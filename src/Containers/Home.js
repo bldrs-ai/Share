@@ -41,6 +41,36 @@ const useStyles = makeStyles((theme) => ({
   title: {
     flexGrow: 1,
   },
+  contextualMenu: {
+    width: 240,
+    height: 300,
+    border: "4px solid lime",
+    marginLeft: "24px",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "space-around",
+    alignItems: "center",
+  },
+  shareContainer: {
+    width: 440,
+    height: 30,
+    paddingLeft: 10,
+    border: "4px solid aqua",
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  searchContainer: {
+    width: 200,
+    height: 30,
+    paddingLeft: 10,
+    border: "1px solid grey",
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
   paper: {
     padding: theme.spacing(2),
     display: "flex",
@@ -51,13 +81,14 @@ const useStyles = makeStyles((theme) => ({
   },
   ifcBackGround: {
     height: "400px",
-    width: "400px",
+    width: "600px",
     display: "flex",
     overflow: "auto",
     flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
   },
+  shareContiner: {},
 }));
 
 const Home = () => {
@@ -67,6 +98,7 @@ const Home = () => {
   const open = Boolean(anchorEl);
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
+  const [openShare, setOpenShare] = useState(false);
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -100,7 +132,7 @@ const Home = () => {
         >
           <Paper elevation={1} className={classes.ifcBackGround}>
             <img
-              style={{ width: 350 }}
+              style={{ width: 500 }}
               src={
                 "https://geospatialmedia.s3.amazonaws.com/wp-content/uploads/2019/01/img-UCLH.jpg"
               }
@@ -119,6 +151,9 @@ const Home = () => {
             className={classes.button}
             startIcon={<ShareIcon />}
             size="smalls"
+            onClick={() => {
+              setOpenShare(!openShare);
+            }}
           >
             Share
           </Button>
@@ -169,6 +204,20 @@ const Home = () => {
         >
           <MenuIcon />
         </IconButton>
+        <div
+          style={{ position: "absolute", left: 60, top: 70 }}
+          className={classes.searchContainer}
+        >
+          search
+        </div>
+        {openShare && (
+          <div
+            style={{ position: "absolute", right: 80, top: 66 }}
+            className={classes.shareContainer}
+          >
+            http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
+          </div>
+        )}
 
         <IconButton
           edge="start"
@@ -187,15 +236,9 @@ const Home = () => {
         <div style={{ position: "relative", left: 0 }}>
           {openLeft ? (
             <div
+              className={classes.contextualMenu}
               style={{
-                width: 240,
-                height: 300,
-                border: "4px solid lime",
                 marginLeft: "24px",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-around",
-                alignItems: "center",
               }}
             >
               <Paper
@@ -219,16 +262,9 @@ const Home = () => {
         <div>
           {openRight ? (
             <div
+              className={classes.contextualMenu}
               style={{
-                width: 240,
-                height: 500,
-                border: "4px solid lime",
                 marginRight: "34px",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-around",
-                alignItems: "center",
-                zIndex: "100",
               }}
             >
               <Paper
