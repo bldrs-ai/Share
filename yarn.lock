@@ -1501,6 +1501,14 @@
     mkdirp "^1.0.4"
     rimraf "^3.0.2"
 
+"@parametricos/bcf-js@^0.1.2":
+  version "0.1.3"
+  resolved "https://registry.yarnpkg.com/@parametricos/bcf-js/-/bcf-js-0.1.3.tgz#aecb248f641567e39db63b1741a5e8678f3ba6e9"
+  integrity sha512-tJdYssZV6Is+ij/ZyZzcPiVd98qjGxs5Muq0se4XjhrtmbDsbeW5XAjWK98o6LlJvj0brpYcuT+/hCZdSBebtw==
+  dependencies:
+    fast-xml-parser "^3.17.5"
+    unzipit "^1.3.5"
+
 "@pmmmwh/react-refresh-webpack-plugin@0.4.3":
   version "0.4.3"
   resolved "https://registry.yarnpkg.com/@pmmmwh/react-refresh-webpack-plugin/-/react-refresh-webpack-plugin-0.4.3.tgz#1eec460596d200c0236bf195b078a5d1df89b766"
@@ -1900,6 +1908,11 @@
   version "2.0.0"
   resolved "https://registry.yarnpkg.com/@types/stack-utils/-/stack-utils-2.0.0.tgz#7036640b4e21cc2f259ae826ce843d277dad8cff"
   integrity sha512-RJJrrySY7A8havqpGObOB4W92QXKJo63/jFLLgpvOtsGUqbQZ9Sbgl35KMm1DjC6j7AvmmU2bIno+3IyEaemaw==
+
+"@types/stats.js@^0.17.0":
+  version "0.17.0"
+  resolved "https://registry.yarnpkg.com/@types/stats.js/-/stats.js-0.17.0.tgz#0ed81d48e03b590c24da85540c1d952077a9fe20"
+  integrity sha512-9w+a7bR8PeB0dCT/HBULU2fMqf6BAzvKbxFboYhmDtDkKPiyXYbjoe2auwsXlEFI7CFNMF1dCv3dFH5Poy9R1w==
 
 "@types/tapable@*", "@types/tapable@^1.0.5":
   version "1.0.6"
@@ -4979,6 +4992,11 @@ fast-levenshtein@^2.0.6, fast-levenshtein@~2.0.6:
   version "2.0.6"
   resolved "https://registry.yarnpkg.com/fast-levenshtein/-/fast-levenshtein-2.0.6.tgz#3d8a5c66883a16a30ca8643e851f19baa7797917"
   integrity sha1-PYpcZog6FqMMqGQ+hR8Zuqd5eRc=
+
+fast-xml-parser@^3.17.5:
+  version "3.19.0"
+  resolved "https://registry.yarnpkg.com/fast-xml-parser/-/fast-xml-parser-3.19.0.tgz#cb637ec3f3999f51406dd8ff0e6fc4d83e520d01"
+  integrity sha512-4pXwmBplsCPv8FOY1WRakF970TjNGnGnfbOnLqjlYvMiF1SR3yOHyxMR/YCXpPTOspNF5gwudqktIP4VsWkvBg==
 
 fastq@^1.6.0:
   version "1.10.1"
@@ -10333,6 +10351,11 @@ static-extend@^0.1.1:
     define-property "^0.2.5"
     object-copy "^0.1.0"
 
+stats.js@^0.17.0:
+  version "0.17.0"
+  resolved "https://registry.yarnpkg.com/stats.js/-/stats.js-0.17.0.tgz#b1c3dc46d94498b578b7fd3985b81ace7131cc7d"
+  integrity sha1-scPcRtlEmLV4t/05hbgaznExzH0=
+
 "statuses@>= 1.4.0 < 2", "statuses@>= 1.5.0 < 2", statuses@~1.5.0:
   version "1.5.0"
   resolved "https://registry.yarnpkg.com/statuses/-/statuses-1.5.0.tgz#161c7dac177659fd9811f43771fa99381478628c"
@@ -10710,6 +10733,21 @@ text-table@0.2.0, text-table@^0.2.0:
   resolved "https://registry.yarnpkg.com/text-table/-/text-table-0.2.0.tgz#7f5ee823ae805207c00af2df4a84ec3fcfa570b4"
   integrity sha1-f17oI66AUgfACvLfSoTsP8+lcLQ=
 
+three-mesh-bvh@^0.3.7:
+  version "0.3.7"
+  resolved "https://registry.yarnpkg.com/three-mesh-bvh/-/three-mesh-bvh-0.3.7.tgz#39a05d2d53f66b5df486d08622801a1850734934"
+  integrity sha512-veRJRj0mY2rBj9yRZVg/E98wd6e7AzqzTq/+6ispY6m50gYuGitUNih2dRQzbkMcwRECLURvuudb9BFW3/swAw==
+
+three@^0.128.0:
+  version "0.128.0"
+  resolved "https://registry.yarnpkg.com/three/-/three-0.128.0.tgz#884dacca6a330e45600a09ec5439283f50b76aa6"
+  integrity sha512-i0ap/E+OaSfzw7bD1TtYnPo3VEplkl70WX5fZqZnfZsE3k3aSFudqrrC9ldFZfYFkn1zwDmBcdGfiIm/hnbyZA==
+
+three@^0.130.1:
+  version "0.130.1"
+  resolved "https://registry.yarnpkg.com/three/-/three-0.130.1.tgz#797588b2877ace31603bbbc864eb2e3022f0b3b4"
+  integrity sha512-OSPPKcGvFSiGkG3jFrwwC76PBV/ZSrGxpBbg28bW8s9GU8r/y2spNGtEXHEb/CVqo0Ctf5Lx2rVaxQZB6OasaA==
+
 throat@^5.0.0:
   version "5.0.0"
   resolved "https://registry.yarnpkg.com/throat/-/throat-5.0.0.tgz#c5199235803aad18754a667d659b5e72ce16764b"
@@ -11041,6 +11079,13 @@ unset-value@^1.0.0:
     has-value "^0.3.1"
     isobject "^3.0.0"
 
+unzipit@^1.3.5:
+  version "1.3.5"
+  resolved "https://registry.yarnpkg.com/unzipit/-/unzipit-1.3.5.tgz#3ee48a478a3b7e248d65d3bc0bb189a8d63c3ce1"
+  integrity sha512-GNJVu1nkQYaw9ploGIuXzrP9bE6y+/V748P3RsMn8W0fHEEkecwd+SHwKH9jXOSuBAKTEOqqF66k0GfFQZ1ReA==
+  dependencies:
+    uzip-module "^1.0.2"
+
 upath@^1.1.1, upath@^1.1.2, upath@^1.2.0:
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/upath/-/upath-1.2.0.tgz#8f66dbcd55a883acdae4408af8b035a5044c1894"
@@ -11145,6 +11190,11 @@ uuid@^8.3.0:
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-8.3.2.tgz#80d5b5ced271bb9af6c445f21a1a04c606cefbe2"
   integrity sha512-+NYs2QeMWy+GWFOEm9xnn6HCDp0l7QBD7ml8zLUmJ+93Q5NF0NocErnwkTkXVFNiX3/fpC6afS8Dhb/gz7R7eg==
 
+uzip-module@^1.0.2:
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/uzip-module/-/uzip-module-1.0.3.tgz#6bbabe2a3efea5d5a4a47479f523a571de3427ce"
+  integrity sha512-AMqwWZaknLM77G+VPYNZLEruMGWGzyigPK3/Whg99B3S6vGHuqsyl5ZrOv1UUF3paGK1U6PM0cnayioaryg/fA==
+
 v8-compile-cache@^2.0.3:
   version "2.2.0"
   resolved "https://registry.yarnpkg.com/v8-compile-cache/-/v8-compile-cache-2.2.0.tgz#9471efa3ef9128d2f7c6a7ca39c4dd6b5055b132"
@@ -11241,6 +11291,32 @@ wbuf@^1.1.0, wbuf@^1.7.3:
   integrity sha512-O84QOnr0icsbFGLS0O3bI5FswxzRr8/gHwWkDlQFskhSPryQXvrTMxjxGP4+iWYoauLoBvfDpkrOauZ+0iZpDA==
   dependencies:
     minimalistic-assert "^1.0.0"
+
+web-ifc-three@0.0.31:
+  version "0.0.31"
+  resolved "https://registry.yarnpkg.com/web-ifc-three/-/web-ifc-three-0.0.31.tgz#258a546885427cd57dab9bef92d12d2c8da4ceeb"
+  integrity sha512-eQJCI2GppIQhqIBytUbQnboViXd4Bx2NRemY2S36z1uFom13RY2FMqHOKU9C5BB+xhENPWabVdFm29kOF8CIxQ==
+  dependencies:
+    stats.js "^0.17.0"
+    three "^0.128.0"
+    three-mesh-bvh "^0.3.7"
+    web-ifc "0.0.20"
+
+web-ifc-viewer@^1.0.14:
+  version "1.0.14"
+  resolved "https://registry.yarnpkg.com/web-ifc-viewer/-/web-ifc-viewer-1.0.14.tgz#9ec374d202f2c2fa8049e8ad069eaec2b8cc4fce"
+  integrity sha512-uGVfat1TdI59+yWr2ZffPVkruuF6cvrv2TxDAaLClWyzG9xfMawn1dylU1CWccOK6RNw1QQNin1E7lkhDeWbNw==
+  dependencies:
+    "@parametricos/bcf-js" "^0.1.2"
+    "@types/stats.js" "^0.17.0"
+    stats.js "^0.17.0"
+    three "^0.128.0"
+    web-ifc-three "0.0.31"
+
+web-ifc@0.0.20:
+  version "0.0.20"
+  resolved "https://registry.yarnpkg.com/web-ifc/-/web-ifc-0.0.20.tgz#b1bc302de518d8ce3e3789b01c06df0a6b24b2c5"
+  integrity sha512-mcmUsUWGPpjdRabIErcZO9xsBbzvVz5lka3J27MGB7ea4lzybRjKyRNDqoGY5qJ7P37KdDgd9PVBLYmvgVto2Q==
 
 web-vitals@^1.0.1:
   version "1.1.2"

@@ -15,6 +15,9 @@ import Container from "@material-ui/core/Container";
 import Button from "@material-ui/core/Button";
 import ShareIcon from "@material-ui/icons/Share";
 import Paper from "@material-ui/core/Paper";
+import { useHistory } from "react-router-dom";
+import { IfcViewerAPI } from "web-ifc-viewer";
+import Viewer from "../Components/ifcViewer";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -99,6 +102,7 @@ const Home = () => {
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
+  const history = useHistory();
 
   const handleMenu = (event) => {
     setAnchorEl(event.currentTarget);
@@ -130,19 +134,25 @@ const Home = () => {
             alignItems: "center",
           }}
         >
-          <Paper elevation={1} className={classes.ifcBackGround}>
+          {/* <Paper elevation={1} className={classes.ifcBackGround}>
             <img
               style={{ width: 500 }}
               src={
                 "https://geospatialmedia.s3.amazonaws.com/wp-content/uploads/2019/01/img-UCLH.jpg"
               }
             />
-          </Paper>
+          </Paper> */}
         </div>
       </div>
       <AppBar elevation={0} position="static">
         <Toolbar variant="dense">
-          <Typography variant="h6" className={classes.title}>
+          <Typography
+            variant="h6"
+            className={classes.title}
+            onClick={() => {
+              history.push("/cards");
+            }}
+          >
             BUILDERS
           </Typography>
           <Button
@@ -265,6 +275,7 @@ const Home = () => {
               className={classes.contextualMenu}
               style={{
                 marginRight: "34px",
+                height: 460,
               }}
             >
               <Paper
@@ -299,6 +310,7 @@ const Home = () => {
           ) : null}
         </div>
       </div>
+      <Viewer />
     </div>
   );
 };

@@ -24,9 +24,6 @@ function App() {
     <ThemeProvider theme={outerTheme}>
       <Router>
         <Switch>
-          <Route path="/dashboard">
-            <Dashboard />
-          </Route>
           <Route path="/">
             <Home />
           </Route>
