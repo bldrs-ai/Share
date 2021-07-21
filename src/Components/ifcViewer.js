@@ -8,13 +8,11 @@ export default class Viewer extends React.Component {
   constructor(props) {
     super(props);
     this.viewer = null;
-    console.log('Viewer init...');
   }
 
 
   componentDidMount() {
     const container = document.getElementById("viewer-container");
-    console.log('Componentdidmount...');
     this.viewer = new IfcViewerAPI({ container });
     this.viewer.addAxes();
     this.viewer.addGrid();
@@ -45,6 +43,27 @@ export default class Viewer extends React.Component {
   render() {
     return (
       <div style={{ position: "absolute", bottom: "30px", left: "30%" }}>
+        <div
+          id="viewer-container"
+          style={{
+            position: 'relative',
+            color: 'blue',
+            textAlign: 'center',
+            border: '3px solid lime',
+            height: '400px',
+            width: '600px',
+            overflow: 'hidden'
+          }}></div>
+        <div
+          id="fileInput"
+          style={{
+            position: 'absolute',
+            top: '26%',
+            left: '30%',
+            color: 'blue',
+            textAlign: 'center',
+            overflow: 'hidden'
+          }}></div>
         <Button
           variant="contained"
           color="primary"
