@@ -6,17 +6,12 @@ import Typography from "@material-ui/core/Typography";
 import IconButton from "@material-ui/core/IconButton";
 import MenuIcon from "@material-ui/icons/Menu";
 import AccountCircle from "@material-ui/icons/AccountCircle";
-import Switch from "@material-ui/core/Switch";
-import FormControlLabel from "@material-ui/core/FormControlLabel";
-import FormGroup from "@material-ui/core/FormGroup";
 import MenuItem from "@material-ui/core/MenuItem";
 import Menu from "@material-ui/core/Menu";
-import Container from "@material-ui/core/Container";
 import Button from "@material-ui/core/Button";
 import ShareIcon from "@material-ui/icons/Share";
 import Paper from "@material-ui/core/Paper";
 import { useHistory } from "react-router-dom";
-import { IfcViewerAPI } from "web-ifc-viewer";
 import Viewer from "../Components/ifcViewer";
 
 const useStyles = makeStyles((theme) => ({
@@ -24,15 +19,13 @@ const useStyles = makeStyles((theme) => ({
     ...theme.typography.button,
     backgroundColor: theme.palette.background.paper,
     padding: theme.spacing(1),
+    flexGrow: 1,
   },
   menuToolbarContainer: {
     width: "100%",
     display: "flex",
     justifyContent: "space-between",
     marginTop: "10px",
-  },
-  root: {
-    flexGrow: 1,
   },
   button: {
     margin: theme.spacing(1),
@@ -96,7 +89,7 @@ const useStyles = makeStyles((theme) => ({
 
 const Home = () => {
   const classes = useStyles();
-  const [auth, setAuth] = React.useState(true);
+  const [auth] = React.useState(true);
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
   const [openLeft, setOpenLeft] = useState(false);
@@ -153,14 +146,14 @@ const Home = () => {
               history.push("/cards");
             }}
           >
-            BUILDERS
+            BUILDRS
           </Typography>
           <Button
             variant="contained"
-            color="primaryLight"
+            color="primary"
             className={classes.button}
             startIcon={<ShareIcon />}
-            size="smalls"
+            size="small"
             onClick={() => {
               setOpenShare(!openShare);
             }}
