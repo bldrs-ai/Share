@@ -5,6 +5,12 @@ import Button from "@material-ui/core/Button";
 
 export default class Viewer extends React.Component {
 
+  state = {
+    loaded: false,
+    loading_ifc: false
+  };
+
+
   constructor(props) {
     super(props);
     this.viewer = null;
@@ -14,9 +20,11 @@ export default class Viewer extends React.Component {
   componentDidMount() {
     const container = document.getElementById("viewer-container");
     this.viewer = new IfcViewerAPI({ container });
+    // No setWasmPath here. As of 1.0.14, the default is
+    // http://localhost:3000/static/js/web-ifc.wasm, so just putting
+    // the binary there in our public directory.
     this.viewer.addAxes();
     this.viewer.addGrid();
-    this.viewer.setWasmPath("wasm/");
     window.onmousemove = this.viewer.prepickIfcItem;
     window.ondblclick = this.viewer.addClippingPlane;
     window.onkeydown = event => {
@@ -26,8 +34,9 @@ export default class Viewer extends React.Component {
 
 
   async loadIfc(event) {
-    if (true) { throw new Error('Not implemented!'); }
+    this.setState({ loading_ifc: true })
     await this.viewer.loadIfc(event.target.files[0], true);
+    this.setState({ loaded: true, loading_ifc: false })
   }
 
 
@@ -42,24 +51,25 @@ export default class Viewer extends React.Component {
 
   render() {
     return (
-      <div style={{ position: "absolute", bottom: "30px", left: "30%" }}>
+      <div style={{ width: '80%', height: '80%', margin: 'auto' }}>
         <div
           id="viewer-container"
           style={{
             position: 'relative',
-            color: 'blue',
+            top: '0px',
+            left: '0px',
             textAlign: 'center',
-            border: '3px solid lime',
-            height: '400px',
-            width: '600px',
-            overflow: 'hidden'
+            color: 'blue',
+            width: '800px',
+            height: '640px',
+            margin: 'auto'
           }}></div>
         <div
           id="fileInput"
           style={{
-            position: 'absolute',
-            top: '26%',
-            left: '30%',
+            position: 'relative',
+            top: '0px',
+            left: '0px',
             color: 'blue',
             textAlign: 'center',
             overflow: 'hidden'
@@ -69,7 +79,6 @@ export default class Viewer extends React.Component {
           color="primary"
           size="small"
           onClick={(event) => {
-            console.log("clicked");
             this.openFileDialog();
           }}
         >

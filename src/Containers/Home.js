@@ -109,33 +109,23 @@ const Home = () => {
     <div>
       <div
         style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
           width: "100%",
           height: "100%",
+          // border: "1px solid aqua",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "space-around",
+          alignItems: "center",
         }}
       >
-        <div
-          style={{
-            width: "100%",
-            height: "100%",
-            // border: "1px solid aqua",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "space-around",
-            alignItems: "center",
-          }}
-        >
-          {/* <Paper elevation={1} className={classes.ifcBackGround}>
-            <img
-              style={{ width: 500 }}
-              src={
-                "https://geospatialmedia.s3.amazonaws.com/wp-content/uploads/2019/01/img-UCLH.jpg"
-              }
-            />
-          </Paper> */}
-        </div>
+        {/* <Paper elevation={1} className={classes.ifcBackGround}>
+          <img
+            style={{ width: 500 }}
+            src={
+              "https://geospatialmedia.s3.amazonaws.com/wp-content/uploads/2019/01/img-UCLH.jpg"
+            }
+          />
+        </Paper> */}
       </div>
       <AppBar elevation={0} position="static">
         <Toolbar variant="dense">
@@ -304,6 +294,7 @@ const Home = () => {
         </div>
       </div>
       <Viewer />
+
     </div>
   );
 };
