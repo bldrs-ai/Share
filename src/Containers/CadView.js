@@ -3,16 +3,16 @@ import { makeStyles } from "@material-ui/core/styles";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Typography from "@material-ui/core/Typography";
-import IconButton from "@material-ui/core/IconButton";
+
 import MenuIcon from "@material-ui/icons/Menu";
-import AccountCircle from "@material-ui/icons/AccountCircle";
-import MenuItem from "@material-ui/core/MenuItem";
-import Menu from "@material-ui/core/Menu";
+import IconButton from "@material-ui/core/IconButton";
+
 import Button from "@material-ui/core/Button";
 import ShareIcon from "@material-ui/icons/Share";
 import Paper from "@material-ui/core/Paper";
 import { useHistory } from "react-router-dom";
 import Viewer from "../Components/ifcViewer";
+import LoginMenu from "../Components/loginMenu";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -87,46 +87,16 @@ const useStyles = makeStyles((theme) => ({
   shareContiner: {},
 }));
 
-const Home = () => {
+const CadView = () => {
   const classes = useStyles();
-  const [auth] = React.useState(true);
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const open = Boolean(anchorEl);
+
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
   const history = useHistory();
 
-  const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
   return (
     <div>
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          // border: "1px solid aqua",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-around",
-          alignItems: "center",
-        }}
-      >
-        {/* <Paper elevation={1} className={classes.ifcBackGround}>
-          <img
-            style={{ width: 500 }}
-            src={
-              "https://geospatialmedia.s3.amazonaws.com/wp-content/uploads/2019/01/img-UCLH.jpg"
-            }
-          />
-        </Paper> */}
-      </div>
       <AppBar elevation={0} position="static">
         <Toolbar variant="dense">
           <Typography
@@ -150,37 +120,7 @@ const Home = () => {
           >
             Share
           </Button>
-          {auth && (
-            <div>
-              <IconButton
-                aria-label="account of current user"
-                aria-controls="menu-appbar"
-                aria-haspopup="true"
-                onClick={handleMenu}
-                color="inherit"
-              >
-                <AccountCircle />
-              </IconButton>
-              <Menu
-                id="menu-appbar"
-                anchorEl={anchorEl}
-                anchorOrigin={{
-                  vertical: "top",
-                  horizontal: "right",
-                }}
-                keepMounted
-                transformOrigin={{
-                  vertical: "top",
-                  horizontal: "right",
-                }}
-                open={open}
-                onClose={handleClose}
-              >
-                <MenuItem onClick={handleClose}>Profile</MenuItem>
-                <MenuItem onClick={handleClose}>Logout</MenuItem>
-              </Menu>
-            </div>
-          )}
+          <LoginMenu />
         </Toolbar>
       </AppBar>
 
@@ -294,9 +234,8 @@ const Home = () => {
         </div>
       </div>
       <Viewer />
-
     </div>
   );
 };
 
-export default Home;
+export default CadView;
