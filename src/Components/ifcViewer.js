@@ -1,6 +1,7 @@
 import React from "react";
 import { IfcViewerAPI } from "web-ifc-viewer";
 import Button from "@material-ui/core/Button";
+import "../App.css";
 
 export default class Viewer extends React.Component {
   state = {
@@ -26,6 +27,18 @@ export default class Viewer extends React.Component {
     window.onkeydown = (event) => {
       this.viewer.removeClippingPlane();
     };
+    //create load ifc input
+    const inputElement = document.createElement("input");
+    inputElement.setAttribute("type", "file");
+    inputElement.classList.add("hidden");
+    inputElement.addEventListener(
+      "change",
+      (event) => {
+        this.loadIfc(event);
+      },
+      false
+    );
+    document.getElementById("fileInput").appendChild(inputElement);
   }
 
   async loadIfc(event) {
@@ -50,41 +63,37 @@ export default class Viewer extends React.Component {
 
   render() {
     return (
-      <div style={{ width: "80%", height: "80%", margin: "auto" }}>
+      <div>
         <div
           id="viewer-container"
           style={{
-            position: "relative",
+            position: "absolute",
             top: "0px",
             left: "0px",
             textAlign: "center",
             color: "blue",
-            width: "800px",
-            height: "640px",
+            width: "100vw",
+            height: "100vh",
             margin: "auto",
           }}
         ></div>
         <div
           id="fileInput"
           style={{
-            position: "relative",
-            top: "0px",
-            left: "0px",
+            position: "absolute",
+            bottom: "30px",
+            width: 300,
+            height: 30,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            left: "43%",
             color: "blue",
             textAlign: "center",
             overflow: "hidden",
+            border: "1px solid lime",
           }}
         ></div>
-        <Button
-          variant="contained"
-          color="primary"
-          size="small"
-          onClick={(event) => {
-            this.openFileDialog();
-          }}
-        >
-          Load ifc
-        </Button>
       </div>
     );
   }
