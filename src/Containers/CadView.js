@@ -3,15 +3,14 @@ import { makeStyles } from "@material-ui/core/styles";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Typography from "@material-ui/core/Typography";
-
-import MenuIcon from "@material-ui/icons/Menu";
-import IconButton from "@material-ui/core/IconButton";
-
 import Paper from "@material-ui/core/Paper";
 import { useHistory } from "react-router-dom";
 import Viewer from "../Components/ifcViewer";
 import LoginMenu from "../Components/loginMenu";
 import PrimaryButton from "../Components/primaryButton";
+import MenuButton from "../Components/menuButton";
+import ElementsTree from "../Components/elementsTree";
+import ElementsInfo from "../Components/elementInfo";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -26,25 +25,8 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "space-between",
     marginTop: "10px",
   },
-  button: {
-    margin: theme.spacing(1),
-  },
-  menuButton: {
-    marginLeft: 12,
-    marginRight: 22,
-  },
   title: {
     flexGrow: 1,
-  },
-  contextualMenu: {
-    width: 240,
-    height: 300,
-    border: "4px solid lime",
-    marginLeft: "24px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-around",
-    alignItems: "center",
   },
   shareContainer: {
     width: 440,
@@ -55,6 +37,9 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
+    position: "absolute",
+    right: 80,
+    top: 66,
   },
   searchContainer: {
     width: 200,
@@ -65,6 +50,9 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
+    position: "absolute",
+    left: 60,
+    top: 70,
   },
   paper: {
     padding: theme.spacing(2),
@@ -74,16 +62,6 @@ const useStyles = makeStyles((theme) => ({
     height: "50px",
     width: "160px",
   },
-  ifcBackGround: {
-    height: "400px",
-    width: "600px",
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  shareContiner: {},
 }));
 
 const CadView = () => {
@@ -115,115 +93,21 @@ const CadView = () => {
           <LoginMenu />
         </Toolbar>
       </AppBar>
-
-      <div className={classes.menuToolbarContainer}>
-        <IconButton
-          edge="start"
-          className={classes.menuButton}
-          color="secondary"
-          aria-label="menu"
-          onClick={() => {
-            setOpenLeft(!openLeft);
-            console.log("open left is clicked");
-          }}
-        >
-          <MenuIcon />
-        </IconButton>
-        <div
-          style={{ position: "absolute", left: 60, top: 70 }}
-          className={classes.searchContainer}
-        >
-          search
+      <div className={classes.searchContainer}>search</div>
+      {openShare && (
+        <div className={classes.shareContainer}>
+          http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
         </div>
-        {openShare && (
-          <div
-            style={{ position: "absolute", right: 80, top: 66 }}
-            className={classes.shareContainer}
-          >
-            http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
-          </div>
-        )}
-
-        <IconButton
-          edge="start"
-          className={classes.menuButton}
-          color="inherit"
-          aria-label="menu"
-          onClick={() => {
-            console.log("open right is clicked");
-            setOpenRight(!openRight);
-          }}
-        >
-          <MenuIcon />
-        </IconButton>
+      )}
+      <div className={classes.menuToolbarContainer}>
+        <MenuButton onClick={() => setOpenLeft(!openLeft)} />
+        <MenuButton onClick={() => setOpenRight(!openRight)} />
       </div>
       <div className={classes.menuToolbarContainer}>
         <div style={{ position: "relative", left: 0 }}>
-          {openLeft ? (
-            <div
-              className={classes.contextualMenu}
-              style={{
-                marginLeft: "24px",
-              }}
-            >
-              <Paper
-                elevation={3}
-                className={classes.paper}
-                style={{ height: 40 }}
-              >
-                <div>ifc elements</div>
-              </Paper>
-
-              <Paper elevation={3} className={classes.paper}>
-                <div>workflow menu 1</div>
-              </Paper>
-
-              <Paper elevation={3} className={classes.paper}>
-                <div>workflow menu 2</div>
-              </Paper>
-            </div>
-          ) : null}
+          {openLeft ? <ElementsTree /> : null}
         </div>
-        <div>
-          {openRight ? (
-            <div
-              className={classes.contextualMenu}
-              style={{
-                marginRight: "34px",
-                height: 460,
-              }}
-            >
-              <Paper
-                elevation={3}
-                className={classes.paper}
-                style={{ height: 20 }}
-              >
-                <div>element data</div>
-              </Paper>
-              <Paper
-                elevation={3}
-                className={classes.paper}
-                style={{ height: 40 }}
-              >
-                <div>parameters</div>
-              </Paper>
-              <Paper
-                elevation={3}
-                className={classes.paper}
-                style={{ height: 20 }}
-              >
-                <div>comments</div>
-              </Paper>
-              <Paper elevation={3} className={classes.paper}>
-                <div>...</div>
-              </Paper>
-
-              <Paper elevation={3} className={classes.paper}>
-                <div>...</div>
-              </Paper>
-            </div>
-          ) : null}
-        </div>
+        <div>{openRight ? <ElementsInfo /> : null}</div>
       </div>
       <Viewer />
     </div>
