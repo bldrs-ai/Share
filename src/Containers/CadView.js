@@ -7,12 +7,11 @@ import Typography from "@material-ui/core/Typography";
 import MenuIcon from "@material-ui/icons/Menu";
 import IconButton from "@material-ui/core/IconButton";
 
-import Button from "@material-ui/core/Button";
-import ShareIcon from "@material-ui/icons/Share";
 import Paper from "@material-ui/core/Paper";
 import { useHistory } from "react-router-dom";
 import Viewer from "../Components/ifcViewer";
 import LoginMenu from "../Components/loginMenu";
+import PrimaryButton from "../Components/primaryButton";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -95,6 +94,10 @@ const CadView = () => {
   const [openShare, setOpenShare] = useState(false);
   const history = useHistory();
 
+  const onClickShare = () => {
+    setOpenShare(!openShare);
+  };
+
   return (
     <div>
       <AppBar elevation={0} position="static">
@@ -108,18 +111,7 @@ const CadView = () => {
           >
             BUILDRS
           </Typography>
-          <Button
-            variant="contained"
-            color="primary"
-            className={classes.button}
-            startIcon={<ShareIcon />}
-            size="small"
-            onClick={() => {
-              setOpenShare(!openShare);
-            }}
-          >
-            Share
-          </Button>
+          <PrimaryButton name={"Share"} onClick={onClickShare} />
           <LoginMenu />
         </Toolbar>
       </AppBar>
