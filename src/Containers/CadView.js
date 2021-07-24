@@ -3,6 +3,7 @@ import { makeStyles } from "@material-ui/core/styles";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Typography from "@material-ui/core/Typography";
+import TextField from "@material-ui/core/TextField";
 import { useHistory } from "react-router-dom";
 import Viewer from "../Components/ifcViewer";
 import LoginMenu from "../Components/loginMenu";
@@ -10,6 +11,7 @@ import PrimaryButton from "../Components/primaryButton";
 import MenuButton from "../Components/menuButton";
 import ElementsTree from "../Components/elementsTree";
 import ElementsInfo from "../Components/elementInfo";
+import SearchInput from "../Components/searchInput";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -21,7 +23,7 @@ const useStyles = makeStyles((theme) => ({
   menuToolbarContainer: {
     width: "100%",
     display: "flex",
-    justifyContent: "space-between",
+    justifyContent: "flex-end",
     marginTop: "10px",
   },
   title: {
@@ -39,20 +41,16 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "flex-start",
     alignItems: "center",
     position: "absolute",
-    right: 80,
-    top: 66,
+    right: 200,
+    top: 14,
   },
   searchContainer: {
-    width: 200,
-    height: 30,
-    paddingLeft: 10,
-    border: "1px solid grey",
     display: "flex",
     flexDirection: "row",
     justifyContent: "flex-start",
     alignItems: "center",
     position: "absolute",
-    left: 60,
+    left: 20,
     top: 84,
   },
   paper: {
@@ -104,14 +102,16 @@ const CadView = () => {
             <LoginMenu />
           </Toolbar>
         </AppBar>
-        <div className={classes.searchContainer}>search</div>
+        <div className={classes.searchContainer}>
+          <SearchInput onClickMenu={() => setOpenLeft(!openLeft)} />
+        </div>
         {openShare && (
           <div className={classes.shareContainer}>
             http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
           </div>
         )}
         <div className={classes.menuToolbarContainer}>
-          <MenuButton onClick={() => setOpenLeft(!openLeft)} />
+          {/* <MenuButton onClick={() => setOpenLeft(!openLeft)} /> */}
           <MenuButton onClick={() => setOpenRight(!openRight)} />
         </div>
         <div className={classes.menuToolbarContainer}>

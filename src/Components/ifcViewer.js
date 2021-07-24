@@ -1,6 +1,5 @@
 import React from "react";
 import { IfcViewerAPI } from "web-ifc-viewer";
-import Button from "@material-ui/core/Button";
 import "../App.css";
 
 export default class Viewer extends React.Component {

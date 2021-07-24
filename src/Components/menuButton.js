@@ -20,7 +20,7 @@ const MenuButton = ({ onClick }) => {
       aria-label="menu"
       onClick={onClick}
     >
-      <MenuIcon style={{ color: "lime " }} />
+      <MenuIcon style={{ color: "lime " }} style={{ width: 30, height: 30 }} />
     </IconButton>
   );
 };

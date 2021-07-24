@@ -4,8 +4,8 @@ import Paper from "@material-ui/core/Paper";
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
-    width: 240,
-    height: 300,
+    width: 300,
+    height: 500,
     border: "1px solid lime",
     display: "flex",
     flexDirection: "column",
@@ -17,8 +17,8 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     overflow: "auto",
     flexDirection: "column",
-    height: "50px",
-    width: "160px",
+    height: "120px",
+    width: "220px",
   },
 }));
 
@@ -29,11 +29,11 @@ const ElementsTree = () => {
       className={classes.contextualMenu}
       style={{
         position: "absolute",
-        top: 130,
-        left: 34,
+        top: 144,
+        left: 24,
       }}
     >
-      <Paper elevation={3} className={classes.paper} style={{ height: 40 }}>
+      <Paper elevation={3} className={classes.paper} style={{ height: 80 }}>
         <div>ifc elements</div>
       </Paper>
 
