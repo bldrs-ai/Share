@@ -1,5 +1,6 @@
 import Tree from "react-animated-tree";
 import "../styles/tree.css";
+import AssistantIcon from "@material-ui/icons/Assistant";
 
 const treeStyles = {
   position: "absolute",
@@ -8,27 +9,36 @@ const treeStyles = {
   color: "black",
   fill: "black",
   width: "100%",
+  fontSize: "16px",
+  fontFamily: "Roboto",
 };
 
 const typeStyles = {
-  fontSize: "2em",
+  fontSize: "20px",
   verticalAlign: "middle",
 };
 
 const ElementsTreeStructure = () => (
-  <Tree content="TopLevel" type="ITEM" open style={treeStyles}>
-    <Tree content="hello" type={<span style={typeStyles}>TopLevel</span>} />
-    <Tree content="subtree with children">
-      <Tree content="hello" open />
-      <Tree content="sub-subtree with children">
+  <Tree content="House" open style={treeStyles}>
+    <Tree
+      content="Annotations"
+      type={
+        <span style={typeStyles}>
+          <AssistantIcon style={{ width: 15, height: 15 }} />
+        </span>
+      }
+    />
+    <Tree content="beam">
+      <Tree content="type1" open />
+      <Tree content="type2">
         <Tree content="child 1" />
         <Tree content="child 2" />
         <Tree content="child 3" />
       </Tree>
-      <Tree content="hello" />
+      <Tree content="door" />
     </Tree>
-    <Tree content="hello" canHide />
-    <Tree content="hello" canHide />
+    <Tree content="openning" canHide />
+    <Tree content="slab" canHide />
   </Tree>
 );
 
