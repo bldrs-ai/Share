@@ -16,6 +16,7 @@ import FolderIcon from "@material-ui/icons/Folder";
 import IconButton from "@material-ui/core/IconButton";
 import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
 import CommentIcon from "@material-ui/icons/Comment";
+import ElementsTreeStructure from "../Components/tree";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -86,6 +87,7 @@ const CadView = () => {
       <div style={{ zIndex: 0 }}>
         <Viewer />
       </div>
+      {/* <ElementsTreeStructure /> */}
       <div index={{ zIndex: 100 }}>
         <AppBar elevation={0} position="static" color="primary">
           <Toolbar

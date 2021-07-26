@@ -1,6 +1,7 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
+import ElementsTreeStructure from "./tree";
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
@@ -11,6 +12,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     justifyContent: "space-around",
     alignItems: "center",
+    overflow: "scroll",
   },
   paper: {
     padding: theme.spacing(2),
@@ -19,13 +21,14 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     height: "120px",
     width: "220px",
+    backgroundColor: "lightGray",
   },
 }));
 
 const ElementsTree = () => {
   const classes = useStyles();
   return (
-    <div
+    <Paper
       className={classes.contextualMenu}
       style={{
         position: "absolute",
@@ -33,18 +36,17 @@ const ElementsTree = () => {
         left: 24,
       }}
     >
-      <Paper elevation={3} className={classes.paper} style={{ height: 80 }}>
-        <div>ifc elements</div>
-      </Paper>
+      <ElementsTreeStructure />
+      {/* <Paper elevation={3} className={classes.paper}></Paper> */}
 
-      <Paper elevation={3} className={classes.paper}>
+      {/* <Paper elevation={3} className={classes.paper}>
         <div>workflow menu 1</div>
       </Paper>
 
       <Paper elevation={3} className={classes.paper}>
         <div>workflow menu 2</div>
-      </Paper>
-    </div>
+      </Paper> */}
+    </Paper>
   );
 };
 
