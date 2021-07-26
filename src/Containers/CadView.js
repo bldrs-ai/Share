@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Typography from "@material-ui/core/Typography";
 import TextField from "@material-ui/core/TextField";
 import { useHistory } from "react-router-dom";
-import Viewer from "../Components/ifcViewer";
+//import Viewer from "../Components/ifcViewer";
 import LoginMenu from "../Components/loginMenu";
 import PrimaryButton from "../Components/primaryButton";
 import MenuButton from "../Components/menuButton";
@@ -17,6 +17,8 @@ import IconButton from "@material-ui/core/IconButton";
 import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
 import CommentIcon from "@material-ui/icons/Comment";
 import ElementsTreeStructure from "../Components/tree";
+import "../App.css";
+import { IfcViewerAPI } from "web-ifc-viewer";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -76,18 +78,118 @@ const CadView = () => {
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
+  const [ifcElements, setIfcElements] = useState({});
   const history = useHistory();
+  let viewer;
 
   const onClickShare = () => {
     setOpenShare(!openShare);
   };
 
+  const visitIfc = (ifcElt, htmlElt) => {
+    const children = ifcElt.children;
+    if (children && children.length > 0) {
+      const ulElt = document.createElement('ul');
+      ulElt.appendChild(document.createTextNode(`${ifcElt.type} (id: ${ifcElt.expressID})`));
+      for (let ndx in children) {
+        const childElt = children[ndx];
+        visitIfc(childElt, ulElt);
+      }
+      htmlElt.appendChild(ulElt);
+    } else {
+      const liElt = document.createElement('li');
+      liElt.appendChild(document.createTextNode(`${ifcElt.type} (id: ${ifcElt.expressID})`));
+      htmlElt.appendChild(liElt);
+    }
+  };
+
+  const loadIfc = async event => {
+    await viewer.loadIfc(event.target.files[0], true);
+    try {
+      // v1.0.14
+      const ifcRoot = viewer.ifcManager.loader.getSpatialStructure(0);
+      console.log('ifcRoot: ', ifcRoot);
+      setIfcElements('foo');
+      // v1.0.20
+      // const ifcRoot = viewer.IFC.loader.ifcManager.getSpatialStructure(0);
+      console.log('spatial structure: ', ifcElements);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Similar to componentDidMount and componentDidUpdate:
+  useEffect(() => {
+    const container = document.getElementById("viewer-container");
+    viewer = new IfcViewerAPI({ container });
+    // No setWasmPath here. As of 1.0.14, the default is
+    // http://localhost:3000/static/js/web-ifc.wasm, so just putting
+    // the binary there in our public directory.
+    viewer.addAxes();
+    viewer.addGrid();
+    window.onmousemove = viewer.prepickIfcItem;
+    window.ondblclick = viewer.addClippingPlane;
+    window.onkeydown = (event) => {
+      viewer.removeClippingPlane();
+    };
+    console.log('CadView#useEffect');
+    //create load ifc input
+    const inputElement = document.createElement("input");
+    inputElement.setAttribute("type", "file");
+    inputElement.classList.add("hidden");
+    inputElement.addEventListener(
+      "change",
+      event => {
+        loadIfc(event);
+      },
+      false
+    );
+    document.getElementById("fileInput").appendChild(inputElement);
+  }, []);
+
   return (
     <div>
       <div style={{ zIndex: 0 }}>
-        <Viewer />
+        <div
+          id="viewer-container"
+          style={{
+            position: "absolute",
+            top: "0px",
+            left: "0px",
+            textAlign: "center",
+            color: "blue",
+            width: "100vw",
+            height: "100vh",
+            margin: "auto",
+          }}
+        ></div>
+        <div
+          id="fileInput"
+          style={{
+            position: "absolute",
+            bottom: "30px",
+            width: 300,
+            height: 30,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            left: "43%",
+            color: "blue",
+            textAlign: "center",
+            overflow: "hidden",
+            border: "1px solid lime",
+          }}
+        ></div>
       </div>
-      {/* <ElementsTreeStructure /> */}
+      <div
+        id="property-viewer-container"
+        style={{
+          position: 'absolute',
+          top: '100px',
+          right: '50px',
+          width: '400px',
+        }}
+      ></div>
       <div index={{ zIndex: 100 }}>
         <AppBar elevation={0} position="static" color="primary">
           <Toolbar
@@ -186,7 +288,7 @@ const CadView = () => {
           <MenuButton onClick={() => setOpenRight(!openRight)} />
         </div>
         <div className={classes.menuToolbarContainer}>
-          <div>{openLeft ? <ElementsTree /> : null}</div>
+          <div>{openLeft ? <ElementsTree id="elements-tree"/> : null}</div>
           <div>{openRight ? <ElementsInfo /> : null}</div>
         </div>
       </div>
