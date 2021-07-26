@@ -20,3 +20,14 @@ First, check in a new production build to your branch
 ```
 
 Next, send PR for merge into main branch on https://github.com/buildrs/Share.  Once it's merged, the live site will be automatically updated.
+
+# Dev
+Please fork and submit PRs from your fork to this repo's main branch.
+
+To merge from upstream:
+```
+# First time only: git remote add upstream https://github.com/buildrs/Share
+# After PR is accepted/merged in main, to sync you fork:
+> git fetch upstream
+> git merge upstream/main
+```
