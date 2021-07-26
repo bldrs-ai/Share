@@ -6,7 +6,6 @@ import Divider from "@material-ui/core/Divider";
 import IconButton from "@material-ui/core/IconButton";
 import MenuIcon from "@material-ui/icons/Menu";
 import SearchIcon from "@material-ui/icons/Search";
-import DirectionsIcon from "@material-ui/icons/Directions";
 
 const useStyles = makeStyles((theme) => ({
   root: {

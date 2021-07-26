@@ -12,6 +12,10 @@ import MenuButton from "../Components/menuButton";
 import ElementsTree from "../Components/elementsTree";
 import ElementsInfo from "../Components/elementInfo";
 import SearchInput from "../Components/searchInput";
+import FolderIcon from "@material-ui/icons/Folder";
+import IconButton from "@material-ui/core/IconButton";
+import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
+import CommentIcon from "@material-ui/icons/Comment";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -30,9 +34,10 @@ const useStyles = makeStyles((theme) => ({
     flexGrow: 1,
     color: "WhiteSmoke",
     fontSize: 20,
+    marginRight: "20px",
   },
   shareContainer: {
-    width: 440,
+    width: 540,
     height: 30,
     paddingLeft: 10,
     color: "aqua",
@@ -42,8 +47,8 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: "flex-start",
     alignItems: "center",
     position: "absolute",
-    right: 200,
-    top: 16,
+    right: 80,
+    top: 86,
   },
   searchContainer: {
     display: "flex",
@@ -88,19 +93,82 @@ const CadView = () => {
             style={{
               borderBottom: "1px solid 	#585858",
               backgroundColor: "#787878",
+              display: "flex",
+              justifyContent: "space-between",
             }}
           >
-            <Typography
-              variant="h6"
-              className={classes.title}
-              onClick={() => {
-                history.push("/cards");
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                justifyContent: "flex-start",
+                alignItems: "center",
               }}
             >
-              BUILDRS
-            </Typography>
-            <PrimaryButton name={"Share"} onClick={onClickShare} />
-            <LoginMenu />
+              <Typography
+                variant="h6"
+                className={classes.title}
+                onClick={() => {
+                  history.push("/cards");
+                }}
+              >
+                BUILDRS
+              </Typography>
+
+              <IconButton
+                edge="start"
+                color="secondary"
+                aria-label="menu"
+                style={{ position: "relative" }}
+              >
+                <FolderIcon
+                  style={{
+                    width: 30,
+                    height: 30,
+                    color: "whiteSmoke",
+                  }}
+                />
+              </IconButton>
+              <IconButton
+                edge="start"
+                color="secondary"
+                aria-label="menu"
+                style={{ position: "relative" }}
+              >
+                <OpenInBrowserIcon
+                  style={{
+                    width: 30,
+                    height: 30,
+                    color: "whiteSmoke",
+                  }}
+                />
+              </IconButton>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "row",
+                justifyContent: "flex-start",
+                alignItems: "center",
+              }}
+            >
+              <IconButton
+                edge="start"
+                color="secondary"
+                aria-label="menu"
+                style={{ position: "relative", right: 10 }}
+              >
+                <CommentIcon
+                  style={{
+                    width: 30,
+                    height: 30,
+                    color: "whiteSmoke",
+                  }}
+                />
+              </IconButton>
+              <PrimaryButton name={"Share"} onClick={onClickShare} />
+              <LoginMenu />
+            </div>
           </Toolbar>
         </AppBar>
         <div className={classes.searchContainer}>
