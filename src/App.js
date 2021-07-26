@@ -1,6 +1,6 @@
 import "./App.css";
 import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
-import Home from "./Containers/Home";
+import CadView from "./Containers/CadView";
 import { createTheme, ThemeProvider } from "@material-ui/core/styles";
 import { grey } from "@material-ui/core/colors";
 
@@ -22,7 +22,7 @@ function App() {
       <Router>
         <Switch>
           <Route path="/">
-            <Home />
+            <CadView />
           </Route>
         </Switch>
       </Router>

@@ -7,13 +7,13 @@ const outerTheme = createTheme({
   palette: {
     primary: {
       light: palette.primary[300],
-      main: "red",
+      main: "green",
       dark: palette.primary[700],
       contrastText: getContrastText(palette.primary[500]),
     },
     secondary: {
       light: palette.secondary.A200,
-      main: "red",
+      main: "orange",
       dark: palette.secondary.A700,
       contrastText: getContrastText(palette.secondary.A400),
     },

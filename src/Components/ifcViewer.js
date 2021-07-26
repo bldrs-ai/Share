@@ -1,21 +1,17 @@
 import React from "react";
 import { IfcViewerAPI } from "web-ifc-viewer";
-import Button from "@material-ui/core/Button";
-
+import "../App.css";
 
 export default class Viewer extends React.Component {
-
   state = {
     loaded: false,
-    loading_ifc: false
+    loading_ifc: false,
   };
-
 
   constructor(props) {
     super(props);
     this.viewer = null;
   }
-
 
   componentDidMount() {
     const container = document.getElementById("viewer-container");
@@ -27,63 +23,76 @@ export default class Viewer extends React.Component {
     this.viewer.addGrid();
     window.onmousemove = this.viewer.prepickIfcItem;
     window.ondblclick = this.viewer.addClippingPlane;
-    window.onkeydown = event => {
+    window.onkeydown = (event) => {
       this.viewer.removeClippingPlane();
     };
+    //create load ifc input
+    const inputElement = document.createElement("input");
+    inputElement.setAttribute("type", "file");
+    inputElement.classList.add("hidden");
+    inputElement.addEventListener(
+      "change",
+      (event) => {
+        this.loadIfc(event);
+      },
+      false
+    );
+    document.getElementById("fileInput").appendChild(inputElement);
   }
-
 
   async loadIfc(event) {
-    this.setState({ loading_ifc: true })
+    this.setState({ loading_ifc: true });
     await this.viewer.loadIfc(event.target.files[0], true);
-    this.setState({ loaded: true, loading_ifc: false })
+    this.setState({ loaded: true, loading_ifc: false });
   }
-
 
   openFileDialog() {
     const inputElement = document.createElement("input");
     inputElement.setAttribute("type", "file");
     inputElement.classList.add("hidden");
-    inputElement.addEventListener("change", event => { this.loadIfc(event); }, false);
+    inputElement.addEventListener(
+      "change",
+      (event) => {
+        this.loadIfc(event);
+      },
+      false
+    );
     document.getElementById("fileInput").appendChild(inputElement);
   }
 
-
   render() {
     return (
-      <div style={{ width: '80%', height: '80%', margin: 'auto' }}>
+      <div>
         <div
           id="viewer-container"
           style={{
-            position: 'relative',
-            top: '0px',
-            left: '0px',
-            textAlign: 'center',
-            color: 'blue',
-            width: '800px',
-            height: '640px',
-            margin: 'auto'
-          }}></div>
+            position: "absolute",
+            top: "0px",
+            left: "0px",
+            textAlign: "center",
+            color: "blue",
+            width: "100vw",
+            height: "100vh",
+            margin: "auto",
+          }}
+        ></div>
         <div
           id="fileInput"
           style={{
-            position: 'relative',
-            top: '0px',
-            left: '0px',
-            color: 'blue',
-            textAlign: 'center',
-            overflow: 'hidden'
-          }}></div>
-        <Button
-          variant="contained"
-          color="primary"
-          size="small"
-          onClick={(event) => {
-            this.openFileDialog();
+            position: "absolute",
+            bottom: "30px",
+            width: 300,
+            height: 30,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            left: "43%",
+            color: "blue",
+            textAlign: "center",
+            overflow: "hidden",
+            border: "1px solid lime",
           }}
-        >
-          Load ifc
-        </Button>
+        ></div>
       </div>
     );
   }
