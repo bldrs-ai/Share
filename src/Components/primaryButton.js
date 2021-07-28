@@ -15,7 +15,7 @@ const PrimaryButton = ({ name, onClick }) => {
   return (
     <Button
       variant="contained"
-      color="secondry"
+      color="secondary"
       className={classes.button}
       startIcon={<ShareIcon />}
       size="medium"

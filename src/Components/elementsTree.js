@@ -1,12 +1,11 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
-import ElementsTreeStructure from "./tree";
+import ElementsTreeStructure from './tree.js';
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 300,
-    height: 500,
     border: "1px solid lime",
     display: "flex",
     flexDirection: "column",
@@ -19,13 +18,13 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     overflow: "auto",
     flexDirection: "column",
-    height: "120px",
     width: "220px",
     backgroundColor: "lightGray",
   },
 }));
 
-const ElementsTree = () => {
+
+const ElementsTree = ({ viewer, ifcElement }) => {
   const classes = useStyles();
   return (
     <Paper
@@ -36,7 +35,7 @@ const ElementsTree = () => {
         left: 24,
       }}
     >
-      <ElementsTreeStructure />
+      <ElementsTreeStructure viewer={viewer} ifcElement={ifcElement}/>
       {/* <Paper elevation={3} className={classes.paper}></Paper> */}
 
       {/* <Paper elevation={3} className={classes.paper}>
