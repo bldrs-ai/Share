@@ -6,7 +6,6 @@ import ElementsTreeStructure from './tree.js';
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 300,
-    height: 500,
     border: "1px solid lime",
     display: "flex",
     flexDirection: "column",
@@ -19,15 +18,13 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     overflow: "auto",
     flexDirection: "column",
-    height: "120px",
     width: "220px",
     backgroundColor: "lightGray",
   },
 }));
 
 
-const ElementsTree = ({ ifcElement }) => {
-  console.log('ElementsTree: ', ifcElement);
+const ElementsTree = ({ viewer, ifcElement }) => {
   const classes = useStyles();
   return (
     <Paper
@@ -38,7 +35,7 @@ const ElementsTree = ({ ifcElement }) => {
         left: 24,
       }}
     >
-      <ElementsTreeStructure ifcElement={ifcElement}/>
+      <ElementsTreeStructure viewer={viewer} ifcElement={ifcElement}/>
       {/* <Paper elevation={3} className={classes.paper}></Paper> */}
 
       {/* <Paper elevation={3} className={classes.paper}>

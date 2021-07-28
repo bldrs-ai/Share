@@ -75,32 +75,34 @@ const CadView = () => {
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
+  const [viewer, setViewer] = useState({});
   const [ifcElement, setIfcElement] = useState({});
   const history = useHistory();
-  let viewer;
 
   const onClickShare = () => {
     setOpenShare(!openShare);
   };
 
-  const loadIfc = async event => {
-    await viewer.loadIfc(event.target.files[0], true);
-    try {
-      // v1.0.14
-      const ifcRoot = viewer.ifcManager.loader.getSpatialStructure(0);
-      // v1.0.20
-      // const ifcRoot = viewer.IFC.loader.ifcManager.getSpatialStructure(0);
-      console.log('setIfcElement to ifcRoot: ', ifcRoot);
-      setIfcElement(ifcRoot);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
+
+    const loadIfc = async event => {
+      await viewer.loadIfc(event.target.files[0], true);
+      try {
+        // v1.0.14
+        //const ifcRoot = viewer.ifcManager.loader.getSpatialStructure(0);
+        // v1.0.20
+        const ifcRoot = viewer.IFC.loader.ifcManager.getSpatialStructure(0);
+        console.log('setIfcElement to ifcRoot: ', ifcRoot);
+        setIfcElement(ifcRoot);
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
     const container = document.getElementById("viewer-container");
-    viewer = new IfcViewerAPI({ container });
+    const viewer = new IfcViewerAPI({ container });
+    setViewer(viewer);
     // No setWasmPath here. As of 1.0.14, the default is
     // http://localhost:3000/static/js/web-ifc.wasm, so just putting
     // the binary there in our public directory.
@@ -268,7 +270,7 @@ const CadView = () => {
         <div className={classes.menuToolbarContainer}>
           <div>
             {openLeft ? (
-              <ElementsTree id="elements-tree" ifcElement={ifcElement} />
+              <ElementsTree id="elements-tree" viewer={viewer} ifcElement={ifcElement} />
             ) : null}
           </div>
           <div>{openRight ? <ElementsInfo /> : null}</div>
