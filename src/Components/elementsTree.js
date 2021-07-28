@@ -1,7 +1,7 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
-import ElementsTreeStructure from "./tree";
+import ElementsTreeStructure from './tree.js';
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
@@ -25,7 +25,9 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const ElementsTree = () => {
+
+const ElementsTree = ({ ifcElement }) => {
+  console.log('ElementsTree: ', ifcElement);
   const classes = useStyles();
   return (
     <Paper
@@ -36,7 +38,7 @@ const ElementsTree = () => {
         left: 24,
       }}
     >
-      <ElementsTreeStructure />
+      <ElementsTreeStructure ifcElement={ifcElement}/>
       {/* <Paper elevation={3} className={classes.paper}></Paper> */}
 
       {/* <Paper elevation={3} className={classes.paper}>

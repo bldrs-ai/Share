@@ -3,9 +3,7 @@ import { makeStyles } from "@material-ui/core/styles";
 import AppBar from "@material-ui/core/AppBar";
 import Toolbar from "@material-ui/core/Toolbar";
 import Typography from "@material-ui/core/Typography";
-import TextField from "@material-ui/core/TextField";
 import { useHistory } from "react-router-dom";
-//import Viewer from "../Components/ifcViewer";
 import LoginMenu from "../Components/loginMenu";
 import PrimaryButton from "../Components/primaryButton";
 import MenuButton from "../Components/menuButton";
@@ -16,7 +14,6 @@ import FolderIcon from "@material-ui/icons/Folder";
 import IconButton from "@material-ui/core/IconButton";
 import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
 import CommentIcon from "@material-ui/icons/Comment";
-import ElementsTreeStructure from "../Components/tree";
 import "../App.css";
 import { IfcViewerAPI } from "web-ifc-viewer";
 
@@ -78,7 +75,7 @@ const CadView = () => {
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
-  const [ifcElements, setIfcElements] = useState({});
+  const [ifcElement, setIfcElement] = useState({});
   const history = useHistory();
   let viewer;
 
@@ -86,33 +83,15 @@ const CadView = () => {
     setOpenShare(!openShare);
   };
 
-  const visitIfc = (ifcElt, htmlElt) => {
-    const children = ifcElt.children;
-    if (children && children.length > 0) {
-      const ulElt = document.createElement('ul');
-      ulElt.appendChild(document.createTextNode(`${ifcElt.type} (id: ${ifcElt.expressID})`));
-      for (let ndx in children) {
-        const childElt = children[ndx];
-        visitIfc(childElt, ulElt);
-      }
-      htmlElt.appendChild(ulElt);
-    } else {
-      const liElt = document.createElement('li');
-      liElt.appendChild(document.createTextNode(`${ifcElt.type} (id: ${ifcElt.expressID})`));
-      htmlElt.appendChild(liElt);
-    }
-  };
-
   const loadIfc = async event => {
     await viewer.loadIfc(event.target.files[0], true);
     try {
       // v1.0.14
       const ifcRoot = viewer.ifcManager.loader.getSpatialStructure(0);
-      console.log('ifcRoot: ', ifcRoot);
-      setIfcElements('foo');
       // v1.0.20
       // const ifcRoot = viewer.IFC.loader.ifcManager.getSpatialStructure(0);
-      console.log('spatial structure: ', ifcElements);
+      console.log('setIfcElement to ifcRoot: ', ifcRoot);
+      setIfcElement(ifcRoot);
     } catch (e) {
       console.error(e);
     }
@@ -132,7 +111,6 @@ const CadView = () => {
     window.onkeydown = (event) => {
       viewer.removeClippingPlane();
     };
-    console.log('CadView#useEffect');
     //create load ifc input
     const inputElement = document.createElement("input");
     inputElement.setAttribute("type", "file");
@@ -288,7 +266,11 @@ const CadView = () => {
           <MenuButton onClick={() => setOpenRight(!openRight)} />
         </div>
         <div className={classes.menuToolbarContainer}>
-          <div>{openLeft ? <ElementsTree id="elements-tree"/> : null}</div>
+          <div>
+            {openLeft ? (
+              <ElementsTree id="elements-tree" ifcElement={ifcElement} />
+            ) : null}
+          </div>
           <div>{openRight ? <ElementsInfo /> : null}</div>
         </div>
       </div>
