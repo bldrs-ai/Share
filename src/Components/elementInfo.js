@@ -23,7 +23,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const ElementsInfo = () => {
+const ElementsInfo = (elementProps) => {
+  console.log('ElementsInfo, elementProps: ', elementProps);
   const classes = useStyles();
   return (
     <div
