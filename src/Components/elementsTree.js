@@ -5,13 +5,14 @@ import ElementsTreeStructure from './tree.js';
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
-    width: 300,
-    border: "1px solid lime",
+    width: 308,
+    border: "1px solid black",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-around",
     alignItems: "center",
     overflow: "scroll",
+    marginLeft: '-5px'
   },
   paper: {
     padding: theme.spacing(2),
@@ -24,27 +25,22 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 
-const ElementsTree = ({ viewer, ifcElement }) => {
+const ElementsTree = ({ ifcElement, onElementSelect }) => {
   const classes = useStyles();
   return (
     <Paper
-      className={classes.contextualMenu}
-      style={{
-        position: "absolute",
+      className = {classes.contextualMenu}
+      style = {{
+        position: 'absolute',
         top: 144,
         left: 24,
+        height: '70%',
+        overflow: 'auto'
       }}
     >
-      <ElementsTreeStructure viewer={viewer} ifcElement={ifcElement}/>
-      {/* <Paper elevation={3} className={classes.paper}></Paper> */}
-
-      {/* <Paper elevation={3} className={classes.paper}>
-        <div>workflow menu 1</div>
-      </Paper>
-
-      <Paper elevation={3} className={classes.paper}>
-        <div>workflow menu 2</div>
-      </Paper> */}
+      <ElementsTreeStructure
+        ifcElement = {ifcElement}
+        onElementSelect = {onElementSelect} />
     </Paper>
   );
 };

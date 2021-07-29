@@ -77,15 +77,43 @@ const CadView = () => {
   const [openShare, setOpenShare] = useState(false);
   const [viewer, setViewer] = useState({});
   const [ifcElement, setIfcElement] = useState({});
+  const [selectedElement, setSelectedElement] = useState({});
   const history = useHistory();
 
   const onClickShare = () => {
     setOpenShare(!openShare);
   };
 
+
+  const onElementSelect = expressID => {
+    try {
+      console.log('Using IfcViewerAPI: ', viewer);
+      viewer.IFC.pickIfcItemsByID(0, [expressID]);
+      const props = viewer.IFC.getItemProperties(0, expressID);
+      setSelectedElement(props);
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
+    const container = document.getElementById("viewer-container");
+    const viewer = new IfcViewerAPI({ container });
+    setViewer(viewer);
+    // No setWasmPath here. As of 1.0.14, the default is
+    // http://localhost:3000/static/js/web-ifc.wasm, so just putting
+    // the binary there in our public directory.
+    viewer.addAxes();
+    viewer.addGrid();
+    window.onmousemove = viewer.prepickIfcItem;
+    window.ondblclick = viewer.addClippingPlane;
+    window.onkeydown = (event) => {
+      viewer.removeClippingPlane();
+    };
+  }, []);
 
+  const fileOpen = () => {
     const loadIfc = async event => {
       await viewer.loadIfc(event.target.files[0], true);
       try {
@@ -100,32 +128,22 @@ const CadView = () => {
       }
     };
 
-    const container = document.getElementById("viewer-container");
-    const viewer = new IfcViewerAPI({ container });
-    setViewer(viewer);
-    // No setWasmPath here. As of 1.0.14, the default is
-    // http://localhost:3000/static/js/web-ifc.wasm, so just putting
-    // the binary there in our public directory.
-    viewer.addAxes();
-    viewer.addGrid();
-    window.onmousemove = viewer.prepickIfcItem;
-    window.ondblclick = viewer.addClippingPlane;
-    window.onkeydown = (event) => {
-      viewer.removeClippingPlane();
-    };
+    const viewerContainer = document.getElementById("viewer-container");
+
     //create load ifc input
-    const inputElement = document.createElement("input");
-    inputElement.setAttribute("type", "file");
-    inputElement.classList.add("hidden");
-    inputElement.addEventListener(
+    const fileInput = document.createElement("input");
+    fileInput.setAttribute("type", "file");
+    fileInput.classList.add("hidden");
+    fileInput.addEventListener(
       "change",
       event => {
         loadIfc(event);
       },
       false
     );
-    document.getElementById("fileInput").appendChild(inputElement);
-  }, []);
+    viewerContainer.appendChild(fileInput);
+    fileInput.click();
+  }
 
   return (
     <div>
@@ -141,23 +159,6 @@ const CadView = () => {
             width: "100vw",
             height: "100vh",
             margin: "auto",
-          }}
-        ></div>
-        <div
-          id="fileInput"
-          style={{
-            position: "absolute",
-            bottom: "30px",
-            width: 300,
-            height: 30,
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            left: "43%",
-            color: "blue",
-            textAlign: "center",
-            overflow: "hidden",
-            border: "1px solid lime",
           }}
         ></div>
       </div>
@@ -198,7 +199,7 @@ const CadView = () => {
               >
                 BUILDRS
               </Typography>
-
+              {/*
               <IconButton
                 edge="start"
                 color="secondary"
@@ -212,12 +213,13 @@ const CadView = () => {
                     color: "whiteSmoke",
                   }}
                 />
-              </IconButton>
+                </IconButton>*/}
               <IconButton
                 edge="start"
                 color="secondary"
                 aria-label="menu"
                 style={{ position: "relative" }}
+                onClick={fileOpen}
               >
                 <OpenInBrowserIcon
                   style={{
@@ -268,12 +270,18 @@ const CadView = () => {
           <MenuButton onClick={() => setOpenRight(!openRight)} />
         </div>
         <div className={classes.menuToolbarContainer}>
-          <div>
-            {openLeft ? (
-              <ElementsTree id="elements-tree" viewer={viewer} ifcElement={ifcElement} />
-            ) : null}
+          <div>{
+            openLeft ? (
+              <ElementsTree id="elements-tree" ifcElement={ifcElement} onElementSelect={onElementSelect} />
+            ) : null
+          }
           </div>
-          <div>{openRight ? <ElementsInfo /> : null}</div>
+          <div>{
+            openRight ? (
+              <ElementsInfo elementProps={selectedElement} />
+            ) : null
+          }
+          </div>
         </div>
       </div>
     </div>
