@@ -7514,7 +7514,7 @@ mkdirp@^1.0.3, mkdirp@^1.0.4:
 
 monaco-editor@^0.25.2:
   version "0.25.2"
-  resolved "https://registry.npmjs.org/monaco-editor/-/monaco-editor-0.25.2.tgz"
+  resolved "https://registry.yarnpkg.com/monaco-editor/-/monaco-editor-0.25.2.tgz#119e2b15bbd968a1a99c03cac9c329316d7c37e9"
   integrity sha512-5iylzSJevCnzJn9UVsW8yOZ3yHjmAs4TfvH3zsbftKiFKmHG0xirGN6DK9Kk04VSWxYCZZAIafYJoNJJMAU1KA==
 
 move-concurrently@^1.0.1:
@@ -10710,7 +10710,7 @@ three-mesh-bvh@^0.3.7:
 
 three-mesh-bvh@^0.4.1:
   version "0.4.1"
-  resolved "https://registry.npmjs.org/three-mesh-bvh/-/three-mesh-bvh-0.4.1.tgz"
+  resolved "https://registry.yarnpkg.com/three-mesh-bvh/-/three-mesh-bvh-0.4.1.tgz#ba0bf1dac7cbd41f2132c8446545c8ad9fbeb892"
   integrity sha512-1ALlGVjArZpi0SdqZhjwFA3DZHgBF/Uo4LnL8G7PczI7rpOoBK87CaBL073DVrrbIE4OONJvpq/PEzluKoRHbg==
 
 three@^0.128.0:
@@ -10838,7 +10838,7 @@ ts-pnp@1.2.0, ts-pnp@^1.1.6:
 
 tsc@^2.0.3:
   version "2.0.3"
-  resolved "https://registry.npmjs.org/tsc/-/tsc-2.0.3.tgz"
+  resolved "https://registry.yarnpkg.com/tsc/-/tsc-2.0.3.tgz#037fe579e3bd67a5cbdaa604b43c6c1991b04bef"
   integrity sha512-SN+9zBUtrpUcOpaUO7GjkEHgWtf22c7FKbKCA4e858eEM7Qz86rRDpgOU2lBIDf0fLCsEg65ms899UMUIB2+Ow==
 
 tsconfig-paths@^3.9.0:
@@ -11244,7 +11244,7 @@ wbuf@^1.1.0, wbuf@^1.7.3:
 
 web-ifc-three@^0.0.40:
   version "0.0.40"
-  resolved "https://registry.npmjs.org/web-ifc-three/-/web-ifc-three-0.0.40.tgz"
+  resolved "https://registry.yarnpkg.com/web-ifc-three/-/web-ifc-three-0.0.40.tgz#66d99bc21d4fd1133184c321f77f9af5202c39c0"
   integrity sha512-MY2Z10QCxRqNUfc+IHYTV2tZW5BVGHLMOxzHTx+QLwO1tPfULVYsUkkJ9p875OcXVajf+vvUcqHzXH9NUjNkHQ==
   dependencies:
     stats.js "^0.17.0"
@@ -11254,7 +11254,7 @@ web-ifc-three@^0.0.40:
 
 web-ifc-viewer@1.0.23:
   version "1.0.23"
-  resolved "https://registry.npmjs.org/web-ifc-viewer/-/web-ifc-viewer-1.0.23.tgz"
+  resolved "https://registry.yarnpkg.com/web-ifc-viewer/-/web-ifc-viewer-1.0.23.tgz#5d2fc42a713bba672c00842a7570fc40c67957b6"
   integrity sha512-R+ogFbFBVNpDch5OXCuwNrclooeQ4XHuCp8ygk5LTeBRsJQ4bfGBW4wak/23VH4hb6l0azZo7YEBStUqwklMcw==
   dependencies:
     "@parametricos/bcf-js" "^0.1.2"
@@ -11266,7 +11266,7 @@ web-ifc-viewer@1.0.23:
 
 web-ifc@0.0.21:
   version "0.0.21"
-  resolved "https://registry.npmjs.org/web-ifc/-/web-ifc-0.0.21.tgz"
+  resolved "https://registry.yarnpkg.com/web-ifc/-/web-ifc-0.0.21.tgz#633e7fd62612f89cc93bdc0329b663a22ec3c4c1"
   integrity sha512-cKnt92CAoeAncspdIQUDBQ2niB7IYM+8EXeIGnc01HIk8u0zzKBIeyhFPFb7E01bGD9ZxWBMQzlRSPuCm/IakQ==
   dependencies:
     monaco-editor "^0.25.2"

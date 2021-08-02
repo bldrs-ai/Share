@@ -21,7 +21,6 @@ const MenuButton = ({ onClick }) => {
       onClick={onClick}
     >
       <MenuIcon style={{
-                  color: "lime",
                   width: 30,
                   height: 30
                 }} />

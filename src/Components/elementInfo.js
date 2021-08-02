@@ -1,12 +1,13 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
+import {Info} from './info.js';
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 240,
     height: 300,
-    border: "1px solid lime",
+    border: "none",
     marginLeft: "24px",
     display: "flex",
     flexDirection: "column",
@@ -24,32 +25,26 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 const ElementsInfo = (elementProps) => {
-  console.log('ElementsInfo, elementProps: ', elementProps);
+  elementProps = elementProps.elementProps;
   const classes = useStyles();
   return (
     <div
       className={classes.contextualMenu}
       style={{
-        height: 460,
+        height: 'auto',
         position: "absolute",
         top: 130,
         right: 34,
       }}
     >
-      <Paper elevation={3} className={classes.paper} style={{ height: 20 }}>
-        <div>element data</div>
-      </Paper>
-      <Paper elevation={3} className={classes.paper} style={{ height: 40 }}>
-        <div>parameters</div>
-      </Paper>
-      <Paper elevation={3} className={classes.paper} style={{ height: 20 }}>
-        <div>comments</div>
-      </Paper>
-      <Paper elevation={3} className={classes.paper}>
-        <div>...</div>
-      </Paper>
-      <Paper elevation={3} className={classes.paper}>
-        <div>...</div>
+      <Paper elevation={3} className={classes.paper} style={{
+               position: 'absolute',
+               width: 'auto',
+               height: 'auto',
+               top: '0px',
+               right: '0px',
+               minHeight: '20%' }}>
+        <Info elementProps={elementProps}/>
       </Paper>
     </div>
   );
