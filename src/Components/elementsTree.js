@@ -6,7 +6,7 @@ import ElementsTreeStructure from './tree.js';
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 308,
-    border: "1px solid black",
+    border: "none",
     display: "flex",
     flexDirection: "column",
     justifyContent: "space-around",

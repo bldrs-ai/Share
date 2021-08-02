@@ -10,7 +10,6 @@ import MenuButton from "../Components/menuButton";
 import ElementsTree from "../Components/elementsTree";
 import ElementsInfo from "../Components/elementInfo";
 import SearchInput from "../Components/searchInput";
-import FolderIcon from "@material-ui/icons/Folder";
 import IconButton from "@material-ui/core/IconButton";
 import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
 import CommentIcon from "@material-ui/icons/Comment";
@@ -77,7 +76,7 @@ const CadView = () => {
   const [openShare, setOpenShare] = useState(false);
   const [viewer, setViewer] = useState({});
   const [ifcElement, setIfcElement] = useState({});
-  const [selectedElement, setSelectedElement] = useState({});
+  const [elementProps, setElementProps] = useState({});
   const history = useHistory();
 
   const onClickShare = () => {
@@ -87,10 +86,10 @@ const CadView = () => {
 
   const onElementSelect = expressID => {
     try {
-      console.log('Using IfcViewerAPI: ', viewer);
-      viewer.IFC.pickIfcItemsByID(0, [expressID]);
-      const props = viewer.IFC.getItemProperties(0, expressID);
-      setSelectedElement(props);
+      viewer.pickIfcItemsByID(0, [expressID]);
+      const props = viewer.getProperties(0, expressID);
+      setElementProps(props);
+      setOpenRight(true);
     } catch (e) {
       console.error(e);
     }
@@ -116,26 +115,17 @@ const CadView = () => {
   const fileOpen = () => {
     const loadIfc = async event => {
       await viewer.loadIfc(event.target.files[0], true);
-      try {
-        // v1.0.14
-        //const ifcRoot = viewer.ifcManager.loader.getSpatialStructure(0);
-        // v1.0.20
-        const ifcRoot = viewer.IFC.loader.ifcManager.getSpatialStructure(0);
-        console.log('setIfcElement to ifcRoot: ', ifcRoot);
-        setIfcElement(ifcRoot);
-      } catch (e) {
-        console.error(e);
-      }
+      const ifcRoot = viewer.getSpatialStructure(0);
+      setIfcElement(ifcRoot);
+      setOpenLeft(true);
     };
 
-    const viewerContainer = document.getElementById("viewer-container");
-
-    //create load ifc input
-    const fileInput = document.createElement("input");
-    fileInput.setAttribute("type", "file");
-    fileInput.classList.add("hidden");
+    const viewerContainer = document.getElementById('viewer-container');
+    const fileInput = document.createElement('input');
+    fileInput.setAttribute('type', 'file');
+    fileInput.classList.add('file-input');
     fileInput.addEventListener(
-      "change",
+      'change',
       event => {
         loadIfc(event);
       },
@@ -272,13 +262,13 @@ const CadView = () => {
         <div className={classes.menuToolbarContainer}>
           <div>{
             openLeft ? (
-              <ElementsTree id="elements-tree" ifcElement={ifcElement} onElementSelect={onElementSelect} />
+              <ElementsTree ifcElement={ifcElement} onElementSelect={onElementSelect} />
             ) : null
           }
           </div>
           <div>{
             openRight ? (
-              <ElementsInfo elementProps={selectedElement} />
+              <ElementsInfo elementProps={elementProps} />
             ) : null
           }
           </div>
