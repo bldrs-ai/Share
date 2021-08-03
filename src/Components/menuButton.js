@@ -5,8 +5,9 @@ import IconButton from "@material-ui/core/IconButton";
 
 const useStyles = makeStyles((theme) => ({
   menuButton: {
-    marginLeft: 12,
-    marginRight: 22,
+    "@media (max-width: 1280px)": {
+      border: "2px solid lime",
+    },
   },
 }));
 
@@ -20,10 +21,12 @@ const MenuButton = ({ onClick }) => {
       aria-label="menu"
       onClick={onClick}
     >
-      <MenuIcon style={{
-                  width: 30,
-                  height: 30
-                }} />
+      <MenuIcon
+        style={{
+          width: 30,
+          height: 30,
+        }}
+      />
     </IconButton>
   );
 };

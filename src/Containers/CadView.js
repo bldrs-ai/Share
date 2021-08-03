@@ -1,18 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { makeStyles } from "@material-ui/core/styles";
-import AppBar from "@material-ui/core/AppBar";
-import Toolbar from "@material-ui/core/Toolbar";
-import Typography from "@material-ui/core/Typography";
-import { useHistory } from "react-router-dom";
-import LoginMenu from "../Components/loginMenu";
-import PrimaryButton from "../Components/primaryButton";
 import MenuButton from "../Components/menuButton";
 import ElementsTree from "../Components/elementsTree";
 import ElementsInfo from "../Components/elementInfo";
 import SearchInput from "../Components/searchInput";
-import IconButton from "@material-ui/core/IconButton";
-import OpenInBrowserIcon from "@material-ui/icons/OpenInBrowser";
-import CommentIcon from "@material-ui/icons/Comment";
 import "../App.css";
 import { IfcViewerAPI } from "web-ifc-viewer";
 import BuildrsToolBar from "../Components/toolBar";
@@ -29,6 +20,24 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     justifyContent: "flex-end",
     marginTop: "10px",
+    border: "1px solid red",
+    "@media (max-width: 1280px)": {
+      marginTop: "40px",
+    },
+  },
+  elementsButton: {
+    position: "absolute",
+    top: 80,
+    right: 10,
+    display: "flex",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    "@media (max-width: 1280px)": {
+      marginTop: theme.spacing(5),
+      top: 690,
+      right: 15,
+    },
   },
   title: {
     flexGrow: 1,
@@ -67,18 +76,32 @@ const useStyles = makeStyles((theme) => ({
     height: "50px",
     width: "160px",
   },
+  viewContainer: {
+    position: "absolute",
+    top: "0px",
+    left: "0px",
+    textAlign: "center",
+    color: "blue",
+    width: "100vw",
+    height: "100vh",
+    margin: "auto",
+  },
+  propertyViewContainer: {
+    position: "absolute",
+    top: "100px",
+    right: "50px",
+    width: "400px",
+  },
 }));
 
 const CadView = () => {
   const classes = useStyles();
-
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
   const [viewer, setViewer] = useState({});
   const [ifcElement, setIfcElement] = useState({});
   const [elementProps, setElementProps] = useState({});
-  const history = useHistory();
 
   const onClickShare = () => {
     setOpenShare(!openShare);
@@ -138,33 +161,14 @@ const CadView = () => {
   return (
     <div>
       <div style={{ zIndex: 0 }}>
-        <div
-          id="viewer-container"
-          style={{
-            position: "absolute",
-            top: "0px",
-            left: "0px",
-            textAlign: "center",
-            color: "blue",
-            width: "100vw",
-            height: "100vh",
-            margin: "auto",
-          }}
-        ></div>
+        <div className={classes.viewContainer} id="viewer-container"></div>
       </div>
       <div
         id="property-viewer-container"
-        style={{
-          position: "absolute",
-          top: "100px",
-          right: "50px",
-          width: "400px",
-        }}
+        className={classes.propertyViewContainer}
       ></div>
       <div index={{ zIndex: 100 }}>
-        <AppBar elevation={0} position="static" color="primary">
-          <BuildrsToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
-        </AppBar>
+        <BuildrsToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <div className={classes.searchContainer}>
           <SearchInput onClickMenu={() => setOpenLeft(!openLeft)} />
         </div>
@@ -173,10 +177,11 @@ const CadView = () => {
             http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
           </div>
         )}
-        <div className={classes.menuToolbarContainer}>
-          {/* <MenuButton onClick={() => setOpenLeft(!openLeft)} /> */}
+        <div className={classes.elementsButton}>
           <MenuButton onClick={() => setOpenRight(!openRight)} />
         </div>
+
+        {/* </div> */}
         <div className={classes.menuToolbarContainer}>
           <div>
             {openLeft ? (
