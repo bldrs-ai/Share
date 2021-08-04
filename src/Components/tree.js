@@ -102,7 +102,7 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
         style = {getStyle(ifcElement)}
         type = {getAction(ifcElement)}>
       {
-        parentOpen ? (ifcElement.children.map(
+        parentOpen && ifcElement.children.length > 0 ? (ifcElement.children.map(
           child => <ElementsTreeStructure
                      viewer = {viewer}
                      ifcElement = {child}
