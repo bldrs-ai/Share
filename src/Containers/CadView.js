@@ -97,7 +97,6 @@ const useStyles = makeStyles((theme) => ({
 
 const CadView = () => {
   const classes = useStyles();
-  const history = useHistory();
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);

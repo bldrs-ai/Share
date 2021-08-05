@@ -17,7 +17,6 @@ const ElementsTreeStructure = ({viewer, element, onElementSelect, showChildren, 
 
 
   const onSeachIconClick = e => {
-    //const expressID = parseInt(e.target.getAttribute('express-id'));
     onElementSelect(element);
   };
 
