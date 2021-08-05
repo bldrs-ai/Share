@@ -3,7 +3,7 @@ import Tree from 'react-animated-tree-v2';
 import '../styles/tree.css';
 
 
-const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildren, parentOpen = false }) => {
+const ElementsTreeStructure = ({viewer, element, onElementSelect, showChildren, parentOpen = false }) => {
 
 
   if (showChildren === undefined) throw new Error();
@@ -17,24 +17,24 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
 
 
   const onSeachIconClick = e => {
-    const expressID = parseInt(e.target.getAttribute('express-id'));
-    onElementSelect(expressID);
+    //const expressID = parseInt(e.target.getAttribute('express-id'));
+    onElementSelect(element);
   };
 
 
-  const autoOpen = ifcElement => {
-    switch(ifcElement.type) {
+  const autoOpen = element => {
+    switch(element.type) {
     case 'IFCBUILDING': ; // fallthrough
     case 'IFCPROJECT':  ; // fallthrough
     case 'IFCSITE':     ; // fallthrough
-    case 'IFCSPACE': return true; // return ifcElement.children && ifcElement.children.length > 0;
+    case 'IFCSPACE': return true; // return element.children && element.children.length > 0;
     default: return false;
     }
   };
 
 
-  const prettyType = ifcElement => {
-    switch(ifcElement.type) {
+  const prettyType = element => {
+    switch(element.type) {
     case 'IFCBUILDING': return 'Building';
     case 'IFCBUILDINGSTOREY': return 'Storey';
     case 'IFCDOOR': return 'Door';
@@ -47,13 +47,14 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
     case 'IFCWALL': return 'Wall';
     case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)';
     case 'IFCWINDOW': return 'Window';
-    default: return ifcElement.type;
+    default: return element.type;
     }
   };
 
 
-  const isSelectable = ifcElement => {
-    switch(ifcElement.type) {
+  const isSelectable = element => {
+    if (true) return true;
+    switch(element.type) {
     case 'IFCBUILDING':      ; // fallthrough
     case 'IFCPROJECT':       ; // fallthrough
     case 'IFCSITE':          ; // fallthrough
@@ -64,17 +65,19 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
   };
 
 
-  const getText = ifcElement => {
-    const props = viewer.getProperties(0, ifcElement.expressID);
-    console.log(`${ifcElement.type}: props: `, props);
-    return (props.Name ? props.Name.value : null) || prettyType(ifcElement);
-    //return prettyType(ifcElement);
+  const getText = element => {
+    const props = viewer.getProperties(0, element.expressID);
+    // TODO: e.g. when there's no model loaded.
+    if (props === null) {
+      return '';
+    }
+    return (props.Name ? props.Name.value : null) || prettyType(element);
   }
 
   /** Hack to special-case the tree root to push it to top of
    * container. */
-  const getStyle = ifcElement => {
-    return ifcElement.type === 'IFCPROJECT' ? {
+  const getStyle = element => {
+    return element.type === 'IFCPROJECT' ? {
       position: 'absolute',
       top: 0,
       left: 10,
@@ -82,11 +85,11 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
   };
 
 
-  const getAction = ifcElement => {
-    return isSelectable(ifcElement) ?
+  const getAction = element => {
+    return isSelectable(element) ?
       (<button
          onClick={onSeachIconClick}
-         express-id = {ifcElement.expressID}>
+         express-id = {element.expressID}>
          🔍
        </button>)
       : null;
@@ -96,16 +99,16 @@ const ElementsTreeStructure = ({viewer, ifcElement, onElementSelect, showChildre
   let i = 0;
   return (
       <Tree
-        content = {getText(ifcElement)}
+        content = {getText(element)}
         open = {open}
         onItemToggle = {onItemToggle}
-        style = {getStyle(ifcElement)}
-        type = {getAction(ifcElement)}>
+        style = {getStyle(element)}
+        type = {getAction(element)}>
       {
-        parentOpen && ifcElement.children.length > 0 ? (ifcElement.children.map(
+        parentOpen && element.children && element.children.length > 0 ? (element.children.map(
           child => <ElementsTreeStructure
                      viewer = {viewer}
-                     ifcElement = {child}
+                     element = {child}
                      onElementSelect = {onElementSelect}
                      showChildren = {autoOpen(child)}
                      parentOpen = {open}

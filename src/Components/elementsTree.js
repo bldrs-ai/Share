@@ -25,7 +25,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 
-const ElementsTree = ({ viewer, ifcElement, onElementSelect }) => {
+const ElementsTree = ({ viewer, element, onElementSelect }) => {
   const classes = useStyles();
   return (
     <Paper
@@ -40,7 +40,7 @@ const ElementsTree = ({ viewer, ifcElement, onElementSelect }) => {
     >
       <ElementsTreeStructure
         viewer = {viewer}
-        ifcElement = {ifcElement}
+        element = {element}
         onElementSelect = {onElementSelect}
         showChildren = {true}
         parentOpen = {true}

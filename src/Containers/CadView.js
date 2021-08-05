@@ -76,8 +76,8 @@ const CadView = () => {
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
   const [viewer, setViewer] = useState({});
-  const [ifcElement, setIfcElement] = useState({});
-  const [elementProps, setElementProps] = useState({});
+  const [rootElement, setRootElement] = useState({});
+  const [selectedElement, setSelectedElement] = useState({});
 
 
   const onClickShare = () => {
@@ -85,10 +85,18 @@ const CadView = () => {
   };
 
 
-  const onElementSelect = expressID => {
-    viewer.pickIfcItemsByID(0, [expressID]);
-    const props = viewer.getProperties(0, expressID);
-    setElementProps(props);
+  const onElementSelect = elt => {
+    const id = elt.expressID;
+    if (id === undefined) throw new Error('Selected element is missing Express ID');
+    try {
+      viewer.pickIfcItemsByID(0, [id]);
+    } catch (e) {
+      // IFCjs will throw a big stack trace if there is not a visual
+      // element, e.g. for IfcSite, but we still want to proceed to
+      // setup its properties.
+      console.log('TODO: no visual element for item: ', elt);
+    }
+    setSelectedElement(elt);
     setOpenRight(true);
   };
 
@@ -114,8 +122,7 @@ const CadView = () => {
   const fileOpen = () => {
     const loadIfc = async event => {
       await viewer.loadIfc(event.target.files[0], true);
-      const ifcRoot = viewer.getSpatialStructure(0);
-      setIfcElement(ifcRoot);
+      setRootElement(viewer.getSpatialStructure(0));
       setOpenLeft(true);
     };
 
@@ -264,14 +271,16 @@ const CadView = () => {
             openLeft ? (
               <ElementsTree
                 viewer = {viewer}
-                ifcElement = {ifcElement}
+                element = {rootElement}
                 onElementSelect = {onElementSelect} />
             ) : null
           }
           </div>
           <div>{
             openRight ? (
-              <ElementsInfo elementProps={elementProps} />
+              <ElementsInfo
+                viewer = {viewer}
+                element = {selectedElement} />
             ) : null
           }
           </div>

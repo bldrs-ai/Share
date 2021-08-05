@@ -24,27 +24,30 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const ElementsInfo = (elementProps) => {
-  elementProps = elementProps.elementProps;
+
+const ElementsInfo = ({viewer, element}) => {
   const classes = useStyles();
   return (
     <div
       className={classes.contextualMenu}
       style={{
         height: 'auto',
-        position: "absolute",
+        position: 'absolute',
         top: 130,
         right: 34,
-      }}
-    >
-      <Paper elevation={3} className={classes.paper} style={{
-               position: 'absolute',
-               width: 'auto',
-               height: 'auto',
-               top: '0px',
-               right: '0px',
-               minHeight: '20%' }}>
-        <Info elementProps={elementProps}/>
+      }}>
+      <Paper
+        elevation={3}
+        className={classes.paper}
+        style={{
+          position: 'absolute',
+          width: 'auto',
+          height: 'auto',
+          top: '0px',
+          right: '0px',
+          minHeight: '20%' }}>
+        <Info viewer = {viewer}
+              element = {element} />
       </Paper>
     </div>
   );
