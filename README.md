@@ -8,6 +8,8 @@ https://discord.com/channels/853953158560743424/853953158560743429
 ```
 # Install npms
 > yarn install
+# Update the serving wasm to the installed version
+> cp node_modules/web-ifc/web-ifc.wasm public/static/js/
 # Run server; this will open your browser to http://localhost:3000/
 > yarn start
 ```
