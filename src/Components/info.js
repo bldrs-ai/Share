@@ -1,5 +1,6 @@
 import Tree from 'react-animated-tree-v2';
 import uuencode from 'uuencode';
+import React from 'react';
 
 
 const deref = ref => {
@@ -64,6 +65,41 @@ const prettyProps = (viewer, element, key, props, serial) => {
 };
 
 
+const Row = ({ firstColumn, secondColumn }) => {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'row',
+        width: 270,
+        justifyContent: 'flex-start',
+        fontSize: 12,
+        marginBottom: 5,
+      }}
+    >
+      <div
+        style={{
+          minWidth: 100,
+          marginRight: 20,
+          border: '1px solid lightGray',
+        }}
+      >
+        {firstColumn}
+      </div>
+      <div
+        style={{
+          minWidth: 150,
+          border: '1px solid lightGray',
+          wordWrap: 'break-word',
+        }}
+      >
+        {secondColumn}
+      </div>
+    </div>
+  );
+};
+
+
 const Info = ({viewer, element}) => {
   const props = viewer.getProperties(0, element.expressID);
   let serial = 0;
@@ -78,8 +114,14 @@ const Info = ({viewer, element}) => {
       </tbody>
     </table>
   );
-};
+//        {Object.keys(elementProps).map((key) => (
+//         <Row
+//            firstColumn={key}
+//            secondColumn={JSON.stringify(elementProps[key])}
+//          />
+//        ))}
 
+};
 
 const isTypeValue = obj => {
   return obj['type'] != null && obj['value'] != null;
@@ -114,4 +156,4 @@ const ObjectTree = ({name, obj}) => {
 };
 
 
-export {Info};
+export { Info };

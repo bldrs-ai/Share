@@ -1,14 +1,16 @@
-import {useState} from "react";
+import { useState } from 'react';
 import Tree from 'react-animated-tree-v2';
 import '../styles/tree.css';
 
-
-const ElementsTreeStructure = ({viewer, element, onElementSelect, showChildren, parentOpen = false }) => {
-
-
+const ElementsTreeStructure = ({
+  viewer,
+  element,
+  onElementSelect,
+  showChildren,
+  parentOpen = false,
+}) => {
   if (showChildren === undefined) throw new Error();
   const [open, setOpen] = useState(showChildren);
-
 
   const onItemToggle = () => {
     console.log('#onItemToggle: calling setOpen(true)');
@@ -92,8 +94,8 @@ const ElementsTreeStructure = ({viewer, element, onElementSelect, showChildren, 
          🔍
        </button>)
       : null;
-  };
 
+  };
 
   let i = 0;
   return (
