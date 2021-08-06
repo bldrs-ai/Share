@@ -20,22 +20,21 @@ const useStyles = makeStyles((theme) => ({
     display: "flex",
     justifyContent: "flex-end",
     marginTop: "10px",
-    border: "1px solid red",
-    "@media (max-width: 1280px)": {
+    "@media (max-width: 900px)": {
       marginTop: "40px",
     },
   },
   elementsButton: {
     position: "absolute",
     top: 80,
-    right: 10,
+    right: 20,
     display: "flex",
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    "@media (max-width: 1280px)": {
+    "@media (max-width: 900px)": {
       marginTop: theme.spacing(5),
-      top: 690,
+      top: 520,
       right: 15,
     },
   },
@@ -94,10 +93,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-
 const CadView = () => {
   const classes = useStyles();
-  const history = useHistory();
   const [openLeft, setOpenLeft] = useState(false);
   const [openRight, setOpenRight] = useState(false);
   const [openShare, setOpenShare] = useState(false);
@@ -109,14 +106,12 @@ const CadView = () => {
     setOpenShare(!openShare);
   };
 
-
-  const onElementSelect = expressID => {
+  const onElementSelect = (expressID) => {
     viewer.pickIfcItemsByID(0, [expressID]);
     const props = viewer.getProperties(0, expressID);
     setElementProps(props);
-    setOpenRight(true);
+    // setOpenRight(true);
   };
-
 
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
@@ -134,7 +129,6 @@ const CadView = () => {
       viewer.removeClippingPlane();
     };
   }, []);
-
 
   const fileOpen = () => {
     const loadIfc = async (event) => {
@@ -159,7 +153,9 @@ const CadView = () => {
     fileInput.click();
   };
 
-  
+  let isLoaded = Object.keys(ifcElement).length === 0;
+  let isLoadedElement = Object.keys(elementProps).length === 0;
+
   return (
     <div>
       <div style={{ zIndex: 0 }}>
@@ -172,7 +168,11 @@ const CadView = () => {
       <div index={{ zIndex: 100 }}>
         <BuildrsToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <div className={classes.searchContainer}>
-          <SearchInput onClickMenu={() => setOpenLeft(!openLeft)} />
+          <SearchInput
+            onClickMenu={() => setOpenLeft(!openLeft)}
+            disabled={isLoaded}
+            open={openLeft}
+          />
         </div>
         {openShare && (
           <div className={classes.shareContainer}>
@@ -180,19 +180,24 @@ const CadView = () => {
           </div>
         )}
         <div className={classes.elementsButton}>
-          <MenuButton onClick={() => setOpenRight(!openRight)} />
+          <MenuButton
+            onClick={() => setOpenRight(!openRight)}
+            disabled={isLoadedElement}
+            open={openRight}
+          />
         </div>
 
         {/* </div> */}
         <div className={classes.menuToolbarContainer}>
-          <div>{
-            openLeft ? (
+          <div>
+            {openLeft ? (
               <ElementsTree
-                viewer = {viewer}
-                ifcElement = {ifcElement}
-                onElementSelect = {onElementSelect} />
-            ) : null
-          }
+                viewer={viewer}
+                ifcElement={ifcElement}
+                onElementSelect={onElementSelect}
+                elementProps={elementProps}
+              />
+            ) : null}
           </div>
           <div>
             {openRight ? <ElementsInfo elementProps={elementProps} /> : null}

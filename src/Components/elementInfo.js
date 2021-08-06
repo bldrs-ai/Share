@@ -1,7 +1,7 @@
 import React from "react";
 import { makeStyles } from "@material-ui/core/styles";
 import Paper from "@material-ui/core/Paper";
-import {Info} from './info.js';
+import { Info } from "./info.js";
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
@@ -13,6 +13,15 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     justifyContent: "space-around",
     alignItems: "center",
+    height: "70%",
+    top: 152,
+    right: 20,
+    "@media (max-width: 900px)": {
+      height: "50%",
+      top: 140,
+      // width: 400,
+      left: 62,
+    },
   },
   paper: {
     padding: theme.spacing(2),
@@ -31,20 +40,23 @@ const ElementsInfo = (elementProps) => {
     <div
       className={classes.contextualMenu}
       style={{
-        height: 'auto',
+        height: "auto",
         position: "absolute",
-        top: 130,
-        right: 34,
       }}
     >
-      <Paper elevation={3} className={classes.paper} style={{
-               position: 'absolute',
-               width: 'auto',
-               height: 'auto',
-               top: '0px',
-               right: '0px',
-               minHeight: '20%' }}>
-        <Info elementProps={elementProps}/>
+      <Paper
+        elevation={3}
+        className={classes.paper}
+        style={{
+          position: "absolute",
+          width: "auto",
+          height: "auto",
+          top: "0px",
+          right: "0px",
+          minHeight: "20%",
+        }}
+      >
+        <Info elementProps={elementProps} />
       </Paper>
     </div>
   );
