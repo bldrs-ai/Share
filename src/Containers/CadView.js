@@ -171,6 +171,7 @@ const CadView = () => {
           <SearchInput
             onClickMenu={() => setOpenLeft(!openLeft)}
             disabled={isLoaded}
+            open={openLeft}
           />
         </div>
         {openShare && (
@@ -182,6 +183,7 @@ const CadView = () => {
           <MenuButton
             onClick={() => setOpenRight(!openRight)}
             disabled={isLoadedElement}
+            open={openRight}
           />
         </div>
 

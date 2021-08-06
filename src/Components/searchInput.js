@@ -5,6 +5,7 @@ import InputBase from "@material-ui/core/InputBase";
 import IconButton from "@material-ui/core/IconButton";
 import MenuIcon from "@material-ui/icons/Menu";
 import SearchIcon from "@material-ui/icons/Search";
+import CloseIcon from "@material-ui/icons/Close";
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -26,7 +27,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function SearchInput({ onClickMenu, disabled }) {
+export default function SearchInput({ onClickMenu, disabled, open }) {
   const classes = useStyles();
 
   return (
@@ -37,6 +38,7 @@ export default function SearchInput({ onClickMenu, disabled }) {
         onClick={onClickMenu}
         disabled={disabled}
       >
+        {/* {open ? <CloseIcon /> : <MenuIcon />} */}
         <MenuIcon />
       </IconButton>
       <InputBase
