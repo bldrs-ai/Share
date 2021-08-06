@@ -18,6 +18,10 @@ const useStyles = makeStyles((theme) => ({
     alignItems: "center",
     overflow: "scroll",
     marginLeft: "-5px",
+    height: "70%",
+    "@media (max-width: 900px)": {
+      height: "50%",
+    },
   },
   paper: {
     padding: theme.spacing(2),
@@ -74,7 +78,7 @@ const ElementsTree = ({
         position: "absolute",
         top: 144,
         left: 24,
-        height: "70%",
+
         overflow: "auto",
         display: "flex",
         flexDirection: "column",

@@ -170,7 +170,7 @@ const CadView = () => {
         <div className={classes.searchContainer}>
           <SearchInput
             onClickMenu={() => setOpenLeft(!openLeft)}
-            disabled={isLoadedElement}
+            disabled={isLoaded}
           />
         </div>
         {openShare && (
