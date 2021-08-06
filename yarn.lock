@@ -11494,6 +11494,11 @@
   "resolved" "https://registry.npmjs.org/utils-merge/-/utils-merge-1.0.1.tgz"
   "version" "1.0.1"
 
+"uuencode@^0.0.4":
+  "integrity" "sha1-yNUDcIhWY4eThas34zPH6OOwIYw="
+  "resolved" "https://registry.npmjs.org/uuencode/-/uuencode-0.0.4.tgz"
+  "version" "0.0.4"
+
 "uuid@^3.3.2", "uuid@^3.4.0":
   "integrity" "sha512-HjSDRw6gZE5JMggctHBcjVak08+KEVhSIiDzFnT9S9aegmp85S/bReBVTb4QTFaRNptJ9kuYaNhnbNEOkbKb/A=="
   "resolved" "https://registry.npmjs.org/uuid/-/uuid-3.4.0.tgz"

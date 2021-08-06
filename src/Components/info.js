@@ -1,48 +1,117 @@
-const prettyProps = (viewer, element, props, key) => {
-  //console.log(`prettyProps, key(${key})`);
+import Tree from 'react-animated-tree-v2';
+import uuencode from 'uuencode';
+
+
+const deref = ref => {
+  if (ref != null) {
+    return ref.value;
+  }
+  throw new Error('Ref undefined or null: ', ref);
+};
+
+
+const dms = (deg, min, sec) => {
+  return `${deg}° ${min}' ${sec}''`;
+};
+
+
+const row = (d1, d2, serial) => {
+  return d2 !== null ?
+    (<tr key={serial}><td>{d1}</td><td>{d2}</td></tr>)
+    : (<tr key={serial}><td colSpan = '2'>{d1}</td></tr>);
+};
+
+
+const prettyProps = (viewer, element, key, props, serial) => {
   let value = props[key];
   if (value === null || value === undefined) {
-    return '<empty>';
+    return row(key, '<empty>', serial);
   }
   const propMgr = viewer.IFC.loader.ifcManager.properties;
   switch (key) {
-  case 'GlobalId': ; // fallthrough
+  case 'GlobalId':
+    return row(key, uuencode.decode(deref(value)), serial);
   case 'Name':     ; // fallthrough
-  case 'PredefinedType': {
+  case 'PredefinedType':
     if (value['value'] != null) {
-      return value['value'];
+      return row(key, value['value'], serial);
     }
     break;
+  case 'OwnerHistory': {
+    return row(<ObjectTree
+               name = {'OwnerHistory'}
+               obj = {propMgr.getItemProperties(0, parseInt(value['value']), true)}/>,
+               null,
+               serial);
   }
   case 'ObjectPlacement': {
-    const refId = parseInt(value['value']);
-    //console.log('Looking up value as item: ', value, refId);
-    return JSON.stringify(propMgr.getItemProperties(0, refId, true), '  ');
+    return row(<ObjectTree
+               name = {'ObjectPlacement'}
+               obj = {propMgr.getItemProperties(0, parseInt(value['value']), true)}/>,
+               null,
+               serial);
   }
-  default: return JSON.stringify(value, '  ');
+  case 'RefLatitude':
+    return row('Latitude', dms(deref(value[0]), deref(value[1]), deref(value[2])), serial);
+  case 'RefLongitude':
+    return row('Longitude', dms(deref(value[0]), deref(value[1]), deref(value[2])), serial);
+  case 'Elevation': ;// fallthrough
+  case 'RefElevation':
+    return row('Elevation', deref(value), serial);
+  default:
+    return row(key, JSON.stringify(value, '  '), serial);
   }
 };
 
 
 const Info = ({viewer, element}) => {
   const props = viewer.getProperties(0, element.expressID);
-  //console.log('Info: ', props);
   let serial = 0;
   return (
     <table>
       <tbody>
       {
         Object.keys(props).map(
-          key =>
-            <tr key={serial++}>
-              <td>{key}</td>
-              <td>{prettyProps(viewer, element, props, key)}</td>
-            </tr>
+          key => prettyProps(viewer, element, key, props, serial++)
         )
       }
       </tbody>
     </table>
   );
 };
+
+
+const isTypeValue = obj => {
+  return obj['type'] != null && obj['value'] != null;
+};
+
+
+const typeValue = obj => {
+  return `${obj['value']}`;
+};
+
+
+const ObjectTree = ({name, obj}) => {
+  let i = 0;
+  if (obj === undefined || obj === null) return null;
+  const isObj = typeof obj === 'object';
+  //console.log('isObj: ', isObj, obj, typeof obj);
+  return (
+      <Tree
+        content = { isObj ? `${name}` : `${obj}` }
+        open = {false} >
+      {
+        isObj ? (
+          isTypeValue(obj) ?
+            typeValue(obj) : Object.keys(obj).map(
+              child => <ObjectTree
+                         name = {child}
+                         obj = {obj[child]}
+                         key = {i++} />))
+          : null
+      }
+    </Tree>);
+};
+
 
 export {Info};
