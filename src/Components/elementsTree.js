@@ -52,6 +52,7 @@ function TabPanel(props) {
     </div>
   );
 }
+
 function a11yProps(index) {
   return {
     id: `simple-tab-${index}`,
@@ -61,9 +62,8 @@ function a11yProps(index) {
 
 const ElementsTree = ({
   viewer,
-  ifcElement,
-  onElementSelect,
-  elementProps,
+  element,
+  onElementSelect
 }) => {
   const classes = useStyles();
   console.log('element prop', elementProps);
@@ -95,15 +95,15 @@ const ElementsTree = ({
       </Tabs>
       <TabPanel value={value} index={0}>
         <ElementsTreeStructure
-          viewer={viewer}
-          ifcElement={ifcElement}
-          onElementSelect={onElementSelect}
-          showChildren={true}
-          parentOpen={true}
+          viewer = {viewer}
+          element = {element}
+          onElementSelect = {onElementSelect}
+          showChildren = {true}
+          parentOpen = {true}
         />
       </TabPanel>
       <TabPanel value={value} index={1}>
-        <Info elementProps={elementProps} />
+        <Info elementProps={viewer, element} />
       </TabPanel>
     </Paper>
   );

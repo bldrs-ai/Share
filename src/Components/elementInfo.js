@@ -33,8 +33,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const ElementsInfo = (elementProps) => {
-  elementProps = elementProps.elementProps;
+
+const ElementsInfo = ({viewer, element}) => {
   const classes = useStyles();
   return (
     <div
@@ -56,7 +56,8 @@ const ElementsInfo = (elementProps) => {
           minHeight: '20%',
         }}
       >
-        <Info elementProps={elementProps} />
+        <Info viewer = {viewer}
+              element = {element} />
       </Paper>
     </div>
   );
