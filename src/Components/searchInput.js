@@ -26,7 +26,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function SearchInput({ onClickMenu }) {
+export default function SearchInput({ onClickMenu, disabled }) {
   const classes = useStyles();
 
   return (
@@ -35,6 +35,7 @@ export default function SearchInput({ onClickMenu }) {
         className={classes.iconButton}
         aria-label="menu"
         onClick={onClickMenu}
+        disabled={disabled}
       >
         <MenuIcon />
       </IconButton>
