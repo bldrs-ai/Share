@@ -1,35 +1,35 @@
-import React from "react";
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
-import ElementsTreeStructure from "./tree.js";
-import Tabs from "@material-ui/core/Tabs";
-import Tab from "@material-ui/core/Tab";
-import Typography from "@material-ui/core/Typography";
-import Box from "@material-ui/core/Box";
-import { Info } from "./info";
+import React from 'react';
+import { makeStyles } from '@material-ui/core/styles';
+import Paper from '@material-ui/core/Paper';
+import ElementsTreeStructure from './tree.js';
+import Tabs from '@material-ui/core/Tabs';
+import Tab from '@material-ui/core/Tab';
+import Typography from '@material-ui/core/Typography';
+import Box from '@material-ui/core/Box';
+import { Info } from './info';
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 308,
-    border: "none",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-around",
-    alignItems: "center",
-    overflow: "scroll",
-    marginLeft: "-5px",
-    height: "70%",
-    "@media (max-width: 900px)": {
-      height: "50%",
+    border: 'none',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-around',
+    alignItems: 'center',
+    overflow: 'scroll',
+    marginLeft: '-5px',
+    height: '70%',
+    '@media (max-width: 900px)': {
+      height: '50%',
     },
   },
   paper: {
     padding: theme.spacing(2),
-    display: "flex",
-    overflow: "auto",
-    flexDirection: "column",
-    width: "220px",
-    backgroundColor: "lightGray",
+    display: 'flex',
+    overflow: 'auto',
+    flexDirection: 'column',
+    width: '220px',
+    backgroundColor: 'lightGray',
   },
 }));
 
@@ -38,7 +38,7 @@ function TabPanel(props) {
 
   return (
     <div
-      role="tabpanel"
+      role='tabpanel'
       hidden={value !== index}
       id={`simple-tabpanel-${index}`}
       aria-labelledby={`simple-tab-${index}`}
@@ -55,7 +55,7 @@ function TabPanel(props) {
 function a11yProps(index) {
   return {
     id: `simple-tab-${index}`,
-    "aria-controls": `simple-tabpanel-${index}`,
+    'aria-controls': `simple-tabpanel-${index}`,
   };
 }
 
@@ -66,7 +66,7 @@ const ElementsTree = ({
   elementProps,
 }) => {
   const classes = useStyles();
-  console.log("element prop", elementProps);
+  console.log('element prop', elementProps);
   const [value, setValue] = React.useState(0);
   const handleChange = (event, newValue) => {
     setValue(newValue);
@@ -75,23 +75,23 @@ const ElementsTree = ({
     <Paper
       className={classes.contextualMenu}
       style={{
-        position: "absolute",
+        position: 'absolute',
         top: 144,
         left: 24,
 
-        overflow: "auto",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "flex-start",
+        overflow: 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'flex-start',
       }}
     >
       <Tabs
         value={value}
         onChange={handleChange}
-        aria-label="simple tabs example"
+        aria-label='simple tabs example'
       >
-        <Tab label="Tree" {...a11yProps(0)} />
-        <Tab label="Info" {...a11yProps(1)} />
+        <Tab label='Tree' {...a11yProps(0)} />
+        <Tab label='Info' {...a11yProps(1)} />
       </Tabs>
       <TabPanel value={value} index={0}>
         <ElementsTreeStructure

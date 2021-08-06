@@ -1,5 +1,4 @@
-import React from "react";
-
+import React from 'react';
 
 export default class Viewer extends React.Component {
   constructor(props) {
@@ -7,13 +6,9 @@ export default class Viewer extends React.Component {
     this.viewer = null;
   }
 
-  componentDidMount() {
-  }
+  componentDidMount() {}
 
   render() {
-    return (
-      <div>
-      </div>
-    );
+    return <div></div>;
   }
 }

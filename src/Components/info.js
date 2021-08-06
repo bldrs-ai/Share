@@ -1,13 +1,13 @@
-import React from "react";
+import React from 'react';
 
 const Row = ({ firstColumn, secondColumn }) => {
   return (
     <div
       style={{
-        display: "flex",
-        flexDirection: "row",
+        display: 'flex',
+        flexDirection: 'row',
         width: 270,
-        justifyContent: "flex-start",
+        justifyContent: 'flex-start',
         fontSize: 12,
         marginBottom: 5,
       }}
@@ -16,7 +16,7 @@ const Row = ({ firstColumn, secondColumn }) => {
         style={{
           minWidth: 100,
           marginRight: 20,
-          border: "1px solid lightGray",
+          border: '1px solid lightGray',
         }}
       >
         {firstColumn}
@@ -24,8 +24,8 @@ const Row = ({ firstColumn, secondColumn }) => {
       <div
         style={{
           minWidth: 150,
-          border: "1px solid lightGray",
-          wordWrap: "break-word",
+          border: '1px solid lightGray',
+          wordWrap: 'break-word',
         }}
       >
         {secondColumn}
