@@ -13,6 +13,15 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: "column",
     justifyContent: "space-around",
     alignItems: "center",
+    height: "70%",
+    top: 152,
+    right: 20,
+    "@media (max-width: 900px)": {
+      height: "50%",
+      top: 140,
+      // width: 400,
+      left: 62,
+    },
   },
   paper: {
     padding: theme.spacing(2),
@@ -33,8 +42,6 @@ const ElementsInfo = (elementProps) => {
       style={{
         height: "auto",
         position: "absolute",
-        top: 150,
-        right: 20,
       }}
     >
       <Paper
