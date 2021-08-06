@@ -1,16 +1,16 @@
-import React from "react";
-import { makeStyles } from "@material-ui/core/styles";
-import Paper from "@material-ui/core/Paper";
-import InputBase from "@material-ui/core/InputBase";
-import IconButton from "@material-ui/core/IconButton";
-import MenuIcon from "@material-ui/icons/Menu";
-import SearchIcon from "@material-ui/icons/Search";
+import React from 'react';
+import { makeStyles } from '@material-ui/core/styles';
+import Paper from '@material-ui/core/Paper';
+import InputBase from '@material-ui/core/InputBase';
+import IconButton from '@material-ui/core/IconButton';
+import MenuIcon from '@material-ui/icons/Menu';
+import SearchIcon from '@material-ui/icons/Search';
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    padding: "2px 4px",
-    display: "flex",
-    alignItems: "center",
+    padding: '2px 4px',
+    display: 'flex',
+    alignItems: 'center',
     width: 300,
   },
   input: {
@@ -30,23 +30,23 @@ export default function SearchInput({ onClickMenu }) {
   const classes = useStyles();
 
   return (
-    <Paper component="form" className={classes.root}>
+    <Paper component='form' className={classes.root}>
       <IconButton
         className={classes.iconButton}
-        aria-label="menu"
+        aria-label='menu'
         onClick={onClickMenu}
       >
         <MenuIcon />
       </IconButton>
       <InputBase
         className={classes.input}
-        placeholder="Search IFC"
-        inputProps={{ "aria-label": "search google maps" }}
+        placeholder='Search IFC'
+        inputProps={{ 'aria-label': 'search google maps' }}
       />
       <IconButton
-        type="submit"
+        type='submit'
         className={classes.iconButton}
-        aria-label="search"
+        aria-label='search'
       >
         <SearchIcon />
       </IconButton>
