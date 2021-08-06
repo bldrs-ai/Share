@@ -33,8 +33,8 @@ const ElementsInfo = (elementProps) => {
       style={{
         height: "auto",
         position: "absolute",
-        top: 130,
-        right: 34,
+        top: 150,
+        right: 20,
       }}
     >
       <Paper

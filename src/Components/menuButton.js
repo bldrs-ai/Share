@@ -7,6 +7,7 @@ import InfoOutlinedIcon from "@material-ui/icons/InfoOutlined";
 
 const useStyles = makeStyles((theme) => ({
   menuButton: {
+    border: "2px solid lime",
     "@media (max-width: 1280px)": {
       border: "2px solid lime",
     },

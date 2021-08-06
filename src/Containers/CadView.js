@@ -110,7 +110,7 @@ const CadView = () => {
     viewer.pickIfcItemsByID(0, [expressID]);
     const props = viewer.getProperties(0, expressID);
     setElementProps(props);
-    setOpenRight(true);
+    // setOpenRight(true);
   };
 
   // Similar to componentDidMount and componentDidUpdate:
