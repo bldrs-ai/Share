@@ -13,7 +13,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'column',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: '70%',
     top: 152,
     right: 20,
     '@media (max-width: 900px)': {

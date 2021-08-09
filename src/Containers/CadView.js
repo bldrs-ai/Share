@@ -160,8 +160,8 @@ const CadView = () => {
     fileInput.click();
   };
 
-  let isLoaded = Object.keys(ifcElement).length === 0;
-  let isLoadedElement = Object.keys(elementProps).length === 0;
+  let isLoaded = Object.keys(rootElement).length === 0;
+  let isLoadedElement = Object.keys(selectedElement).length === 0;
 
   return (
     <div>
