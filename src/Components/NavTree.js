@@ -2,6 +2,7 @@ import { useState } from 'react';
 import Tree from 'react-animated-tree-v2';
 import '../styles/tree.css';
 
+
 const NavTree = ({
   viewer,
   element,
@@ -87,12 +88,25 @@ const NavTree = ({
 
   };
 
+
+  /** Unclear why absolute position is needed.  With relative or
+   * static, the container doesn't scroll when there's overflow. */
+  const getStyle = element => {
+    return element.type === 'IFCPROJECT' ? {
+      position: 'absolute',
+      top: 10,
+      left: 10,
+    } : {};
+  };
+
+
   let i = 0;
   return (
       <Tree
         content = {getText(element)}
         open = {open}
         onItemToggle = {onItemToggle}
+        style = {getStyle(element)}
         type = {getAction(element)}>
       {
         parentOpen && element.children && element.children.length > 0 ? (element.children.map(
