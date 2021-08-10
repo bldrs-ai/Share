@@ -1,6 +1,7 @@
 import { makeStyles } from '@material-ui/core/styles';
 import Paper from '@material-ui/core/Paper';
-import ElementsTreeStructure from './tree.js';
+
+import NavTree from './NavTree.js';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -29,7 +30,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 
-const ElementsTree = ({
+const NavPanel = ({
   viewer,
   element,
   onElementSelect
@@ -48,7 +49,7 @@ const ElementsTree = ({
         justifyContent: 'flex-start',
       }}
     >
-      <ElementsTreeStructure
+      <NavTree
         viewer = {viewer}
         element = {element}
         onElementSelect = {onElementSelect}
@@ -59,4 +60,5 @@ const ElementsTree = ({
   );
 };
 
-export default ElementsTree;
+
+export default NavPanel;

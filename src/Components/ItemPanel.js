@@ -1,7 +1,9 @@
 import React from 'react';
 import { makeStyles } from '@material-ui/core/styles';
 import Paper from '@material-ui/core/Paper';
-import { Info } from './info.js';
+
+import ItemProperties from './ItemProperties.js';
+
 
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
@@ -33,7 +35,7 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 
-const ElementsInfo = ({viewer, element}) => {
+const ItemPanel = ({viewer, element}) => {
   const classes = useStyles();
   return (
     <div
@@ -55,11 +57,13 @@ const ElementsInfo = ({viewer, element}) => {
           minHeight: '20%',
         }}
       >
-        <Info viewer = {viewer}
-              element = {element} />
+        <ItemProperties
+          viewer = {viewer}
+          element = {element} />
       </Paper>
     </div>
   );
 };
 
-export default ElementsInfo;
+
+export default ItemPanel;

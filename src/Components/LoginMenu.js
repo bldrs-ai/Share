@@ -4,6 +4,7 @@ import MenuItem from '@material-ui/core/MenuItem';
 import IconButton from '@material-ui/core/IconButton';
 import AccountCircle from '@material-ui/icons/AccountCircle';
 
+
 const LoginMenu = () => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
@@ -46,5 +47,6 @@ const LoginMenu = () => {
     </div>
   );
 };
+
 
 export default LoginMenu;

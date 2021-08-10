@@ -100,7 +100,7 @@ const Row = ({ firstColumn, secondColumn }) => {
 };
 
 
-const Info = ({viewer, element}) => {
+const ItemProperties = ({viewer, element}) => {
   const props = viewer.getProperties(0, element.expressID);
   let serial = 0;
   return (
@@ -156,4 +156,4 @@ const ObjectTree = ({name, obj}) => {
 };
 
 
-export { Info };
+export default ItemProperties;

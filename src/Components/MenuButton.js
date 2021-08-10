@@ -4,6 +4,7 @@ import IconButton from '@material-ui/core/IconButton';
 import CloseIcon from '@material-ui/icons/Close';
 import InfoOutlinedIcon from '@material-ui/icons/InfoOutlined';
 
+
 const useStyles = makeStyles((theme) => ({
   menuButton: {
     border: '2px solid lime',
@@ -15,6 +16,7 @@ const useStyles = makeStyles((theme) => ({
     '@media (max-width: 1280px)': {},
   },
 }));
+
 
 const MenuButton = ({ onClick, disabled, open }) => {
   const classes = useStyles();
@@ -45,5 +47,6 @@ const MenuButton = ({ onClick, disabled, open }) => {
     </IconButton>
   );
 };
+
 
 export default MenuButton;

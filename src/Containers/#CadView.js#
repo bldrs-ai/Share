@@ -35,7 +35,7 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
-    alignItems: 'left',
+    alignItems: 'center',
     '@media (max-width: 900px)': {
       marginTop: theme.spacing(5),
       top: 520,

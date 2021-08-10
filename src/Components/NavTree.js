@@ -2,7 +2,7 @@ import { useState } from 'react';
 import Tree from 'react-animated-tree-v2';
 import '../styles/tree.css';
 
-const ElementsTreeStructure = ({
+const NavTree = ({
   viewer,
   element,
   onElementSelect,
@@ -73,16 +73,6 @@ const ElementsTreeStructure = ({
       return '';
     }
     return (props.Name ? props.Name.value : null) || prettyType(element);
-  }
-
-  /** Hack to special-case the tree root to push it to top of
-   * container. */
-  const getStyle = element => {
-    return element.type === 'IFCPROJECT' ? {
-      position: 'absolute',
-      top: 0,
-      left: 10,
-    } : {};
   };
 
 
@@ -103,11 +93,10 @@ const ElementsTreeStructure = ({
         content = {getText(element)}
         open = {open}
         onItemToggle = {onItemToggle}
-        style = {getStyle(element)}
         type = {getAction(element)}>
       {
         parentOpen && element.children && element.children.length > 0 ? (element.children.map(
-          child => <ElementsTreeStructure
+          child => <NavTree
                      viewer = {viewer}
                      element = {child}
                      onElementSelect = {onElementSelect}
@@ -120,4 +109,4 @@ const ElementsTreeStructure = ({
   );
 };
 
-export default ElementsTreeStructure;
+export default NavTree;

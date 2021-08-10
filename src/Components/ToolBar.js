@@ -5,9 +5,11 @@ import Typography from '@material-ui/core/Typography';
 import IconButton from '@material-ui/core/IconButton';
 import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
 import CommentIcon from '@material-ui/icons/Comment';
-import PrimaryButton from '../Components/primaryButton';
-import LoginMenu from './loginMenu';
 import { makeStyles } from '@material-ui/core/styles';
+
+import PrimaryButton from '../Components/primaryButton';
+import LoginMenu from './LoginMenu';
+
 
 const useStyles = makeStyles((theme) => ({
   title: {
@@ -18,7 +20,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const BuildrsToolBar = ({ fileOpen, onClickShare }) => {
+
+const ToolBar = ({ fileOpen, onClickShare }) => {
   const classes = useStyles();
   return (
     <AppBar elevation={0} position='static' color='primary'>
@@ -94,4 +97,5 @@ const BuildrsToolBar = ({ fileOpen, onClickShare }) => {
   );
 };
 
-export default BuildrsToolBar;
+
+export default ToolBar;

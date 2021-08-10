@@ -27,7 +27,8 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-export default function SearchInput({ onClickMenu, disabled, open }) {
+
+export default function SearchBar({ onClickMenu, disabled, open }) {
   const classes = useStyles();
 
   return (
