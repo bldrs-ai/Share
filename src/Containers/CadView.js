@@ -1,12 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { makeStyles } from '@material-ui/core/styles';
-import MenuButton from '../Components/menuButton';
-import ElementsTree from '../Components/elementsTree';
-import ElementsInfo from '../Components/elementInfo';
-import SearchInput from '../Components/searchInput';
-import '../App.css';
+
 import { IfcViewerAPI } from 'web-ifc-viewer';
-import BuildrsToolBar from '../Components/toolBar';
+
+import MenuButton from '../Components/MenuButton';
+import ItemPanel from '../Components/ItemPanel';
+import NavPanel from '../Components/NavPanel';
+import SearchBar from '../Components/SearchBar';
+import ToolBar from '../Components/ToolBar';
+
+import '../App.css';
+
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -173,9 +177,9 @@ const CadView = () => {
         className={classes.propertyViewContainer}
       ></div>
       <div index={{ zIndex: 100 }}>
-        <BuildrsToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
+        <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <div className={classes.searchContainer}>
-          <SearchInput
+          <SearchBar
             onClickMenu={() => setOpenLeft(!openLeft)}
             disabled={isLoaded}
             open={openLeft}
@@ -198,7 +202,7 @@ const CadView = () => {
         <div className={classes.menuToolbarContainer}>
           <div>
             {openLeft ? (
-              <ElementsTree
+              <NavPanel
                 viewer = {viewer}
                 element = {rootElement}
                 onElementSelect = {onElementSelect} />
@@ -207,7 +211,7 @@ const CadView = () => {
           </div>
           <div>{
             openRight ? (
-              <ElementsInfo
+              <ItemPanel
                 viewer = {viewer}
                 element = {selectedElement} />
             ) : null
