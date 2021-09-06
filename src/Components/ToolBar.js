@@ -10,7 +10,6 @@ import { makeStyles } from '@material-ui/core/styles';
 import PrimaryButton from '../Components/primaryButton';
 import LoginMenu from './LoginMenu';
 
-
 const useStyles = makeStyles((theme) => ({
   title: {
     flexGrow: 1,
@@ -19,7 +18,6 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '20px',
   },
 }));
-
 
 const ToolBar = ({ fileOpen, onClickShare }) => {
   const classes = useStyles();
@@ -96,6 +94,5 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
     </AppBar>
   );
 };
-
 
 export default ToolBar;

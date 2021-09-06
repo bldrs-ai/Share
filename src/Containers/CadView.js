@@ -8,9 +8,9 @@ import ItemPanel from '../Components/ItemPanel';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
+import EnhancedTable from '../Components/Table';
 
 import '../App.css';
-
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -105,14 +105,16 @@ const CadView = () => {
   const [viewer, setViewer] = useState({});
   const [rootElement, setRootElement] = useState({});
   const [selectedElement, setSelectedElement] = useState({});
+  const [showSearchTable, setShowSearchTable] = useState(false);
 
   const onClickShare = () => {
     setOpenShare(!openShare);
   };
 
-  const onElementSelect = elt => {
+  const onElementSelect = (elt) => {
     const id = elt.expressID;
-    if (id === undefined) throw new Error('Selected element is missing Express ID');
+    if (id === undefined)
+      throw new Error('Selected element is missing Express ID');
     try {
       viewer.pickIfcItemsByID(0, [id]);
     } catch (e) {
@@ -178,13 +180,16 @@ const CadView = () => {
       ></div>
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
+
         <div className={classes.searchContainer}>
           <SearchBar
             onClickMenu={() => setOpenLeft(!openLeft)}
             disabled={isLoaded}
             open={openLeft}
+            onClickSearch={() => setShowSearchTable(true)}
           />
         </div>
+
         {openShare && (
           <div className={classes.shareContainer}>
             http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
@@ -198,27 +203,39 @@ const CadView = () => {
           />
         </div>
 
-        {/* </div> */}
         <div className={classes.menuToolbarContainer}>
           <div>
             {openLeft ? (
               <NavPanel
-                viewer = {viewer}
-                element = {rootElement}
-                onElementSelect = {onElementSelect} />
-            ) : null
-          }
+                viewer={viewer}
+                element={rootElement}
+                onElementSelect={onElementSelect}
+              />
+            ) : null}
           </div>
-          <div>{
-            openRight ? (
-              <ItemPanel
-                viewer = {viewer}
-                element = {selectedElement} />
-            ) : null
-          }
+          <div>
+            {openRight ? (
+              <ItemPanel viewer={viewer} element={selectedElement} />
+            ) : null}
           </div>
         </div>
       </div>
+      {showSearchTable ? (
+        <div
+          style={{
+            position: 'absolute',
+            width: '90vw',
+            top: 150,
+            left: 20,
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          <EnhancedTable onClickClose={() => setShowSearchTable(false)} />
+        </div>
+      ) : null}
     </div>
   );
 };
