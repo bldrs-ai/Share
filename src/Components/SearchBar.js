@@ -8,13 +8,16 @@ import MenuIcon from '@material-ui/icons/Menu';
 import SearchIcon from '@material-ui/icons/Search';
 import DirectionsIcon from '@material-ui/icons/Directions';
 import TableChartOutlinedIcon from '@material-ui/icons/TableChartOutlined';
+import FolderOpenOutlinedIcon from '@material-ui/icons/FolderOpenOutlined';
+import Tooltip from '@material-ui/core/Tooltip';
 
+import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
 const useStyles = makeStyles((theme) => ({
   root: {
     padding: '2px 4px',
     display: 'flex',
     alignItems: 'center',
-    width: 300,
+    width: 400,
   },
   input: {
     marginLeft: theme.spacing(1),
@@ -33,7 +36,7 @@ export default function SearchBar({
   onClickMenu,
   disabled,
   open,
-  onClickSearch,
+  onClickTable,
 }) {
   const classes = useStyles();
 
@@ -49,25 +52,41 @@ export default function SearchBar({
       </IconButton>
       <InputBase
         className={classes.input}
-        placeholder='Search IFC'
+        placeholder='Search'
         inputProps={{ 'aria-label': 'search google maps' }}
       />
-      <IconButton
-        type='submit'
-        className={classes.iconButton}
-        aria-label='search'
-      >
-        <SearchIcon />
-      </IconButton>
+      <Tooltip title='model'>
+        <IconButton
+          // type='submit'
+          className={classes.iconButton}
+          aria-label='model'
+        >
+          <SearchIcon />
+        </IconButton>
+      </Tooltip>
+
       <Divider className={classes.divider} orientation='vertical' />
-      <IconButton
-        color='primary'
-        className={classes.iconButton}
-        aria-label='directions'
-        onClick={onClickSearch}
-      >
-        <TableChartOutlinedIcon />
-      </IconButton>
+      <Tooltip title='table'>
+        <IconButton
+          color='primary'
+          className={classes.iconButton}
+          aria-label='directions'
+          onClick={onClickTable}
+        >
+          <TableChartOutlinedIcon />
+        </IconButton>
+      </Tooltip>
+      <Divider className={classes.divider} orientation='vertical' />
+      <Tooltip title='directory'>
+        <IconButton
+          color='primary'
+          className={classes.iconButton}
+          aria-label='directions'
+          disabled
+        >
+          <FolderOpenOutlinedIcon />
+        </IconButton>
+      </Tooltip>
     </Paper>
   );
 }

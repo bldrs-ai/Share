@@ -14,8 +14,9 @@ const useStyles = makeStyles((theme) => ({
   title: {
     flexGrow: 1,
     color: 'WhiteSmoke',
-    fontSize: 20,
+    fontSize: 24,
     marginRight: '20px',
+    letterSpacing: 1.2,
   },
 }));
 

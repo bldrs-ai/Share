@@ -19,6 +19,8 @@ import Tooltip from '@material-ui/core/Tooltip';
 import CloseIcon from '@material-ui/icons/Close';
 import FilterListIcon from '@material-ui/icons/FilterList';
 import DropDownMenu from './DropDownMenu';
+import LibraryAddIcon from '@material-ui/icons/LibraryAdd';
+import HelpOutlineIcon from '@material-ui/icons/HelpOutline';
 
 function createData(name, property1, property2, property3, property4) {
   return { name, property1, property2, property3, property4 };
@@ -199,6 +201,16 @@ const EnhancedTableToolbar = (props) => {
           component='div'
         >
           {numSelected} selected
+          <Tooltip title='Add to a set'>
+            <IconButton aria-label='Add to a set' style={{ marginLeft: 12 }}>
+              <LibraryAddIcon />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title='...'>
+            <IconButton aria-label='...' style={{ marginLeft: 0 }}>
+              <HelpOutlineIcon />
+            </IconButton>
+          </Tooltip>
         </Typography>
       ) : (
         <Typography
@@ -210,12 +222,12 @@ const EnhancedTableToolbar = (props) => {
           Search Results
         </Typography>
       )}
-      <DropDownMenu title={'Project'} />
+      <DropDownMenu title={'Project'} placeholder={'Project'} />
       <DropDownMenu title={'Level'} />
       <DropDownMenu title={'Type'} />
       <DropDownMenu title={'Optional'} />
 
-      <div style={{ marginTop: 20 }}>
+      <div style={{ marginTop: 0 }}>
         {numSelected > 0 ? null : (
           // <Tooltip title='Delete'>
           //   <IconButton aria-label='delete'>{/* <DeleteIcon /> */}</IconButton>
@@ -318,7 +330,7 @@ export default function EnhancedTable({ onClickClose }) {
 
   return (
     <div className={classes.root}>
-      <Paper className={classes.paper}>
+      <Paper className={classes.paper} elevation={10}>
         <EnhancedTableToolbar
           numSelected={selected.length}
           onClickClose={onClickClose}

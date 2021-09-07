@@ -186,13 +186,23 @@ const CadView = () => {
             onClickMenu={() => setOpenLeft(!openLeft)}
             disabled={isLoaded}
             open={openLeft}
-            onClickSearch={() => setShowSearchTable(true)}
+            onClickTable={() => setShowSearchTable(!showSearchTable)}
           />
+        </div>
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '30px',
+            left: '48%',
+            color: 'blue',
+          }}
+        >
+          BUILDERS
         </div>
 
         {openShare && (
           <div className={classes.shareContainer}>
-            http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
+            http://wwww.builders.io/kdjiui4kjh/dflakdjkfjlh
           </div>
         )}
         <div className={classes.elementsButton}>
@@ -220,11 +230,12 @@ const CadView = () => {
           </div>
         </div>
       </div>
+
       {showSearchTable ? (
         <div
           style={{
             position: 'absolute',
-            width: '90vw',
+            width: '50vw',
             top: 150,
             left: 20,
             display: 'flex',
