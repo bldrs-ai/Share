@@ -60,7 +60,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     position: 'absolute',
     right: 80,
-    top: 86,
+    top: 92,
   },
   searchContainer: {
     display: 'flex',
@@ -94,6 +94,16 @@ const useStyles = makeStyles((theme) => ({
     top: '100px',
     right: '50px',
     width: '400px',
+  },
+  table: {
+    position: 'absolute',
+    width: '50vw',
+    top: 150,
+    left: 20,
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 }));
 
@@ -195,9 +205,10 @@ const CadView = () => {
             bottom: '30px',
             left: '48%',
             color: 'blue',
+            cursor: 'pointer',
           }}
         >
-          BUILDERS
+          BUILDRS.ORG
         </div>
 
         {openShare && (
@@ -232,18 +243,7 @@ const CadView = () => {
       </div>
 
       {showSearchTable ? (
-        <div
-          style={{
-            position: 'absolute',
-            width: '50vw',
-            top: 150,
-            left: 20,
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
+        <div className={classes.table}>
           <EnhancedTable onClickClose={() => setShowSearchTable(false)} />
         </div>
       ) : null}

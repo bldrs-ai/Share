@@ -180,6 +180,16 @@ const useToolbarStyles = makeStyles((theme) => ({
         },
   title: {
     flex: '1 1 100%',
+    marginTop: '0px',
+  },
+  filters: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
   },
 }));
 
@@ -222,10 +232,12 @@ const EnhancedTableToolbar = (props) => {
           Search Results
         </Typography>
       )}
-      <DropDownMenu title={'Project'} placeholder={'Project'} />
-      <DropDownMenu title={'Level'} />
-      <DropDownMenu title={'Type'} />
-      <DropDownMenu title={'Optional'} />
+      <div className={classes.filters}>
+        <DropDownMenu title={'Project'} placeholder={'Project'} />
+        <DropDownMenu title={'Level'} />
+        <DropDownMenu title={'Type'} />
+        <DropDownMenu title={'Optional'} />
+      </div>
 
       <div style={{ marginTop: 0 }}>
         {numSelected > 0 ? null : (
@@ -254,6 +266,9 @@ const useStyles = makeStyles((theme) => ({
   paper: {
     width: '100%',
     marginBottom: theme.spacing(2),
+    '@media (max-width: 900px)': {
+      width: 310,
+    },
   },
   table: {
     minWidth: 750,

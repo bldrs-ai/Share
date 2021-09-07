@@ -4,6 +4,7 @@ import AppBar from '@material-ui/core/AppBar';
 import Typography from '@material-ui/core/Typography';
 import IconButton from '@material-ui/core/IconButton';
 import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
+import ShareIcon from '@material-ui/icons/Share';
 import CommentIcon from '@material-ui/icons/Comment';
 import { makeStyles } from '@material-ui/core/styles';
 
@@ -17,6 +18,22 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 24,
     marginRight: '20px',
     letterSpacing: 1.2,
+  },
+  comment: {
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
+  },
+  shareButton: {
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
+  },
+  shareIconButton: {
+    display: 'none',
+    '@media (max-width: 900px)': {
+      display: 'block',
+    },
   },
 }));
 
@@ -60,6 +77,21 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
               }}
             />
           </IconButton>
+          <IconButton
+            edge='start'
+            color='secondary'
+            aria-label='menu'
+            style={{ position: 'relative' }}
+            className={classes.shareIconButton}
+          >
+            <ShareIcon
+              style={{
+                width: 24,
+                height: 24,
+                color: 'whiteSmoke',
+              }}
+            />
+          </IconButton>
         </div>
         <div
           style={{
@@ -73,6 +105,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             edge='start'
             color='secondary'
             aria-label='menu'
+            className={classes.comment}
             style={{
               position: 'relative',
               right: 10,
@@ -88,7 +121,10 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
               }}
             />
           </IconButton>
-          <PrimaryButton name={'Share'} onClick={onClickShare} />
+          <div className={classes.shareButton}>
+            <PrimaryButton name={'Share'} onClick={onClickShare} />
+          </div>
+
           <LoginMenu />
         </div>
       </Toolbar>

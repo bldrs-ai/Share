@@ -18,6 +18,9 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     alignItems: 'center',
     width: 400,
+    '@media (max-width: 900px)': {
+      width: 300,
+    },
   },
   input: {
     marginLeft: theme.spacing(1),

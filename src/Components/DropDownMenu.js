@@ -10,7 +10,7 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: theme.spacing(2),
     marginRight: theme.spacing(2),
     marginTop: theme.spacing(2),
-    marginBottom: theme.spacing(6),
+    marginBottom: theme.spacing(4),
     minWidth: 120,
   },
   selectEmpty: {

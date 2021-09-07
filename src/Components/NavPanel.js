@@ -3,10 +3,9 @@ import Paper from '@material-ui/core/Paper';
 
 import NavTree from './NavTree.js';
 
-
 const useStyles = makeStyles((theme) => ({
   contextualMenu: {
-    width: 308,
+    width: 407,
     border: 'none',
     display: 'flex',
     flexDirection: 'column',
@@ -17,6 +16,7 @@ const useStyles = makeStyles((theme) => ({
     height: '70%',
     '@media (max-width: 900px)': {
       height: '50%',
+      width: 310,
     },
   },
   paper: {
@@ -29,12 +29,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-
-const NavPanel = ({
-  viewer,
-  element,
-  onElementSelect
-}) => {
+const NavPanel = ({ viewer, element, onElementSelect }) => {
   const classes = useStyles();
   return (
     <Paper
@@ -50,15 +45,14 @@ const NavPanel = ({
       }}
     >
       <NavTree
-        viewer = {viewer}
-        element = {element}
-        onElementSelect = {onElementSelect}
-        showChildren = {true}
-        parentOpen = {true}
+        viewer={viewer}
+        element={element}
+        onElementSelect={onElementSelect}
+        showChildren={true}
+        parentOpen={true}
       />
     </Paper>
   );
 };
-
 
 export default NavPanel;
