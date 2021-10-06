@@ -1,4 +1,4 @@
-import Tree from 'react-animated-tree-v2';
+import TreeItem from '@mui/lab/TreeItem';
 import uuencode from 'uuencode';
 import React from 'react';
 
@@ -64,7 +64,7 @@ const prettyProps = (viewer, element, key, props, serial) => {
   }
 };
 
-
+/*
 const Row = ({ firstColumn, secondColumn }) => {
   return (
     <div
@@ -98,10 +98,10 @@ const Row = ({ firstColumn, secondColumn }) => {
     </div>
   );
 };
-
+*/
 
 const ItemProperties = ({viewer, element}) => {
-  const props = viewer.getProperties(0, element.expressID);
+  const props = element; //viewer.getProperties(0, element.expressID);
   let serial = 0;
   return (
     <table>
@@ -139,9 +139,7 @@ const ObjectTree = ({name, obj}) => {
   const isObj = typeof obj === 'object';
   //console.log('isObj: ', isObj, obj, typeof obj);
   return (
-      <Tree
-        content = { isObj ? `${name}` : `${obj}` }
-        open = {false} >
+    <TreeItem nodeId={''+i} label = { isObj ? `${name}` : `${obj}` }>
       {
         isObj ? (
           isTypeValue(obj) ?
@@ -152,7 +150,7 @@ const ObjectTree = ({name, obj}) => {
                          key = {i++} />))
           : null
       }
-    </Tree>);
+    </TreeItem>);
 };
 
 
