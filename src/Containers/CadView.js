@@ -110,7 +110,7 @@ const CadView = () => {
     setOpenShare(!openShare);
   };
 
-  const onElementSelect = elt => {
+  const onElementSelect = async elt => {
     const id = elt.expressID;
     if (id === undefined) throw new Error('Selected element is missing Express ID');
     try {
@@ -119,9 +119,10 @@ const CadView = () => {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
       // setup its properties.
-      console.log('TODO: no visual element for item: ', elt);
+      //console.log('TODO: no visual element for item: ', elt);
     }
-    setSelectedElement(elt);
+    const props = await viewer.getProperties(0, elt.expressID);
+    setSelectedElement(props);
     setOpenRight(true);
   };
 
@@ -137,15 +138,15 @@ const CadView = () => {
     viewer.addGrid();
     window.onmousemove = viewer.prepickIfcItem;
     window.ondblclick = viewer.addClippingPlane;
-    window.onkeydown = (event) => {
-      viewer.removeClippingPlane();
-    };
+    window.onkeydown = event => viewer.removeClippingPlane();
   }, []);
 
+
   const fileOpen = () => {
-    const loadIfc = async (event) => {
+    const loadIfc = async event => {
       await viewer.loadIfc(event.target.files[0], true);
-      setRootElement(viewer.getSpatialStructure(0));
+      const rootElt = await viewer.IFC.getSpatialStructure(0);
+      setRootElement(rootElt);
       setOpenLeft(true);
     };
 
@@ -155,9 +156,7 @@ const CadView = () => {
     fileInput.classList.add('file-input');
     fileInput.addEventListener(
       'change',
-      (event) => {
-        loadIfc(event);
-      },
+      event => loadIfc(event),
       false
     );
     viewerContainer.appendChild(fileInput);

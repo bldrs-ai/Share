@@ -1,6 +1,8 @@
 import { makeStyles } from '@material-ui/core/styles';
 import Paper from '@material-ui/core/Paper';
-
+import TreeView from '@mui/lab/TreeView';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import NavTree from './NavTree.js';
 
 
@@ -8,15 +10,12 @@ const useStyles = makeStyles((theme) => ({
   contextualMenu: {
     width: 308,
     border: 'none',
-    display: 'flex',
-    flexDirection: 'column',
     justifyContent: 'space-around',
     alignItems: 'center',
     overflow: 'scroll',
-    marginLeft: '-5px',
     height: '70%',
     '@media (max-width: 900px)': {
-      height: '50%',
+      height: '70%',
     },
   },
   paper: {
@@ -42,20 +41,23 @@ const NavPanel = ({
       style={{
         position: 'absolute',
         top: 144,
-        left: 24,
+        left: 20,
         overflow: 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'flex-start',
       }}
-    >
-      <NavTree
-        viewer = {viewer}
-        element = {element}
-        onElementSelect = {onElementSelect}
-        showChildren = {true}
-        parentOpen = {true}
-      />
+      >
+      <TreeView
+        aria-label="IFC Navigator"
+        defaultCollapseIcon={<ExpandMoreIcon />}
+        defaultExpandIcon={<ChevronRightIcon />}
+        sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
+        key = "tree">
+        <NavTree
+          viewer = {viewer}
+          element = {element}
+          onElementSelect = {onElementSelect}
+          showChildren = {true}
+          keyPrefix = {'root'}/>
+      </TreeView>
     </Paper>
   );
 };
