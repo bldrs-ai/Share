@@ -6,68 +6,37 @@ import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
 
 
+const prettyType = elt => {
+  switch (elt.type) {
+  case 'IFCBEAM': return 'Beam';
+  case 'IFCBUILDING': return 'Building';
+  case 'IFCBUILDINGSTOREY': return 'Storey';
+  case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)';
+  case 'IFCCOLUMN': return 'Column';
+  case 'IFCCOVERING': return 'Covering';
+  case 'IFCDOOR': return 'Door';
+  case 'IFCFLOWSEGMENT': return 'Flow Segment';
+  case 'IFCFLOWTERMINAL': return 'Flow Terminal';
+  case 'IFCPROJECT': return 'Project';
+  case 'IFCRAILING': return 'Railing';
+  case 'IFCROOF': return 'Roof';
+  case 'IFCSITE': return 'Site';
+  case 'IFCSLAB': return 'Slab';
+  case 'IFCSPACE': return 'Space';
+  case 'IFCWALL': return 'Wall';
+  case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)';
+  case 'IFCWINDOW': return 'Window';
+  default: return elt.type;
+  }
+};
+
+
 const NavTree = ({
   viewer,
   element,
   onElementSelect,
   keyPrefix = ''
 }) => {
-
-  const prettyType = elt => {
-    switch (elt.type) {
-    case 'IFCBEAM': return 'Beam';
-    case 'IFCBUILDING': return 'Building';
-    case 'IFCBUILDINGSTOREY': return 'Storey';
-    case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)';
-    case 'IFCCOLUMN': return 'Column';
-    case 'IFCCOVERING': return 'Covering';
-    case 'IFCDOOR': return 'Door';
-    case 'IFCFLOWSEGMENT': return 'Flow Segment';
-    case 'IFCFLOWTERMINAL': return 'Flow Terminal';
-    case 'IFCPROJECT': return 'Project';
-    case 'IFCRAILING': return 'Railing';
-    case 'IFCROOF': return 'Roof';
-    case 'IFCSITE': return 'Site';
-    case 'IFCSLAB': return 'Slab';
-    case 'IFCSPACE': return 'Space';
-    case 'IFCWALL': return 'Wall';
-    case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)';
-    case 'IFCWINDOW': return 'Window';
-    default: return elt.type;
-    }
-  };
-
-
-  // Most of below comes from the Mui demo for custom ContentComponent
-  // prop for "... limiting expansion to clicking the icon"
-  // https://mui.com/components/tree-view/#IconExpansionTreeView.js
-  const [elementText, setElementText] = React.useState('');
-
-  React.useEffect(() => {
-    // TODO(pablo): copypasta to fix
-    // "Can't perform a React state update on an unmounted component"
-    // The idea here is that the async handler was being called
-    // multiple times, including after unmounted.  Needed to add a
-    // state var and cleanup return function. But I don't really
-    // understand lifecycle.
-    //
-    // This looks informative:
-    // https://overreacted.io/a-complete-guide-to-useeffect/#so-what-about-cleanup
-    let mounted = true;
-    viewer.getProperties(0, element.expressID).then(props => {
-      if (mounted) {
-        // TODO: e.g. when there's no model loaded.
-        if (props === null) {
-          return 'model not loaded';
-        }
-        setElementText((props.Name ? props.Name.value : null) || prettyType(element));
-      }
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [viewer, element, elementText]);
-
 
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
@@ -132,6 +101,7 @@ const NavTree = ({
     );
   });
 
+
   CustomContent.propTypes = {
     /**
      * Override or extend the styles applied to the component.
@@ -163,6 +133,7 @@ const NavTree = ({
     nodeId: PropTypes.string.isRequired,
   };
 
+
   const CustomTreeItem = (props) => (
     <TreeItem ContentComponent={CustomContent} {...props} />
   );
@@ -172,7 +143,7 @@ const NavTree = ({
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
-    <CustomTreeItem nodeId={keyPrefix} label={elementText}
+    <CustomTreeItem nodeId={keyPrefix} label={element.Name ? element.Name.value : prettyType(element)}
                     onClick = {() => onElementSelect(element)}>
       {
         element.children && element.children.length > 0 ? element.children.map(

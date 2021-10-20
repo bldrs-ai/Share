@@ -13,17 +13,12 @@ afterAll(() => server.close())
 test('loads and displays NavTree node', async () => {
   const testLabel = 'Test node label';
   const {container, getByText} = render(
-    <NavTree viewer={{getProperties: () => {
-               return {
-                 then: cb => {
-                   cb({
-                     Name: {
-                       value: testLabel
-                     }
-                   });
-                 }
-               };
-             }}} element={{children: []}}/>)
+    <NavTree viewer={{}}
+             element={{
+               children: [],
+               Name: {
+                 value: testLabel
+               }}}/>)
 
   await waitFor(() => screen.getByRole('treeitem'))
   expect(getByText(testLabel)).toBeInTheDocument()
