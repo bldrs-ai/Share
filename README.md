@@ -33,3 +33,11 @@ To merge from upstream:
 > git fetch upstream
 > git merge upstream/main
 ```
+
+
+# TODO: Remove react-scripts
+## Node tests
+Misc links
+https://testing-library.com/docs/react-testing-library/example-intro
+https://stackoverflow.com/questions/56952728/jest-tests-on-react-components-unexpected-token
+

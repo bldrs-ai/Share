@@ -35,6 +35,9 @@ const NavPanel = ({
   onElementSelect
 }) => {
   const classes = useStyles();
+  // TODO(pablo): the defaultExpanded array can contain bogus IDs with
+  // no error.  Not sure of a better way to pre-open the first few
+  // nodes besides hardcoding.
   return (
     <Paper
       className={classes.contextualMenu}
@@ -50,12 +53,12 @@ const NavPanel = ({
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
         sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
+        defaultExpanded = {['root', 'root-0', 'root-0-0']}
         key = "tree">
         <NavTree
           viewer = {viewer}
           element = {element}
           onElementSelect = {onElementSelect}
-          showChildren = {true}
           keyPrefix = {'root'}/>
       </TreeView>
     </Paper>

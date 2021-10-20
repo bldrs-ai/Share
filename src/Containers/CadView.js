@@ -144,8 +144,12 @@ const CadView = () => {
 
   const fileOpen = () => {
     const loadIfc = async event => {
+      console.log(viewer);
+      //await viewer.IFC.loader.ifcManager.useJSONData();
       await viewer.loadIfc(event.target.files[0], true);
-      const rootElt = await viewer.IFC.getSpatialStructure(0);
+      const rootElt = await viewer.IFC.getSpatialStructure(0, true);
+      //const props = await viewer.IFC.getProperties(0, rootElt.expressID, true);
+      //console.log('rootElt with props: ', rootElt);
       setRootElement(rootElt);
       setOpenLeft(true);
     };
