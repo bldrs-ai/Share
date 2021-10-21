@@ -32,6 +32,7 @@ const useStyles = makeStyles((theme) => ({
 const NavPanel = ({
   viewer,
   element,
+  selectedElements,
   onElementSelect
 }) => {
   const classes = useStyles();
@@ -53,7 +54,7 @@ const NavPanel = ({
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
         sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
-        defaultExpanded = {['root', 'root-0', 'root-0-0']}
+        selected = {selectedElements}
         key = "tree">
         <NavTree
           viewer = {viewer}

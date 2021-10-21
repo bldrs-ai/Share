@@ -143,7 +143,7 @@ const NavTree = ({
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
-    <CustomTreeItem nodeId={keyPrefix} label={element.Name ? element.Name.value : prettyType(element)}
+    <CustomTreeItem nodeId={element.expressID.toString()} label={element.Name ? element.Name.value : prettyType(element)}
                     onClick = {() => onElementSelect(element)}>
       {
         element.children && element.children.length > 0 ? element.children.map(

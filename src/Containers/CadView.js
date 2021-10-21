@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { makeStyles } from '@material-ui/core/styles';
-
+import jsonata from 'jsonata';
 import { IfcViewerAPI } from 'web-ifc-viewer';
-
+import { makeStyles } from '@material-ui/core/styles';
 import MenuButton from '../Components/MenuButton';
 import ItemPanel from '../Components/ItemPanel';
 import NavPanel from '../Components/NavPanel';
@@ -105,16 +104,62 @@ const CadView = () => {
   const [viewer, setViewer] = useState({});
   const [rootElement, setRootElement] = useState({});
   const [selectedElement, setSelectedElement] = useState({});
+  const [selectedElements, setSelectedElements] = useState([]);
 
-  const onClickShare = () => {
-    setOpenShare(!openShare);
+  const onClickShare = () => setOpenShare(!openShare);
+
+  // Need to ensure only expressID strings
+  const toExpressIds = results => {
+    results = results.filter(elt => elt !== null
+                             && elt !== undefined
+                             && typeof elt.expressID === 'number'
+                             && !isNaN(elt.expressID));
+    return results.map(elt => elt.expressID);
   };
+
+
+  const clearSearch = () => {
+    setSelectedElements([]);
+    viewer.IFC.unpickIfcItems();
+  };
+
+
+  const onSearch = query => {
+    console.log(`CadView#onSearch: query: ${query}`);
+    if (query.startsWith(':')) {
+      query = query.substring(1);
+      let result = jsonata(query).evaluate(rootElement);
+      console.log('CadView#onSearch: result: ', result);
+      if (result) {
+        if (!Array.isArray(result)) {
+          result = [result];
+        }
+        const resultExpressIDs = toExpressIds(result);
+        setSelectedElements(resultExpressIDs.map(id => id + ''));
+        try {
+          console.log('picking ifc items: ', resultExpressIDs);
+          viewer.pickIfcItemsByID(0, resultExpressIDs);
+        } catch (e) {
+          // IFCjs will throw a big stack trace if there is not a visual
+          // element, e.g. for IfcSite, but we still want to proceed to
+          // setup its properties.
+          //console.log('TODO: no visual element for item: ', elt);
+        }
+      }
+    } else if (query.trim() === '') {
+      clearSearch();
+    }
+  }
+
+  const onSearchModify = target => {
+    console.log('CadView#onSearchModify: target: ', target);
+  }
 
   const onElementSelect = async elt => {
     const id = elt.expressID;
     if (id === undefined) throw new Error('Selected element is missing Express ID');
     try {
-      viewer.pickIfcItemsByID(0, [id]);
+      viewer.pickIfcItemsByID(0, id);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -151,6 +196,7 @@ const CadView = () => {
       //const props = await viewer.IFC.getProperties(0, rootElt.expressID, true);
       //console.log('rootElt with props: ', rootElt);
       setRootElement(rootElt);
+      console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
       setOpenLeft(true);
     };
 
@@ -183,6 +229,8 @@ const CadView = () => {
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <div className={classes.searchContainer}>
           <SearchBar
+            onSearch = {onSearch}
+            onSearchModify = {onSearchModify}
             onClickMenu={() => setOpenLeft(!openLeft)}
             disabled={isLoaded}
             open={openLeft}
@@ -208,6 +256,7 @@ const CadView = () => {
               <NavPanel
                 viewer = {viewer}
                 element = {rootElement}
+                selectedElements = {selectedElements}
                 onElementSelect = {onElementSelect} />
             ) : null
           }
