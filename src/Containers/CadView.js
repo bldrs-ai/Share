@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import jsonata from 'jsonata';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@material-ui/core/styles';
+import SearchIndex from './SearchIndex.js';
 import MenuButton from '../Components/MenuButton';
 import ItemPanel from '../Components/ItemPanel';
 import NavPanel from '../Components/NavPanel';
@@ -9,6 +9,9 @@ import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 
 import '../App.css';
+
+
+const debug = 0;
 
 
 const useStyles = makeStyles((theme) => ({
@@ -98,78 +101,72 @@ const useStyles = makeStyles((theme) => ({
 
 const CadView = () => {
   const classes = useStyles();
-  const [openLeft, setOpenLeft] = useState(false);
-  const [openRight, setOpenRight] = useState(false);
-  const [openShare, setOpenShare] = useState(false);
+  const [showSearchBar, setShowSearchBar] = useState(false);
+  const [showNavPanel, setShowNavPanel] = useState(false);
+  const [showItemPanel, setShowItemPanel] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [viewer, setViewer] = useState({});
   const [rootElement, setRootElement] = useState({});
   const [selectedElement, setSelectedElement] = useState({});
   const [selectedElements, setSelectedElements] = useState([]);
+  const [expandedElements, setExpandedElements] = useState([]);
 
-  const onClickShare = () => setOpenShare(!openShare);
+  const onClickShare = () => setShowShare(!showShare);
 
-  // Need to ensure only expressID strings
-  const toExpressIds = results => {
-    results = results.filter(elt => elt !== null
-                             && elt !== undefined
-                             && typeof elt.expressID === 'number'
-                             && !isNaN(elt.expressID));
-    return results.map(elt => elt.expressID);
-  };
+  const [searchIndex, setSearchIndex] = useState({clearIndex: () => {}});
 
 
   const clearSearch = () => {
     setSelectedElements([]);
     viewer.IFC.unpickIfcItems();
-  };
-
-
-  const onSearch = query => {
-    console.log(`CadView#onSearch: query: ${query}`);
-    if (query.startsWith(':')) {
-      query = query.substring(1);
-      let result = jsonata(query).evaluate(rootElement);
-      console.log('CadView#onSearch: result: ', result);
-      if (result) {
-        if (!Array.isArray(result)) {
-          result = [result];
-        }
-        const resultExpressIDs = toExpressIds(result);
-        setSelectedElements(resultExpressIDs.map(id => id + ''));
-        try {
-          console.log('picking ifc items: ', resultExpressIDs);
-          viewer.pickIfcItemsByID(0, resultExpressIDs);
-        } catch (e) {
-          // IFCjs will throw a big stack trace if there is not a visual
-          // element, e.g. for IfcSite, but we still want to proceed to
-          // setup its properties.
-          //console.log('TODO: no visual element for item: ', elt);
-        }
-      }
-    } else if (query.trim() === '') {
-      clearSearch();
-    }
   }
 
-  const onSearchModify = target => {
-    console.log('CadView#onSearchModify: target: ', target);
-  }
 
-  const onElementSelect = async elt => {
-    const id = elt.expressID;
-    if (id === undefined) throw new Error('Selected element is missing Express ID');
+  const selectItems = resultIDs => {
+    setSelectedElements(resultIDs.map(id => id + ''));
     try {
-      viewer.pickIfcItemsByID(0, id);
+      if (debug >= 2) {
+        console.log('picking ifc items: ', resultIDs);
+      }
+      viewer.pickIfcItemsByID(0, resultIDs);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
       // setup its properties.
-      //console.log('TODO: no visual element for item: ', elt);
+      if (debug >= 3) {
+        console.error('TODO: no visual element for item ids: ', resultIDs);
+      }
     }
+  }
+
+
+  const onSearch = query => {
+    clearSearch();
+    if (debug) {
+      console.log(`CadView#onSearch: query: ${query}`);
+    }
+    query = query.trim();
+    if (query === '') {
+      return;
+    }
+
+    const resultIDs = searchIndex.search(query);
+    selectItems(resultIDs);
+  }
+
+
+  // TODO(pablo): search suggest
+  const onSearchModify = target => {}
+
+  const onElementSelect = async elt => {
+    const id = elt.expressID;
+    if (id === undefined) throw new Error('Selected element is missing Express ID');
+    selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
-    setOpenRight(true);
-  };
+    setShowItemPanel(true);
+  }
+
 
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
@@ -184,20 +181,40 @@ const CadView = () => {
     window.onmousemove = viewer.prepickIfcItem;
     window.ondblclick = viewer.addClippingPlane;
     window.onkeydown = event => viewer.removeClippingPlane();
-  }, []);
+  }, [])
 
 
   const fileOpen = () => {
     const loadIfc = async event => {
-      console.log(viewer);
-      //await viewer.IFC.loader.ifcManager.useJSONData();
+      if (debug) {
+        console.log(viewer);
+      }
       await viewer.loadIfc(event.target.files[0], true);
       const rootElt = await viewer.IFC.getSpatialStructure(0, true);
       //const props = await viewer.IFC.getProperties(0, rootElt.expressID, true);
-      //console.log('rootElt with props: ', rootElt);
       setRootElement(rootElt);
-      console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
-      setOpenLeft(true);
+      if (debug >= 2) {
+        console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
+      }
+      const expanded = [rootElt.expressID+''];
+      let elt = rootElt;
+      for (let i = 0; i < 3; i++) {
+        if (elt.children.length > 0) {
+          expanded.push(elt.expressID+'');
+          elt = elt.children[0];
+        }
+      }
+      setExpandedElements(expanded);
+      setShowNavPanel(true);
+      searchIndex.clearIndex();
+      const index = new SearchIndex(rootElt, viewer);
+      index.indexElement(rootElt);
+      // TODO(pablo): why can't i do:
+      //   setSearchIndex(new SearchIndex(rootElt, viewer));
+      //   searchIndex.indexElement(...);
+      // When I try this searchIndex is actually a promise.
+      setSearchIndex(index);
+      setShowSearchBar(true);
     };
 
     const viewerContainer = document.getElementById('viewer-container');
@@ -227,42 +244,40 @@ const CadView = () => {
       ></div>
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
-        <div className={classes.searchContainer}>
-          <SearchBar
-            onSearch = {onSearch}
-            onSearchModify = {onSearchModify}
-            onClickMenu={() => setOpenLeft(!openLeft)}
-            disabled={isLoaded}
-            open={openLeft}
-          />
-        </div>
-        {openShare && (
-          <div className={classes.shareContainer}>
-            http://wwww.builders.com/kdjiui4kjh/dflakdjkfjlh
+        {showSearchBar && (
+          <div className={classes.searchContainer}>
+            <SearchBar
+              onSearch={onSearch}
+              onSearchModify={onSearchModify}
+              onClickMenu={() => setShowNavPanel(!showNavPanel)}
+              disabled={isLoaded}
+              open={showNavPanel}
+            />
           </div>
         )}
         <div className={classes.elementsButton}>
           <MenuButton
-            onClick={() => setOpenRight(!openRight)}
+            onClick={() => setShowItemPanel(!showItemPanel)}
             disabled={isLoadedElement}
-            open={openRight}
+            open={showItemPanel}
           />
         </div>
 
         {/* </div> */}
         <div className={classes.menuToolbarContainer}>
           <div>
-            {openLeft ? (
+            {showNavPanel ? (
               <NavPanel
                 viewer = {viewer}
                 element = {rootElement}
                 selectedElements = {selectedElements}
+                expandedElements = {expandedElements}
                 onElementSelect = {onElementSelect} />
             ) : null
           }
           </div>
           <div>{
-            openRight ? (
+            showItemPanel ? (
               <ItemPanel
                 viewer = {viewer}
                 element = {selectedElement} />

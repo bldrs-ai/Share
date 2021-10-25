@@ -4,11 +4,11 @@ import AppBar from '@material-ui/core/AppBar';
 import Typography from '@material-ui/core/Typography';
 import IconButton from '@material-ui/core/IconButton';
 import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
-import CommentIcon from '@material-ui/icons/Comment';
 import { makeStyles } from '@material-ui/core/styles';
 
-import PrimaryButton from '../Components/primaryButton';
-import LoginMenu from './LoginMenu';
+//import CommentIcon from '@material-ui/icons/Comment';
+//import ShareButton from '../Components/ShareButton';
+//import LoginMenu from './LoginMenu';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -70,7 +70,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             alignItems: 'center',
           }}
         >
-          <IconButton
+          {/*<IconButton
             edge='start'
             color='secondary'
             aria-label='menu'
@@ -81,16 +81,17 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
               height: 25,
             }}
           >
-            <CommentIcon
+            {<CommentIcon
               style={{
                 width: 20,
                 height: 20,
                 color: 'whiteSmoke',
               }}
-            />
-          </IconButton>
-          <PrimaryButton name={'Share'} onClick={onClickShare} />
-          <LoginMenu />
+              />
+             </IconButton>
+          */}
+          {/*<ShareButton name={'Share'} onClick={onClickShare} />*/}
+          {/*<LoginMenu />*/}
         </div>
       </Toolbar>
     </AppBar>

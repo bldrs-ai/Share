@@ -10,7 +10,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-const PrimaryButton = ({ name, onClick }) => {
+const ShareButton = ({ name, onClick }) => {
   const classes = useStyles();
   return (
     <Button
@@ -26,4 +26,4 @@ const PrimaryButton = ({ name, onClick }) => {
   );
 };
 
-export default PrimaryButton;
+export default ShareButton;

@@ -1,6 +1,6 @@
 import TreeItem from '@mui/lab/TreeItem';
-import uuencode from 'uuencode';
 import React from 'react';
+import {prettyType} from '../utils/Ifc';
 
 
 const deref = ref => {
@@ -31,7 +31,9 @@ const prettyProps = (viewer, element, key, props, serial) => {
   const propMgr = viewer.IFC.loader.ifcManager.properties;
   switch (key) {
   case 'GlobalId':
-    return row(key, uuencode.decode(deref(value)), serial);
+    return row(key, deref(value), serial);
+  case 'type':
+    return row('Type', prettyType(element, viewer), serial);
   case 'Name':     ; // fallthrough
   case 'PredefinedType':
     if (value['value'] != null) {
@@ -64,41 +66,6 @@ const prettyProps = (viewer, element, key, props, serial) => {
   }
 };
 
-/*
-const Row = ({ firstColumn, secondColumn }) => {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'row',
-        width: 270,
-        justifyContent: 'flex-start',
-        fontSize: 12,
-        marginBottom: 5,
-      }}
-    >
-      <div
-        style={{
-          minWidth: 100,
-          marginRight: 20,
-          border: '1px solid lightGray',
-        }}
-      >
-        {firstColumn}
-      </div>
-      <div
-        style={{
-          minWidth: 150,
-          border: '1px solid lightGray',
-          wordWrap: 'break-word',
-        }}
-      >
-        {secondColumn}
-      </div>
-    </div>
-  );
-};
-*/
 
 const ItemProperties = ({viewer, element}) => {
   const props = element; //viewer.getProperties(0, element.expressID);
@@ -114,13 +81,6 @@ const ItemProperties = ({viewer, element}) => {
       </tbody>
     </table>
   );
-//        {Object.keys(elementProps).map((key) => (
-//         <Row
-//            firstColumn={key}
-//            secondColumn={JSON.stringify(elementProps[key])}
-//          />
-//        ))}
-
 };
 
 const isTypeValue = obj => {

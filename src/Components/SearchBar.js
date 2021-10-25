@@ -45,6 +45,8 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
   const onSubmit = event => {
     event.preventDefault();
     onSearch(textValue);
+    // TODO(pablo): hack
+    document.getElementById('main_search_input').blur();
   };
 
   return (
@@ -60,7 +62,8 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}
-        placeholder="Search IFC"
+        id="main_search_input"
+        placeholder="Search building"
         inputProps={{ 'aria-label': 'search' }}
         onChange={onChange}
         value={textValue}
