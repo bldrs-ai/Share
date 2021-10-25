@@ -1,10 +1,10 @@
 import React from 'react';
 import { makeStyles } from '@material-ui/core/styles';
-import Paper from '@material-ui/core/Paper';
-import InputBase from '@material-ui/core/InputBase';
-import IconButton from '@material-ui/core/IconButton';
-import MenuIcon from '@material-ui/icons/Menu';
-import SearchIcon from '@material-ui/icons/Search';
+import Paper from '@mui/material/Paper';
+import InputBase from '@mui/material/InputBase';
+import IconButton from '@mui/material/IconButton';
+import MenuIcon from '@mui/icons-material/Menu';
+import SearchIcon from '@mui/icons-material/Search';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -28,11 +28,29 @@ const useStyles = makeStyles((theme) => ({
 }));
 
 
-export default function SearchBar({ onClickMenu, disabled, open }) {
+export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disabled, open }) {
   const classes = useStyles();
 
+  const [textValue, setTextValue] = React.useState('');
+
+  // TODO(pablo): What I have here seems to work fine but not sure if
+  // it's idomatic.  See:
+  //   https://blog.logrocket.com/using-material-ui-with-react-hook-form/
+  const onChange = event => {
+    const value = event.target.value;
+    setTextValue(value);
+    onSearchModify(value);
+  }
+
+  const onSubmit = event => {
+    event.preventDefault();
+    onSearch(textValue);
+    // TODO(pablo): hack
+    document.getElementById('main_search_input').blur();
+  };
+
   return (
-    <Paper component='form' className={classes.root}>
+    <Paper component='form' className={classes.root} onSubmit={onSubmit}>
       <IconButton
         className={classes.iconButton}
         aria-label='menu'
@@ -43,9 +61,12 @@ export default function SearchBar({ onClickMenu, disabled, open }) {
         <MenuIcon />
       </IconButton>
       <InputBase
-        className={classes.input}
-        placeholder='Search IFC'
-        inputProps={{ 'aria-label': 'search google maps' }}
+        sx={{ ml: 1, flex: 1 }}
+        id="main_search_input"
+        placeholder="Search building"
+        inputProps={{ 'aria-label': 'search' }}
+        onChange={onChange}
+        value={textValue}
       />
       <IconButton
         type='submit'
@@ -54,14 +75,6 @@ export default function SearchBar({ onClickMenu, disabled, open }) {
       >
         <SearchIcon />
       </IconButton>
-      {/* <Divider className={classes.divider} orientation="vertical" /> */}
-      {/* <IconButton
-        color="primary"
-        className={classes.iconButton}
-        aria-label="directions"
-      >
-        <DirectionsIcon />
-      </IconButton> */}
     </Paper>
   );
 }

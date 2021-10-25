@@ -4,30 +4,38 @@ import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
 import PropTypes from 'prop-types';
 import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
+import {reifyName} from '../utils/Ifc';
 
 
-const prettyType = elt => {
-  switch (elt.type) {
-  case 'IFCBEAM': return 'Beam';
-  case 'IFCBUILDING': return 'Building';
-  case 'IFCBUILDINGSTOREY': return 'Storey';
-  case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)';
-  case 'IFCCOLUMN': return 'Column';
-  case 'IFCCOVERING': return 'Covering';
-  case 'IFCDOOR': return 'Door';
-  case 'IFCFLOWSEGMENT': return 'Flow Segment';
-  case 'IFCFLOWTERMINAL': return 'Flow Terminal';
-  case 'IFCPROJECT': return 'Project';
-  case 'IFCRAILING': return 'Railing';
-  case 'IFCROOF': return 'Roof';
-  case 'IFCSITE': return 'Site';
-  case 'IFCSLAB': return 'Slab';
-  case 'IFCSPACE': return 'Space';
-  case 'IFCWALL': return 'Wall';
-  case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)';
-  case 'IFCWINDOW': return 'Window';
-  default: return elt.type;
-  }
+const NavTreePropTypes = {
+  /**
+   * Override or extend the styles applied to the component.
+   */
+  classes: PropTypes.object.isRequired,
+  /**
+   * className applied to the root element.
+   */
+  className: PropTypes.string,
+  /**
+   * The icon to display next to the tree node's label. Either a parent or end icon.
+   */
+  displayIcon: PropTypes.node,
+  /**
+   * The icon to display next to the tree node's label. Either an expansion or collapse icon.
+   */
+  expansionIcon: PropTypes.node,
+  /**
+   * The icon to display next to the tree node's label.
+   */
+  icon: PropTypes.node,
+  /**
+   * The tree node label.
+   */
+  label: PropTypes.node,
+  /**
+   * The id of the node.
+   */
+  nodeId: PropTypes.string.isRequired,
 };
 
 
@@ -102,36 +110,7 @@ const NavTree = ({
   });
 
 
-  CustomContent.propTypes = {
-    /**
-     * Override or extend the styles applied to the component.
-     */
-    classes: PropTypes.object.isRequired,
-    /**
-     * className applied to the root element.
-     */
-    className: PropTypes.string,
-    /**
-     * The icon to display next to the tree node's label. Either a parent or end icon.
-     */
-    displayIcon: PropTypes.node,
-    /**
-     * The icon to display next to the tree node's label. Either an expansion or collapse icon.
-     */
-    expansionIcon: PropTypes.node,
-    /**
-     * The icon to display next to the tree node's label.
-     */
-    icon: PropTypes.node,
-    /**
-     * The tree node label.
-     */
-    label: PropTypes.node,
-    /**
-     * The id of the node.
-     */
-    nodeId: PropTypes.string.isRequired,
-  };
+  CustomContent.propTypes = NavTreePropTypes;
 
 
   const CustomTreeItem = (props) => (
@@ -143,7 +122,7 @@ const NavTree = ({
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
-    <CustomTreeItem nodeId={keyPrefix} label={element.Name ? element.Name.value : prettyType(element)}
+    <CustomTreeItem nodeId={element.expressID.toString()} label={reifyName(element, viewer)}
                     onClick = {() => onElementSelect(element)}>
       {
         element.children && element.children.length > 0 ? element.children.map(
