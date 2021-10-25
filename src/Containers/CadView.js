@@ -168,6 +168,33 @@ const CadView = () => {
   }
 
 
+  const onModelLoad = (rootElt, viewer) => {
+    setRootElement(rootElt);
+    if (debug >= 2) {
+      console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
+    }
+    const expanded = [rootElt.expressID+''];
+    let elt = rootElt;
+    for (let i = 0; i < 3; i++) {
+      if (elt.children.length > 0) {
+        expanded.push(elt.expressID+'');
+        elt = elt.children[0];
+      }
+    }
+    setExpandedElements(expanded);
+    setShowNavPanel(true);
+    searchIndex.clearIndex();
+    const index = new SearchIndex(rootElt, viewer);
+    index.indexElement(rootElt);
+    // TODO(pablo): why can't i do:
+    //   setSearchIndex(new SearchIndex(rootElt, viewer));
+    //   searchIndex.indexElement(...);
+    // When I try this searchIndex is actually a promise.
+    setSearchIndex(index);
+    setShowSearchBar(true);
+  };
+
+
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
     const container = document.getElementById('viewer-container');
@@ -181,49 +208,59 @@ const CadView = () => {
     window.onmousemove = viewer.prepickIfcItem;
     window.ondblclick = viewer.addClippingPlane;
     window.onkeydown = event => viewer.removeClippingPlane();
-  }, [])
+
+    // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
+    // this to get access to progress and error.
+    if (window.location.hash.length > 0) {
+      const filePath = './' + window.location.hash.substring(1);
+      if (debug) {
+        console.log('CadView#useEffect: load from server and hash: ', filePath);
+      }
+      viewer.IFC.loader.load(
+        filePath,
+        model => {
+          if (debug) {
+            console.log('CadView#useEffect$onLoad, model: ', model, viewer);
+          }
+          viewer.IFC.addIfcModel(model);
+          const rootEltPromise = model.ifcManager.getSpatialStructure(0, true);
+          rootEltPromise.then(rootElt => {
+            onModelLoad(rootElt, viewer);
+          });
+        },
+        progressEvent => {
+          if (debug) {
+            console.log('CadView#useEffect$onProgress', progressEvent);
+          }
+        },
+        error => {
+          console.error('CadView#useEffect$onError', error);
+        });
+    }
+  }, []);
+
+
+  const loadIfc = async file => {
+    if (debug) {
+      console.log(viewer);
+    }
+    await viewer.loadIfc(file, true);
+    const rootElt = await viewer.IFC.getSpatialStructure(0, true);
+    if (debug) {
+      console.log('rootElt: ', rootElt);
+    }
+    onModelLoad(rootElt, viewer);
+  };
 
 
   const fileOpen = () => {
-    const loadIfc = async event => {
-      if (debug) {
-        console.log(viewer);
-      }
-      await viewer.loadIfc(event.target.files[0], true);
-      const rootElt = await viewer.IFC.getSpatialStructure(0, true);
-      //const props = await viewer.IFC.getProperties(0, rootElt.expressID, true);
-      setRootElement(rootElt);
-      if (debug >= 2) {
-        console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
-      }
-      const expanded = [rootElt.expressID+''];
-      let elt = rootElt;
-      for (let i = 0; i < 3; i++) {
-        if (elt.children.length > 0) {
-          expanded.push(elt.expressID+'');
-          elt = elt.children[0];
-        }
-      }
-      setExpandedElements(expanded);
-      setShowNavPanel(true);
-      searchIndex.clearIndex();
-      const index = new SearchIndex(rootElt, viewer);
-      index.indexElement(rootElt);
-      // TODO(pablo): why can't i do:
-      //   setSearchIndex(new SearchIndex(rootElt, viewer));
-      //   searchIndex.indexElement(...);
-      // When I try this searchIndex is actually a promise.
-      setSearchIndex(index);
-      setShowSearchBar(true);
-    };
-
     const viewerContainer = document.getElementById('viewer-container');
     const fileInput = document.createElement('input');
     fileInput.setAttribute('type', 'file');
     fileInput.classList.add('file-input');
     fileInput.addEventListener(
       'change',
-      event => loadIfc(event),
+      event => loadIfc(event.target.files[0]),
       false
     );
     viewerContainer.appendChild(fileInput);
