@@ -8,12 +8,11 @@ import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
+import CircularProgress from '@mui/material/CircularProgress';
 
 import '../App.css';
 
-
 const debug = 0;
-
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -114,17 +113,15 @@ const CadView = () => {
 
   const onClickShare = () => setShowShare(!showShare);
 
-  const [searchIndex, setSearchIndex] = useState({clearIndex: () => {}});
-
+  const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
 
   const clearSearch = () => {
     setSelectedElements([]);
     viewer.IFC.unpickIfcItems();
-  }
+  };
 
-
-  const selectItems = resultIDs => {
-    setSelectedElements(resultIDs.map(id => id + ''));
+  const selectItems = (resultIDs) => {
+    setSelectedElements(resultIDs.map((id) => id + ''));
     try {
       if (debug >= 2) {
         console.log('picking ifc items: ', resultIDs);
@@ -138,10 +135,9 @@ const CadView = () => {
         console.error('TODO: no visual element for item ids: ', resultIDs);
       }
     }
-  }
+  };
 
-
-  const onSearch = query => {
+  const onSearch = (query) => {
     clearSearch();
     if (debug) {
       console.log(`CadView#onSearch: query: ${query}`);
@@ -154,34 +150,35 @@ const CadView = () => {
     const resultIDs = searchIndex.search(query);
     selectItems(resultIDs);
     gtag('event', 'search', {
-      search_term: query
+      search_term: query,
     });
-  }
-
+  };
 
   // TODO(pablo): search suggest
-  const onSearchModify = target => {}
+  const onSearchModify = (target) => {};
 
-  const onElementSelect = async elt => {
+  const onElementSelect = async (elt) => {
     const id = elt.expressID;
-    if (id === undefined) throw new Error('Selected element is missing Express ID');
+    if (id === undefined)
+      throw new Error('Selected element is missing Express ID');
     selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
     setShowItemPanel(true);
-  }
-
+  };
 
   const onModelLoad = (rootElt, viewer) => {
     setRootElement(rootElt);
     if (debug >= 2) {
-      console.log(`CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`);
+      console.log(
+        `CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`
+      );
     }
-    const expanded = [rootElt.expressID+''];
+    const expanded = [rootElt.expressID + ''];
     let elt = rootElt;
     for (let i = 0; i < 3; i++) {
       if (elt.children.length > 0) {
-        expanded.push(elt.expressID+'');
+        expanded.push(elt.expressID + '');
         elt = elt.children[0];
       }
     }
@@ -198,7 +195,6 @@ const CadView = () => {
     setShowSearchBar(true);
   };
 
-
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
     const container = document.getElementById('viewer-container');
@@ -211,7 +207,7 @@ const CadView = () => {
     viewer.addGrid();
     window.onmousemove = viewer.prepickIfcItem;
     window.ondblclick = viewer.addClippingPlane;
-    window.onkeydown = event => viewer.removeClippingPlane();
+    window.onkeydown = (event) => viewer.removeClippingPlane();
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
@@ -222,29 +218,29 @@ const CadView = () => {
       }
       viewer.IFC.loader.load(
         filePath,
-        model => {
+        (model) => {
           if (debug) {
             console.log('CadView#useEffect$onLoad, model: ', model, viewer);
           }
           viewer.IFC.addIfcModel(model);
           const rootEltPromise = model.ifcManager.getSpatialStructure(0, true);
-          rootEltPromise.then(rootElt => {
+          rootEltPromise.then((rootElt) => {
             onModelLoad(rootElt, viewer);
           });
         },
-        progressEvent => {
+        (progressEvent) => {
           if (debug) {
             console.log('CadView#useEffect$onProgress', progressEvent);
           }
         },
-        error => {
+        (error) => {
           console.error('CadView#useEffect$onError', error);
-        });
+        }
+      );
     }
   }, []);
 
-
-  const loadIfc = async file => {
+  const loadIfc = async (file) => {
     if (debug) {
       console.log(viewer);
     }
@@ -256,10 +252,9 @@ const CadView = () => {
     onModelLoad(rootElt, viewer);
     gtag('event', 'select_content', {
       content_type: 'ifc_model',
-      item_id: file
+      item_id: file,
     });
   };
-
 
   const fileOpen = () => {
     const viewerContainer = document.getElementById('viewer-container');
@@ -268,7 +263,7 @@ const CadView = () => {
     fileInput.classList.add('file-input');
     fileInput.addEventListener(
       'change',
-      event => loadIfc(event.target.files[0]),
+      (event) => loadIfc(event.target.files[0]),
       false
     );
     viewerContainer.appendChild(fileInput);
@@ -313,21 +308,18 @@ const CadView = () => {
           <div>
             {showNavPanel ? (
               <NavPanel
-                viewer = {viewer}
-                element = {rootElement}
-                selectedElements = {selectedElements}
-                expandedElements = {expandedElements}
-                onElementSelect = {onElementSelect} />
-            ) : null
-          }
+                viewer={viewer}
+                element={rootElement}
+                selectedElements={selectedElements}
+                expandedElements={expandedElements}
+                onElementSelect={onElementSelect}
+              />
+            ) : null}
           </div>
-          <div>{
-            showItemPanel ? (
-              <ItemPanel
-                viewer = {viewer}
-                element = {selectedElement} />
-            ) : null
-          }
+          <div>
+            {showItemPanel ? (
+              <ItemPanel viewer={viewer} element={selectedElement} />
+            ) : null}
           </div>
         </div>
       </div>
