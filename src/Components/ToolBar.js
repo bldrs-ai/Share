@@ -44,7 +44,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
           }}
         >
           <Typography variant='h6' className={classes.title}>
-            BUILDRS
+            BLDRS
           </Typography>
 
           <IconButton
