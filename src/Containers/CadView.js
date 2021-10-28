@@ -7,6 +7,7 @@ import ItemPanel from '../Components/ItemPanel';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
+import gtag from '../utils/gtag.js';
 
 import '../App.css';
 
@@ -152,6 +153,9 @@ const CadView = () => {
 
     const resultIDs = searchIndex.search(query);
     selectItems(resultIDs);
+    gtag('event', 'search', {
+      search_term: query
+    });
   }
 
 
@@ -250,6 +254,10 @@ const CadView = () => {
       console.log('rootElt: ', rootElt);
     }
     onModelLoad(rootElt, viewer);
+    gtag('event', 'select_content', {
+      content_type: 'ifc_model',
+      item_id: file
+    });
   };
 
 
