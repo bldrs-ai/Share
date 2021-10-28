@@ -97,6 +97,14 @@ const useStyles = makeStyles((theme) => ({
     right: '50px',
     width: '400px',
   },
+  loader: {
+    color: 'lightgrey',
+    position: 'absolute',
+    top: '1%',
+    left: '49%',
+    width: 200,
+    height: 200,
+  },
 }));
 
 const CadView = () => {
@@ -110,6 +118,7 @@ const CadView = () => {
   const [selectedElement, setSelectedElement] = useState({});
   const [selectedElements, setSelectedElements] = useState([]);
   const [expandedElements, setExpandedElements] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   const onClickShare = () => setShowShare(!showShare);
 
@@ -254,6 +263,7 @@ const CadView = () => {
       content_type: 'ifc_model',
       item_id: file,
     });
+    setIsLoading(false);
   };
 
   const fileOpen = () => {
@@ -268,6 +278,7 @@ const CadView = () => {
     );
     viewerContainer.appendChild(fileInput);
     fileInput.click();
+    setIsLoading(true);
   };
 
   let isLoaded = Object.keys(rootElement).length === 0;
@@ -284,6 +295,15 @@ const CadView = () => {
       ></div>
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
+        {isLoading ? (
+          <CircularProgress
+            thickness={8}
+            color='inherit'
+            className={classes.loader}
+            value={100}
+          />
+        ) : null}
+
         {showSearchBar && (
           <div className={classes.searchContainer}>
             <SearchBar
