@@ -1,9 +1,10 @@
-import "./App.css";
-import { BrowserRouter as Router, Switch, Route } from "react-router-dom";
-import { createTheme, ThemeProvider } from "@material-ui/core/styles";
-import { grey } from "@material-ui/core/colors";
-import CadView from "./Containers/CadView";
-
+import './App.css';
+import React, { useEffect } from 'react';
+import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
+import { createTheme, ThemeProvider } from '@material-ui/core/styles';
+import { grey } from '@material-ui/core/colors';
+import CadView from './Containers/CadView';
+import ReactGA from 'react-ga';
 
 const outerTheme = createTheme({
   palette: {
@@ -17,13 +18,19 @@ const outerTheme = createTheme({
   },
 });
 
-
 function App() {
+  const initReactGA = () => {
+    ReactGA.initialize('UA-210924287-2');
+    ReactGA.pageview('test-init-pageview');
+  };
+  useEffect(() => {
+    initReactGA();
+  }, []);
   return (
     <ThemeProvider theme={outerTheme}>
       <Router>
         <Switch>
-          <Route path="/">
+          <Route path='/'>
             <CadView />
           </Route>
         </Switch>
