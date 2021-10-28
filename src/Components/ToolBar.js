@@ -27,7 +27,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
     ReactGA.event({
       category: 'File',
       action: 'File Open',
-      label: 'File open',
+      label: 'File Open',
       value: 1,
     });
   };
