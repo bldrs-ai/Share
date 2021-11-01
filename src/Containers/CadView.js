@@ -9,7 +9,7 @@ import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
 
-import SnackBarMessage from '../Components/Snackbar';
+import SnackBarMessage from '../Components/SnackbarMessage';
 import '../App.css';
 
 const debug = 0;
@@ -111,7 +111,8 @@ const CadView = () => {
   const [selectedElements, setSelectedElements] = useState([]);
   const [expandedElements, setExpandedElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
-
+  const [loadingMessage, setLoadingMessage] = useState();
+  console.log('is Loading', isLoading);
   const onClickShare = () => setShowShare(!showShare);
 
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
@@ -121,13 +122,21 @@ const CadView = () => {
     viewer.IFC.unpickIfcItems();
   };
 
-  const selectItems = (resultIDs) => {
+  const selectItems = async (resultIDs) => {
+    console.log('in the select items');
+    setIsLoading(true);
+    setLoadingMessage('Selection in progress');
     setSelectedElements(resultIDs.map((id) => id + ''));
+    console.log('selected elements', selectedElements);
     try {
       if (debug >= 2) {
         console.log('picking ifc items: ', resultIDs);
       }
-      viewer.pickIfcItemsByID(0, resultIDs);
+      console.log('in the try method');
+      setIsLoading(true);
+      await viewer.pickIfcItemsByID(0, resultIDs);
+      console.log('after await ');
+      setIsLoading(false);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -153,6 +162,7 @@ const CadView = () => {
     gtag('event', 'search', {
       search_term: query,
     });
+    setIsLoading(false);
   };
 
   // TODO(pablo): search suggest
@@ -243,6 +253,7 @@ const CadView = () => {
 
   const loadIfc = async (file) => {
     setIsLoading(true);
+    setLoadingMessage('model is loading');
     if (debug) {
       console.log(viewer);
     }
@@ -290,7 +301,7 @@ const CadView = () => {
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <SnackBarMessage
-          message={'MODEL IS LOADING'}
+          message={loadingMessage}
           open={isLoading}
           type={'info'}
         />

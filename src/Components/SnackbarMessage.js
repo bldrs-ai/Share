@@ -28,6 +28,7 @@ const SnackBarMessage = ({ message, type, open }) => {
           backgroundColor: '#787878',
           width: 'auto',
           paddingRight: 20,
+          textTransform: 'uppercase',
         }}
         severity={type}
       >
