@@ -6,7 +6,6 @@ import IconButton from '@material-ui/core/IconButton';
 import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
 import AppsSelector from './AppsSelector.js'
 import { makeStyles } from '@material-ui/core/styles';
-import ReactGA from 'react-ga';
 
 //import CommentIcon from '@material-ui/icons/Comment';
 //import ShareButton from '../Components/ShareButton';
@@ -25,12 +24,6 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
   const classes = useStyles();
   const openFile = () => {
     fileOpen();
-    ReactGA.event({
-      category: 'File',
-      action: 'File Open',
-      label: 'File Open',
-      value: 1,
-    });
   };
   return (
     <AppBar elevation={0} position='static' color='primary'>
@@ -52,7 +45,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
           }}
         >
           <Typography variant='h6' className={classes.title}>
-            BUILDRS
+            BLDRS
           </Typography>
 
           <IconButton
