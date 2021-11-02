@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
 import { createTheme, ThemeProvider } from '@material-ui/core/styles';
 import { grey } from '@material-ui/core/colors';
 import CadView from './Containers/CadView';
+import HelloApp from './Apps/HelloApp';
 
 const bldrsTheme = createTheme({
   palette: {
@@ -25,8 +26,8 @@ function App() {
           <Route exact path='/'>
             <CadView />
           </Route>
-          <Route path='/extract'>
-            <XYZExtract />
+          <Route path='/apps/hello'>
+            <HelloApp />
           </Route>
         </Switch>
       </Router>

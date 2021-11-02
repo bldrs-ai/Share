@@ -4,6 +4,7 @@ import ListItem from '@mui/material/ListItem';
 import ListItemText from '@mui/material/ListItemText';
 import ListItemButton from '@mui/material/ListItemButton';
 import ListItemAvatar from '@mui/material/ListItemAvatar';
+import Link from '@mui/material/Link';
 import Avatar from '@mui/material/Avatar';
 import Paper from '@material-ui/core/Paper';
 import ChatIcon from '@mui/icons-material/Chat';
@@ -28,14 +29,14 @@ const AppsList = ({ name, onClick }) => {
     >
        <List>
             <ListItem disablePadding>
-                <ListItemButton>
+                <ListItemButton component="a" href="/apps/hello" >
                     <ListItemAvatar>
                         <Avatar>
                             <ChatIcon />
                         </Avatar>
                     </ListItemAvatar>
                     <ListItemText>
-                        Hello World
+                        Hello World      
                     </ListItemText>
                 </ListItemButton>
            </ListItem>
