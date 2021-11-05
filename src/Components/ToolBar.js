@@ -4,6 +4,7 @@ import AppBar from '@material-ui/core/AppBar';
 import Typography from '@material-ui/core/Typography';
 import IconButton from '@material-ui/core/IconButton';
 import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
+import AppsSelector from './AppsSelector.js'
 import { makeStyles } from '@material-ui/core/styles';
 
 //import CommentIcon from '@material-ui/icons/Comment';
@@ -71,6 +72,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             alignItems: 'center',
           }}
         >
+          {<AppsSelector />}
           {/*<IconButton
             edge='start'
             color='secondary'
