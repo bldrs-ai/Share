@@ -14,19 +14,27 @@ https://discord.com/channels/853953158560743424/853953158560743429
 > yarn start
 ```
 
-# Push to prod
-First, check in a new production build to your branch
+# Build & Include IFC files to publish
+Build the static serving directory, including any of your IFC files
+
 ```
 > yarn build
-> git add . ; git ci -m 'Updating production build...' ; git push
+> cp $IFC_FILES ./build # Optional if you have IFC files to publish
+> git add . ; git ci -m 'Publishing new version.' ; git push
 ```
 
-Next, send PR for merge into main branch on https://github.com/buildrs/Share.  Once it's merged, the live site will be automatically updated.
+Your files will now be ready to serve from your site.  E.g. For our example site, the *haus.ifc* in the build directory is linked as:
+
+
+  https://buildrs.github.io/Share/build/#haus.ifc
+
 
 # Dev
-Please fork and submit PRs from your fork to this repo's main branch.
+If you want to contribute, please fork and submit PRs from your fork to this repo's main branch.
 
-To merge from upstream:
+Once it's merged, the live site will be automatically updated.
+
+To merge from upstream into your fork:
 ```
 # First time only: git remote add upstream https://github.com/buildrs/Share
 # After PR is accepted/merged in main, to sync you fork:
@@ -38,6 +46,8 @@ To merge from upstream:
 # TODO: Remove react-scripts
 ## Node tests
 Misc links
+
 https://testing-library.com/docs/react-testing-library/example-intro
+
 https://stackoverflow.com/questions/56952728/jest-tests-on-react-components-unexpected-token
 
