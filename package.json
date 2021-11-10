@@ -1,6 +1,6 @@
 {
   "name": "builders",
-  "version": "0.1.0",
+  "version": "0.1.0-r110",
   "main": "src/index.jsx",
   "dependencies": {
     "@babel/core": "^7.0.0",
@@ -33,7 +33,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "react-scripts build && node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
