@@ -8,7 +8,7 @@ import { makeStyles } from '@material-ui/core/styles';
 
 //import CommentIcon from '@material-ui/icons/Comment';
 //import ShareButton from '../Components/ShareButton';
-//import LoginMenu from './LoginMenu';
+import LoginMenu from './LoginMenu';
 
 const useStyles = makeStyles((theme) => ({
   title: {
@@ -92,7 +92,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
              </IconButton>
           */}
           {/*<ShareButton name={'Share'} onClick={onClickShare} />*/}
-          {/*<LoginMenu />*/}
+          {<LoginMenu />}
         </div>
       </Toolbar>
     </AppBar>

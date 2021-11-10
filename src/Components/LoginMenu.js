@@ -3,6 +3,7 @@ import Menu from '@material-ui/core/Menu';
 import MenuItem from '@material-ui/core/MenuItem';
 import IconButton from '@material-ui/core/IconButton';
 import AccountCircle from '@material-ui/icons/AccountCircle';
+import PkgJson from '../../package.json';
 
 
 const LoginMenu = () => {
@@ -41,8 +42,8 @@ const LoginMenu = () => {
         open={open}
         onClose={handleClose}
       >
-        <MenuItem onClick={handleClose}>Profile</MenuItem>
-        <MenuItem onClick={handleClose}>Logout</MenuItem>
+        {/*<MenuItem onClick={handleClose}>Profile</MenuItem>*/}
+        <MenuItem onClick={handleClose}>Version: {PkgJson.version}</MenuItem>
       </Menu>
     </div>
   );
