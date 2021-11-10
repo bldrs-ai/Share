@@ -112,7 +112,6 @@ const CadView = () => {
   const [expandedElements, setExpandedElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState();
-  console.log('is Loading', isLoading);
   const onClickShare = () => setShowShare(!showShare);
 
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
@@ -123,19 +122,15 @@ const CadView = () => {
   };
 
   const selectItems = async (resultIDs) => {
-    console.log('in the select items');
     setIsLoading(true);
     setLoadingMessage('Selection in progress');
     setSelectedElements(resultIDs.map((id) => id + ''));
-    console.log('selected elements', selectedElements);
     try {
       if (debug >= 2) {
         console.log('picking ifc items: ', resultIDs);
       }
-      console.log('in the try method');
       setIsLoading(true);
       await viewer.pickIfcItemsByID(0, resultIDs);
-      console.log('after await ');
       setIsLoading(false);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -170,8 +165,9 @@ const CadView = () => {
 
   const onElementSelect = async (elt) => {
     const id = elt.expressID;
-    if (id === undefined)
+    if (id === undefined) {
       throw new Error('Selected element is missing Express ID');
+    }
     selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
@@ -211,6 +207,9 @@ const CadView = () => {
     const container = document.getElementById('viewer-container');
     const viewer = new IfcViewerAPI({ container });
     setViewer(viewer);
+    if (debug) {
+      console.log('CadView#useEffect: viewer created: ', viewer);
+    }
     // No setWasmPath here. As of 1.0.14, the default is
     // http://localhost:3000/static/js/web-ifc.wasm, so just putting
     // the binary there in our public directory.
@@ -254,9 +253,6 @@ const CadView = () => {
   const loadIfc = async (file) => {
     setIsLoading(true);
     setLoadingMessage('model is loading');
-    if (debug) {
-      console.log(viewer);
-    }
     await viewer.loadIfc(file, true);
 
     const rootElt = await viewer.IFC.getSpatialStructure(0, true);
