@@ -1,4 +1,5 @@
 import React from 'react';
+import '../styles/tree.css';
 import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
 import PropTypes from 'prop-types';
 import clsx from 'clsx';

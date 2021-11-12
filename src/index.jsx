@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom";
+import "./index.css";
 import App from "./App.jsx";
 import reportWebVitals from "./reportWebVitals";
-import PkgJson from '../package.json';
 
 
 ReactDOM.render(
@@ -16,15 +16,3 @@ ReactDOM.render(
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
-
-
-if (window.dataLayer) {
-  window.dataLayer = window.dataLayer || [];
-  function gtag() { window.dataLayer.push(arguments); }
-  gtag('set', {
-    'version': `${PkgJson.version}`
-  });
-  console.log('set version: ', `${PkgJson.version}`);
-} else {
-  console.error('Cannot find gtag');
-}
