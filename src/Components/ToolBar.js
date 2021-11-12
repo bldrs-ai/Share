@@ -5,7 +5,6 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
 import { makeStyles } from '@mui/styles';
-
 //import CommentIcon from '@material-ui/icons/Comment';
 //import ShareButton from '../Components/ShareButton';
 import LoginMenu from './LoginMenu';
@@ -27,12 +26,10 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
   return (
     <AppBar
       elevation={0}
-      position='static'
+      position='absolute'
       color='primary'
       style={{
-        border: '1px solid red',
-        padding: '0px,0px,0px,0px',
-        width: '1px solid red',
+        position: 'absolute',
       }}
     >
       <Toolbar
@@ -50,6 +47,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             flexDirection: 'row',
             justifyContent: 'flex-start',
             alignItems: 'center',
+            width: '120px',
           }}
         >
           <Typography variant='h6' className={classes.title}>
@@ -60,7 +58,6 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             edge='start'
             color='secondary'
             aria-label='menu'
-            style={{ position: 'relative', paddingLeft: '20px' }}
             onClick={openFile}
           >
             <OpenInBrowserIcon
@@ -78,9 +75,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             flexDirection: 'row',
             justifyContent: 'flex-start',
             alignItems: 'center',
-            // border: '1px solid red ',
             position: 'relative',
-            left: '8px',
           }}
         >
           {/*<IconButton
