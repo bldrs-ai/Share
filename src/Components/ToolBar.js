@@ -1,10 +1,10 @@
 import React from 'react';
-import Toolbar from '@material-ui/core/Toolbar';
-import AppBar from '@material-ui/core/AppBar';
-import Typography from '@material-ui/core/Typography';
-import IconButton from '@material-ui/core/IconButton';
-import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
-import { makeStyles } from '@material-ui/core/styles';
+import Toolbar from '@mui/material/Toolbar';
+import AppBar from '@mui/material/AppBar';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
+import { makeStyles } from '@mui/styles';
 
 //import CommentIcon from '@material-ui/icons/Comment';
 //import ShareButton from '../Components/ShareButton';

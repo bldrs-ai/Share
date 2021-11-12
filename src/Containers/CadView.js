@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { IfcViewerAPI } from 'web-ifc-viewer';
-import { makeStyles } from '@material-ui/core/styles';
+import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
 import MenuButton from '../Components/MenuButton';
 import ItemPanel from '../Components/ItemPanel';
@@ -8,17 +8,13 @@ import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
-
 import SnackBarMessage from '../Components/SnackbarMessage';
-import '../App.css';
+
 
 const debug = 0;
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    ...theme.typography.button,
-    backgroundColor: theme.palette.background.paper,
-    padding: theme.spacing(1),
     flexGrow: 1,
   },
   menuToolbarContainer: {
@@ -39,7 +35,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'center',
     alignItems: 'center',
     '@media (max-width: 900px)': {
-      marginTop: theme.spacing(5),
       top: 520,
       right: 15,
     },
@@ -74,7 +69,6 @@ const useStyles = makeStyles((theme) => ({
     top: 84,
   },
   paper: {
-    padding: theme.spacing(2),
     display: 'flex',
     overflow: 'auto',
     flexDirection: 'column',
@@ -213,6 +207,7 @@ const CadView = () => {
     // No setWasmPath here. As of 1.0.14, the default is
     // http://localhost:3000/static/js/web-ifc.wasm, so just putting
     // the binary there in our public directory.
+    viewer.IFC.setWasmPath('./static/js/');
     viewer.addAxes();
     viewer.addGrid();
     window.onmousemove = viewer.prepickIfcItem;
