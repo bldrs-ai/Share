@@ -1,7 +1,7 @@
 import React from 'react';
-import Button from '@mui/material/Button';
-import ShareIcon from '@mui/icons-masterial/Share';
-import { makeStyles } from '@mui/styles';
+import Button from '@material-ui/core/Button';
+import ShareIcon from '@material-ui/icons/Share';
+import { makeStyles } from '@material-ui/core/styles';
 
 const useStyles = makeStyles((theme) => ({
   button: {

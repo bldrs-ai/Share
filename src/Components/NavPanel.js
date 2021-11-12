@@ -1,6 +1,5 @@
-import React from 'react';
-import { makeStyles } from '@mui/styles';
-import Paper from '@mui/material/Paper';
+import { makeStyles } from '@material-ui/core/styles';
+import Paper from '@material-ui/core/Paper';
 import TreeView from '@mui/lab/TreeView';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
@@ -20,6 +19,7 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   paper: {
+    padding: theme.spacing(2),
     display: 'flex',
     overflow: 'auto',
     flexDirection: 'column',

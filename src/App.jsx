@@ -1,25 +1,31 @@
+import './App.css';
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { grey } from '@mui/material/colors';
+import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
+import { createTheme, ThemeProvider } from '@material-ui/core/styles';
+import { grey } from '@material-ui/core/colors';
 import CadView from './Containers/CadView';
-import '../public/favicon.ico';
 
-
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-const theme = createTheme({
-status: {
-    danger: 'foo',
-},
+const bldrsTheme = createTheme({
+  palette: {
+    primary: {
+      main: grey[500],
+      light: grey[100],
+    },
+    secondary: {
+      main: grey[700],
+    },
+  },
 });
-
 
 function App() {
   return (
-    <ThemeProvider theme={theme}>
+    <ThemeProvider theme={bldrsTheme}>
       <Router>
-        <Routes>
-          <Route path='/' element={<CadView />}/>
-        </Routes>
+        <Switch>
+          <Route path='/'>
+            <CadView />
+          </Route>
+        </Switch>
       </Router>
     </ThemeProvider>
   );
