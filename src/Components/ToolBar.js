@@ -1,10 +1,10 @@
 import React from 'react';
-import Toolbar from '@material-ui/core/Toolbar';
-import AppBar from '@material-ui/core/AppBar';
-import Typography from '@material-ui/core/Typography';
-import IconButton from '@material-ui/core/IconButton';
-import OpenInBrowserIcon from '@material-ui/icons/OpenInBrowser';
-import { makeStyles } from '@material-ui/core/styles';
+import Toolbar from '@mui/material/Toolbar';
+import AppBar from '@mui/material/AppBar';
+import Typography from '@mui/material/Typography';
+import IconButton from '@mui/material/IconButton';
+import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
+import { makeStyles } from '@mui/styles';
 
 //import CommentIcon from '@material-ui/icons/Comment';
 //import ShareButton from '../Components/ShareButton';
@@ -25,7 +25,16 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
     fileOpen();
   };
   return (
-    <AppBar elevation={0} position='static' color='primary'>
+    <AppBar
+      elevation={0}
+      position='static'
+      color='primary'
+      style={{
+        border: '1px solid red',
+        padding: '0px,0px,0px,0px',
+        width: '1px solid red',
+      }}
+    >
       <Toolbar
         variant='regular'
         style={{
@@ -51,7 +60,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             edge='start'
             color='secondary'
             aria-label='menu'
-            style={{ position: 'relative' }}
+            style={{ position: 'relative', paddingLeft: '20px' }}
             onClick={openFile}
           >
             <OpenInBrowserIcon
@@ -69,6 +78,9 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             flexDirection: 'row',
             justifyContent: 'flex-start',
             alignItems: 'center',
+            // border: '1px solid red ',
+            position: 'relative',
+            left: '8px',
           }}
         >
           {/*<IconButton

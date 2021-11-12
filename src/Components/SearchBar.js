@@ -1,5 +1,5 @@
 import React from 'react';
-import { makeStyles } from '@material-ui/core/styles';
+import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
@@ -15,7 +15,6 @@ const useStyles = makeStyles((theme) => ({
     width: 300,
   },
   input: {
-    marginLeft: theme.spacing(1),
     flex: 1,
   },
   iconButton: {
