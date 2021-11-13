@@ -15,11 +15,11 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CadView />
-      {/* <Router>
+      <Router>
         <Routes>
-          <Route path='/' element={<CadView />}/>
+          <Route path='/' element={<CadView />} />
         </Routes>
-      </Router> */}
+      </Router>
     </ThemeProvider>
   );
 }

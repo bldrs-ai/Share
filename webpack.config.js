@@ -1,26 +1,24 @@
-const path = require("path");
+const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 //const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 const htmlPlugin = new HtmlWebpackPlugin({
-  template: "./public/index.html",
-  filename: "index.html"
+  template: './public/index.html',
+  filename: 'index.html',
 });
 
-
 const wasmPlugin = new CopyWebpackPlugin({
-  patterns: [
-    { from: "node_modules/web-ifc/web-ifc.wasm", to: "./static/js" },
-  ],
+  patterns: [{ from: 'node_modules/web-ifc/web-ifc.wasm', to: './static/js' }],
 });
 
 module.exports = {
-  entry: "./src",
-  mode: "production",
+  entry: './src',
+  mode: 'production',
   output: {
     path: path.join(__dirname, '/build'),
-    filename: "[name].[contenthash].js",
+    filename: '[name].[contenthash].js',
+    publicPath: '/',
   },
   devtool: 'source-map',
   module: {
@@ -29,8 +27,8 @@ module.exports = {
       {
         test: /\.(js|jsx)$/,
         exclude: /node_modules/,
-        enforce: "pre",
-        use: ["babel-loader"],
+        enforce: 'pre',
+        use: ['babel-loader'],
       },
       {
         test: /.svg$/,
@@ -45,17 +43,17 @@ module.exports = {
       },
       {
         test: /.(png|jpe?g|gif|ico)$/i,
-        use: 'file-loader?name=[name].[ext]'
-      }
+        use: 'file-loader?name=[name].[ext]',
+      },
     ],
   },
   resolve: {
-    extensions: ["*", ".js", ".jsx"],
+    extensions: ['*', '.js', '.jsx'],
   },
   plugins: [
     htmlPlugin,
-    wasmPlugin
-//    new BundleAnalyzerPlugin()
+    wasmPlugin,
+    //    new BundleAnalyzerPlugin()
   ],
   /*
 https://medium.com/hackernoon/the-100-correct-way-to-split-your-chunks-with-webpack-f8a9df5b7758
