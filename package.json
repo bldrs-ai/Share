@@ -1,8 +1,8 @@
 {
   "name": "builders",
-  "version": "0.1.0-r122",
+  "version": "0.1.0-r123",
   "main": "src/index.jsx",
-  "homepage": ".",
+  "homepage": "https://buildrs.github.io/",
   "scripts": {
     "build": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json && webpack",
     "start": "webpack-dev-server --mode development --open --hot --port 3000",
