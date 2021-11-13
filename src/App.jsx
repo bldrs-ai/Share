@@ -17,8 +17,8 @@ function App() {
       <CadView />
       <Router>
         <Routes>
-          <Route path='/' element={<CadView />} />
-          <Route path='/about' element={<div>hello</div>} />
+          <Route path='/' element={<div>hello</div>} />
+          <Route path='/about' element={<CadView />} />
         </Routes>
       </Router>
     </ThemeProvider>
