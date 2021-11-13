@@ -18,7 +18,7 @@ function App() {
       <Router>
         <Routes>
           <Route path='/' element={<div>hello</div>} />
-          <Route path='/about' element={<CadView />} />
+          {/* <Route path='/about' element={<CadView />} /> */}
         </Routes>
       </Router>
     </ThemeProvider>
