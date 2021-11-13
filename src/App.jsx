@@ -4,23 +4,22 @@ import { grey } from '@mui/material/colors';
 import CadView from './Containers/CadView';
 import '../public/favicon.ico';
 
-
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 const theme = createTheme({
-status: {
+  status: {
     danger: 'foo',
-},
+  },
 });
-
 
 function App() {
   return (
     <ThemeProvider theme={theme}>
-      <Router>
+      <CadView />
+      {/* <Router>
         <Routes>
           <Route path='/' element={<CadView />}/>
         </Routes>
-      </Router>
+      </Router> */}
     </ThemeProvider>
   );
 }
