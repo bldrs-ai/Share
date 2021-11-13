@@ -14,7 +14,6 @@ const theme = createTheme({
 function App() {
   return (
     <ThemeProvider theme={theme}>
-      <CadView />
       <Router>
         <Routes>
           <Route path='/' element={<div>hello</div>} />
