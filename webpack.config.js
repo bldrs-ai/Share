@@ -16,14 +16,16 @@ const wasmPlugin = new CopyWebpackPlugin({
 });
 
 module.exports = {
-  entry: "./src",
-  mode: "production",
+  entry: "./src/index.jsx",
+  mode: 'production',
   output: {
-    path: path.join(__dirname, '/build'),
+    path: path.join(__dirname, '/docs'),
     filename: "[name].[contenthash].js",
+    publicPath: ''
   },
   devtool: 'source-map',
   module: {
+    /** This is for web-ifc warning about cyclic deps. */
     exprContextCritical: false,
     rules: [
       {
@@ -57,6 +59,10 @@ module.exports = {
     wasmPlugin
 //    new BundleAnalyzerPlugin()
   ],
+  devServer: {
+    historyApiFallback: true
+  }
+};
   /*
 https://medium.com/hackernoon/the-100-correct-way-to-split-your-chunks-with-webpack-f8a9df5b7758
 https://hackernoon.com/lessons-learned-code-splitting-with-webpack-and-react-f012a989113
@@ -81,4 +87,3 @@ https://hackernoon.com/lessons-learned-code-splitting-with-webpack-and-react-f01
       },
     },
   }*/
-};

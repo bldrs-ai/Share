@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
@@ -44,6 +45,7 @@ const LoginMenu = () => {
       >
         {/*<MenuItem onClick={handleClose}>Profile</MenuItem>*/}
         <MenuItem onClick={handleClose}>Version: {PkgJson.version}</MenuItem>
+        <Link to='/Share/about'>About</Link>
       </Menu>
     </div>
   );

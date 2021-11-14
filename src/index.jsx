@@ -1,30 +1,40 @@
-import React from "react";
-import ReactDOM from "react-dom";
-import App from "./App.jsx";
-import reportWebVitals from "./reportWebVitals";
-import PkgJson from '../package.json';
+import React from 'react';
+import { BrowserRouter, Routes, Route, Link, useNavigate, useRoutes } from 'react-router-dom';
+import { render } from 'react-dom'
+import App from './App';
 
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById("root")
-);
+const About = () =>
+  <div>
+    What about it?!
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+    <p><Link to='/Share/'>Home</Link></p>
+  </div>;
 
 
-if (window.dataLayer) {
-  window.dataLayer = window.dataLayer || [];
-  function gtag() { window.dataLayer.push(arguments); }
-  gtag('set', {
-    'version': `${PkgJson.version}`
-  });
-  console.log('set version: ', `${PkgJson.version}`);
-} else {
-  console.error('Cannot find gtag');
+function Routed() {
+  const nav = useNavigate();
+
+  React.useEffect(() => {
+    const referrer = document.referrer;
+    if (referrer) {
+      console.log('Referrer: ', document.referrer);
+      const path = new URL(document.referrer).pathname;
+      console.log('Referrer: path: ', path);
+      if (path.length > 1) {
+        nav(path);
+      }
+    }
+  }, []);
+
+  let element = useRoutes([
+    { path: "/Share/*", element: <App /> },
+    { path: "/Share/about", element: <About /> }
+  ]);
+  return element;
 }
+
+render(
+  <BrowserRouter>
+    <Routed/>
+  </BrowserRouter>, document.getElementById('root'))
