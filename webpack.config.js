@@ -9,7 +9,10 @@ const htmlPlugin = new HtmlWebpackPlugin({
 });
 
 const wasmPlugin = new CopyWebpackPlugin({
-  patterns: [{ from: 'node_modules/web-ifc/web-ifc.wasm', to: './static/js' }],
+  patterns: [
+    { from: 'node_modules/web-ifc/web-ifc.wasm', to: './static/js' },
+    { from: 'public/404.html', to: './404.html' }
+  ],
 });
 
 module.exports = {

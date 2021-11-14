@@ -11,7 +11,6 @@ const theme = createTheme({
   },
 });
 
-<<<<<<< HEAD
 const App = () => (
   <ThemeProvider theme={theme}>
     <Routes>
@@ -19,19 +18,5 @@ const App = () => (
     </Routes>
   </ThemeProvider>
 )
-=======
-function App() {
-  return (
-    <ThemeProvider theme={theme}>
-      <Router>
-        <Routes>
-          <Route path='/' element={<div>hello</div>} />
-          {/* <Route path='/about' element={<CadView />} /> */}
-        </Routes>
-      </Router>
-    </ThemeProvider>
-  );
-}
->>>>>>> b9084c59983d33072c955536189d6d9814438e1c
 
 export default App;
