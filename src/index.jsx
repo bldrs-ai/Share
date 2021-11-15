@@ -8,7 +8,7 @@ const About = () =>
   <div>
     What about it?!
 
-    <p><Link to='/Share/'>Home</Link></p>
+    <p><Link to='/Share'>Home</Link></p>
   </div>;
 
 

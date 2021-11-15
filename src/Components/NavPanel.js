@@ -1,4 +1,5 @@
 import React from 'react';
+import { Routes, Route } from 'react-router-dom';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
@@ -58,11 +59,17 @@ const NavPanel = ({
         defaultExpanded = {expandedElements}
         selected = {selectedElements}
         key = "tree">
-        <NavTree
-          viewer = {viewer}
-          element = {element}
-          onElementSelect = {onElementSelect}
-          keyPrefix = {'root'}/>
+        <Routes>
+          <Route
+            path="nav/*"
+            element={
+              <NavTree
+                viewer = {viewer}
+                element = {element}
+                onElementSelect = {onElementSelect}
+                keyPrefix = {'root'}/>
+            }/>
+        </Routes>
       </TreeView>
     </Paper>
   );

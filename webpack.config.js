@@ -11,6 +11,7 @@ const htmlPlugin = new HtmlWebpackPlugin({
 const wasmPlugin = new CopyWebpackPlugin({
   patterns: [
     { from: 'node_modules/web-ifc/web-ifc.wasm', to: './static/js' },
+    { from: 'public/haus.ifc', to: './haus.ifc' },
     { from: 'public/404.html', to: './404.html' }
   ],
 });
@@ -21,7 +22,7 @@ module.exports = {
   output: {
     path: path.join(__dirname, '/docs'),
     filename: "[name].[contenthash].js",
-    publicPath: '',
+    publicPath: '/Share',
     clean: true
   },
   devtool: 'source-map',
@@ -56,16 +57,17 @@ module.exports = {
     extensions: ['*', '.js', '.jsx'],
   },
   devServer: {
-    historyApiFallback: true,
+    historyApiFallback: {
+      // https://stackoverflow.com/questions/37271062/historyapifallback-doesnt-work-in-webpack-dev-server
+      // Has to match the output directory.
+      index: '/Share'
+    }
   },
   plugins: [
     htmlPlugin,
     wasmPlugin,
     //    new BundleAnalyzerPlugin()
   ],
-  devServer: {
-    historyApiFallback: true
-  }
 };
   /*
 https://medium.com/hackernoon/the-100-correct-way-to-split-your-chunks-with-webpack-f8a9df5b7758

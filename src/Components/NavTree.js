@@ -1,8 +1,10 @@
 import React from 'react';
+import { Routes, Route, Link as RouterLink } from 'react-router-dom';
 import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
 import PropTypes from 'prop-types';
 import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
+import Link from '@mui/material/Link';
 import {reifyName} from '../utils/Ifc';
 
 
@@ -66,6 +68,9 @@ const NavTree = ({
       preventSelection,
     } = useTreeItem(nodeId);
 
+
+    const child = props.child;
+
     const icon = iconProp || expansionIcon || displayIcon;
 
     const handleMouseDown = event => {
@@ -102,7 +107,7 @@ const NavTree = ({
           component="div"
           className={classes.label}
         >
-          {label}
+          {child ? <RouterLink to={child.expressID.toString()}>{label}</RouterLink> : label}
         </Typography>
       </div>
     );
@@ -112,34 +117,76 @@ const NavTree = ({
   CustomContent.propTypes = NavTreePropTypes;
 
 
-  const CustomTreeItem = (props) => (
-    <TreeItem ContentComponent={CustomContent} {...props} />
-  );
+  const CustomTreeItem = (props) => {
+    return <TreeItem ContentComponent={CustomContent} {...props}/>
+  };
 
+  const ChildTreeItem = (props) => {
+    return <TreeItem ContentProps={{child: props.child}} ContentComponent={CustomContent} {...props}/>
+  };
 
+  const nodeId = element.expressID.toString();
   let i = 0;
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
-    <CustomTreeItem nodeId={element.expressID.toString()} label={reifyName(element, viewer)}
-                    onClick = {() => onElementSelect(element)}>
-      {
-        element.children && element.children.length > 0 ? element.children.map(
-          child => {
-            const childKey = `${keyPrefix}-${i++}`;
-            return (<React.Fragment key={childKey}>
-                      <NavTree
-                        viewer = {viewer}
-                        element = {child}
-                        onElementSelect = {onElementSelect}
-                        keyPrefix = {childKey} />
-                    </React.Fragment>);
-          }
-        )
-          : null
-      }
-    </CustomTreeItem>
-  );
+    <Routes>
+      <Route
+        path={nodeId + '/*'}
+        element={
+          <CustomTreeItem
+            nodeId={element.expressID.toString()}
+            label={reifyName(element, viewer)}
+            onClick={() => onElementSelect(element)}>
+            {
+              element.children && element.children.length > 0 ? element.children.map(
+                child => {
+                  const childKey = `${keyPrefix}-${i++}`;
+                  return (<React.Fragment key={childKey}>
+                            <NavTree
+                              viewer = {viewer}
+                              element = {child}
+                              onElementSelect = {onElementSelect}
+                              keyPrefix = {childKey} />
+                          </React.Fragment>);
+                }
+              )
+                : null
+            }
+          </CustomTreeItem>
+        }/>
+      <Route
+        index
+        element={
+          <CustomTreeItem
+            nodeId={element.expressID.toString()}
+            label={reifyName(element, viewer)}
+            onClick={() => onElementSelect(element)}>
+            {
+              element.children && element.children.length > 0 ? element.children.map(
+                child => {
+                  const childKey = `${keyPrefix}-${i++}`;
+                  const childId = child.expressID.toString();
+                  return (
+                    <React.Fragment key={childKey}>
+                      <ChildTreeItem
+                        nodeId={child.expressID.toString()}
+                        label={reifyName(child, viewer)}
+                        onClick={() => onElementSelect(child)}
+                        child={child}>
+                        <NavTree
+                          viewer = {viewer}
+                          element = {child}
+                          onElementSelect = {onElementSelect}
+                          keyPrefix = {childKey} />
+                      </ChildTreeItem>
+                    </React.Fragment>
+                  );
+                }) : null
+            }
+          </CustomTreeItem>
+        }/>
+    </Routes>);
 };
 
 export default NavTree;
