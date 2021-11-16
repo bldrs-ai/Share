@@ -1,11 +1,13 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
+import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import NavTree from './NavTree.js';
+import {reifyName} from '../utils/Ifc';
+import NavTree from './NavTree';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -34,9 +36,33 @@ const NavPanel = ({
   viewer,
   element,
   selectedElements,
+  defaultExpandedElements,
   expandedElements,
-  onElementSelect
+  onElementSelect,
+  setExpandedElements
 }) => {
+
+  const location = useLocation();
+
+  function id(elt) {
+    return elt.expressID.toString();
+  }
+
+  React.useEffect(() => {
+    const eltPath = location.pathname.split(/nav\//)[1];
+    if (eltPath.startsWith('/')) {
+      return;
+    }
+    const parts = eltPath.split(/\//);
+    if (parts.length > 0) {
+      const targetId = parseInt(parts[parts.length - 1]);
+      if (isFinite(targetId)) {
+        onElementSelect({expressID: targetId});
+        setExpandedElements(parts);
+      }
+    }
+  }, [location]);
+
   const classes = useStyles();
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
@@ -56,24 +82,22 @@ const NavPanel = ({
         defaultCollapseIcon={<ExpandMoreIcon />}
         defaultExpandIcon={<ChevronRightIcon />}
         sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
-        defaultExpanded = {expandedElements}
+        defaultExpanded = {defaultExpandedElements}
+        expanded = {expandedElements}
         selected = {selectedElements}
         key = "tree">
-        <Routes>
-          <Route
-            path="nav/*"
-            element={
-              <NavTree
-                viewer = {viewer}
-                element = {element}
-                onElementSelect = {onElementSelect}
-                keyPrefix = {'root'}/>
-            }/>
-        </Routes>
+        {
+          <NavTree
+            viewer={viewer}
+            element={element}
+            path={'nav/' + element.expressID.toString()}
+            onElementSelect={onElementSelect}
+            setExpandedElements={setExpandedElements}
+          />
+        }
       </TreeView>
     </Paper>
   );
 };
-
 
 export default NavPanel;

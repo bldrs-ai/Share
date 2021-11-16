@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Link, useNavigate, useRoutes } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, Outlet, useNavigate, useRoutes } from 'react-router-dom';
 import { render } from 'react-dom'
 import App from './App';
 

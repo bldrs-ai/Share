@@ -103,6 +103,7 @@ const CadView = () => {
   const [rootElement, setRootElement] = useState({});
   const [selectedElement, setSelectedElement] = useState({});
   const [selectedElements, setSelectedElements] = useState([]);
+  const [defaultExpandedElements, setDefaultExpandedElements] = useState([]);
   const [expandedElements, setExpandedElements] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState();
@@ -183,7 +184,7 @@ const CadView = () => {
         elt = elt.children[0];
       }
     }
-    setExpandedElements(expanded);
+    setDefaultExpandedElements(expanded);
     setShowNavPanel(true);
     searchIndex.clearIndex();
     const index = new SearchIndex(rootElt, viewer);
@@ -323,8 +324,10 @@ const CadView = () => {
                 viewer={viewer}
                 element={rootElement}
                 selectedElements={selectedElements}
+                defaultExpandedElements={defaultExpandedElements}
                 expandedElements={expandedElements}
                 onElementSelect={onElementSelect}
+                setExpandedElements={setExpandedElements}
               />
             ) : null}
           </div>

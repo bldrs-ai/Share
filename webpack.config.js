@@ -25,7 +25,7 @@ module.exports = {
     publicPath: '/Share',
     clean: true
   },
-  devtool: 'source-map',
+  devtool: 'eval-source-map',
   module: {
     /** This is for web-ifc warning about cyclic deps. */
     exprContextCritical: false,
