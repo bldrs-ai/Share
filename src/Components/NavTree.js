@@ -106,7 +106,10 @@ const NavTree = ({
         <Typography
           onClick={handleSelectionClick}
           className={classes.label}>
-          <RouterLink to={path} style={{textDecoration: 'none'}}>{label}</RouterLink>
+          <RouterLink to={path}
+                      style={{color: 'black', textDecoration: 'none'}}>
+            {label}
+          </RouterLink>
         </Typography>
       </div>
     );
