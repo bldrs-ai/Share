@@ -70,7 +70,6 @@ const NavTree = ({
       preventSelection,
     } = useTreeItem(nodeId);
 
-
     const child = props.child;
 
     const icon = iconProp || expansionIcon || displayIcon;
@@ -106,10 +105,8 @@ const NavTree = ({
         </div>
         <Typography
           onClick={handleSelectionClick}
-          component="div"
-          className={classes.label}
-        >
-          <RouterLink to={path}>{label}</RouterLink>
+          className={classes.label}>
+          <RouterLink to={path} style={{textDecoration: 'none'}}>{label}</RouterLink>
         </Typography>
       </div>
     );

@@ -85,6 +85,9 @@ const NavPanel = ({
         defaultExpanded = {defaultExpandedElements}
         expanded = {expandedElements}
         selected = {selectedElements}
+        onNodeToggle = {(event, nodeIds) => {
+          setExpandedElements(nodeIds);
+        }}
         key = "tree">
         {
           <NavTree
