@@ -1,4 +1,6 @@
 import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
@@ -217,8 +219,11 @@ const CadView = () => {
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
-    if (true || window.location.hash.length > 0) {
+    if (true) {
+      const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
+      console.log('Parts: ', parts);
       //const filePath = './' + window.location.hash.substring(1);
+      //if (true) return;
       const filePath = '/haus.ifc';
       if (debug) {
         console.log('CadView#useEffect: load from server and hash: ', filePath);
