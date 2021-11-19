@@ -1,8 +1,6 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import IconButton from '@mui/material/IconButton';
-import CloseIcon from '@mui/icons-material/Close';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -30,19 +28,9 @@ const MenuButton = ({ onClick, disabled, open }) => {
       disabled={disabled}
     >
       {open ? (
-        <CloseIcon
-          style={{
-            width: 30,
-            height: 30,
-          }}
-        />
+        <div>X</div>
       ) : (
-        <InfoOutlinedIcon
-          style={{
-            width: 30,
-            height: 30,
-          }}
-        />
+        <div>O</div>
       )}
     </IconButton>
   );

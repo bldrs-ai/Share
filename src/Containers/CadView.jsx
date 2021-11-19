@@ -221,7 +221,7 @@ const CadView = () => {
     // this to get access to progress and error.
     if (true) {
       const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-      console.log('Parts: ', parts);
+      //console.log('Parts: ', parts);
       //const filePath = './' + window.location.hash.substring(1);
       //if (true) return;
       const filePath = '/haus.ifc';

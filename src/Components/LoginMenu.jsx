@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
-import AccountCircle from '@mui/icons-material/AccountCircle';
 import PkgJson from '../../package.json';
 
 
@@ -25,7 +24,7 @@ const LoginMenu = () => {
         onClick={handleMenu}
         color='inherit'
       >
-        <AccountCircle />
+        👤
       </IconButton>
 
       <Menu

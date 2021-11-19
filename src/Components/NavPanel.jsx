@@ -4,8 +4,6 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
 import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {reifyName} from '../utils/Ifc';
 import NavTree from './NavTree';
 
@@ -49,10 +47,11 @@ const NavPanel = ({
   }
 
   React.useEffect(() => {
-    const eltPath = location.pathname.split(/nav\//)[1];
-    if (eltPath.startsWith('/')) {
+    let eltPath = location.pathname.split(/nav\//);
+    if (eltPath.length == 1) {
       return;
     }
+    eltPath = eltPath[1];
     const parts = eltPath.split(/\//);
     if (parts.length > 0) {
       const targetId = parseInt(parts[parts.length - 1]);
@@ -79,8 +78,8 @@ const NavPanel = ({
       >
       <TreeView
         aria-label="IFC Navigator"
-        defaultCollapseIcon={<ExpandMoreIcon />}
-        defaultExpandIcon={<ChevronRightIcon />}
+        defaultCollapseIcon={'v'}
+        defaultExpandIcon={'>'}
         sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
         defaultExpanded = {defaultExpandedElements}
         expanded = {expandedElements}

@@ -3,10 +3,7 @@ import Toolbar from '@mui/material/Toolbar';
 import AppBar from '@mui/material/AppBar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
-import OpenInBrowserIcon from '@mui/icons-material/OpenInBrowser';
 import { makeStyles } from '@mui/styles';
-//import CommentIcon from '@material-ui/icons/Comment';
-//import ShareButton from '../Components/ShareButton';
 import LoginMenu from './LoginMenu';
 
 const useStyles = makeStyles((theme) => ({
@@ -20,9 +17,6 @@ const useStyles = makeStyles((theme) => ({
 
 const ToolBar = ({ fileOpen, onClickShare }) => {
   const classes = useStyles();
-  const openFile = () => {
-    fileOpen();
-  };
   return (
     <AppBar
       elevation={0}
@@ -58,15 +52,10 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             edge='start'
             color='secondary'
             aria-label='menu'
-            onClick={openFile}
+            onClick={fileOpen}
+            style={{color: 'white', textDecoration: 'underline', paddingLeft: '2em', fontSize: '1em'}}
           >
-            <OpenInBrowserIcon
-              style={{
-                width: 30,
-                height: 30,
-                color: 'whiteSmoke',
-              }}
-            />
+            Open
           </IconButton>
         </div>
         <div

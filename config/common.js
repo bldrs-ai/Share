@@ -15,7 +15,7 @@ const build = {
   format: 'esm',
   sourcemap: true,
   target: ['chrome58','firefox57','safari11','edge18'],
-  logLevel: 'debug'
+  logLevel: 'info'
 }
 
 export {

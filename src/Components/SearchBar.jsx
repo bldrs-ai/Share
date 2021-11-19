@@ -3,8 +3,6 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
-import MenuIcon from '@mui/icons-material/Menu';
-import SearchIcon from '@mui/icons-material/Search';
 
 
 const useStyles = makeStyles((theme) => ({
@@ -56,8 +54,7 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
         onClick={onClickMenu}
         disabled={disabled}
       >
-        {/* {open ? <CloseIcon /> : <MenuIcon />} */}
-        <MenuIcon />
+        =
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}
@@ -72,7 +69,7 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
         className={classes.iconButton}
         aria-label='search'
       >
-        <SearchIcon />
+        🔍
       </IconButton>
     </Paper>
   );

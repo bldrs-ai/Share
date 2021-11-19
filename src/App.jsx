@@ -1,5 +1,4 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
 import { grey } from '@mui/material/colors';
 import CadView from './Containers/CadView';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
@@ -12,9 +11,7 @@ const theme = createTheme({
 
 const App = () => (
   <ThemeProvider theme={theme}>
-    <Routes>
-      <Route path='/*' element={<CadView />}/>
-    </Routes>
+    <CadView />
   </ThemeProvider>
 )
 
