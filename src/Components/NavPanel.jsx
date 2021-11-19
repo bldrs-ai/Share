@@ -51,7 +51,7 @@ const NavPanel = ({
     if (eltPath.length == 1) {
       return;
     }
-    eltPath = eltPath[1];
+    eltPath = '/Share/' + eltPath[1];
     const parts = eltPath.split(/\//);
     if (parts.length > 0) {
       const targetId = parseInt(parts[parts.length - 1]);
