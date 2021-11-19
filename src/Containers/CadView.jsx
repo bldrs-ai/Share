@@ -224,7 +224,7 @@ const CadView = () => {
       //console.log('Parts: ', parts);
       //const filePath = './' + window.location.hash.substring(1);
       //if (true) return;
-      const filePath = '/haus.ifc';
+      const filePath = './haus.ifc';
       if (debug) {
         console.log('CadView#useEffect: load from server and hash: ', filePath);
       }
