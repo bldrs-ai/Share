@@ -4,14 +4,6 @@ import { render } from 'react-dom'
 import App from './App';
 
 
-const About = () =>
-  <div>
-    What about it?!
-
-    <p><Link to='/Share'>Home</Link></p>
-  </div>;
-
-
 function Routed() {
   const nav = useNavigate();
 
@@ -28,8 +20,7 @@ function Routed() {
   }, []);
 
   let element = useRoutes([
-    { path: "/Share/*", element: <App /> },
-    { path: "/Share/about", element: <About /> }
+    { path: "/*", element: <App /> },
   ]);
   return element;
 }
