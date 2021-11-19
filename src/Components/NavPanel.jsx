@@ -51,7 +51,7 @@ const NavPanel = ({
     if (eltPath.length == 1) {
       return;
     }
-    eltPath = '/Share/' + eltPath[1];
+    eltPath = eltPath[1];
     const parts = eltPath.split(/\//);
     if (parts.length > 0) {
       const targetId = parseInt(parts[parts.length - 1]);
@@ -92,7 +92,7 @@ const NavPanel = ({
           <NavTree
             viewer={viewer}
             element={element}
-            path={'nav/' + element.expressID.toString()}
+            path={'/Share/nav/' + element.expressID.toString()}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
           />
