@@ -1,18 +1,35 @@
-import React from "react";
-import ReactDOM from "react-dom";
-import "./index.css";
-import App from "./App.jsx";
-import reportWebVitals from "./reportWebVitals";
+import React from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
+import { render } from 'react-dom'
+import App from './App';
+
+// TODO: This isn't used.
+// If icons-material isn't imported somewhere, mui dies
+import AccountCircle from '@mui/icons-material/AccountCircle';
 
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>,
-  document.getElementById("root")
-);
+function Routed() {
+  const nav = useNavigate();
 
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
+  React.useEffect(() => {
+    const referrer = document.referrer;
+    if (referrer) {
+      const path = new URL(document.referrer).pathname;
+      if (path.length > 1) {
+        nav(path);
+      }
+    }
+  }, []);
+
+
+  return (
+    <Routes>
+      <Route path="/*" element={<App/>} />
+    </Routes>
+  );
+}
+
+render(
+  <BrowserRouter>
+    <Routed/>
+  </BrowserRouter>, document.getElementById('root'))

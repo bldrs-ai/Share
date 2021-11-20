@@ -1,34 +1,18 @@
-import './App.css';
 import React from 'react';
-import { BrowserRouter as Router, Switch, Route } from 'react-router-dom';
-import { createTheme, ThemeProvider } from '@material-ui/core/styles';
-import { grey } from '@material-ui/core/colors';
+import { grey } from '@mui/material/colors';
 import CadView from './Containers/CadView';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
 
-const bldrsTheme = createTheme({
-  palette: {
-    primary: {
-      main: grey[500],
-      light: grey[100],
-    },
-    secondary: {
-      main: grey[700],
-    },
+const theme = createTheme({
+  status: {
+    danger: 'foo',
   },
 });
 
-function App() {
-  return (
-    <ThemeProvider theme={bldrsTheme}>
-      <Router>
-        <Switch>
-          <Route path='/'>
-            <CadView />
-          </Route>
-        </Switch>
-      </Router>
-    </ThemeProvider>
-  );
-}
+const App = () => (
+  <ThemeProvider theme={theme}>
+    <CadView />
+  </ThemeProvider>
+)
 
 export default App;
