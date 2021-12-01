@@ -92,7 +92,7 @@ const NavPanel = ({
           <NavTree
             viewer={viewer}
             element={element}
-            path={'/Share/nav/' + element.expressID.toString()}
+            pathPrefix={'/Share/nav'}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
           />

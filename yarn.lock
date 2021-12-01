@@ -850,6 +850,11 @@
     prop-types "^15.7.2"
     react-is "^17.0.2"
 
+"@pablo-mayrgundter/testing.js@^1.1.2":
+  version "1.1.2"
+  resolved "https://npm.pkg.github.com/download/@pablo-mayrgundter/testing.js/1.1.2/7d639eab3ad3ea7e93c280291aa754b7c1fd75e3a83400668de630c0206f2e0b#47ec1236acca7eca183a7ccc0f4c30f1427d25a6"
+  integrity sha512-Ml+MFgIMhFkEQjxPQQujDubBAcoVqpS4ux0urfnBrlCxuMaJ7aQNSZnl+AltsDt8iJcyBmgqfy6B1c3fhXJJEQ==
+
 "@popperjs/core@^2.4.4":
   version "2.10.2"
   resolved "https://registry.yarnpkg.com/@popperjs/core/-/core-2.10.2.tgz#0798c03351f0dea1a5a4cabddf26a55a7cbee590"

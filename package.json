@@ -26,6 +26,7 @@
     "web-vitals": "^2.1.0"
   },
   "devDependencies": {
+    "@pablo-mayrgundter/testing.js": "^1.1.2",
     "@testing-library/jest-dom": "^5.15.0",
     "esbuild": "^0.13.14",
     "jest": "^27.3.1",

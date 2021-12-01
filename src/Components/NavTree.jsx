@@ -6,6 +6,7 @@ import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
 import {reifyName} from '../utils/Ifc';
+import {computeElementPath} from '../utils/TreeUtils';
 
 
 const NavTreePropTypes = {
@@ -43,7 +44,7 @@ const NavTreePropTypes = {
 const NavTree = ({
   viewer,
   element,
-  path,
+  pathPrefix,
   onElementSelect,
   setExpandedElements,
   keyPrefix = ''
@@ -106,7 +107,7 @@ const NavTree = ({
         <Typography
           onClick={handleSelectionClick}
           className={classes.label}>
-          <RouterLink to={path}
+          <RouterLink to={pathPrefix + computeElementPath(element, elt => elt.expressID.toString())}
                       style={{color: 'black', textDecoration: 'none'}}>
             {label}
           </RouterLink>
@@ -144,7 +145,7 @@ const NavTree = ({
                      <NavTree
                        viewer={viewer}
                        element={child}
-                       path={path + '/' + child.expressID}
+                       pathPrefix={pathPrefix}
                        onElementSelect={onElementSelect}
                        setExpandedElements={setExpandedElements}
                        keyPrefix={childKey} />

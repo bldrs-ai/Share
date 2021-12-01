@@ -11,6 +11,7 @@ import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
+import { setupParentLinks } from '../utils/TreeUtils';
 
 
 const debug = 0;
@@ -103,6 +104,7 @@ const CadView = () => {
   const [showShare, setShowShare] = useState(false);
   const [viewer, setViewer] = useState({});
   const [rootElement, setRootElement] = useState({});
+  const elementsById = useState({});
   const [selectedElement, setSelectedElement] = useState({});
   const [selectedElements, setSelectedElements] = useState([]);
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([]);
@@ -171,8 +173,10 @@ const CadView = () => {
     setShowItemPanel(true);
   };
 
+
   const onModelLoad = (rootElt, viewer) => {
     setRootElement(rootElt);
+    setupParentLinks(rootElt);
     if (debug >= 2) {
       console.log(
         `CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`
