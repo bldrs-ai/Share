@@ -13,7 +13,6 @@ import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { setupParentLinks } from '../utils/TreeUtils';
 
-
 const debug = 0;
 
 const useStyles = makeStyles((theme) => ({
@@ -173,7 +172,6 @@ const CadView = () => {
     setShowItemPanel(true);
   };
 
-
   const onModelLoad = (rootElt, viewer) => {
     setRootElement(rootElt);
     setupParentLinks(rootElt);
@@ -217,9 +215,31 @@ const CadView = () => {
     viewer.IFC.setWasmPath('./static/js/');
     viewer.addAxes();
     viewer.addGrid();
-    window.onmousemove = viewer.prepickIfcItem;
-    window.ondblclick = viewer.addClippingPlane;
-    window.onkeydown = (event) => viewer.removeClippingPlane();
+    viewer.clipper.active = true;
+
+    const handleKeyDown = (event) => {
+      //add a plane
+      if (event.code === 'KeyQ') {
+        viewer.clipper.createPlane();
+      }
+      //delete all planes
+      if (event.code === 'KeyW') {
+        viewer.clipper.deletePlane();
+      }
+      if (event.code == 'KeyA') {
+        viewer.IFC.unpickIfcItems();
+      }
+    };
+
+    // Highlight items when hovering over them
+    window.onmousemove = viewer.IFC.prePickIfcItem;
+    window.onkeydown = handleKeyDown;
+
+    // Select items
+    window.ondblclick = async () => {
+      const item = await viewer.IFC.pickIfcItem(true);
+      if (item.modelID === undefined || item.id === undefined) return;
+    };
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
