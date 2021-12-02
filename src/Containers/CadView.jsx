@@ -215,6 +215,7 @@ const CadView = () => {
     viewer.IFC.setWasmPath('./static/js/');
     viewer.addAxes();
     viewer.addGrid();
+    viewer.clipper.active = true;
 
     const handleKeyDown = (event) => {
       //add a plane
@@ -224,6 +225,9 @@ const CadView = () => {
       //delete all planes
       if (event.code === 'KeyW') {
         viewer.clipper.deletePlane();
+      }
+      if (event.code == 'KeyA') {
+        viewer.IFC.unpickIfcItems();
       }
     };
 
