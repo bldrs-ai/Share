@@ -36,7 +36,7 @@ PR requirements:
  - Focused: one logical/wholistic change.  Less is more.
  - Clear: Well-factored, commented, no debugging, etc.
  - Tested: focused and clear unit tests.
- - Demonstrated: a link to a live demo of your fork's GitHub pages.
+ - Demonstrated: a link to a live demo of your PR hosted at your fork's GitHub pages.
 
 For GitHub Pages demos, see [choosing-a-publishing-source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#choosing-a-publishing-source).  Point your Pages to the fork's /docs directory, which is where yarn build outputs to.
 
