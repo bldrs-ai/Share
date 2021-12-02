@@ -1,8 +1,7 @@
 Share is a web-based BIM integration environment using [IFC.js](https://github.com/IFCjs/web-ifc-viewer) and React with IFC hosted in git.
 
-Join our Discord here:
+Join the [Buildrs Discord](https://discord.com/channels/853953158560743424/853953158560743429):
 
-https://discord.com/channels/853953158560743424/853953158560743429
 
 # Setup
 
@@ -33,11 +32,13 @@ https://buildrs.github.io/Share/build/#haus.ifc
 
 If you want to contribute, please use the [fork and and branch](https://blog.scottlowe.org/2015/01/27/using-fork-branch-git-workflow/) style and send a PR.
 
-PRs should include:
- - Great code with no debugging, commented code, etc.
- - Unit tests.
- - Demo link from your fork's GitHub pages.  See [here](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#choosing-a-publishing-source) for instructions to set this up.  Point your Pages to the fork's /docs directory, which is where yarn build outputs to.
+PR requirements:
+ - Focused: one logical/wholistic change.  Less is more.
+ - Clear: Well-factored, commented, no debugging, etc.
+ - Tested: focused and clear unit tests.
+ - Demonstrated: a link to a live demo of your fork's GitHub pages.
 
+For GitHub Pages demos, see [choosing-a-publishing-source](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#choosing-a-publishing-source).  Point your Pages to the fork's /docs directory, which is where yarn build outputs to.
 
 Quick reference for how to merge from upstream into your fork:
 
