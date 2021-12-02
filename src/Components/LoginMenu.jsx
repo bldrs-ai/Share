@@ -4,7 +4,7 @@ import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
 import PkgJson from '../../package.json';
-
+import Person from '../assets/Person.svg';
 
 const LoginMenu = () => {
   const [anchorEl, setAnchorEl] = React.useState(null);
@@ -24,7 +24,12 @@ const LoginMenu = () => {
         onClick={handleMenu}
         color='inherit'
       >
-        👤
+        <Person
+          style={{
+            width: '40px',
+            height: '40px',
+          }}
+        />
       </IconButton>
 
       <Menu
@@ -49,6 +54,5 @@ const LoginMenu = () => {
     </div>
   );
 };
-
 
 export default LoginMenu;

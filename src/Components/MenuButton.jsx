@@ -1,7 +1,7 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import IconButton from '@mui/material/IconButton';
-
+import Hamburger from '../assets/Hamburger.svg';
 
 const useStyles = makeStyles((theme) => ({
   menuButton: {
@@ -15,7 +15,6 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-
 const MenuButton = ({ onClick, disabled, open }) => {
   const classes = useStyles();
   return (
@@ -27,14 +26,9 @@ const MenuButton = ({ onClick, disabled, open }) => {
       onClick={onClick}
       disabled={disabled}
     >
-      {open ? (
-        <div>X</div>
-      ) : (
-        <div>O</div>
-      )}
+      {open ? <Hamburger /> : <Hamburger />}
     </IconButton>
   );
 };
-
 
 export default MenuButton;

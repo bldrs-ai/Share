@@ -5,9 +5,8 @@ import PropTypes from 'prop-types';
 import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
 import Link from '@mui/material/Link';
-import {reifyName} from '../utils/Ifc';
-import {computeElementPath} from '../utils/TreeUtils';
-
+import { reifyName } from '../utils/Ifc';
+import { computeElementPath } from '../utils/TreeUtils';
 
 const NavTreePropTypes = {
   /**
@@ -40,16 +39,14 @@ const NavTreePropTypes = {
   nodeId: PropTypes.string.isRequired,
 };
 
-
 const NavTree = ({
   viewer,
   element,
   pathPrefix,
   onElementSelect,
   setExpandedElements,
-  keyPrefix = ''
+  keyPrefix = '',
 }) => {
-
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
       classes,
@@ -75,15 +72,15 @@ const NavTree = ({
 
     const icon = iconProp || expansionIcon || displayIcon;
 
-    const handleMouseDown = event => {
+    const handleMouseDown = (event) => {
       preventSelection(event);
     };
 
-    const handleExpansionClick = event => {
+    const handleExpansionClick = (event) => {
       handleExpansion(event);
     };
 
-    const handleSelectionClick = event => {
+    const handleSelectionClick = (event) => {
       handleSelection(event);
       onElementSelect(element);
     };
@@ -104,11 +101,20 @@ const NavTree = ({
         <div onClick={handleExpansionClick} className={classes.iconContainer}>
           {icon}
         </div>
-        <Typography
-          onClick={handleSelectionClick}
-          className={classes.label}>
-          <RouterLink to={pathPrefix + computeElementPath(element, elt => elt.expressID.toString())}
-                      style={{color: 'black', textDecoration: 'none'}}>
+        <Typography onClick={handleSelectionClick} className={classes.label}>
+          <RouterLink
+            to={
+              pathPrefix +
+              computeElementPath(element, (elt) => elt.expressID.toString())
+            }
+            style={{
+              color: 'black',
+              textDecoration: 'none',
+              fontFamily: 'helvetica',
+              fontWeight: 600,
+              color: '#696969',
+            }}
+          >
             {label}
           </RouterLink>
         </Typography>
@@ -116,16 +122,20 @@ const NavTree = ({
     );
   });
 
-
   CustomContent.propTypes = NavTreePropTypes;
 
-
   const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={CustomContent} {...props}/>
+    return <TreeItem ContentComponent={CustomContent} {...props} />;
   };
 
   const ChildTreeItem = (props) => {
-    return <TreeItem ContentProps={{child: props.child}} ContentComponent={CustomContent} {...props}/>
+    return (
+      <TreeItem
+        ContentProps={{ child: props.child }}
+        ContentComponent={CustomContent}
+        {...props}
+      />
+    );
   };
 
   const nodeId = element.expressID.toString();
@@ -136,23 +146,27 @@ const NavTree = ({
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName(element, viewer)}
-      onClick={() => onElementSelect(element)}>
-      {
-        element.children && element.children.length > 0 ? element.children.map(
-          child => {
+      onClick={() => onElementSelect(element)}
+    >
+      {element.children && element.children.length > 0
+        ? element.children.map((child) => {
             const childKey = `${keyPrefix}-${i++}`;
-            return <React.Fragment key={childKey}>
-                     <NavTree
-                       viewer={viewer}
-                       element={child}
-                       pathPrefix={pathPrefix}
-                       onElementSelect={onElementSelect}
-                       setExpandedElements={setExpandedElements}
-                       keyPrefix={childKey} />
-                   </React.Fragment>
-          }) : null
-      }
-    </CustomTreeItem>);
+            return (
+              <React.Fragment key={childKey}>
+                <NavTree
+                  viewer={viewer}
+                  element={child}
+                  pathPrefix={pathPrefix}
+                  onElementSelect={onElementSelect}
+                  setExpandedElements={setExpandedElements}
+                  keyPrefix={childKey}
+                />
+              </React.Fragment>
+            );
+          })
+        : null}
+    </CustomTreeItem>
+  );
 };
 
 export default NavTree;

@@ -12,7 +12,7 @@ import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { setupParentLinks } from '../utils/TreeUtils';
-
+import { Color } from 'three';
 const debug = 0;
 
 const useStyles = makeStyles((theme) => ({
@@ -189,7 +189,7 @@ const CadView = () => {
       }
     }
     setDefaultExpandedElements(expanded);
-    setShowNavPanel(true);
+    setShowNavPanel(false);
     searchIndex.clearIndex();
     const index = new SearchIndex(rootElt, viewer);
     index.indexElement(rootElt);
@@ -204,7 +204,10 @@ const CadView = () => {
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
     const container = document.getElementById('viewer-container');
-    const viewer = new IfcViewerAPI({ container });
+    const viewer = new IfcViewerAPI({
+      container,
+      backgroundColor: new Color('#808080'),
+    });
     setViewer(viewer);
     if (debug) {
       console.log('CadView#useEffect: viewer created: ', viewer);
@@ -214,7 +217,7 @@ const CadView = () => {
     // the binary there in our public directory.
     viewer.IFC.setWasmPath('./static/js/');
     viewer.addAxes();
-    viewer.addGrid();
+    viewer.addGrid(50, 50);
     viewer.clipper.active = true;
 
     const handleKeyDown = (event) => {
@@ -339,11 +342,13 @@ const CadView = () => {
           </div>
         )}
         <div className={classes.elementsButton}>
-          <MenuButton
-            onClick={() => setShowItemPanel(!showItemPanel)}
-            disabled={isLoadedElement}
-            open={showItemPanel}
-          />
+          {isLoadedElement ? null : (
+            <MenuButton
+              onClick={() => setShowItemPanel(!showItemPanel)}
+              disabled={isLoadedElement}
+              open={showItemPanel}
+            />
+          )}
         </div>
 
         <div className={classes.menuToolbarContainer}>
