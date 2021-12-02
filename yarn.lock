@@ -852,8 +852,8 @@
 
 "@pablo-mayrgundter/testing.js@^1.1.2":
   version "1.1.2"
-  resolved "https://npm.pkg.github.com/download/@pablo-mayrgundter/testing.js/1.1.2/7d639eab3ad3ea7e93c280291aa754b7c1fd75e3a83400668de630c0206f2e0b#47ec1236acca7eca183a7ccc0f4c30f1427d25a6"
-  integrity sha512-Ml+MFgIMhFkEQjxPQQujDubBAcoVqpS4ux0urfnBrlCxuMaJ7aQNSZnl+AltsDt8iJcyBmgqfy6B1c3fhXJJEQ==
+  resolved "https://registry.yarnpkg.com/@pablo-mayrgundter/testing.js/-/testing.js-1.1.2.tgz#7c1a96eb81b93af3e3cb5e26fcfc8295d69407f1"
+  integrity sha512-feCXFMg3ZrI6QTs3qrqr+SJSx5vctDjCyzwYIQ3UNHWOnmp2Aaqt7SyWq+BNiPHzGIUfayacFLHkFz8fSULjEg==
 
 "@popperjs/core@^2.4.4":
   version "2.10.2"
