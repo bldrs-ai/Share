@@ -12,7 +12,7 @@ https://discord.com/channels/853953158560743424/853953158560743429
 # Update the serving wasm to the installed version
 > cp node_modules/web-ifc/web-ifc.wasm public/static/js/
 # Run server; this will open your browser to http://localhost:3000/
-> yarn start
+> yarn serve
 ```
 
 # Build & Include IFC files to publish
@@ -21,7 +21,7 @@ Build the static serving directory, including any of your IFC files
 
 ```
 > yarn build
-> cp $IFC_FILES ./build # Optional if you have IFC files to publish
+> cp $IFC_FILES ./docs # Optional if you have IFC files to publish
 > git add . ; git ci -m 'Publishing new version.' ; git push
 ```
 
@@ -31,11 +31,15 @@ https://buildrs.github.io/Share/build/#haus.ifc
 
 # Dev
 
-If you want to contribute, please fork and submit PRs from your fork to this repo's main branch.
+If you want to contribute, please use the [fork and and branch](https://blog.scottlowe.org/2015/01/27/using-fork-branch-git-workflow/) style and send a PR.
 
-Once it's merged, the live site will be automatically updated.
+PRs should include:
+ - Great code with no debugging, commented code, etc.
+ - Unit tests.
+ - Demo link from your fork's GitHub pages.  See [here](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site#choosing-a-publishing-source) for instructions to set this up.  Point your Pages to the fork's /docs directory, which is where yarn build outputs to.
 
-To merge from upstream into your fork:
+
+Quick reference for how to merge from upstream into your fork:
 
 ```
 # First time only: git remote add upstream https://github.com/buildrs/Share
@@ -44,7 +48,6 @@ To merge from upstream into your fork:
 > git merge upstream/main
 ```
 
-# TODO: Remove react-scripts
 
 ## Node tests
 
