@@ -31,7 +31,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
       <Toolbar
         variant='regular'
         style={{
-          borderBottom: '1px solid 	#585858',
+          borderBottom: '1px solid 	#696969',
           backgroundColor: '#808080',
           display: 'flex',
           justifyContent: 'space-between',

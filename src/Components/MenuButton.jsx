@@ -26,7 +26,8 @@ const MenuButton = ({ onClick, disabled, open }) => {
       onClick={onClick}
       disabled={disabled}
     >
-      {open ? <Hamburger /> : <Hamburger />}
+      <Hamburger style={{ width: 30, height: 30 }} />
+      {/* {open ?  <Hamburger /> : <Hamburger />} */}
     </IconButton>
   );
 };

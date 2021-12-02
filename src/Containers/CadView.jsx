@@ -13,6 +13,7 @@ import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { setupParentLinks } from '../utils/TreeUtils';
 import { Color } from 'three';
+
 const debug = 0;
 
 const useStyles = makeStyles((theme) => ({
@@ -31,7 +32,7 @@ const useStyles = makeStyles((theme) => ({
   elementsButton: {
     position: 'absolute',
     top: 80,
-    right: 20,
+    right: 30,
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
