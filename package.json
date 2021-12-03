@@ -1,6 +1,6 @@
 {
   "name": "builders",
-  "version": "0.1.0-r184",
+  "version": "0.1.0-r186",
   "main": "src/index.jsx",
   "homepage": "https://buildrs.github.io/",
   "scripts": {
