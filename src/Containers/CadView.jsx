@@ -86,7 +86,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'flex-start',
     alignItems: 'center',
     position: 'absolute',
-    left: 90,
+    left: 20,
     top: 84,
   },
   paper: {
