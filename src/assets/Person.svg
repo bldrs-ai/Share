@@ -15,7 +15,7 @@
 <path d="M11.5911 1.32233L34.0324 1" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M1.43967 66.7429L1.04126 34.7031" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M11.736 23.7777L11.5911 1.32233" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
-<path d="M6.5 32L1 35H45L43 32H6.5Z" fill="black"/>
+<path d="M6.5 32L1 35H45L43 32H6.5Z" fill="#7D7D7D"/>
 <path d="M44.5 68L45 35H23H1L1.5 66.5L44.5 68Z" fill="#C4C4C4"/>
 <path d="M11.5 24V1.50001L34 1.18088V24H11.5Z" fill="#C4C4C4"/>
 <path d="M45.1059 35.1009L44.6516 34.0582" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
@@ -27,5 +27,5 @@
 <path d="M11.5911 1.32233L34.0324 1" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M1.43967 66.7429L1.04126 34.7031" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M11.736 23.7777L11.5911 1.32233" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
-<path d="M37 5L34 1V24L37 22.5V5Z" fill="black"/>
+<path d="M37 5L34 1V24L37 22.5V5Z" fill="#7D7D7D"/>
 </svg>

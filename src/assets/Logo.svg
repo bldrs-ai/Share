@@ -7,14 +7,14 @@
 <path d="M92 7L124 5V127L93 125L92 7Z" fill="#C4C4C4"/>
 <path d="M236 67H276V135L236 133V67Z" fill="#C4C4C4"/>
 <path d="M287 67H330L329 138L286 136L287 67Z" fill="#C4C4C4"/>
-<path d="M200 67H223V133L200 136V67Z" fill="#424242"/>
-<path d="M32 10L57 11V119L32 122V10Z" fill="#424242"/>
-<path d="M124 5L151 8V124L124 127V5Z" fill="#424242"/>
-<path d="M63 65H86V117L63 119V65Z" fill="#424242"/>
-<path d="M228 1L249 4V67H228V1Z" fill="#424242"/>
-<path d="M276 67H286.9L286 134L276 135V67Z" fill="#424242"/>
-<path d="M330 67H350V134L329 138L330 67Z" fill="#424242"/>
-<path d="M228 67H236V131L228 132V67Z" fill="#424242"/>
+<path d="M200 67H223V133L200 136V67Z" fill="#848484"/>
+<path d="M32 10L57 11V119L32 122V10Z" fill="#848484"/>
+<path d="M124 5L151 8V124L124 127V5Z" fill="#848484"/>
+<path d="M63 65H86V117L63 119V65Z" fill="#848484"/>
+<path d="M228 1L249 4V67H228V1Z" fill="#848484"/>
+<path d="M276 67H286.9L286 134L276 135V67Z" fill="#848484"/>
+<path d="M330 67H350V134L329 138L330 67Z" fill="#848484"/>
+<path d="M228 67H236V131L228 132V67Z" fill="#848484"/>
 <path d="M32 10V122" stroke="black" stroke-width="0.24"/>
 <path d="M286 114L307 115" stroke="black" stroke-width="0.24"/>
 <path d="M286 136L329 138" stroke="black" stroke-width="0.24"/>
