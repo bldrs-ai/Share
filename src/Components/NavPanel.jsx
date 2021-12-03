@@ -92,7 +92,7 @@ const NavPanel = ({
           <NavTree
             viewer={viewer}
             element={element}
-            pathPrefix={'/Share/nav'}
+            pathPrefix={'/'}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
           />
