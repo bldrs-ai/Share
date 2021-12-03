@@ -4,4 +4,4 @@ export default function gtag() {
   dataLayer.push(arguments);
 }
 gtag('js', new Date());
-gtag('config', 'G-S8TR3R9TWB');
+gtag('config', 'UA-210924287-3');
