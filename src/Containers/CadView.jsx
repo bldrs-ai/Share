@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLocation } from 'react-router-dom';
-import { useParams } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
@@ -11,7 +10,7 @@ import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
 import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
-import { setupParentLinks } from '../utils/TreeUtils';
+import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils';
 import { Color } from 'three';
 import SideMenu from '../Components/SideMenu';
 import ItemProperties from '../Components/ItemProperties';
@@ -192,7 +191,7 @@ const CadView = () => {
 
   const onModelLoad = (rootElt, viewer) => {
     setRootElement(rootElt);
-    setupParentLinks(rootElt);
+    setupLookupAndParentLinks(rootElt, elementsById);
     if (debug >= 2) {
       console.log(
         `CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`
@@ -207,7 +206,7 @@ const CadView = () => {
       }
     }
     setDefaultExpandedElements(expanded);
-    setShowNavPanel(false);
+    setShowNavPanel(true);
     searchIndex.clearIndex();
     const index = new SearchIndex(rootElt, viewer);
     index.indexElement(rootElt);
@@ -218,6 +217,7 @@ const CadView = () => {
     setSearchIndex(index);
     setShowSearchBar(true);
   };
+  const navigate = useNavigate();
 
   // Similar to componentDidMount and componentDidUpdate:
   useEffect(() => {
@@ -260,41 +260,39 @@ const CadView = () => {
     window.ondblclick = async () => {
       const item = await viewer.IFC.pickIfcItem(true);
       if (item.modelID === undefined || item.id === undefined) return;
+      const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
+      navigate(path);
+      setSelectedElement(item);
     };
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
-    if (true) {
-      const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-      //console.log('Parts: ', parts);
-      //const filePath = './' + window.location.hash.substring(1);
-      //if (true) return;
-      const filePath = './haus.ifc';
-      if (debug) {
-        console.log('CadView#useEffect: load from server and hash: ', filePath);
-      }
-      viewer.IFC.loader.load(
-        filePath,
-        (model) => {
-          if (debug) {
-            console.log('CadView#useEffect$onLoad, model: ', model, viewer);
-          }
-          viewer.IFC.addIfcModel(model);
-          const rootEltPromise = model.ifcManager.getSpatialStructure(0, true);
-          rootEltPromise.then((rootElt) => {
-            onModelLoad(rootElt, viewer);
-          });
-        },
-        (progressEvent) => {
-          if (debug) {
-            console.log('CadView#useEffect$onProgress', progressEvent);
-          }
-        },
-        (error) => {
-          console.error('CadView#useEffect$onError', error);
-        }
-      );
+    const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
+    const filePath = './haus.ifc';
+    if (debug) {
+      console.log('CadView#useEffect: load from server and hash: ', filePath);
     }
+    viewer.IFC.loader.load(
+      filePath,
+      (model) => {
+        if (debug) {
+          console.log('CadView#useEffect$onLoad, model: ', model, viewer);
+        }
+        viewer.IFC.addIfcModel(model);
+        const rootEltPromise = model.ifcManager.getSpatialStructure(0, true);
+        rootEltPromise.then((rootElt) => {
+          onModelLoad(rootElt, viewer);
+        });
+      },
+      (progressEvent) => {
+        if (debug) {
+          console.log('CadView#useEffect$onProgress', progressEvent);
+        }
+      },
+      (error) => {
+        console.error('CadView#useEffect$onError', error);
+      }
+    );
   }, []);
 
   const loadIfc = async (file) => {

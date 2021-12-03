@@ -30,6 +30,7 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
+
 const NavPanel = ({
   viewer,
   element,
@@ -46,12 +47,10 @@ const NavPanel = ({
   }
 
   React.useEffect(() => {
-    let eltPath = location.pathname.split(/nav\//);
-    if (eltPath.length == 1) {
+    if (location.pathname.length <= 0) {
       return;
     }
-    eltPath = eltPath[1];
-    const parts = eltPath.split(/\//);
+    const parts = location.pathname.split(/\//);
     if (parts.length > 0) {
       const targetId = parseInt(parts[parts.length - 1]);
       if (isFinite(targetId)) {
@@ -95,7 +94,7 @@ const NavPanel = ({
             <NavTree
               viewer={viewer}
               element={element}
-              pathPrefix={'/Share/nav'}
+              pathPrefix={''}
               onElementSelect={onElementSelect}
               setExpandedElements={setExpandedElements}
             />
