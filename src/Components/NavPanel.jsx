@@ -74,6 +74,7 @@ const NavPanel = ({
         left: 20,
         overflow: 'auto',
       }}
+    >
       <div style={{ marginTop: 20 }}>
         <TreeView
           aria-label='IFC Navigator'
