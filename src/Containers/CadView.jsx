@@ -207,7 +207,7 @@ const CadView = () => {
     const container = document.getElementById('viewer-container');
     const viewer = new IfcViewerAPI({
       container,
-      backgroundColor: new Color('#808080'),
+      backgroundColor: new Color('#e0e0e0'),
     });
     setViewer(viewer);
     if (debug) {
