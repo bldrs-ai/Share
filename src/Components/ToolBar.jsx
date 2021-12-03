@@ -5,6 +5,8 @@ import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import { makeStyles } from '@mui/styles';
 import LoginMenu from './LoginMenu';
+import Logo from '../assets/Logo.svg';
+import Folder from '../assets/Folder.svg';
 
 const useStyles = makeStyles((theme) => ({
   title: {
@@ -29,8 +31,8 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
       <Toolbar
         variant='regular'
         style={{
-          borderBottom: '1px solid 	#585858',
-          backgroundColor: '#787878',
+          borderBottom: '1px solid 	#696969',
+          backgroundColor: '#D8D8D8',
           display: 'flex',
           justifyContent: 'space-between',
         }}
@@ -45,7 +47,13 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
           }}
         >
           <Typography variant='h6' className={classes.title}>
-            BLDRS
+            {/* BLDRS */}
+            <Logo
+              style={{
+                width: '120px',
+                height: '50px',
+              }}
+            />
           </Typography>
 
           <IconButton
@@ -53,9 +61,14 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             color='secondary'
             aria-label='menu'
             onClick={fileOpen}
-            style={{color: 'white', textDecoration: 'underline', paddingLeft: '2em', fontSize: '1em'}}
+            style={{ marginLeft: 20 }}
           >
-            Open
+            <Folder
+              style={{
+                width: '40px',
+                height: '40px',
+              }}
+            />
           </IconButton>
         </div>
         <div

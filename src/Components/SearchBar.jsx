@@ -3,7 +3,8 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
-
+import Search from '../assets/Search.svg';
+import Hamburger from '../assets/Hamburger.svg';
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -24,8 +25,13 @@ const useStyles = makeStyles((theme) => ({
   },
 }));
 
-
-export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disabled, open }) {
+export default function SearchBar({
+  onSearch,
+  onSearchModify,
+  onClickMenu,
+  disabled,
+  open,
+}) {
   const classes = useStyles();
 
   const [textValue, setTextValue] = React.useState('');
@@ -33,13 +39,13 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
   // TODO(pablo): What I have here seems to work fine but not sure if
   // it's idomatic.  See:
   //   https://blog.logrocket.com/using-material-ui-with-react-hook-form/
-  const onChange = event => {
+  const onChange = (event) => {
     const value = event.target.value;
     setTextValue(value);
     onSearchModify(value);
-  }
+  };
 
-  const onSubmit = event => {
+  const onSubmit = (event) => {
     event.preventDefault();
     onSearch(textValue);
     // TODO(pablo): hack
@@ -54,22 +60,28 @@ export default function SearchBar({ onSearch, onSearchModify, onClickMenu, disab
         onClick={onClickMenu}
         disabled={disabled}
       >
-        =
+        <Hamburger style={{ width: 20, height: 20 }} />
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}
-        id="main_search_input"
-        placeholder="Search building"
+        id='main_search_input'
+        placeholder='Search building'
         inputProps={{ 'aria-label': 'search' }}
         onChange={onChange}
         value={textValue}
+        style={{
+          fontSize: 18,
+          fontWeight: 600,
+          fontFamily: 'Helvetica',
+          color: '#696969',
+        }}
       />
       <IconButton
         type='submit'
         className={classes.iconButton}
         aria-label='search'
       >
-        🔍
+        <Search style={{ width: 30, height: 30 }} />
       </IconButton>
     </Paper>
   );

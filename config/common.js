@@ -1,5 +1,7 @@
-const entry = 'src/index.jsx'
-const buildDir = 'docs'
+import svgrPlugin from 'esbuild-plugin-svgr';
+
+const entry = 'src/index.jsx';
+const buildDir = 'docs';
 const build = {
   entryPoints: [entry],
   bundle: true,
@@ -14,10 +16,9 @@ const build = {
   outdir: buildDir,
   format: 'esm',
   sourcemap: true,
-  target: ['chrome58','firefox57','safari11','edge18'],
-  logLevel: 'info'
-}
+  target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
+  logLevel: 'info',
+  plugins: [svgrPlugin()],
+};
 
-export {
-  build
-}
+export { build };
