@@ -47,9 +47,7 @@ const LoginMenu = () => {
         open={open}
         onClose={handleClose}
       >
-        {/*<MenuItem onClick={handleClose}>Profile</MenuItem>*/}
         <MenuItem onClick={handleClose}>Version: {PkgJson.version}</MenuItem>
-        <Link to='/Share/about'>About</Link>
       </Menu>
     </div>
   );

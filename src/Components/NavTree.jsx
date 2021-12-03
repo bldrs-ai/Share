@@ -108,7 +108,6 @@ const NavTree = ({
               computeElementPath(element, (elt) => elt.expressID.toString())
             }
             style={{
-              color: 'black',
               textDecoration: 'none',
               fontFamily: 'helvetica',
               fontWeight: 600,
