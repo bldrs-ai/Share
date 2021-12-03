@@ -390,11 +390,11 @@ const CadView = () => {
               />
             ) : null}
           </div>
-          <div>
+          {/* <div>
             {showItemPanel ? (
               <ItemPanel viewer={viewer} element={selectedElement} />
             ) : null}
-          </div>
+          </div> */}
         </div>
       </div>
     </div>
