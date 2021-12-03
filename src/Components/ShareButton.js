@@ -1,6 +1,5 @@
 import React from 'react';
 import Button from '@mui/material/Button';
-import ShareIcon from '@mui/icons-masterial/Share';
 import { makeStyles } from '@mui/styles';
 
 const useStyles = makeStyles((theme) => ({
