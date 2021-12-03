@@ -13,6 +13,10 @@ import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { setupParentLinks } from '../utils/TreeUtils';
 import { Color } from 'three';
+import SideMenu from '../Components/SideMenu';
+import ItemProperties from '../Components/ItemProperties';
+import Hamburger from '../assets/Hamburger.svg';
+import Search from '../assets/Search.svg';
 
 const debug = 0;
 
@@ -37,10 +41,24 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    '@media (max-width: 900px)': {
-      top: 520,
-      right: 15,
-    },
+  },
+  treeButton: {
+    position: 'absolute',
+    top: 140,
+    left: 30,
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  searchButton: {
+    position: 'absolute',
+    top: 80,
+    left: 30,
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   title: {
     flexGrow: 1,
@@ -68,7 +86,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'flex-start',
     alignItems: 'center',
     position: 'absolute',
-    left: 20,
+    left: 90,
     top: 84,
   },
   paper: {
@@ -112,7 +130,6 @@ const CadView = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState();
   const onClickShare = () => setShowShare(!showShare);
-
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
 
   const clearSearch = () => {
@@ -207,7 +224,7 @@ const CadView = () => {
     const container = document.getElementById('viewer-container');
     const viewer = new IfcViewerAPI({
       container,
-      backgroundColor: new Color('#808080'),
+      backgroundColor: new Color('#E0E0E0'),
     });
     setViewer(viewer);
     if (debug) {
@@ -324,6 +341,13 @@ const CadView = () => {
         id='property-viewer-container'
         className={classes.propertyViewContainer}
       ></div>
+      <SideMenu
+        title={'Properties'}
+        open={showItemPanel}
+        onClose={() => setShowItemPanel(false)}
+        anchor={'right'}
+        content={<ItemProperties viewer={viewer} element={selectedElement} />}
+      />
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <SnackBarMessage
