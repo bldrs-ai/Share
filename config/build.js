@@ -1,4 +1,5 @@
 import esbuild from 'esbuild';
+import svgrPlugin from 'esbuild-plugin-svgr';
 import * as common from './common.js';
 
 esbuild

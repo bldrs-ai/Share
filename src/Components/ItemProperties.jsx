@@ -121,7 +121,6 @@ const prettyProps = (viewer, element, key, props, serial) => {
 const ItemProperties = ({ viewer, element }) => {
   const props = element; //viewer.getProperties(0, element.expressID);
   let serial = 0;
-  console.log('element', element);
   return (
     <table
       style={{
@@ -131,9 +130,11 @@ const ItemProperties = ({ viewer, element }) => {
         marginTop: 40,
       }}
     >
-      {Object.keys(props).map((key) =>
-        prettyProps(viewer, element, key, props, serial++)
-      )}
+      <tbody>
+        {Object.keys(props).map((key) =>
+          prettyProps(viewer, element, key, props, serial++)
+        )}
+      </tbody>
     </table>
   );
 };

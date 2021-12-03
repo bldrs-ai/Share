@@ -9,14 +9,14 @@ import AccountCircle from '@mui/icons-material/AccountCircle';
 
 
 function Routed() {
-  const nav = useNavigate();
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     const referrer = document.referrer;
     if (referrer) {
       const path = new URL(document.referrer).pathname;
       if (path.length > 1) {
-        nav(path);
+        navigate(path);
       }
     }
   }, []);

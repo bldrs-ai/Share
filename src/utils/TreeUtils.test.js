@@ -1,8 +1,8 @@
 import Testing from '@pablo-mayrgundter/testing.js/testing.js';
 import {
   computeElementPath,
-  setupParentLinks
-} from './TreeUtils';
+  setupLookupAndParentLinks
+} from './TreeUtils.js';
 
 
 const tests = new Testing();
@@ -11,10 +11,13 @@ const tests = new Testing();
 function makeTestTree() {
   return {
     name: 'a',
+    expressID: 0,
     children: [{
       name: 'b',
+      expressID: 1,
       children: [{
         name: 'c',
+        expressID: 2,
         children: []
       }]
     }]
@@ -22,15 +25,19 @@ function makeTestTree() {
 }
 
 
-tests.add('Test setupParentLinks', () => {
+tests.add('Test setupLookupAndParentLinks', () => {
   const tree = makeTestTree();
-  setupParentLinks(tree);
+  const eltsById = {};
+  setupLookupAndParentLinks(tree, eltsById);
   const a = tree;
   const b = tree.children[0];
   const c = tree.children[0].children[0];
   tests.assertEquals(b, c.parent);
   tests.assertEquals(a, b.parent);
   tests.assertEquals(undefined, a.parent);
+  tests.assertEquals(a, eltsById[0]);
+  tests.assertEquals(b, eltsById[1]);
+  tests.assertEquals(c, eltsById[2]);
 })
 
 tests.add('Test computeElementPath', () => {
@@ -42,7 +49,8 @@ tests.add('Test computeElementPath', () => {
   tests.assertEquals('/a', computeElementPath(a, getNameCb));
   tests.assertEquals('/b', computeElementPath(b, getNameCb));
   tests.assertEquals('/c', computeElementPath(c, getNameCb));
-  setupParentLinks(tree);
+  const eltsById = {};
+  setupLookupAndParentLinks(tree, eltsById);
   tests.assertEquals('/a', computeElementPath(a, getNameCb));
   tests.assertEquals('/a/b', computeElementPath(b, getNameCb));
   tests.assertEquals('/a/b/c', computeElementPath(c, getNameCb));
