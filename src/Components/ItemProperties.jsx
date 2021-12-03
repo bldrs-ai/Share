@@ -1,117 +1,166 @@
 import TreeItem from '@mui/lab/TreeItem';
 import React from 'react';
-import {prettyType} from '../utils/Ifc';
+import { prettyType } from '../utils/Ifc';
 
-
-const deref = ref => {
+const deref = (ref) => {
   if (ref != null) {
     return ref.value;
   }
   throw new Error('Ref undefined or null: ', ref);
 };
 
-
 const dms = (deg, min, sec) => {
   return `${deg}° ${min}' ${sec}''`;
 };
 
-
 const row = (d1, d2, serial) => {
-  return d2 !== null ?
-    (<tr key={serial}><td>{d1}</td><td>{d2}</td></tr>)
-    : (<tr key={serial}><td colSpan = '2'>{d1}</td></tr>);
+  return d2 !== null ? (
+    <tr
+      key={serial}
+      style={{
+        height: 40,
+      }}
+    >
+      <td
+        style={{
+          border: '1px solid lightgrey',
+          fontFamily: 'Helvetica',
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#696969',
+        }}
+      >
+        {d1}
+      </td>
+      <td
+        style={{
+          border: '1px solid lightgrey',
+          fontFamily: 'Helvetica',
+          fontSize: 14,
+          fontWeight: 600,
+          color: '#696969',
+        }}
+      >
+        {d2}
+      </td>
+    </tr>
+  ) : (
+    <tr key={serial}>
+      <td
+        style={{
+          fontFamily: 'Helvetica',
+          fontSize: 14,
+          fontWeight: 600,
+        }}
+        colSpan='2'
+      >
+        {d1}
+      </td>
+    </tr>
+  );
 };
-
 
 const prettyProps = (viewer, element, key, props, serial) => {
   let value = props[key];
   if (value === null || value === undefined) {
-    return row(key, '<empty>', serial);
+    return row(key, ' - ', serial);
   }
   const propMgr = viewer.IFC.loader.ifcManager.properties;
   switch (key) {
-  case 'GlobalId':
-    return row(key, deref(value), serial);
-  case 'type':
-    return row('Type', prettyType(element, viewer), serial);
-  case 'Name':     ; // fallthrough
-  case 'PredefinedType':
-    if (value['value'] != null) {
-      return row(key, value['value'], serial);
+    case 'GlobalId':
+      return row(key, deref(value), serial);
+    case 'type':
+      return row('Type', prettyType(element, viewer), serial);
+    case 'Name': // fallthrough
+    case 'PredefinedType':
+      if (value['value'] != null) {
+        return row(key, value['value'], serial);
+      }
+      break;
+    case 'OwnerHistory': {
+      return row(
+        <ObjectTree
+          name={'OwnerHistory'}
+          obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
+        />,
+        null,
+        serial
+      );
     }
-    break;
-  case 'OwnerHistory': {
-    return row(<ObjectTree
-               name = {'OwnerHistory'}
-               obj = {propMgr.getItemProperties(0, parseInt(value['value']), true)}/>,
-               null,
-               serial);
-  }
-  case 'ObjectPlacement': {
-    return row(<ObjectTree
-               name = {'ObjectPlacement'}
-               obj = {propMgr.getItemProperties(0, parseInt(value['value']), true)}/>,
-               null,
-               serial);
-  }
-  case 'RefLatitude':
-    return row('Latitude', dms(deref(value[0]), deref(value[1]), deref(value[2])), serial);
-  case 'RefLongitude':
-    return row('Longitude', dms(deref(value[0]), deref(value[1]), deref(value[2])), serial);
-  case 'Elevation': ;// fallthrough
-  case 'RefElevation':
-    return row('Elevation', deref(value), serial);
-  default:
-    return row(key, JSON.stringify(value, '  '), serial);
+    case 'ObjectPlacement': {
+      return row(
+        <ObjectTree
+          name={'ObjectPlacement'}
+          obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
+          style={{ border: '1px solid lightgrey' }}
+        />,
+        null,
+        serial
+      );
+    }
+    case 'RefLatitude':
+      return row(
+        'Latitude',
+        dms(deref(value[0]), deref(value[1]), deref(value[2])),
+        serial
+      );
+    case 'RefLongitude':
+      return row(
+        'Longitude',
+        dms(deref(value[0]), deref(value[1]), deref(value[2])),
+        serial
+      );
+    case 'Elevation': // fallthrough
+    case 'RefElevation':
+      return row('Elevation', deref(value), serial);
+    default:
+      return row(key, JSON.stringify(value, '  '), serial);
   }
 };
 
-
-const ItemProperties = ({viewer, element}) => {
+const ItemProperties = ({ viewer, element }) => {
   const props = element; //viewer.getProperties(0, element.expressID);
   let serial = 0;
+  console.log('element', element);
   return (
-    <table>
-      <tbody>
-      {
-        Object.keys(props).map(
-          key => prettyProps(viewer, element, key, props, serial++)
-        )
-      }
-      </tbody>
+    <table
+      style={{
+        fontFamily: 'Helvetica',
+        fontSize: 20,
+
+        marginTop: 40,
+      }}
+    >
+      {Object.keys(props).map((key) =>
+        prettyProps(viewer, element, key, props, serial++)
+      )}
     </table>
   );
 };
 
-const isTypeValue = obj => {
+const isTypeValue = (obj) => {
   return obj['type'] != null && obj['value'] != null;
 };
 
-
-const typeValue = obj => {
+const typeValue = (obj) => {
   return `${obj['value']}`;
 };
 
-
-const ObjectTree = ({name, obj}) => {
+const ObjectTree = ({ name, obj }) => {
   let i = 0;
   if (obj === undefined || obj === null) return null;
   const isObj = typeof obj === 'object';
-  //console.log('isObj: ', isObj, obj, typeof obj);
   return (
-    <TreeItem nodeId={''+i} label = { isObj ? `${name}` : `${obj}` }>
-      {
-        isObj ? (
-          isTypeValue(obj) ?
-            typeValue(obj) : Object.keys(obj).map(
-              child => <ObjectTree
-                         name = {child}
-                         obj = {obj[child]}
-                         key = {i++} />))
-          : null
-      }
-    </TreeItem>);
+    <TreeItem nodeId={'' + i} label={isObj ? `${name}` : `${obj}`}>
+      {isObj
+        ? isTypeValue(obj)
+          ? typeValue(obj)
+          : Object.keys(obj).map((child) => (
+              <ObjectTree name={child} obj={obj[child]} key={i++} />
+            ))
+        : null}
+    </TreeItem>
+  );
 };
-
 
 export default ItemProperties;
