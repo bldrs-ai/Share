@@ -1,12 +1,11 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
-
 import ItemProperties from './ItemProperties';
 
 
 const useStyles = makeStyles((theme) => ({
-  contextualMenu: {
+  itemPanel: {
     width: 240,
     height: 300,
     border: 'none',
@@ -17,19 +16,21 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     top: 152,
     right: 20,
-    '@media (max-width: 900px)': {
-      height: '50%',
-      top: 140,
-      // width: 400,
-      left: 62,
-    },
+    height: 'auto',
+    position: 'absolute',
   },
   paper: {
+    position: 'absolute',
+    top: '0px',
+    right: '0px',
     display: 'flex',
-    overflow: 'auto',
     flexDirection: 'column',
     height: '50px',
     width: '160px',
+    minHeight: '20%',
+    width: 'auto',
+    height: 'auto',
+    overflow: 'auto',
   },
 }));
 
@@ -38,23 +39,11 @@ const ItemPanel = ({viewer, element}) => {
   const classes = useStyles();
   return (
     <div
-      className={classes.contextualMenu}
-      style={{
-        height: 'auto',
-        position: 'absolute',
-      }}
+      className={classes.itemPanel}
     >
       <Paper
         elevation={3}
         className={classes.paper}
-        style={{
-          position: 'absolute',
-          width: 'auto',
-          height: 'auto',
-          top: '0px',
-          right: '0px',
-          minHeight: '20%',
-        }}
       >
         <ItemProperties
           viewer = {viewer}
