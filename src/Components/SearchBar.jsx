@@ -4,7 +4,7 @@ import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
 import Search from '../assets/Search.svg';
-import Hamburger from '../assets/Hamburger.svg';
+import TreeIcon from '../assets/Tree.svg';
 
 const useStyles = makeStyles((theme) => ({
   root: {
@@ -60,7 +60,7 @@ export default function SearchBar({
         onClick={onClickMenu}
         disabled={disabled}
       >
-        <Hamburger style={{ width: 20, height: 20 }} />
+        <TreeIcon style={{ width: 20, height: 20 }} />
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}

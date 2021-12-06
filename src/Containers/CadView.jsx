@@ -339,13 +339,6 @@ const CadView = () => {
         id='property-viewer-container'
         className={classes.propertyViewContainer}
       ></div>
-      <SideMenu
-        title={'Properties'}
-        open={showItemPanel}
-        onClose={() => setShowItemPanel(false)}
-        anchor={'right'}
-        content={<ItemProperties viewer={viewer} element={selectedElement} />}
-      />
       <div index={{ zIndex: 100 }}>
         <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
         <SnackBarMessage
@@ -388,11 +381,11 @@ const CadView = () => {
               />
             ) : null}
           </div>
-          {/* <div>
+          <div>
             {showItemPanel ? (
               <ItemPanel viewer={viewer} element={selectedElement} />
             ) : null}
-          </div> */}
+          </div>
         </div>
       </div>
     </div>
