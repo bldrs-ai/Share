@@ -7,10 +7,10 @@
 <path d="M11.681 54.9802L10.7126 12.0017" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M54.354 1L52.3144 1.4382" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M54.2574 11.8968L54.354 1" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
-<path d="M45 2V12H55V1L45 2Z" fill="#494747"/>
+<path d="M45 2V12H55V1L45 2Z" fill="#7D7D7D"/>
 <path d="M54.1628 12H11L11.9922 55L74.0154 53L75 27.5V1H54.1628L54.1628 12Z" fill="#C4C4C4"/>
 <path d="M10.7126 12.0017L54.2574 11.8968" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M54.2574 11.8968L54.354 1" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
-<path d="M10.2857 12L0 13L1.71429 55H12L10.2857 12Z" fill="#494747"/>
+<path d="M10.2857 12L0 13L1.71429 55H12L10.2857 12Z" fill="#7D7D7D"/>
 <path d="M54.5 12.5H10L11.5 55L74.5 53V1H54.5V12.5Z" stroke="#494747" stroke-width="2"/>
 </svg>

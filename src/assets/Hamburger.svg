@@ -1,4 +1,6 @@
 <svg width="47" height="49" viewBox="0 0 47 49" fill="none" xmlns="http://www.w3.org/2000/svg">
+<path d="M1 0.907501L46.4173 0.450928" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
+<path d="M1 0.907501L46.4173 0.450928" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M46 19.5L1.5 19V30L46 30.5V19.5Z" fill="#C4C4C4" stroke="black" stroke-width="0.1"/>
 <path d="M45.5 37L1.5 36.5V47L45.5 48.154V37Z" fill="#C4C4C4" stroke="black" stroke-width="0.1"/>
 <path d="M1 12V1L46.5 0.5L46 12H1Z" fill="#C4C4C4"/>
@@ -97,4 +99,7 @@
 <path d="M1.47998 36.4079L45.7696 37.1427" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M4.5 34L1.5 36.5L45.5 37L44 34.5L4.5 34Z" fill="#7D7D7D" stroke="black" stroke-width="0.3" stroke-linejoin="round"/>
 <path d="M4 18.5L1.5 19L46 19.5L44.5 18.5H4Z" fill="#7D7D7D" stroke="black" stroke-width="0.1" stroke-linejoin="round"/>
+<path d="M1.5 11.5V1.49454L46 1.00552V11.5H1.5Z" stroke="#494747"/>
+<path d="M1.5 20H45.5V30H1.5V20Z" stroke="#494747"/>
+<path d="M45.5 37L1.5 36.5V47L45.5 48V37Z" stroke="#494747"/>
 </svg>
