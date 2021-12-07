@@ -43,6 +43,7 @@ const LoginMenu = () => {
 
       <Menu
         id='menu-appbar'
+        elevation={2}
         anchorEl={anchorEl}
         anchorOrigin={{
           vertical: 'top',

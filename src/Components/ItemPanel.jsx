@@ -3,7 +3,6 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import ItemProperties from './ItemProperties';
 
-
 const useStyles = makeStyles((theme) => ({
   itemPanel: {
     width: 300,
@@ -29,19 +28,26 @@ const useStyles = makeStyles((theme) => ({
     width: 400,
     overflow: 'auto',
   },
+  panelTitle: {
+    fontFamily: 'Helvetica',
+    fontSize: 20,
+    fontWeight:600,
+    marginTop: 10,
+    marginBottom:10,
+    color: '#D8D8D8',
+  },
 }));
 
 
 const ItemPanel = ({viewer, element}) => {
   const classes = useStyles();
   return (
-    <div
-      className={classes.itemPanel}
-    >
+    <div className={classes.itemPanel}>
       <Paper
         elevation={3}
         className={classes.paper}
       >
+        <div className = {classes.panelTitle}>Properties</div>
         <ItemProperties
           viewer = {viewer}
           element = {element} />

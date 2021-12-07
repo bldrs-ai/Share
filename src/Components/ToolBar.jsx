@@ -16,17 +16,17 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '20px',
   },
   toolBar:{
-            borderBottom: '1px solid 	#696969',
-            backgroundColor: '#D8D8D8',
-            display: 'flex',
-            justifyContent: 'space-between',
+    borderBottom: '1px solid 	#696969',
+    backgroundColor: '#D8D8D8',
+    display: 'flex',
+    justifyContent: 'space-between',
   },
   logoWrapper:{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'flex-start',
-              alignItems: 'center',
-              width: '120px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    width: '120px',
   }
 }));
 
