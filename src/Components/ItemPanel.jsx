@@ -6,7 +6,7 @@ import ItemProperties from './ItemProperties';
 const useStyles = makeStyles((theme) => ({
   itemPanel: {
     width: 300,
-    height: 300,
+    height: 'auto',
     border: 'none',
     marginLeft: '24px',
     display: 'flex',
@@ -34,6 +34,7 @@ const useStyles = makeStyles((theme) => ({
     fontWeight:600,
     marginTop: 10,
     marginBottom:10,
+    marginLeft:10,
     color: '#D8D8D8',
   },
 }));
