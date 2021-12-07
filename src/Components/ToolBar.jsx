@@ -8,6 +8,7 @@ import LoginMenu from './LoginMenu';
 import Logo from '../assets/Logo.svg';
 import Folder from '../assets/Folder.svg';
 
+
 const useStyles = makeStyles((theme) => ({
   title: {
     flexGrow: 1,
@@ -30,7 +31,7 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const ToolBar = ({ fileOpen, onClickShare }) => {
+const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
   const classes = useStyles();
   return (
     <AppBar
@@ -72,6 +73,30 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             />
           </IconButton>
         </div>
+
+       <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+          // border:'1px solid gray'
+         }}>
+        <div
+          style={{
+          height:18,
+          fontFamily: 'Helvetica',
+          fontSize: 14,
+          fontWeight: 200,
+          color:'grey',
+          cursor:'pointer',
+          borderBottom:'1px solid #737373'
+         }}
+        onClick = {onClickAbout}
+        >
+          ABOUT
+        </div>
+
         <div
           style={{
             display: 'flex',
@@ -84,7 +109,9 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
         >
           {<LoginMenu />}
         </div>
+      </div>
       </Toolbar>
+
     </AppBar>
   );
 };

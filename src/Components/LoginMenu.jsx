@@ -57,8 +57,8 @@ const LoginMenu = () => {
             }
           }}
       >
-        <MenuItem style = {{fontSize: 16,fontFamily:'Helvetica' }}>Version: {PkgJson.version}</MenuItem>
-        <MenuItem style = {{fontSize: 16,fontFamily:'Helvetica' }}> <a href = {'https://github.com/buildrs/Share'}>Github</a></MenuItem>
+        <MenuItem style = {{fontSize: 16,fontFamily:'Helvetica' }}> <a href = {'https://github.com/buildrs/Share'}>Repository</a></MenuItem>
+        <MenuItem style = {{fontSize: 10,fontFamily:'Helvetica', color:'gray' }}>Version: {PkgJson.version}</MenuItem>
       </Menu>
     </div>
   );

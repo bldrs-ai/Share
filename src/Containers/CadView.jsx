@@ -5,6 +5,7 @@ import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
 import MenuButton from '../Components/MenuButton';
 import ItemPanel from '../Components/ItemPanel';
+import AboutPanel from '../Components/AboutPanel';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
@@ -12,17 +13,12 @@ import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils';
 import { Color } from 'three';
-import SideMenu from '../Components/SideMenu';
-import ItemProperties from '../Components/ItemProperties';
-import Hamburger from '../assets/Hamburger.svg';
-import Search from '../assets/Search.svg';
+
 
 const debug = 0;
+const PANEL_TOP = 84;
 
 const useStyles = makeStyles((theme) => ({
-  root: {
-    flexGrow: 1,
-  },
   menuToolbarContainer: {
     width: '100%',
     display: 'flex',
@@ -32,68 +28,14 @@ const useStyles = makeStyles((theme) => ({
       marginTop: '40px',
     },
   },
-  elementsButton: {
-    position: 'absolute',
-    top: 80,
-    right: 18,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  treeButton: {
-    position: 'absolute',
-    top: 140,
-    left: 30,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  searchButton: {
-    position: 'absolute',
-    top: 80,
-    left: 30,
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    flexGrow: 1,
-    color: 'WhiteSmoke',
-    fontSize: 20,
-    marginRight: '20px',
-  },
-  shareContainer: {
-    width: 540,
-    height: 30,
-    paddingLeft: 10,
-    color: 'aqua',
-    border: '1px solid aqua',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    position: 'absolute',
-    right: 80,
-    top: 86,
-  },
   searchContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: 20,
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    position: 'absolute',
-    left: 20,
-    top: 84,
-  },
-  paper: {
-    display: 'flex',
-    overflow: 'auto',
-    flexDirection: 'column',
-    height: '50px',
-    width: '160px',
   },
   viewContainer: {
     position: 'absolute',
@@ -105,11 +47,22 @@ const useStyles = makeStyles((theme) => ({
     height: '100vh',
     margin: 'auto',
   },
-  propertyViewContainer: {
+  itemPanelToggleButton: {
     position: 'absolute',
-    top: '100px',
-    right: '50px',
-    width: '400px',
+    top: `${PANEL_TOP}px`,
+    right: '20px',
+  },
+  aboutPanelContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: 0,
+    right: 0,
+    minWidth: '200px',
+    maxWidth: '500px',
+    width: '100%',
+    margin: '0em auto',
+    border: 'none',
+    zIndex:1000,
   },
 }));
 
@@ -130,6 +83,7 @@ const CadView = () => {
   const [loadingMessage, setLoadingMessage] = useState();
   const onClickShare = () => setShowShare(!showShare);
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
+  const [showAbout, setShowAbout] = useState(true)
 
   const clearSearch = () => {
     setSelectedElements([]);
@@ -327,28 +281,28 @@ const CadView = () => {
     viewerContainer.appendChild(fileInput);
     fileInput.click();
   };
+  const onClickAbout = () => {
+    console.log('about is clicked')
+  };
 
   let isLoaded = Object.keys(rootElement).length === 0;
-  let isLoadedElement = Object.keys(selectedElement).length === 0;
+  let isItemSelected = Object.keys(selectedElement).length === 0;
+    console.log('isItemSelected', isItemSelected)
 
   return (
-    <div>
+    <div style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
       <div style={{ zIndex: 0 }}>
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
-      <div
-        id='property-viewer-container'
-        className={classes.propertyViewContainer}
-      ></div>
-      <div index={{ zIndex: 100 }}>
-        <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} />
+      <div style={{ zIndex: 100 }}>
+        <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} onClickAbout = {()=>setShowAbout(!showAbout)} />
         <SnackBarMessage
           message={loadingMessage}
           open={isLoading}
           type={'info'}
         />
-        {showSearchBar && (
-          <div className={classes.searchContainer}>
+        <div className={classes.searchContainer}>
+          {showSearchBar && (
             <SearchBar
               onSearch={onSearch}
               onSearchModify={onSearchModify}
@@ -356,38 +310,25 @@ const CadView = () => {
               disabled={isLoaded}
               open={showNavPanel}
             />
-          </div>
-        )}
-        <div className={classes.elementsButton}>
-          {isLoadedElement ? null : (
-            <MenuButton
-              onClick={() => setShowItemPanel(!showItemPanel)}
-              disabled={isLoadedElement}
-              open={showItemPanel}
-            />
           )}
         </div>
-
-        <div className={classes.menuToolbarContainer}>
-          <div>
-            {showNavPanel ? (
-              <NavPanel
-                viewer={viewer}
-                element={rootElement}
-                selectedElements={selectedElements}
-                defaultExpandedElements={defaultExpandedElements}
-                expandedElements={expandedElements}
-                onElementSelect={onElementSelect}
-                setExpandedElements={setExpandedElements}
-              />
-            ) : null}
-          </div>
-          <div>
-            {showItemPanel ? (
-              <ItemPanel viewer={viewer} element={selectedElement} />
-            ) : null}
-          </div>
+        <div className={classes.itemPanelToggleButton}>
+          <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
         </div>
+        <div className={classes.menuToolbarContainer}>
+          {showNavPanel &&
+            <NavPanel
+              viewer={viewer}
+              element={rootElement}
+              selectedElements={selectedElements}
+              defaultExpandedElements={defaultExpandedElements}
+              expandedElements={expandedElements}
+              onElementSelect={onElementSelect}
+              setExpandedElements={setExpandedElements}
+            />}
+        </div>
+        <div>{showItemPanel && <ItemPanel viewer={viewer} element={selectedElement} />}</div>
+        <div className={classes.aboutPanelContainer}>{showAbout && <AboutPanel />}</div>
       </div>
     </div>
   );
