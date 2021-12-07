@@ -98,7 +98,10 @@ const NavTree = ({
         ref={ref}
       >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} className={classes.iconContainer}>
+        <div onClick={handleExpansionClick} className={classes.iconContainer}
+             style={{
+              marginLeft:8,
+            }}>
           {icon}
         </div>
         <Typography onClick={handleSelectionClick} className={classes.label}>
@@ -112,6 +115,7 @@ const NavTree = ({
               fontFamily: 'helvetica',
               fontWeight: 600,
               color: '#696969',
+              marginLeft:8,
             }}
           >
             {label}

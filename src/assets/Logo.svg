@@ -83,4 +83,11 @@
 <path d="M1 11L32 10" stroke="black" stroke-width="0.24"/>
 <path d="M350 134V67" stroke="black" stroke-width="0.24"/>
 <path d="M256 134H255" stroke="black" stroke-width="0.24"/>
+<path d="M57 11L31.5 10.5L32 122L57 118.5V11Z" stroke="#737373"/>
+<path d="M86.5 65.5H63V119L86.5 117V65.5Z" stroke="#737373"/>
+<path d="M151 8L123.5 5L124 127L151 124V8Z" stroke="#737373"/>
+<path d="M223.5 67.5V133L199.5 135.5V67.5H223.5Z" stroke="#737373"/>
+<path d="M228 132.5V1L248.5 4.5V67H236V131.5L228 132.5Z" stroke="#737373"/>
+<path d="M248.5 67H276V99.5L255.5 98.75V101.5L276 102.5V135L257 134V112H254V134L236.5 132.5" stroke="#737373"/>
+<path d="M329.5 67H287L286 112L307 113V115.5L286 114.5L285.5 136L329.5 138V93.5H308V91H329.5V67Z" stroke="#737373"/>
 </svg>

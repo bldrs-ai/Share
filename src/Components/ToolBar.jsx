@@ -8,6 +8,7 @@ import LoginMenu from './LoginMenu';
 import Logo from '../assets/Logo.svg';
 import Folder from '../assets/Folder.svg';
 
+
 const useStyles = makeStyles((theme) => ({
   title: {
     flexGrow: 1,
@@ -15,47 +16,57 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 20,
     marginRight: '20px',
   },
+  toolBar:{
+    borderBottom: '1px solid 	#696969',
+    backgroundColor: '#D8D8D8',
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+  logoWrapper:{
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    width: '120px',
+  },
+  rightContainer:{
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  about:{
+    height: 18,
+    fontFamily: 'Helvetica',
+    fontSize: 14,
+    fontWeight: 200,
+    color: 'grey',
+    cursor: 'pointer',
+    borderBottom: '1px solid #737373'
+  },
+  profile: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    position: 'relative',
+    left: '10px',
+  }
 }));
 
-const ToolBar = ({ fileOpen, onClickShare }) => {
+const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
   const classes = useStyles();
   return (
     <AppBar
       elevation={0}
       position='absolute'
       color='primary'
-      style={{
-        position: 'absolute',
-      }}
-    >
-      <Toolbar
-        variant='regular'
-        style={{
-          borderBottom: '1px solid 	#696969',
-          backgroundColor: '#D8D8D8',
-          display: 'flex',
-          justifyContent: 'space-between',
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            width: '120px',
-          }}
-        >
+      style={{ position: 'absolute'}}>
+      <Toolbar variant='regular' className={classes.toolBar} >
+        <div className={classes.logoWrapper} >
           <Typography variant='h6' className={classes.title}>
-            {/* BLDRS */}
-            <Logo
-              style={{
-                width: '120px',
-                height: '50px',
-              }}
-            />
+            <Logo style={{ width: '120px', height: '50px'}}/>
           </Typography>
-
           <IconButton
             edge='start'
             color='secondary'
@@ -63,46 +74,13 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             onClick={fileOpen}
             style={{ marginLeft: 20 }}
           >
-            <Folder
-              style={{
-                width: '40px',
-                height: '40px',
-              }}
-            />
+            <Folder style={{width: '40px', height: '40px'}}/>
           </IconButton>
         </div>
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            position: 'relative',
-          }}
-        >
-          {/*<IconButton
-            edge='start'
-            color='secondary'
-            aria-label='menu'
-            style={{
-              position: 'relative',
-              right: 10,
-              width: 25,
-              height: 25,
-            }}
-          >
-            {<CommentIcon
-              style={{
-                width: 20,
-                height: 20,
-                color: 'whiteSmoke',
-              }}
-              />
-             </IconButton>
-          */}
-          {/*<ShareButton name={'Share'} onClick={onClickShare} />*/}
-          {<LoginMenu />}
-        </div>
+       <div className = {classes.rightContainer}>
+        <div className = {classes.about} onClick = {onClickAbout}>ABOUT</div>
+        <div className = {classes.profile}>{<LoginMenu />}</div>
+      </div>
       </Toolbar>
     </AppBar>
   );

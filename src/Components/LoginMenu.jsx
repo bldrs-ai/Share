@@ -5,10 +5,19 @@ import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
 import PkgJson from '../../package.json';
 import Person from '../assets/Person.svg';
+import { makeStyles } from '@mui/styles';
+
+const useStyles = makeStyles(() => ({
+  MenuItem: {
+    fontSize: 20,
+    fontFamily:'Helvetica',
+  },
+}));
 
 const LoginMenu = () => {
   const [anchorEl, setAnchorEl] = React.useState(null);
   const open = Boolean(anchorEl);
+  const classes = useStyles();
   const handleClose = () => {
     setAnchorEl(null);
   };
@@ -34,20 +43,21 @@ const LoginMenu = () => {
 
       <Menu
         id='menu-appbar'
+        elevation={2}
         anchorEl={anchorEl}
         anchorOrigin={{
           vertical: 'top',
-          horizontal: 'right',
-        }}
-        keepMounted
-        transformOrigin={{
-          vertical: 'top',
-          horizontal: 'right',
+          horizontal: 'left',
         }}
         open={open}
         onClose={handleClose}
+        PaperProps={{
+            style: {
+              transform: 'translateX(-70px) translateY(0pc)',
+            }
+          }}
       >
-        <MenuItem onClick={handleClose}>Version: {PkgJson.version}</MenuItem>
+        <MenuItem>Version: {PkgJson.version}</MenuItem>
       </Menu>
     </div>
   );

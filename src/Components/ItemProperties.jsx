@@ -126,8 +126,6 @@ const ItemProperties = ({ viewer, element }) => {
       style={{
         fontFamily: 'Helvetica',
         fontSize: 20,
-
-        marginTop: 40,
       }}
     >
       <tbody>

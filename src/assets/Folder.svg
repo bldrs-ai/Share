@@ -12,4 +12,5 @@
 <path d="M10.7126 12.0017L54.2574 11.8968" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M54.2574 11.8968L54.354 1" stroke="black" stroke-width="0.24" stroke-linecap="round"/>
 <path d="M10.2857 12L0 13L1.71429 55H12L10.2857 12Z" fill="#7D7D7D"/>
+<path d="M54.5 12.5H10L11.5 55L74.5 53V1H54.5V12.5Z" stroke="#737373"/>
 </svg>
