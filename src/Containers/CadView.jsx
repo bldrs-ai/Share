@@ -328,7 +328,9 @@ const CadView = () => {
             />}
         </div>
         <div>{showItemPanel && <ItemPanel viewer={viewer} element={selectedElement} />}</div>
-        <div className={classes.aboutPanelContainer}>{showAbout && <AboutPanel />}</div>
+        <div className={classes.aboutPanelContainer}>
+          {showAbout && <AboutPanel close = {()=>setShowAbout(false)} />}
+        </div>
       </div>
     </div>
   );

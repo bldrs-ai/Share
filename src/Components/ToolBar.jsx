@@ -28,6 +28,29 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'flex-start',
     alignItems: 'center',
     width: '120px',
+  },
+  rightContainer:{
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  about:{
+    height: 18,
+    fontFamily: 'Helvetica',
+    fontSize: 14,
+    fontWeight: 200,
+    color: 'grey',
+    cursor: 'pointer',
+    borderBottom: '1px solid #737373'
+  },
+  profile: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+    position: 'relative',
+    left: '10px',
   }
 }));
 
@@ -38,26 +61,12 @@ const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
       elevation={0}
       position='absolute'
       color='primary'
-      style={{
-        position: 'absolute',
-      }}
-    >
-      <Toolbar
-        variant='regular'
-        className={classes.toolBar}
-      >
-        <div
-        className={classes.logoWrapper}
-        >
+      style={{ position: 'absolute'}}>
+      <Toolbar variant='regular' className={classes.toolBar} >
+        <div className={classes.logoWrapper} >
           <Typography variant='h6' className={classes.title}>
-            <Logo
-              style={{
-                width: '120px',
-                height: '50px',
-              }}
-            />
+            <Logo style={{ width: '120px', height: '50px'}}/>
           </Typography>
-
           <IconButton
             edge='start'
             color='secondary'
@@ -65,53 +74,14 @@ const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
             onClick={fileOpen}
             style={{ marginLeft: 20 }}
           >
-            <Folder
-              style={{
-                width: '40px',
-                height: '40px',
-              }}
-            />
+            <Folder style={{width: '40px', height: '40px'}}/>
           </IconButton>
         </div>
-
-       <div
-        style={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'flex-start',
-          alignItems: 'center',
-          // border:'1px solid gray'
-         }}>
-        <div
-          style={{
-          height:18,
-          fontFamily: 'Helvetica',
-          fontSize: 14,
-          fontWeight: 200,
-          color:'grey',
-          cursor:'pointer',
-          borderBottom:'1px solid #737373'
-         }}
-        onClick = {onClickAbout}
-        >
-          ABOUT
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            position: 'relative',
-            left:10,
-          }}
-        >
-          {<LoginMenu />}
-        </div>
+       <div className = {classes.rightContainer}>
+        <div className = {classes.about} onClick = {onClickAbout}>ABOUT</div>
+        <div className = {classes.profile}>{<LoginMenu />}</div>
       </div>
       </Toolbar>
-
     </AppBar>
   );
 };

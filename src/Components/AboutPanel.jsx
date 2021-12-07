@@ -2,6 +2,7 @@ import React from 'react';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import ItemProperties from './ItemProperties';
+import Close from '../assets/Close.svg'
 
 
 const useStyles = makeStyles((theme) => ({
@@ -15,12 +16,21 @@ const useStyles = makeStyles((theme) => ({
       marginTop: 0
     }
   },
+  close:{
+    float:'right',
+    cursor:'pointer',
+    "& svg": {
+        width:'20px',
+        height:'20px',
+    },
+  }
 }));
 
-const AboutPanel = () => {
+const AboutPanel = ({close}) => {
   const classes = useStyles();
   return (
       <Paper elevation={3} className={classes.paper}>
+        <div className = {classes.close}onClick = {close}><Close/></div>
         <h1>About</h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFC files.
             We are just getting started!  Stay tuned for the upcoming MVP release.</p>
