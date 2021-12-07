@@ -286,7 +286,6 @@ const CadView = () => {
 
   let isLoaded = Object.keys(rootElement).length === 0;
   let isItemSelected = Object.keys(selectedElement).length === 0;
-    console.log('isItemSelected', isItemSelected)
 
   return (
     <div style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
