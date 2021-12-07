@@ -5,18 +5,17 @@ import ItemProperties from './ItemProperties';
 
 const useStyles = makeStyles((theme) => ({
   itemPanel: {
+    position: 'absolute',
+    display: 'flex',
+    top: 140,
+    right: 20,
     width: 300,
     height: 'auto',
     border: 'none',
     marginLeft: '24px',
-    display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
     alignItems: 'center',
-    top: 140,
-    right: 20,
-    height: 'auto',
-    position: 'absolute',
   },
   paper: {
     position: 'absolute',
