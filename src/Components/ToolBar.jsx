@@ -15,6 +15,19 @@ const useStyles = makeStyles((theme) => ({
     fontSize: 20,
     marginRight: '20px',
   },
+  toolBar:{
+            borderBottom: '1px solid 	#696969',
+            backgroundColor: '#D8D8D8',
+            display: 'flex',
+            justifyContent: 'space-between',
+  },
+  logoWrapper:{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'flex-start',
+              alignItems: 'center',
+              width: '120px',
+  }
 }));
 
 const ToolBar = ({ fileOpen, onClickShare }) => {
@@ -30,24 +43,12 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
     >
       <Toolbar
         variant='regular'
-        style={{
-          borderBottom: '1px solid 	#696969',
-          backgroundColor: '#D8D8D8',
-          display: 'flex',
-          justifyContent: 'space-between',
-        }}
+        className={classes.toolBar}
       >
         <div
-          style={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-            width: '120px',
-          }}
+        className={classes.logoWrapper}
         >
           <Typography variant='h6' className={classes.title}>
-            {/* BLDRS */}
             <Logo
               style={{
                 width: '120px',
