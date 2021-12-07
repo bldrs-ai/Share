@@ -6,7 +6,7 @@ import ItemProperties from './ItemProperties';
 
 const useStyles = makeStyles((theme) => ({
   itemPanel: {
-    width: 240,
+    width: 300,
     height: 300,
     border: 'none',
     marginLeft: '24px',
@@ -14,22 +14,19 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'column',
     justifyContent: 'space-around',
     alignItems: 'center',
-    top: 152,
+    top: 140,
     right: 20,
     height: 'auto',
     position: 'absolute',
   },
   paper: {
     position: 'absolute',
-    top: '0px',
-    right: '0px',
+    top: 0,
+    right: 0,
     display: 'flex',
     flexDirection: 'column',
-    height: '50px',
-    width: '160px',
-    minHeight: '20%',
-    width: 'auto',
-    height: 'auto',
+    height: 400,
+    width: 400,
     overflow: 'auto',
   },
 }));

@@ -78,29 +78,9 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
             justifyContent: 'flex-start',
             alignItems: 'center',
             position: 'relative',
+            left:10,
           }}
         >
-          {/*<IconButton
-            edge='start'
-            color='secondary'
-            aria-label='menu'
-            style={{
-              position: 'relative',
-              right: 10,
-              width: 25,
-              height: 25,
-            }}
-          >
-            {<CommentIcon
-              style={{
-                width: 20,
-                height: 20,
-                color: 'whiteSmoke',
-              }}
-              />
-             </IconButton>
-          */}
-          {/*<ShareButton name={'Share'} onClick={onClickShare} />*/}
           {<LoginMenu />}
         </div>
       </Toolbar>

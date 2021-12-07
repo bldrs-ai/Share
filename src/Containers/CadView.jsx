@@ -35,7 +35,7 @@ const useStyles = makeStyles((theme) => ({
   elementsButton: {
     position: 'absolute',
     top: 80,
-    right: 30,
+    right: 18,
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
