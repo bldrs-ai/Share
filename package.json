@@ -1,11 +1,14 @@
 {
   "name": "builders",
-  "version": "0.1.0-r203",
+  "version": "0.1.0-r204",
   "main": "src/index.jsx",
   "homepage": "https://buildrs.github.io/",
   "scripts": {
-    "build": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json && rm -rf docs ; cp -r public docs ; node config/build.js",
-    "serve": "rm -rf docs ; cp -r public docs ; node config/serve.js",
+    "build": "yarn update-version && yarn clean && yarn update-web-ifc && cp -r public docs && node config/build.js",
+    "clean": "rm -rf docs",
+    "update-version": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",
+    "update-web-ifc": "cp node_modules/web-ifc/web-ifc.wasm public/static/js/",
+    "serve": "node config/serve.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {
@@ -21,8 +24,8 @@
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
     "react-router-dom": "^6.0.2",
-    "three": "^0.132.2",
-    "web-ifc-viewer": "1.0.105",
+    "three": "^0.135",
+    "web-ifc-viewer": "^1.0.106",
     "web-vitals": "^2.1.0"
   },
   "devDependencies": {
@@ -34,6 +37,7 @@
     "@testing-library/react": "^12.1.2",
     "esbuild": "^0.13.14",
     "esbuild-jest": "^0.5.0",
+    "esbuild-plugin-svgr": "^0.0.3",
     "jest": "^27.4.3",
     "jsdom": "^18.0.1",
     "react-test-renderer": "^17.0.2"
