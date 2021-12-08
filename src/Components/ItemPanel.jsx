@@ -2,57 +2,48 @@ import React from 'react';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import ItemProperties from './ItemProperties';
+import Close from '../assets/Close.svg'
 
-const useStyles = makeStyles((theme) => ({
-  itemPanel: {
-    position: 'absolute',
-    display: 'flex',
-    top: 140,
-    right: 20,
-    width: 300,
-    height: 'auto',
-    border: 'none',
-    marginLeft: '24px',
-    flexDirection: 'column',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-  },
+
+const useStyles = makeStyles(() => ({
   paper: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    display: 'flex',
-    flexDirection: 'column',
-    height: 400,
-    width: 400,
+    height: '400px',
+    width: '400px',
     overflow: 'auto',
   },
-  panelTitle: {
+  titleContainer: {
+    display:'flex',
+    flexDirection:'row',
+    justifyContent:'space-between',
+    alignItems:'center'
+  },
+  title: {
     fontFamily: 'Helvetica',
-    fontSize: 20,
+    fontSize: '24px',
     fontWeight:600,
-    marginTop: 10,
-    marginBottom:10,
-    marginLeft:10,
+    marginTop: '10px',
+    marginLeft:'10px',
+    marginBottom:'10px',
     color: '#D8D8D8',
+  },
+  close: {
+    width:'24px',
+    height:'24px',
+    marginRight:'10px',
+    cursor:'pointer'
   },
 }));
 
-
-const ItemPanel = ({viewer, element}) => {
+const ItemPanel = ({viewer, element, close}) => {
   const classes = useStyles();
   return (
-    <div className={classes.itemPanel}>
-      <Paper
-        elevation={3}
-        className={classes.paper}
-      >
-        <div className = {classes.panelTitle}>Properties</div>
-        <ItemProperties
-          viewer = {viewer}
-          element = {element} />
+      <Paper elevation={3} className={classes.paper}>
+        <div className = {classes.titleContainer}>
+          <div className = {classes.title}>Properties</div>
+          <Close className = {classes.close} onClick = {close}/>
+        </div>
+        <ItemProperties viewer = {viewer} element = {element} />
       </Paper>
-    </div>
   );
 };
 

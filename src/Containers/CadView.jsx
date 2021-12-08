@@ -19,11 +19,19 @@ const debug = 0;
 const PANEL_TOP = 84;
 
 const useStyles = makeStyles((theme) => ({
+  pageContainer:{
+    position: 'absolute',
+    top: '0px',
+    left: '0px',
+    width: '100%',
+    height: '100%'
+  },
   menuToolbarContainer: {
     width: '100%',
     display: 'flex',
     justifyContent: 'flex-end',
     marginTop: '10px',
+    border:'1px solid red',
     '@media (max-width: 900px)': {
       marginTop: '40px',
     },
@@ -31,7 +39,7 @@ const useStyles = makeStyles((theme) => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: 20,
+    left: '20px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -52,11 +60,16 @@ const useStyles = makeStyles((theme) => ({
     top: `${PANEL_TOP}px`,
     right: '20px',
   },
+  itemPanelContainer:{
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    right: '20px',
+  },
   aboutPanelContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: 0,
-    right: 0,
+    left: '0px',
+    right: '0px',
     minWidth: '200px',
     maxWidth: '500px',
     width: '100%',
@@ -171,6 +184,7 @@ const CadView = () => {
     setSearchIndex(index);
     setShowSearchBar(true);
   };
+
   const navigate = useNavigate();
 
   // Similar to componentDidMount and componentDidUpdate:
@@ -280,15 +294,11 @@ const CadView = () => {
     viewerContainer.appendChild(fileInput);
     fileInput.click();
   };
-  const onClickAbout = () => {
-    console.log('about is clicked')
-  };
 
   let isLoaded = Object.keys(rootElement).length === 0;
-  let isItemSelected = Object.keys(selectedElement).length === 0;
 
   return (
-    <div style={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%'}}>
+    <div className = {classes.pageContainer}>
       <div style={{ zIndex: 0 }}>
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
@@ -313,19 +323,21 @@ const CadView = () => {
         <div className={classes.itemPanelToggleButton}>
           <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
         </div>
-        <div className={classes.menuToolbarContainer}>
-          {showNavPanel &&
-            <NavPanel
-              viewer={viewer}
-              element={rootElement}
-              selectedElements={selectedElements}
-              defaultExpandedElements={defaultExpandedElements}
-              expandedElements={expandedElements}
-              onElementSelect={onElementSelect}
-              setExpandedElements={setExpandedElements}
-            />}
+        {showNavPanel &&
+          <NavPanel
+            viewer={viewer}
+            element={rootElement}
+            selectedElements={selectedElements}
+            defaultExpandedElements={defaultExpandedElements}
+            expandedElements={expandedElements}
+            onElementSelect={onElementSelect}
+            setExpandedElements={setExpandedElements}
+          />}
+        <div className={classes.itemPanelContainer}>
+          <div>{showItemPanel &&
+            <ItemPanel viewer={viewer} element={selectedElement} close = {()=>setShowItemPanel(false)}/>}
+          </div>
         </div>
-        <div>{showItemPanel && <ItemPanel viewer={viewer} element={selectedElement} />}</div>
         <div className={classes.aboutPanelContainer}>
           {showAbout && <AboutPanel close = {()=>setShowAbout(false)} />}
         </div>
