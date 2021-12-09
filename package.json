@@ -1,6 +1,6 @@
 {
   "name": "builders",
-  "version": "0.1.0-r210",
+  "version": "0.1.0-r212",
   "main": "src/index.jsx",
   "homepage": "https://buildrs.github.io/",
   "scripts": {
@@ -8,7 +8,7 @@
     "new-version": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",
     "copy-web-asm": "cp node_modules/web-ifc/web-ifc.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
-    "serve": "node config/serve.js",
+    "serve": "yarn copy-web-asm && node config/serve.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js"
   },
   "dependencies": {

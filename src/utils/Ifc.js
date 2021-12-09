@@ -6,6 +6,7 @@ function getType(elt, viewer) {
 
 function prettyType(elt, viewer) {
   switch (getType(elt, viewer)) {
+  case 'IFCANNOTATION': return 'Note';
   case 'IFCBEAM': return 'Beam';
   case 'IFCBUILDING': return 'Building';
   case 'IFCBUILDINGSTOREY': return 'Storey';
@@ -48,11 +49,11 @@ function getName(elt) {
 function reifyName(element, viewer) {
   if (element.LongName) {
     if (element.LongName.value) {
-      return element.LongName.value.trim();
+      return decodeIFCString(element.LongName.value.trim());
     }
   } else if (element.Name) {
     if (element.Name.value) {
-      return element.Name.value.trim();
+      return decodeIFCString(element.Name.value.trim());
     }
   }
   return prettyType(element, viewer) + '';
@@ -60,14 +61,30 @@ function reifyName(element, viewer) {
 
 
 function getDescription(element) {
-  return getValueOrUndefined(element, 'Description');
+  const val = getValueOrUndefined(element, 'Description');
+  return val ? decodeIFCString(val) : val;
+}
+
+
+// https://github.com/tomvandig/web-ifc/issues/58#issuecomment-870344068
+function decodeIFCString (ifcString) {
+  const ifcUnicodeRegEx = /\\X2\\(.*?)\\X0\\/uig;
+  let resultString = ifcString;
+  let match = ifcUnicodeRegEx.exec (ifcString);
+  while (match) {
+    const unicodeChar = String.fromCharCode (parseInt (match[1], 16));
+    resultString = resultString.replace (match[0], unicodeChar);
+    match = ifcUnicodeRegEx.exec (ifcString);
+  }
+  return resultString;
 }
 
 
 export {
+  decodeIFCString,
+  getDescription,
+  getName,
   getType,
   prettyType,
-  getName,
-  reifyName,
-  getDescription
+  reifyName
 }
