@@ -3,8 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
-import MenuButton from '../Components/MenuButton';
-import ItemPanel from '../Components/ItemPanel';
+import ItemPanelButton from '../Components/ItemPanel';
 import ShortCutsPanel from '../Components/ShortcutsPanel.jsx';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
@@ -55,16 +54,6 @@ const useStyles = makeStyles((theme) => ({
     width: '100vw',
     height: '100vh',
     margin: 'auto',
-  },
-  itemPanelToggleButton: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    right: '20px',
-  },
-  itemPanelContainer:{
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    right: '20px',
   },
   aboutPanelContainer: {
     position: 'absolute',
@@ -337,7 +326,8 @@ const CadView = () => {
       <div style={{ zIndex: 100 }}>
         <ToolBar
           fileOpen={fileOpen}
-          onClickShare={onClickShare}/>
+          onClickShare={onClickShare}
+          offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
           open={isLoading}
@@ -354,9 +344,7 @@ const CadView = () => {
             />
           )}
         </div>
-        <div className={classes.itemPanelToggleButton}>
-          <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
-        </div>
+
         {showNavPanel &&
           <NavPanel
             viewer={viewer}
@@ -368,9 +356,11 @@ const CadView = () => {
             setExpandedElements={setExpandedElements}
           />}
         <div className={classes.itemPanelContainer}>
-          <div>{showItemPanel &&
-            <ItemPanel viewer={viewer} element={selectedElement} close = {()=>setShowItemPanel(false)}/>}
-          </div>
+            <ItemPanelButton
+              viewer={viewer}
+              element={selectedElement}
+              close = {()=>setShowItemPanel(false)}
+              topOffset = {PANEL_TOP}/>
         </div>
         <div className={classes.shortCutPanelContainer}>
           {showShortCuts && <ShortCutsPanel close = {()=>setShowShortCuts(false)} />}
