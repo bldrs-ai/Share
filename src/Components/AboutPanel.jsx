@@ -5,9 +5,10 @@ import ItemProperties from './ItemProperties';
 import Close from '../assets/Close.svg'
 
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles({
   panel: {
     position: 'absolute',
+    top: (props) => props.offsetTop,
     left: 0,
     right: 0,
     width: '500px',
@@ -29,24 +30,24 @@ const useStyles = makeStyles((theme) => ({
         height:'20px',
     },
   }
-}));
+});
 
 
-const AboutIcon = () => {
-  const [open, setOpen] = React.useState(true);
+const AboutIcon = ({offsetTop}) => {
+  const [open, setOpen]=React.useState(true);
   return (
     <div onClick={() => { setOpen(!open) }}>
-      About {open && <AboutPanel openToggle={()=>{setOpen(!open)}}/>}
+      About {open && <AboutPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
     </div>);
 };
 
 
-const AboutPanel = ({openToggle}) => {
-  const classes = useStyles();
+const AboutPanel = ({openToggle, offsetTop}) => {
+  const classes = useStyles({offsetTop:offsetTop});
 
   return (
     <Paper elevation={3} className={classes.panel}>
-      <div className = {classes.closeButton} onClick={openToggle}><Close/></div>
+      <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
       <h1>About</h1>
       <p><strong>BLDRS</strong> is a collaborative integration environment for IFC files.
         We are just getting started!  Stay tuned for the upcoming MVP release.</p>

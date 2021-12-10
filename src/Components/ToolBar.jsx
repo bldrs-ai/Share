@@ -55,7 +55,7 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const ToolBar = ({ fileOpen, onClickShare }) => {
+const ToolBar = ({ fileOpen, onClickShare, offsetTop }) => {
   const classes = useStyles();
   return (
     <AppBar
@@ -79,7 +79,7 @@ const ToolBar = ({ fileOpen, onClickShare }) => {
           </IconButton>
         </div>
         <div className = {classes.rightContainer}>
-        <AboutIcon/>
+        <AboutIcon offsetTop = {offsetTop}/>
         <div className = {classes.profile}>{<LoginMenu />}</div>
       </div>
       </Toolbar>
