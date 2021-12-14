@@ -4,8 +4,11 @@
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
-    "build": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json && rm -rf docs ; cp -r public docs ; node config/build.js",
-    "serve": "rm -rf docs ; cp -r public docs ; node config/serve.js",
+    "clean": "rm -rf docs ; cp -r public docs",
+    "new-version": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",
+    "copy-web-asm": "cp node_modules/web-ifc/web-ifc.wasm public/static/js",
+    "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
+    "serve": "yarn copy-web-asm && node config/serve.js",
     "test": "jest"
   },
   "dependencies": {

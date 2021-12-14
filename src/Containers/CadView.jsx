@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
-import MenuButton from '../Components/MenuButton';
-import ItemPanel from '../Components/ItemPanel';
-import AboutPanel from '../Components/AboutPanel';
+import ItemPanelButton from '../Components/ItemPanel';
+import ShortCutsPanel from '../Components/ShortcutsPanel.jsx';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
+import IconGroup from '../Components/IconGroup'
 import gtag from '../utils/gtag.js';
 import SnackBarMessage from '../Components/SnackbarMessage';
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils';
@@ -55,16 +55,6 @@ const useStyles = makeStyles((theme) => ({
     height: '100vh',
     margin: 'auto',
   },
-  itemPanelToggleButton: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    right: '20px',
-  },
-  itemPanelContainer:{
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    right: '20px',
-  },
   aboutPanelContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
@@ -77,6 +67,25 @@ const useStyles = makeStyles((theme) => ({
     border: 'none',
     zIndex:1000,
   },
+  shortCutPanelContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: '0px',
+    right: '0px',
+    minWidth: '200px',
+    maxWidth: '500px',
+    width: '100%',
+    margin: '0em auto',
+    border: 'none',
+    zIndex:1000,
+  },
+  iconGroup:{
+      position: 'absolute',
+      bottom: `${PANEL_TOP}px`,
+      right: '20px',
+      border: 'none',
+      zIndex:1000,
+    },
 }));
 
 const CadView = () => {
@@ -96,7 +105,7 @@ const CadView = () => {
   const [loadingMessage, setLoadingMessage] = useState();
   const onClickShare = () => setShowShare(!showShare);
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
-  const [showAbout, setShowAbout] = useState(true)
+  const [showShortCuts, setShowShortCuts] = useState(false)
 
   const clearSearch = () => {
     setSelectedElements([]);
@@ -225,12 +234,17 @@ const CadView = () => {
     window.onkeydown = handleKeyDown;
 
     // Select items
-    window.ondblclick = async () => {
-      const item = await viewer.IFC.pickIfcItem(true);
-      if (item.modelID === undefined || item.id === undefined) return;
-      const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
-      navigate(path);
-      setSelectedElement(item);
+    window.ondblclick = async (event) => {
+      if (event.target) {
+        console.log('tagName: ', event.target.tagName);
+        if (event.target.tagName == 'CANVAS') {
+          const item = await viewer.IFC.pickIfcItem(true);
+          if (item.modelID === undefined || item.id === undefined) return;
+          const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
+          navigate(path);
+          setSelectedElement(item);
+        }
+      }
     };
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
@@ -295,6 +309,13 @@ const CadView = () => {
     fileInput.click();
   };
 
+  const placeCutPlane = () => {
+    viewer.IFC.unpickIfcItems();
+  };
+  const unSelectItem = () => {
+    viewer.IFC.unpickIfcItems();
+  };
+
   let isLoaded = Object.keys(rootElement).length === 0;
 
   return (
@@ -303,7 +324,10 @@ const CadView = () => {
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
       <div style={{ zIndex: 100 }}>
-        <ToolBar fileOpen={fileOpen} onClickShare={onClickShare} onClickAbout = {()=>setShowAbout(!showAbout)} />
+        <ToolBar
+          fileOpen={fileOpen}
+          onClickShare={onClickShare}
+          offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
           open={isLoading}
@@ -320,9 +344,7 @@ const CadView = () => {
             />
           )}
         </div>
-        <div className={classes.itemPanelToggleButton}>
-          <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
-        </div>
+
         {showNavPanel &&
           <NavPanel
             viewer={viewer}
@@ -334,12 +356,21 @@ const CadView = () => {
             setExpandedElements={setExpandedElements}
           />}
         <div className={classes.itemPanelContainer}>
-          <div>{showItemPanel &&
-            <ItemPanel viewer={viewer} element={selectedElement} close = {()=>setShowItemPanel(false)}/>}
-          </div>
+            <ItemPanelButton
+              viewer={viewer}
+              element={selectedElement}
+              close = {()=>setShowItemPanel(false)}
+              topOffset = {PANEL_TOP}/>
         </div>
-        <div className={classes.aboutPanelContainer}>
-          {showAbout && <AboutPanel close = {()=>setShowAbout(false)} />}
+        <div className={classes.shortCutPanelContainer}>
+          {showShortCuts && <ShortCutsPanel close = {()=>setShowShortCuts(false)} />}
+        </div>
+        <div className={classes.iconGroup}>
+          <IconGroup
+            placeCutPlane = {()=>placeCutPlane()}
+            unSelectItem = {()=>unSelectItem()}
+            toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}
+          />
         </div>
       </div>
     </div>

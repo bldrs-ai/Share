@@ -4,6 +4,7 @@ import AppBar from '@mui/material/AppBar';
 import Typography from '@mui/material/Typography';
 import IconButton from '@mui/material/IconButton';
 import { makeStyles } from '@mui/styles';
+import { AboutIcon } from './AboutPanel';
 import LoginMenu from './LoginMenu';
 import Logo from '../assets/Logo.svg';
 import Folder from '../assets/Folder.svg';
@@ -54,7 +55,7 @@ const useStyles = makeStyles((theme) => ({
   }
 }));
 
-const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
+const ToolBar = ({ fileOpen, onClickShare, offsetTop }) => {
   const classes = useStyles();
   return (
     <AppBar
@@ -77,8 +78,8 @@ const ToolBar = ({ fileOpen, onClickShare, onClickAbout }) => {
             <Folder style={{width: '40px', height: '40px'}}/>
           </IconButton>
         </div>
-       <div className = {classes.rightContainer}>
-        <div className = {classes.about} onClick = {onClickAbout}>ABOUT</div>
+        <div className = {classes.rightContainer}>
+        <AboutIcon offsetTop = {offsetTop}/>
         <div className = {classes.profile}>{<LoginMenu />}</div>
       </div>
       </Toolbar>
