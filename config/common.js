@@ -1,5 +1,3 @@
-import svgrPlugin from 'esbuild-plugin-svgr';
-
 const entry = 'src/index.jsx';
 const buildDir = 'docs';
 const build = {
@@ -17,8 +15,7 @@ const build = {
   format: 'esm',
   sourcemap: true,
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
-  logLevel: 'info',
-  plugins: [svgrPlugin()],
+  logLevel: 'info'
 };
 
 export { build };
