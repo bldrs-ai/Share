@@ -4,7 +4,6 @@ import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
 import ItemPanelButton from '../Components/ItemPanel';
-import ShortCutsPanel from '../Components/ShortcutsPanel_.jsx';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
@@ -60,6 +59,12 @@ const useStyles = makeStyles((theme) => ({
     width: '100vw',
     height: '100vh',
     margin: 'auto',
+  },
+  viewWrapper:{
+    zIndex: 0
+  },
+  menusWrapper:{
+    zIndex: 100
   },
   aboutPanelContainer: {
     position: 'absolute',
@@ -327,11 +332,11 @@ const CadView = () => {
   let isLoaded = Object.keys(rootElement).length === 0;
 
   return (
-    <div className = {classes.pageContainer}>
-      <div className = {classes.viewerContainer}>
+    <div className={classes.pageContainer}>
+      <div className={classes.viewWrapper}>
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
-      <div className={classes.toolBar}>
+      <div className={classes.menusWrapper}>
         <ToolBar
           fileOpen={fileOpen}
           onClickShare={onClickShare}

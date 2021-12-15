@@ -58,7 +58,7 @@ const useStyles = makeStyles({
 
 
 const AboutIcon = ({offsetTop}) => {
-  const [open, setOpen]=React.useState(false);
+  const [open, setOpen]=React.useState(true);
  const classes = useStyles();
   return (
     <div onClick={() => { setOpen(!open) }}>
