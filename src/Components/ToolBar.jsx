@@ -10,12 +10,16 @@ import Logo from '../assets/Logo.svg';
 import Folder from '../assets/Folder.svg';
 
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles({
+  appBar:{
+    position: 'absolute'
+  },
   title: {
-    flexGrow: 1,
+    display: 'flex',
+    justifyContent:'center',
     color: 'WhiteSmoke',
     fontSize: 20,
-    marginRight: '20px',
+    paddingRight:'20px',
   },
   toolBar:{
     borderBottom: '1px solid 	#696969',
@@ -23,12 +27,20 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     justifyContent: 'space-between',
   },
-  logoWrapper:{
+  leftContainer:{
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
+    width: '190px',
+  },
+  logo:{
     width: '120px',
+    height: '40px',
+  },
+  folder:{
+    width: '40px',
+    height: '40px'
   },
   rightContainer:{
     display: 'flex',
@@ -53,34 +65,33 @@ const useStyles = makeStyles((theme) => ({
     position: 'relative',
     left: '10px',
   }
-}));
+});
 
-const ToolBar = ({ fileOpen, onClickShare, offsetTop }) => {
+const ToolBar = ({ fileOpen, offsetTop }) => {
   const classes = useStyles();
   return (
     <AppBar
       elevation={0}
       position='absolute'
       color='primary'
-      style={{ position: 'absolute'}}>
+      className = {classes.appBar}>
       <Toolbar variant='regular' className={classes.toolBar} >
-        <div className={classes.logoWrapper} >
+        <div className={classes.leftContainer} >
           <Typography variant='h6' className={classes.title}>
-            <Logo style={{ width: '120px', height: '50px'}}/>
+            <Logo className = {classes.logo}/>
           </Typography>
           <IconButton
             edge='start'
             color='secondary'
             aria-label='menu'
             onClick={fileOpen}
-            style={{ marginLeft: 20 }}
           >
-            <Folder style={{width: '40px', height: '40px'}}/>
+            <Folder className = {classes.folder}/>
           </IconButton>
         </div>
         <div className = {classes.rightContainer}>
-        <AboutIcon offsetTop = {offsetTop}/>
-        <div className = {classes.profile}>{<LoginMenu />}</div>
+          <AboutIcon offsetTop = {offsetTop}/>
+          <div className = {classes.profile}>{<LoginMenu />}</div>
       </div>
       </Toolbar>
     </AppBar>

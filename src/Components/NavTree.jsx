@@ -4,9 +4,9 @@ import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
 import PropTypes from 'prop-types';
 import clsx from 'clsx';
 import Typography from '@mui/material/Typography';
-import Link from '@mui/material/Link';
 import { reifyName } from '../utils/Ifc';
 import { computeElementPath } from '../utils/TreeUtils';
+
 
 const NavTreePropTypes = {
   /**
@@ -96,15 +96,13 @@ const NavTree = ({
         })}
         onMouseDown={handleMouseDown}
         ref={ref}
+        style = {{width:'160px'}}
       >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} className={classes.iconContainer}
-             style={{
-              marginLeft:8,
-            }}>
+        <div onClick={handleExpansionClick} style={{marginLeft:8,}}>
           {icon}
         </div>
-        <Typography onClick={handleSelectionClick} className={classes.label}>
+        <Typography onClick={handleSelectionClick} >
           <RouterLink
             to={
               pathPrefix +
@@ -113,9 +111,9 @@ const NavTree = ({
             style={{
               textDecoration: 'none',
               fontFamily: 'helvetica',
-              fontWeight: 600,
+              fontWeight: 200,
               color: '#696969',
-              marginLeft:8,
+              marginLeft: 8,
             }}
           >
             {label}

@@ -11,6 +11,9 @@ const useStyles = makeStyles({
     position: 'absolute',
     top: (props) =>`${props.topOffset}px`,
     right: '20px',
+    '@media (max-width: 900px)': {
+      right: '10px',
+    },
   },
   itemPanel:{
     position: 'absolute',
@@ -19,6 +22,10 @@ const useStyles = makeStyles({
     height: '400px',
     width: '400px',
     overflow: 'auto',
+    '@media (max-width: 900px)': {
+      height: '400px',
+      width: '350px',
+    },
   },
   titleContainer: {
     display:'flex',
@@ -29,11 +36,11 @@ const useStyles = makeStyles({
   title: {
     fontFamily: 'Helvetica',
     fontSize: '24px',
-    fontWeight:600,
+    fontWeight: 400,
     marginTop: '10px',
     marginLeft:'10px',
     marginBottom:'10px',
-    color: '#D8D8D8',
+    color: '#696969',
   },
   close: {
     width:'24px',
@@ -41,11 +48,10 @@ const useStyles = makeStyles({
     marginRight:'10px',
     cursor:'pointer'
   },
-
 });
 
 const ItemPanelButton = ({viewer, element, topOffset}) =>{
-  const [showItemPanel,setShowItemPanel] = useState(true);
+  const [showItemPanel,setShowItemPanel] = useState(false);
   const classes = useStyles({topOffset:topOffset});
   return(
       <div className={classes.toggleButton}>
@@ -72,6 +78,5 @@ const ItemPanel = ({viewer, element, close, topOffset}) => {
       </Paper>
   );
 };
-
 
 export default ItemPanelButton;

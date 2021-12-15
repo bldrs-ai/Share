@@ -12,6 +12,10 @@ const useStyles = makeStyles(() => ({
     fontSize: 20,
     fontFamily:'Helvetica',
   },
+  icon:{
+      width: '40px',
+      height: '40px',
+  }
 }));
 
 const LoginMenu = () => {
@@ -33,12 +37,7 @@ const LoginMenu = () => {
         onClick={handleMenu}
         color='inherit'
       >
-        <Person
-          style={{
-            width: '40px',
-            height: '40px',
-          }}
-        />
+        <Person className = {classes.icon}/>
       </IconButton>
 
       <Menu
