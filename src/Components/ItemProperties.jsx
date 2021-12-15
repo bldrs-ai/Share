@@ -26,7 +26,7 @@ const row = (d1, d2, serial) => {
           border: '1px solid lightgrey',
           fontFamily: 'Helvetica',
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 200,
           color: '#696969',
         }}
       >
@@ -37,7 +37,7 @@ const row = (d1, d2, serial) => {
           border: '1px solid lightgrey',
           fontFamily: 'Helvetica',
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 200,
           color: '#696969',
         }}
       >
@@ -50,7 +50,7 @@ const row = (d1, d2, serial) => {
         style={{
           fontFamily: 'Helvetica',
           fontSize: 14,
-          fontWeight: 600,
+          fontWeight: 200,
         }}
         colSpan='2'
       >

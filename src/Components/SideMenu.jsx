@@ -2,6 +2,7 @@ import React from 'react';
 import Drawer from '@mui/material/Drawer';
 import Close from '../assets/Close.svg';
 import { makeStyles } from '@mui/styles';
+import { cardClasses } from '@mui/material';
 
 const useStyles = makeStyles({
   closeWrapper: {
@@ -69,6 +70,17 @@ const useStyles = makeStyles({
     top: 50,
     marginTop: '65px',
   },
+  title: {
+    fontFamily: 'Helvetica',
+    fontSize: '30px',
+    fontWeight: 600,
+    marginLeft: '10px',
+    color: 'lightgray',
+  },
+  close:{
+    width: '30px',
+    marginRight: '8px'
+  }
 });
 
 const SideMenu = ({
@@ -97,18 +109,8 @@ const SideMenu = ({
           }}
         >
           <div className={classes.closeWrapper} onClick={() => onClose()}>
-            <div
-              style={{
-                fontFamily: 'Helvetica',
-                fontSize: 30,
-                fontWeight: 600,
-                marginLeft: 10,
-                color: 'lightgray',
-              }}
-            >
-              {title}
-            </div>
-            <Close style={{ width: 30, marginRight: 8 }} />
+            <div className={classes.title}>{title}</div>
+            <Close className={classes.close} />
           </div>
           {content}
         </Drawer>
