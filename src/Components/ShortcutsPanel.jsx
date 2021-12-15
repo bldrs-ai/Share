@@ -2,7 +2,7 @@ import React from 'react';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import Close from '../assets/Close.svg'
-import Shortcuts from '../assets/Shortcuts.svg'
+import Shortcuts from '../assets/ShortCuts.svg'
 
 
 
