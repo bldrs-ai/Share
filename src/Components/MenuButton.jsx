@@ -3,7 +3,7 @@ import { makeStyles } from '@mui/styles';
 import IconButton from '@mui/material/IconButton';
 import Hamburger from '../assets/Hamburger.svg';
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles({
   menuButton: {
     border: '2px solid lime',
     '@media (max-width: 1280px)': {
@@ -13,7 +13,11 @@ const useStyles = makeStyles((theme) => ({
   menuButtonDisabled: {
     '@media (max-width: 1280px)': {},
   },
-}));
+  icon:{
+    width: '30px',
+    height: '30px'
+  }
+});
 
 const MenuButton = ({ onClick, disabled, open }) => {
   const classes = useStyles();
@@ -26,8 +30,7 @@ const MenuButton = ({ onClick, disabled, open }) => {
       onClick={onClick}
       disabled={disabled}
     >
-      <Hamburger style={{ width: 30, height: 30 }} />
-      {/* {open ?  <Hamburger /> : <Hamburger />} */}
+      <Hamburger className={classes.icon} />
     </IconButton>
   );
 };

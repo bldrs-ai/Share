@@ -1,25 +1,31 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
-import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
-import { reifyName } from '../utils/Ifc';
 import NavTree from './NavTree';
 import ArrowStraight from '../assets/Arrow_straight.svg';
 import ArrowDown from '../assets/Arrow_down.svg';
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles({
   contextualMenu: {
-    width: 308,
+    position: 'absolute',
+    top: "144px",
+    left: "20px",
+    overflow: 'auto',
+    width: '308px',
     border: 'none',
     justifyContent: 'space-around',
     alignItems: 'center',
-    overflow: 'scroll',
     height: '70%',
     '@media (max-width: 900px)': {
-      height: '70%',
+      height: '30%',
+      width: '250px',
     },
+  },
+  treeContainer:{
+    marginTop: 20,
+    overflow: 'scroll'
   },
   paper: {
     display: 'flex',
@@ -28,7 +34,11 @@ const useStyles = makeStyles((theme) => ({
     width: '220px',
     backgroundColor: 'lightGray',
   },
-}));
+  icon:{
+    width: 16,
+    height: 16
+  }
+});
 
 
 const NavPanel = ({
@@ -65,29 +75,17 @@ const NavPanel = ({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper
-      className={classes.contextualMenu}
-      style={{
-        position: 'absolute',
-        top: 144,
-        left: 20,
-        overflow: 'auto',
-      }}
-    >
-      <div style={{ marginTop: 20 }}>
+    <Paper className={classes.contextualMenu}>
+      <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
-          defaultCollapseIcon={<ArrowDown style={{ width: 16, height: 16 }} />}
-          defaultExpandIcon={
-            <ArrowStraight style={{ width: 16, height: 16 }} />
-          }
+          defaultCollapseIcon={<ArrowDown className = {classes.icon} />}
+          defaultExpandIcon={<ArrowStraight className = {classes.icon} />}
           sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
           selected={selectedElements}
-          onNodeToggle={(event, nodeIds) => {
-            setExpandedElements(nodeIds);
-          }}
+          onNodeToggle={(event, nodeIds) => {setExpandedElements(nodeIds)}}
           key='tree'
         >
           {

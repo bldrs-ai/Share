@@ -8,7 +8,3 @@ esbuild
     console.log('Build succeeded.');
   })
   .catch(() => process.exit(1));
-
-esbuild.build({
-  plugins: [svgrPlugin()],
-});

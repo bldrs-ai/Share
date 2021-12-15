@@ -12,6 +12,9 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     alignItems: 'center',
     width: 300,
+    '@media (max-width: 900px)': {
+      width: 240,
+    },
   },
   input: {
     flex: 1,
@@ -23,6 +26,16 @@ const useStyles = makeStyles((theme) => ({
     height: 28,
     margin: 4,
   },
+  icon:{
+    width: '30px',
+    height: '30px'
+  },
+  inputBase:{
+    fontSize: 18,
+    fontWeight: 600,
+    fontFamily: 'Helvetica',
+    color: '#696969',
+  }
 }));
 
 export default function SearchBar({
@@ -33,7 +46,6 @@ export default function SearchBar({
   open,
 }) {
   const classes = useStyles();
-
   const [textValue, setTextValue] = React.useState('');
 
   // TODO(pablo): What I have here seems to work fine but not sure if
@@ -60,7 +72,7 @@ export default function SearchBar({
         onClick={onClickMenu}
         disabled={disabled}
       >
-        <TreeIcon style={{ width: 20, height: 20 }} />
+        <TreeIcon className={classes.icon} />
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}
@@ -71,17 +83,16 @@ export default function SearchBar({
         value={textValue}
         style={{
           fontSize: 18,
-          fontWeight: 600,
+          fontWeight: 200,
           fontFamily: 'Helvetica',
           color: '#696969',
-        }}
-      />
+        }}/>
       <IconButton
         type='submit'
         className={classes.iconButton}
         aria-label='search'
       >
-        <Search style={{ width: 30, height: 30 }} />
+        <Search className={classes.icon} />
       </IconButton>
     </Paper>
   );

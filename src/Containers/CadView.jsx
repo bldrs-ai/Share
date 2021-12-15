@@ -4,7 +4,6 @@ import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
 import ItemPanelButton from '../Components/ItemPanel';
-import ShortCutsPanel from '../Components/ShortcutsPanel.jsx';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
@@ -25,6 +24,12 @@ const useStyles = makeStyles((theme) => ({
     left: '0px',
     width: '100%',
     height: '100%'
+  },
+  viewerContainer:{
+    zIndex: 0
+  },
+  toolBar:{
+    zIndex: 100
   },
   menuToolbarContainer: {
     width: '100%',
@@ -55,6 +60,12 @@ const useStyles = makeStyles((theme) => ({
     height: '100vh',
     margin: 'auto',
   },
+  viewWrapper:{
+    zIndex: 0
+  },
+  menusWrapper:{
+    zIndex: 100
+  },
   aboutPanelContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
@@ -81,7 +92,7 @@ const useStyles = makeStyles((theme) => ({
   },
   iconGroup:{
       position: 'absolute',
-      bottom: `${PANEL_TOP}px`,
+      bottom: `40px`,
       right: '20px',
       border: 'none',
       zIndex:1000,
@@ -162,7 +173,7 @@ const CadView = () => {
     selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
-    setShowItemPanel(true);
+    setShowItemPanel(false);
   };
 
   const onModelLoad = (rootElt, viewer) => {
@@ -310,20 +321,22 @@ const CadView = () => {
   };
 
   const placeCutPlane = () => {
-    viewer.IFC.unpickIfcItems();
+    viewer.clipper.createPlane();
   };
+
   const unSelectItem = () => {
     viewer.IFC.unpickIfcItems();
+    viewer.clipper.deleteAllPlanes()
   };
 
   let isLoaded = Object.keys(rootElement).length === 0;
 
   return (
-    <div className = {classes.pageContainer}>
-      <div style={{ zIndex: 0 }}>
+    <div className={classes.pageContainer}>
+      <div className={classes.viewWrapper}>
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
-      <div style={{ zIndex: 100 }}>
+      <div className={classes.menusWrapper}>
         <ToolBar
           fileOpen={fileOpen}
           onClickShare={onClickShare}
@@ -361,9 +374,6 @@ const CadView = () => {
               element={selectedElement}
               close = {()=>setShowItemPanel(false)}
               topOffset = {PANEL_TOP}/>
-        </div>
-        <div className={classes.shortCutPanelContainer}>
-          {showShortCuts && <ShortCutsPanel close = {()=>setShowShortCuts(false)} />}
         </div>
         <div className={classes.iconGroup}>
           <IconGroup
