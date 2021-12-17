@@ -17,28 +17,34 @@ const row = (d1, d2, serial) => {
   return d2 !== null ? (
     <tr
       key={serial}
-      style={{
-        height: 40,
-      }}
+      style = {{height:'30px'}}
     >
       <td
         style={{
+          maxWidth:'150px',
+          overflowWrap: 'break-word',
           border: '1px solid lightgrey',
           fontFamily: 'Helvetica',
-          fontSize: 14,
+          fontSize: '12px',
           fontWeight: 200,
           color: '#696969',
+          paddingLeft:'4px',
+          paddingRight:'4px',
         }}
       >
         {d1}
       </td>
       <td
         style={{
+          maxWidth:'200px',
+          overflowWrap: 'break-word',
           border: '1px solid lightgrey',
           fontFamily: 'Helvetica',
-          fontSize: 14,
+          fontSize: 12,
           fontWeight: 200,
           color: '#696969',
+          paddingLeft:'4px',
+          paddingRight:'4px',
         }}
       >
         {d2}
@@ -52,7 +58,6 @@ const row = (d1, d2, serial) => {
           fontSize: 14,
           fontWeight: 200,
         }}
-        colSpan='2'
       >
         {d1}
       </td>
@@ -77,27 +82,6 @@ const prettyProps = (viewer, element, key, props, serial) => {
         return row(key, value['value'], serial);
       }
       break;
-    case 'OwnerHistory': {
-      return row(
-        <ObjectTree
-          name={'OwnerHistory'}
-          obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
-        />,
-        null,
-        serial
-      );
-    }
-    case 'ObjectPlacement': {
-      return row(
-        <ObjectTree
-          name={'ObjectPlacement'}
-          obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
-          style={{ border: '1px solid lightgrey' }}
-        />,
-        null,
-        serial
-      );
-    }
     case 'RefLatitude':
       return row(
         'Latitude',
@@ -121,22 +105,24 @@ const prettyProps = (viewer, element, key, props, serial) => {
 const ItemProperties = ({ viewer, element }) => {
   const props = element; //viewer.getProperties(0, element.expressID);
   let serial = 0;
+  console.log('in the item properties', element)
   return (
-    <table
-      style={{
-        fontFamily: 'Helvetica',
-        fontSize: 20,
-      }}
-    >
-      <tbody>
-        {Object.keys(props).map((key) =>
-          prettyProps(viewer, element, key, props, serial++)
-        )}
-      </tbody>
+      <table
+        style={{
+          width:'300px',
+          fontFamily: 'Helvetica',
+          fontSize: 20,
+        }}
+      >
+        <tbody>
+          {Object.keys(props).map((key) =>
+            prettyProps(viewer, element, key, props, serial++)
+          )}
+        </tbody>
     </table>
   );
+a
 };
-
 const isTypeValue = (obj) => {
   return obj['type'] != null && obj['value'] != null;
 };
@@ -146,19 +132,23 @@ const typeValue = (obj) => {
 };
 
 const ObjectTree = ({ name, obj }) => {
+  console.log('object', obj)
+  console.log('in the object tree')
   let i = 0;
   if (obj === undefined || obj === null) return null;
   const isObj = typeof obj === 'object';
   return (
-    <TreeItem nodeId={'' + i} label={isObj ? `${name}` : `${obj}`}>
-      {isObj
-        ? isTypeValue(obj)
-          ? typeValue(obj)
-          : Object.keys(obj).map((child) => (
-              <ObjectTree name={child} obj={obj[child]} key={i++} />
-            ))
-        : null}
-    </TreeItem>
+    <div style={{border:'1px solid red'}}>
+      <TreeItem nodeId={'' + i} label={isObj ? `${name}` : `${obj}`}>
+            {isObj
+              ? isTypeValue(obj)
+                ? typeValue(obj)
+                : Object.keys(obj).map((child) => (
+                    <ObjectTree name={child} obj={obj[child]} key={i++} />
+                  ))
+              : null}
+      </TreeItem>
+    </div>
   );
 };
 

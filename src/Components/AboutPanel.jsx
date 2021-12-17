@@ -1,8 +1,10 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
+import IconButton from '@mui/material/IconButton';
 import Close from '../assets/Close.svg'
 import Info from '../assets/Info.svg'
+import InfoOn from '../assets/InfoOn.svg'
 
 
 
@@ -61,8 +63,15 @@ const AboutIcon = ({offsetTop}) => {
   const [open, setOpen]=React.useState(true);
  const classes = useStyles();
   return (
-    <div onClick={() => { setOpen(!open) }}>
-      <Info className = {classes.icon}/> {open && <AboutPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
+    <div >
+     <IconButton
+        className={classes.iconButton}
+        aria-label='About'
+        onClick={() => { setOpen(!open) }}
+      >
+      {open ? <InfoOn className = {classes.icon}/> : <Info className = {classes.icon}/> }
+      </IconButton>
+      {open && <AboutPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
     </div>);
 };
 

@@ -2,117 +2,84 @@ import React from 'react';
 import Drawer from '@mui/material/Drawer';
 import Close from '../assets/Close.svg';
 import { makeStyles } from '@mui/styles';
-import { cardClasses } from '@mui/material';
 
 const useStyles = makeStyles({
-  closeWrapper: {
-    textTransform: 'uppercase',
-    marginTop: 25,
-    marginRight: 30,
+  drawerPaper:{
+    marginTop:'65px',
+    height:'200px',
+    width:'350px',
+    borderRadius:'0px',
+    marginLeft:'20px',
+    zIndex: 10,
+    overflow:'hidden',
+    '@media (max-width: 900px)': {
+    width:'auto',
+    borderRadius:'8px',
+    marginLeft:'0px',
+    },
+  },
+  headerWrapper: {
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    // border: '1px solid red',
-    '@media (max-width: 780px)': {
-      position: 'relative',
-      marginTop: 25,
-      marginLeft: 0,
-      right: '-1px',
-    },
-  },
-  close: {
-    marginTop: 0,
-    marginRight: 0,
-    height: 60,
-    width: 50,
-    zIndex: 1000,
-    cursor: 'pointer',
-  },
-  singin: {
-    fontSize: 30,
-    fontFamily: 'Helvetica',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    margin: '30px 30px 28px 50px',
-    cursor: 'pointer',
-    '@media (max-width: 780px)': {
-      fontSize: 50,
-      margin: '50px 10px 28px 40px',
-    },
-  },
-  buildSpace: {
-    fontSize: 60,
-    fontFamily: 'Helvetica',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    margin: '5px 40px 30px 50px',
-    textDecoration: 'underline',
-    cursor: 'pointer',
-    '@media (max-width: 780px)': { fontSize: 50, margin: '0px 20px 28px 40px' },
-  },
-  contactus: {
-    fontSize: 60,
-    fontFamily: 'Helvetica',
-    fontWeight: 'bold',
-    textTransform: 'uppercase',
-    margin: '290px 30px 30px 50px',
-    cursor: 'pointer',
-    '@media (max-width: 780px)': {
-      fontSize: 50,
-      margin: '210px 10px 28px 40px',
-    },
-  },
-  paper: {
-    width: 350,
-    background: 'none',
-    position: 'fixed',
-    right: 0,
-    top: 50,
-    marginTop: '65px',
+    margin: '10px 10px',
+    '@media (max-width: 900px)': {
+    paddingBottom: '10px',
+    borderBottom:'1px solid lightgrey',
+    }
   },
   title: {
     fontFamily: 'Helvetica',
-    fontSize: '30px',
-    fontWeight: 600,
-    marginLeft: '10px',
+    fontSize: '20px',
+    fontWeight: '200px',
     color: 'lightgray',
   },
-  close:{
-    width: '30px',
-    marginRight: '8px'
+  close: {
+    height: '20px',
+    width: '20px',
+    zIndex: 1000,
+    cursor: 'pointer',
+  },
+  contentContainer:{
+    display:'flex',
+    flexDirection:'row',
+    justifyContent:'center',
+    '@media (max-width: 900px)': {
+    maxHeight:'200px',
+    overflow:'auto'
+    },
   }
 });
 
+
 const SideMenu = ({
   title,
-  open,
   onClose,
-  viewer,
-  element,
-  anchor,
   content,
+  open,
 }) => {
   const classes = useStyles();
+  const anchor = window.innerWidth > 500?'right':'bottom'
 
   return (
     <>
       <React.Fragment key={'right'}>
         <Drawer
+          elevation={3}
           BackdropProps={{ invisible: true }}
           anchor={anchor}
           open={open}
           variant='persistent'
           docked
-          classes={{
-            paper: classes.paper,
-            paperAnchorBottom: classes.modal,
-          }}
+          classes={{paper: classes.drawerPaper}}
         >
-          <div className={classes.closeWrapper} onClick={() => onClose()}>
+          <div className={classes.headerWrapper} onClick={onClose}>
             <div className={classes.title}>{title}</div>
             <Close className={classes.close} />
           </div>
-          {content}
+          <div className = {classes.contentContainer}>
+            {content}
+          </div>
         </Drawer>
       </React.Fragment>
     </>
