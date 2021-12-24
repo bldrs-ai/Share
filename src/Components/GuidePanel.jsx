@@ -15,6 +15,7 @@ const useStyles = makeStyles({
     height:'100vh',
     display:'flex',
     justifyContent:'center',
+    zIndex:1000
   },
   panel: {
     position:'relative',

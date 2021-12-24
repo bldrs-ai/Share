@@ -21,7 +21,7 @@ const useStyles = makeStyles((theme) => ({
     borderRadius:'20px',
     backgroundColor:'#D8D8D8',
     boxShadow:'2px 2px 8px #888888',
-    zIndex:2000,
+    zIndex:10,
     '@media (max-width: 900px)': {
       background:'none',
       boxShadow:'none',
