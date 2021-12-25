@@ -24,8 +24,8 @@ const useStyles = makeStyles({
     alignItems: 'center',
     margin: '10px 10px',
     '@media (max-width: 900px)': {
-    paddingBottom: '10px',
-    borderBottom:'1px solid lightgrey',
+      paddingBottom: '10px',
+      borderBottom:'1px solid lightgrey',
     }
   },
   title: {
@@ -45,8 +45,8 @@ const useStyles = makeStyles({
     flexDirection:'row',
     justifyContent:'center',
     '@media (max-width: 900px)': {
-    maxHeight:'200px',
-    overflow:'auto'
+      maxHeight:'200px',
+      overflow:'auto'
     },
   }
 });

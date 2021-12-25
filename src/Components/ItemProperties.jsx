@@ -40,7 +40,7 @@ const row = (d1, d2, serial) => {
           overflowWrap: 'break-word',
           border: '1px solid lightgrey',
           fontFamily: 'Helvetica',
-          fontSize: 12,
+          fontSize: '12px',
           fontWeight: 200,
           color: '#696969',
           paddingLeft:'4px',
@@ -88,6 +88,27 @@ const prettyProps = (viewer, element, key, props, serial) => {
         dms(deref(value[0]), deref(value[1]), deref(value[2])),
         serial
       );
+    // case 'OwnerHistory': {
+    //       return row(
+    //         <ObjectTree
+    //           name={'OwnerHistory'}
+    //           obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
+    //         />,
+    //         null,
+    //         serial
+    //       );
+    //     }
+    // case 'ObjectPlacement': {
+    //   return row(
+    //     <ObjectTree
+    //       name={'ObjectPlacement'}
+    //       obj={propMgr.getItemProperties(0, parseInt(value['value']), true)}
+    //       style={{ border: '1px solid lightgrey' }}
+    //     />,
+    //     null,
+    //     serial
+    //   );
+    // }
     case 'RefLongitude':
       return row(
         'Longitude',
@@ -105,7 +126,6 @@ const prettyProps = (viewer, element, key, props, serial) => {
 const ItemProperties = ({ viewer, element }) => {
   const props = element; //viewer.getProperties(0, element.expressID);
   let serial = 0;
-  console.log('in the item properties', element)
   return (
       <table
         style={{
@@ -132,8 +152,6 @@ const typeValue = (obj) => {
 };
 
 const ObjectTree = ({ name, obj }) => {
-  console.log('object', obj)
-  console.log('in the object tree')
   let i = 0;
   if (obj === undefined || obj === null) return null;
   const isObj = typeof obj === 'object';
