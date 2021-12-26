@@ -96,6 +96,11 @@ const useStyles = makeStyles((theme) => ({
       right: '20px',
       border: 'none',
       zIndex:1000,
+      '@media (max-width: 900px)': {
+        bottom: `0px`,
+        top:'140px',
+        right: '14px',
+      },
     },
 }));
 
@@ -373,7 +378,10 @@ const CadView = () => {
               viewer={viewer}
               element={selectedElement}
               close = {()=>setShowItemPanel(false)}
-              topOffset = {PANEL_TOP}/>
+              topOffset = {PANEL_TOP}
+              placeCutPlane = {()=>placeCutPlane()}
+              unSelectItem = {()=>unSelectItem()}
+              toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}/>
         </div>
         <div className={classes.iconGroup}>
           <IconGroup

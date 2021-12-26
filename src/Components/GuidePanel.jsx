@@ -15,6 +15,7 @@ const useStyles = makeStyles({
     height:'100vh',
     display:'flex',
     justifyContent:'center',
+    zIndex:1000
   },
   panel: {
     position:'relative',
@@ -25,7 +26,7 @@ const useStyles = makeStyles({
     padding: '1em 1em',
     '@media (max-width: 900px)': {
       width: '86%',
-      height:'360px',
+      height:'310px',
     },
     "& h1, & h2": {
       color: '#696969',
@@ -86,7 +87,7 @@ const GuidePanel = ({openToggle, offsetTop}) => {
       <ul>
         <li>Tap a model element</li>
         <li>Tap a section plane button</li>
-        <li>Multiple planes can be attached to a model</li>
+        <li>Attach multiple planes</li>
         <li>X is used to clear the planes</li>
       </ul>
     </Paper>
