@@ -49,6 +49,7 @@ const NavPanel = ({
   expandedElements,
   onElementSelect,
   setExpandedElements,
+  pathPrefix
 }) => {
   const location = useLocation();
 
@@ -92,7 +93,7 @@ const NavPanel = ({
             <NavTree
               viewer={viewer}
               element={element}
-              pathPrefix={''}
+              pathPrefix={pathPrefix}
               onElementSelect={onElementSelect}
               setExpandedElements={setExpandedElements}
             />
