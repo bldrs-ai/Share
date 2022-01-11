@@ -2,6 +2,7 @@ import React from 'react';
 import { makeStyles } from '@mui/styles';
 import IconButton from '@mui/material/IconButton';
 import Hamburger from '../assets/Hamburger.svg';
+import Tooltip from '@mui/material/Tooltip';
 
 const useStyles = makeStyles({
   menuButton: {
@@ -15,23 +16,23 @@ const useStyles = makeStyles({
   },
   icon:{
     width: '30px',
-    height: '30px'
+    height: '30px',
   }
 });
 
-const MenuButton = ({ onClick, disabled, open }) => {
+const MenuButton = ({ onClick }) => {
   const classes = useStyles();
   return (
+  <Tooltip title="Properties" placement="left">
     <IconButton
       edge='start'
-      className={disabled ? classes.menuButtonDisabled : classes.menuButton}
       color='secondary'
       aria-label='menu'
       onClick={onClick}
-      disabled={disabled}
     >
       <Hamburger className={classes.icon} />
     </IconButton>
+  </Tooltip>
   );
 };
 

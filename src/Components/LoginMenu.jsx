@@ -1,5 +1,4 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
 import Menu from '@mui/material/Menu';
 import MenuItem from '@mui/material/MenuItem';
 import IconButton from '@mui/material/IconButton';
@@ -8,13 +7,12 @@ import Person from '../assets/Person.svg';
 import { makeStyles } from '@mui/styles';
 
 const useStyles = makeStyles(() => ({
-  MenuItem: {
-    fontSize: 20,
-    fontFamily:'Helvetica',
-  },
   icon:{
-      width: '40px',
-      height: '40px',
+    width: '40px',
+    height: '40px',
+  },
+  menuItem:{
+    height:'30px'
   }
 }));
 
@@ -50,13 +48,14 @@ const LoginMenu = () => {
         }}
         open={open}
         onClose={handleClose}
+        style = {{height:80}}
         PaperProps={{
             style: {
-              transform: 'translateX(-70px) translateY(0pc)',
+              transform: 'translateX(-50px) translateY(-10px)',
             }
           }}
       >
-        <MenuItem>Version: {PkgJson.version}</MenuItem>
+        <MenuItem className={classes.menuItem} >Version: {PkgJson.version}</MenuItem>
       </Menu>
     </div>
   );
