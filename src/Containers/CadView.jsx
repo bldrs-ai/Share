@@ -247,7 +247,6 @@ const CadView = () => {
     // Select items
     window.ondblclick = async (event) => {
       if (event.target) {
-        console.log('tagName: ', event.target.tagName);
         if (event.target.tagName == 'CANVAS') {
           const item = await viewer.IFC.pickIfcItem(true);
           if (item.modelID === undefined || item.id === undefined) return;

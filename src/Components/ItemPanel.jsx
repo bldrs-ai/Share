@@ -19,8 +19,8 @@ const useStyles = makeStyles({
     position: 'absolute',
     top: '0px',
     right: '0px',
-    height: '400px',
-    width: '400px',
+    minWidth: '250px',
+    minHeight: '300px',
     overflow: 'auto',
     '@media (max-width: 900px)': {
       height: '400px',
