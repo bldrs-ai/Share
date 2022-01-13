@@ -2,7 +2,7 @@ import React, {useState} from 'react';
 import { makeStyles } from '@mui/styles';
 import ItemProperties from './ItemProperties';
 import MenuButton from '../Components/MenuButton';
-import SideMenu from './SideMenu'
+import ItemPropertiesDrawer from './ItemPropertiesDrawer'
 
 
 const useStyles = makeStyles({
@@ -70,7 +70,7 @@ const ItemPanel = ({viewer, element, close, topOffset}) => {
   const classes = useStyles({topOffset:topOffset});
   return (
     <>
-      <SideMenu
+      <ItemPropertiesDrawer
           content = {<ItemProperties viewer = {viewer} element = {element}/>}
           title = {'Properties'}
           onClose = {close}

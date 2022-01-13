@@ -41,8 +41,6 @@ const useStyles = makeStyles({
     cursor: 'pointer',
   },
   contentContainer:{
-    display:'flex',
-    flexDirection:'row',
     justifyContent:'center',
     '@media (max-width: 900px)': {
       maxHeight:'200px',
@@ -52,7 +50,7 @@ const useStyles = makeStyles({
 });
 
 
-const SideMenu = ({
+const ItemPropertiesDrawer = ({
   title,
   onClose,
   content,
@@ -68,9 +66,9 @@ const SideMenu = ({
           elevation={3}
           BackdropProps={{ invisible: true }}
           anchor={anchor}
-          open={open}
+          open={true || open}
           variant='persistent'
-          docked
+          docked='true'
           classes={{paper: classes.drawerPaper}}
         >
           <div className={classes.headerWrapper} onClick={onClose}>
@@ -86,4 +84,4 @@ const SideMenu = ({
   );
 };
 
-export default SideMenu;
+export default ItemPropertiesDrawer;
