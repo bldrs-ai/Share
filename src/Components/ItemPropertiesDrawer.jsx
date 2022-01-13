@@ -12,7 +12,6 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    // border: '1px solid red',
     '@media (max-width: 780px)': {
       position: 'relative',
       marginTop: 25,
@@ -22,9 +21,9 @@ const useStyles = makeStyles({
   },
   close: {
     marginTop: 0,
-    marginRight: 0,
     height: 60,
-    width: 50,
+    width: '30px',
+    marginRight: '8px',
     zIndex: 1000,
     cursor: 'pointer',
   },
@@ -48,7 +47,10 @@ const useStyles = makeStyles({
     margin: '5px 40px 30px 50px',
     textDecoration: 'underline',
     cursor: 'pointer',
-    '@media (max-width: 780px)': { fontSize: 50, margin: '0px 20px 28px 40px' },
+    '@media (max-width: 780px)': {
+      fontSize: 50,
+      margin: '0px 20px 28px 40px'
+    },
   },
   contactus: {
     fontSize: 60,
@@ -63,7 +65,7 @@ const useStyles = makeStyles({
     },
   },
   paper: {
-    width: 350,
+    width: 400,
     background: 'none',
     position: 'fixed',
     right: 0,
@@ -76,21 +78,15 @@ const useStyles = makeStyles({
     fontWeight: 600,
     marginLeft: '10px',
     color: 'lightgray',
-  },
-  close:{
-    width: '30px',
-    marginRight: '8px'
   }
 });
 
-const SideMenu = ({
+const ItemPropertiesDrawer = ({
+  properties,
   title,
   open,
-  onClose,
-  viewer,
-  element,
   anchor,
-  content,
+  onClose
 }) => {
   const classes = useStyles();
 
@@ -100,9 +96,9 @@ const SideMenu = ({
         <Drawer
           BackdropProps={{ invisible: true }}
           anchor={anchor}
-          open={open}
+          open={true || open}
           variant='persistent'
-          docked
+          docked='true'
           classes={{
             paper: classes.paper,
             paperAnchorBottom: classes.modal,
@@ -112,11 +108,11 @@ const SideMenu = ({
             <div className={classes.title}>{title}</div>
             <Close className={classes.close} />
           </div>
-          {content}
+          {properties}
         </Drawer>
       </React.Fragment>
     </>
   );
 };
 
-export default SideMenu;
+export default ItemPropertiesDrawer;

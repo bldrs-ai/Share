@@ -20,26 +20,49 @@ const useStyles = makeStyles({
 
 export default function ItemProperties({ viewer, element }) {
   const [table, setTable] = React.useState(null);
+  const [psets, setPSets] = React.useState(null);
   const classes = useStyles({});
   React.useEffect(() => {
-    propsTable(element, viewer).then((t) => {
+
+    propsTable(
+      element,
+      viewer
+    ).then((t) => {
+      console.log('t:', t);
       setTable(t);
+    });
+
+
+    viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID).then((pset) => {
+      console.log('PSET: ', pset);
+      // TODO(pablo): Just accessing the [0] is dubious here.. need to
+      // take another look.  There's a quantity thing at [1].
+      propsTable(
+        pset[0],
+        viewer,
+        false
+      ).then((ps) => {
+        console.log('ps:', ps);
+        setPSets(ps);
+      });
     });
   }, [element]);
   return (
     <div className={classes.propsContainer}>
       {table  || 'Loading...'}
+      <hr/>
+      {psets  || 'Loading...'}
     </div>)
 }
 
-
-const propsTable = async (props, viewer) => {
+/** Allows recursive display of tables. */
+const propsTable = async (props, viewer, filter = true) => {
   let serial = 0;
   return (
     <table>
       <tbody>
         {await Promise.all(Object.keys(props).map(
-          (key) => prettyProps(key, props[key], viewer, serial++)
+          (key) => prettyProps(key, props[key], viewer, serial++, filter)
         ))}
       </tbody>
     </table>
@@ -51,7 +74,7 @@ const propsTable = async (props, viewer) => {
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
  */
-async function prettyProps(key, value, viewer, serial) {
+async function prettyProps(key, value, viewer, serial, filter) {
   const propMgr = viewer.IFC.loader.ifcManager.properties;
   let label = '' + key;
   if (label.startsWith('Ref')) {
@@ -61,16 +84,6 @@ async function prettyProps(key, value, viewer, serial) {
     return null;
   }
   switch (key) {
-    case 'type':
-    case 'CompositionType':
-    case 'GlobalId':
-    case 'OwnerHistory':
-    case 'ObjectPlacement':
-    case 'ObjectType':
-    case 'Representation':
-    case 'RepresentationContexts':
-    case 'Tag':
-    case 'UnitsInContext': return null;
     case 'Coordinates':
     case 'RefLatitude':
     case 'RefLongitude':
@@ -82,6 +95,16 @@ async function prettyProps(key, value, viewer, serial) {
       // Seeing cyclical references here, so skipping.
       return null;
     case 'expressID': return row('Express Id', value, serial);
+    case 'type':
+    case 'CompositionType':
+    case 'GlobalId':
+    case 'ObjectPlacement':
+    case 'ObjectType':
+    case 'OwnerHistory':
+    case 'Representation':
+    case 'RepresentationContexts':
+    case 'Tag':
+    case 'UnitsInContext': if (filter) return null;
     default:
       return row(label, await deref(value, viewer, serial), serial);
   }
@@ -113,7 +136,7 @@ function stoi(s) {
 }
 
 
-async function deref(ref, viewer, serial) {
+async function deref(ref, viewer, serial, filter) {
   if (ref === null || ref === undefined) {
     throw new Error('Ref undefined or null: ', ref);
   }
@@ -126,7 +149,7 @@ async function deref(ref, viewer, serial) {
       case 5:
         const refId = stoi(ref.value);
         // TODO, only recursion uses the viewer, serial.
-        return await propsTable(await viewer.getProperties(0, refId), viewer, serial);
+        return await propsTable(await viewer.getProperties(0, refId), viewer, serial, filter);
       default:
         return 'Unknown type: ' + ref.value;
     }

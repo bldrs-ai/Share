@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
-import ItemPanelButton from '../Components/ItemPanel';
+import ItemPanelControl from '../Components/ItemPanel';
 import NavPanel from '../Components/NavPanel';
 import SearchBar from '../Components/SearchBar';
 import ToolBar from '../Components/ToolBar';
@@ -368,7 +368,7 @@ const CadView = () => {
             setExpandedElements={setExpandedElements}
           />}
         <div className={classes.itemPanelContainer}>
-            <ItemPanelButton
+            <ItemPanelControl
               viewer={viewer}
               element={selectedElement}
               close = {()=>setShowItemPanel(false)}
