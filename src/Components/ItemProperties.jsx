@@ -34,8 +34,23 @@ export default function ItemProperties({ viewer, element }) {
           psets.map(
             async (ps, ndx) => {
               return (
-                <li key={ndx}>
-                  <h2>{ps.Name.value || 'Property Set'}</h2>
+                <li key={ndx}
+                    style = {{
+                        listStyle: 'none',
+                        borderBottom:'1px solid lightgrey'
+                    }}
+                  >
+                  <h2 style={{
+                        maxWidth:'200px',
+                        overflowWrap: 'break-word',
+                        fontFamily: 'Helvetica',
+                        fontSize: '20px',
+                        fontWeight: 200,
+                        color: '#696969',
+                        paddingLeft:'4px',
+                        paddingRight:'4px',
+
+                      }}>{ps.Name.value || 'Property Set'}</h2>
                   {await propsTable(ps, viewer)}
                 </li>
               )
@@ -52,15 +67,15 @@ export default function ItemProperties({ viewer, element }) {
   return (
     <div className={classes.propsContainer}>
       {table  || 'Loading...'}
-      <hr/>
-      <ul>{psetTables  || 'Loading...'}</ul>
+      <hr style = {{backgroundColor:'lightgrey'}}/>
+      {psetTables  || 'Loading...'}
     </div>)
 }
 
 /** Allows recursive display of tables. */
 const propsTable = async (props, viewer, serial = 0) => {
   return (
-    <table>
+    <table style = {{borderBottom:'1px solid lighgrey'}}>
       <tbody>
         {await Promise.all(Object.keys(props).map(
           (key, ndx) => prettyProps(key, props[key], viewer, ndx)
@@ -122,8 +137,30 @@ function row(d1, d2, serial) {
   }
   return (
     <tr key={serial}>
-      <td key="a">{d1}</td>
-      <td key="b">{d2}</td>
+      <td key="a"
+          style={{
+            maxWidth:'150px',
+            overflowWrap: 'break-word',
+            fontFamily: 'Helvetica',
+            fontSize: '12px',
+            fontWeight: 200,
+            color: '#696969',
+            // color: '#F5F5F5',
+            paddingLeft:'4px',
+            paddingRight:'4px',
+        }}>{d1}</td>
+      <td key="b"
+          style={{
+            maxWidth:'200px',
+            overflowWrap: 'break-word',
+            fontFamily: 'Helvetica',
+            fontSize: '12px',
+            fontWeight: 200,
+            color: '#696969',
+            // color: '#F5F5F5',
+            paddingLeft:'4px',
+            paddingRight:'4px',
+          }}>{d2}</td>
     </tr>
   )
 }

@@ -72,7 +72,7 @@ const ItemPanel = ({viewer, element, close, topOffset}) => {
     <>
       <ItemPropertiesDrawer
           content = {<ItemProperties viewer = {viewer} element = {element}/>}
-          title = {'Properties'}
+          title = {'IFC Information'}
           onClose = {close}
           open = {open}
         />

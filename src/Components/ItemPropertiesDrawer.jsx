@@ -31,8 +31,8 @@ const useStyles = makeStyles({
   title: {
     fontFamily: 'Helvetica',
     fontSize: '20px',
-    fontWeight: '200px',
-    color: 'lightgray',
+    fontWeight: 200,
+    color: '#696969',
   },
   close: {
     height: '20px',
