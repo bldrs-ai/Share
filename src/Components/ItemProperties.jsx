@@ -1,6 +1,7 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import { decodeIFCString, prettyType } from '../utils/Ifc';
+import { cardClasses } from '@mui/material';
 
 
 const useStyles = makeStyles({
@@ -14,6 +15,20 @@ const useStyles = makeStyles({
     '& td + td': {
       paddingLeft: '0.5em'
     }
+  },
+  section:{
+   listStyle: 'none',
+    borderBottom:'1px solid lightgrey'
+  },
+  sectionTitle:{
+    maxWidth:'200px',
+    overflowWrap: 'break-word',
+    fontFamily: 'Helvetica',
+    fontSize: '20px',
+    fontWeight: 200,
+    color: '#696969',
+    paddingLeft:'4px',
+    paddingRight:'4px',
   },
 });
 
@@ -34,23 +49,8 @@ export default function ItemProperties({ viewer, element }) {
           psets.map(
             async (ps, ndx) => {
               return (
-                <li key={ndx}
-                    style = {{
-                        listStyle: 'none',
-                        borderBottom:'1px solid lightgrey'
-                    }}
-                  >
-                  <h2 style={{
-                        maxWidth:'200px',
-                        overflowWrap: 'break-word',
-                        fontFamily: 'Helvetica',
-                        fontSize: '20px',
-                        fontWeight: 200,
-                        color: '#696969',
-                        paddingLeft:'4px',
-                        paddingRight:'4px',
-
-                      }}>{ps.Name.value || 'Property Set'}</h2>
+                <li key={ndx} className = {classes.section}>
+                  <h2 className = {classes.sectionTitle}>{ps.Name.value || 'Property Set'}</h2>
                   {await propsTable(ps, viewer)}
                 </li>
               )
@@ -66,6 +66,7 @@ export default function ItemProperties({ viewer, element }) {
   }, [element]);
   return (
     <div className={classes.propsContainer}>
+      <h2 className = {classes.sectionTitle}>Properties</h2>
       {table  || 'Loading...'}
       <hr style = {{backgroundColor:'lightgrey'}}/>
       {psetTables  || 'Loading...'}
@@ -145,7 +146,6 @@ function row(d1, d2, serial) {
             fontSize: '12px',
             fontWeight: 200,
             color: '#696969',
-            // color: '#F5F5F5',
             paddingLeft:'4px',
             paddingRight:'4px',
         }}>{d1}</td>
@@ -157,7 +157,6 @@ function row(d1, d2, serial) {
             fontSize: '12px',
             fontWeight: 200,
             color: '#696969',
-            // color: '#F5F5F5',
             paddingLeft:'4px',
             paddingRight:'4px',
           }}>{d2}</td>
