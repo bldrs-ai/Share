@@ -39,7 +39,14 @@ const useStyles = makeStyles({
   },
   icons:{
     width:'20px'
+  },
+  accordian:{
+    maxWidth:'320px'
+  },
+  accordianDetails:{
+    overflow:'scroll'
   }
+
 });
 
 
@@ -60,7 +67,7 @@ export default function ItemProperties({ viewer, element }) {
             async (ps, ndx) => {
               return (
                 <li key={ndx} className = {classes.section}>
-                <Accordion style = {{maxWidth:'320px'}}>
+                <Accordion className = {classes.accordian}>
                   <AccordionSummary
                     expandIcon={<ExpandIcon className = {classes.icons} />}
                     aria-controls="panel1a-content"
@@ -68,7 +75,7 @@ export default function ItemProperties({ viewer, element }) {
                   >
                     <Typography>{ps.Name.value || 'Property Set'}</Typography>
                   </AccordionSummary>
-                  <AccordionDetails style = {{overflow:'scroll'}}>
+                  <AccordionDetails className = {classes.accordianDetails}>
                      {await propsTable(ps, viewer)}
                   </AccordionDetails>
                 </Accordion>
