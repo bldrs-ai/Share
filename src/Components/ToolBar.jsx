@@ -8,6 +8,8 @@ import { AboutIcon } from './AboutPanel';
 import LoginMenu from './LoginMenu';
 import Logo from '../assets/Logo.svg';
 import Folder from '../assets/Folder.svg';
+import { alpha, styled } from '@mui/material/styles';
+import { grey } from '@mui/material/colors';
 
 
 const useStyles = makeStyles({
@@ -17,7 +19,6 @@ const useStyles = makeStyles({
   title: {
     display: 'flex',
     justifyContent:'center',
-    color: 'WhiteSmoke',
     fontSize: 20,
     paddingRight:'20px',
   },
@@ -45,8 +46,9 @@ const useStyles = makeStyles({
   rightContainer:{
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    width:'144px',
   },
   about:{
     height: 18,
@@ -57,15 +59,8 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     borderBottom: '1px solid #737373'
   },
-  profile: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-    position: 'relative',
-    left: '10px',
-  }
 });
+
 
 const ToolBar = ({ fileOpen, offsetTop }) => {
   const classes = useStyles();
@@ -91,7 +86,7 @@ const ToolBar = ({ fileOpen, offsetTop }) => {
         </div>
         <div className = {classes.rightContainer}>
           <AboutIcon offsetTop = {offsetTop}/>
-          <div className = {classes.profile}>{<LoginMenu />}</div>
+          <LoginMenu />
       </div>
       </Toolbar>
     </AppBar>
