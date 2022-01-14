@@ -1,7 +1,12 @@
 import React from 'react';
 import { makeStyles } from '@mui/styles';
 import { decodeIFCString, prettyType } from '../utils/Ifc';
+import Accordion from '@mui/material/Accordion';
+import AccordionSummary from '@mui/material/AccordionSummary';
+import AccordionDetails from '@mui/material/AccordionDetails';
+import Typography from '@mui/material/Typography';
 import { cardClasses } from '@mui/material';
+import ExpandIcon from '../assets/ExpandIcon.svg';
 
 
 const useStyles = makeStyles({
@@ -17,11 +22,11 @@ const useStyles = makeStyles({
     }
   },
   section:{
-   listStyle: 'none',
-    borderBottom:'1px solid lightgrey'
+    listStyle:'none',
+    maxWidth:"400px"
   },
   sectionTitle:{
-    maxWidth:'200px',
+    maxWidth:'320px',
     overflowWrap: 'break-word',
     fontFamily: 'Helvetica',
     fontSize: '20px',
@@ -29,7 +34,12 @@ const useStyles = makeStyles({
     color: '#696969',
     paddingLeft:'4px',
     paddingRight:'4px',
+    paddingBottom:'10px',
+    borderBottom:' 1px solid lightgrey'
   },
+  icons:{
+    width:'20px'
+  }
 });
 
 
@@ -50,8 +60,19 @@ export default function ItemProperties({ viewer, element }) {
             async (ps, ndx) => {
               return (
                 <li key={ndx} className = {classes.section}>
-                  <h2 className = {classes.sectionTitle}>{ps.Name.value || 'Property Set'}</h2>
-                  {await propsTable(ps, viewer)}
+                <Accordion style = {{maxWidth:'320px'}}>
+                  <AccordionSummary
+                    expandIcon={<ExpandIcon className = {classes.icons} />}
+                    aria-controls="panel1a-content"
+                    id="panel1a-header"
+                  >
+                    <Typography>{ps.Name.value || 'Property Set'}</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails style = {{overflow:'scroll'}}>
+                     {await propsTable(ps, viewer)}
+                  </AccordionDetails>
+                </Accordion>
+
                 </li>
               )
             }
@@ -64,11 +85,13 @@ export default function ItemProperties({ viewer, element }) {
       }
     );
   }, [element]);
+console.log('psetTables',psetTables)
   return (
     <div className={classes.propsContainer}>
       <h2 className = {classes.sectionTitle}>Properties</h2>
       {table  || 'Loading...'}
-      <hr style = {{backgroundColor:'lightgrey'}}/>
+      {/* <hr style = {{backgroundColor:'lightgrey'}}/> */}
+      <h2 className = {classes.sectionTitle}>Property Sets</h2>
       {psetTables  || 'Loading...'}
     </div>)
 }
@@ -143,7 +166,7 @@ function row(d1, d2, serial) {
             maxWidth:'150px',
             overflowWrap: 'break-word',
             fontFamily: 'Helvetica',
-            fontSize: '12px',
+            fontSize: '14px',
             fontWeight: 200,
             color: '#696969',
             paddingLeft:'4px',
@@ -154,7 +177,7 @@ function row(d1, d2, serial) {
             maxWidth:'200px',
             overflowWrap: 'break-word',
             fontFamily: 'Helvetica',
-            fontSize: '12px',
+            fontSize: '14px',
             fontWeight: 200,
             color: '#696969',
             paddingLeft:'4px',
