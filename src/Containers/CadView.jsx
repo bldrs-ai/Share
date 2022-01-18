@@ -265,7 +265,7 @@ const CadView = () => {
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
     const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-    const filePath = './haus.ifc';
+    const filePath = './tinyhouse.ifc';
     if (debug) {
       console.log('CadView#useEffect: load from server and hash: ', filePath);
     }
