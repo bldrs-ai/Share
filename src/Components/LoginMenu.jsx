@@ -6,10 +6,11 @@ import PkgJson from '../../package.json';
 import Person from '../assets/Person.svg';
 import { makeStyles } from '@mui/styles';
 
+
 const useStyles = makeStyles(() => ({
   icon:{
-    width: '40px',
-    height: '40px',
+    width: '30px',
+    height: '30px',
   },
   menuItem:{
     height:'30px'
@@ -51,7 +52,7 @@ const LoginMenu = () => {
         style = {{height:80}}
         PaperProps={{
             style: {
-              transform: 'translateX(-50px) translateY(-10px)',
+              transform: 'translateX(-160px) translateY(-7px)',
             }
           }}
       >
