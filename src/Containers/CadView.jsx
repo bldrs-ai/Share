@@ -252,7 +252,6 @@ const CadView = () => {
     // Select items
     window.ondblclick = async (event) => {
       if (event.target) {
-        console.log('tagName: ', event.target.tagName);
         if (event.target.tagName == 'CANVAS') {
           const item = await viewer.IFC.pickIfcItem(true);
           if (item.modelID === undefined || item.id === undefined) return;
@@ -266,7 +265,7 @@ const CadView = () => {
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
     const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-    const filePath = './haus.ifc';
+    const filePath = './tinyhouse.ifc';
     if (debug) {
       console.log('CadView#useEffect: load from server and hash: ', filePath);
     }
