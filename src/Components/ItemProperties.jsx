@@ -9,65 +9,49 @@ import { cardClasses } from '@mui/material';
 import ExpandIcon from '../assets/ExpandIcon.svg';
 
 
-const useStyles = makeStyles({
-  propsContainer: {
-    padding: '0.5em',
-    '& td': {
-      verticalAlign: 'top',
-      paddingBottom: '1em',
-      whiteSpace: 'nowrap'
-    },
-    '& td + td': {
-      paddingLeft: '0.5em'
-    }
-  },
-  section:{
-    listStyle:'none',
-    maxWidth:"400px"
-  },
-  sectionTitle:{
-    maxWidth:'320px',
-    overflowWrap: 'break-word',
-    fontFamily: 'Helvetica',
-    fontSize: '20px',
-    fontWeight: 200,
-    color: '#696969',
-    paddingLeft:'4px',
-    paddingRight:'4px',
-    paddingBottom:'10px',
-    borderBottom:' 1px solid lightgrey'
-  },
-  icons:{
-    width:'20px'
-  },
-  accordian:{
-    maxWidth:'320px'
-  },
-  accordianDetails:{
-    overflow:'scroll'
-  }
-
-});
-
-
 export default function ItemProperties({ viewer, element }) {
-  const [table, setTable] = React.useState(null);
-  const [psetTables, setPsetTables] = React.useState(null);
+  const [propTable, setPropTable] = React.useState(null);
+  const [psetsList, setPsetsList] = React.useState(null);
   const classes = useStyles({});
-  React.useEffect(() => {
-    propsTable(element, viewer).then(
-      (t) => {
-        setTable(t);
-      }
-    );
-    viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID).then(
-      (psets) => {
-        Promise.all(
-          psets.map(
-            async (ps, ndx) => {
-              return (
-                <li key={ndx} className = {classes.section}>
-                <Accordion className = {classes.accordian}>
+  React.useEffect(async () => {
+    setPropTable(await createPropertyTable(element, viewer));
+    setPsetsList(await createPsetsList(element, viewer, classes));
+  }, [element]);
+
+  return (
+    <div className={classes.propsContainer}>
+      <h2 className = {classes.sectionTitle}>Properties</h2>
+      {propTable  || 'Loading...'}
+      <h2 className = {classes.sectionTitle}>Property Sets</h2>
+      {psetsList  || 'Loading...'}
+    </div>)
+}
+
+
+/** Allows recursive display of tables. */
+async function createPropertyTable(props, viewer, serial = 0) {
+  return (
+    <table style={{borderBottom: '1px solid lighgrey'}}>
+      <tbody>
+        {await Promise.all(Object.keys(props).map(
+          async (key, ndx) => await prettyProps(key, props[key], viewer, ndx)
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
+
+async function createPsetsList(element, viewer, classes) {
+  const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID);
+  return (
+    <ul className={classes.psetsList}>
+      {await Promise.all(
+        psets.map(
+          async (ps, ndx) => {
+            return (
+              <li key={ndx} className={classes.section}>
+                <Accordion className={classes.accordian}>
                   <AccordionSummary
                     expandIcon={<ExpandIcon className = {classes.icons} />}
                     aria-controls="panel1a-content"
@@ -76,44 +60,15 @@ export default function ItemProperties({ viewer, element }) {
                     <Typography>{ps.Name.value || 'Property Set'}</Typography>
                   </AccordionSummary>
                   <AccordionDetails className = {classes.accordianDetails}>
-                     {await propsTable(ps, viewer)}
+                    {await createPropertyTable(ps, viewer)}
                   </AccordionDetails>
                 </Accordion>
-
-                </li>
-              )
-            }
-          )
-        ).then(
-          (pts) => {
-            setPsetTables(pts);
+              </li>
+            )
           }
-        )
-      }
-    );
-  }, [element]);
-console.log('psetTables',psetTables)
-  return (
-    <div className={classes.propsContainer}>
-      <h2 className = {classes.sectionTitle}>Properties</h2>
-      {table  || 'Loading...'}
-      {/* <hr style = {{backgroundColor:'lightgrey'}}/> */}
-      <h2 className = {classes.sectionTitle}>Property Sets</h2>
-      {psetTables  || 'Loading...'}
-    </div>)
-}
-
-/** Allows recursive display of tables. */
-const propsTable = async (props, viewer, serial = 0) => {
-  return (
-    <table style = {{borderBottom:'1px solid lighgrey'}}>
-      <tbody>
-        {await Promise.all(Object.keys(props).map(
-          (key, ndx) => prettyProps(key, props[key], viewer, ndx)
         ))}
-      </tbody>
-    </table>
-  );
+    </ul>
+  )
 }
 
 
@@ -220,7 +175,7 @@ async function deref(ref, viewer, serial) {
       case 5:
         const refId = stoi(ref.value);
         // TODO, only recursion uses the viewer, serial.
-        return await propsTable(
+        return await createPropertyTable(
           await viewer.getProperties(0, refId), viewer, serial);
       default:
         return 'Unknown type: ' + ref.value;
@@ -230,7 +185,7 @@ async function deref(ref, viewer, serial) {
     return (await Promise.all(ref.map(
       async (v, ndx) => isTypeValue(v)
         ? await deref(v, viewer, ndx)
-        : await propsTable(v, viewer, ndx)
+        : await createPropertyTable(v, viewer, ndx)
     )));
   }
   if (typeof ref === 'object') {
@@ -238,3 +193,47 @@ async function deref(ref, viewer, serial) {
   }
   return ref; // typically number or string.
 }
+
+
+const useStyles = makeStyles({
+  propsContainer: {
+    padding: '0.5em',
+    '& td': {
+      verticalAlign: 'top',
+      paddingBottom: '1em',
+      whiteSpace: 'nowrap'
+    },
+    '& td + td': {
+      paddingLeft: '0.5em'
+    }
+  },
+  psetsList: {
+    padding: '0px'
+  },
+  section:{
+    listStyle:'none',
+    maxWidth:"400px"
+  },
+  sectionTitle:{
+    maxWidth:'320px',
+    overflowWrap: 'break-word',
+    fontFamily: 'Helvetica',
+    fontSize: '20px',
+    fontWeight: 200,
+    color: '#696969',
+    paddingLeft:'4px',
+    paddingRight:'4px',
+    paddingBottom:'10px',
+    borderBottom:' 1px solid lightgrey'
+  },
+  icons:{
+    width:'20px'
+  },
+  accordian:{
+    maxWidth:'320px'
+  },
+  accordianDetails:{
+    overflow:'scroll'
+  }
+
+});
