@@ -29,9 +29,9 @@ export default function ItemProperties({ viewer, element }) {
 
 
 /** Allows recursive display of tables. */
-async function createPropertyTable(props, viewer, serial = 0) {
+async function createPropertyTable(props, viewer, serial = 0, isHasProperties = false) {
   return (
-    <table style={{borderBottom: '1px solid lighgrey'}}>
+    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey'}}>
       <tbody>
         {await Promise.all(Object.keys(props).map(
           async (key, ndx) => await prettyProps(key, props[key], viewer, ndx)
@@ -57,7 +57,7 @@ async function createPsetsList(element, viewer, classes) {
                     aria-controls="panel1a-content"
                     id="panel1a-header"
                   >
-                    <Typography>{ps.Name.value || 'Property Set'}</Typography>
+                    <Typography>{decodeIFCString(ps.Name.value) || 'Property Set'}</Typography>
                   </AccordionSummary>
                   <AccordionDetails className = {classes.accordianDetails}>
                     {await createPropertyTable(ps, viewer)}
@@ -106,6 +106,32 @@ async function prettyProps(key, value, viewer, serial = 0) {
     case 'RepresentationContexts':
     case 'Tag':
     case 'UnitsInContext': return null;
+    case 'HasProperties':
+      // HasProperties behaves a little special.
+      if (Array.isArray(value)) {
+        let rows = [];
+        for (let ndx in value) {
+          const p = value[ndx];
+          if (p.type != 5) throw new Error('huh?')
+          const refId = stoi(p.value);
+          const dObj = await viewer.getProperties(0, refId)
+          rows.push(row(
+            decodeIFCString(dObj.Name.value),
+            decodeIFCString(dObj.NominalValue.value),
+            serial++ + '-row'));
+        }
+        return (
+          <tr key={serial++}>
+            <td>
+              <table>
+                <tbody>{rows}</tbody>
+              </table>
+            </td>
+          </tr>
+        );
+      } else {
+        console.warn('HasProperties with unknown structure: ', js(value));
+      }
     default:
       return row(label, await deref(value, viewer, serial), serial);
   }
@@ -118,8 +144,11 @@ const isTypeValue = (obj) => {
 
 
 function row(d1, d2, serial) {
+  if (serial == undefined) {
+    throw new Error('Must have serial for key');
+  }
   if (d2 === null) {
-    return <tr key={serial}><td colspan="2">{d1}</td></tr>
+    return (<tr key={serial}><td key={serial + '-double-data'} colspan="2">{d1}</td></tr>)
   }
   return (
     <tr key={serial}>
@@ -162,7 +191,7 @@ function stoi(s) {
 }
 
 
-async function deref(ref, viewer, serial) {
+async function deref(ref, viewer, serial, isHasProperties) {
   if (ref === null || ref === undefined) {
     throw new Error('Ref undefined or null: ', ref);
   }
@@ -185,7 +214,7 @@ async function deref(ref, viewer, serial) {
     return (await Promise.all(ref.map(
       async (v, ndx) => isTypeValue(v)
         ? await deref(v, viewer, ndx)
-        : await createPropertyTable(v, viewer, ndx)
+        : await createPropertyTable(v, viewer, ndx, isHasProperties)
     )));
   }
   if (typeof ref === 'object') {

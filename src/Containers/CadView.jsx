@@ -178,6 +178,14 @@ const CadView = () => {
     selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
+
+    // TODO(pablo): just found out this method is getting called a lot
+    // when i added navigation on select, which flooded the browser
+    // IPC.
+
+    //const path = computeElementPath(elt, elt => elt.expressID);
+    //navigate(path);
+    //console.log(elt, ', path: ', path);
     setShowItemPanel(false);
   };
 
