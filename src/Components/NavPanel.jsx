@@ -4,8 +4,9 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
 import NavTree from './NavTree';
-import ArrowStraight from '../assets/Arrow_straight.svg';
-import ArrowDown from '../assets/Arrow_down.svg';
+import NodeClosed from '../assets/Arrow_straight.svg';
+import NodeOpen from '../assets/Arrow_down.svg';
+
 
 const useStyles = makeStyles({
   contextualMenu: {
@@ -14,18 +15,18 @@ const useStyles = makeStyles({
     left: "20px",
     overflow: 'auto',
     width: '308px',
-    border: 'none',
     justifyContent: 'space-around',
     alignItems: 'center',
-    height: '70%',
+    maxHeight: '50%',
     '@media (max-width: 900px)': {
-      height: '30%',
+      maxHeight: '30%',
       width: '250px',
     },
   },
   treeContainer:{
-    marginTop: 20,
-    overflow: 'scroll'
+    paddingTop: '20px',
+    paddingBottom: '20px',
+    overflow: 'scroll',
   },
   paper: {
     display: 'flex',
@@ -79,8 +80,8 @@ const NavPanel = ({
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
-          defaultCollapseIcon={<ArrowDown className = {classes.icon} />}
-          defaultExpandIcon={<ArrowStraight className = {classes.icon} />}
+          defaultCollapseIcon={<NodeOpen className = {classes.icon} />}
+          defaultExpandIcon={<NodeClosed className = {classes.icon} />}
           sx={{ flexGrow: 1, maxWidth: 400, overflowY: 'auto' }}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
