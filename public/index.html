@@ -57,8 +57,8 @@
             return s.replace(/~and~/g, '&')
           }).join('?');
           var finalPath = l.pathname.slice(0, -1) + decoded + l.hash
-          window.history.replaceState(null, null, finalPath);
           console.log('finalPath: ', finalPath);
+          window.history.replaceState(null, null, finalPath);
         }
       }(window.location))
     </script>
@@ -69,7 +69,11 @@
     <div id="root"></div>
     <script>
       console.log('before app load: ');
+      const loader = document.createElement('script');
+      loader.setAttribute('src', window.location.pathname.startsWith('/Share')
+                          ? '/Share/index.js'
+                          : '/index.js');
+      document.body.appendChild(loader)
     </script>
-    <script src="/index.js"></script>
   </body>
 </html>
