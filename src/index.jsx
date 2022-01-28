@@ -7,8 +7,10 @@ import App from './App';
 // If icons-material isn't imported somewhere, mui dies
 import AccountCircle from '@mui/icons-material/AccountCircle';
 
+console.log('IN APP LOC 1: ', window.location)
 
 function Routed() {
+/*
   const navigate = useNavigate();
 
   React.useEffect(() => {
@@ -20,8 +22,8 @@ function Routed() {
       }
     }
   }, []);
-
-
+*/
+  console.log('IN APP LOC: ', window.location)
   return (
     <Routes>
       <Route path="/*" element={<App/>} />
