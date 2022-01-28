@@ -276,7 +276,6 @@ const CadView = () => {
     const filePath = window.location.pathname.startsWith('/Share')
           ? '/Share/tinyhouse.ifc'
           : '/tinyhouse.ifc';
-    console..og('load ifc at: ', filePath);
     if (debug) {
       console.log('CadView#useEffect: load from server and hash: ', filePath);
     }
