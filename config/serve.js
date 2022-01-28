@@ -11,9 +11,7 @@ esbuild.serve({
   // The result tells us where esbuild's local server is
   const {host, port} = result
 
-  console.log('creating server...');
   http.createServer((req, res) => {
-    console.log('creating server at path: ', req.url);
     const options = {
       hostname: host,
       port: port,
@@ -24,7 +22,6 @@ esbuild.serve({
 
     // Forward each incoming request to esbuild
     const proxyReq = http.request(options, proxyRes => {
-      console.log('Got request: ', proxyReq.statusCode)
       // If esbuild returns "not found", send a custom 404 page
       if (proxyRes.statusCode === 404) {
         res.writeHead(404, { 'Content-Type': 'text/html' });
@@ -53,6 +50,7 @@ esbuild.serve({
       // https://username.github.io/repo-name/one/two?a=b&c=d#qwe becomes
       // https://username.github.io/repo-name/?/one/two&a=b~and~c=d#qwe
       // Otherwise, leave pathSegmentsToKeep as 0.
+      /////////////////// Modified locally for esbuild, which serves out of root. /
       var pathSegmentsToKeep = 0;
 
       var l = window.location;
@@ -70,7 +68,6 @@ esbuild.serve({
     Resource not found.  Redirecting...
   </body>
 </html>`);
-        console.log('Returned custom 404')
         return;
       }
 
