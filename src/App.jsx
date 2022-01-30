@@ -10,13 +10,13 @@ import CadView from './Containers/CadView'
 import 'normalize.css'
 
 
-const Forward = ({pathPrefix}) => {
+function Forward({appPrefix}) {
   const location = useLocation(), navigate = useNavigate();
   console.log('Forward: location: ', location);
   React.useEffect(() => {
     console.log('App.jsx: Base: should forward?: ', location);
-    if (location.pathname == pathPrefix) {
-      const dest = pathPrefix + '/v/p';
+    if (location.pathname == appPrefix) {
+      const dest = appPrefix + '/v/p';
       console.log('App.jsx: Base: forwarding to: ', dest);
       navigate(dest);
     }
@@ -33,14 +33,24 @@ const Forward = ({pathPrefix}) => {
  *   http://host/share/v/p/haus.ifc
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
  */
-const App = ({pathPrefix}) => (
-  <Routes>
-    <Route path="/" element={<Forward pathPrefix={pathPrefix}/>}>
-      <Route path="v/p/*" element={<CadView pathPrefix={pathPrefix + '/v/p'} />}/>
-      <Route path="v/gh/:org/:repo/:branch/*" element={<CadView pathPrefix={pathPrefix + '/v/gh'} />}/>
-    </Route>
-  </Routes>
-)
-
-
-export default App;
+export default function App({installPrefix, appPrefix}) {
+  return (
+    <Routes>
+      <Route path="/" element={<Forward appPrefix={appPrefix}/>}>
+        <Route path="v/p/*"
+               element={
+                 <CadView
+                   installPrefix={installPrefix}
+                   appPrefix={appPrefix}
+                   pathPrefix={appPrefix + '/v/p'} />
+               } />
+        <Route path="v/gh/:org/:repo/:branch/*"
+               element={
+                 <CadView
+                   installPrefix={installPrefix}
+                   appPrefix={appPrefix}
+                   pathPrefix={appPrefix + '/v/p'} />
+               } />
+      </Route>
+    </Routes>);
+}

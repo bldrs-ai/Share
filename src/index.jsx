@@ -16,7 +16,7 @@ import { ThemeProvider, createTheme } from '@mui/material/styles'
 import AccountCircle from '@mui/icons-material/AccountCircle'
 
 
-const PATH_PREFIX = window.location.pathname.startsWith('/Share') ? '/Share' : '';
+const INSTALL_PREFIX = window.location.pathname.startsWith('/Share') ? '/Share' : '';
 
 
 const theme = createTheme({
@@ -56,14 +56,17 @@ function Routed() {
       }
     }
     if (location.pathname === '/') {
-      navigate('/share');
+      navigate(INSTALL_PREFIX + '/share');
     }
   }, []);
 
   return (
     <Routes>
-      <Route path={PATH_PREFIX} element={<Themed/>}>
-        <Route path="share/*" element={<App pathPrefix={PATH_PREFIX + "/share"}/>}/>
+      <Route path={INSTALL_PREFIX} element={<Themed/>}>
+        <Route path="share/*" element={
+                 <App installPrefix={INSTALL_PREFIX}
+                      appPrefix={INSTALL_PREFIX + "/share"} />
+               }/>
       </Route>
     </Routes>
   )

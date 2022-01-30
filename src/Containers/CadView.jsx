@@ -18,7 +18,7 @@ const debug = 3;
 const PANEL_TOP = 84;
 
 
-export default function CadView({pathPrefix}) {
+export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showNavPanel, setShowNavPanel] = useState(false);
@@ -148,7 +148,8 @@ export default function CadView({pathPrefix}) {
     }
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
     const mp = getModelPath(pathPrefix, params);
-    console.log('demuxing paths... ', {pathPrefix, pathname, params, modelPath, mp});
+    console.log('demuxing paths... ',
+                {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath, mp});
     if (mp === null) {
       // TODO: probe for index.ifc
       let fwd = pathPrefix + '/tinyhouse.ifc';
