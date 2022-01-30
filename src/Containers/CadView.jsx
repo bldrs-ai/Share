@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { IfcViewerAPI } from 'web-ifc-viewer';
 import { makeStyles } from '@mui/styles';
 import SearchIndex from './SearchIndex.js';
@@ -14,12 +14,11 @@ import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtil
 import { Color } from 'three';
 
 
-const PATH_PREFIX = window.location.pathname.startsWith('/Share') ? '/Share' : '';
 const debug = 0;
 const PANEL_TOP = 84;
 
 
-export default function CadView() {
+export default function CadView({pathPrefix}) {
   const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showNavPanel, setShowNavPanel] = useState(false);
@@ -37,6 +36,8 @@ export default function CadView() {
   const onClickShare = () => setShowShare(!showShare);
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
   const [showShortCuts, setShowShortCuts] = useState(false)
+
+  const [modelPath, setModelPath] = useState(null);
 
   const clearSearch = () => {
     setSelectedElements([]);
@@ -83,7 +84,7 @@ export default function CadView() {
   };
 
   // TODO(pablo): search suggest
-  const onSearchModify = (target) => {};
+  const onSearchModify = (query) => {};
 
   const onElementSelect = async (elt) => {
     const id = elt.expressID;
@@ -105,13 +106,9 @@ export default function CadView() {
   };
 
   const onModelLoad = (rootElt, viewer) => {
+    console.log('CadView#onModelLoad...')
     setRootElement(rootElt);
     setupLookupAndParentLinks(rootElt, elementsById);
-    if (debug >= 2) {
-      console.log(
-        `CadView#fileOpen: json: '${JSON.stringify(rootElt, null, '  ')}'`
-      );
-    }
     const expanded = [rootElt.expressID + ''];
     let elt = rootElt;
     for (let i = 0; i < 3; i++) {
@@ -134,66 +131,52 @@ export default function CadView() {
   };
 
   const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
 
-  // Similar to componentDidMount and componentDidUpdate:
+
   useEffect(() => {
-    const container = document.getElementById('viewer-container');
-    const viewer = new IfcViewerAPI({
-      container,
-      backgroundColor: new Color('#E0E0E0'),
-    });
+    const viewer = initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedElement);
     setViewer(viewer);
-    if (debug) {
-      console.log('CadView#useEffect: viewer created: ', viewer);
+  }, []);
+
+
+  useEffect(() => {
+    const pathname = location.pathname;
+    if (!pathname.startsWith(pathPrefix)) {
+      throw new Error('Pathname does not match pathPrefix')
     }
-    // No setWasmPath here. As of 1.0.14, the default is
-    // http://localhost:3000/static/js/web-ifc.wasm, so just putting
-    // the binary there in our public directory.
-    viewer.IFC.setWasmPath('./static/js/');
-    viewer.addAxes();
-    viewer.addGrid(50, 50);
-    viewer.clipper.active = true;
+    // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
+    const mp = getModelPath(pathPrefix, params);
+    console.log('demuxing paths... ', {pathPrefix, pathname, params, modelPath, mp});
+    if (mp === null) {
+      // TODO: probe for index.ifc
+      let fwd = pathPrefix + '/tinyhouse.ifc';
+      console.log('forwarding to: ', fwd);
+      navigate(fwd);
+      return;
+    }
+    if (modelPath === null
+        || modelPath.filepath && modelPath.filepath != mp.filepath
+        || modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
+      setModelPath(mp);
+      console.log('New model path: ', mp);
+    }
+  }, [params])
 
-    const handleKeyDown = (event) => {
-      //add a plane
-      if (event.code === 'KeyQ') {
-        viewer.clipper.createPlane();
-      }
-      //delete all planes
-      if (event.code === 'KeyW') {
-        viewer.clipper.deletePlane();
-      }
-      if (event.code == 'KeyA') {
-        viewer.IFC.unpickIfcItems();
-      }
-    };
 
-    // Highlight items when hovering over them
-    window.onmousemove = viewer.IFC.prePickIfcItem;
-    window.onkeydown = handleKeyDown;
-
-    // Select items
-    window.ondblclick = async (event) => {
-      if (event.target) {
-        if (event.target.tagName == 'CANVAS') {
-          const item = await viewer.IFC.pickIfcItem(true);
-          if (item.modelID === undefined || item.id === undefined) return;
-          const path = PATH_PREFIX + computeElementPath(elementsById[item.id], elt => elt.expressID);
-          navigate(path);
-          setSelectedElement(item);
-        }
-      }
-    };
+  useEffect(() => {
+    if (modelPath === null) {
+      return
+    }
 
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
-    const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-    const filePath = PATH_PREFIX + '/tinyhouse.ifc'
     if (debug) {
-      console.log('CadView#useEffect: load from server and hash: ', filePath);
+      console.log('CadView#useEffect: have new modelPath: ', modelPath);
     }
     viewer.IFC.loader.load(
-      filePath,
+      modelPath.gitpath || modelPath.filepath,
       (model) => {
         if (debug) {
           console.log('CadView#useEffect$onLoad, model: ', model, viewer);
@@ -204,16 +187,25 @@ export default function CadView() {
           onModelLoad(rootElt, viewer);
         });
       },
-      (progressEvent) => {
-        if (debug) {
-          console.log('CadView#useEffect$onProgress', progressEvent);
-        }
-      },
-      (error) => {
-        console.error('CadView#useEffect$onError', error);
-      }
+      (progressEvent) => { if (debug) { console.log('CadView#onProgress', progressEvent) }},
+      (error) => console.error('CadView#useEffect$onError', error)
     );
-  }, []);
+
+    // Select items.
+    // TODO: is this best place for this?  Here because needs ref to modelPath.
+    window.ondblclick = async (event) => {
+      if (event.target) {
+        if (event.target.tagName == 'CANVAS') {
+          const item = await viewer.IFC.pickIfcItem(true);
+          if (item.modelID === undefined || item.id === undefined) return;
+          const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
+          console.log('dblclick on: ', path)
+          navigate(pathPrefix + (modelPath.gitpath || modelPath.filepath) + path);
+          setSelectedElement(item);
+        }
+      }
+    };
+  }, [modelPath]);
 
   const loadIfc = async (file) => {
     setIsLoading(true);
@@ -294,7 +286,7 @@ export default function CadView() {
             expandedElements={expandedElements}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
-            pathPrefix={PATH_PREFIX}
+            pathPrefix={pathPrefix + (modelPath.filepath || '')}
           />}
         <div className={classes.itemPanelContainer}>
             <ItemPanelButton
@@ -308,15 +300,95 @@ export default function CadView() {
         </div>
         <div className={classes.iconGroup}>
           <IconGroup
-            placeCutPlane = {()=>placeCutPlane()}
-            unSelectItem = {()=>unSelectItem()}
-            toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}
+            placeCutPlane={()=>placeCutPlane()}
+            unSelectItem={()=>unSelectItem()}
+            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
           />
         </div>
       </div>
     </div>
   );
 };
+
+
+/** @return IfcViewerAPI viewer */
+function initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedElement) {
+  const container = document.getElementById('viewer-container');
+  const viewer = new IfcViewerAPI({
+    container,
+    backgroundColor: new Color('#E0E0E0'),
+  });
+  if (debug) {
+    console.log('CadView#initViewer: viewer created: ', viewer, ', for modelPath: ', modelPath);
+  }
+  // No setWasmPath here. As of 1.0.14, the default is
+  // http://localhost:3000/static/js/web-ifc.wasm, so just putting
+  // the binary there in our public directory.
+  viewer.IFC.setWasmPath('./static/js/');
+  viewer.addAxes();
+  viewer.addGrid(50, 50);
+  viewer.clipper.active = true;
+
+  const handleKeyDown = (event) => {
+    //add a plane
+    if (event.code === 'KeyQ') {
+      viewer.clipper.createPlane();
+    }
+    //delete all planes
+    if (event.code === 'KeyW') {
+      viewer.clipper.deletePlane();
+    }
+    if (event.code == 'KeyA') {
+      viewer.IFC.unpickIfcItems();
+    }
+  };
+
+  // Highlight items when hovering over them
+  window.onmousemove = viewer.IFC.prePickIfcItem;
+  window.onkeydown = handleKeyDown;
+
+  return viewer;
+}
+
+/**
+ * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
+ *
+ * Either reference within this project's serving directory:
+ *   {filepath: '/file.ifc'}
+ *
+ * or a global GitHub path:
+ *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
+ */
+// TODO: combine modelPath methods into class.
+function getModelPath(pathPrefix, params) {
+  let m = null;
+  if (pathPrefix.endsWith('/p')) {
+    const filepath = params['*'];
+    if (filepath == '') {
+      return null;
+    }
+    const parts = filepath.split('.ifc');
+    // Filepath is a reference rooted in the serving directory.
+    // e.g. /haus.ifc or /ifc-files/haus.ifc
+    m = {
+      filepath: '/' + parts[0] + '.ifc', // TODO(pablo)
+      eltPath: parts[1]
+    };
+    console.log('CadView#getModelPath: is a project file: ', m);
+  } else if (pathPrefix.endsWith('/gh')) {
+    m = {
+      org: params['org'],
+      repo: params['repo'],
+      branch: params['branch'],
+      filepath: params['*']
+    };
+    m.gitpath = `https://raw.githubusercontent.com/${m.org}/${m.repo}/${m.branch}/${m.filepath}`
+    console.log('CadView#getModelPath: is a remote GitHub file: ', m);
+  } else {
+    throw new Error('Empty view type from pathPrefix')
+  }
+  return m;
+}
 
 
 const useStyles = makeStyles((theme) => ({
