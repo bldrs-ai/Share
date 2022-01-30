@@ -7,6 +7,7 @@ import {
   useNavigate
 } from 'react-router-dom'
 import CadView from './Containers/CadView'
+import 'normalize.css'
 
 
 const Forward = ({pathPrefix}) => {

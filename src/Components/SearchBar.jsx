@@ -5,8 +5,9 @@ import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
 import Search from '../assets/Search.svg';
 import TreeIcon from '../assets/Tree.svg';
+import TreeIconOn from '../assets/TreeOn.svg';
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles({
   root: {
     padding: '2px 4px',
     display: 'flex',
@@ -36,7 +37,7 @@ const useStyles = makeStyles((theme) => ({
     fontFamily: 'Helvetica',
     color: '#696969',
   }
-}));
+});
 
 export default function SearchBar({
   onSearch,
@@ -72,7 +73,7 @@ export default function SearchBar({
         onClick={onClickMenu}
         disabled={disabled}
       >
-        <TreeIcon className={classes.icon} />
+        {open ? <TreeIconOn className={classes.icon} />:<TreeIcon className={classes.icon} />}
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}

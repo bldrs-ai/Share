@@ -52,9 +52,9 @@ function Routed() {
         navigate(path);
       }
     }
-    //if (location.pathname === '/') {
-    //  navigate('/share');
-    //}
+    if (location.pathname === '/') {
+      navigate('/share');
+    }
   }, []);
 
   return (

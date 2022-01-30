@@ -1,9 +1,8 @@
 import React, {useState} from 'react';
 import { makeStyles } from '@mui/styles';
-import Paper from '@mui/material/Paper';
 import ItemProperties from './ItemProperties';
-import Close from '../assets/Close.svg'
 import MenuButton from '../Components/MenuButton';
+import ItemPropertiesDrawer from './ItemPropertiesDrawer'
 
 
 const useStyles = makeStyles({
@@ -61,6 +60,7 @@ const ItemPanelButton = ({viewer, element, topOffset}) =>{
           element = {element}
           close = {()=>setShowItemPanel(false)}
           topOffset = {topOffset}
+          open = {showItemPanel}
         />}
       </div>
   )
@@ -69,13 +69,14 @@ const ItemPanelButton = ({viewer, element, topOffset}) =>{
 const ItemPanel = ({viewer, element, close, topOffset}) => {
   const classes = useStyles({topOffset:topOffset});
   return (
-      <Paper elevation={3} className={classes.itemPanel}>
-        <div className = {classes.titleContainer}>
-          <div className = {classes.title}>Properties</div>
-          <Close className = {classes.close} onClick = {close}/>
-        </div>
-        <ItemProperties viewer = {viewer} element = {element} />
-      </Paper>
+    <>
+      <ItemPropertiesDrawer
+          content = {<ItemProperties viewer = {viewer} element = {element}/>}
+          title = {'IFC Information'}
+          onClose = {close}
+          open = {open}
+        />
+  </>
   );
 };
 
