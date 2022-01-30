@@ -16,8 +16,9 @@ const Forward = ({pathPrefix}) => {
   React.useEffect(() => {
     console.log('App.jsx: Base: should forward?: ', location);
     if (location.pathname == pathPrefix) {
-      console.log('App.jsx: Base: forwarding...');
-      navigate(pathPrefix + '/v/p');
+      const dest = pathPrefix + '/v/p';
+      console.log('App.jsx: Base: forwarding to: ', dest);
+      navigate(dest);
     }
   }, []);
 

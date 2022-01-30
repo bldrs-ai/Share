@@ -62,7 +62,7 @@ function Routed() {
 
   return (
     <Routes>
-      <Route path="/" element={<Themed/>}>
+      <Route path={PATH_PREFIX} element={<Themed/>}>
         <Route path="share/*" element={<App pathPrefix={PATH_PREFIX + "/share"}/>}/>
       </Route>
     </Routes>
