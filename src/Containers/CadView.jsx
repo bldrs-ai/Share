@@ -14,97 +14,12 @@ import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtil
 import { Color } from 'three';
 
 
+const PATH_PREFIX = window.location.pathname.startsWith('/Share') ? '/Share' : '';
 const debug = 0;
 const PANEL_TOP = 84;
 
-const useStyles = makeStyles((theme) => ({
-  pageContainer:{
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    width: '100%',
-    height: '100%'
-  },
-  viewerContainer:{
-    zIndex: 0
-  },
-  toolBar:{
-    zIndex: 100
-  },
-  menuToolbarContainer: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'flex-end',
-    marginTop: '10px',
-    border:'1px solid red',
-    '@media (max-width: 900px)': {
-      marginTop: '40px',
-    },
-  },
-  searchContainer: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '20px',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  viewContainer: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    textAlign: 'center',
-    color: 'blue',
-    width: '100vw',
-    height: '100vh',
-    margin: 'auto',
-  },
-  viewWrapper:{
-    zIndex: 0
-  },
-  menusWrapper:{
-    zIndex: 100
-  },
-  aboutPanelContainer: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '0px',
-    right: '0px',
-    minWidth: '200px',
-    maxWidth: '500px',
-    width: '100%',
-    margin: '0em auto',
-    border: 'none',
-    zIndex:1000,
-  },
-  shortCutPanelContainer: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '0px',
-    right: '0px',
-    minWidth: '200px',
-    maxWidth: '500px',
-    width: '100%',
-    margin: '0em auto',
-    border: 'none',
-    zIndex:1000,
-  },
-  iconGroup:{
-      position: 'absolute',
-      bottom: `40px`,
-      right: '20px',
-      border: 'none',
-      zIndex:1000,
-      '@media (max-width: 900px)': {
-        bottom: `0px`,
-        top:'140px',
-        right: '14px',
-      },
-    },
-}));
 
-const CadView = () => {
+export default function CadView() {
   const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showNavPanel, setShowNavPanel] = useState(false);
@@ -263,7 +178,7 @@ const CadView = () => {
         if (event.target.tagName == 'CANVAS') {
           const item = await viewer.IFC.pickIfcItem(true);
           if (item.modelID === undefined || item.id === undefined) return;
-          const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
+          const path = PATH_PREFIX + computeElementPath(elementsById[item.id], elt => elt.expressID);
           navigate(path);
           setSelectedElement(item);
         }
@@ -273,7 +188,7 @@ const CadView = () => {
     // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
     // this to get access to progress and error.
     const parts = window.location.pathname.split(/[-\w\d]+.ifc/);
-    const filePath = './tinyhouse.ifc';
+    const filePath = PATH_PREFIX + '/tinyhouse.ifc'
     if (debug) {
       console.log('CadView#useEffect: load from server and hash: ', filePath);
     }
@@ -379,6 +294,7 @@ const CadView = () => {
             expandedElements={expandedElements}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
+            pathPrefix={PATH_PREFIX}
           />}
         <div className={classes.itemPanelContainer}>
             <ItemPanelButton
@@ -402,4 +318,90 @@ const CadView = () => {
   );
 };
 
-export default CadView;
+
+const useStyles = makeStyles((theme) => ({
+  pageContainer:{
+    position: 'absolute',
+    top: '0px',
+    left: '0px',
+    width: '100%',
+    height: '100%'
+  },
+  viewerContainer:{
+    zIndex: 0
+  },
+  toolBar:{
+    zIndex: 100
+  },
+  menuToolbarContainer: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'flex-end',
+    marginTop: '10px',
+    border:'1px solid red',
+    '@media (max-width: 900px)': {
+      marginTop: '40px',
+    },
+  },
+  searchContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: '20px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  viewContainer: {
+    position: 'absolute',
+    top: '0px',
+    left: '0px',
+    textAlign: 'center',
+    color: 'blue',
+    width: '100vw',
+    height: '100vh',
+    margin: 'auto',
+  },
+  viewWrapper:{
+    zIndex: 0
+  },
+  menusWrapper:{
+    zIndex: 100
+  },
+  aboutPanelContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: '0px',
+    right: '0px',
+    minWidth: '200px',
+    maxWidth: '500px',
+    width: '100%',
+    margin: '0em auto',
+    border: 'none',
+    zIndex:1000,
+  },
+  shortCutPanelContainer: {
+    position: 'absolute',
+    top: `${PANEL_TOP}px`,
+    left: '0px',
+    right: '0px',
+    minWidth: '200px',
+    maxWidth: '500px',
+    width: '100%',
+    margin: '0em auto',
+    border: 'none',
+    zIndex:1000,
+  },
+  iconGroup:{
+      position: 'absolute',
+      bottom: `40px`,
+      right: '20px',
+      border: 'none',
+      zIndex:1000,
+      '@media (max-width: 900px)': {
+        bottom: `0px`,
+        top:'140px',
+        right: '14px',
+      },
+    },
+}));
