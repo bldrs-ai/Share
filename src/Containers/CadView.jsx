@@ -144,7 +144,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   useEffect(() => {
     const pathname = location.pathname;
     if (!pathname.startsWith(pathPrefix)) {
-      throw new Error('Pathname does not match pathPrefix')
+      throw new Error(`Pathname(${pathname}) does not match pathPrefix(${pathPrefix})`)
     }
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
     const mp = getModelPath(pathPrefix, params);
