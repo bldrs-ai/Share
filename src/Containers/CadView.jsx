@@ -149,7 +149,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       console.log('#useEffect2: using paths to determine model path: ',
                   {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath});
     }
-    const ghPrefix = installPrefix + appPrefix + '/v/gh';
+    const ghPrefix = appPrefix + '/v/gh';
     if (!pathname.startsWith(pathPrefix)
         && !pathname.startsWith(ghPrefix)) {
       throw new Error(`Pathname(${pathname}) does not start with pathPrefix(${pathPrefix}) or ghPrefix(${ghPrefix})`);
