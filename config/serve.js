@@ -39,18 +39,12 @@ esbuild.serve({
       var pathSegmentsToKeep = window.location.pathname.startsWith('/Share') ? 1 : 0;
 
       var l = window.location;
-    var u1 = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '');
-    var u2 = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/';
-    var u3 = l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~');
-    var u4 = (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '');
-    console.log(u1, u2, u3, u4);
-      l.replace(
-        u1 +
-        u2 +
-        u3 +
-        u4 +
-        l.hash
-      );
+      var u1 = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '');
+      var u2 = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/';
+      var u3 = l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~');
+      var u4 = (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '');
+      //console.log('Redirect URL parts: ', u1, u2, u3, u4);
+      l.replace(u1 + u2 + u3 + u4 + l.hash);
     </script>
   </head>
   <body>

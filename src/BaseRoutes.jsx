@@ -24,11 +24,12 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  *
  *   http://host/share/v/p/haus.ifc
  *   http://host/share/v/gh/buildrs/Share/main/public/haus.ifc
+ * @param testElt For unit test allow use of a stub here instead of loading the app.
  */
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation(), navigate = useNavigate();
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
-/*
+
   React.useEffect(() => {
     const referrer = document.referrer;
     if (referrer) {
@@ -42,9 +43,8 @@ export default function BaseRoutes({testElt = null}) {
       navigate(installPrefix + '/share');
     }
   }, []);
-*/
+
   const basePath = installPrefix + "/*";
-  console.log('BASE PATH: ', basePath);
   return (
     <Routes>
       <Route path={basePath} element={<Themed/>}>
