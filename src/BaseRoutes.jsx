@@ -24,6 +24,7 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  *
  *   http://host/share/v/p/haus.ifc
  *   http://host/share/v/gh/buildrs/Share/main/public/haus.ifc
+ *
  * @param testElt For unit test allow use of a stub here instead of loading the app.
  */
 export default function BaseRoutes({testElt = null}) {

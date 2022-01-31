@@ -10,14 +10,20 @@ import CadView from './Containers/CadView'
 import 'normalize.css'
 
 
+const debug = 0;
+
+
 function Forward({appPrefix}) {
   const location = useLocation(), navigate = useNavigate();
-  console.log('Forward: location: ', location);
   React.useEffect(() => {
-    console.log('Share.jsx: Base: should forward?: ', location);
+    if (debug) {
+      console.log('Share.jsx: should forward?: ', location);
+    }
     if (location.pathname == appPrefix) {
       const dest = appPrefix + '/v/p';
-      console.log('Share.jsx: Base: forwarding to: ', dest);
+      if (debug) {
+        console.log('Share.jsx: Base: forwarding to: ', dest);
+      }
       navigate(dest);
     }
   }, []);

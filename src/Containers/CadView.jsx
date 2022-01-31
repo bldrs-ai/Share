@@ -14,7 +14,7 @@ import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtil
 import { Color } from 'three';
 
 
-const debug = 3;
+const debug = 0;
 const PANEL_TOP = 84;
 
 
@@ -106,7 +106,9 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   };
 
   const onModelLoad = (rootElt, viewer) => {
-    console.log('CadView#onModelLoad...')
+    if (debug) {
+      console.log('CadView#onModelLoad...');
+    }
     setRootElement(rootElt);
     setupLookupAndParentLinks(rootElt, elementsById);
     const expanded = [rootElt.expressID + ''];
@@ -143,18 +145,26 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   useEffect(() => {
     const pathname = location.pathname;
-    if (!pathname.startsWith(pathPrefix)) {
-      throw new Error(`Pathname(${pathname}) does not match pathPrefix(${pathPrefix})`)
+    if (debug >= 2) {
+      console.log('#useEffect2: using paths to determine model path: ',
+                  {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath});
     }
-    console.log('#useEffect2: using paths to determin model path: ',
-                {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath});
+    const ghPrefix = installPrefix + appPrefix + '/v/gh';
+    if (!pathname.startsWith(pathPrefix)
+        && !pathname.startsWith(ghPrefix)) {
+      throw new Error(`Pathname(${pathname}) does not start with pathPrefix(${pathPrefix}) or ghPrefix(${ghPrefix})`);
+    }
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
     const mp = getModelPath(installPrefix, pathPrefix, params);
-    console.log('#useEffect2: got modelPath: ', {mp});
+    if (debug >= 2) {
+      console.log('#useEffect2: got modelPath: ', {mp});
+    }
     if (mp === null) {
       // TODO: probe for index.ifc
       let fwd = pathPrefix + '/tinyhouse.ifc';
-      console.log('forwarding to: ', fwd);
+      if (debug >= 2) {
+        console.log('forwarding to: ', fwd);
+      }
       navigate(fwd);
       return;
     }
@@ -162,7 +172,9 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         || modelPath.filepath && modelPath.filepath != mp.filepath
         || modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
       setModelPath(mp);
-      console.log('New model path: ', mp);
+      if (debug) {
+        console.log('New model path: ', mp);
+      }
     }
   }, [params])
 
@@ -201,7 +213,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
           const item = await viewer.IFC.pickIfcItem(true);
           if (item.modelID === undefined || item.id === undefined) return;
           const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
-          console.log('dblclick on: ', path)
           navigate(pathPrefix + (modelPath.gitpath || modelPath.filepath) + path);
           setSelectedElement(item);
         }
@@ -378,7 +389,9 @@ function getModelPath(installPrefix, pathPrefix, params) {
       filepath: '/' + parts[0] + '.ifc', // TODO(pablo)
       eltPath: parts[1]
     };
-    console.log('CadView#getModelPath: is a project file: ', m);
+    if (debug) {
+      console.log('CadView#getModelPath: is a project file: ', m);
+    }
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
       org: params['org'],
@@ -387,7 +400,9 @@ function getModelPath(installPrefix, pathPrefix, params) {
       filepath: params['*']
     };
     m.gitpath = `https://raw.githubusercontent.com/${m.org}/${m.repo}/${m.branch}/${m.filepath}`
-    console.log('CadView#getModelPath: is a remote GitHub file: ', m);
+    if (debug) {
+      console.log('CadView#getModelPath: is a remote GitHub file: ', m);
+    }
   } else {
     throw new Error('Empty view type from pathPrefix')
   }
