@@ -14,10 +14,7 @@ import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtil
 import { Color } from 'three';
 
 
-const debug = 3;
-const PANEL_TOP = 84;
-
-
+const debug = 0;
 export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
@@ -89,15 +86,14 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     selectItems([id]);
     const props = await viewer.getProperties(0, elt.expressID);
     setSelectedElement(props);
+    setShowItemPanel(false);
 
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
-
+    //console.log('CadView#onElementSelect: in...');
     //const path = computeElementPath(elt, elt => elt.expressID);
     //navigate(path);
-    //console.log(elt, ', path: ', path);
-    setShowItemPanel(false);
   };
 
 
@@ -226,7 +222,9 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         const item = await viewer.IFC.pickIfcItem(true);
         if (item.modelID === undefined || item.id === undefined) return;
         const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
-        console.log('dblclick, using modelPath: ', modelPath);
+        if (debug >= 2) {
+          console.log('dblclick, using modelPath: ', modelPath);
+        }
         if (modelPath.gitpath) {
           navigate(pathPrefix + modelPath.getRepoPath() + path);
         } else {
@@ -384,6 +382,7 @@ function initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedEl
   return viewer;
 }
 
+
 /**
  * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
  *
@@ -434,6 +433,7 @@ function getModelPath(installPrefix, pathPrefix, params) {
 }
 
 
+const PANEL_TOP = 84;
 const useStyles = makeStyles((theme) => ({
   pageContainer:{
     position: 'absolute',
