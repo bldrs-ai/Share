@@ -57,7 +57,7 @@ export default function Share({installPrefix, appPrefix}) {
                  <CadView
                    installPrefix={installPrefix}
                    appPrefix={appPrefix}
-                   pathPrefix={appPrefix + '/v/p'} />
+                   pathPrefix={appPrefix + '/v/gh'} />
                } />
       </Route>
     </Routes>);

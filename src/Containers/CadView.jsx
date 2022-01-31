@@ -44,17 +44,14 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     viewer.IFC.unpickIfcItems();
   };
 
+
   const selectItems = async (resultIDs) => {
-    setIsLoading(true);
-    setLoadingMessage('Selection in progress');
     setSelectedElements(resultIDs.map((id) => id + ''));
     try {
       if (debug >= 2) {
         console.log('picking ifc items: ', resultIDs);
       }
-      setIsLoading(true);
       await viewer.pickIfcItemsByID(0, resultIDs);
-      setIsLoading(false);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -64,6 +61,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       }
     }
   };
+
 
   const onSearch = (query) => {
     clearSearch();
@@ -80,11 +78,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     gtag('event', 'search', {
       search_term: query,
     });
-    setIsLoading(false);
   };
 
-  // TODO(pablo): search suggest
-  const onSearchModify = (query) => {};
 
   const onElementSelect = async (elt) => {
     const id = elt.expressID;
@@ -104,6 +99,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     //console.log(elt, ', path: ', path);
     setShowItemPanel(false);
   };
+
 
   const onModelLoad = (rootElt, viewer) => {
     if (debug) {
@@ -132,6 +128,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     setShowSearchBar(true);
   };
 
+  // TODO(pablo): search suggest
+  const onSearchModify = (query) => {};
+
+
   const navigate = useNavigate();
   const location = useLocation();
   const params = useParams();
@@ -146,24 +146,23 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   useEffect(() => {
     const pathname = location.pathname;
     if (debug >= 2) {
-      console.log('#useEffect2: using paths to determine model path: ',
+      console.log('CadView#useEffect[params]: using paths to determine model path: ',
                   {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath});
     }
-    const ghPrefix = appPrefix + '/v/gh';
-    if (!pathname.startsWith(pathPrefix)
-        && !pathname.startsWith(ghPrefix)) {
-      throw new Error(`Pathname(${pathname}) does not start with pathPrefix(${pathPrefix}) or ghPrefix(${ghPrefix})`);
+    if (!pathname.startsWith(pathPrefix)) {
+      // Just an assert.. this shouldn't be possible.
+      throw new Error(`Pathname(${pathname}) does not start with pathPrefix(${pathPrefix})`);
     }
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
     const mp = getModelPath(installPrefix, pathPrefix, params);
     if (debug >= 2) {
-      console.log('#useEffect2: got modelPath: ', {mp});
+      console.log('CadView#useEffect[params]: got modelPath: ', {mp});
     }
     if (mp === null) {
       // TODO: probe for index.ifc
       let fwd = pathPrefix + '/tinyhouse.ifc';
       if (debug >= 2) {
-        console.log('forwarding to: ', fwd);
+        console.log('CadView#useEffect[params]: forwarding to: ', fwd);
       }
       navigate(fwd);
       return;
@@ -173,7 +172,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         || modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
       setModelPath(mp);
       if (debug) {
-        console.log('New model path: ', mp);
+        console.log('CadView#useEffect[params]: new model path: ', mp);
       }
     }
   }, [params])
@@ -183,14 +182,16 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     if (modelPath === null) {
       return
     }
-
-    // Expanded version of viewer.loadIfcUrl('/index.ifc').  Using
-    // this to get access to progress and error.
+    const toLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     if (debug) {
-      console.log('CadView#useEffect: have new modelPath: ', modelPath);
+      console.log(`CadView#useEffect[modelPath]: loading(${toLoad}) from modelPath: `, modelPath);
     }
+
+    setIsLoading(true);
+    const loadingMessageBase = 'Model is loading';
+    setLoadingMessage(loadingMessageBase);
     viewer.IFC.loader.load(
-      modelPath.gitpath || (installPrefix + modelPath.filepath),
+      toLoad,
       (model) => {
         if (debug) {
           console.log('CadView#useEffect$onLoad, model: ', model, viewer);
@@ -200,31 +201,47 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         rootEltPromise.then((rootElt) => {
           onModelLoad(rootElt, viewer);
         });
+        setIsLoading(false);
       },
-      (progressEvent) => { if (debug) { console.log('CadView#onProgress', progressEvent) }},
-      (error) => console.error('CadView#useEffect$onError', error)
+      (progressEvent) => {
+        if (Number.isFinite(progressEvent.loaded)) {
+          const loadedBytes = progressEvent.loaded;
+          const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2);
+          setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`);
+          if (debug >= 3) {
+            console.log(`CadView#useEffect[modelPath]$onProgress, ${loadedBytes} bytes`);
+          }
+        }
+      },
+      (error) => {
+        console.error('CadView#useEffect[modelPath]$onError', error);
+        setIsLoading(false);
+      }
     );
 
     // Select items.
     // TODO: is this best place for this?  Here because needs ref to modelPath.
     window.ondblclick = async (event) => {
-      if (event.target) {
-        if (event.target.tagName == 'CANVAS') {
-          const item = await viewer.IFC.pickIfcItem(true);
-          if (item.modelID === undefined || item.id === undefined) return;
-          const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
-          navigate(pathPrefix + (modelPath.gitpath || modelPath.filepath) + path);
-          setSelectedElement(item);
+      if (event.target && event.target.tagName == 'CANVAS') {
+        const item = await viewer.IFC.pickIfcItem(true);
+        if (item.modelID === undefined || item.id === undefined) return;
+        const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
+        console.log('dblclick, using modelPath: ', modelPath);
+        if (modelPath.gitpath) {
+          navigate(pathPrefix + modelPath.getRepoPath() + path);
+        } else {
+          navigate(pathPrefix + modelPath.filepath + path);
         }
+        setSelectedElement(item);
       }
     };
   }, [modelPath]);
 
+
   const loadIfc = async (file) => {
     setIsLoading(true);
-    setLoadingMessage('model is loading');
+    setLoadingMessage('Model is loading');
     await viewer.loadIfc(file, true);
-
     const rootElt = await viewer.IFC.getSpatialStructure(0, true);
     if (debug) {
       console.log('rootElt: ', rootElt);
@@ -236,6 +253,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     });
     setIsLoading(false);
   };
+
 
   const fileOpen = () => {
     const viewerContainer = document.getElementById('viewer-container');
@@ -252,14 +270,17 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     fileInput.click();
   };
 
+
   const placeCutPlane = () => {
     viewer.clipper.createPlane();
   };
+
 
   const unSelectItem = () => {
     viewer.IFC.unpickIfcItems();
     viewer.clipper.deleteAllPlanes()
   };
+
 
   let isLoaded = Object.keys(rootElement).length === 0;
 
@@ -275,8 +296,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
           offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
-          open={isLoading}
           type={'info'}
+          open={isLoading}
         />
         <div className={classes.searchContainer}>
           {showSearchBar && (
@@ -375,18 +396,19 @@ function initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedEl
 // TODO: combine modelPath methods into class.
 function getModelPath(installPrefix, pathPrefix, params) {
   let m = null;
+  let filepath = params['*'];
+  if (filepath == '') {
+    return null;
+  }
+  const parts = filepath.split('.ifc');
+  filepath = '/' + parts[0] + '.ifc'; // TODO(pablo)
   if (pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:
     //   /v/p/*.  It should be only the filename.
-    const filepath = params['*'];
-    if (filepath == '') {
-      return null;
-    }
-    const parts = filepath.split('.ifc');
     // Filepath is a reference rooted in the serving directory.
     // e.g. /haus.ifc or /ifc-files/haus.ifc
     m = {
-      filepath: '/' + parts[0] + '.ifc', // TODO(pablo)
+      filepath: filepath,
       eltPath: parts[1]
     };
     if (debug) {
@@ -397,9 +419,11 @@ function getModelPath(installPrefix, pathPrefix, params) {
       org: params['org'],
       repo: params['repo'],
       branch: params['branch'],
-      filepath: params['*']
+      filepath: filepath,
+      eltPath: parts[1]
     };
-    m.gitpath = `https://raw.githubusercontent.com/${m.org}/${m.repo}/${m.branch}/${m.filepath}`
+    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
+    m.gitpath = `https://raw.githubusercontent.com${m.getRepoPath()}`
     if (debug) {
       console.log('CadView#getModelPath: is a remote GitHub file: ', m);
     }
