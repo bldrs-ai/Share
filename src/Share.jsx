@@ -32,6 +32,8 @@ function Forward({appPrefix}) {
  * Examples for this component:
  *   http://host/share/v/p/haus.ifc
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
+ *                    ^... here on handled by this component's paths.
+ *              ^... path to the component in BaseRoutes.jsx.
  */
 export default function Share({installPrefix, appPrefix}) {
   return (

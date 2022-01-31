@@ -178,7 +178,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       console.log('CadView#useEffect: have new modelPath: ', modelPath);
     }
     viewer.IFC.loader.load(
-      modelPath.gitpath || modelPath.filepath,
+      modelPath.gitpath || (installPrefix + modelPath.filepath),
       (model) => {
         if (debug) {
           console.log('CadView#useEffect$onLoad, model: ', model, viewer);
@@ -365,6 +365,8 @@ function initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedEl
 function getModelPath(installPrefix, pathPrefix, params) {
   let m = null;
   if (pathPrefix.endsWith('/p')) {
+    // * param is defined in ../Share.jsx, e.g.:
+    //   /v/p/*.  It should be only the filename.
     const filepath = params['*'];
     if (filepath == '') {
       return null;
@@ -373,7 +375,7 @@ function getModelPath(installPrefix, pathPrefix, params) {
     // Filepath is a reference rooted in the serving directory.
     // e.g. /haus.ifc or /ifc-files/haus.ifc
     m = {
-      filepath: installPrefix + '/' + parts[0] + '.ifc', // TODO(pablo)
+      filepath: '/' + parts[0] + '.ifc', // TODO(pablo)
       eltPath: parts[1]
     };
     console.log('CadView#getModelPath: is a project file: ', m);
