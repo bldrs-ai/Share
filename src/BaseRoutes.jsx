@@ -38,7 +38,8 @@ export default function BaseRoutes({testElt = null}) {
         navigate(path);
       }
     }
-    if (location.pathname === '/') {
+    if (location.pathname === installPrefix
+        || location.pathname === (installPrefix + '/')) {
       console.log('BaseRoutes: forwarding to: ', installPrefix + '/share');
       navigate(installPrefix + '/share');
     }
@@ -58,8 +59,7 @@ export default function BaseRoutes({testElt = null}) {
   )
 }
 
-/*
-*/
+
 const theme = createTheme({
   status: {
     danger: 'foo',
@@ -69,7 +69,6 @@ const theme = createTheme({
 
 const Themed = () => (
   <ThemeProvider theme={theme}>
-    <h1>Hello world</h1>
     <Outlet/>
   </ThemeProvider>
 )
