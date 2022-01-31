@@ -146,10 +146,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     if (!pathname.startsWith(pathPrefix)) {
       throw new Error(`Pathname(${pathname}) does not match pathPrefix(${pathPrefix})`)
     }
+    console.log('#useEffect2: paths: ',
+                {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath, mp});
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
     const mp = getModelPath(installPrefix, pathPrefix, params);
-    console.log('demuxing paths... ',
-                {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath, mp});
     if (mp === null) {
       // TODO: probe for index.ifc
       let fwd = pathPrefix + '/tinyhouse.ifc';
