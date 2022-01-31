@@ -147,7 +147,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       throw new Error(`Pathname(${pathname}) does not match pathPrefix(${pathPrefix})`)
     }
     // See https://github.com/buildrs/Share/wiki/URL-Structure/#model
-    const mp = getModelPath(pathPrefix, params);
+    const mp = getModelPath(installPrefix, pathPrefix, params);
     console.log('demuxing paths... ',
                 {installPrefix, appPrefix, pathPrefix, pathname, params, modelPath, mp});
     if (mp === null) {
@@ -361,7 +361,7 @@ function initViewer(pathPrefix, modelPath, navigate, elementsById, setSelectedEl
  *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
  */
 // TODO: combine modelPath methods into class.
-function getModelPath(pathPrefix, params) {
+function getModelPath(installPrefix, pathPrefix, params) {
   let m = null;
   if (pathPrefix.endsWith('/p')) {
     const filepath = params['*'];
@@ -372,7 +372,7 @@ function getModelPath(pathPrefix, params) {
     // Filepath is a reference rooted in the serving directory.
     // e.g. /haus.ifc or /ifc-files/haus.ifc
     m = {
-      filepath: '/' + parts[0] + '.ifc', // TODO(pablo)
+      filepath: installPrefix + '/' + parts[0] + '.ifc', // TODO(pablo)
       eltPath: parts[1]
     };
     console.log('CadView#getModelPath: is a project file: ', m);
