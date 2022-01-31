@@ -28,7 +28,7 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation(), navigate = useNavigate();
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
-
+/*
   React.useEffect(() => {
     const referrer = document.referrer;
     if (referrer) {
@@ -42,12 +42,12 @@ export default function BaseRoutes({testElt = null}) {
       navigate(installPrefix + '/share');
     }
   }, []);
-
-  const basePath = installPrefix + "*";
+*/
+  const basePath = installPrefix + "/*";
   console.log('BASE PATH: ', basePath);
   return (
     <Routes>
-      <Route path="/" element={<Themed/>}>
+      <Route path={basePath} element={<Themed/>}>
         <Route path="share/*"
                element={
                  testElt || <Share installPrefix={installPrefix}
@@ -58,7 +58,8 @@ export default function BaseRoutes({testElt = null}) {
   )
 }
 
-
+/*
+*/
 const theme = createTheme({
   status: {
     danger: 'foo',
@@ -68,6 +69,7 @@ const theme = createTheme({
 
 const Themed = () => (
   <ThemeProvider theme={theme}>
+    <h1>Hello world</h1>
     <Outlet/>
   </ThemeProvider>
 )
