@@ -14,6 +14,7 @@ import Share from './Share'
 import AccountCircle from '@mui/icons-material/AccountCircle'
 
 
+const debug = 0;
 /**
  * From URL design: https://github.com/buildrs/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
@@ -41,7 +42,9 @@ export default function BaseRoutes({testElt = null}) {
     }
     if (location.pathname === installPrefix
         || location.pathname === (installPrefix + '/')) {
-      console.log('BaseRoutes: forwarding to: ', installPrefix + '/share');
+      if (debug) {
+        console.log('BaseRoutes: forwarding to: ', installPrefix + '/share');
+      }
       navigate(installPrefix + '/share');
     }
   }, []);
