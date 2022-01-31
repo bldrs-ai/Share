@@ -14,7 +14,7 @@ import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtil
 import { Color } from 'three';
 
 
-const debug = 0;
+const debug = 3;
 const PANEL_TOP = 84;
 
 
