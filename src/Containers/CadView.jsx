@@ -320,7 +320,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
             expandedElements={expandedElements}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
-            pathPrefix={pathPrefix + (modelPath.filepath || '')}
+            pathPrefix={pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)}
           />}
         <div className={classes.itemPanelContainer}>
             <ItemPanelButton
