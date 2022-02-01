@@ -1,6 +1,6 @@
 Share is a web-based BIM integration environment using [IFC.js](https://github.com/IFCjs/web-ifc-viewer) and React with IFC hosted in git.
 
-Join the [Buildrs Discord](https://discord.gg/UByF2x6s):
+Join the [Buildrs Discord](https://discord.gg/UByF2x6s).
 
 
 # Setup
