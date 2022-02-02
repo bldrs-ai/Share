@@ -15,7 +15,7 @@ import { assert } from '../utils/assert'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
 
 
-const DEBUG_LEVEL = 0;
+const DEBUG_LEVEL = 4;
 const debug = (level = 0) => {
   return level < DEBUG_LEVEL ? console : {log: () => {}};
 }
