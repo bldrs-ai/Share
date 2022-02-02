@@ -175,8 +175,12 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     debug().log(`CadView#loadIfc: `, filepath, viewer);
     if (pathPrefix.endsWith('new')) {
       const l = window.location;
+      debug(3).log('CadView#loadIfc: parsing blob from url: ', l);
       filepath = filepath.split('.ifc')[0];
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}${filepath}`
+      const parts = filepath.split('/');
+      filepath = parts[parts.length - 1];
+      debug(3).log('CadView#loadIfc: got: ', filepath);
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
     setIsLoading(true);
     const loadingMessageBase = `Loading ${filepath}`;
