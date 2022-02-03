@@ -41,11 +41,29 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const urlParams = useParams();
 
 
+  /**
+   * On a change to urlParams, setting a new model path will clear the
+   * scene and load the new model IFC.  If there's not a valid IFC,
+   * the helper will redirect to the index file.
+   *
+   * Otherwise, the param change is a sub-path, e.g. the IFC element
+   * path, so no other useEffect is triggered.
+   */
   useEffect(() => {
-    setModelPathOrGotoIndex()
+    setModelPathOrGotoIndexOrStay()
   }, [urlParams])
 
 
+  /**
+   * If there's a new modelPath set, then a new model needs to be
+   * loaded into the scene.  This is split into two parts:
+   *
+   * 1) clearing the current scene and setting a new IfcViewerAPI.
+   * 2) setting pathToLoad variable which does the new model load.
+   *
+   * TODO: Keeping this logic in the same effect was causing some null
+   * references into the viewer object.
+   */
   useEffect(() => {
     if (modelPath == null) {
       return;
@@ -56,6 +74,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }, [modelPath])
 
 
+  /** Finally, when we have a fully resolved model path to load, load it. */
   useEffect(() => {
     if (pathToLoad == null) {
       return;
@@ -63,6 +82,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     loadIfc(pathToLoad);
   }, [pathToLoad])
 
+
+  // Helpers //
 
   function newScene() {
     setShowNavPanel(false);
@@ -72,7 +93,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  function setModelPathOrGotoIndex() {
+  function setModelPathOrGotoIndexOrStay() {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams);
     if (mp === null) {
       // TODO: probe for index.ifc
