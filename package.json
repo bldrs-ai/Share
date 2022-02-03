@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r242",
+  "version": "0.1.0-r266",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
@@ -40,6 +40,7 @@
     "esbuild": "^0.13.14",
     "esbuild-plugin-svgr": "^0.0.3",
     "gl": "^4.9.2",
+    "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
     "jsdom": "^18.0.1",
     "regenerator-runtime": "^0.13.9"
@@ -48,7 +49,7 @@
     "verbose": false,
     "testEnvironment": "jsdom",
     "testPathIgnorePatterns": [
-      "src/App.test.js"
+      "src/Share.test.js"
     ],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",
@@ -57,6 +58,9 @@
     "transformIgnorePatterns": [
       "/node_modules/(?!(web-ifc|web-ifc-three|web-ifc-viewer|three)/)"
     ],
+    "moduleNameMapper": {
+      "^.+\\.css$": "identity-obj-proxy"
+    },
     "setupFilesAfterEnv": [
       "<rootDir>/src/setupTests.js"
     ]
