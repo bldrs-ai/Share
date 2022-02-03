@@ -6,25 +6,62 @@ import IconButton from '@mui/material/IconButton';
 import { makeStyles } from '@mui/styles';
 import { AboutIcon } from './AboutPanel';
 import LoginMenu from './LoginMenu';
-import Logo from '../assets/Logo.svg';
-import Folder from '../assets/Folder.svg';
-import { alpha, styled } from '@mui/material/styles';
-import { grey } from '@mui/material/colors';
+import Logo from '../assets/Logo_alpha.svg';
+import Open from '../assets/Open.svg';
+import Tooltip from '@mui/material/Tooltip';
+import {AppsControl} from './AppsPanel'
+import MultipleSelect from './DropDownToolbar'
+import Toggle from './Toggle'
+
+const ToolBar = ({ fileOpen, offsetTop, toggleTheme }) => {
+  const classes = useStyles();
+  return (
+    <AppBar
+      elevation={0}
+      position='absolute'
+      color='primary'
+      className = {classes.appBar}>
+      <Toolbar variant='regular' className={classes.toolBar} >
+        <div className={classes.leftContainer} >
+          <Typography className={classes.title}>
+            <Logo className = {classes.logo}/>
+          </Typography>
+          <div className = {classes.models}>
+            <IconButton onClick={fileOpen}>
+              <Open className = {classes.icon}/>
+            </IconButton>
+          </div>
+            <Tooltip title='Select a model'>
+              <MultipleSelect/>
+            </Tooltip>
+        </div>
+        <div className = {classes.rightContainer}>
+          <Toggle defaultChecked onChange={()=>{
+                toggleTheme()
+              }}/>
+          <AboutIcon offsetTop = {offsetTop}/>
+          <LoginMenu />
+          <AppsControl/>
+        </div>
+      </Toolbar>
+    </AppBar>
+  );
+};
 
 
 const useStyles = makeStyles({
   appBar:{
-    position: 'absolute'
+    position: 'absolute',
+    zIndex:2000,
   },
   title: {
     display: 'flex',
     justifyContent:'center',
     fontSize: 20,
-    paddingRight:'20px',
+    paddingRight:'10px',
   },
   toolBar:{
     borderBottom: '1px solid 	#696969',
-    backgroundColor: '#D8D8D8',
     display: 'flex',
     justifyContent: 'space-between',
   },
@@ -39,16 +76,12 @@ const useStyles = makeStyles({
     width: '120px',
     height: '40px',
   },
-  folder:{
-    width: '40px',
-    height: '40px'
-  },
   rightContainer:{
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    width:'144px',
+    width:'194px',
   },
   about:{
     height: 18,
@@ -59,38 +92,16 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     borderBottom: '1px solid #737373'
   },
+  models:{
+    '@media (max-width: 900px)': {
+      display:'none'
+    },
+  },
+  icon:{
+    width:'40px',
+    height:'40px',
+    cursor:'pointer'
+  },
 });
-
-
-const ToolBar = ({ fileOpen, offsetTop }) => {
-  const classes = useStyles();
-  return (
-    <AppBar
-      elevation={0}
-      position='absolute'
-      color='primary'
-      className = {classes.appBar}>
-      <Toolbar variant='regular' className={classes.toolBar} >
-        <div className={classes.leftContainer} >
-          <Typography variant='h6' className={classes.title}>
-            <Logo className = {classes.logo}/>
-          </Typography>
-          <IconButton
-            edge='start'
-            color='secondary'
-            aria-label='menu'
-            onClick={fileOpen}
-          >
-            <Folder className = {classes.folder}/>
-          </IconButton>
-        </div>
-        <div className = {classes.rightContainer}>
-          <AboutIcon offsetTop = {offsetTop}/>
-          <LoginMenu />
-      </div>
-      </Toolbar>
-    </AppBar>
-  );
-};
 
 export default ToolBar;
