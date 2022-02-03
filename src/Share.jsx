@@ -57,7 +57,7 @@ function Forward({appPrefix}) {
  *              ^... path to the component in BaseRoutes.jsx.
  */
 export default function Share({installPrefix, appPrefix}) {
-  const [mode, setMode] = React.useState('dark');
+  const [mode, setMode] = React.useState('light');
   const colorMode = React.useMemo(
     () => ({
       toggleColorMode: () => {

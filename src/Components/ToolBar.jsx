@@ -36,7 +36,7 @@ const ToolBar = ({ fileOpen, offsetTop, toggleTheme }) => {
             </Tooltip>
         </div>
         <div className = {classes.rightContainer}>
-          <Toggle defaultChecked onChange={()=>{
+          <Toggle onChange={()=>{
                 toggleTheme()
               }}/>
           <AboutIcon offsetTop = {offsetTop}/>
