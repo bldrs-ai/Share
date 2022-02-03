@@ -1,9 +1,10 @@
+import { MockViewer, newMockStringValueElt } from './IfcMock.test'
 import {
   decodeIFCString,
   deref,
   getType,
   isTypeValue
-} from './Ifc.js'
+} from './Ifc'
 
 
 test('isTypeValue', () => {
@@ -70,38 +71,3 @@ test('deref reference typeVal', async () => {
     }
   }), 0, e => e.value)).toEqual(label);
 });
-
-
-export class MockViewer {
-  constructor(propsById = {}) {
-    this.propsById = propsById;
-    this.IFC = {
-      loader: {
-        ifcManager: {
-          getPropertySets: (modelId, expressId) => {
-            return new Promise((resolve, reject) => {
-              resolve([]);
-            });
-          },
-          getIfcType: (elt, viewer) => 'IFCELEMENT'
-        }
-      }
-    }
-  }
-
-  getProperties(modelId, id) {
-    return this.propsById[id];
-  }
-};
-
-
-export function newMockStringValueElt(label, id = 1) {
-  return {
-    children: [],
-    expressID: id,
-    Name: {
-      type: 1,
-      value: label
-    }
-  }
-}
