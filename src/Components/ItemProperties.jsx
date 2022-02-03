@@ -3,17 +3,14 @@ import { makeStyles } from '@mui/styles'
 import {
   decodeIFCString,
   deref,
-  isTypeValue,
-  prettyType,
 } from '../utils/Ifc'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
-import { cardClasses } from '@mui/material'
 import ExpandIcon from '../assets/ExpandIcon.svg'
 import { stoi } from '../utils/strings'
-
+import Tooltip from '@mui/material/Tooltip';
 
 export default function ItemProperties({ viewer, element }) {
   const [propTable, setPropTable] = React.useState(null);
@@ -27,17 +24,16 @@ export default function ItemProperties({ viewer, element }) {
   return (
     <div className={classes.propsContainer}>
       <h2 className = {classes.sectionTitle}>Properties</h2>
-      {propTable  || 'Loading...'}
+      {<div style = {{marginLeft:20}}>{propTable}</div>  || <div className = {classes.loading}>Loading..</div>}
       <h2 className = {classes.sectionTitle}>Property Sets</h2>
-      {psetsList  || 'Loading...'}
+      {psetsList  ||<div className = {classes.loading}>Loading..</div>}
     </div>)
 }
-
 
 /** Allows recursive display of tables. */
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
-    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey'}}>
+    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey',  tableLayout: 'fixed'}}>
       <tbody>
         {
           await Promise.all(
@@ -53,19 +49,25 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   )
 }
 
-
 async function createPsetsList(element, viewer, classes) {
   const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID);
   return (
-    <ul className={classes.psetsList}>
+    <div style = {{
+          marginLeft:'10px',
+          width:308,
+          height:'300px',
+          overflow:'scroll',
+          paddingBottom:'30px',
+          borderBottom:'1px solid #494747'}}
+          >
       {await Promise.all(
         psets.map(
           async (ps, ndx) => {
             return (
-              <li key={ndx} className={classes.section}>
+              <div key={ndx} className={classes.section}>
                 <Accordion className={classes.accordian}>
                   <AccordionSummary
-                    expandIcon={<ExpandIcon className = {classes.icons} />}
+                    expandIcon={<ExpandIcon style = {{width:16}}/>}
                     aria-controls="panel1a-content"
                     id="panel1a-header"
                   >
@@ -75,14 +77,13 @@ async function createPsetsList(element, viewer, classes) {
                     {await createPropertyTable(ps, viewer, 0, true)}
                   </AccordionDetails>
                 </Accordion>
-              </li>
+              </div>
             )
           }
         ))}
-    </ul>
+    </div>
   )
 }
-
 
 /**
  * The keys are defined here:
@@ -129,8 +130,6 @@ async function prettyProps(key, value, viewer, serial = 0) {
         serial);
   }
 }
-
-
 async function hasProperties(value, viewer, serial) {
   return await unpackHelper(value, viewer, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value);
@@ -138,8 +137,6 @@ async function hasProperties(value, viewer, serial) {
     rows.push(row(name, value, serial++ + '-row'));
   })
 }
-
-
 async function quantities(value, viewer, serial) {
   return await unpackHelper(value, viewer, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value);
@@ -154,8 +151,6 @@ async function quantities(value, viewer, serial) {
     rows.push(row(name, val, serial++ + '-row'));
   })
 }
-
-
 async function unpackHelper(value, viewer, serial, objToRow) {
   // HasProperties behaves a little special.
   if (Array.isArray(value)) {
@@ -182,8 +177,6 @@ async function unpackHelper(value, viewer, serial, objToRow) {
   console.warn('HasProperties with unknown structure: ', js(value));
   return null;
 }
-
-
 function row(d1, d2, serial) {
   if (serial == undefined) {
     throw new Error('Must have serial for key');
@@ -192,37 +185,44 @@ function row(d1, d2, serial) {
     return (<tr key={serial}><td key={serial + '-double-data'} colspan="2">{d1}</td></tr>)
   }
   return (
-    <tr key={serial}>
+    <tr key={serial} >
       <td key="a"
           style={{
-            maxWidth:'150px',
-            overflowWrap: 'break-word',
+            width:'150px',
             fontFamily: 'Helvetica',
             fontSize: '14px',
             fontWeight: 200,
-            color: '#696969',
             paddingLeft:'4px',
             paddingRight:'4px',
-        }}>{d1}</td>
-      <td key="b"
-          style={{
-            maxWidth:'200px',
-            overflowWrap: 'break-word',
-            fontFamily: 'Helvetica',
-            fontSize: '14px',
-            fontWeight: 200,
-            color: '#696969',
-            paddingLeft:'4px',
-            paddingRight:'4px',
-          }}>{d2}</td>
+            cursor:'default'
+        }}>
+           <Tooltip title={d1} placement="top">
+            <div style ={{
+              width:'150px',
+              overflow:'hidden',
+              textOverflow: 'ellipsis',
+              overflowWrap: 'break-word',
+              wordBreak: 'break-all',}} >{d1}</div>
+            </Tooltip>
+      </td>
+          <Tooltip title={d2} placement="top">
+            <td key="b"
+                style={{
+                  width:'150px',
+                  textOverflow: 'ellipsis',
+                  overflowWrap: 'break-word',
+                  fontFamily: 'Helvetica',
+                  fontSize: '14px',
+                  fontWeight: 200,
+                  paddingLeft:'4px',
+                  paddingRight:'4px',
+                  cursor:'default'
+                }}>{d2}</td>
+          </Tooltip>
     </tr>
   )
 }
-
-
 const dms = (deg, min, sec) => { return `${deg}° ${min}' ${sec}''`};
-
-
 const useStyles = makeStyles({
   propsContainer: {
     padding: '0.5em',
@@ -240,25 +240,37 @@ const useStyles = makeStyles({
   },
   section:{
     listStyle:'none',
-    maxWidth:"400px"
+    width:"308px",
+    margin:'2px'
   },
   sectionTitle:{
-    maxWidth:'320px',
+    width:"308px",
     overflowWrap: 'break-word',
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: 200,
     color: '#696969',
-    paddingLeft:'4px',
+    paddingLeft:'10px',
     paddingRight:'4px',
     paddingBottom:'10px',
-    borderBottom:' 1px solid lightgrey'
+    borderBottom:' 1px solid #494747'
+  },
+  loading:{
+    width:"308px",
+    overflowWrap: 'break-word',
+    fontFamily: 'Helvetica',
+    fontSize: '16px',
+    fontWeight: 200,
+    color: '#696969',
+    paddingLeft:'10px',
+    paddingRight:'4px',
+    paddingBottom:'10px',
   },
   icons:{
     width:'20px'
   },
   accordian:{
-    maxWidth:'320px'
+    width:'308px'
   },
   accordianDetails:{
     overflow:'scroll'
