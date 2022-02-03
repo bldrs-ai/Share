@@ -35,29 +35,18 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [modelPath, setModelPath] = useState(null);
+  const [pathToLoad, setPathToLoad] = useState(null);
 
   const navigate = useNavigate();
-  const params = useParams();
+  const urlParams = useParams();
 
 
   useEffect(() => {
     newScene();
-    const mp = getModelPath(installPrefix, pathPrefix, params);
-    if (mp === null) {
-      // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/tinyhouse.ifc');
-      return;
-    }
-    if (modelPath === null
-        || modelPath.filepath && modelPath.filepath != mp.filepath
-        || modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
-      setModelPath(mp);
-      debug().log('CadView#useEffect[params]: new model path: ', mp);
-    }
-  }, [params])
+    setModelPathOrGotoIndex()
+  }, [urlParams])
 
 
-  const [pathToLoad, setPathToLoad] = useState(null);
   useEffect(() => {
     if (modelPath == null) {
       return;
@@ -80,6 +69,22 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     setShowSearchBar(false);
     setShowItemPanel(false);
     setViewer(initViewer(pathPrefix));
+  }
+
+
+  function setModelPathOrGotoIndex() {
+    const mp = getModelPath(installPrefix, pathPrefix, urlParams);
+    if (mp === null) {
+      // TODO: probe for index.ifc
+      navigate(appPrefix + '/v/p/tinyhouse.ifc');
+      return;
+    }
+    if (modelPath === null
+        || modelPath.filepath && modelPath.filepath != mp.filepath
+        || modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
+      setModelPath(mp);
+      debug().log('CadView#setModelPathOrGotoIndex: new model path: ', mp);
+    }
   }
 
 
@@ -106,16 +111,16 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
           const loadedBytes = progressEvent.loaded;
           const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2);
           setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`);
-          debug(3).log(`CadView#useEffect[modelPath]$onProgress, ${loadedBytes} bytes`);
+          debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`);
         }
       },
       (error) => {
-        console.error('CadView#useEffect[modelPath]$onError', error);
+        console.error('CadView#loadIfc$onError', error);
         // TODO(pablo): error modal.
         setIsLoading(false);
       }
     );
-    debug().log(`CadView#useEffect$onLoad, filepath(${filepath}) with model, viewer: `,
+    debug().log(`CadView#loadIfc: filepath(${filepath}) with model, viewer: `,
                 model, viewer);
     viewer.IFC.addIfcModel(model);
     const rootElt = await model.ifcManager.getSpatialStructure(0, true);
@@ -131,7 +136,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         const item = await viewer.IFC.pickIfcItem(true);
         if (item.modelID === undefined || item.id === undefined) return;
         const path = computeElementPath(elementsById[item.id], elt => elt.expressID);
-        debug(2).log('dblclick, using modelPath: ', modelPath);
         if (modelPath.gitpath) {
           navigate(pathPrefix + modelPath.getRepoPath() + path);
         } else {
@@ -183,7 +187,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   async function selectItems(resultIDs) {
     setSelectedElements(resultIDs.map((id) => id + ''));
     try {
-      debug(2).log('picking ifc items: ', resultIDs);
       await viewer.pickIfcItemsByID(0, resultIDs, true);
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -374,9 +377,9 @@ function initViewer(pathPrefix) {
  *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
  */
 // TODO: combine modelPath methods into class.
-function getModelPath(installPrefix, pathPrefix, params) {
+function getModelPath(installPrefix, pathPrefix, urlParams) {
   let m = null;
-  let filepath = params['*'];
+  let filepath = urlParams['*'];
   if (filepath == '') {
     return null;
   }
@@ -394,9 +397,9 @@ function getModelPath(installPrefix, pathPrefix, params) {
     debug().log('CadView#getModelPath: is a project file: ', m);
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
-      org: params['org'],
-      repo: params['repo'],
-      branch: params['branch'],
+      org: urlParams['org'],
+      repo: urlParams['repo'],
+      branch: urlParams['branch'],
       filepath: filepath,
       eltPath: parts[1]
     };
