@@ -42,7 +42,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
 
   useEffect(() => {
-    newScene();
     setModelPathOrGotoIndex()
   }, [urlParams])
 
@@ -51,6 +50,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     if (modelPath == null) {
       return;
     }
+    newScene();
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath));
   }, [modelPath])
