@@ -6,8 +6,44 @@ import Close from '../assets/Close.svg'
 import Info from '../assets/Info.svg'
 import InfoOn from '../assets/InfoOn.svg'
 
+const AboutIcon = ({offsetTop}) => {
+  const [open, setOpen]=React.useState(true);
+ const classes = useStyles();
+  return (
+    <div >
+     <IconButton
+        aria-label='About'
+        onClick={() => { setOpen(!open) }}
+      >
+      {open ? <InfoOn className = {classes.icon}/> : <Info className = {classes.icon}/> }
+    </IconButton>
+      {open && <AboutPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
+    </div>);
+};
 
+const AboutPanel = ({openToggle, offsetTop}) => {
+  const classes = useStyles({offsetTop:offsetTop});
 
+  return (
+  <div className = {classes.container} onClick = {openToggle}>
+    <Paper elevation={3} className={classes.panel}>
+      <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
+      <h1>About</h1>
+      <p><strong>BLDRS</strong> is a collaborative integration environment for IFC files.
+        We are just getting started!  Stay tuned for the upcoming MVP release.</p>
+      <p>BLDRS is an open source project. Please visit our repository:&nbsp;
+      <a href = {'https://github.com/buildrs/Share'} target="_new">github.com/buildrs/Share</a></p>
+      <h2>Features</h2>
+      <ul>
+        <li>Upload IFC file</li>
+        <li>Select IFC element</li>
+        <li>Get IFC element properties </li>
+        <li>Share IFC element with the URL address</li>
+      </ul>
+    </Paper>
+  </div>
+);
+};
 const useStyles = makeStyles({
   container:{
     position: 'absolute',
@@ -40,7 +76,6 @@ const useStyles = makeStyles({
     "& p, & li": {
       fontWeight:200
     },
-
   },
   icon:{
     width:'30px',
@@ -58,48 +93,4 @@ const useStyles = makeStyles({
   }
 });
 
-
-const AboutIcon = ({offsetTop}) => {
-  const [open, setOpen]=React.useState(true);
- const classes = useStyles();
-  return (
-    <div >
-     <IconButton
-        className={classes.iconButton}
-        aria-label='About'
-        onClick={() => { setOpen(!open) }}
-      >
-      {open ? <InfoOn className = {classes.icon}/> : <Info className = {classes.icon}/> }
-      </IconButton>
-      {open && <AboutPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
-    </div>);
-};
-
-
-const AboutPanel = ({openToggle, offsetTop}) => {
-  const classes = useStyles({offsetTop:offsetTop});
-
-  return (
-  <div className = {classes.container}>
-    <Paper elevation={3} className={classes.panel}>
-      <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
-      <h1>About</h1>
-      <p><strong>BLDRS</strong> is a collaborative integration environment for IFC files.
-        We are just getting started!  Stay tuned for the upcoming MVP release.</p>
-      <p>BLDRS is an open source project. Please visit our repository:&nbsp;
-      <a href = {'https://github.com/buildrs/Share'} target="_new">github.com/buildrs/Share</a></p>
-      <h2>Features</h2>
-      <ul>
-        <li>Upload IFC file</li>
-        <li>Select IFC element</li>
-        <li>Get IFC element properties </li>
-        <li>Share IFC element with the URL address</li>
-      </ul>
-    </Paper>
-  </div>
-);
-};
-
-export {
-  AboutIcon
-}
+export { AboutIcon }
