@@ -11,14 +11,9 @@ import ToolBar from '../Components/ToolBar'
 import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
+import debug from '../utils/debug'
 import { assert } from '../utils/assert'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
-
-
-const DEBUG_LEVEL = 4;
-const debug = (level = 0) => {
-  return level < DEBUG_LEVEL ? console : {log: () => {}};
-}
 
 
 export default function CadView({installPrefix, appPrefix, pathPrefix}) {
@@ -41,98 +36,12 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [modelPath, setModelPath] = useState(null);
 
-
-  const clearSearch = () => {
-    setSelectedElements([]);
-    viewer.IFC.unpickIfcItems();
-  };
-
-
-  const selectItems = async (resultIDs) => {
-    setSelectedElements(resultIDs.map((id) => id + ''));
-    try {
-      debug(2).log('picking ifc items: ', resultIDs);
-      await viewer.pickIfcItemsByID(0, resultIDs, true);
-    } catch (e) {
-      // IFCjs will throw a big stack trace if there is not a visual
-      // element, e.g. for IfcSite, but we still want to proceed to
-      // setup its properties.
-      debug(3).log('TODO: no visual element for item ids: ', resultIDs);
-    }
-  };
-
-
-  const onSearch = (query) => {
-    clearSearch();
-    debug().log(`CadView#onSearch: query: ${query}`);
-    query = query.trim();
-    if (query === '') {
-      return;
-    }
-
-    const resultIDs = searchIndex.search(query);
-    selectItems(resultIDs);
-    gtag('event', 'search', {
-      search_term: query,
-    });
-  };
-
-
-  const onElementSelect = async (elt) => {
-    const id = elt.expressID;
-    if (id === undefined) {
-      throw new Error('Selected element is missing Express ID');
-    }
-    selectItems([id]);
-    const props = await viewer.getProperties(0, elt.expressID);
-    setSelectedElement(props);
-    setShowItemPanel(false);
-
-    // TODO(pablo): just found out this method is getting called a lot
-    // when i added navigation on select, which flooded the browser
-    // IPC.
-    //console.log('CadView#onElementSelect: in...');
-  };
-
-
-  const onModelLoad = (rootElt, viewer, pathLoaded) => {
-    debug().log('CadView#onModelLoad...');
-    gtag('event', 'select_content', {
-      content_type: 'ifc_model',
-      item_id: pathLoaded,
-    });
-    setRootElement(rootElt);
-    setupLookupAndParentLinks(rootElt, elementsById);
-    const expanded = [rootElt.expressID + ''];
-    let elt = rootElt;
-    for (let i = 0; i < 3; i++) {
-      if (elt.children.length > 0) {
-        expanded.push(elt.expressID + '');
-        elt = elt.children[0];
-      }
-    }
-    setDefaultExpandedElements(expanded);
-    searchIndex.clearIndex();
-    const index = new SearchIndex(rootElt, viewer);
-    index.indexElement(rootElt);
-    // TODO(pablo): why can't i do:
-    //   setSearchIndex(new SearchIndex(rootElt, viewer));
-    //   searchIndex.indexElement(...);
-    // When I try this searchIndex is actually a promise.
-    setSearchIndex(index);
-    setShowNavPanel(true);
-    setShowSearchBar(true);
-    setDoubleClickListener(pathLoaded);
-  };
-
-  // TODO(pablo): search suggest
-  const onSearchModify = (query) => {};
-
   const navigate = useNavigate();
   const params = useParams();
 
 
   useEffect(() => {
+    newScene();
     const mp = getModelPath(installPrefix, pathPrefix, params);
     if (mp === null) {
       // TODO: probe for index.ifc
@@ -153,10 +62,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     if (modelPath == null) {
       return;
     }
-    setShowNavPanel(false);
-    setShowSearchBar(false);
-    setShowItemPanel(false);
-    setViewer(initViewer(pathPrefix));
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath));
   }, [modelPath])
@@ -170,8 +75,16 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }, [pathToLoad])
 
 
+  function newScene() {
+    setShowNavPanel(false);
+    setShowSearchBar(false);
+    setShowItemPanel(false);
+    setViewer(initViewer(pathPrefix));
+  }
+
+
   /** Load IFC helper used by 1) useEffect on path change and 2) upload button. */
-  const loadIfc = async (filepath) => {
+  async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath, viewer);
     if (pathPrefix.endsWith('new')) {
       const l = window.location;
@@ -208,11 +121,11 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     const rootElt = await model.ifcManager.getSpatialStructure(0, true);
     onModelLoad(rootElt, viewer, filepath);
     setIsLoading(false);
-  };
+  }
 
 
   /** Select items in model when they're double-clicked. */
-  const setDoubleClickListener = async (filepath) => {
+  async function setDoubleClickListener(filepath) {
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName == 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true);
@@ -230,7 +143,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  const loadLocalFile = () => {
+  function loadLocalFile() {
     const viewerContainer = document.getElementById('viewer-container');
     const fileInput = document.createElement('input');
     fileInput.setAttribute('type', 'file');
@@ -247,18 +160,106 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     );
     viewerContainer.appendChild(fileInput);
     fileInput.click();
-  };
+  }
 
 
-  const placeCutPlane = () => {
+  function placeCutPlane() {
     viewer.clipper.createPlane();
-  };
+  }
 
 
-  const unSelectItems = () => {
+  function unSelectItems() {
     viewer.unpickIfcItems();
     viewer.clipper.deleteAllPlanes()
-  };
+  }
+
+
+  function clearSearch() {
+    setSelectedElements([]);
+    viewer.IFC.unpickIfcItems();
+  }
+
+
+  async function selectItems(resultIDs) {
+    setSelectedElements(resultIDs.map((id) => id + ''));
+    try {
+      debug(2).log('picking ifc items: ', resultIDs);
+      await viewer.pickIfcItemsByID(0, resultIDs, true);
+    } catch (e) {
+      // IFCjs will throw a big stack trace if there is not a visual
+      // element, e.g. for IfcSite, but we still want to proceed to
+      // setup its properties.
+      debug(3).log('TODO: no visual element for item ids: ', resultIDs);
+    }
+  }
+
+
+  function onSearch(query) {
+    clearSearch();
+    debug().log(`CadView#onSearch: query: ${query}`);
+    query = query.trim();
+    if (query === '') {
+      return;
+    }
+
+    const resultIDs = searchIndex.search(query);
+    selectItems(resultIDs);
+    gtag('event', 'search', {
+      search_term: query,
+    });
+  }
+
+
+  async function onElementSelect(elt) {
+    const id = elt.expressID;
+    if (id === undefined) {
+      throw new Error('Selected element is missing Express ID');
+    }
+    selectItems([id]);
+    const props = await viewer.getProperties(0, elt.expressID);
+    setSelectedElement(props);
+    setShowItemPanel(false);
+
+    // TODO(pablo): just found out this method is getting called a lot
+    // when i added navigation on select, which flooded the browser
+    // IPC.
+    //console.log('CadView#onElementSelect: in...');
+  }
+
+
+  function onModelLoad(rootElt, viewer, pathLoaded) {
+    debug().log('CadView#onModelLoad...');
+    gtag('event', 'select_content', {
+      content_type: 'ifc_model',
+      item_id: pathLoaded,
+    });
+    setRootElement(rootElt);
+    setupLookupAndParentLinks(rootElt, elementsById);
+    const expanded = [rootElt.expressID + ''];
+    let elt = rootElt;
+    for (let i = 0; i < 3; i++) {
+      if (elt.children.length > 0) {
+        expanded.push(elt.expressID + '');
+        elt = elt.children[0];
+      }
+    }
+    setDefaultExpandedElements(expanded);
+    searchIndex.clearIndex();
+    const index = new SearchIndex(rootElt, viewer);
+    index.indexElement(rootElt);
+    // TODO(pablo): why can't i do:
+    //   setSearchIndex(new SearchIndex(rootElt, viewer));
+    //   searchIndex.indexElement(...);
+    // When I try this searchIndex is actually a promise.
+    setSearchIndex(index);
+    setShowNavPanel(true);
+    setShowSearchBar(true);
+    setDoubleClickListener(pathLoaded);
+  }
+
+
+  // TODO(pablo): search suggest
+  const onSearchModify = (query) => {};
 
 
   let isLoaded = Object.keys(rootElement).length === 0;
