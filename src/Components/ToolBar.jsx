@@ -6,10 +6,9 @@ import IconButton from '@mui/material/IconButton';
 import { makeStyles } from '@mui/styles';
 import { AboutIcon } from './AboutPanel';
 import LoginMenu from './LoginMenu';
-import Logo from '../assets/Logo_alpha.svg';
+import Logo from '../assets/Logo.svg';
 import Open from '../assets/Open.svg';
 import Tooltip from '@mui/material/Tooltip';
-import {AppsControl} from './AppsPanel'
 import MultipleSelect from './DropDownToolbar'
 import Toggle from './Toggle'
 
@@ -41,7 +40,6 @@ const ToolBar = ({ fileOpen, offsetTop, toggleTheme }) => {
               }}/>
           <AboutIcon offsetTop = {offsetTop}/>
           <LoginMenu />
-          <AppsControl/>
         </div>
       </Toolbar>
     </AppBar>

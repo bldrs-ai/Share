@@ -329,7 +329,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, mode, tog
             setExpandedElements={setExpandedElements}
             pathPrefix={pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)}
           />}
-        <div className={classes.itemPanelContainer}>
             <ItemPanelButton
               viewer={viewer}
               element={selectedElement}
@@ -338,7 +337,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, mode, tog
               placeCutPlane = {()=>placeCutPlane()}
               unSelectItem = {()=>unSelectItems()}
               toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}/>
-        </div>
         <div className={classes.iconGroup}>
           <IconGroup
             placeCutPlane={()=>placeCutPlane()}

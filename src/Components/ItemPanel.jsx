@@ -9,7 +9,7 @@ const useStyles = makeStyles({
   toggleButton: {
     position: 'absolute',
     top: (props) =>`${props.topOffset}px`,
-    right: '20px',
+    right: '22px',
     '@media (max-width: 900px)': {
       right: '10px',
     },

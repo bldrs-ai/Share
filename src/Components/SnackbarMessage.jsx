@@ -26,8 +26,8 @@ const SnackBarMessage = ({ message, type, open }) => {
       autoHideDuration={6000}
     >
       <Alert
-        className={classes.alert}
         severity={type}
+        sx = {{backgroundColor:'#252525', color:'#DCDCDC'}}
       >
         {message}
       </Alert>
