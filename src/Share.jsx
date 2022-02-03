@@ -66,6 +66,7 @@ export default function Share({installPrefix, appPrefix}) {
     }),
     [],
   );
+
   const theme = React.useMemo(
     () =>{
       return(
@@ -82,11 +83,6 @@ export default function Share({installPrefix, appPrefix}) {
                 },
               tonalOffset: 1,
               },
-              // typography: {
-              //   allVariants: {
-              //     color: ""
-              //   },
-              // },
             })
       )
       }
@@ -104,21 +100,27 @@ export default function Share({installPrefix, appPrefix}) {
                     <CadView
                       installPrefix={installPrefix}
                       appPrefix={appPrefix}
-                      pathPrefix={appPrefix + '/v/new'} />
+                      pathPrefix={appPrefix + '/v/new'}
+                      toggleTheme = {colorMode.toggleColorMode}
+                      mode = {mode}/>
                   } />
             <Route path="v/p/*"
                   element={
                     <CadView
                       installPrefix={installPrefix}
                       appPrefix={appPrefix}
-                      pathPrefix={appPrefix + '/v/p'} />
+                      pathPrefix={appPrefix + '/v/p'}
+                      toggleTheme = {colorMode.toggleColorMode}
+                      mode = {mode}/>
                   } />
             <Route path="v/gh/:org/:repo/:branch/*"
                   element={
                     <CadView
                       installPrefix={installPrefix}
                       appPrefix={appPrefix}
-                      pathPrefix={appPrefix + '/v/gh'} />
+                      pathPrefix={appPrefix + '/v/gh'}
+                      toggleTheme = {colorMode.toggleColorMode}
+                      mode = {mode}/>
                   } />
           </Route>
         </Routes>

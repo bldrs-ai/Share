@@ -16,7 +16,7 @@ import { assert } from '../utils/assert'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
 
 
-export default function CadView({installPrefix, appPrefix, pathPrefix}) {
+export default function CadView({installPrefix, appPrefix, pathPrefix, mode, toggleTheme}) {
   const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [showNavPanel, setShowNavPanel] = useState(false);
@@ -297,7 +297,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         <ToolBar
           fileOpen={loadLocalFile}
           onClickShare={onClickShare}
-          offsetTop={PANEL_TOP}/>
+          offsetTop={PANEL_TOP}
+          toggleTheme = {toggleTheme}
+          mode = {mode}
+        />
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
