@@ -29,11 +29,10 @@ export default function ItemProperties({ viewer, element }) {
       {psetsList  ||<div className = {classes.loading}>Loading..</div>}
     </div>)
 }
-
 /** Allows recursive display of tables. */
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
-    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey',  tableLayout: 'fixed', width:'260px'}}>
+    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey',  tableLayout: 'fixed'}}>
       <tbody>
         {
           await Promise.all(
@@ -48,7 +47,6 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
     </table>
   )
 }
-
 async function createPsetsList(element, viewer, classes) {
   const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID);
   return (
@@ -56,7 +54,8 @@ async function createPsetsList(element, viewer, classes) {
           marginLeft:'10px',
           width:308,
           height:'300px',
-          overflow:'scroll',
+          overflowY:'scroll',
+          overflowX:'hidden',
           paddingBottom:'30px',
           borderBottom:'1px solid #494747'}}
           >
@@ -84,7 +83,6 @@ async function createPsetsList(element, viewer, classes) {
     </div>
   )
 }
-
 /**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
@@ -122,9 +120,6 @@ async function prettyProps(key, value, viewer, serial = 0) {
       return await quantities(value, viewer, serial);
     case 'UnitsInContext':
     case 'Representations':
-    //for now returning null becasue the Address is in the table format
-    case 'SiteAddress':return null
-    case 'BuildingAddress':return null
     default:
       return row(
         label,
@@ -189,47 +184,39 @@ function row(d1, d2, serial) {
   }
   return (
     <tr key={serial} >
-          <td key="a"
-              style={{
-                width:'150px',
-                fontFamily: 'Helvetica',
-                overflow:'hidden',
-                fontSize: '14px',
-                fontWeight: 200,
-                paddingLeft:'4px',
-                paddingRight:'4px',
-                cursor:'default',
-            }}>
-              <Tooltip title={d1} placement="top">
-                <div style ={{
-                  width:'150px',
-                  overflow:'hidden',
-                  textOverflow: 'ellipsis',
-                  overflowWrap: 'break-word',
-                  wordBreak: 'break-all'}} >{d1}</div>
-                </Tooltip>
-          </td>
+      <td key="a"
+          style={{
+            width:'150px',
+            fontFamily: 'Helvetica',
+            fontSize: '14px',
+            fontWeight: 200,
+            paddingLeft:'4px',
+            paddingRight:'4px',
+            cursor:'default'
+        }}>
+           <Tooltip title={d1} placement="top">
+            <div style ={{
+              width:'150px',
+              overflow:'hidden',
+              textOverflow: 'ellipsis',
+              overflowWrap: 'break-word',
+              wordBreak: 'break-all',}} >{d1}</div>
+            </Tooltip>
+      </td>
+          <Tooltip title={d2} placement="top">
             <td key="b"
                 style={{
-                  width:'100px',
+                  width:'150px',
                   textOverflow: 'ellipsis',
-                  overflowWrap: 'hidden',
+                  overflowWrap: 'break-word',
                   fontFamily: 'Helvetica',
                   fontSize: '14px',
                   fontWeight: 200,
                   paddingLeft:'4px',
                   paddingRight:'4px',
-                  cursor:'default',
-                }}>
-            <Tooltip title={d2} placement="top">
-              <div style ={{
-                width:'100px',
-                overflow:'hidden',
-                textOverflow: 'ellipsis',
-                overflowWrap: 'break-word',
-                wordBreak: 'break-all'}} >{d2}</div>
-            </Tooltip>
-              </td>
+                  cursor:'default'
+                }}>{d2}</td>
+          </Tooltip>
     </tr>
   )
 }
@@ -284,7 +271,7 @@ const useStyles = makeStyles({
     width:'308px'
   },
   accordianDetails:{
-    overflow:'scroll'
+    // overflow:'scroll'
   }
 
 });

@@ -15,12 +15,13 @@ const useStyles = makeStyles({
       height:'200px',
       borderRadius:'8px',
       marginLeft:'0px',
+      opacity:.9,
     },
   },
   drawerContainer:{
     height:'100%',
     width:'auto',
-    overflow:'hidden'
+    overflow:'hidden',
   },
   headerWrapper: {
     display: 'flex',
@@ -68,7 +69,7 @@ const useStyles = makeStyles({
     height:'90%',
     '@media (max-width: 900px)': {
       maxHeight:'200px',
-      overflow:'auto'
+      overflow:'auto',
     },
   }
 });

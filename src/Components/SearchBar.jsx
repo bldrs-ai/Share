@@ -6,6 +6,7 @@ import IconButton from '@mui/material/IconButton';
 import Search from '../assets/Search.svg';
 import TreeIcon from '../assets/Tree.svg';
 import TreeIconOn from '../assets/TreeOn.svg';
+import Hamburger from '../assets/Hamburger.svg';
 
 const useStyles = makeStyles({
   root: {
@@ -35,7 +36,6 @@ const useStyles = makeStyles({
     fontSize: 18,
     fontWeight: 600,
     fontFamily: 'Helvetica',
-    color: '#696969',
   }
 });
 
@@ -73,7 +73,7 @@ export default function SearchBar({
         onClick={onClickMenu}
         disabled={disabled}
       >
-        {open ? <TreeIconOn className={classes.icon} />:<TreeIcon className={classes.icon} />}
+        <Hamburger className={classes.icon} />
       </IconButton>
       <InputBase
         sx={{ ml: 1, flex: 1 }}
@@ -86,7 +86,6 @@ export default function SearchBar({
           fontSize: 18,
           fontWeight: 200,
           fontFamily: 'Helvetica',
-          color: '#696969',
         }}/>
       <IconButton
         type='submit'
