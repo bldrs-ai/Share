@@ -30,9 +30,11 @@ const ToolBar = ({ fileOpen, offsetTop, toggleTheme }) => {
               <Open className = {classes.icon}/>
             </IconButton>
           </div>
+          <div className ={classes.dropDown}>
             <Tooltip title='Select a model'>
               <MultipleSelect/>
             </Tooltip>
+          </div>
         </div>
         <div className = {classes.rightContainer}>
           <Toggle onChange={()=>{
@@ -102,6 +104,11 @@ const useStyles = makeStyles({
     width:'40px',
     height:'40px',
     cursor:'pointer'
+  },
+  dropDown:{
+    '@media (max-width: 900px)': {
+      display:'none'
+    },
   },
 });
 
