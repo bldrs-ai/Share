@@ -19,8 +19,9 @@ const useStyles = makeStyles({
     alignItems: 'center',
     maxHeight: '50%',
     '@media (max-width: 900px)': {
-      maxHeight: '30%',
+      maxHeight: '20%',
       width: '250px',
+      opacity: 0.8,
     },
   },
   treeContainer:{
