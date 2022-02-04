@@ -80,6 +80,9 @@ const useStyles = makeStyles({
     justifyContent: 'flex-end',
     alignItems: 'center',
     width:'194px',
+    '@media (max-width: 900px)': {
+      marginRight:'-6px'
+    },
   },
   about:{
     height: 18,
