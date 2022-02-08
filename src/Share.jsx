@@ -1,20 +1,22 @@
-import React from 'react'
+import React, { useState, useMemo, createContext } from 'react';
 import {
   Outlet,
   Routes,
   Route,
   useLocation,
-  useNavigate
-} from 'react-router-dom'
-import CadView from './Containers/CadView'
-import 'normalize.css'
+  useNavigate,
+} from 'react-router-dom';
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import CadView from './Containers/CadView';
+import 'normalize.css';
 
 
 const debug = 0;
+const ColorModeContext = createContext({ toggleColorMode: () => {} });
 
-
-function Forward({appPrefix}) {
-  const location = useLocation(), navigate = useNavigate();
+function Forward({ appPrefix }) {
+  const location = useLocation(),
+  navigate = useNavigate();
   React.useEffect(() => {
     if (debug) {
       console.log('Share.jsx: should forward?: ', location);
@@ -27,10 +29,8 @@ function Forward({appPrefix}) {
       navigate(dest);
     }
   }, []);
-
-  return (<Outlet/>)
+  return <Outlet />;
 }
-
 
 /**
  * For URL design see: https://github.com/buildrs/Share/wiki/URL-Structure
@@ -55,31 +55,78 @@ function Forward({appPrefix}) {
  *                    ^... here on handled by this component's paths.
  *              ^... path to the component in BaseRoutes.jsx.
  */
-export default function Share({installPrefix, appPrefix}) {
+export default function Share({ installPrefix, appPrefix }) {
+  const [mode, setMode] = React.useState('light');
+  const colorMode = React.useMemo(
+    () => ({
+      toggleColorMode: () => {
+        setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
+      },
+    }),
+    []
+  );
+
+  const theme = React.useMemo(() => {
+    return createTheme({
+      palette: {
+        mode,
+        primary: {
+          main: '#C8C8C8',
+          light: '#e3f2fd',
+          dark: '#42a5f5',
+        },
+        background: {
+          paper: mode === 'light' ? '#DCDCDC' : '#252525',
+        },
+        tonalOffset: 1,
+      },
+    });
+  }, [mode]);
+
   return (
-    <Routes>
-      <Route path="/" element={<Forward appPrefix={appPrefix}/>}>
-        <Route path="v/new/*"
-               element={
-                 <CadView
-                   installPrefix={installPrefix}
-                   appPrefix={appPrefix}
-                   pathPrefix={appPrefix + '/v/new'} />
-               } />
-        <Route path="v/p/*"
-               element={
-                 <CadView
-                   installPrefix={installPrefix}
-                   appPrefix={appPrefix}
-                   pathPrefix={appPrefix + '/v/p'} />
-               } />
-        <Route path="v/gh/:org/:repo/:branch/*"
-               element={
-                 <CadView
-                   installPrefix={installPrefix}
-                   appPrefix={appPrefix}
-                   pathPrefix={appPrefix + '/v/gh'} />
-               } />
-      </Route>
-    </Routes>);
+    <ColorModeContext.Provider value={colorMode}>
+      <ThemeProvider theme={theme}>
+        <Routes>
+          <Route path='/' element={<Forward appPrefix={appPrefix} />}>
+            <Route
+              path='v/new/*'
+              element={
+                <CadView
+                  installPrefix={installPrefix}
+                  appPrefix={appPrefix}
+                  pathPrefix={appPrefix + '/v/new'}
+                  toggleTheme={colorMode.toggleColorMode}
+                  mode={mode}
+                />
+              }
+            />
+            <Route
+              path='v/p/*'
+              element={
+                <CadView
+                  installPrefix={installPrefix}
+                  appPrefix={appPrefix}
+                  pathPrefix={appPrefix + '/v/p'}
+                  toggleTheme={colorMode.toggleColorMode}
+                  mode={mode}
+                />
+              }
+            />
+            <Route
+              path='v/gh/:org/:repo/:branch/*'
+              element={
+                <CadView
+                  installPrefix={installPrefix}
+                  appPrefix={appPrefix}
+                  pathPrefix={appPrefix + '/v/gh'}
+                  toggleTheme={colorMode.toggleColorMode}
+                  mode={mode}
+                />
+              }
+            />
+          </Route>
+        </Routes>
+      </ThemeProvider>
+    </ColorModeContext.Provider>
+  );
 }
