@@ -8,24 +8,17 @@ import {
 } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CadView from './Containers/CadView';
-import 'normalize.css';
-
-
-const debug = 0;
-const ColorModeContext = createContext({ toggleColorMode: () => {} });
+import debug from './utils/debug'
+import 'normalize.css'
 
 function Forward({ appPrefix }) {
   const location = useLocation(),
   navigate = useNavigate();
   React.useEffect(() => {
-    if (debug) {
-      console.log('Share.jsx: should forward?: ', location);
-    }
+    debug().log('Share.jsx: should forward?: ', location);
     if (location.pathname == appPrefix) {
       const dest = appPrefix + '/v/p';
-      if (debug) {
-        console.log('Share.jsx: Base: forwarding to: ', dest);
-      }
+      debug().log('Share.jsx: Base: forwarding to: ', dest);
       navigate(dest);
     }
   }, []);
@@ -95,8 +88,6 @@ export default function Share({ installPrefix, appPrefix }) {
                   installPrefix={installPrefix}
                   appPrefix={appPrefix}
                   pathPrefix={appPrefix + '/v/new'}
-                  toggleTheme={colorMode.toggleColorMode}
-                  mode={mode}
                 />
               }
             />
@@ -107,8 +98,6 @@ export default function Share({ installPrefix, appPrefix }) {
                   installPrefix={installPrefix}
                   appPrefix={appPrefix}
                   pathPrefix={appPrefix + '/v/p'}
-                  toggleTheme={colorMode.toggleColorMode}
-                  mode={mode}
                 />
               }
             />
@@ -119,8 +108,6 @@ export default function Share({ installPrefix, appPrefix }) {
                   installPrefix={installPrefix}
                   appPrefix={appPrefix}
                   pathPrefix={appPrefix + '/v/gh'}
-                  toggleTheme={colorMode.toggleColorMode}
-                  mode={mode}
                 />
               }
             />
@@ -128,5 +115,8 @@ export default function Share({ installPrefix, appPrefix }) {
         </Routes>
       </ThemeProvider>
     </ColorModeContext.Provider>
-  );
+  )
 }
+
+
+export const ColorModeContext = createContext({ toggleColorMode: () => {} });
