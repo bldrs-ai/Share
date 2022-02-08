@@ -97,7 +97,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams);
     if (mp === null) {
       // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/tinyhouse.ifc');
+      navigate(appPrefix + '/v/p/index.ifc');
       return;
     }
     if (modelPath === null
