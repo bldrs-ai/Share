@@ -12,7 +12,6 @@ import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
-import { assert } from '../utils/assert'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
 
 
@@ -97,7 +96,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams);
     if (mp === null) {
       // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/tinyhouse.ifc');
+      navigate(appPrefix + '/v/p/index.ifc');
       return;
     }
     if (modelPath === null
