@@ -4,8 +4,8 @@ import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
 import TreeView from '@mui/lab/TreeView';
 import NavTree from './NavTree';
-import NodeClosed from '../assets/Arrow_straight.svg';
-import NodeOpen from '../assets/Arrow_down.svg';
+import NodeClosed from '../assets/NodeClosed.svg';
+import NodeOpen from '../assets/NodeOpen.svg';
 
 
 const useStyles = makeStyles({
@@ -26,6 +26,7 @@ const useStyles = makeStyles({
   treeContainer:{
     paddingTop: '20px',
     paddingBottom: '20px',
+    paddingLeft:'5px',
     overflow: 'scroll',
   },
   paper: {
@@ -36,8 +37,8 @@ const useStyles = makeStyles({
     backgroundColor: 'lightGray',
   },
   icon:{
-    width: 16,
-    height: 16
+    width: 14,
+    height: 14
   }
 });
 

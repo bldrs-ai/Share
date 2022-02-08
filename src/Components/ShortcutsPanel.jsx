@@ -1,10 +1,42 @@
 import React from 'react';
-import { makeStyles } from '@mui/styles';
 import Paper from '@mui/material/Paper';
+import { makeStyles } from '@mui/styles';
 import Close from '../assets/Close.svg'
 import Shortcuts from '../assets/ShortCuts.svg'
 
 
+export default function ShortcutsIcon ({offsetTop}) {
+  const [open, setOpen]=React.useState(false);
+  const classes = useStyles();
+    return (
+      <div onClick={() => { setOpen(!open) }}>
+        <Shortcuts className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
+      </div>);
+};
+
+
+const ShortcutsPanel = ({openToggle, offsetTop}) => {
+  const classes = useStyles({offsetTop:offsetTop});
+  return (
+  <div className = {classes.container}>
+    <Paper elevation={3} className={classes.panel}>
+      <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
+      <h1>Guide</h1>
+      <p>To attach a section plane:</p>
+      <ul>
+        <li>Hover over an element</li>
+        <li>Press <strong>Q to attach a section plane</strong></li>
+        <li>Hover over a plane press <strong>W to delete the plane</strong></li>
+        <li>Multiple planes can be attached to a model</li>
+      </ul>
+      <p>To clear selection:</p>
+      <ul>
+        <li>Press <strong>A to clear selected element</strong></li>
+      </ul>
+    </Paper>
+  </div>
+);
+};
 
 const useStyles = makeStyles({
   container:{
@@ -56,41 +88,6 @@ const useStyles = makeStyles({
     },
   }
 });
-
-
-const ShortcutsIcon = ({offsetTop}) => {
-  const [open, setOpen]=React.useState(false);
- const classes = useStyles();
-  return (
-    <div onClick={() => { setOpen(!open) }}>
-      <Shortcuts className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{setOpen(!open)}} offsetTop={offsetTop}/>}
-    </div>);
-};
-
-
-const ShortcutsPanel = ({openToggle, offsetTop}) => {
-  const classes = useStyles({offsetTop:offsetTop});
-
-  return (
-  <div className = {classes.container}>
-    <Paper elevation={3} className={classes.panel}>
-      <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
-      <h1>Shortcuts</h1>
-      <p>To attach a section plane:</p>
-      <ul>
-        <li>Hover over an element</li>
-        <li>Press <strong>Q to attach a section plane</strong></li>
-        <li>Hover over a plane press <strong>W to delete the plane</strong></li>
-        <li>Multiple planes can be attached to a model</li>
-      </ul>
-      <p>To clear selection:</p>
-      <ul>
-        <li>Press <strong>A to clear selected element</strong></li>
-      </ul>
-    </Paper>
-  </div>
-);
-};
 
 export {
   ShortcutsIcon

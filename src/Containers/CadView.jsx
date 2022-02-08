@@ -1,6 +1,6 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useContext } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { makeStyles } from '@mui/styles'
+import { makeStyles } from '@mui/styles' // useTheme, see TODO below
 import { Color } from 'three'
 import { IfcViewerAPI } from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
@@ -13,6 +13,7 @@ import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
+
 
 
 export default function CadView({installPrefix, appPrefix, pathPrefix}) {
@@ -38,7 +39,16 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   const navigate = useNavigate();
   const urlParams = useParams();
+  //const theme = useTheme()
 
+
+  //useEffect(()=>{
+  //  if (viewer.context) {
+  //  // TODO: should work
+  //  // viewer.context.renderer.renderer.setClearColor(0xff0000)
+  //  // viewer.context.scene.color = new THREE.Color(0xff0000)
+  //  }
+  //}, [theme])
 
   /**
    * On a change to urlParams, setting a new model path will clear the
@@ -355,7 +365,7 @@ function initViewer(pathPrefix) {
   container.textContent = '';
   const viewer = new IfcViewerAPI({
     container,
-    backgroundColor: new Color('#E0E0E0'),
+    backgroundColor: new Color('#a0a0a0'),
   });
   debug().log('CadView#initViewer: viewer created: ', viewer);
   // Path to web-ifc.wasm in serving directory.
@@ -363,6 +373,7 @@ function initViewer(pathPrefix) {
   viewer.addAxes();
   viewer.addGrid(50, 50);
   viewer.clipper.active = true;
+
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
