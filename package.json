@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r266",
+  "version": "0.1.0-r268",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
@@ -20,7 +20,6 @@
     "@mui/material": "^5.0.1",
     "@mui/styled-engine": "^5.0.1",
     "@mui/styles": "^5.1.0",
-    "jsonata": "^1.8.5",
     "normalize.css": "^8.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",

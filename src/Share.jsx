@@ -6,24 +6,18 @@ import {
   useLocation,
   useNavigate
 } from 'react-router-dom'
-import CadView from './Containers/CadView'
 import 'normalize.css'
-
-
-const debug = 0;
+import CadView from './Containers/CadView'
+import debug from './utils/debug'
 
 
 function Forward({appPrefix}) {
   const location = useLocation(), navigate = useNavigate();
   React.useEffect(() => {
-    if (debug) {
-      console.log('Share.jsx: should forward?: ', location);
-    }
+    debug().log('Share.jsx: should forward?: ', location);
     if (location.pathname == appPrefix) {
       const dest = appPrefix + '/v/p';
-      if (debug) {
-        console.log('Share.jsx: Base: forwarding to: ', dest);
-      }
+      debug().log('Share.jsx: Base: forwarding to: ', dest);
       navigate(dest);
     }
   }, []);

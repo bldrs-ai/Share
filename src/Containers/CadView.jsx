@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { makeStyles } from '@mui/styles'
 import { Color } from 'three'
 import { IfcViewerAPI } from 'web-ifc-viewer'
@@ -15,6 +15,8 @@ import debug from '../utils/debug'
 import { assert } from '../utils/assert'
 import { computeElementPath, setupLookupAndParentLinks } from '../utils/TreeUtils'
 
+
+const searchIndex = new SearchIndex();
 
 export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const classes = useStyles();
@@ -32,11 +34,11 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState();
   const onClickShare = () => setShowShare(!showShare);
-  const [searchIndex, setSearchIndex] = useState({ clearIndex: () => {} });
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [modelPath, setModelPath] = useState(null);
   const [pathToLoad, setPathToLoad] = useState(null);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const urlParams = useParams();
 
@@ -83,6 +85,14 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }, [pathToLoad])
 
 
+  useEffect(() => {
+    if (pathToLoad == null) {
+      return;
+    }
+    onSearch();
+  }, [searchParams])
+
+
   // Helpers //
 
   function newScene() {
@@ -106,6 +116,26 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       setModelPath(mp);
       debug().log('CadView#setModelPathOrGotoIndex: new model path: ', mp);
     }
+  }
+
+
+  function loadLocalFile() {
+    const viewerContainer = document.getElementById('viewer-container');
+    const fileInput = document.createElement('input');
+    fileInput.setAttribute('type', 'file');
+    fileInput.classList.add('file-input');
+    fileInput.addEventListener(
+      'change',
+      (event) => {
+        let ifcUrl = URL.createObjectURL(event.target.files[0]);
+        const parts = ifcUrl.split('/');
+        ifcUrl = parts[parts.length - 1];
+        navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`);
+      },
+      false
+    );
+    viewerContainer.appendChild(fileInput);
+    fileInput.click();
   }
 
 
@@ -150,6 +180,20 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
+  function onModelLoad(rootElt, viewer, pathLoaded) {
+    debug().log('CadView#onModelLoad...');
+    gtag('event', 'select_content', {
+      content_type: 'ifc_model',
+      item_id: pathLoaded,
+    });
+    setRootElement(rootElt);
+    setupLookupAndParentLinks(rootElt, elementsById);
+    setDoubleClickListener(pathLoaded);
+    initSearch(rootElt, viewer);
+    setShowNavPanel(true);
+  }
+
+
   /** Select items in model when they're double-clicked. */
   async function setDoubleClickListener(filepath) {
     window.ondblclick = async (event) => {
@@ -168,43 +212,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  function loadLocalFile() {
-    const viewerContainer = document.getElementById('viewer-container');
-    const fileInput = document.createElement('input');
-    fileInput.setAttribute('type', 'file');
-    fileInput.classList.add('file-input');
-    fileInput.addEventListener(
-      'change',
-      (event) => {
-        let ifcUrl = URL.createObjectURL(event.target.files[0]);
-        const parts = ifcUrl.split('/');
-        ifcUrl = parts[parts.length - 1];
-        navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`);
-      },
-      false
-    );
-    viewerContainer.appendChild(fileInput);
-    fileInput.click();
-  }
-
-
-  function placeCutPlane() {
-    viewer.clipper.createPlane();
-  }
-
-
-  function unSelectItems() {
-    viewer.unpickIfcItems();
-    viewer.clipper.deleteAllPlanes()
-  }
-
-
-  function clearSearch() {
-    setSelectedElements([]);
-    viewer.IFC.unpickIfcItems();
-  }
-
-
   async function selectItems(resultIDs) {
     setSelectedElements(resultIDs.map((id) => id + ''));
     try {
@@ -215,22 +222,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       // setup its properties.
       debug(3).log('TODO: no visual element for item ids: ', resultIDs);
     }
-  }
-
-
-  function onSearch(query) {
-    clearSearch();
-    debug().log(`CadView#onSearch: query: ${query}`);
-    query = query.trim();
-    if (query === '') {
-      return;
-    }
-
-    const resultIDs = searchIndex.search(query);
-    selectItems(resultIDs);
-    gtag('event', 'search', {
-      search_term: query,
-    });
   }
 
 
@@ -251,39 +242,61 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  function onModelLoad(rootElt, viewer, pathLoaded) {
-    debug().log('CadView#onModelLoad...');
-    gtag('event', 'select_content', {
-      content_type: 'ifc_model',
-      item_id: pathLoaded,
-    });
-    setRootElement(rootElt);
-    setupLookupAndParentLinks(rootElt, elementsById);
-    const expanded = [rootElt.expressID + ''];
-    let elt = rootElt;
-    for (let i = 0; i < 3; i++) {
-      if (elt.children.length > 0) {
-        expanded.push(elt.expressID + '');
-        elt = elt.children[0];
-      }
-    }
-    setDefaultExpandedElements(expanded);
-    searchIndex.clearIndex();
-    const index = new SearchIndex(rootElt, viewer);
-    index.indexElement(rootElt);
-    // TODO(pablo): why can't i do:
-    //   setSearchIndex(new SearchIndex(rootElt, viewer));
-    //   searchIndex.indexElement(...);
-    // When I try this searchIndex is actually a promise.
-    setSearchIndex(index);
-    setShowNavPanel(true);
-    setShowSearchBar(true);
-    setDoubleClickListener(pathLoaded);
+  function unSelectItems() {
+    viewer.unpickIfcItems();
+    viewer.clipper.deleteAllPlanes()
   }
 
 
-  // TODO(pablo): search suggest
-  const onSearchModify = (query) => {};
+  function initSearch(rootElt, viewer) {
+    searchIndex.clearIndex();
+    debug().log('CadView#initSearch');
+    debug().time('build searchIndex');
+    searchIndex.indexElement(rootElt, viewer);
+    debug().timeEnd('build searchIndex');
+    debug().log('searchIndex: ', searchIndex)
+    onSearch();
+    setShowSearchBar(true);
+  }
+
+
+  function onSearch() {
+    const sp = new URLSearchParams(window.location.search);
+    console.log('CadView#onSearch: URLSearchParams: ', sp);
+    let query = sp.get('q');
+    if (query) {
+      query = query.trim()
+      console.log('CadView#onSearch: setting query from q=', query);
+      if (query === '') {
+        clearSearchQuery();
+        return;
+      }
+      const resultIDs = searchIndex.search(query);
+      selectItems(resultIDs);
+/*
+need to expand results and parents
+    const expanded = ['84'];
+    for (let i in resultIDs) {
+      expanded.push(resultIDs[i] + '');
+    }
+    setExpandedElements(expanded);
+*/
+      gtag('event', 'search', {
+        search_term: query,
+      });
+    }
+  }
+
+
+  function clearSearchQuery() {
+    setSelectedElements([]);
+    viewer.IFC.unpickIfcItems();
+  }
+
+
+  function placeCutPlane() {
+    viewer.clipper.createPlane();
+  }
 
 
   let isLoaded = Object.keys(rootElement).length === 0;
@@ -306,8 +319,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         <div className={classes.searchContainer}>
           {showSearchBar && (
             <SearchBar
-              onSearch={onSearch}
-              onSearchModify={onSearchModify}
               onClickMenu={() => setShowNavPanel(!showNavPanel)}
               disabled={isLoaded}
               open={showNavPanel}

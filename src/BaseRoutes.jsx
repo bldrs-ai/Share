@@ -4,17 +4,18 @@ import {
   Routes,
   Route,
   useLocation,
-  useNavigate
+  useNavigate,
+  useSearchParams
 } from 'react-router-dom'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
 import Share from './Share'
+import debug from './utils/debug'
 
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 import AccountCircle from '@mui/icons-material/AccountCircle'
 
 
-const debug = 0;
 /**
  * From URL design: https://github.com/buildrs/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
@@ -29,22 +30,23 @@ const debug = 0;
  * @param testElt For unit test allow use of a stub here instead of loading the app.
  */
 export default function BaseRoutes({testElt = null}) {
-  const location = useLocation(), navigate = useNavigate();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
 
   React.useEffect(() => {
     const referrer = document.referrer;
+    debug().log('BaseRoutes: document.referrer: ', referrer);
     if (referrer) {
-      const path = new URL(document.referrer).pathname;
-      if (path.length > 1) {
-        navigate(path);
+      const ref = new URL(referrer);
+      if (ref.pathname.length > 1) {
+        navigate(ref);
       }
     }
     if (location.pathname === installPrefix
         || location.pathname === (installPrefix + '/')) {
-      if (debug) {
-        console.log('BaseRoutes: forwarding to: ', installPrefix + '/share');
-      }
+      debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share');
       navigate(installPrefix + '/share');
     }
   }, []);

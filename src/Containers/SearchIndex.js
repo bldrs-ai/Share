@@ -1,15 +1,11 @@
-import jsonata from 'jsonata';
-import * as Ifc from '../utils/Ifc.js';
-
-
-const debug = 0;
+import * as Ifc from '../utils/Ifc'
+import debug from '../utils/debug'
+import { assertDefined } from '../utils/assert'
 
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
-  constructor(ifcElement, viewer) {
-    this.ifcElement = ifcElement;
-    this.viewer = viewer;
+  constructor() {
     this.eltsByType = {};
     this.eltsByName = {};
     this.eltsByGlobalId = {};
@@ -18,8 +14,9 @@ export default class SearchIndex {
 
 
   /** Recursively visits elt and indexes properties. */
-  indexElement(elt) {
-    const type = Ifc.getType(elt, this.viewer);
+  indexElement(elt, viewer) {
+    assertDefined(elt, viewer);
+    const type = Ifc.getType(elt, viewer);
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt);
       if (type.startsWith('IFC')) {
@@ -33,7 +30,7 @@ export default class SearchIndex {
       this.indexElementByStringSet(this.eltsByName, this.tokenize(name), elt);
     }
 
-    const reifiedName = Ifc.reifyName(elt, this.viewer);
+    const reifiedName = Ifc.reifyName(elt, viewer);
     if (reifiedName) {
       this.indexElementByString(this.eltsByName, reifiedName, elt);
       this.indexElementByStringSet(this.eltsByName, this.tokenize(reifiedName), elt);
@@ -52,7 +49,7 @@ export default class SearchIndex {
 
     // Recurse.
     for (let child of elt.children) {
-      this.indexElement(child);
+      this.indexElement(child, viewer);
     }
   }
 
@@ -91,6 +88,12 @@ export default class SearchIndex {
     for (let key in this.eltsByName) {
       delete this.eltsByName[key];
     }
+    for (let key in this.eltsByGlobalId) {
+      delete this.eltsByGlobalId[key];
+    }
+    for (let key in this.eltsByText) {
+      delete this.eltsByText[key];
+    }
   }
 
 
@@ -117,49 +120,25 @@ export default class SearchIndex {
       query = `::**[${query.substring(1)}]`;
     }
 
-    if (debug) {
-      console.log(`SearchIndex#search: query rewrite: ${query}`);
-    }
+    debug().log(`SearchIndex#search: query rewrite: ${query}`);
 
-    if (query.startsWith('::')) {
-      query = query.substring(2);
-      // https://docs.jsonata.org/
-      let jsonResults = jsonata(query).evaluate(this.ifcElement);
-      if (debug) {
-        console.log('CadView#onSearch: JSONata results: ', query, jsonResults);
-      }
-      if (jsonResults) {
-        if (!Array.isArray(jsonResults)) {
-          jsonResults = [jsonResults];
-        }
-        addAll(new Set(jsonResults));
-      }
-    } else {
-      const token = query; // TODO(pablo): tokenization
-      if (debug >= 2) {
-        console.log('searching: ',
-                    this.eltsByName,
-                    this.eltsByType,
-                    this.eltsByGlobalId,
-                    this.eltsByText);
-      }
+    const token = query; // TODO(pablo): tokenization
+    debug(2).log('SearchIndex#search: this: ', this);
 
-      addAll(this.eltsByName[token]);
-      addAll(this.eltsByType[token]);
+    addAll(this.eltsByName[token]);
+    addAll(this.eltsByType[token]);
 
-      const lowerToken = token.toLowerCase();
-      addAll(this.eltsByName[lowerToken]);
-      addAll(this.eltsByType[lowerToken]);
+    const lowerToken = token.toLowerCase();
+    addAll(this.eltsByName[lowerToken]);
+    addAll(this.eltsByType[lowerToken]);
 
-      addAll(this.eltsByGlobalId[token]);
+    addAll(this.eltsByGlobalId[token]);
 
-      addAll(this.eltsByText[token]);
-    }
+    addAll(this.eltsByText[token]);
+
 
     const resultIDs = toExpressIds(Array.from(resultSet));
-    if (debug) {
-      console.log('result IDs: ', resultIDs);
-    }
+    debug().log('result IDs: ', resultIDs);
     return resultIDs;
   }
 }
