@@ -1,15 +1,46 @@
-import React from 'react';
-import Toolbar from '@mui/material/Toolbar';
-import AppBar from '@mui/material/AppBar';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import { makeStyles } from '@mui/styles';
-import { AboutIcon } from './AboutPanel';
-import LoginMenu from './LoginMenu';
-import Logo from '../assets/Logo.svg';
-import Folder from '../assets/Folder.svg';
-import { alpha, styled } from '@mui/material/styles';
-import { grey } from '@mui/material/colors';
+import React from 'react'
+import AppBar from '@mui/material/AppBar'
+import IconButton from '@mui/material/IconButton'
+import Toolbar from '@mui/material/Toolbar'
+import Typography from '@mui/material/Typography'
+import { makeStyles } from '@mui/styles'
+import Settings from './Settings'
+import { AboutIcon } from './AboutPanel'
+import Logo from '../assets/Logo.svg'
+import Folder from '../assets/Folder.svg'
+
+
+export default function ToolBar({ fileOpen, offsetTop }) {
+  const classes = useStyles();
+
+  return (
+    <AppBar
+      elevation={0}
+      position='absolute'
+      color='primary'
+      className = {classes.appBar}>
+      <Toolbar variant='regular' className={classes.toolBar} >
+        <div className={classes.leftContainer} >
+          <Typography variant='h6' className={classes.title}>
+            <Logo className = {classes.logo}/>
+          </Typography>
+          <IconButton
+            edge='start'
+            color='secondary'
+            aria-label='menu'
+            onClick={fileOpen}
+          >
+            <Folder className = {classes.folder}/>
+          </IconButton>
+        </div>
+        <div className = {classes.rightContainer}>
+          <AboutIcon offsetTop = {offsetTop}/>
+          <Settings />
+      </div>
+      </Toolbar>
+    </AppBar>
+  )
+}
 
 
 const useStyles = makeStyles({
@@ -24,7 +55,6 @@ const useStyles = makeStyles({
   },
   toolBar:{
     borderBottom: '1px solid 	#696969',
-    backgroundColor: '#D8D8D8',
     display: 'flex',
     justifyContent: 'space-between',
   },
@@ -59,38 +89,4 @@ const useStyles = makeStyles({
     cursor: 'pointer',
     borderBottom: '1px solid #737373'
   },
-});
-
-
-const ToolBar = ({ fileOpen, offsetTop }) => {
-  const classes = useStyles();
-  return (
-    <AppBar
-      elevation={0}
-      position='absolute'
-      color='primary'
-      className = {classes.appBar}>
-      <Toolbar variant='regular' className={classes.toolBar} >
-        <div className={classes.leftContainer} >
-          <Typography variant='h6' className={classes.title}>
-            <Logo className = {classes.logo}/>
-          </Typography>
-          <IconButton
-            edge='start'
-            color='secondary'
-            aria-label='menu'
-            onClick={fileOpen}
-          >
-            <Folder className = {classes.folder}/>
-          </IconButton>
-        </div>
-        <div className = {classes.rightContainer}>
-          <AboutIcon offsetTop = {offsetTop}/>
-          <LoginMenu />
-      </div>
-      </Toolbar>
-    </AppBar>
-  );
-};
-
-export default ToolBar;
+})

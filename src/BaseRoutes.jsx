@@ -6,15 +6,14 @@ import {
   useLocation,
   useNavigate
 } from 'react-router-dom'
-import { ThemeProvider, createTheme } from '@mui/material/styles'
 import Share from './Share'
+import debug from './utils/debug'
 
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 import AccountCircle from '@mui/icons-material/AccountCircle'
 
 
-const debug = 0;
 /**
  * From URL design: https://github.com/buildrs/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
@@ -42,9 +41,7 @@ export default function BaseRoutes({testElt = null}) {
     }
     if (location.pathname === installPrefix
         || location.pathname === (installPrefix + '/')) {
-      if (debug) {
-        console.log('BaseRoutes: forwarding to: ', installPrefix + '/share');
-      }
+      debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share');
       navigate(installPrefix + '/share');
     }
   }, []);
@@ -52,7 +49,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = installPrefix + "/*";
   return (
     <Routes>
-      <Route path={basePath} element={<Themed/>}>
+      <Route path={basePath} element={<Outlet/>}>
         <Route path="share/*"
                element={
                  testElt || <Share installPrefix={installPrefix}
@@ -62,17 +59,3 @@ export default function BaseRoutes({testElt = null}) {
     </Routes>
   )
 }
-
-
-const theme = createTheme({
-  status: {
-    danger: 'foo',
-  },
-});
-
-
-const Themed = () => (
-  <ThemeProvider theme={theme}>
-    <Outlet/>
-  </ThemeProvider>
-)
