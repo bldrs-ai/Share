@@ -3,15 +3,20 @@ import AppBar from '@mui/material/AppBar'
 import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
-import { makeStyles } from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Settings from './Settings'
-import { AboutIcon } from './AboutPanel'
+import {AboutIcon} from './AboutPanel'
 import Logo from '../assets/Logo.svg'
 import Folder from '../assets/Folder.svg'
 
 
-export default function ToolBar({ fileOpen, offsetTop }) {
-  const classes = useStyles();
+/**
+ * @param {Function} fileOpen
+ * @param {Number} offsetTop
+ * @return {Object} React component.
+ */
+export default function ToolBar({fileOpen, offsetTop}) {
+  const classes = useStyles()
 
   return (
     <AppBar
@@ -36,7 +41,7 @@ export default function ToolBar({ fileOpen, offsetTop }) {
         <div className = {classes.rightContainer}>
           <AboutIcon offsetTop = {offsetTop}/>
           <Settings />
-      </div>
+        </div>
       </Toolbar>
     </AppBar>
   )
@@ -44,49 +49,49 @@ export default function ToolBar({ fileOpen, offsetTop }) {
 
 
 const useStyles = makeStyles({
-  appBar:{
-    position: 'absolute'
+  appBar: {
+    position: 'absolute',
   },
   title: {
     display: 'flex',
-    justifyContent:'center',
+    justifyContent: 'center',
     fontSize: 20,
-    paddingRight:'20px',
+    paddingRight: '20px',
   },
-  toolBar:{
-    borderBottom: '1px solid 	#696969',
+  toolBar: {
+    borderBottom: '1px solid #696969',
     display: 'flex',
     justifyContent: 'space-between',
   },
-  leftContainer:{
+  leftContainer: {
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
     width: '190px',
   },
-  logo:{
+  logo: {
     width: '120px',
     height: '40px',
   },
-  folder:{
+  folder: {
     width: '40px',
-    height: '40px'
+    height: '40px',
   },
-  rightContainer:{
+  rightContainer: {
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
-    width:'144px',
+    width: '144px',
   },
-  about:{
+  about: {
     height: 18,
     fontFamily: 'Helvetica',
     fontSize: 14,
     fontWeight: 200,
     color: 'grey',
     cursor: 'pointer',
-    borderBottom: '1px solid #737373'
+    borderBottom: '1px solid #737373',
   },
 })

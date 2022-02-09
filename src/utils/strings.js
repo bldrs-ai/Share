@@ -1,7 +1,7 @@
 export function stoi(s) {
-  const i = parseInt(s);
+  const i = parseInt(s)
   if (!isFinite(i)) {
-    throw new Error('Expected integer, got: ' + s);
+    throw new Error('Expected integer, got: ' + s)
   }
-  return i;
+  return i
 }
