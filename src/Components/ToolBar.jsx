@@ -1,13 +1,15 @@
-import React from 'react'
+import React,{useContext} from 'react'
 import AppBar from '@mui/material/AppBar'
 import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
-import {makeStyles} from '@mui/styles'
+import {makeStyles,useTheme} from '@mui/styles'
 import Settings from './Settings'
-import {AboutIcon} from './AboutPanel'
-import Logo from '../assets/Logo.svg'
-import Folder from '../assets/Folder.svg'
+import {AboutControl} from './AboutPanel'
+import {ColorModeContext} from '../Share'
+import LogoLight from '../assets/Logo_abstract_dark.svg'
+import LogoDark from '../assets/Logo_abstract_dark.svg'
+import Open from '../assets/Open.svg'
 
 
 /**
@@ -17,6 +19,8 @@ import Folder from '../assets/Folder.svg'
  */
 export default function ToolBar({fileOpen, offsetTop}) {
   const classes = useStyles()
+  const theme = useContext(ColorModeContext)
+  const themeMode = useTheme()
 
   return (
     <AppBar
@@ -27,7 +31,9 @@ export default function ToolBar({fileOpen, offsetTop}) {
       <Toolbar variant='regular' className={classes.toolBar} >
         <div className={classes.leftContainer} >
           <Typography variant='h6' className={classes.title}>
-            <Logo className = {classes.logo}/>
+            {themeMode.palette.mode==='light'?
+              <LogoDark className = {classes.logo}/>
+              :<LogoLight className = {classes.logo}/>}
           </Typography>
           <IconButton
             edge='start'
@@ -35,11 +41,11 @@ export default function ToolBar({fileOpen, offsetTop}) {
             aria-label='menu'
             onClick={fileOpen}
           >
-            <Folder className = {classes.folder}/>
+            <Open className = {classes.icon}/>
           </IconButton>
         </div>
         <div className = {classes.rightContainer}>
-          <AboutIcon offsetTop = {offsetTop}/>
+          <AboutControl offsetTop = {offsetTop}/>
           <Settings />
         </div>
       </Toolbar>
@@ -74,9 +80,9 @@ const useStyles = makeStyles({
     width: '120px',
     height: '40px',
   },
-  folder: {
-    width: '40px',
-    height: '40px',
+  icon: {
+    width: '30px',
+    height: '30px',
   },
   rightContainer: {
     display: 'flex',

@@ -3,21 +3,21 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Close from '../assets/Close.svg'
-import Shortcuts from '../assets/ShortCuts.svg'
+import Question from '../assets/Question.svg'
 
 
 /**
  * @param {Number} offsetTop
  * @return {Object}
  */
-export default function ShortcutsIcon({offsetTop}) {
+export default function ShortcutsControl({offsetTop}) {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
   return (
     <IconButton onClick={() => {
       setOpen(!open)
     }}>
-      <Shortcuts className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
+      <Question className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTop={offsetTop}/>}
     </IconButton>)
