@@ -1,11 +1,11 @@
-import React from 'react';
-import { Link as RouterLink } from 'react-router-dom';
-import TreeItem, { useTreeItem } from '@mui/lab/TreeItem';
-import PropTypes from 'prop-types';
-import clsx from 'clsx';
-import Typography from '@mui/material/Typography';
-import { reifyName } from '../utils/Ifc';
-import { computeElementPath } from '../utils/TreeUtils';
+import React from 'react'
+import {Link as RouterLink} from 'react-router-dom'
+import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
+import PropTypes from 'prop-types'
+import clsx from 'clsx'
+import Typography from '@mui/material/Typography'
+import {reifyName} from '../utils/Ifc'
+import {computeElementPath} from '../utils/TreeUtils'
 
 
 const NavTreePropTypes = {
@@ -37,7 +37,7 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
-};
+}
 
 const NavTree = ({
   viewer,
@@ -56,7 +56,7 @@ const NavTree = ({
       icon: iconProp,
       expansionIcon,
       displayIcon,
-    } = props;
+    } = props
 
     const {
       disabled,
@@ -66,24 +66,22 @@ const NavTree = ({
       handleExpansion,
       handleSelection,
       preventSelection,
-    } = useTreeItem(nodeId);
+    } = useTreeItem(nodeId)
 
-    const child = props.child;
-
-    const icon = iconProp || expansionIcon || displayIcon;
+    const icon = iconProp || expansionIcon || displayIcon
 
     const handleMouseDown = (event) => {
-      preventSelection(event);
-    };
+      preventSelection(event)
+    }
 
     const handleExpansionClick = (event) => {
-      handleExpansion(event);
-    };
+      handleExpansion(event)
+    }
 
     const handleSelectionClick = (event) => {
-      handleSelection(event);
-      onElementSelect(element);
-    };
+      handleSelection(event)
+      onElementSelect(element)
+    }
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -96,10 +94,11 @@ const NavTree = ({
         })}
         onMouseDown={handleMouseDown}
         ref={ref}
-        style = {{width:'160px'}}
+        style = {{width: '160px'}}
       >
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} style={{marginLeft:8,}}>
+        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
+            jsx-a11y/no-static-element-interactions */}
+        <div onClick={handleExpansionClick} style={{marginLeft: 8}}>
           {icon}
         </div>
         <Typography onClick={handleSelectionClick} >
@@ -120,27 +119,17 @@ const NavTree = ({
           </RouterLink>
         </Typography>
       </div>
-    );
-  });
+    )
+  })
 
-  CustomContent.propTypes = NavTreePropTypes;
+  CustomContent.propTypes = NavTreePropTypes
 
   const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={CustomContent} {...props} />;
-  };
+    return <TreeItem ContentComponent={CustomContent} {...props} />
+  }
 
-  const ChildTreeItem = (props) => {
-    return (
-      <TreeItem
-        ContentProps={{ child: props.child }}
-        ContentComponent={CustomContent}
-        {...props}
-      />
-    );
-  };
 
-  const nodeId = element.expressID.toString();
-  let i = 0;
+  let i = 0
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
@@ -149,25 +138,25 @@ const NavTree = ({
       label={reifyName(element, viewer)}
       onClick={() => onElementSelect(element)}
     >
-      {element.children && element.children.length > 0
-        ? element.children.map((child) => {
-            const childKey = `${keyPrefix}-${i++}`;
-            return (
-              <React.Fragment key={childKey}>
-                <NavTree
-                  viewer={viewer}
-                  element={child}
-                  pathPrefix={pathPrefix}
-                  onElementSelect={onElementSelect}
-                  setExpandedElements={setExpandedElements}
-                  keyPrefix={childKey}
-                />
-              </React.Fragment>
-            );
-          })
-        : null}
+      {element.children && element.children.length > 0 ?
+        element.children.map((child) => {
+          const childKey = `${keyPrefix}-${i++}`
+          return (
+            <React.Fragment key={childKey}>
+              <NavTree
+                viewer={viewer}
+                element={child}
+                pathPrefix={pathPrefix}
+                onElementSelect={onElementSelect}
+                setExpandedElements={setExpandedElements}
+                keyPrefix={childKey}
+              />
+            </React.Fragment>
+          )
+        }) :
+        null}
     </CustomTreeItem>
-  );
-};
+  )
+}
 
-export default NavTree;
+export default NavTree

@@ -1,16 +1,16 @@
-import React from 'react';
-import Button from '@mui/material/Button';
-import { makeStyles } from '@mui/styles';
+import React from 'react'
+import Button from '@mui/material/Button'
+import {makeStyles} from '@mui/styles'
 
 const useStyles = makeStyles((theme) => ({
   button: {
     height: 36,
     margin: theme.spacing(1),
   },
-}));
+}))
 
-const ShareButton = ({ name, onClick }) => {
-  const classes = useStyles();
+const ShareButton = ({name, onClick}) => {
+  const classes = useStyles()
   return (
     <Button
       variant='contained'
@@ -22,7 +22,7 @@ const ShareButton = ({ name, onClick }) => {
     >
       {name}
     </Button>
-  );
-};
+  )
+}
 
-export default ShareButton;
+export default ShareButton

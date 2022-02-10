@@ -1,28 +1,33 @@
-import React, { useContext } from 'react'
+import React, {useContext, useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import { makeStyles, useTheme } from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
-import { ColorModeContext } from '../Share'
+import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
 import SettingsIcon from '../assets/Settings.svg'
 
 
-export default function Settings ({toggleTheme, mode}) {
-  const [anchorEl, setAnchorEl] = React.useState(null);
-  const open = Boolean(anchorEl);
-  const classes = useStyles();
-  const theme = useContext(ColorModeContext);
+/**
+ * @param {function} toggleTheme
+ * @param {Object} mode
+ * @return {Object}
+ */
+export default function Settings({toggleTheme, mode}) {
+  const [anchorEl, setAnchorEl] = useState(null)
+  const open = Boolean(anchorEl)
+  const classes = useStyles()
+  const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
 
   const handleClose = () => {
-    setAnchorEl(null);
-  };
+    setAnchorEl(null)
+  }
 
   const handleMenu = (event) => {
-    setAnchorEl(event.currentTarget);
-  };
+    setAnchorEl(event.currentTarget)
+  }
 
   return (
     <div>
@@ -46,18 +51,20 @@ export default function Settings ({toggleTheme, mode}) {
         }}
         open={open}
         onClose={handleClose}
-        style = {{height:180}}
+        style = {{height: 180}}
         PaperProps={{
-            style: {
-              transform: 'translateX(12px) translateY(50px)',
-            }
-          }}
+          style: {
+            transform: 'translateX(12px) translateY(50px)',
+          },
+        }}
       >
-      <MenuItem className={classes.menuItem} disableRipple>Version: {PkgJson.version}</MenuItem>
-      <MenuItem className={classes.menuItem} disableRipple >
-        <div>Theme: {themeMode.palette.mode}</div>
-        <Toggle defaultChecked onChange={() => { theme.toggleColorMode('dark') }}/>
-      </MenuItem>
+        <MenuItem className={classes.menuItem} disableRipple>Version: {PkgJson.version}</MenuItem>
+        <MenuItem className={classes.menuItem} disableRipple >
+          <div>Theme: {themeMode.palette.mode}</div>
+          <Toggle defaultChecked onChange={() => {
+            theme.toggleColorMode('dark')
+          }}/>
+        </MenuItem>
       </Menu>
     </div>
   )
@@ -65,11 +72,11 @@ export default function Settings ({toggleTheme, mode}) {
 
 
 const useStyles = makeStyles(() => ({
-  icon:{
+  icon: {
     width: '30px',
     height: '30px',
   },
-  menuItem:{
-    height:'30px'
-  }
+  menuItem: {
+    height: '30px',
+  },
 }))
