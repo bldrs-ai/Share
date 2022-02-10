@@ -7,8 +7,12 @@ import {makeStyles,useTheme} from '@mui/styles'
 import Settings from './Settings'
 import {AboutControl} from './AboutPanel'
 import {ColorModeContext} from '../Share'
-import LogoLight from '../assets/Logo.svg'
-import LogoDark from '../assets/Logo.svg'
+// import LogoLight from '../assets/Logo_abstract_dark.svg'
+// import LogoDark from '../assets/Logo_abstract_dark.svg'
+import LogoLight from '../assets/Logo_0_light.svg'
+import LogoDark from '../assets/Logo_0_dark.svg'
+// import LogoLight from '../assets/Logo.svg'
+// import LogoDark from '../assets/Logo.svg'
 import Open from '../assets/Open.svg'
 
 
@@ -33,7 +37,7 @@ export default function ToolBar({fileOpen, offsetTop}) {
           <Typography variant='h6' className={classes.title}>
             {themeMode.palette.mode==='light'?
               <LogoDark className = {classes.logo}/>
-              :<LogoLight className = {classes.logo}/>}
+            :<LogoLight className = {classes.logo}/>}
           </Typography>
           <IconButton
             edge='start'
