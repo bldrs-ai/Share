@@ -4,8 +4,8 @@ import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
-import NodeClosed from '../assets/Arrow_straight.svg'
-import NodeOpen from '../assets/Arrow_down.svg'
+import NodeClosed from '../assets/NodeClosed.svg'
+import NodeOpen from '../assets/NodeOpen.svg'
 
 
 /**
@@ -85,7 +85,7 @@ const useStyles = makeStyles({
   contextualMenu: {
     'position': 'absolute',
     'top': '144px',
-    'left': '20px',
+    'left': '23px',
     'overflow': 'auto',
     'width': '308px',
     'justifyContent': 'space-around',
@@ -109,7 +109,7 @@ const useStyles = makeStyles({
     backgroundColor: 'lightGray',
   },
   icon: {
-    width: 16,
-    height: 16,
+    width: 12,
+    height: 12,
   },
 })

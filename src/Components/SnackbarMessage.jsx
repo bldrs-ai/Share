@@ -13,17 +13,13 @@ import {makeStyles} from '@mui/styles'
 export default function SnackBarMessage({message, type, open}) {
   const classes = useStyles()
   return (
-    <Snackbar
+      <Snackbar
       open={open}
-      anchorOrigin={{
-        vertical: 'bottom',
-        horizontal: 'right',
-      }}
-      autoHideDuration={6000}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
     >
       <Alert
-        className={classes.alert}
         severity={type}
+        sx = {{backgroundColor:'#848484'}}
       >
         {message}
       </Alert>

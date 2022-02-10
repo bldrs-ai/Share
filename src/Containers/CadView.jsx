@@ -514,7 +514,7 @@ const useStyles = makeStyles((theme) => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: '20px',
+    left: '23px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
