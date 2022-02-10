@@ -7,8 +7,8 @@ import {makeStyles,useTheme} from '@mui/styles'
 import Settings from './Settings'
 import {AboutControl} from './AboutPanel'
 import {ColorModeContext} from '../Share'
-import LogoLight from '../assets/Logo_abstract_dark.svg'
-import LogoDark from '../assets/Logo_abstract_dark.svg'
+import LogoLight from '../assets/Logo.svg'
+import LogoDark from '../assets/Logo.svg'
 import Open from '../assets/Open.svg'
 
 
