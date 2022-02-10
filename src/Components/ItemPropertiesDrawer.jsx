@@ -1,77 +1,77 @@
-import React from 'react';
-import Drawer from '@mui/material/Drawer';
-import Close from '../assets/Close.svg';
-import { makeStyles } from '@mui/styles';
+import React from 'react'
+import Drawer from '@mui/material/Drawer'
+import Close from '../assets/Close.svg'
+import {makeStyles} from '@mui/styles'
 
 const useStyles = makeStyles({
-  drawerPaper:{
-    marginTop:'65px',
-    width:'350px',
-    borderRadius:'0px',
-    marginLeft:'20px',
-    zIndex: 10,
+  drawerPaper: {
+    'marginTop': '65px',
+    'width': '350px',
+    'borderRadius': '0px',
+    'marginLeft': '20px',
+    'zIndex': 10,
     '@media (max-width: 900px)': {
-      width:'auto',
-      height:'200px',
-      borderRadius:'8px',
-      marginLeft:'0px',
+      width: 'auto',
+      height: '200px',
+      borderRadius: '8px',
+      marginLeft: '0px',
     },
   },
-  drawerContainer:{
-    height:'100%',
-    width:'auto',
-    overflow:'hidden'
+  drawerContainer: {
+    height: '100%',
+    width: 'auto',
+    overflow: 'hidden',
   },
   headerWrapper: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    margin: '16px 10px 8px 10px',
-    paddingBottom:'12px',
-    borderBottom:'1px solid #494747',
+    'display': 'flex',
+    'justifyContent': 'space-between',
+    'alignItems': 'center',
+    'margin': '16px 10px 8px 10px',
+    'paddingBottom': '12px',
+    'borderBottom': '1px solid #494747',
     '@media (max-width: 900px)': {
       paddingBottom: '10px',
-      borderBottom:'none',
-    }
+      borderBottom: 'none',
+    },
   },
   title: {
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: '200px',
     color: '#696969',
-    marginLeft:'13px'
+    marginLeft: '13px',
   },
   closeContainer: {
-    position:'relative',
-    right:'20px',
+    'position': 'relative',
+    'right': '20px',
     '@media (max-width: 900px)': {
-      maxHeight:'200px',
-      right:'20px',
-      top:'2px'
+      maxHeight: '200px',
+      right: '20px',
+      top: '2px',
     },
   },
   close: {
-    height: '20px',
-    width: '20px',
-    zIndex: 1000,
-    cursor: 'pointer',
+    'height': '20px',
+    'width': '20px',
+    'zIndex': 1000,
+    'cursor': 'pointer',
     '@media (max-width: 900px)': {
       height: '30px',
       width: '30px',
     },
   },
-  contentContainer:{
-    display:'flex',
-    flexDirection:'row',
-    justifyContent:'center',
-    overflow:'auto',
-    height:'90%',
+  contentContainer: {
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'center',
+    'overflow': 'auto',
+    'height': '90%',
     '@media (max-width: 900px)': {
-      maxHeight:'200px',
-      overflow:'auto'
+      maxHeight: '200px',
+      overflow: 'auto',
     },
-  }
-});
+  },
+})
 
 
 const ItemPropertiesDrawer = ({
@@ -80,7 +80,7 @@ const ItemPropertiesDrawer = ({
   content,
   open,
 }) => {
-  const classes = useStyles();
+  const classes = useStyles()
   const anchor = window.innerWidth > 500?'right':'bottom'
 
   return (
@@ -93,20 +93,20 @@ const ItemPropertiesDrawer = ({
           variant='persistent'
           classes={{paper: classes.drawerPaper}}
         >
-        <div className ={classes.drawerContainer}>
-          <div className={classes.headerWrapper} onClick={onClose}>
-            <div className={classes.title}>{title}</div>
-           <div className = {classes.closeContainer}><Close className={classes.close} /></div>
-          </div>
+          <div className ={classes.drawerContainer}>
+            <div className={classes.headerWrapper} onClick={onClose}>
+              <div className={classes.title}>{title}</div>
+              <div className = {classes.closeContainer}><Close className={classes.close} /></div>
+            </div>
 
-          <div className = {classes.contentContainer}>
-            {content}
+            <div className = {classes.contentContainer}>
+              {content}
+            </div>
           </div>
-        </div>
         </Drawer>
       </React.Fragment>
     </>
-  );
-};
+  )
+}
 
-export default ItemPropertiesDrawer;
+export default ItemPropertiesDrawer

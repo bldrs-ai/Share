@@ -1,28 +1,34 @@
-import React, { useState, useMemo, createContext } from 'react';
+import React, {createContext, useState, useMemo} from 'react'
 import {
   Outlet,
   Routes,
   Route,
   useLocation,
   useNavigate,
-} from 'react-router-dom';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import CadView from './Containers/CadView';
+} from 'react-router-dom'
+import {ThemeProvider, createTheme} from '@mui/material/styles'
+import CadView from './Containers/CadView'
 import debug from './utils/debug'
 import 'normalize.css'
 
-function Forward({ appPrefix }) {
-  const location = useLocation(),
-  navigate = useNavigate();
+
+/**
+ * Forward page from /share to /share/v/p per spect at:
+ *   https://github.com/buildrs/Share/wiki/URL-Structure
+ * @return {Object}
+ */
+function Forward({appPrefix}) {
+  const location = useLocation()
+  const navigate = useNavigate()
   React.useEffect(() => {
-    debug().log('Share.jsx: should forward?: ', location);
+    debug().log('Share.jsx: should forward?: ', location)
     if (location.pathname == appPrefix) {
-      const dest = appPrefix + '/v/p';
-      debug().log('Share.jsx: Base: forwarding to: ', dest);
-      navigate(dest);
+      const dest = appPrefix + '/v/p'
+      debug().log('Share.jsx: Base: forwarding to: ', dest)
+      navigate(dest)
     }
-  }, []);
-  return <Outlet />;
+  }, [appPrefix, location, navigate])
+  return <Outlet />
 }
 
 /**
@@ -47,19 +53,20 @@ function Forward({ appPrefix }) {
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
  *                    ^... here on handled by this component's paths.
  *              ^... path to the component in BaseRoutes.jsx.
+ * @return {Object}
  */
-export default function Share({ installPrefix, appPrefix }) {
-  const [mode, setMode] = React.useState('light');
-  const colorMode = React.useMemo(
-    () => ({
-      toggleColorMode: () => {
-        setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'));
-      },
-    }),
-    []
-  );
+export default function Share({installPrefix, appPrefix}) {
+  const [mode, setMode] = useState('light')
+  const colorMode = useMemo(
+      () => ({
+        toggleColorMode: () => {
+          setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'))
+        },
+      }),
+      [],
+  )
 
-  const theme = React.useMemo(() => {
+  const theme = useMemo(() => {
     return createTheme({
       palette: {
         mode,
@@ -73,8 +80,8 @@ export default function Share({ installPrefix, appPrefix }) {
         },
         tonalOffset: 1,
       },
-    });
-  }, [mode]);
+    })
+  }, [mode])
 
   return (
     <ColorModeContext.Provider value={colorMode}>
@@ -119,4 +126,4 @@ export default function Share({ installPrefix, appPrefix }) {
 }
 
 
-export const ColorModeContext = createContext({ toggleColorMode: () => {} });
+export const ColorModeContext = createContext({toggleColorMode: () => {}})

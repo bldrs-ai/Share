@@ -1,4 +1,4 @@
-const DEBUG_LEVEL = 4;
+const DEBUG_LEVEL = 4
 export default function debug(level = 0) {
-  return level < DEBUG_LEVEL ? console : {log: () => {}};
+  return level < DEBUG_LEVEL ? console : {log: () => {}}
 }
