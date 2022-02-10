@@ -38,9 +38,7 @@ export default function IconGroup({placeCutPlane, unSelectItem, toggleShortCutsP
       </Tooltip>
     </div>:<div className = {classes.container}>
       <Tooltip title="Shortcuts" placement="left">
-        <IconButton onClick ={toggleShortCutsPanel} aria-label="cutPlane" size="small">
-          <ShortcutsIcon />
-        </IconButton>
+        <ShortcutsIcon />
       </Tooltip>
       <Tooltip title="Clear Selection" placement="left">
         <IconButton onClick ={unSelectItem} aria-label="cutPlane" size="small">

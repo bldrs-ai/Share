@@ -1,4 +1,5 @@
 import React from 'react'
+import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Close from '../assets/Close.svg'
@@ -13,13 +14,13 @@ export default function ShortcutsIcon({offsetTop}) {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
   return (
-    <button onClick={() => {
+    <IconButton onClick={() => {
       setOpen(!open)
     }}>
       <Shortcuts className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTop={offsetTop}/>}
-    </button>)
+    </IconButton>)
 }
 
 
