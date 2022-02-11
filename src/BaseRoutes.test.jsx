@@ -3,8 +3,8 @@ import {render} from '@testing-library/react'
 import {mockRoutes} from './BaseRoutesMock.test'
 import BaseRoutes from './BaseRoutes'
 
-//TO do flacky test
-//  RangeError: /Users/olegmoshkovich/Desktop/builders/Share/node_modules/web-ifc/web-ifc-api.js:
+//TODO: fix flacky test
+//RangeError: /Users/olegmoshkovich/Desktop/builders/Share/node_modules/web-ifc/web-ifc-api.js:
 //Maximum call stack size exceeded
 
 test('BaseRoutes', () => {
