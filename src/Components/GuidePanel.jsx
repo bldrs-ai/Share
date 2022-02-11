@@ -1,5 +1,6 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
+import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Close from '../assets/3D/clear.svg'
 import Question from '../assets/3D/help.svg'
@@ -62,13 +63,13 @@ const QuestionIcon = ({offsetTop}) => {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
   return (
-    <div onClick={() => {
+    <IconButton onClick={() => {
       setOpen(!open)
     }}>
       <Question className = {classes.icon}/> {open && <GuidePanel openToggle={()=>{
         setOpen(!open)
       }} offsetTop={offsetTop}/>}
-    </div>)
+    </IconButton>)
 }
 
 

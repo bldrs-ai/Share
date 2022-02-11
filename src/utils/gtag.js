@@ -1,7 +1,11 @@
 window.dataLayer = window['dataLayer'] || []
-export default function gtag() {
+
+/**
+ * Create google analytics tag.
+ */
+export default function gtag(arguments) {
   const dataLayer = window.dataLayer
-  dataLayer.push(arguments)
+  dataLayer.push()
 }
 gtag('js', new Date())
 gtag('config', 'UA-210924287-3')

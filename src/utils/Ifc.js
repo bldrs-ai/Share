@@ -1,17 +1,31 @@
 import {stoi} from './strings'
 
-
+/**
+ * Determing the type
+ * @param {Object} obj IFC element.
+ * @return {string} The sum of the two numbers.
+ */
 export function isTypeValue(obj) {
   return obj['type'] != null && obj['value'] != null
 }
 
-
+/**
+ * Get the IFC type.
+ * @param {Object} elt IFC element.
+ * @param {Object} viewer Instance of a viewer.
+ * @return {string} The sum of the two numbers.
+ */
 export function getType(elt, viewer) {
   const ifcMgr = viewer.IFC.loader.ifcManager
   return ifcMgr.getIfcType(0, elt.expressID)
 }
 
-
+/**
+ * Format the type.
+ * @param {Object} elt IFC element.
+ * @param {Object} viewer Instance of a viewer.
+ * @return {string} string.
+ */
 export function prettyType(elt, viewer) {
   switch (getType(elt, viewer)) {
     case 'IFCANNOTATION': return 'Note'
@@ -38,7 +52,12 @@ export function prettyType(elt, viewer) {
   }
 }
 
-
+/**
+ * Return undefined if no value exists.
+ * @param {Object} element IFC element.
+ * @param {string} param Instance of a viewer.
+ * @return {string|undefined} The sum of the two numbers.
+ */
 function getValueOrUndefined(element, param) {
   if (element[param]) {
     if (element[param].value) {
@@ -48,12 +67,21 @@ function getValueOrUndefined(element, param) {
   return undefined
 }
 
-
+/**
+ * Retutn the name if it exist.
+ * @param {Object} elt IFC element.
+ * @return {string|null} The sum of the two numbers.
+ */
 export function getName(elt) {
   return elt.Name ? elt.Name.value.trim() : null
 }
 
-
+/**
+ * Return legible name.
+ * @param {Object} element IFC element.
+ * @param {Object} viewer IFC element.
+ * @return {function} The sum of the two numbers.
+ */
 export function reifyName(element, viewer) {
   if (element.LongName) {
     if (element.LongName.value) {
@@ -67,7 +95,11 @@ export function reifyName(element, viewer) {
   return prettyType(element, viewer) + ''
 }
 
-
+/**
+ * Elements description.
+ * @param {Object} element IFC element.
+ * @return {function|string} The sum of the two numbers.
+ */
 export function getDescription(element) {
   const val = getValueOrUndefined(element, 'Description')
   return val ? decodeIFCString(val) : val
@@ -75,6 +107,12 @@ export function getDescription(element) {
 
 
 // https://github.com/tomvandig/web-ifc/issues/58#issuecomment-870344068
+/**
+ * get the ifc string
+ * @param {string} ifcString IFC element.
+ * @param {Object} viewer IFC element.
+ * @return {function} The sum of the two numbers.
+ */
 export function decodeIFCString(ifcString) {
   const ifcUnicodeRegEx = /\\X2\\(.*?)\\X0\\/uig
   let resultString = ifcString

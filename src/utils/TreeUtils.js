@@ -1,3 +1,8 @@
+/**
+ * Recursively visit nodes if the node has children
+ * @param {Elt} elt tree element
+ * @param {function} observeCb obeserve function
+ */
 function visitTree(elt, observeCb) {
   if (elt && elt.children) {
     for (const child of elt.children) {
@@ -9,7 +14,9 @@ function visitTree(elt, observeCb) {
 
 
 /**
- * Visits an element tree and sets parent links for each element.
+ * add parent links to the tree
+ * @param {Object} rootElt IFC element.
+ * @param {string} elementsById Instance of.
  */
 function setupLookupAndParentLinks(rootElt, elementsById) {
   if (elementsById === undefined || elementsById == null) {
@@ -22,7 +29,12 @@ function setupLookupAndParentLinks(rootElt, elementsById) {
   })
 }
 
-
+/**
+ * generate URL address to the element
+ * @param {Object} elt IFC element.
+ * @param {string} getNameCb Instance of.
+ * @return {string} The sum of the two numbers.
+ */
 function computeElementPath(elt, getNameCb) {
   if (getNameCb === undefined || getNameCb == null) {
     throw new Error('Illegal argument: getNameCb undefined')

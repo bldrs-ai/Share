@@ -79,17 +79,17 @@ const useStyles = makeStyles({
       color: '#696969',
       fontWeight: 200,
       textAlign: 'left',
-      fontSize:20,
+      fontSize: 20,
     },
     '& h1': {
       marginTop: 0,
       fontWeight: 200,
-      fontSize:20,
+      fontSize: 20,
     },
     '& p, & li': {
       fontWeight: 200,
       textAlign: 'left',
-      fontSize:16,
+      fontSize: 16,
     },
   },
   icon: {
