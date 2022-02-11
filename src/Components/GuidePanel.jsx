@@ -2,7 +2,7 @@ import React from 'react'
 import {makeStyles} from '@mui/styles'
 import Paper from '@mui/material/Paper'
 import Close from '../assets/Close.svg'
-import Question from '../assets/Question.svg'
+import Question from '../assets/3D/help.svg'
 
 
 const useStyles = makeStyles({
