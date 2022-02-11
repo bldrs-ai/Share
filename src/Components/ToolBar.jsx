@@ -7,13 +7,9 @@ import {makeStyles,useTheme} from '@mui/styles'
 import Settings from './Settings'
 import {AboutControl} from './AboutPanel'
 import {ColorModeContext} from '../Share'
-// import LogoLight from '../assets/Logo_abstract_dark.svg'
-// import LogoDark from '../assets/Logo_abstract_dark.svg'
-import LogoLight from '../assets/Logo_0_light.svg'
-import LogoDark from '../assets/Logo_0_dark.svg'
-// import LogoLight from '../assets/Logo.svg'
-// import LogoDark from '../assets/Logo.svg'
-import Open from '../assets/Open.svg'
+import LogoLight from '../assets/3D/logo.svg'
+import LogoDark from '../assets/3D/logo.svg'
+import Open from '../assets/3D/Open.svg'
 
 
 /**
@@ -94,6 +90,7 @@ const useStyles = makeStyles({
     justifyContent: 'flex-end',
     alignItems: 'center',
     width: '144px',
+    marginRight:'-3px'
   },
   about: {
     height: 18,

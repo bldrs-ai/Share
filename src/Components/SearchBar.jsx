@@ -3,8 +3,8 @@ import Paper from '@mui/material/Paper';
 import InputBase from '@mui/material/InputBase';
 import IconButton from '@mui/material/IconButton';
 import { makeStyles } from '@mui/styles';
-import Search from '../assets/Search.svg';
-import Hamburger from '../assets/Hamburger.svg';
+import Search from '../assets/3D/search.svg';
+import Hamburger from '../assets/3D/tree.svg';
 
 
 export default function SearchBar({

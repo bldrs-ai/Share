@@ -4,8 +4,8 @@ import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import {QuestionIcon} from './GuidePanel'
 import ShortcutsControl from './ShortcutsPanel'
-import CutPlane from '../assets/CutPlane.svg'
-import Delete from '../assets/Delete.svg'
+import CutPlane from '../assets/3D/cutplane.svg'
+import Delete from '../assets/3D/clear.svg'
 
 
 /**
