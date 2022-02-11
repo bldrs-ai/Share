@@ -66,7 +66,7 @@ export default function Share({installPrefix, appPrefix}) {
       [],
   )
 
-  const theme = useMemo(() => {
+const theme = useMemo(() => {
     return createTheme({
       palette: {
         mode,
@@ -79,9 +79,11 @@ export default function Share({installPrefix, appPrefix}) {
           paper: mode === 'light' ? '#DCDCDC' : '#252525',
         },
         tonalOffset: 1,
-      },
-    })
-  }, [mode])
+        },
+      shape:{
+        borderRadius:10},
+      });
+  }, [mode]);
 
   return (
     <ColorModeContext.Provider value={colorMode}>

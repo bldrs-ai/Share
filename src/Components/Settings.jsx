@@ -6,7 +6,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
 import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
-import SettingsIcon from '../assets/Settings.svg'
+import SettingsIcon from '../assets/3D/more.svg'
 
 
 /**
