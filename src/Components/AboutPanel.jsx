@@ -2,7 +2,7 @@ import React from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import { makeStyles } from '@mui/styles'
-import About from '../assets/About.svg'
+import About from '../assets/3D/attention.svg'
 
 
 export function AboutControl ({offsetTop}) {
