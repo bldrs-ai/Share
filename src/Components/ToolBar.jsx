@@ -9,7 +9,7 @@ import {AboutControl} from './AboutPanel'
 import {ColorModeContext} from '../Share'
 import LogoLight from '../assets/3D/logo.svg'
 import LogoDark from '../assets/3D/logo.svg'
-import Open from '../assets/3D/Open.svg'
+import Open from '../assets/3D/open.svg'
 
 
 /**
