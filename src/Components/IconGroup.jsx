@@ -3,9 +3,9 @@ import Tooltip from '@mui/material/Tooltip'
 import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import {QuestionIcon} from './GuidePanel'
-import ShortcutsIcon from './ShortcutsPanel'
-import CutPlane from '../assets/CutPlane.svg'
-import Delete from '../assets/Delete.svg'
+import ShortcutsControl from './ShortcutsPanel'
+import CutPlane from '../assets/3D/cutplane.svg'
+import Delete from '../assets/3D/clear.svg'
 
 
 /**
@@ -38,7 +38,7 @@ export default function IconGroup({placeCutPlane, unSelectItem, toggleShortCutsP
       </Tooltip>
     </div>:<div className = {classes.container}>
       <Tooltip title="Shortcuts" placement="left">
-        <ShortcutsIcon />
+        <ShortcutsControl />
       </Tooltip>
       <Tooltip title="Clear Selection" placement="left">
         <IconButton onClick ={unSelectItem} aria-label="cutPlane" size="small">

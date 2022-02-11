@@ -2,22 +2,22 @@ import React from 'react'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Close.svg'
-import Shortcuts from '../assets/ShortCuts.svg'
+import Close from '../assets/3D/clear.svg'
+import Question from '../assets/3D/help.svg'
 
 
 /**
  * @param {Number} offsetTop
  * @return {Object}
  */
-export default function ShortcutsIcon({offsetTop}) {
+export default function ShortcutsControl({offsetTop}) {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
   return (
     <IconButton onClick={() => {
       setOpen(!open)
     }}>
-      <Shortcuts className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
+      <Question className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTop={offsetTop}/>}
     </IconButton>)
@@ -35,7 +35,7 @@ function ShortcutsPanel({openToggle, offsetTop}) {
   return (
     <div className={classes.container}>
       <Paper elevation={3} className={classes.panel}>
-        <button className={classes.closeButton} onClick={openToggle}><Close/></button>
+        <IconButton className={classes.closeButton} onClick={openToggle}><Close className = {classes.icon}/></IconButton>
         <h1>Shortcuts</h1>
         <p>To attach a section plane:</p>
         <ul>
@@ -67,8 +67,8 @@ const useStyles = makeStyles({
   panel: {
     'position': 'relative',
     'top': '82px',
-    'width': '460px',
-    'height': '280px',
+    'width': '300px',
+    'height': '300px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
@@ -79,14 +79,17 @@ const useStyles = makeStyles({
       color: '#696969',
       fontWeight: 200,
       textAlign: 'left',
+      fontSize:20,
     },
     '& h1': {
       marginTop: 0,
       fontWeight: 200,
+      fontSize:20,
     },
     '& p, & li': {
       fontWeight: 200,
       textAlign: 'left',
+      fontSize:16,
     },
   },
   icon: {

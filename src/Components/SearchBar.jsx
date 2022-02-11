@@ -1,11 +1,10 @@
-import React from 'react'
-import {makeStyles} from '@mui/styles'
-import Paper from '@mui/material/Paper'
-import InputBase from '@mui/material/InputBase'
-import IconButton from '@mui/material/IconButton'
-import Search from '../assets/Search.svg'
-import TreeIcon from '../assets/Tree.svg'
-import TreeIconOn from '../assets/TreeOn.svg'
+import React from 'react';
+import Paper from '@mui/material/Paper';
+import InputBase from '@mui/material/InputBase';
+import IconButton from '@mui/material/IconButton';
+import { makeStyles } from '@mui/styles';
+import Search from '../assets/3D/search.svg';
+import Hamburger from '../assets/3D/tree.svg';
 
 
 /**
@@ -50,7 +49,7 @@ export default function SearchBar({
         onClick={onClickMenu}
         disabled={disabled}
       >
-        {open ? <TreeIconOn className={classes.icon} />:<TreeIcon className={classes.icon} />}
+        <Hamburger className = {classes.icon}/>
       </IconButton>
       <InputBase
         sx={{ml: 1, flex: 1}}
@@ -63,7 +62,6 @@ export default function SearchBar({
           fontSize: 18,
           fontWeight: 200,
           fontFamily: 'Helvetica',
-          color: '#696969',
         }}/>
       <IconButton
         type='submit'
@@ -76,13 +74,12 @@ export default function SearchBar({
   )
 }
 
-
 const useStyles = makeStyles({
   root: {
-    'padding': '2px 4px',
-    'display': 'flex',
-    'alignItems': 'center',
-    'width': 300,
+    padding: '2px 4px',
+    display: 'flex',
+    alignItems: 'center',
+    width: 300,
     '@media (max-width: 900px)': {
       width: 240,
     },
@@ -97,14 +94,14 @@ const useStyles = makeStyles({
     height: 28,
     margin: 4,
   },
-  icon: {
+  icon:{
     width: '30px',
-    height: '30px',
+    height: '30px'
   },
-  inputBase: {
+  inputBase:{
     fontSize: 18,
     fontWeight: 600,
     fontFamily: 'Helvetica',
     color: '#696969',
-  },
-})
+  }
+});
