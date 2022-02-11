@@ -1,12 +1,15 @@
 import jsonata from 'jsonata'
+import debug from '../utils/debug'
 import * as Ifc from '../utils/Ifc.js'
-
-
-const debug = 0
+import {deleteProperties} from '../utils/objects'
 
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
+  /**
+   * @param {Object} ifcElement async callback for rendering sub-object
+   * @param {Object} viewer async callback for rendering sub-object
+   */
   constructor(ifcElement, viewer) {
     this.ifcElement = ifcElement
     this.viewer = viewer
@@ -17,7 +20,10 @@ export default class SearchIndex {
   }
 
 
-  /** Recursively visits elt and indexes properties. */
+  /**
+   * Recursively visits elt and indexes properties.
+   * @param {Object} elt async callback for rendering sub-object
+   */
   indexElement(elt) {
     const type = Ifc.getType(elt, this.viewer)
     if (type) {
@@ -57,12 +63,21 @@ export default class SearchIndex {
   }
 
 
-  /** Returns a set of word tokens from the string. */
+  /**
+   * Returns a set of word tokens from the string.
+   * @param {str} str
+   * @return {Set} token
+   */
   tokenize(str) {
     return new Set(str.match(/(\w+)/g))
   }
 
-
+  /**
+   * Create index set of found results
+   * @param {Object} index
+   * @param {string} key
+   * @return {Object} The index set.
+   */
   findCreateIndexSet(index, key) {
     let set = index[key]
     if (set === undefined) {
@@ -71,30 +86,40 @@ export default class SearchIndex {
     return set
   }
 
-
-  indexElementByString(index, str, elt) {
-    this.findCreateIndexSet(index, str).add(elt)
-    this.findCreateIndexSet(index, str.toLowerCase()).add(elt)
+  /**
+   * Add entry for key in index pointing to given elt
+   * @param {Object} index
+   * @param {string} key
+   * @param {Object} elt
+   */
+  indexElementByString(index, key, elt) {
+    this.findCreateIndexSet(index, key).add(elt)
+    this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
   }
 
-
+  /**
+   * Add entry for key in index pointing to given elt for each key in the set
+   * @param {Object} index index of the element in the set
+   * @param {Set} strSet set of strings
+   * @param {Object} elt IFC element
+   */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
       this.indexElementByString(index, str, elt)
     }
   }
 
-
+  /** Clear all entries in the search index. */
   clearIndex() {
-    for (const key in this.eltsByType) {
-      delete this.eltsByType[key]
-    }
-    for (const key in this.eltsByName) {
-      delete this.eltsByName[key]
-    }
+    deleteProperties(this.eltsByType)
+    deleteProperties(this.eltsByName)
   }
 
-
+  /**
+   * Search the index with the given query and return the express IDs of matching IFC elements
+   * @param {string} query The search query.
+   * @return {string} resultIDs
+   */
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {

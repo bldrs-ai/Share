@@ -1,12 +1,11 @@
-import React,{useContext} from 'react'
+import React from 'react'
 import AppBar from '@mui/material/AppBar'
 import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
-import {makeStyles,useTheme} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import Settings from './Settings'
-import {AboutControl} from './AboutPanel'
-import {ColorModeContext} from '../Share'
+import AboutControl from './AboutPanel'
 import LogoLight from '../assets/3D/logo.svg'
 import LogoDark from '../assets/3D/logo.svg'
 import Open from '../assets/3D/open.svg'
@@ -19,7 +18,6 @@ import Open from '../assets/3D/open.svg'
  */
 export default function ToolBar({fileOpen, offsetTop}) {
   const classes = useStyles()
-  const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
 
   return (
@@ -32,8 +30,8 @@ export default function ToolBar({fileOpen, offsetTop}) {
         <div className={classes.leftContainer} >
           <Typography variant='h6' className={classes.title}>
             {themeMode.palette.mode==='light'?
-              <LogoDark className = {classes.logo}/>
-            :<LogoLight className = {classes.logo}/>}
+              <LogoDark className = {classes.logo}/>:
+            <LogoLight className = {classes.logo}/>}
           </Typography>
           <IconButton
             edge='start'
@@ -90,7 +88,7 @@ const useStyles = makeStyles({
     justifyContent: 'flex-end',
     alignItems: 'center',
     width: '144px',
-    marginRight:'-3px'
+    marginRight: '-3px',
   },
   about: {
     height: 18,
