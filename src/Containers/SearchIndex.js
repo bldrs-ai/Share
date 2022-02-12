@@ -1,5 +1,6 @@
 import jsonata from 'jsonata'
 import * as Ifc from '../utils/Ifc.js'
+import {deleteProperties} from '../utils/objects'
 
 
 const debug = 0
@@ -120,12 +121,8 @@ Constructor of the Search index class
   * to filter unwanted properties from the prototype  guard-fo
   */
   clearIndex() {
-    for (const key in this.eltsByType) {
-      delete this.eltsByType[key]
-    }
-    for (const key in this.eltsByName) {
-      delete this.eltsByName[key]
-    }
+    deleteProperties(this.eltsByType)
+    deleteProperties(this.eltsByName)
   }
 
   /**
