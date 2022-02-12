@@ -129,9 +129,14 @@ export function decodeIFCString(ifcString) {
 /**
  * Recursive dereference of nested IFC. If ref.type is (1-4),
  * viewer and typeValCb will not be used.
- * @param typeValCb async callback for rendering sub-object
+ * @param {Object} ref async callback for rendering sub-object
+ * @param {Object} viewer async callback for rendering sub-object
+ * @param {Number} serial async callback for rendering sub-object
+ * @param {string} typeValCb async callback for rendering sub-object
  */
 export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
+  console.log('TYPE of', typeof(ref))
+  const refId = stoi(ref.value)
   if (ref === null || ref === undefined) {
     throw new Error('Ref undefined or null: ', ref)
   }
@@ -142,7 +147,6 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
       case 3: return ref.value // no idea.. values are typically in CAPS
       case 4: return ref.value // typically measures of space, time or angle.
       case 5:
-        const refId = stoi(ref.value)
         // TODO, only recursion uses the viewer, serial.
         return await typeValCb(
             await viewer.getProperties(0, refId), viewer, serial)
@@ -150,7 +154,6 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
         return 'Unknown type: ' + ref.value
     }
   } else if (Array.isArray(ref)) {
-    const listNdx = 0
     return (await Promise.all(ref.map(
         async (v, ndx) => isTypeValue(v) ?
         await deref(v, viewer, ndx, typeValCb) :

@@ -7,6 +7,11 @@ const debug = 0
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
+/**
+Constructor of the Search index class
+ * @param {Object} ifcElement async callback for rendering sub-object
+ * @param {Object} viewer async callback for rendering sub-object
+ */
   constructor(ifcElement, viewer) {
     this.ifcElement = ifcElement
     this.viewer = viewer
@@ -17,7 +22,10 @@ export default class SearchIndex {
   }
 
 
-  /** Recursively visits elt and indexes properties. */
+  /**
+  Recursively visits elt and indexes properties.
+  * @param {Object} elt async callback for rendering sub-object
+  */
   indexElement(elt) {
     const type = Ifc.getType(elt, this.viewer)
     if (type) {
@@ -57,12 +65,22 @@ export default class SearchIndex {
   }
 
 
-  /** Returns a set of word tokens from the string. */
+  /**
+  * Returns a set of word tokens from the string.
+  * @param {str} str
+  * @return {Set} token
+  */
   tokenize(str) {
     return new Set(str.match(/(\w+)/g))
   }
 
-
+  /**
+  * TODO: pablo to confirm
+  * Create index set of found results
+  * @param {string} index
+  * @param {string} key
+  * @return {str} set
+  */
   findCreateIndexSet(index, key) {
     let set = index[key]
     if (set === undefined) {
@@ -71,20 +89,36 @@ export default class SearchIndex {
     return set
   }
 
-
+  /**
+  * TODO: pablo to confirm
+  * Create an index for found ifc element
+  * @param {string} index
+  * @param {string} str
+  * @param {Object} elt
+  */
   indexElementByString(index, str, elt) {
     this.findCreateIndexSet(index, str).add(elt)
     this.findCreateIndexSet(index, str.toLowerCase()).add(elt)
   }
 
-
+  /**
+  * TODO: pablo to confirm
+  * Create an index for found ifc element
+  * @param {string} index index of the element in the set
+  * @param {Set} strSet set of strings
+  * @param {Object} elt IFC element
+  */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
       this.indexElementByString(index, str, elt)
     }
   }
 
-
+  /**
+  * TODO: pablo to confirm
+  * fix this error:The body of a for-in should be wrapped in an if statement
+  * to filter unwanted properties from the prototype  guard-fo
+  */
   clearIndex() {
     for (const key in this.eltsByType) {
       delete this.eltsByType[key]
@@ -94,7 +128,13 @@ export default class SearchIndex {
     }
   }
 
-
+  /**
+  * TODO: pablo to confirm
+  * Seach the if Tree
+  * @param {string} query index of the element in the set
+  * @param {Set} strSet set of strings
+  * @param {Object} elt IFC element
+  */
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {
