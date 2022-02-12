@@ -79,7 +79,7 @@ const GuidePanel = ({openToggle, offsetTop}) => {
   return (
     <div className = {classes.container}>
       <Paper elevation={3} className={classes.panel}>
-        <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
+        <div className = {classes.closeButton}><Close onClick = {openToggle}/></div>
         <h1>Guide</h1>
         <p>To select an element:</p>
         <ul>

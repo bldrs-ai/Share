@@ -6,13 +6,19 @@ import {makeStyles} from '@mui/styles'
 import Search from '../assets/3D/search.svg'
 import Hamburger from '../assets/3D/tree.svg'
 
-
+/**
+* SearchBar react component
+* @param {function} onSearch
+* @param {function} onSearchModify
+* @param {function} onClickMenu
+* @param {boolean} disabled
+* @return {Component}
+*/
 export default function SearchBar({
   onSearch,
   onSearchModify,
   onClickMenu,
   disabled,
-  open,
 }) {
   const classes = useStyles()
   const [textValue, setTextValue] = React.useState('')

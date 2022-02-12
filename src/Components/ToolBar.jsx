@@ -1,4 +1,4 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import AppBar from '@mui/material/AppBar'
 import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
@@ -6,7 +6,6 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import Settings from './Settings'
 import {AboutControl} from './AboutPanel'
-import {ColorModeContext} from '../Share'
 import LogoLight from '../assets/3D/logo.svg'
 import LogoDark from '../assets/3D/logo.svg'
 import Open from '../assets/3D/open.svg'
@@ -19,7 +18,6 @@ import Open from '../assets/3D/open.svg'
  */
 export default function ToolBar({fileOpen, offsetTop}) {
   const classes = useStyles()
-  const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
 
   return (

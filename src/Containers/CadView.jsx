@@ -64,8 +64,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
    * Otherwise, the param change is a sub-path, e.g. the IFC element
    * path, so no other useEffect is triggered.
    */
+
   useEffect(() => {
     setModelPathOrGotoIndexOrStay()
+    /*eslint-disable */
   }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
 
 
@@ -91,7 +93,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
-  }, [modelPath, installPrefix])
+  }, [modelPath, installPrefix, pathPrefix])
 
 
   /** Finally, when we have a fully resolved model path to load, load it. */
@@ -100,7 +102,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     loadIfc(pathToLoad)
-  }, [pathToLoad])// [pathToLoad, loadIfc]);
+  }, [pathToLoad, loadIfc])// [pathToLoad, loadIfc]);
 
 
   // Helpers //

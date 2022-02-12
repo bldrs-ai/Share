@@ -4,7 +4,11 @@ import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/3D/attention.svg'
 
-
+/**
+ * Button to toggle About panel on and off
+ * @param {string} offset tree element
+ * @return {Component} componet
+ */
 export function AboutControl({offsetTop}) {
   const [open, setOpen]=React.useState(true)
   const classes = useStyles()
@@ -19,16 +23,27 @@ export function AboutControl({offsetTop}) {
     </div>)
 }
 
+/**
+ * About Panel component
+ * @param {string} offset tree element
+ * @return {Component} componet
+ */
 function AboutPanel({openToggle, offsetTop}) {
   const classes = useStyles({offsetTop: offsetTop})
 
   return (
-    <div className = {classes.container} onClick = {openToggle}>
+    <div className = {classes.container}
+      role = "none"
+      onClick = {openToggle}
+      onKeyDown={openToggle} >
       <Paper elevation={3} className={classes.panel}>
-        <h1 style = {{width: '100%', display: 'flex', justifyContent: 'center', paddingTop: '10px'}}><About/></h1>
+        <h1 className = {classes.title}><About/></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
-          <a href = {'https://github.com/buildrs/Share'} target="_new">github.com/buildrs/Share</a></p>
+          <a href = {'https://github.com/buildrs/Share'} target="_new">
+            github.com/buildrs/Share
+          </a>
+        </p>
         <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
         <h2 >Features:</h2>
         <ul>
@@ -52,6 +67,11 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'center',
   },
+  title: {
+    width: '100%',
+    display: 'flex',
+    justifyContent: 'center',
+    paddingTop: '10px'},
   panel: {
     'position': 'relative',
     'top': (props) => props.offsetTop,

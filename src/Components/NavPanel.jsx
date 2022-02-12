@@ -43,7 +43,7 @@ export default function NavPanel({
         setExpandedElements(parts)
       }
     }
-  }, [location])
+  }, [location, onElementSelect, setExpandedElements])
 
   const classes = useStyles()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with

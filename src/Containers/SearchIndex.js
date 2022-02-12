@@ -134,6 +134,7 @@ Constructor of the Search index class
   * @param {string} query index of the element in the set
   * @param {Set} strSet set of strings
   * @param {Object} elt IFC element
+  * @return {string} resultIDs
   */
   search(query) {
     // Need to ensure only expressID strings
