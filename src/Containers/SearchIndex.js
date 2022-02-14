@@ -94,7 +94,7 @@ export default class SearchIndex {
    */
   indexElementByString(index, key, elt) {
     this.findCreateIndexSet(index, key).add(elt)
-    this.findCreateIndexSet(index, key.toLowerCase()).adcd(elt)
+    this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
   }
 
   /**
