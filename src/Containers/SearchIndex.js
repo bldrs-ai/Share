@@ -109,18 +109,15 @@ export default class SearchIndex {
     }
   }
 
-  /**
-   * Clear
-   */
+  /** Clear all entries in the search index. */
   clearIndex() {
     deleteProperties(this.eltsByType)
     deleteProperties(this.eltsByName)
   }
 
   /**
-   * TODO: pablo to confirm
-   * Seach the if Tree
-   * @param {string } query index of the element in the set
+   * Search the index with the given query and return the express IDs of matching IFC elements
+   * @param {string} query The search query.
    * @return {string} resultIDs
    */
   search(query) {

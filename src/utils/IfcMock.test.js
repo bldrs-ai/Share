@@ -28,10 +28,7 @@ test('MockViewer getPropertySets', async () => {
  * Create a mock IFC viewer
  */
 export class MockViewer {
-  /**
-  * Class construction
-  * @param {Object} propsById IFC property.
-  */
+  /** @param {Object} propsById Mock IFC properties. */
   constructor(propsById = {}) {
     this.propsById = propsById
     this.IFC = {
@@ -49,22 +46,22 @@ export class MockViewer {
   }
 
   /**
-  * Get the IFC type.
-  * @param {string} modelId
-  * @param {string} id
-  * @return {Object} returns property object
-  */
+   * Get the IFC type.
+   * @param {string} modelId
+   * @param {string} id
+   * @return {Object} returns property object
+   */
   getProperties(modelId, id) {
     return this.propsById[id]
   }
 }
 
 /**
-* Get the IFC type.
-* @param {string} label
-* @param {Number} id
-* @return {Object} returns property object
-*/
+ * Create a mock element with the given label.
+ * @param {string} label
+ * @param {Number} id Express ID for the element.
+ * @return {Object} Mock IFC element
+ */
 export function newMockStringValueElt(label, id = 1) {
   return {
     children: [],

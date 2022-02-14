@@ -13,7 +13,7 @@ export function isTypeValue(obj) {
  * Get the IFC type.
  * @param {Object} elt IFC element.
  * @param {Object} viewer Instance of a viewer.
- * @return {string} The sum of the two numbers.
+ * @return {string} String representation of an IFC element type, e.g. 'IFCELEMENT'
  */
 export function getType(elt, viewer) {
   const ifcMgr = viewer.IFC.loader.ifcManager
@@ -21,10 +21,10 @@ export function getType(elt, viewer) {
 }
 
 /**
- * Format the type.
+ * Format the type, e.g. given an element of type 'IFCANNOTATION' return 'Note'.
  * @param {Object} elt IFC element.
  * @param {Object} viewer Instance of a viewer.
- * @return {string} string.
+ * @return {string} A nice human-readable string of the element type of the given element.
  */
 export function prettyType(elt, viewer) {
   switch (getType(elt, viewer)) {
@@ -53,24 +53,24 @@ export function prettyType(elt, viewer) {
 }
 
 /**
- * Return undefined if no value exists.
+ * Helper to get the named property value from the given element, or else undefined. Equivalent to `element[propertyName].value`, but with checks.
  * @param {Object} element IFC element.
- * @param {string} param Instance of a viewer.
- * @return {string|undefined} The sum of the two numbers.
+ * @param {string} propertyName Name of the property of the element to retrieve.
+ * @return {any|undefined} The property's value.
  */
-function getValueOrUndefined(element, param) {
-  if (element[param]) {
-    if (element[param].value) {
-      return element[param].value
+function getValueOrUndefined(element, propertyName) {
+  if (element[propertyName]) {
+    if (element[propertyName].value) {
+      return element[propertyName].value
     }
   }
   return undefined
 }
 
 /**
- * Retutn the name if it exist.
+ * Return the name of the given element if it exists otherwise null.
  * @param {Object} elt IFC element.
- * @return {string|null} The sum of the two numbers.
+ * @return {string|null} The element name.
  */
 export function getName(elt) {
   return elt.Name ? elt.Name.value.trim() : null
@@ -79,8 +79,8 @@ export function getName(elt) {
 /**
  * Return legible name.
  * @param {Object} element IFC element.
- * @param {Object} viewer IFC element.
- * @return {function} The sum of the two numbers.
+ * @param {Object} viewer IFC viewer.
+ * @return {string} A human-readable name.
  */
 export function reifyName(element, viewer) {
   if (element.LongName) {
@@ -96,9 +96,9 @@ export function reifyName(element, viewer) {
 }
 
 /**
- * Elements description.
+ * Get the 'Description' property of the given element.  The string will also be decoded for non-ascii characters.
  * @param {Object} element IFC element.
- * @return {function|string} The sum of the two numbers.
+ * @return {function|string} The element's description property.
  */
 export function getDescription(element) {
   const val = getValueOrUndefined(element, 'Description')
@@ -108,10 +108,9 @@ export function getDescription(element) {
 
 // https://github.com/tomvandig/web-ifc/issues/58#issuecomment-870344068
 /**
- * get the ifc string
- * @param {string} ifcString IFC element.
- * @param {Object} viewer IFC element.
- * @return {function} The sum of the two numbers.
+ * Decode multi-byte character encodings.
+ * @param {Object} ifcString IFC element.
+ * @return {string} A decoded string.
  */
 export function decodeIFCString(ifcString) {
   const ifcUnicodeRegEx = /\\X2\\(.*?)\\X0\\/uig
@@ -127,12 +126,12 @@ export function decodeIFCString(ifcString) {
 
 
 /**
- * Recursive dereference of nested IFC. If ref.type is (1-4),
- * viewer and typeValCb will not be used.
- * @param {Object} ref async callback for rendering sub-object
- * @param {Object} viewer async callback for rendering sub-object
- * @param {Number} serial async callback for rendering sub-object
- * @param {string} typeValCb async callback for rendering sub-object
+ * Recursive dereference of nested IFC. If ref.type is (1-4), viewer and typeValCb will not be used.
+ * @param {Object} ref The element to dereference.
+ * @param {Object} viewer Instance of IfcViewerApi.
+ * @param {Number} serial Serial number for react IDs.
+ * @param {function} typeValCb async callback for rendering sub-object
+ * @return {any} A flattened version of the referenced element.  TODO(pablo): clarify type.
  */
 export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
   if (ref === null || ref === undefined) {
