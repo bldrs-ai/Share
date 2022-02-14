@@ -93,7 +93,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
-  }, [modelPath, installPrefix, pathPrefix])
+  /* eslint-disable */
+  }, [modelPath, installPrefix])
 
 
   /** Finally, when we have a fully resolved model path to load, load it. */
@@ -102,7 +103,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     loadIfc(pathToLoad)
-  }, [pathToLoad, loadIfc])// [pathToLoad, loadIfc]);
+  /* eslint-disable */
+  }, [pathToLoad])// [pathToLoad, loadIfc]);
 
 
   // Helpers //

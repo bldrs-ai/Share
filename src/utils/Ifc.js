@@ -3,7 +3,7 @@ import {stoi} from './strings'
 /**
  * Determing the type
  * @param {Object} obj IFC element.
- * @return {string} The sum of the two numbers.
+ * @return {boolean} The sum of the two numbers.
  */
 export function isTypeValue(obj) {
   return obj['type'] != null && obj['value'] != null

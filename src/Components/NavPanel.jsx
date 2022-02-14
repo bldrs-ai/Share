@@ -43,7 +43,8 @@ export default function NavPanel({
         setExpandedElements(parts)
       }
     }
-  }, [location, onElementSelect, setExpandedElements])
+  /* eslint-disable */
+  }, [location])
 
   const classes = useStyles()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with

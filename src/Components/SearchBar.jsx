@@ -6,6 +6,7 @@ import {makeStyles} from '@mui/styles'
 import Search from '../assets/3D/search.svg'
 import Hamburger from '../assets/3D/tree.svg'
 
+
 /**
 * SearchBar react component
 * @param {function} onSearch

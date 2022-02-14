@@ -28,10 +28,10 @@ test('MockViewer getPropertySets', async () => {
  * Create a mock IFC viewer
  */
 export class MockViewer {
-/**
- * Class construction
- * @param {Object} propsById IFC property.
- */
+  /**
+  * Class construction
+  * @param {Object} propsById IFC property.
+  */
   constructor(propsById = {}) {
     this.propsById = propsById
     this.IFC = {

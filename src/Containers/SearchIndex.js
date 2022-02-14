@@ -1,15 +1,12 @@
 import jsonata from 'jsonata'
+import debug from '../utils/debug'
 import * as Ifc from '../utils/Ifc.js'
 import {deleteProperties} from '../utils/objects'
-
-
-const debug = 0
 
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
 /**
-Constructor of the Search index class
  * @param {Object} ifcElement async callback for rendering sub-object
  * @param {Object} viewer async callback for rendering sub-object
  */
@@ -76,9 +73,8 @@ Constructor of the Search index class
   }
 
   /**
-  * TODO: pablo to confirm
   * Create index set of found results
-  * @param {string} index
+  * @param {Object} index
   * @param {string} key
   * @return {str} set
   */
@@ -91,21 +87,19 @@ Constructor of the Search index class
   }
 
   /**
-  * TODO: pablo to confirm
-  * Create an index for found ifc element
-  * @param {string} index
-  * @param {string} str
+  * Add entry for key in index pointing to given elt
+  * @param {Object} index
+  * @param {string} key
   * @param {Object} elt
   */
-  indexElementByString(index, str, elt) {
-    this.findCreateIndexSet(index, str).add(elt)
-    this.findCreateIndexSet(index, str.toLowerCase()).add(elt)
+  indexElementByString(index, key, elt) {
+    this.findCreateIndexSet(index, key).add(elt)
+    this.findCreateIndexSet(index, key.toLowerCase()).adcd(elt)
   }
 
   /**
-  * TODO: pablo to confirm
-  * Create an index for found ifc element
-  * @param {string} index index of the element in the set
+  * Add entry for key in index pointing to given elt for each key in the set
+  * @param {Object} index index of the element in the set
   * @param {Set} strSet set of strings
   * @param {Object} elt IFC element
   */
@@ -116,9 +110,7 @@ Constructor of the Search index class
   }
 
   /**
-  * TODO: pablo to confirm
-  * fix this error:The body of a for-in should be wrapped in an if statement
-  * to filter unwanted properties from the prototype  guard-fo
+  * Clear
   */
   clearIndex() {
     deleteProperties(this.eltsByType)
@@ -128,9 +120,7 @@ Constructor of the Search index class
   /**
   * TODO: pablo to confirm
   * Seach the if Tree
-  * @param {string} query index of the element in the set
-  * @param {Set} strSet set of strings
-  * @param {Object} elt IFC element
+  * @param {string } query index of the element in the set
   * @return {string} resultIDs
   */
   search(query) {

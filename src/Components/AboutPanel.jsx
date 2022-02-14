@@ -6,7 +6,7 @@ import About from '../assets/3D/attention.svg'
 
 /**
  * Button to toggle About panel on and off
- * @param {string} offset tree element
+ * @param {Number} offsetTop offset tree element
  * @return {Component} componet
  */
 export function AboutControl({offsetTop}) {
