@@ -3,7 +3,7 @@
  * @param {Elt} elt tree element
  * @param {function} observeCb obeserve function
  */
-function visitTree(elt, observeCb) {
+export function visitTree(elt, observeCb) {
   if (elt && elt.children) {
     for (const child of elt.children) {
       observeCb(child, elt)
@@ -14,11 +14,11 @@ function visitTree(elt, observeCb) {
 
 
 /**
- * add parent links to the tree
- * @param {Object} rootElt IFC element.
- * @param {string} elementsById Instance of.
+ * Visits an element tree and sets parent links for each element.
+ * @param {Object} rootElt Root IFC element.
+ * @param {Object} elementsById An already existing map of elements by ID.
  */
-function setupLookupAndParentLinks(rootElt, elementsById) {
+export function setupLookupAndParentLinks(rootElt, elementsById) {
   if (elementsById === undefined || elementsById == null) {
     throw new Error('Illegal argument: elementsById undefined')
   }
@@ -30,21 +30,14 @@ function setupLookupAndParentLinks(rootElt, elementsById) {
 }
 
 /**
- * generate URL address to the element
+ * Generate a URL address fragment for the element.
  * @param {Object} elt IFC element.
- * @param {string} getNameCb Instance of.
- * @return {string} The sum of the two numbers.
+ * @param {function} getNameCb Instance of.
+ * @return {string} The URL path fragment for the element.
  */
-function computeElementPath(elt, getNameCb) {
+export function computeElementPath(elt, getNameCb) {
   if (getNameCb === undefined || getNameCb == null) {
     throw new Error('Illegal argument: getNameCb undefined')
   }
   return (elt.parent ? computeElementPath(elt.parent, getNameCb) : '' ) + '/' + getNameCb(elt)
-}
-
-
-export {
-  computeElementPath,
-  setupLookupAndParentLinks,
-  visitTree,
 }

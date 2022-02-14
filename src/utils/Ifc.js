@@ -1,9 +1,9 @@
 import {stoi} from './strings'
 
 /**
- * Determing if the given object is a type/value pair.
+ * Check whether both type and value properties are defined and non-null on the object.
  * @param {Object} obj IFC element.
- * @return {boolean} The sum of the two numbers.
+ * @return {boolean} True if and only if the both type and value properties are defined on the object.
  */
 export function isTypeValue(obj) {
   return obj['type'] != null && obj['value'] != null

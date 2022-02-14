@@ -7,7 +7,7 @@ import About from '../assets/3D/attention.svg'
 /**
  * Button to toggle About panel on and off
  * @param {Number} offsetTop offset tree element
- * @return {Component} componet
+ * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
   const [open, setOpen]=React.useState(true)

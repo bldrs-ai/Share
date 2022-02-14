@@ -4,8 +4,8 @@ import {
 } from './TreeUtils'
 
 /**
- * Test the ifc Tree
- * @return {Object} elt.children array of elements
+ *Helper to create a mock IFC doc object tree.
+ *@return {Object} The mock IFC obj.
  */
 function makeTestTree() {
   return {
