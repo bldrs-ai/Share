@@ -67,7 +67,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   useEffect(() => {
     setModelPathOrGotoIndexOrStay()
-    // eslint-disable-next-line
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
 
 
@@ -93,7 +93,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
-  // eslint-disable-next-line React Hook useEffect has a missing dependency
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelPath, installPrefix])
 
 
@@ -103,7 +103,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     loadIfc(pathToLoad)
-  // eslint-disable-next-line
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathToLoad])// [pathToLoad, loadIfc]);
 
 

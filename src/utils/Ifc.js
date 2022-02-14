@@ -3,7 +3,8 @@ import {stoi} from './strings'
 /**
  * Check whether both type and value properties are defined and non-null on the object.
  * @param {Object} obj IFC element.
- * @return {boolean} True if and only if the both type and value properties are defined on the object.
+ * @return {boolean} True if and only if
+ * the both type and value properties are defined on the object.
  */
 export function isTypeValue(obj) {
   return obj['type'] != null && obj['value'] != null
@@ -53,7 +54,8 @@ export function prettyType(elt, viewer) {
 }
 
 /**
- * Helper to get the named property value from the given element, or else undefined. Equivalent to `element[propertyName].value`, but with checks.
+ * Helper to get the named property value from the given element,
+ * or else undefined. Equivalent to `element[propertyName].value`, but with checks.
  * @param {Object} element IFC element.
  * @param {string} propertyName Name of the property of the element to retrieve.
  * @return {any|undefined} The property's value.
@@ -96,7 +98,8 @@ export function reifyName(element, viewer) {
 }
 
 /**
- * Get the 'Description' property of the given element.  The string will also be decoded for non-ascii characters.
+ * Get the 'Description' property of the given element.
+ * The string will also be decoded for non-ascii characters.
  * @param {Object} element IFC element.
  * @return {function|string} The element's description property.
  */
