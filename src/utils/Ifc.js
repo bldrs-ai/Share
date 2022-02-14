@@ -1,7 +1,7 @@
 import {stoi} from './strings'
 
 /**
- * Determing the type
+ * Determing if the given object is a type/value pair.
  * @param {Object} obj IFC element.
  * @return {boolean} The sum of the two numbers.
  */
@@ -135,8 +135,6 @@ export function decodeIFCString(ifcString) {
  * @param {string} typeValCb async callback for rendering sub-object
  */
 export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
-  console.log('TYPE of', typeof(ref))
-  const refId = stoi(ref.value)
   if (ref === null || ref === undefined) {
     throw new Error('Ref undefined or null: ', ref)
   }
@@ -148,6 +146,7 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
       case 4: return ref.value // typically measures of space, time or angle.
       case 5:
         // TODO, only recursion uses the viewer, serial.
+        const refId = stoi(ref.value)
         return await typeValCb(
             await viewer.getProperties(0, refId), viewer, serial)
       default:

@@ -1,6 +1,6 @@
 /**
  * Convert string to integer.
- * @param {string} s srtring.
+ * @param {string} s Input string.
  * @return {Number} integer.
  */
 export function stoi(s) {
