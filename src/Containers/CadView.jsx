@@ -220,9 +220,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    console.log('in the unselect item',viewer)
     viewer.IFC.unpickIfcItems()
-
     viewer.clipper.deleteAllPlanes()
   }
 
