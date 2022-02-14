@@ -1,9 +1,9 @@
 /**
   * TODO: pablo to confirm
-  * Delete properties
-  * @param {Object} target index of the element in the set
+  * Delete all properties defined in the given object.
+  * @param {Object} obj index of the element in the set
   */
-export function deleteProperties(target) {
+export function deleteProperties(obj) {
   for (const key in target) {
     if (Object.prototype.hasOwnProperty.call(target, key)) {
       delete target[key]
