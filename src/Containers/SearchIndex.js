@@ -6,10 +6,10 @@ import {deleteProperties} from '../utils/objects'
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
-/**
- * @param {Object} ifcElement async callback for rendering sub-object
- * @param {Object} viewer async callback for rendering sub-object
- */
+  /**
+   * @param {Object} ifcElement async callback for rendering sub-object
+   * @param {Object} viewer async callback for rendering sub-object
+   */
   constructor(ifcElement, viewer) {
     this.ifcElement = ifcElement
     this.viewer = viewer
@@ -76,7 +76,7 @@ export default class SearchIndex {
    * Create index set of found results
    * @param {Object} index
    * @param {string} key
-   * @return {str} set
+   * @return {Object} The index set.
    */
   findCreateIndexSet(index, key) {
     let set = index[key]

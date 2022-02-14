@@ -1,6 +1,6 @@
 /**
  * Recursively visit nodes if the node has children
- * @param {Elt} elt tree element
+ * @param {Object} elt tree element
  * @param {function} observeCb obeserve function
  */
 export function visitTree(elt, observeCb) {
