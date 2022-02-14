@@ -9,7 +9,7 @@ import About from '../assets/3D/attention.svg'
  * @param {Number} offsetTop offset tree element
  * @return {Component} componet
  */
-export function AboutControl({offsetTop}) {
+export default function AboutControl({offsetTop}) {
   const [open, setOpen]=React.useState(true)
   const classes = useStyles()
   return (
