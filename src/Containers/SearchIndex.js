@@ -21,9 +21,9 @@ export default class SearchIndex {
 
 
   /**
-  Recursively visits elt and indexes properties.
-  * @param {Object} elt async callback for rendering sub-object
-  */
+   * Recursively visits elt and indexes properties.
+   * @param {Object} elt async callback for rendering sub-object
+   */
   indexElement(elt) {
     const type = Ifc.getType(elt, this.viewer)
     if (type) {
@@ -64,20 +64,20 @@ export default class SearchIndex {
 
 
   /**
-  * Returns a set of word tokens from the string.
-  * @param {str} str
-  * @return {Set} token
-  */
+   * Returns a set of word tokens from the string.
+   * @param {str} str
+   * @return {Set} token
+   */
   tokenize(str) {
     return new Set(str.match(/(\w+)/g))
   }
 
   /**
-  * Create index set of found results
-  * @param {Object} index
-  * @param {string} key
-  * @return {str} set
-  */
+   * Create index set of found results
+   * @param {Object} index
+   * @param {string} key
+   * @return {str} set
+   */
   findCreateIndexSet(index, key) {
     let set = index[key]
     if (set === undefined) {
@@ -87,22 +87,22 @@ export default class SearchIndex {
   }
 
   /**
-  * Add entry for key in index pointing to given elt
-  * @param {Object} index
-  * @param {string} key
-  * @param {Object} elt
-  */
+   * Add entry for key in index pointing to given elt
+   * @param {Object} index
+   * @param {string} key
+   * @param {Object} elt
+   */
   indexElementByString(index, key, elt) {
     this.findCreateIndexSet(index, key).add(elt)
     this.findCreateIndexSet(index, key.toLowerCase()).adcd(elt)
   }
 
   /**
-  * Add entry for key in index pointing to given elt for each key in the set
-  * @param {Object} index index of the element in the set
-  * @param {Set} strSet set of strings
-  * @param {Object} elt IFC element
-  */
+   * Add entry for key in index pointing to given elt for each key in the set
+   * @param {Object} index index of the element in the set
+   * @param {Set} strSet set of strings
+   * @param {Object} elt IFC element
+   */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
       this.indexElementByString(index, str, elt)
@@ -110,19 +110,19 @@ export default class SearchIndex {
   }
 
   /**
-  * Clear
-  */
+   * Clear
+   */
   clearIndex() {
     deleteProperties(this.eltsByType)
     deleteProperties(this.eltsByName)
   }
 
   /**
-  * TODO: pablo to confirm
-  * Seach the if Tree
-  * @param {string } query index of the element in the set
-  * @return {string} resultIDs
-  */
+   * TODO: pablo to confirm
+   * Seach the if Tree
+   * @param {string } query index of the element in the set
+   * @return {string} resultIDs
+   */
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {

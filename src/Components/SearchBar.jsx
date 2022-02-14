@@ -8,13 +8,13 @@ import Hamburger from '../assets/3D/tree.svg'
 
 
 /**
-* SearchBar react component
-* @param {function} onSearch
-* @param {function} onSearchModify
-* @param {function} onClickMenu
-* @param {boolean} disabled
-* @return {Component}
-*/
+ * SearchBar react component
+ * @param {function} onSearch
+ * @param {function} onSearchModify
+ * @param {function} onClickMenu
+ * @param {boolean} disabled
+ * @return {Component}
+ */
 export default function SearchBar({
   onSearch,
   onSearchModify,
