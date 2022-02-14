@@ -43,7 +43,7 @@ export default function BaseRoutes({testElt = null}) {
       debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share');
       navigate(installPrefix + '/share');
     }
-  }, []) // lint reqs but clobber url: [installPrefix, location.pathname, navigate]
+  }, [])
 
   const basePath = installPrefix + '/*'
   return (
