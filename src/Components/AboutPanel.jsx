@@ -114,9 +114,7 @@ const useStyles = makeStyles({
       paddingBottom: '2px',
       cornerRadius: '2px',
     },
-
   },
-
   about: {
     cursor: 'pointer',
     paddingRight: '10px',

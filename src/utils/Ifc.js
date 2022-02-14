@@ -144,11 +144,12 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
       case 2: return ref.value // no idea.
       case 3: return ref.value // no idea.. values are typically in CAPS
       case 4: return ref.value // typically measures of space, time or angle.
-      case 5:
+      case 5: {
         // TODO, only recursion uses the viewer, serial.
         const refId = stoi(ref.value)
         return await typeValCb(
             await viewer.getProperties(0, refId), viewer, serial)
+      }
       default:
         return 'Unknown type: ' + ref.value
     }

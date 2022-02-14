@@ -43,7 +43,7 @@ export default function NavPanel({
         setExpandedElements(parts)
       }
     }
-  /* eslint-disable */
+  // eslint-disable-next-line
   }, [location])
 
   const classes = useStyles()

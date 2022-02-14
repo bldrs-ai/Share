@@ -67,7 +67,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   useEffect(() => {
     setModelPathOrGotoIndexOrStay()
-    /*eslint-disable */
+    // eslint-disable-next-line
   }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
 
 
@@ -93,7 +93,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
-  /* eslint-disable */
+  // eslint-disable-next-line
   }, [modelPath, installPrefix])
 
 
@@ -103,7 +103,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     loadIfc(pathToLoad)
-  /* eslint-disable */
+  // eslint-disable-next-line
   }, [pathToLoad])// [pathToLoad, loadIfc]);
 
 

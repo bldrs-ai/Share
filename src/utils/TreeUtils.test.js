@@ -3,7 +3,10 @@ import {
   setupLookupAndParentLinks,
 } from './TreeUtils'
 
-
+/**
+ * Test the ifc Tree
+ * @return {Object} elt.children array of elements
+ */
 function makeTestTree() {
   return {
     name: 'a',

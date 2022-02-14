@@ -4,11 +4,6 @@
  * @param {function} observeCb obeserve function
  */
 function visitTree(elt, observeCb) {
-  /**
-  * if element has children
-  * @param {Elt} elt tree element
-  * @param {Array} elt.children array of elements
-  */
   if (elt && elt.children) {
     for (const child of elt.children) {
       observeCb(child, elt)
