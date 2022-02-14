@@ -2,7 +2,10 @@ import React from 'react'
 import {render} from '@testing-library/react'
 import {mockRoutes} from './BaseRoutesMock.test'
 import BaseRoutes from './BaseRoutes'
+import debug, {setDebugLevel} from './utils/debug'
 
+
+setDebugLevel(0)
 /**
  * TODO(pablo): fix flacky test
  * RangeError: /Users/olegmoshkovich/Desktop/builders/Share/node_modules/web-ifc/web-ifc-api.js:

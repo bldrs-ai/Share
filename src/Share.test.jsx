@@ -31,12 +31,11 @@ import {render} from '@testing-library/react'
 import Share from './Share'
 
 
-test('BLDRS should be in main sceen', async () => {
-  const {getByText} = render(
-      <MemoryRouter>
-        <Routes>
-          <Route path="/" element={ <Share/> } />
-        </Routes>
-      </MemoryRouter>)
+test('Share', () => {
+  const {getByText} = render(mockRoutes(
+    <Share
+      installPrefix={'/'}
+      appPrefix={'share'}
+      pathPrefix={'v/p'} /> ))
   expect(getByText(/BLDRS/i)).toBeInTheDocument()
 })

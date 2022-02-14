@@ -6,14 +6,9 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
-import Share from './Share'
+import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
-// TODO: This isn't used.
-// If icons-material isn't imported somewhere, mui dies
-/* eslint-disable */
-import AccountCircle from '@mui/icons-material/AccountCircle'
-/* eslint-enable */
 
 /**
  * From URL design: https://github.com/buildrs/Share/wiki/URL-Structure
@@ -30,32 +25,37 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  * @return {Object}
  */
 export default function BaseRoutes({testElt = null}) {
-  const location = useLocation(); const navigate = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const location = useLocation();
+  const navigate = useNavigate();
+  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
 
   useEffect(() => {
-    const referrer = document.referrer
+    const referrer = document.referrer;
+    debug().log('BaseRoutes: document.referrer: ', referrer);
     if (referrer) {
-      const path = new URL(document.referrer).pathname
-      if (path.length > 1) {
-        navigate(path)
+      const ref = new URL(referrer);
+      if (ref.pathname.length > 1) {
+        navigate(ref);
       }
     }
-    if (location.pathname === installPrefix ||
-        location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+    if (location.pathname === installPrefix
+        || location.pathname === (installPrefix + '/')) {
+      debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share');
+      navigate(installPrefix + '/share');
     }
-  }, [installPrefix, location.pathname, navigate])
+  }, []) // lint reqs but clobber url: [installPrefix, location.pathname, navigate]
 
   const basePath = installPrefix + '/*'
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
-        <Route path="share/*"
+        <Route
+          path="share/*"
           element={
-            testElt || <Share installPrefix={installPrefix}
-              appPrefix={installPrefix + '/share'} />
+            testElt ||
+              <ShareRoutes
+                installPrefix={installPrefix}
+                appPrefix={installPrefix + '/share'} />
           }/>
       </Route>
     </Routes>

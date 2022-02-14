@@ -5,3 +5,11 @@ export function assert(cond, msg) {
   }
   throw new Error(msg)
 }
+
+
+export function assertDefined(a, b, c) {
+  for (let ndx in arguments) {
+    const arg = arguments[ndx];
+    assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`);
+  }
+}

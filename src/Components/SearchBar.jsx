@@ -1,42 +1,47 @@
-import React from 'react';
-import Paper from '@mui/material/Paper';
-import InputBase from '@mui/material/InputBase';
-import IconButton from '@mui/material/IconButton';
-import { makeStyles } from '@mui/styles';
-import Search from '../assets/3D/search.svg';
-import Hamburger from '../assets/3D/tree.svg';
+import React, {useEffect, useState} from 'react'
+import {useSearchParams} from 'react-router-dom'
+import InputBase from '@mui/material/InputBase'
+import IconButton from '@mui/material/IconButton'
+import Paper from '@mui/material/Paper'
+import {makeStyles} from '@mui/styles'
+import Hamburger from '../assets/3D/tree.svg'
+import Search from '../assets/3D/search.svg'
 
 
 /**
  * @param {function} onSearch
  * @param {function} onSearchModify
  * @param {function} onClickMenu
- * @param {boolean} disabled
  * @param {boolean} open
  * @return {Object}
  */
-export default function SearchBar({
-  onSearch,
-  onSearchModify,
-  onClickMenu,
-  disabled,
-  open,
-}) {
+export default function SearchBar({onClickMenu, open}) {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [inputText, setInputText] = useState('')
   const classes = useStyles()
-  const [textValue, setTextValue] = React.useState('')
+
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    console.log('SearchBar#useEffect[]: URLSearchParams: ', sp)
+    let query = sp.get('q')
+    if (query) {
+      setInputText(query.trim())
+    }
+  }, [])
 
   // TODO(pablo): What I have here seems to work fine but not sure if
   // it's idomatic.  See:
   //   https://blog.logrocket.com/using-material-ui-with-react-hook-form/
   const onChange = (event) => {
     const value = event.target.value
-    setTextValue(value)
-    onSearchModify(value)
+    setInputText(value)
+    // TODO: onSearchModify(value)
   }
 
   const onSubmit = (event) => {
     event.preventDefault()
-    onSearch(textValue)
+    setSearchParams({q: inputText })
     // TODO(pablo): hack
     document.getElementById('main_search_input').blur()
   }
@@ -47,7 +52,6 @@ export default function SearchBar({
         className={classes.iconButton}
         aria-label='menu'
         onClick={onClickMenu}
-        disabled={disabled}
       >
         <Hamburger className = {classes.icon}/>
       </IconButton>
@@ -57,7 +61,7 @@ export default function SearchBar({
         placeholder='Search building'
         inputProps={{'aria-label': 'search'}}
         onChange={onChange}
-        value={textValue}
+        value={inputText}
         style={{
           fontSize: 18,
           fontWeight: 200,
@@ -104,4 +108,4 @@ const useStyles = makeStyles({
     fontFamily: 'Helvetica',
     color: '#696969',
   }
-});
+})
