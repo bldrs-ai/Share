@@ -27,7 +27,8 @@ function Forward({appPrefix}) {
       debug().log('Share.jsx: Base: forwarding to: ', dest)
       navigate(dest)
     }
-  }, [appPrefix, location, navigate])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   return <Outlet />
 }
 

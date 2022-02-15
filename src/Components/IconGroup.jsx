@@ -27,8 +27,7 @@ export default function IconGroup({placeCutPlane, unSelectItem, toggleShortCutsP
                 <Delete className = {classes.icon}/>
               </IconButton>
             </Tooltip>
-          </div>
-          :
+          </div> :
           <div className = {classes.container}>
             <IconButton aria-label="cutPlane" size="small">
               <GuidePanelControl/>

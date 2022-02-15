@@ -27,3 +27,17 @@ test('ItemProperties for single element', async () => {
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })
+
+// TODO(pablo):
+/*
+test('ItemProperties for single element', async () => {
+  const testLabel = 'Test node label'
+  const {getByText} = render(mockRoutes(
+      <ItemProperties
+        viewer={new MockViewer}
+        element={testObj} />,
+  ))
+  await waitFor(() => screen.getByText(testLabel))
+  expect(getByText(testLabel)).toBeInTheDocument()
+})
+*/

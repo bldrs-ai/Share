@@ -46,7 +46,8 @@ export default function BaseRoutes({testElt = null}) {
       debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share')
       navigate(installPrefix + '/share')
     }
-  }, [installPrefix, location.pathname, navigate])
+  // eslint-disable-next-line
+  }, [])
 
   const basePath = installPrefix + '/*'
   return (

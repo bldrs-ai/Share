@@ -56,7 +56,11 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
               Object.keys(props)
                   .filter((key) => !(isPset && (key == 'expressID' || key == 'Name')))
                   .map(
-                      async (key, ndx) => await prettyProps(key, props[key], viewer, ndx),
+                      async (key, ndx) => {
+                        const val = props[key]
+                        console.log('createPropertyTable', key, val)
+                        return await prettyProps(key, val, viewer, ndx)
+                      },
                   ),
           )
         }
@@ -119,8 +123,10 @@ async function prettyProps(key, value, viewer, serial = 0) {
     label = label.substring(3)
   }
   if (value === null || value === undefined || value == '') {
+    console.warn(`prettyProps: undefined value(${value}) for key(${key})`)
     return null
   }
+  console.log('prettyProps, switching on key,value: ', key, value)
   switch (key) {
     case 'Coordinates':
     case 'RefLatitude':
@@ -139,11 +145,12 @@ async function prettyProps(key, value, viewer, serial = 0) {
     case 'Representation':
     case 'RepresentationContexts':
     case 'Tag':
+      debug().warn('prettyProps, skipping prop for key: ', key)
       return null
-    case 'HasProperties':
-      return await hasProperties(value, viewer, serial)
     case 'Quantities':
-      return await quantities(value, viewer, serial)
+      return await quantities(key, value, viewer, serial)
+    case 'HasProperties':
+      return await hasProperties(key, value, viewer, serial)
     case 'UnitsInContext':
     case 'Representations':
     default:
@@ -157,33 +164,40 @@ async function prettyProps(key, value, viewer, serial = 0) {
 
 
 /**
- * @param {Object|string} value
+ * @param {string} key Used only for debug
+ * @param {Array} hasPropertiesArr
  * @param {Object} viewer
  * @param {Number} serial
- * @return {Object}
+ * @return {Object} Table rows for given hasPropertiesArr
  */
-async function hasProperties(value, viewer, serial) {
-  return await unpackHelper(value, viewer, serial, (dObj, rows) => {
+async function hasProperties(key, hasPropertiesArr, viewer, serial) {
+  if (!Array.isArray(hasPropertiesArr)) {
+    throw new Error('hasPropertiesArr should be array')
+  }
+  return await unpackHelper(hasPropertiesArr, viewer, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
-    const value = decodeIFCString(dObj.NominalValue.value)
+    const value = dObj.NominalValue === undefined ?
+      '<error>' :
+      decodeIFCString(dObj.NominalValue.value)
     rows.push(row(name, value, serial++ + '-row'))
   })
 }
 
 
 /**
- * @param {Object|string} value
+ * @param {string} key Used only for debug
+ * @param {Object} quantitiesObj
  * @param {Object} viewer
  * @param {Number} serial
  * @return {Object}
  */
-async function quantities(value, viewer, serial) {
-  return await unpackHelper(value, viewer, serial, (dObj, rows) => {
-    const name = decodeIFCString(dObj.Name.value)
+async function quantities(key, quantitiesObj, viewer, serial) {
+  return await unpackHelper(quantitiesObj, viewer, serial, (ifcElt, rows) => {
+    const name = decodeIFCString(ifcElt.Name.value)
     let val = 'value'
-    for (const dObjKey in dObj) {
-      if (dObjKey.endsWith('Value')) {
-        val = dObj[dObjKey].value
+    for (const key in ifcElt) {
+      if (key.endsWith('Value')) {
+        val = ifcElt[key].value
         break
       }
     }
@@ -194,24 +208,28 @@ async function quantities(value, viewer, serial) {
 
 
 /**
- * @param {Object|string} value
+ * Convert a HasProperties to react component.
+ * @param {Array} eltArr
  * @param {Object} viewer
  * @param {Number} serial
- * @param {function} objToRow
- * @return {Object}
+ * @param {function} ifcToRowCb Callback to convert an IFC elt to a table row
+ * @return {Object} The react component or null if fail
  */
-async function unpackHelper(value, viewer, serial, objToRow) {
+async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
   // HasProperties behaves a little special.
-  if (Array.isArray(value)) {
+  if (Array.isArray(eltArr)) {
     const rows = []
-    for (let i = 0; i < value.length; i++) {
-      const p = value[i]
-      if (p.type != 5) {
-        throw new Error('HasProperties array contains non-reference type')
+
+    for (const i in eltArr) {
+      if (Object.prototype.hasOwnProperty.call(eltArr, i)) {
+        const p = eltArr[i]
+        if (p.type != 5) {
+          throw new Error('Array contains non-reference type')
+        }
+        const refId = stoi(p.value)
+        const ifcElt = await viewer.getProperties(0, refId)
+        ifcToRowCb(ifcElt, rows)
       }
-      const refId = stoi(p.value)
-      const dObj = await viewer.getProperties(0, refId)
-      objToRow(dObj, rows)
     }
     return (
       <tr key={serial++}>
@@ -223,7 +241,7 @@ async function unpackHelper(value, viewer, serial, objToRow) {
       </tr>
     )
   }
-  debug().warn('HasProperties with unknown structure: ', value)
+  debug().warn('HasProperties with unknown structure: ', eltArr)
   return null
 }
 

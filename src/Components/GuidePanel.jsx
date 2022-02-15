@@ -5,7 +5,12 @@ import Paper from '@mui/material/Paper'
 import Close from '../assets/3D/clear.svg'
 import Question from '../assets/3D/help.svg'
 
-
+/**
+ * A UI control to toggle Guide panel on and off
+ * @param {Number} offsetTop position of the panel
+ * @param {Object} viewer IFC viewer.
+ * @return {Object} The GuidePanelControl react component.
+ */
 export default function GuidePanelControl({offsetTop}) {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
@@ -19,6 +24,13 @@ export default function GuidePanelControl({offsetTop}) {
     </IconButton>)
 }
 
+
+/**
+ * Guide Panel component
+ * @param {string} offset off set from the top of the page
+ * @param {boolean} openToggle toggle state that is set in the control
+ * @return {Component} componet
+ */
 function GuidePanel({openToggle, offsetTop}) {
   const classes = useStyles({offsetTop: offsetTop})
   return (
