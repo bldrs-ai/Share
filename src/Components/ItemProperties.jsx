@@ -56,11 +56,11 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
               Object.keys(props)
                   .filter((key) => !(isPset && (key == 'expressID' || key == 'Name')))
                   .map(
-                    async (key, ndx) => {
-                      const val = props[key];
-                      console.log('createPropertyTable', key, val)
-                      return await prettyProps(key, val, viewer, ndx)
-                    }
+                      async (key, ndx) => {
+                        const val = props[key]
+                        console.log('createPropertyTable', key, val)
+                        return await prettyProps(key, val, viewer, ndx)
+                      },
                   ),
           )
         }
@@ -148,9 +148,9 @@ async function prettyProps(key, value, viewer, serial = 0) {
       debug().warn('prettyProps, skipping prop for key: ', key)
       return null
     case 'Quantities':
-      return await quantities(key, value, viewer, serial);
+      return await quantities(key, value, viewer, serial)
     case 'HasProperties':
-      return await hasProperties(key, value, viewer, serial);
+      return await hasProperties(key, value, viewer, serial)
     case 'UnitsInContext':
     case 'Representations':
     default:
@@ -176,7 +176,9 @@ async function hasProperties(key, hasPropertiesArr, viewer, serial) {
   }
   return await unpackHelper(hasPropertiesArr, viewer, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
-    const value = dObj.NominalValue === undefined ? '<error>' : decodeIFCString(dObj.NominalValue.value)
+    const value = dObj.NominalValue === undefined ?
+      '<error>' :
+      decodeIFCString(dObj.NominalValue.value)
     rows.push(row(name, value, serial++ + '-row'))
   })
 }
@@ -217,14 +219,17 @@ async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
   // HasProperties behaves a little special.
   if (Array.isArray(eltArr)) {
     const rows = []
+
     for (const i in eltArr) {
-      const p = eltArr[i];
-      if (p.type != 5) {
-        throw new Error('Array contains non-reference type')
+      if (Object.prototype.hasOwnProperty.call(eltArr, i)) {
+        const p = eltArr[i]
+        if (p.type != 5) {
+          throw new Error('Array contains non-reference type')
+        }
+        const refId = stoi(p.value)
+        const ifcElt = await viewer.getProperties(0, refId)
+        ifcToRowCb(ifcElt, rows)
       }
-      const refId = stoi(p.value);
-      const ifcElt = await viewer.getProperties(0, refId);
-      ifcToRowCb(ifcElt, rows);
     }
     return (
       <tr key={serial++}>

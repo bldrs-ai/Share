@@ -93,6 +93,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
     // TODO: maybe push pathToLoad into modelPath.
     setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelPath])
 
 
