@@ -64,8 +64,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
    * Otherwise, the param change is a sub-path, e.g. the IFC element
    * path, so no other useEffect is triggered.
    */
+
   useEffect(() => {
     setModelPathOrGotoIndexOrStay()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
 
 
@@ -100,6 +102,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     loadIfc(pathToLoad)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathToLoad])// [pathToLoad, loadIfc]);
 
 
@@ -216,7 +219,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.unpickIfcItems()
+    viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
 

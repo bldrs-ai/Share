@@ -1,8 +1,48 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
+import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Close from '../assets/3D/clear.svg'
 import Question from '../assets/3D/help.svg'
+
+
+export default function GuidePanelControl({offsetTop}) {
+  const [open, setOpen]=React.useState(false)
+  const classes = useStyles()
+  return (
+    <IconButton onClick={() => {
+      setOpen(!open)
+    }}>
+      <Question className = {classes.icon}/> {open && <GuidePanel openToggle={()=>{
+        setOpen(!open)
+      }} offsetTop={offsetTop}/>}
+    </IconButton>)
+}
+
+function GuidePanel({openToggle, offsetTop}) {
+  const classes = useStyles({offsetTop: offsetTop})
+  return (
+    <div className = {classes.container}>
+      <Paper elevation={3} className={classes.panel}>
+        <div className = {classes.closeButton}><Close onClick = {openToggle}/></div>
+        <h1>Guide</h1>
+        <p>To select an element:</p>
+        <ul>
+          <li>Double tap an element</li>
+          <li>X is used to clear the selection</li>
+        </ul>
+
+        <p>To attach a cut plane:</p>
+        <ul>
+          <li>Tap a model element</li>
+          <li>Tap a section plane button</li>
+          <li>Attach multiple planes</li>
+          <li>X is used to clear the planes</li>
+        </ul>
+      </Paper>
+    </div>
+  )
+}
 
 
 const useStyles = makeStyles({
@@ -56,48 +96,3 @@ const useStyles = makeStyles({
     },
   },
 })
-
-
-const QuestionIcon = ({offsetTop}) => {
-  const [open, setOpen]=React.useState(false)
-  const classes = useStyles()
-  return (
-    <div onClick={() => {
-      setOpen(!open)
-    }}>
-      <Question className = {classes.icon}/> {open && <GuidePanel openToggle={()=>{
-        setOpen(!open)
-      }} offsetTop={offsetTop}/>}
-    </div>)
-}
-
-
-const GuidePanel = ({openToggle, offsetTop}) => {
-  const classes = useStyles({offsetTop: offsetTop})
-
-  return (
-    <div className = {classes.container}>
-      <Paper elevation={3} className={classes.panel}>
-        <div className = {classes.closeButton} onClick = {openToggle}><Close/></div>
-        <h1>Guide</h1>
-        <p>To select an element:</p>
-        <ul>
-          <li>Double tap an element</li>
-          <li>X is used to clear the selection</li>
-        </ul>
-
-        <p>To attach a cut plane:</p>
-        <ul>
-          <li>Tap a model element</li>
-          <li>Tap a section plane button</li>
-          <li>Attach multiple planes</li>
-          <li>X is used to clear the planes</li>
-        </ul>
-      </Paper>
-    </div>
-  )
-}
-
-export {
-  QuestionIcon,
-}

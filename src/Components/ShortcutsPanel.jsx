@@ -35,7 +35,11 @@ function ShortcutsPanel({openToggle, offsetTop}) {
   return (
     <div className={classes.container}>
       <Paper elevation={3} className={classes.panel}>
-        <IconButton className={classes.closeButton} onClick={openToggle}><Close className = {classes.icon}/></IconButton>
+        <IconButton
+          className={classes.closeButton}
+          onClick={openToggle}>
+          <Close className = {classes.icon}/>
+        </IconButton>
         <h1>Shortcuts</h1>
         <p>To attach a section plane:</p>
         <ul>
@@ -79,17 +83,17 @@ const useStyles = makeStyles({
       color: '#696969',
       fontWeight: 200,
       textAlign: 'left',
-      fontSize:20,
+      fontSize: 20,
     },
     '& h1': {
       marginTop: 0,
       fontWeight: 200,
-      fontSize:20,
+      fontSize: 20,
     },
     '& p, & li': {
       fontWeight: 200,
       textAlign: 'left',
-      fontSize:16,
+      fontSize: 16,
     },
   },
   icon: {
