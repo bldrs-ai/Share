@@ -84,8 +84,8 @@ async function createPsetsList(element, viewer, classes) {
           psets.map(
               async (ps, ndx) => {
                 return (
-                  <li key={ndx} className={classes.section}>
-                    <Accordion className={classes.accordian}>
+                  <li key={ndx} className={classes.section} >
+                    <Accordion className={classes.accordian} defaultExpanded>
                       <AccordionSummary
                         expandIcon={<ExpandIcon className = {classes.icons} />}
                         aria-controls="panel1a-content"
@@ -313,10 +313,17 @@ const useStyles = makeStyles({
   },
   psetsList: {
     padding: '0px',
+    marginLeft: '10px',
+    width: '308px',
+    height: '400px',
+    overflow: 'scroll',
+    paddingBottom: '30px',
+    borderBottom: '1px solid #494747',
   },
   section: {
     listStyle: 'none',
     maxWidth: '400px',
+    marginBottom: '5px',
   },
   sectionTitle: {
     maxWidth: '320px',
