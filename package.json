@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r265",
+  "version": "0.1.0-r286",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
@@ -9,6 +9,7 @@
     "copy-web-asm": "cp node_modules/web-ifc/web-ifc.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
+    "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
     "test": "jest"
   },
   "dependencies": {

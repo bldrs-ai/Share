@@ -94,9 +94,11 @@ const ItemPropertiesDrawer = ({
           classes={{paper: classes.drawerPaper}}
         >
           <div className ={classes.drawerContainer}>
-            <div className={classes.headerWrapper} onClick={onClose}>
+            <div className={classes.headerWrapper} >
               <div className={classes.title}>{title}</div>
-              <div className = {classes.closeContainer}><Close className={classes.close} /></div>
+              <div className = {classes.closeContainer}>
+                <Close className={classes.close} onClick={onClose}/>
+              </div>
             </div>
 
             <div className = {classes.contentContainer}>
