@@ -27,6 +27,7 @@ function Forward({appPrefix}) {
       debug().log('Share.jsx: Base: forwarding to: ', dest)
       navigate(dest)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   return <Outlet />
 }
@@ -66,7 +67,7 @@ export default function Share({installPrefix, appPrefix}) {
       [],
   )
 
-const theme = useMemo(() => {
+  const theme = useMemo(() => {
     return createTheme({
       palette: {
         mode,
@@ -79,11 +80,12 @@ const theme = useMemo(() => {
           paper: mode === 'light' ? '#DCDCDC' : '#252525',
         },
         tonalOffset: 1,
-        },
-      shape:{
-        borderRadius:10},
-      });
-  }, [mode]);
+      },
+      shape: {
+        borderRadius: 10,
+      },
+    })
+  }, [mode])
 
   return (
     <ColorModeContext.Provider value={colorMode}>

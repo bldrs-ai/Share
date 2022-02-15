@@ -1,4 +1,4 @@
-import {MockViewer, newMockStringValueElt} from './IfcMock.test'
+import {MockViewer} from './IfcMock.test'
 import {
   decodeIFCString,
   deref,

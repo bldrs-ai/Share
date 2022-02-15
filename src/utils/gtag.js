@@ -1,7 +1,12 @@
 window.dataLayer = window['dataLayer'] || []
+
+
+/** Create google analytics tag. */
 export default function gtag() {
   const dataLayer = window.dataLayer
-  dataLayer.push(arguments)
+  // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments
+  // eslint-disable-next-line
+  dataLayer.push()
 }
 gtag('js', new Date())
 gtag('config', 'UA-210924287-3')

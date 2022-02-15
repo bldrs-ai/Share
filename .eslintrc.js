@@ -27,6 +27,8 @@ module.exports = {
     'react/prop-types': 'off',
     'semi': ['error', 'never'],
     'max-len': ['error', 100],
+    'no-irregular-whitespace': ['error'],
+    'no-trailing-spaces': ['error']
   },
   'settings': {
     'react': {

@@ -3,6 +3,7 @@ import {render, screen, waitFor} from '@testing-library/react'
 import {MockViewer, newMockStringValueElt} from '../utils/IfcMock.test'
 import {mockRoutes} from '../BaseRoutesMock.test'
 import ItemProperties from './ItemProperties'
+// eslint-disable-next-line no-unused-vars
 import testObj from './ItemProperties.testobj.json'
 
 
