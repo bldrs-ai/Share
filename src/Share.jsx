@@ -27,7 +27,7 @@ function Forward({appPrefix}) {
       debug().log('Share.jsx: Base: forwarding to: ', dest)
       navigate(dest)
     }
-  }, [appPrefix, location, navigate])
+  }, [])
   return <Outlet />
 }
 
