@@ -58,7 +58,6 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
                   .map(
                       async (key, ndx) => {
                         const val = props[key]
-                        console.log('createPropertyTable', key, val)
                         return await prettyProps(key, val, viewer, ndx)
                       },
                   ),
