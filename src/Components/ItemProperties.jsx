@@ -3,6 +3,7 @@ import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
 import {
@@ -49,7 +50,8 @@ export default function ItemProperties({viewer, element}) {
  */
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
-    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey'}}>
+    <table key={serial + '-table'}
+      style={{borderBottom: '1px solid lighgrey', tableLayout: 'fixed'}}>
       <tbody>
         {
           await Promise.all(
@@ -90,7 +92,9 @@ async function createPsetsList(element, viewer, classes) {
                         aria-controls="panel1a-content"
                         id="panel1a-header"
                       >
-                        <Typography>{decodeIFCString(ps.Name.value) || 'Property Set'}</Typography>
+                        <Typography className = {classes.accordionTitle}>
+                          {decodeIFCString(ps.Name.value) || 'Property Set'}
+                        </Typography>
                       </AccordionSummary>
                       <AccordionDetails className = {classes.accordianDetails}>
                         {await createPropertyTable(ps, viewer, 0, true)}
@@ -234,7 +238,7 @@ async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
       <tr key={serial++}>
         <td>
           <table>
-            <tbody>{rows}</tbody>
+            <tbody >{rows}</tbody>
           </table>
         </td>
       </tr>
@@ -260,28 +264,32 @@ function row(d1, d2, serial) {
   }
   return (
     <tr key={serial}>
-      <td key="a"
-        style={{
-          maxWidth: '150px',
-          overflowWrap: 'break-word',
+      <Tooltip title={d1} placement="top">
+        <div style ={{
           fontFamily: 'Helvetica',
           fontSize: '14px',
           fontWeight: 200,
-          color: '#696969',
-          paddingLeft: '4px',
-          paddingRight: '4px',
-        }}>{d1}</td>
-      <td key="b"
-        style={{
-          maxWidth: '200px',
+          width: '150px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           overflowWrap: 'break-word',
-          fontFamily: 'Helvetica',
-          fontSize: '14px',
-          fontWeight: 200,
-          color: '#696969',
-          paddingLeft: '4px',
-          paddingRight: '4px',
-        }}>{d2}</td>
+          wordBreak: 'break-all',
+        }}>{d1}</div>
+      </Tooltip>
+      <Tooltip title={d2} placement="top">
+        <td key="b"
+          style={{
+            width: '150px',
+            textOverflow: 'ellipsis',
+            overflowWrap: 'break-word',
+            fontFamily: 'Helvetica',
+            fontSize: '14px',
+            fontWeight: 200,
+            paddingLeft: '4px',
+            paddingRight: '4px',
+            cursor: 'default',
+          }}>{d2}</td>
+      </Tooltip>
     </tr>
   )
 }
@@ -345,5 +353,9 @@ const useStyles = makeStyles({
   accordianDetails: {
     overflow: 'scroll',
   },
-
+  accordionTitle: {
+    width: '200px',
+    textOverflow: 'ellipsis',
+    overflowWrap: 'break-word',
+  },
 })
