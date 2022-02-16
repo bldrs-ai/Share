@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { makeStyles } from '@mui/styles'
-import { Color } from 'three'
-import { IfcViewerAPI } from 'web-ifc-viewer'
+import React, {useEffect, useState} from 'react'
+import {useNavigate, useSearchParams} from 'react-router-dom'
+import {makeStyles} from '@mui/styles'
+import {Color} from 'three'
+import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
 import ItemPanelButton from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
@@ -12,6 +12,7 @@ import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
+import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
@@ -19,28 +20,37 @@ import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
-const searchIndex = new SearchIndex();
+const searchIndex = new SearchIndex()
 
 
-let count = 0;
+let count = 0
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
  * @return {Object}
  */
-export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath}) {
+export default function CadView({
+  installPrefix,
+  appPrefix,
+  pathPrefix,
+  modelPath,
+}) {
+  assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
+
   // React router
   const navigate = useNavigate()
+  // TODO(pablo): Removing this setter leads to a very strange stack overflow
+  // eslint-disable-next-line no-unused-vars
   const [searchParams, setSearchParams] = useSearchParams()
 
   // IFC
   const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
+  const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
-  const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
@@ -56,20 +66,30 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
 
   /** Load the full resolved model path. */
   useEffect(() => {
+    debug().log('CadView#useEffect[modelPath], setting new viewer')
+    setShowNavPanel(false)
+    setShowSearchBar(false)
+    setShowItemPanel(false)
     setViewer(initViewer(pathPrefix))
-  }, [])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modelPath])
 
 
   useEffect(() => {
     if (viewer == null) {
-      return;
+      debug().warn('CadView#useEffect[viewer], viewer is null!')
+      return
     }
+    debug().log('CadView#useEffect[viewer], calling loadIfc')
     loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer])
 
 
   useEffect(() => {
+    debug().log('CadView#useEffect[searchParams]')
     onSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
 
@@ -158,6 +178,10 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
   }
 
 
+  /**
+   * @param {Object} rootElt Root ifc elment for recursive indexing.
+   * @param {Object} viewer The IfcViewerAPI instance.
+   */
   function initSearch(rootElt, viewer) {
     searchIndex.clearIndex()
     debug().log('CadView#initSearch')
@@ -193,14 +217,15 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
       }
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
-/*
-need to expand results and parents
-    const expanded = ['84']
-    for (let i in resultIDs) {
-      expanded.push(resultIDs[i] + '')
-    }
-    setExpandedElements(expanded)
-*/
+      const expanded = []
+      /*
+        expanded.pus('84')
+        // need to expand results and parents
+        for (let i in resultIDs) {
+          expanded.push(resultIDs[i] + '')
+        }
+      */
+      setDefaultExpandedElements(expanded)
       gtag('event', 'search', {
         search_term: query,
       })
@@ -239,7 +264,7 @@ need to expand results and parents
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.unpickIfcItems()
+    viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
 
@@ -280,7 +305,6 @@ need to expand results and parents
     // IPC.
     // console.log('CadView#onElementSelect: in...')
   }
-
 
   return (
     <div className={classes.pageContainer}>

@@ -25,24 +25,25 @@ import debug from './utils/debug'
  * @return {Object}
  */
 export default function BaseRoutes({testElt = null}) {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
+  const location = useLocation()
+  const navigate = useNavigate()
+  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
 
   useEffect(() => {
-    const referrer = document.referrer;
-    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer);
+    const referrer = document.referrer
+    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer)
     if (referrer) {
-      const ref = new URL(referrer);
+      const ref = new URL(referrer)
       if (ref.pathname.length > 1) {
-        navigate(ref);
+        navigate(ref)
       }
     }
-    if (location.pathname === installPrefix
-        || location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share');
-      navigate(installPrefix + '/share');
+    if (location.pathname === installPrefix ||
+        location.pathname === (installPrefix + '/')) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
+      navigate(installPrefix + '/share')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const basePath = installPrefix + '/*'

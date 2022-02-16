@@ -1,6 +1,5 @@
 import React from 'react'
-import {render, screen, waitFor} from '@testing-library/react'
-import {MockViewer, newMockStringValueElt} from '../utils/IfcMock.test'
+import {render, screen} from '@testing-library/react'
 import {mockRoutes} from '../BaseRoutesMock.test'
 import SearchBar, {
   containsIfcPath,
@@ -23,8 +22,10 @@ test('containsIfcPath', () => {
     '/share/v/p/index.ifc/1/2?q=': true,
     '/share/v/p/index.ifc/1/2/3?q=': true,
   }
-  for (let path in testPairs) {
-    expect(containsIfcPath({pathname: path})).toEqual(testPairs[path])
+  for (const path in testPairs) {
+    if (Object.prototype.hasOwnProperty.call(testPairs, path)) {
+      expect(containsIfcPath({pathname: path})).toEqual(testPairs[path])
+    }
   }
 })
 
@@ -37,30 +38,32 @@ test('validSearchQuery', () => {
     '?q=1/2': true,
   }
   for (const paramStr in testPairs) {
-    const isValid = testPairs[paramStr];
-    expect(validSearchQuery(new URLSearchParams(paramStr))).toEqual(isValid)
+    if (Object.prototype.hasOwnProperty.call(testPairs, paramStr)) {
+      const isValid = testPairs[paramStr]
+      expect(validSearchQuery(new URLSearchParams(paramStr))).toEqual(isValid)
+    }
   }
 })
 
 
 test('stripIfcPathFromLocation', () => {
   expect(stripIfcPathFromLocation({
-    pathname: '/share/v/p/index.ifc'
+    pathname: '/share/v/p/index.ifc',
   })).toBe('/share/v/p/index.ifc')
   expect(stripIfcPathFromLocation({
-    pathname: '/share/v/p/index.ifc?q=foo'
+    pathname: '/share/v/p/index.ifc?q=foo',
   })).toBe('/share/v/p/index.ifc?q=foo')
   expect(stripIfcPathFromLocation({
-    pathname: '/share/v/p/index.ifc/84/103'
+    pathname: '/share/v/p/index.ifc/84/103',
   })).toBe('/share/v/p/index.ifc')
   expect(stripIfcPathFromLocation({
-    pathname: '/share/v/p/index.ifc/84/103?q=foo'
+    pathname: '/share/v/p/index.ifc/84/103?q=foo',
   })).toBe('/share/v/p/index.ifc?q=foo')
 })
 
 
 test('SeachBar', () => {
-  const {getByText} = render(mockRoutes(
+  render(mockRoutes(
       <SearchBar
         onClickMenuCb={() => {}}
         isOpen={true} />,

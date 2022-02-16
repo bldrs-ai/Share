@@ -1,22 +1,25 @@
 import * as Ifc from '../utils/Ifc'
 import debug from '../utils/debug'
-import { assertDefined } from '../utils/assert'
+import {deleteProperties} from '../utils/objects'
 
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
+  /** Initializes all the index lookup objects. */
   constructor() {
-    this.eltsByType = {};
-    this.eltsByName = {};
-    this.eltsByGlobalId = {};
-    this.eltsByText = {};
+    this.eltsByType = {}
+    this.eltsByName = {}
+    this.eltsByGlobalId = {}
+    this.eltsByText = {}
   }
 
-
-  /** Recursively visits elt and indexes properties. */
+  /**
+   * Recursively visits elt and indexes properties.
+   * @param {Object} elt async callback for rendering sub-object
+   * @param {Object} viewer IfcViewerApi instance.
+   */
   indexElement(elt, viewer) {
-    assertDefined(elt, viewer);
-    const type = Ifc.getType(elt, viewer);
+    const type = Ifc.getType(elt, viewer)
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt)
       if (type.startsWith('IFC')) {
@@ -30,7 +33,7 @@ export default class SearchIndex {
       this.indexElementByStringSet(this.eltsByName, this.tokenize(name), elt)
     }
 
-    const reifiedName = Ifc.reifyName(elt, viewer);
+    const reifiedName = Ifc.reifyName(elt, viewer)
     if (reifiedName) {
       this.indexElementByString(this.eltsByName, reifiedName, elt)
       this.indexElementByStringSet(this.eltsByName, this.tokenize(reifiedName), elt)
@@ -48,18 +51,27 @@ export default class SearchIndex {
     }
 
     // Recurse.
-    for (let child of elt.children) {
-      this.indexElement(child, viewer);
+    for (const child of elt.children) {
+      this.indexElement(child, viewer)
     }
   }
 
 
-  /** Returns a set of word tokens from the string. */
+  /**
+   * Returns a set of word tokens from the string.
+   * @param {str} str
+   * @return {Set} token
+   */
   tokenize(str) {
     return new Set(str.match(/(\w+)/g))
   }
 
-
+  /**
+   * Create index set of found results
+   * @param {Object} index
+   * @param {string} key
+   * @return {Object} The index set.
+   */
   findCreateIndexSet(index, key) {
     let set = index[key]
     if (set === undefined) {
@@ -68,36 +80,42 @@ export default class SearchIndex {
     return set
   }
 
-
-  indexElementByString(index, str, elt) {
-    this.findCreateIndexSet(index, str).add(elt)
-    this.findCreateIndexSet(index, str.toLowerCase()).add(elt)
+  /**
+   * Add entry for key in index pointing to given elt
+   * @param {Object} index
+   * @param {string} key
+   * @param {Object} elt
+   */
+  indexElementByString(index, key, elt) {
+    this.findCreateIndexSet(index, key).add(elt)
+    this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
   }
 
-
+  /**
+   * Add entry for key in index pointing to given elt for each key in the set
+   * @param {Object} index index of the element in the set
+   * @param {Set} strSet set of strings
+   * @param {Object} elt IFC element
+   */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
       this.indexElementByString(index, str, elt)
     }
   }
 
-
+  /** Clear all entries in the search index. */
   clearIndex() {
-    for (const key in this.eltsByType) {
-      delete this.eltsByType[key]
-    }
-    for (const key in this.eltsByName) {
-      delete this.eltsByName[key]
-    }
-    for (let key in this.eltsByGlobalId) {
-      delete this.eltsByGlobalId[key];
-    }
-    for (let key in this.eltsByText) {
-      delete this.eltsByText[key];
-    }
+    deleteProperties(this.eltsByType)
+    deleteProperties(this.eltsByName)
+    deleteProperties(this.eltsByGlobalId)
+    deleteProperties(this.eltsByText)
   }
 
-
+  /**
+   * Search the index with the given query and return the express IDs of matching IFC elements
+   * @param {string} query The search query.
+   * @return {string} resultIDs
+   */
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {
@@ -121,25 +139,25 @@ export default class SearchIndex {
       query = `::**[${query.substring(1)}]`
     }
 
-    debug().log(`SearchIndex#search: query rewrite: ${query}`);
+    debug().log(`SearchIndex#search: query rewrite: ${query}`)
 
-    const token = query; // TODO(pablo): tokenization
-    debug(2).log('SearchIndex#search: this: ', this);
+    const token = query // TODO(pablo): tokenization
+    debug(2).log('SearchIndex#search: this: ', this)
 
-    addAll(this.eltsByName[token]);
-    addAll(this.eltsByType[token]);
+    addAll(this.eltsByName[token])
+    addAll(this.eltsByType[token])
 
-    const lowerToken = token.toLowerCase();
-    addAll(this.eltsByName[lowerToken]);
-    addAll(this.eltsByType[lowerToken]);
+    const lowerToken = token.toLowerCase()
+    addAll(this.eltsByName[lowerToken])
+    addAll(this.eltsByType[lowerToken])
 
-    addAll(this.eltsByGlobalId[token]);
+    addAll(this.eltsByGlobalId[token])
 
-    addAll(this.eltsByText[token]);
+    addAll(this.eltsByText[token])
 
 
-    const resultIDs = toExpressIds(Array.from(resultSet));
-    debug().log('result IDs: ', resultIDs);
-    return resultIDs;
+    const resultIDs = toExpressIds(Array.from(resultSet))
+    debug().log('result IDs: ', resultIDs)
+    return resultIDs
   }
 }

@@ -13,6 +13,7 @@ import debug from './utils/debug'
 /**
  * Forward page from /share to /share/v/p per spect at:
  *   https://github.com/buildrs/Share/wiki/URL-Structure
+ * @param {string} appPrefix The install prefix, e.g. /share.
  * @return {Object}
  */
 function Forward({appPrefix}) {
@@ -25,7 +26,7 @@ function Forward({appPrefix}) {
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
     }
-  }, [location])
+  }, [location, appPrefix, navigate])
 
   return <Outlet />
 }

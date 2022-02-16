@@ -13,7 +13,9 @@ test('MockViewer getProperties', () => {
 
 
 test('MockViewer getIfcType', () => {
-  expect(new MockViewer().IFC.loader.ifcManager.getIfcType(undefined, undefined)).toEqual('IFCELEMENT')
+  expect(new MockViewer().IFC.loader.ifcManager
+      .getIfcType(undefined, undefined))
+      .toEqual('IFCELEMENT')
 })
 
 
@@ -22,8 +24,11 @@ test('MockViewer getPropertySets', async () => {
   expect(val).toEqual([])
 })
 
-
+/**
+ * Create a mock IFC viewer
+ */
 export class MockViewer {
+  /** @param {Object} propsById Mock IFC properties. */
   constructor(propsById = {}) {
     this.propsById = propsById
     this.IFC = {
@@ -40,12 +45,23 @@ export class MockViewer {
     }
   }
 
+  /**
+   * Get the IFC type.
+   * @param {string} modelId
+   * @param {string} id
+   * @return {Object} returns property object
+   */
   getProperties(modelId, id) {
     return this.propsById[id]
   }
 }
 
-
+/**
+ * Create a mock element with the given label.
+ * @param {string} label
+ * @param {Number} id Express ID for the element.
+ * @return {Object} Mock IFC element
+ */
 export function newMockStringValueElt(label, id = 1) {
   return {
     children: [],

@@ -2,8 +2,7 @@ import React, {useRef, useEffect, useState} from 'react'
 import {
   useLocation,
   useNavigate,
-  useParams,
-  useSearchParams
+  useSearchParams,
 } from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
 import IconButton from '@mui/material/IconButton'
@@ -11,6 +10,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Hamburger from '../assets/3D/tree.svg'
 import Search from '../assets/3D/search.svg'
+import debug from '../utils/debug'
 
 
 /**
@@ -19,9 +19,8 @@ import Search from '../assets/3D/search.svg'
  * @return {Object} The SearchBar react component
  */
 export default function SearchBar({onClickMenuCb, isOpen}) {
-  const location = useLocation();
-  const pathParams = useParams();
-  const navigate = useNavigate();
+  const location = useLocation()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
@@ -30,6 +29,7 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
 
 
   useEffect(() => {
+    debug().log('SearchBar#useEffect[searchParams]')
     if (location.search) {
       if (validSearchQuery(searchParams)) {
         const newInputText = searchParams.get('q')
@@ -40,6 +40,7 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
         navigate(location.pathname)
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
 
@@ -49,13 +50,13 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
 
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
-      const newPath = stripIfcPathFromLocation(location);
+      const newPath = stripIfcPathFromLocation(location)
       navigate({
         pathname: newPath,
-        search: `?q=${inputText}`
+        search: `?q=${inputText}`,
       })
     } else {
-      setSearchParams({q: inputText});
+      setSearchParams({q: inputText})
     }
     searchInputRef.current.blur()
   }
@@ -98,9 +99,10 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
  *   /share/v/p/index.ifc
  *
  * @param {Object} location React router location object.
+ * @return {boolean}
  */
 export function containsIfcPath(location) {
-  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) != null;
+  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) != null
 }
 
 
@@ -108,11 +110,11 @@ export function containsIfcPath(location) {
  * Returns true iff searchParams query is defined with a string value.
  *
  * @param {Object} searchParams Object with a 'q' parameter and optional string value.
- * @param {boolean}
+ * @return {boolean}
  */
 export function validSearchQuery(searchParams) {
   const value = searchParams.get('q')
-  return value != null && value.length > 0;
+  return value != null && value.length > 0
 }
 
 
@@ -127,9 +129,10 @@ export function validSearchQuery(searchParams) {
  *
  * @param {Object} location React router location object.
  * @param {string} fileExtension defaults to '.ifc' for now.
+ * @return {string}
  */
 export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
-  const baseAndPathquery = location.pathname.split(fileExtension);
+  const baseAndPathquery = location.pathname.split(fileExtension)
   if (baseAndPathquery.length == 2) {
     const base = baseAndPathquery[0]
     let newPath = base + fileExtension
@@ -146,10 +149,10 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 const useStyles = makeStyles({
   root: {
-    padding: '2px 4px',
-    display: 'flex',
-    alignItems: 'center',
-    width: 300,
+    'padding': '2px 4px',
+    'display': 'flex',
+    'alignItems': 'center',
+    'width': 300,
     '@media (max-width: 900px)': {
       width: 240,
     },
@@ -161,18 +164,18 @@ const useStyles = makeStyles({
     height: 28,
     margin: 4,
   },
-  icon:{
+  icon: {
     width: '30px',
-    height: '30px'
+    height: '30px',
   },
-  inputBase:{
-    flex: 1,
-    marginLeft: '5px',
-    fontWeight: 600,
-    fontFamily: 'Helvetica',
-    color: '#696969',
+  inputBase: {
+    'flex': 1,
+    'marginLeft': '5px',
+    'fontWeight': 600,
+    'fontFamily': 'Helvetica',
+    'color': '#696969',
     '& input': {
       fontSize: '18px',
-    }
-  }
+    },
+  },
 })

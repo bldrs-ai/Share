@@ -17,6 +17,13 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 /* eslint-enable */
 
 
+/**
+ * Handles path demuxing to pass to CadView.
+ * @param {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
+ * @param {string} appPrefix e.g. /share is the prefix for this component.
+ * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
+ * @return {Object} The Share react component.
+ */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
@@ -34,24 +41,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    */
   useEffect(() => {
     onChangeUrlParams()
-  }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
-
-
-  /**
-   * If there's a new modelPath set, then a new model needs to be
-   * loaded into the scene.  This is split into two parts:
-   *
-   * 1) clearing the current scene and setting a new IfcViewerAPI.
-   * 2) setting pathToLoad variable which does the new model load.
-   *
-   * TODO: Keeping this logic in the same effect was causing some null
-   * references into the viewer object.
-   */
-  useEffect(() => {
-    if (modelPath == null) {
-      return
-    }
-  }, [modelPath])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlParams])
 
 
   /** A demux to help forward to the index file, load a new model or do nothing. */
@@ -93,11 +84,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         },
         tonalOffset: 1,
       },
-      shape:{
-        borderRadius:10
+      shape: {
+        borderRadius: 10,
       },
-    });
-  }, [mode]);
+    })
+  }, [mode])
 
 
   return (

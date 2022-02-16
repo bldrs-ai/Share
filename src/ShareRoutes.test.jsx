@@ -6,8 +6,8 @@ import ShareRoutes from './ShareRoutes'
 
 test('ShareRoutes', () => {
   const {getByText} = render(mockRoutes(
-    <ShareRoutes
-      installPrefix={'/'}
-      appPrefix={'share'} /> ))
+      <ShareRoutes
+        installPrefix={'/'}
+        appPrefix={'share'} /> ))
   expect(getByText(/BLDRS/i)).toBeInTheDocument()
 })
