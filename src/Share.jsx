@@ -82,7 +82,8 @@ export default function Share({installPrefix, appPrefix}) {
         tonalOffset: 1,
       },
       shape: {
-        borderRadius: 10},
+        borderRadius: 10,
+      },
     })
   }, [mode])
 
