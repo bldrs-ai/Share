@@ -3,6 +3,7 @@ import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
 import {
@@ -260,28 +261,32 @@ function row(d1, d2, serial) {
   }
   return (
     <tr key={serial}>
-      <td key="a"
-        style={{
-          maxWidth: '150px',
-          overflowWrap: 'break-word',
+      <Tooltip title={d1} placement="top">
+        <div style ={{
           fontFamily: 'Helvetica',
           fontSize: '14px',
           fontWeight: 200,
-          color: '#696969',
-          paddingLeft: '4px',
-          paddingRight: '4px',
-        }}>{d1}</td>
-      <td key="b"
-        style={{
-          maxWidth: '200px',
+          width: '150px',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
           overflowWrap: 'break-word',
-          fontFamily: 'Helvetica',
-          fontSize: '14px',
-          fontWeight: 200,
-          color: '#696969',
-          paddingLeft: '4px',
-          paddingRight: '4px',
-        }}>{d2}</td>
+          wordBreak: 'break-all',
+        }}>{d1}</div>
+      </Tooltip>
+      <Tooltip title={d2} placement="top">
+        <td key="b"
+          style={{
+            width: '150px',
+            textOverflow: 'ellipsis',
+            overflowWrap: 'break-word',
+            fontFamily: 'Helvetica',
+            fontSize: '14px',
+            fontWeight: 200,
+            paddingLeft: '4px',
+            paddingRight: '4px',
+            cursor: 'default',
+          }}>{d2}</td>
+      </Tooltip>
     </tr>
   )
 }
