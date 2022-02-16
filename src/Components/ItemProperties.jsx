@@ -92,7 +92,9 @@ async function createPsetsList(element, viewer, classes) {
                         aria-controls="panel1a-content"
                         id="panel1a-header"
                       >
-                        <Typography>{decodeIFCString(ps.Name.value) || 'Property Set'}</Typography>
+                        <Typography className = {classes.accordionTitle}>
+                          {decodeIFCString(ps.Name.value) || 'Property Set'}
+                        </Typography>
                       </AccordionSummary>
                       <AccordionDetails className = {classes.accordianDetails}>
                         {await createPropertyTable(ps, viewer, 0, true)}
@@ -236,7 +238,7 @@ async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
       <tr key={serial++}>
         <td>
           <table>
-            <tbody>{rows}</tbody>
+            <tbody >{rows}</tbody>
           </table>
         </td>
       </tr>
@@ -351,5 +353,9 @@ const useStyles = makeStyles({
   accordianDetails: {
     overflow: 'scroll',
   },
-
+  accordionTitle: {
+    width: '200px',
+    textOverflow: 'ellipsis',
+    overflowWrap: 'break-word',
+  },
 })
