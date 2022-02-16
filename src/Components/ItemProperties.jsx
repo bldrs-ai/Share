@@ -50,7 +50,8 @@ export default function ItemProperties({viewer, element}) {
  */
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
-    <table key={serial + '-table'} style={{borderBottom: '1px solid lighgrey'}}>
+    <table key={serial + '-table'}
+      style={{borderBottom: '1px solid lighgrey', tableLayout: 'fixed'}}>
       <tbody>
         {
           await Promise.all(
