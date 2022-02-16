@@ -31,7 +31,7 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     const referrer = document.referrer;
-    debug().log('BaseRoutes: document.referrer: ', referrer);
+    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer);
     if (referrer) {
       const ref = new URL(referrer);
       if (ref.pathname.length > 1) {
@@ -40,7 +40,7 @@ export default function BaseRoutes({testElt = null}) {
     }
     if (location.pathname === installPrefix
         || location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes: forwarding to: ', installPrefix + '/share');
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share');
       navigate(installPrefix + '/share');
     }
   }, [])

@@ -20,13 +20,12 @@ function Forward({appPrefix}) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    debug().log('ShareRoutes.jsx: should forward?: ', location)
     if (location.pathname == appPrefix) {
       const dest = appPrefix + '/v/p'
-      debug().log('ShareRoutes.jsx: Base: forwarding to: ', dest)
+      debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
     }
-  }, [appPrefix, location, navigate])
+  }, [location])
 
   return <Outlet />
 }

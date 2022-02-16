@@ -2,9 +2,9 @@ import React, {
   createContext,
   useMemo,
   useEffect,
-  useState
+  useState,
 } from 'react'
-import {useNavigate, useParams, useSearchParams} from 'react-router-dom'
+import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider, createTheme} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import debug from './utils/debug'
@@ -20,7 +20,6 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
-  const searchParams = useSearchParams()
   const [modelPath, setModelPath] = useState(null)
   const [mode, setMode] = useState('light')
 
@@ -55,20 +54,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [modelPath])
 
 
-  useEffect(() => {
-    const sp = new URLSearchParams(window.location.search)
-    console.log('Share#onSearch: URLSearchParams: ', sp)
-    let query = sp.get('q')
-    if (query) {
-      query = query.trim()
-      console.log('Share#onSearch: setting query from q=', query)
-      const dest = appPrefix + '/v/p' + window.location.search
-      debug().log('Share.jsx: Base: forwarding to: ', dest)
-      navigate(dest)
-    }
-  }, [searchParams])
-
-
   /** A demux to help forward to the index file, load a new model or do nothing. */
   function onChangeUrlParams() {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
@@ -81,7 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         modelPath.filepath && modelPath.filepath != mp.filepath ||
         modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
       setModelPath(mp)
-      debug().log('Share#setModelPathOrGotoIndex: new model path: ', mp)
+      debug().log('Share#onChangeUrlParams: new model path: ', mp)
     }
   }
 
@@ -107,10 +92,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
           paper: mode === 'light' ? '#DCDCDC' : '#252525',
         },
         tonalOffset: 1,
-        },
+      },
       shape:{
-        borderRadius:10},
-      });
+        borderRadius:10
+      },
+    });
   }, [mode]);
 
 

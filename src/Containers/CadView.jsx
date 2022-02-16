@@ -62,7 +62,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
 
   useEffect(() => {
     if (viewer == null) {
-      console.log('yo')
       return;
     }
     loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
@@ -174,7 +173,9 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
   /** Clear active search state and unpick active scene elts. */
   function clearSearch() {
     setSelectedElements([])
-    viewer.IFC.unpickIfcItems()
+    if (viewer) {
+      viewer.IFC.unpickIfcItems()
+    }
   }
 
 
@@ -184,7 +185,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath
    */
   function onSearch() {
     const sp = new URLSearchParams(window.location.search)
-    console.log('CadView#onSearch: URLSearchParams: ', sp)
     let query = sp.get('q')
     if (query) {
       query = query.trim()
@@ -204,6 +204,8 @@ need to expand results and parents
       gtag('event', 'search', {
         search_term: query,
       })
+    } else {
+      clearSearch()
     }
   }
 

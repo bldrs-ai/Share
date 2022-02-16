@@ -1,5 +1,10 @@
-import React, {useEffect, useState} from 'react'
-import {useSearchParams} from 'react-router-dom'
+import React, {useRef, useEffect, useState} from 'react'
+import {
+  useLocation,
+  useNavigate,
+  useParams,
+  useSearchParams
+} from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
@@ -9,41 +14,50 @@ import Search from '../assets/3D/search.svg'
 
 
 /**
- * @param {function} onSearch
- * @param {function} onSearchModify
- * @param {function} onClickMenu
- * @param {boolean} open
- * @return {Object}
+ * @param {function} onClickMenuCb callback
+ * @param {boolean} isOpen toggle
+ * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenu, open}) {
+export default function SearchBar({onClickMenuCb, isOpen}) {
+  const location = useLocation();
+  const pathParams = useParams();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
+  const onInputChange = (event) => setInputText(event.target.value)
+  const searchInputRef = useRef(null)
   const classes = useStyles()
 
 
   useEffect(() => {
-    const sp = new URLSearchParams(window.location.search)
-    console.log('SearchBar#useEffect[]: URLSearchParams: ', sp)
-    let query = sp.get('q')
-    if (query) {
-      setInputText(query.trim())
+    if (location.search) {
+      if (validSearchQuery(searchParams)) {
+        const newInputText = searchParams.get('q')
+        if (inputText != newInputText) {
+          setInputText(newInputText)
+        }
+      } else {
+        navigate(location.pathname)
+      }
     }
-  }, [])
+  }, [searchParams])
 
-  // TODO(pablo): What I have here seems to work fine but not sure if
-  // it's idomatic.  See:
-  //   https://blog.logrocket.com/using-material-ui-with-react-hook-form/
-  const onChange = (event) => {
-    const value = event.target.value
-    setInputText(value)
-    // TODO: onSearchModify(value)
-  }
 
   const onSubmit = (event) => {
+    // Prevent form event bubbling and causing page reload.
     event.preventDefault()
-    setSearchParams({q: inputText })
-    // TODO(pablo): hack
-    document.getElementById('main_search_input').blur()
+
+    // Searches from SearchBar clear current URL's IFC path.
+    if (containsIfcPath(location)) {
+      const newPath = stripIfcPathFromLocation(location);
+      navigate({
+        pathname: newPath,
+        search: `?q=${inputText}`
+      })
+    } else {
+      setSearchParams({q: inputText});
+    }
+    searchInputRef.current.blur()
   }
 
   return (
@@ -51,32 +65,84 @@ export default function SearchBar({onClickMenu, open}) {
       <IconButton
         className={classes.iconButton}
         aria-label='menu'
-        onClick={onClickMenu}
-      >
-        <Hamburger className = {classes.icon}/>
+        onClick={onClickMenuCb}>
+        <Hamburger className={classes.icon}/>
       </IconButton>
       <InputBase
-        sx={{ml: 1, flex: 1}}
-        id='main_search_input'
+        inputRef={searchInputRef}
+        value={inputText}
+        onChange={onInputChange}
         placeholder='Search building'
         inputProps={{'aria-label': 'search'}}
-        onChange={onChange}
-        value={inputText}
-        style={{
-          fontSize: 18,
-          fontWeight: 200,
-          fontFamily: 'Helvetica',
-        }}/>
+        className={classes.inputBase}/>
       <IconButton
         type='submit'
         className={classes.iconButton}
-        aria-label='search'
-      >
-        <Search className={classes.icon} />
+        aria-label='search' >
+        <Search className={classes.icon}/>
       </IconButton>
     </Paper>
   )
 }
+
+
+/**
+ * Return true for paths like
+ *
+ *   /share/v/p/index.ifc/1
+ *   /share/v/p/index.ifc/1/2
+ *   /share/v/p/index.ifc/1/2/...
+ *
+ * and false for:
+ *
+ *   /share/v/p/index.ifc
+ *
+ * @param {Object} location React router location object.
+ */
+export function containsIfcPath(location) {
+  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) != null;
+}
+
+
+/**
+ * Returns true iff searchParams query is defined with a string value.
+ *
+ * @param {Object} searchParams Object with a 'q' parameter and optional string value.
+ * @param {boolean}
+ */
+export function validSearchQuery(searchParams) {
+  const value = searchParams.get('q')
+  return value != null && value.length > 0;
+}
+
+
+/**
+ * Converts a path like:
+ *
+ *   /share/v/p/index.ifc/84/103?q=foo
+ *
+ * to:
+ *
+ *   /share/v/p/index.ifc?q=foo
+ *
+ * @param {Object} location React router location object.
+ * @param {string} fileExtension defaults to '.ifc' for now.
+ */
+export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
+  const baseAndPathquery = location.pathname.split(fileExtension);
+  if (baseAndPathquery.length == 2) {
+    const base = baseAndPathquery[0]
+    let newPath = base + fileExtension
+    const pathAndQuery = baseAndPathquery[1].split('?')
+    if (pathAndQuery.length == 2) {
+      const query = pathAndQuery[1]
+      newPath += '?' + query
+    }
+    return newPath
+  }
+  throw new Error('Expected URL of the form <base>/file.ifc<path>[?query]')
+}
+
 
 const useStyles = makeStyles({
   root: {
@@ -87,9 +153,6 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': {
       width: 240,
     },
-  },
-  input: {
-    flex: 1,
   },
   iconButton: {
     padding: 10,
@@ -103,9 +166,13 @@ const useStyles = makeStyles({
     height: '30px'
   },
   inputBase:{
-    fontSize: 18,
+    flex: 1,
+    marginLeft: '5px',
     fontWeight: 600,
     fontFamily: 'Helvetica',
     color: '#696969',
+    '& input': {
+      fontSize: '18px',
+    }
   }
 })

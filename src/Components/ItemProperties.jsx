@@ -58,7 +58,7 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
                   .map(
                     async (key, ndx) => {
                       const val = props[key];
-                      console.log('createPropertyTable', key, val)
+                      debug().log('createPropertyTable', key, val)
                       return await prettyProps(key, val, viewer, ndx)
                     }
                   ),
@@ -123,10 +123,10 @@ async function prettyProps(key, value, viewer, serial = 0) {
     label = label.substring(3)
   }
   if (value === null || value === undefined || value == '') {
-    console.warn(`prettyProps: undefined value(${value}) for key(${key})`)
+    debug().warn(`prettyProps: undefined value(${value}) for key(${key})`)
     return null
   }
-  console.log('prettyProps, switching on key,value: ', key, value)
+  debug().log('prettyProps, switching on key,value: ', key, value)
   switch (key) {
     case 'Coordinates':
     case 'RefLatitude':
