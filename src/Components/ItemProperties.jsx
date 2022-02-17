@@ -50,8 +50,7 @@ export default function ItemProperties({viewer, element}) {
  */
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
-    <table key={serial + '-table'}
-      style={{borderBottom: '1px solid lighgrey', tableLayout: 'fixed'}}>
+    <table key={serial + '-table'}>
       <tbody>
         {
           await Promise.all(
@@ -265,30 +264,10 @@ function row(d1, d2, serial) {
   return (
     <tr key={serial}>
       <Tooltip title={d1} placement="top">
-        <div style ={{
-          fontFamily: 'Helvetica',
-          fontSize: '14px',
-          fontWeight: 200,
-          width: '150px',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          overflowWrap: 'break-word',
-          wordBreak: 'break-all',
-        }}>{d1}</div>
+        <td>{d1}</td>
       </Tooltip>
       <Tooltip title={d2} placement="top">
-        <td key="b"
-          style={{
-            width: '150px',
-            textOverflow: 'ellipsis',
-            overflowWrap: 'break-word',
-            fontFamily: 'Helvetica',
-            fontSize: '14px',
-            fontWeight: 200,
-            paddingLeft: '4px',
-            paddingRight: '4px',
-            cursor: 'default',
-          }}>{d2}</td>
+        <td key="b">{d2}</td>
       </Tooltip>
     </tr>
   )
@@ -313,9 +292,24 @@ const useStyles = makeStyles({
       verticalAlign: 'top',
       paddingBottom: '1em',
       whiteSpace: 'nowrap',
+      width: '130px',
+      maxWidth: '130px',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      fontFamily: 'Helvetica',
+      fontSize: '14px',
+      fontWeight: 200,
+      paddingLeft: '4px',
+      paddingRight: '4px',
+      cursor: 'default',
     },
     '& td + td': {
       paddingLeft: '0.5em',
+    },
+    '& table': {
+      tableLayout: 'fixed',
+      width: '280px',
+      overflow: 'hidden',
     },
   },
   psetsList: {
@@ -325,7 +319,7 @@ const useStyles = makeStyles({
     height: '400px',
     overflow: 'scroll',
     paddingBottom: '30px',
-    borderBottom: '1px solid #494747',
+    // borderBottom: '1px solid #494747',
   },
   section: {
     listStyle: 'none',
