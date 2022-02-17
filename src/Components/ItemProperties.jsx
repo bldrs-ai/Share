@@ -319,7 +319,6 @@ const useStyles = makeStyles({
     height: '400px',
     overflow: 'scroll',
     paddingBottom: '30px',
-    // borderBottom: '1px solid #494747',
   },
   section: {
     listStyle: 'none',
