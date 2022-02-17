@@ -1,8 +1,5 @@
-import React from 'react'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import Typography from '@mui/material/Typography'
+import React, {useState} from 'react'
+
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
@@ -11,7 +8,8 @@ import {
   deref,
 } from '../utils/Ifc'
 import {stoi} from '../utils/strings'
-import ExpandIcon from '../assets/ExpandIcon.svg'
+import Toggle from './Toggle'
+import ExpansionPanel from './ExpansionPanel'
 
 
 /**
@@ -20,21 +18,26 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
  * @return {Object}
  */
 export default function ItemProperties({viewer, element}) {
-  const [propTable, setPropTable] = React.useState(null)
-  const [psetsList, setPsetsList] = React.useState(null)
+  const [propTable, setPropTable] = useState(null)
+  const [psetsList, setPsetsList] = useState(null)
+  const [expandAll, setExpandAll] = useState(false)
   const classes = useStyles({})
+
   React.useEffect(() => {
     (async () => {
       setPropTable(await createPropertyTable(element, viewer))
-      setPsetsList(await createPsetsList(element, viewer, classes))
+      setPsetsList(await createPsetsList(element, viewer, classes, expandAll))
     })()
-  }, [element, viewer, classes])
+  }, [element, viewer, classes, expandAll])
 
   return (
     <div className={classes.propsContainer}>
       <h2 className = {classes.sectionTitle}>Properties</h2>
       {propTable || 'Loading...'}
-      <h2 className = {classes.sectionTitle}>Property Sets</h2>
+      <h2 className = {classes.sectionTitle}>
+        <div>Property Sets</div>
+        <Toggle onChange = {() => setExpandAll(!expandAll)} />
+      </h2>
       {psetsList || 'Loading...'}
     </div>)
 }
@@ -74,31 +77,25 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
  * @param {Object} element
  * @param {Object} viewer
  * @param {Object} classes
+ * @param {boolean} expandAll
  * @return {Object}
  */
-async function createPsetsList(element, viewer, classes) {
+async function createPsetsList(element, viewer, classes, expandAll) {
   const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID)
+
   return (
     <ul className={classes.psetsList}>
+
       {await Promise.all(
           psets.map(
               async (ps, ndx) => {
                 return (
-                  <li key={ndx} className={classes.section} >
-                    <Accordion className={classes.accordian} defaultExpanded = {false}>
-                      <AccordionSummary
-                        expandIcon={<ExpandIcon className = {classes.icons} />}
-                        aria-controls="panel1a-content"
-                        id="panel1a-header"
-                      >
-                        <Typography className = {classes.accordionTitle}>
-                          {decodeIFCString(ps.Name.value) || 'Property Set'}
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails className = {classes.accordianDetails}>
-                        {await createPropertyTable(ps, viewer, 0, true)}
-                      </AccordionDetails>
-                    </Accordion>
+                  <li key={ndx} className={classes.section}>
+                    <ExpansionPanel
+                      summary = { decodeIFCString(ps.Name.value) || 'Property Set'}
+                      detail = {await createPropertyTable(ps, viewer, 0, true)}
+                      expandState = {expandAll} classes={classes}
+                    />
                   </li>
                 )
               },
@@ -106,6 +103,7 @@ async function createPsetsList(element, viewer, classes) {
     </ul>
   )
 }
+
 
 /* eslint-disable max-len*/
 /**
@@ -326,6 +324,10 @@ const useStyles = makeStyles({
     marginBottom: '5px',
   },
   sectionTitle: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItem: 'center',
     maxWidth: '320px',
     overflowWrap: 'break-word',
     fontFamily: 'Helvetica',
@@ -335,7 +337,7 @@ const useStyles = makeStyles({
     paddingLeft: '4px',
     paddingRight: '4px',
     paddingBottom: '10px',
-    borderBottom: ' 1px solid lightgrey',
+    borderBottom: '1px solid lightgrey',
   },
   icons: {
     width: '20px',
