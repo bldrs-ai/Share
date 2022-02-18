@@ -1,31 +1,35 @@
-const MAX_LEVEL = 4
-const MIN_LEVEL = 0
-let DEBUG_LEVEL = MAX_LEVEL
+const VERBOSE = 3
+// eslint-disable-next-line no-unused-vars
+const DEBUG = 1
+const INFO = 1
+const OFF = 0
+let DEBUG_LEVEL = VERBOSE
 
 
 /**
  * Create debug statement.
- * @param {Number} level
+ * @param {Number} level Default is INFO.
  * @return {function} returned function is console.log or a no-op if debugging is turned off
  */
-export default function debug(level = MIN_LEVEL) {
+export default function debug(level = INFO) {
   return level < DEBUG_LEVEL ? console : mockLog
 }
 
 
 /**
- * @param {Number} level From MIN_LEVEL to MAX_LEVEL.
+ * @param {Number} level One of OFF, INFO, DEBUG, VERBOSE.
  */
 export function setDebugLevel(level) {
-  if (!Number.isFinite(level) || level < MIN_LEVEL || level > MAX_LEVEL) {
-    throw new Error(`Debug level must be a number from 0-${MAX_LEVEL}`)
+  if (!Number.isFinite(level) || level < OFF || level > VERBOSE) {
+    throw new Error(`Debug level must be a number from 0-${VERBOSE}`)
   }
   DEBUG_LEVEL = level
 }
 
-/** Equivalent to setDebugLevel(MIN_LEVEL) */
+
+/** Equivalent to setDebugLevel(OFF) */
 export function disableDebug() {
-  setDebugLevel(MIN_LEVEL)
+  setDebugLevel(OFF)
 }
 
 

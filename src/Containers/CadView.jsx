@@ -71,6 +71,7 @@ export default function CadView({
     setShowSearchBar(false)
     setShowItemPanel(false)
     setViewer(initViewer(pathPrefix))
+    debug().log('CadView#useEffect[modelPath], done setting new viewer')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelPath])
 
@@ -82,6 +83,7 @@ export default function CadView({
     }
     debug().log('CadView#useEffect[viewer], calling loadIfc')
     loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    debug().log('CadView#useEffect[viewer], done loading new ifc')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer])
 
@@ -89,6 +91,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect[searchParams]')
     onSearch()
+    debug().log('CadView#useEffect[searchParams]: done')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
@@ -217,15 +220,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
-      const expanded = []
-      /*
-        expanded.pus('84')
-        // need to expand results and parents
-        for (let i in resultIDs) {
-          expanded.push(resultIDs[i] + '')
-        }
-      */
-      setDefaultExpandedElements(expanded)
+      setDefaultExpandedElements(resultIDs.map((id) => id + ''))
       gtag('event', 'search', {
         search_term: query,
       })
@@ -305,6 +300,7 @@ export default function CadView({
     // IPC.
     // console.log('CadView#onElementSelect: in...')
   }
+
 
   return (
     <div className={classes.pageContainer}>
