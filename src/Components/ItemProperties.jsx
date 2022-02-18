@@ -85,7 +85,7 @@ async function createPsetsList(element, viewer, classes) {
               async (ps, ndx) => {
                 return (
                   <li key={ndx} className={classes.section} >
-                    <Accordion className={classes.accordian} defaultExpanded = {false}>
+                    <Accordion className={classes.accordian} defaultExpanded={false}>
                       <AccordionSummary
                         expandIcon={<ExpandIcon className = {classes.icons} />}
                         aria-controls="panel1a-content"
