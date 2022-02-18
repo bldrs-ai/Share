@@ -1,5 +1,4 @@
 import React, {useState} from 'react'
-
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
@@ -10,7 +9,6 @@ import {
 import {stoi} from '../utils/strings'
 import Toggle from './Toggle'
 import ExpansionPanel from './ExpansionPanel'
-
 
 /**
  * @param {Object} viewer
@@ -260,14 +258,7 @@ function row(d1, d2, serial) {
     return (<tr key={serial}><td key={serial + '-double-data'} colSpan="2">{d1}</td></tr>)
   }
   return (
-    <tr key={serial}>
-      <Tooltip title={d1} placement="top">
-        <td>{d1}</td>
-      </Tooltip>
-      <Tooltip title={d2} placement="top">
-        <td key="b">{d2}</td>
-      </Tooltip>
-    </tr>
+    <Row d1 = {d1} d2={d2} serial={serial} />
   )
 }
 
@@ -280,6 +271,30 @@ function row(d1, d2, serial) {
  */
 const dms = (deg, min, sec) => {
   return `${deg}° ${min}' ${sec}''`
+}
+
+/**
+ * Wrapper compoent for a table row
+ * @param {String} d1
+ * @param {String} d2
+ * @param {Number} serial
+ * @return {Object} The react component
+ */
+function Row({d1, d2, serial}) {
+  return (
+    <tr key={serial}>
+      <Tooltip
+        title={d1}
+        placement="top">
+        <td >{d1}</td>
+      </Tooltip>
+      <Tooltip
+        title={d2}
+        placement="top">
+        <td key="b">{d2}</td>
+      </Tooltip>
+    </tr>
+  )
 }
 
 
@@ -315,7 +330,6 @@ const useStyles = makeStyles({
     marginLeft: '10px',
     width: '308px',
     height: '400px',
-    overflow: 'scroll',
     paddingBottom: '30px',
   },
   section: {
@@ -346,7 +360,6 @@ const useStyles = makeStyles({
     maxWidth: '320px',
   },
   accordianDetails: {
-    overflow: 'scroll',
   },
   accordionTitle: {
     width: '200px',
