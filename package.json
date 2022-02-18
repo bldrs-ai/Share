@@ -10,7 +10,8 @@
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
     "lint": "yarn eslint --fix `find src -name '*.jsx'` `find src -name '*.js'`",
-    "test": "jest"
+    "test": "jest",
+    "precommit": "yarn test && yarn lint"
   },
   "dependencies": {
     "@babel/core": "^7.15.5",
