@@ -319,8 +319,8 @@ export default function CadView({
         <div className={classes.searchContainer}>
           {showSearchBar && (
             <SearchBar
-              onClickMenu={() => setShowNavPanel(!showNavPanel)}
-              open={showNavPanel}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              isOpen={showNavPanel}
             />
           )}
         </div>
