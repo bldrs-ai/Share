@@ -28,11 +28,13 @@ module.exports = {
     'semi': ['error', 'never'],
     'max-len': ['error', 100],
     'no-irregular-whitespace': ['error'],
-    'no-trailing-spaces': ['error']
+    'no-trailing-spaces': ['error'],
+    'prefer-rest-params': 'off'
   },
   'settings': {
     'react': {
       'version': 'latest',
     },
   },
+  'reportUnusedDisableDirectives': true
 }

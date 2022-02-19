@@ -5,3 +5,7 @@
 import '@testing-library/jest-dom'
 // Needed for async test
 import 'regenerator-runtime/runtime'
+import {disableDebug} from './utils/debug'
+
+
+disableDebug()
