@@ -10,6 +10,7 @@ import {stoi} from '../utils/strings'
 import Toggle from './Toggle'
 import ExpansionPanel from './ExpansionPanel'
 
+
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets.
  * @param {Object} viewer
@@ -28,7 +29,6 @@ export default function ItemProperties({viewer, element}) {
       setPsetsList(await createPsetsList(element, viewer, classes, expandAll))
     })()
   }, [element, viewer, classes, expandAll])
-
   return (
     <div className={classes.propsContainer}>
       <h2 className={classes.sectionTitle}>Properties</h2>
@@ -134,6 +134,10 @@ async function prettyProps(key, value, viewer, serial = 0) {
           await deref(value[1]),
           await deref(value[2])), serial)
     case 'expressID': return row('Express Id', value, serial)
+    case 'Quantities':
+      return await quantities(key, value, viewer, serial)
+    case 'HasProperties':
+      return await hasProperties(key, value, viewer, serial)
     case 'type':
     case 'CompositionType':
     case 'GlobalId':
@@ -143,12 +147,6 @@ async function prettyProps(key, value, viewer, serial = 0) {
     case 'Representation':
     case 'RepresentationContexts':
     case 'Tag':
-      debug().warn('prettyProps, skipping prop for key: ', key)
-      return null
-    case 'Quantities':
-      return await quantities(key, value, viewer, serial)
-    case 'HasProperties':
-      return await hasProperties(key, value, viewer, serial)
     case 'UnitsInContext':
     case 'Representations':
     default:
@@ -257,9 +255,10 @@ function row(d1, d2, serial) {
   if (d2 === null) {
     return (<tr key={serial}><td key={serial + '-double-data'} colSpan="2">{d1}</td></tr>)
   }
-  return (
-    <Row d1={d1} d2={d2} serial={serial} />
-  )
+  if (typeof d1 === 'object' || d2 === 'object') {
+    return
+  }
+  return <Row d1={d1} d2={d2} serial={serial} />
 }
 
 
@@ -272,6 +271,7 @@ function row(d1, d2, serial) {
 const dms = (deg, min, sec) => {
   return `${deg}° ${min}' ${sec}''`
 }
+
 
 /**
  * Wrapper component for a table row
