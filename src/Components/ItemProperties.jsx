@@ -33,7 +33,7 @@ export default function ItemProperties({viewer, element}) {
     <div className={classes.propsContainer}>
       <h2 className={classes.sectionTitle}>Properties</h2>
       {propTable || 'Loading...'}
-      <h2 className = {classes.sectionTitle}>
+      <h2 className={classes.sectionTitle}>
         <div>Property Sets</div>
         <Toggle onChange = {() => setExpandAll(!expandAll)} />
       </h2>
@@ -91,9 +91,9 @@ async function createPsetsList(element, viewer, classes, expandAll) {
                 return (
                   <li key={ndx} className={classes.section}>
                     <ExpansionPanel
-                      summary = { decodeIFCString(ps.Name.value) || 'Property Set'}
-                      detail = {await createPropertyTable(ps, viewer, 0, true)}
-                      expandState = {expandAll} classes={classes}
+                      summary={ decodeIFCString(ps.Name.value) || 'Property Set'}
+                      detail={await createPropertyTable(ps, viewer, 0, true)}
+                      expandState={expandAll} classes={classes}
                     />
                   </li>
                 )
