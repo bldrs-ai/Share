@@ -179,7 +179,7 @@ async function hasProperties(key, hasPropertiesArr, viewer, serial) {
   }
   return await unpackHelper(hasPropertiesArr, viewer, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
-    const value = dObj.NominalValue === undefined ?
+    const value = (dObj.NominalValue === undefined || dObj.NominalValue == null) ?
       '<error>' :
       decodeIFCString(dObj.NominalValue.value)
     rows.push(row(name, value, serial++ + '-row'))
