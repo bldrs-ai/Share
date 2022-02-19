@@ -13,7 +13,7 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
  * @param {Object} classes styles for the panel
  * @return {Object}
  */
-export default function Property( {detail, summary, expandState, classes}) {
+export default function Property({detail, summary, expandState, classes}) {
   useEffect(()=>setExpand(expandState), [expandState])
   const [expand, setExpand] = useState()
   return (
