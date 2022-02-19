@@ -31,7 +31,7 @@ export default function ItemProperties({viewer, element}) {
 
   return (
     <div className={classes.propsContainer}>
-      <h2 className = {classes.sectionTitle}>Properties</h2>
+      <h2 className={classes.sectionTitle}>Properties</h2>
       {propTable || 'Loading...'}
       <h2 className = {classes.sectionTitle}>
         <div>Property Sets</div>
