@@ -15,9 +15,10 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
 
 
 /**
+ * ItemProperties displays IFC element properties and possibly PropertySets.
  * @param {Object} viewer
  * @param {Object} element
- * @return {Object}
+ * @return {Object} The ItemProperties react component.
  */
 export default function ItemProperties({viewer, element}) {
   const [propTable, setPropTable] = React.useState(null)
@@ -125,10 +126,10 @@ async function prettyProps(key, value, viewer, serial = 0) {
     label = label.substring(3)
   }
   if (value === null || value === undefined || value == '') {
-    console.warn(`prettyProps: undefined value(${value}) for key(${key})`)
+    debug().warn(`prettyProps: undefined value(${value}) for key(${key})`)
     return null
   }
-  console.log('prettyProps, switching on key,value: ', key, value)
+  debug().log('prettyProps, switching on key,value: ', key, value)
   switch (key) {
     case 'Coordinates':
     case 'RefLatitude':
