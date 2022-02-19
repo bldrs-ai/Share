@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react'
-import {useNavigate, useParams} from 'react-router-dom'
-import {makeStyles} from '@mui/styles' // useTheme, see TODO below
+import {useNavigate, useSearchParams} from 'react-router-dom'
+import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
@@ -12,7 +12,16 @@ import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
+import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+
+
+/**
+ * Experimenting with a global. Just calling #indexElement and #clear
+ * when new models load.
+ */
+const searchIndex = new SearchIndex()
+
 
 let count = 0
 /**
@@ -20,110 +29,71 @@ let count = 0
  * nav components.
  * @return {Object}
  */
-export default function CadView({installPrefix, appPrefix, pathPrefix}) {
-  debug().log('CadView#init count: ', count++)
-  const classes = useStyles()
-  const [showSearchBar, setShowSearchBar] = useState(false)
-  const [showNavPanel, setShowNavPanel] = useState(false)
+export default function CadView({
+  installPrefix,
+  appPrefix,
+  pathPrefix,
+  modelPath,
+}) {
+  assertDefined(...arguments)
+  debug().log('CadView#init: count: ', count++)
+
+  // React router
+  const navigate = useNavigate()
+  // TODO(pablo): Removing this setter leads to a very strange stack overflow
   // eslint-disable-next-line no-unused-vars
-  const [showItemPanel, setShowItemPanel] = useState(false)
-  const [showShare, setShowShare] = useState(false)
-  const [viewer, setViewer] = useState({})
+  const [searchParams, setSearchParams] = useSearchParams()
+
+  // IFC
+  const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
+  const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
-  const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
+
+  // UI elts
+  const classes = useStyles()
+  const [showNavPanel, setShowNavPanel] = useState(false)
+  const [showSearchBar, setShowSearchBar] = useState(false)
+  // eslint-disable-next-line no-unused-vars
+  const [showItemPanel, setShowItemPanel] = useState(false)
+  const [showShortCuts, setShowShortCuts] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
-  const onClickShare = () => setShowShare(!showShare)
-  const [searchIndex, setSearchIndex] = useState({clearIndex: () => {}})
-  const [showShortCuts, setShowShortCuts] = useState(false)
-  const [modelPath, setModelPath] = useState(null)
-  const [pathToLoad, setPathToLoad] = useState(null)
-
-  const navigate = useNavigate()
-  const urlParams = useParams()
-  // const theme = useTheme()
 
 
-  // useEffect(()=>{
-  //  if (viewer.context) {
-  //  // TODO: should work
-  //  // viewer.context.renderer.renderer.setClearColor(0xff0000)
-  //  // viewer.context.scene.color = new THREE.Color(0xff0000)
-  //  }
-  // }, [theme])
-
-  /**
-   * On a change to urlParams, setting a new model path will clear the
-   * scene and load the new model IFC.  If there's not a valid IFC,
-   * the helper will redirect to the index file.
-   *
-   * Otherwise, the param change is a sub-path, e.g. the IFC element
-   * path, so no other useEffect is triggered.
-   */
-
+  /** Load the full resolved model path. */
   useEffect(() => {
-    setModelPathOrGotoIndexOrStay()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlParams])// [urlParams, setModelPathOrGotoIndexOrStay]);
-
-
-  /**
-   * If there's a new modelPath set, then a new model needs to be
-   * loaded into the scene.  This is split into two parts:
-   *
-   * 1) clearing the current scene and setting a new IfcViewerAPI.
-   * 2) setting pathToLoad variable which does the new model load.
-   *
-   * TODO: Keeping this logic in the same effect was causing some null
-   * references into the viewer object.
-   */
-  useEffect(() => {
-    if (modelPath == null) {
-      return
-    }
-
+    debug().log('CadView#useEffect[modelPath], setting new viewer')
     setShowNavPanel(false)
     setShowSearchBar(false)
     setShowItemPanel(false)
     setViewer(initViewer(pathPrefix))
-
-    // TODO: maybe push pathToLoad into modelPath.
-    setPathToLoad(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    debug().log('CadView#useEffect[modelPath], done setting new viewer')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [modelPath])
 
 
-  /** Finally, when we have a fully resolved model path to load, load it. */
   useEffect(() => {
-    if (pathToLoad == null) {
+    if (viewer == null) {
+      debug().warn('CadView#useEffect[viewer], viewer is null!')
       return
     }
-    loadIfc(pathToLoad)
+    debug().log('CadView#useEffect[viewer], calling loadIfc')
+    loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    debug().log('CadView#useEffect[viewer], done loading new ifc')
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathToLoad])// [pathToLoad, loadIfc]);
+  }, [viewer])
 
 
-  // Helpers //
-
-  /** A demux to help forward to the index file, load a new model or do nothing. */
-  function setModelPathOrGotoIndexOrStay() {
-    const mp = getModelPath(installPrefix, pathPrefix, urlParams)
-    if (mp === null) {
-      // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/index.ifc')
-      return
-    }
-    if (modelPath === null ||
-        modelPath.filepath && modelPath.filepath != mp.filepath ||
-        modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
-      setModelPath(mp)
-      debug().log('CadView#setModelPathOrGotoIndex: new model path: ', mp)
-    }
-  }
+  useEffect(() => {
+    debug().log('CadView#useEffect[searchParams]')
+    onSearch()
+    debug().log('CadView#useEffect[searchParams]: done')
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
 
   /**
@@ -170,27 +140,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  /**
-   * Select items in model when they are double-clicked.
-   * @param {string} filepath
-   */
-  async function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName == 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item.modelID === undefined || item.id === undefined) return
-        const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-        if (modelPath.gitpath) {
-          navigate(pathPrefix + modelPath.getRepoPath() + path)
-        } else {
-          navigate(pathPrefix + modelPath.filepath + path)
-        }
-        setSelectedElement(item)
-      }
-    }
-  }
-
-
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
     const viewerContainer = document.getElementById('viewer-container')
@@ -212,6 +161,96 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
+  /**
+   * Analyze loaded IFC model to configure UI elements.
+   * @param {Object} rootElt Root of the IFC model.
+   * @param {Object} viewer
+   * @param {string} pathLoaded
+   */
+  function onModelLoad(rootElt, viewer, pathLoaded) {
+    debug().log('CadView#onModelLoad...', rootElt)
+    gtag('event', 'select_content', {
+      content_type: 'ifc_model',
+      item_id: pathLoaded,
+    })
+    setRootElement(rootElt)
+    setupLookupAndParentLinks(rootElt, elementsById)
+    setDoubleClickListener()
+    initSearch(rootElt, viewer)
+    setShowNavPanel(true)
+  }
+
+
+  /**
+   * @param {Object} rootElt Root ifc elment for recursive indexing.
+   * @param {Object} viewer The IfcViewerAPI instance.
+   */
+  function initSearch(rootElt, viewer) {
+    searchIndex.clearIndex()
+    debug().log('CadView#initSearch')
+    debug().time('build searchIndex')
+    searchIndex.indexElement(rootElt, viewer)
+    debug().timeEnd('build searchIndex')
+    debug().log('searchIndex: ', searchIndex)
+    onSearch()
+    setShowSearchBar(true)
+  }
+
+
+  /** Clear active search state and unpick active scene elts. */
+  function clearSearch() {
+    setSelectedElements([])
+    if (viewer) {
+      viewer.IFC.unpickIfcItems()
+    }
+  }
+
+
+  /**
+   * Search for the query in the index and select matching items in UI elts.
+   * @param {string} query The search query.
+   */
+  function onSearch() {
+    const sp = new URLSearchParams(window.location.search)
+    let query = sp.get('q')
+    if (query) {
+      query = query.trim()
+      if (query === '') {
+        throw new Error('CadView#onSearch: empty query in search handler')
+      }
+      const resultIDs = searchIndex.search(query)
+      selectItems(resultIDs)
+      setDefaultExpandedElements(resultIDs.map((id) => id + ''))
+      gtag('event', 'search', {
+        search_term: query,
+      })
+    } else {
+      clearSearch()
+    }
+  }
+
+
+  /**
+   * Select items in model when they are double-clicked.
+   * @param {string} filepath
+   */
+  async function setDoubleClickListener() {
+    window.ondblclick = async (event) => {
+      if (event.target && event.target.tagName == 'CANVAS') {
+        const item = await viewer.IFC.pickIfcItem(true)
+        if (item.modelID === undefined || item.id === undefined) return
+        const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
+        if (modelPath.gitpath) {
+          navigate(pathPrefix + modelPath.getRepoPath() + path)
+        } else {
+          navigate(pathPrefix + modelPath.filepath + path)
+        }
+        setSelectedElement(item)
+      }
+    }
+  }
+
+
   /** Add a clipping plane. */
   function placeCutPlane() {
     viewer.clipper.createPlane()
@@ -222,13 +261,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
   function unSelectItems() {
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
-  }
-
-
-  /** Clear active search state and unpick active scene elts. */
-  function clearSearch() {
-    setSelectedElements([])
-    viewer.IFC.unpickIfcItems()
   }
 
 
@@ -250,26 +282,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
 
 
   /**
-   * Search for the query in the index and select matching items in UI elts.
-   * @param {string} query The search query.
-   */
-  function onSearch(query) {
-    clearSearch()
-    debug().log(`CadView#onSearch: query: ${query}`)
-    query = query.trim()
-    if (query === '') {
-      return
-    }
-
-    const resultIDs = searchIndex.search(query)
-    selectItems(resultIDs)
-    gtag('event', 'search', {
-      search_term: query,
-    })
-  }
-
-
-  /**
    * Select the items in the NavTree and update item properties for ItemPanel.
    * @param {Object} elt The selected IFC element.
    */
@@ -286,52 +298,9 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
-    // console.log('CadView#onElementSelect: in...');
+    // console.log('CadView#onElementSelect: in...')
   }
 
-
-  /**
-   * Analyze loaded IFC model to configure UI elements.
-   * @param {Object} rootElt Root of the IFC model.
-   * @param {Object} viewer
-   * @param {string} pathLoaded
-   */
-  function onModelLoad(rootElt, viewer, pathLoaded) {
-    debug().log('CadView#onModelLoad...')
-    gtag('event', 'select_content', {
-      content_type: 'ifc_model',
-      item_id: pathLoaded,
-    })
-    setRootElement(rootElt)
-    setupLookupAndParentLinks(rootElt, elementsById)
-    const expanded = [rootElt.expressID + '']
-    let elt = rootElt
-    for (let i = 0; i < 3; i++) {
-      if (elt.children.length > 0) {
-        expanded.push(elt.expressID + '')
-        elt = elt.children[0]
-      }
-    }
-    setDefaultExpandedElements(expanded)
-    searchIndex.clearIndex()
-    const index = new SearchIndex(rootElt, viewer)
-    index.indexElement(rootElt)
-    // TODO(pablo): why can't i do:
-    //   setSearchIndex(new SearchIndex(rootElt, viewer));
-    //   searchIndex.indexElement(...);
-    // When I try this searchIndex is actually a promise.
-    setSearchIndex(index)
-    setShowNavPanel(true)
-    setShowSearchBar(true)
-    setDoubleClickListener()
-  }
-
-
-  // TODO(pablo): search suggest
-  const onSearchModify = (query) => {}
-
-
-  const isLoaded = Object.keys(rootElement).length === 0
 
   return (
     <div className={classes.pageContainer}>
@@ -341,7 +310,6 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
       <div className={classes.menusWrapper}>
         <ToolBar
           fileOpen={loadLocalFile}
-          onClickShare={onClickShare}
           offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
@@ -351,11 +319,8 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
         <div className={classes.searchContainer}>
           {showSearchBar && (
             <SearchBar
-              onSearch={onSearch}
-              onSearchModify={onSearchModify}
-              onClickMenu={() => setShowNavPanel(!showNavPanel)}
-              disabled={isLoaded}
-              open={showNavPanel}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              isOpen={showNavPanel}
             />
           )}
         </div>
@@ -401,6 +366,7 @@ export default function CadView({installPrefix, appPrefix, pathPrefix}) {
  * @return {Object} IfcViewerAPI viewer
  */
 function initViewer(pathPrefix) {
+  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix)
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
@@ -436,57 +402,6 @@ function initViewer(pathPrefix) {
   }
 
   return viewer
-}
-
-
-/**
- * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
- *
- * Format is either a reference within this project's serving directory:
- *   {filepath: '/file.ifc'}
- *
- * or a global GitHub path:
- *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
- *
- * @param {string} installPrefix e.g. /share
- * @param {string} pathPrefix e.g. /share/v/p
- * @param {Object} urlParams e.g. .../:org/:repo/:branch/*
- * @return {Object}
- */
-function getModelPath(installPrefix, pathPrefix, urlParams) {
-  // TODO: combine modelPath methods into class.
-  let m = null
-  let filepath = urlParams['*']
-  if (filepath == '') {
-    return null
-  }
-  const parts = filepath.split('.ifc')
-  filepath = '/' + parts[0] + '.ifc' // TODO(pablo)
-  if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
-    // * param is defined in ../Share.jsx, e.g.:
-    //   /v/p/*.  It should be only the filename.
-    // Filepath is a reference rooted in the serving directory.
-    // e.g. /haus.ifc or /ifc-files/haus.ifc
-    m = {
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    debug().log('CadView#getModelPath: is a project file: ', m)
-  } else if (pathPrefix.endsWith('/gh')) {
-    m = {
-      org: urlParams['org'],
-      repo: urlParams['repo'],
-      branch: urlParams['branch'],
-      filepath: filepath,
-      eltPath: parts[1],
-    }
-    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
-    m.gitpath = `https://raw.githubusercontent.com${m.getRepoPath()}`
-    debug().log('CadView#getModelPath: is a remote GitHub file: ', m)
-  } else {
-    throw new Error('Empty view type from pathPrefix')
-  }
-  return m
 }
 
 

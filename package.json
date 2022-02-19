@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r307",
+  "version": "0.1.0-r296",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
@@ -9,8 +9,9 @@
     "copy-web-asm": "cp node_modules/web-ifc/web-ifc.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
-    "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
-    "test": "jest"
+    "lint": "yarn eslint --fix `find src -name '*.jsx'` `find src -name '*.js'`",
+    "test": "jest",
+    "precommit": "yarn test && yarn lint"
   },
   "dependencies": {
     "@babel/core": "^7.15.5",
@@ -21,7 +22,6 @@
     "@mui/material": "^5.0.1",
     "@mui/styled-engine": "^5.0.1",
     "@mui/styles": "^5.1.0",
-    "jsonata": "^1.8.5",
     "normalize.css": "^8.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
@@ -56,7 +56,7 @@
     "testEnvironment": "jsdom",
     "testPathIgnorePatterns": [
       "src/Share.test.js",
-      "src/BaseRoutes.test.jsx"
+      "src/ShareRoutes.test.js"
     ],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",

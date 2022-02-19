@@ -4,6 +4,7 @@ import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/3D/attention.svg'
 
+
 /**
  * Button to toggle About panel on and off
  * @param {Number} offsetTop offset tree element
@@ -19,17 +20,19 @@ export default function AboutControl({offsetTop}) {
       }}>About</Typography>
       {open && <AboutPanel openToggle={()=>{
         setOpen(!open)
-      }} offsetTop={offsetTop}/>}
+      }} offsetTopCssStr={offsetTop}/>}
     </div>)
 }
 
+
 /**
  * About Panel component
- * @param {string} offset tree element
- * @return {Component} componet
+ * @param {boolean} openToggle Reactive toggle state for panel.
+ * @param {string} offsetTopCssStr
+ * @return {Component} The AboutPanel react component.
  */
-function AboutPanel({openToggle, offsetTop}) {
-  const classes = useStyles({offsetTop: offsetTop})
+function AboutPanel({openToggle, offsetTopCssStr}) {
+  const classes = useStyles({offsetTop: offsetTopCssStr})
 
   return (
     <div className = {classes.container}
@@ -56,6 +59,7 @@ function AboutPanel({openToggle, offsetTop}) {
     </div>
   )
 }
+
 
 const useStyles = makeStyles({
   container: {
@@ -134,5 +138,3 @@ const useStyles = makeStyles({
     },
   },
 })
-
-

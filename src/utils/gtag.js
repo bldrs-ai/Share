@@ -5,7 +5,7 @@ window.dataLayer = window['dataLayer'] || []
 export default function gtag() {
   const dataLayer = window.dataLayer
   // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Functions/arguments
-  // eslint-disable-next-line
+
   dataLayer.push()
 }
 gtag('js', new Date())

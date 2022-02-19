@@ -1,5 +1,6 @@
 import {stoi} from './strings'
 
+
 /**
  * Check whether both type and value properties are defined and non-null on the object.
  * @param {Object} obj IFC element.
@@ -18,7 +19,8 @@ export function isTypeValue(obj) {
  */
 export function getType(elt, viewer) {
   const ifcMgr = viewer.IFC.loader.ifcManager
-  return ifcMgr.getIfcType(0, elt.expressID)
+  const id = elt.expressID
+  return ifcMgr.getIfcType(0, id)
 }
 
 /**

@@ -1,71 +1,74 @@
-import React, {createContext, useState, useMemo} from 'react'
-import {
-  Outlet,
-  Routes,
-  Route,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom'
+import React, {
+  createContext,
+  useMemo,
+  useEffect,
+  useState,
+} from 'react'
+import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider, createTheme} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import debug from './utils/debug'
 import 'normalize.css'
 
+// TODO: This isn't used.
+// If icons-material isn't imported somewhere, mui dies
+/* eslint-disable */
+import AccountCircle from '@mui/icons-material/AccountCircle'
+/* eslint-enable */
+
 
 /**
- * Forward page from /share to /share/v/p per spect at:
- *   https://github.com/buildrs/Share/wiki/URL-Structure
- * @return {Object}
+ * Handles path demuxing to pass to CadView.
+ * @param {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
+ * @param {string} appPrefix e.g. /share is the prefix for this component.
+ * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
+ * @return {Object} The Share react component.
  */
-function Forward({appPrefix}) {
-  const location = useLocation()
+export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
-  React.useEffect(() => {
-    debug().log('Share.jsx: should forward?: ', location)
-    if (location.pathname == appPrefix) {
-      const dest = appPrefix + '/v/p'
-      debug().log('Share.jsx: Base: forwarding to: ', dest)
-      navigate(dest)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-  return <Outlet />
-}
-
-/**
- * For URL design see: https://github.com/buildrs/Share/wiki/URL-Structure
- *
- * A new model path will cause a new instance of CadView to be
- * instantiated, including a new IFC.js viewer.  Thus, each model has
- * its own IFC.js/three.js context.
- *
- * For example, a first page load of:
- *
- *   .../v/p/haus.ifc
- *
- * will load a new instance of CadView for that path.  Changing the path to:
- *
- *   .../v/p/tinyhouse.ifc
- *
- * will load a second new instance fot that path.
- *
- * Examples for this component:
- *   http://host/share/v/p/haus.ifc
- *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
- *                    ^... here on handled by this component's paths.
- *              ^... path to the component in BaseRoutes.jsx.
- * @return {Object}
- */
-export default function Share({installPrefix, appPrefix}) {
+  const urlParams = useParams()
+  const [modelPath, setModelPath] = useState(null)
   const [mode, setMode] = useState('light')
+
+
+  /**
+   * On a change to urlParams, setting a new model path will clear the
+   * scene and load the new model IFC.  If there's not a valid IFC,
+   * the helper will redirect to the index file.
+   *
+   * Otherwise, the param change is a sub-path, e.g. the IFC element
+   * path, so no other useEffect is triggered.
+   */
+  useEffect(() => {
+    onChangeUrlParams()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [urlParams])
+
+
+  /** A demux to help forward to the index file, load a new model or do nothing. */
+  function onChangeUrlParams() {
+    const mp = getModelPath(installPrefix, pathPrefix, urlParams)
+    if (mp === null) {
+      // TODO: probe for index.ifc
+      navigate(appPrefix + '/v/p/index.ifc')
+      return
+    }
+    if (modelPath === null ||
+        modelPath.filepath && modelPath.filepath != mp.filepath ||
+        modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
+      setModelPath(mp)
+      debug().log('Share#onChangeUrlParams: new model path: ', mp)
+    }
+  }
+
+
   const colorMode = useMemo(
       () => ({
         toggleColorMode: () => {
           setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'))
         },
-      }),
-      [],
-  )
+      }), [])
+
 
   const theme = useMemo(() => {
     return createTheme({
@@ -87,46 +90,70 @@ export default function Share({installPrefix, appPrefix}) {
     })
   }, [mode])
 
+
   return (
-    <ColorModeContext.Provider value={colorMode}>
+    modelPath && <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
-        <Routes>
-          <Route path='/' element={<Forward appPrefix={appPrefix} />}>
-            <Route
-              path='v/new/*'
-              element={
-                <CadView
-                  installPrefix={installPrefix}
-                  appPrefix={appPrefix}
-                  pathPrefix={appPrefix + '/v/new'}
-                />
-              }
-            />
-            <Route
-              path='v/p/*'
-              element={
-                <CadView
-                  installPrefix={installPrefix}
-                  appPrefix={appPrefix}
-                  pathPrefix={appPrefix + '/v/p'}
-                />
-              }
-            />
-            <Route
-              path='v/gh/:org/:repo/:branch/*'
-              element={
-                <CadView
-                  installPrefix={installPrefix}
-                  appPrefix={appPrefix}
-                  pathPrefix={appPrefix + '/v/gh'}
-                />
-              }
-            />
-          </Route>
-        </Routes>
+        <CadView
+          installPrefix={installPrefix}
+          appPrefix={appPrefix}
+          pathPrefix={pathPrefix}
+          modelPath={modelPath}
+        />
       </ThemeProvider>
     </ColorModeContext.Provider>
   )
+}
+
+
+/**
+ * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
+ *
+ * Format is either a reference within this project's serving directory:
+ *   {filepath: '/file.ifc'}
+ *
+ * or a global GitHub path:
+ *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
+ *
+ * @param {string} installPrefix e.g. /share
+ * @param {string} pathPrefix e.g. /share/v/p
+ * @param {Object} urlParams e.g. .../:org/:repo/:branch/*
+ * @return {Object}
+ */
+function getModelPath(installPrefix, pathPrefix, urlParams) {
+  // TODO: combine modelPath methods into class.
+  let m = null
+  let filepath = urlParams['*']
+  if (filepath == '') {
+    return null
+  }
+  const parts = filepath.split('.ifc')
+  filepath = '/' + parts[0] + '.ifc' // TODO(pablo)
+  if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
+    // * param is defined in ../Share.jsx, e.g.:
+    //   /v/p/*.  It should be only the filename.
+    // Filepath is a reference rooted in the serving directory.
+    // e.g. /haus.ifc or /ifc-files/haus.ifc
+    m = {
+      filepath: filepath,
+      eltPath: parts[1],
+    }
+    debug().log('Share#getModelPath: is a project file: ', m)
+  } else if (pathPrefix.endsWith('/gh')) {
+    m = {
+      org: urlParams['org'],
+      repo: urlParams['repo'],
+      branch: urlParams['branch'],
+      filepath: filepath,
+      eltPath: parts[1],
+    }
+    m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
+    m.gitpath = `https://raw.githubusercontent.com${m.getRepoPath()}`
+    debug().log('Share#getModelPath: is a remote GitHub file: ', m)
+  } else {
+    throw new Error('Empty view type from pathPrefix')
+  }
+  return m
 }
 
 
