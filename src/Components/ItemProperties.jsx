@@ -35,7 +35,7 @@ export default function ItemProperties({viewer, element}) {
       {propTable || 'Loading...'}
       <h2 className={classes.sectionTitle}>
         <div>Property Sets</div>
-        <Toggle onChange = {()=>setExpandAll(!expandAll)} />
+        <Toggle onChange={()=>setExpandAll(!expandAll)} />
       </h2>
       {psetsList || 'Loading...'}
     </div>)
