@@ -53,7 +53,7 @@ export default function ItemProperties({viewer, element}) {
 async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
   return (
     <table key={serial + '-table'}>
-      <tbody>
+      <tbody key={serial + '-body'}>
         {
           await Promise.all(
               Object.keys(props)
