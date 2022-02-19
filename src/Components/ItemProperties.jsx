@@ -81,10 +81,8 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
  */
 async function createPsetsList(element, viewer, classes, expandAll) {
   const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID)
-
   return (
     <ul className={classes.psetsList}>
-
       {await Promise.all(
           psets.map(
               async (ps, ndx) => {
