@@ -1,12 +1,12 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r315",
+  "version": "0.1.0-r316",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
     "clean": "rm -rf docs ; cp -r public docs",
     "new-version": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",
-    "copy-web-asm": "cp node_modules/web-ifc/web-ifc.wasm public/static/js",
+    "copy-web-asm": "cp node_modules/web-ifc/*.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
     "lint": "yarn eslint --fix `find src -name '*.jsx'` `find src -name '*.js'`",
@@ -27,7 +27,7 @@
     "react-dom": "^17.0.2",
     "react-router-dom": "^6.0.2",
     "three": "^0.135",
-    "web-ifc-viewer": "^1.0.106",
+    "web-ifc-viewer": "^1.0.137",
     "web-vitals": "^2.1.0"
   },
   "devDependencies": {
@@ -37,19 +37,18 @@
     "@testing-library/jest-dom": "^5.15.0",
     "@testing-library/react": "^12.1.2",
     "babel-jest": "^27.4.4",
-    "canvas": "^2.8.0",
-    "esbuild": "^0.13.14",
-    "esbuild-plugin-svgr": "^0.0.3",
+    "canvas": "~2.8.0",
+    "esbuild": "^0.14.22",
+    "esbuild-plugin-svgr": "^1.0.0",
     "eslint": "^8.8.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-jsx-a11y": "^6.5.1",
     "eslint-plugin-react": "^7.28.0",
     "eslint-plugin-react-hooks": "^4.3.0",
-    "gl": "^4.9.2",
+    "gl": "^5.0.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
-    "jsdom": "^18.0.1",
-    "regenerator-runtime": "^0.13.9"
+    "jsdom": "^19.0.0"
   },
   "jest": {
     "verbose": false,
