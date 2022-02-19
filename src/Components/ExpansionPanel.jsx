@@ -6,7 +6,8 @@ import Typography from '@mui/material/Typography'
 import ExpandIcon from '../assets/ExpandIcon.svg'
 
 
-/** Expansion panels are used to package property sets
+/**
+ * Expansion panels are used to package property sets
  * @param {string} detail title of the panel
  * @param {string} summary content of the panel
  * @param {boolean} expandState global control of the panel
@@ -14,13 +15,13 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
  * @return {Object}
  */
 export default function Property({detail, summary, expandState, classes}) {
-  useEffect(()=>setExpand(expandState), [expandState])
+  useEffect(() => setExpand(expandState), [expandState])
   const [expand, setExpand] = useState()
   return (
     <Accordion
       className={classes.accordian}
       expanded={expand === true}
-      onChange={()=>setExpand(!expand)}>
+      onChange={() => setExpand(!expand)}>
       <AccordionSummary
         expandIcon={<ExpandIcon className={classes.icons} />}
         aria-controls="panel1a-content"
