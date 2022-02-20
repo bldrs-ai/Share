@@ -36,7 +36,7 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
-  debug().log('CadView#init: count: ', count++)
+  debug().log('CadView#init: COUNT: ', count++)
 
   // React router
   const navigate = useNavigate()
