@@ -1,6 +1,6 @@
 import React from 'react'
 import IconButton from '@mui/material/IconButton'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Settings from './Settings'
 import AboutControl from './AboutPanel'
 import Open from '../assets/2D/Open.svg'
