@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
@@ -11,7 +11,7 @@ import About from '../assets/3D/attention.svg'
  * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
-  const [open, setOpen]=React.useState(true)
+  const [open, setOpen]=useState(true)
   const classes = useStyles()
   return (
     <div >
@@ -63,7 +63,7 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
 
 const useStyles = makeStyles({
   container: {
-    position: 'absolute',
+    position: 'fixed',
     top: '0px',
     left: '0px',
     width: '100%',

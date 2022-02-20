@@ -5,8 +5,8 @@ import TreeView from '@mui/lab/TreeView'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
-import NodeClosed from '../assets/3D/nodeClosed.svg'
-import NodeOpen from '../assets/3D/nodeOpen.svg'
+import NodeClosed from '../assets/2D/NodeClosed.svg'
+import NodeOpen from '../assets/2D/NodeOpened.svg'
 
 
 /**
@@ -88,7 +88,7 @@ export default function NavPanel({
 const useStyles = makeStyles({
   contextualMenu: {
     'position': 'absolute',
-    'top': '90px',
+    'top': '80px',
     'left': '23px',
     'overflow': 'auto',
     'width': '308px',

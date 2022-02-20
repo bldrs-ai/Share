@@ -3,6 +3,44 @@ import Drawer from '@mui/material/Drawer'
 import Close from '../assets/Close.svg'
 import {makeStyles} from '@mui/styles'
 
+
+const ItemPropertiesDrawer = ({
+  title,
+  onClose,
+  content,
+  open,
+}) => {
+  const classes = useStyles()
+  const anchor = window.innerWidth > 500?'right':'bottom'
+
+  return (
+    <>
+      <React.Fragment key={'right'}>
+        <Drawer
+          elevation={3}
+          anchor={anchor}
+          open={true || open}
+          variant='persistent'
+          classes={{paper: classes.drawerPaper}}
+        >
+          <div className ={classes.drawerContainer}>
+            <div className={classes.headerWrapper} >
+              <div className={classes.title}>{title}</div>
+              <div className = {classes.closeContainer}>
+                <Close className={classes.close} onClick={onClose}/>
+              </div>
+            </div>
+            <div className = {classes.contentContainer}>
+              {content}
+            </div>
+          </div>
+        </Drawer>
+      </React.Fragment>
+    </>
+  )
+}
+
+
 const useStyles = makeStyles({
   drawerPaper: {
     'marginTop': '0px',
@@ -44,6 +82,7 @@ const useStyles = makeStyles({
   closeContainer: {
     'position': 'relative',
     'right': '20px',
+    'top': '4px',
     '@media (max-width: 900px)': {
       maxHeight: '200px',
       right: '20px',
@@ -56,8 +95,8 @@ const useStyles = makeStyles({
     'zIndex': 1000,
     'cursor': 'pointer',
     '@media (max-width: 900px)': {
-      height: '30px',
-      width: '30px',
+      height: '20px',
+      width: '20px',
     },
   },
   contentContainer: {
@@ -72,43 +111,5 @@ const useStyles = makeStyles({
     },
   },
 })
-
-
-const ItemPropertiesDrawer = ({
-  title,
-  onClose,
-  content,
-  open,
-}) => {
-  const classes = useStyles()
-  const anchor = window.innerWidth > 500?'right':'bottom'
-
-  return (
-    <>
-      <React.Fragment key={'right'}>
-        <Drawer
-          elevation={3}
-          anchor={anchor}
-          open={true || open}
-          variant='persistent'
-          classes={{paper: classes.drawerPaper}}
-        >
-          <div className ={classes.drawerContainer}>
-            <div className={classes.headerWrapper} >
-              <div className={classes.title}>{title}</div>
-              <div className = {classes.closeContainer}>
-                <Close className={classes.close} onClick={onClose}/>
-              </div>
-            </div>
-
-            <div className = {classes.contentContainer}>
-              {content}
-            </div>
-          </div>
-        </Drawer>
-      </React.Fragment>
-    </>
-  )
-}
 
 export default ItemPropertiesDrawer

@@ -4,17 +4,16 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelButton from '../Components/ItemPanel'
+import ItemPanelControl from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-// import ToolBar from '../Components/ToolBar'
+import InfoGroup from '../Components/InfoGroup'
 import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-// import LogoLight from '../assets/3D/logo6.svg'
 import LogoDark from '../assets/3D/logo6.svg'
 
 
@@ -143,24 +142,24 @@ export default function CadView({
 
 
   /** Upload a local IFC file for display. */
-  // function loadLocalFile() {
-  //   const viewerContainer = document.getElementById('viewer-container')
-  //   const fileInput = document.createElement('input')
-  //   fileInput.setAttribute('type', 'file')
-  //   fileInput.classList.add('file-input')
-  //   fileInput.addEventListener(
-  //       'change',
-  //       (event) => {
-  //         let ifcUrl = URL.createObjectURL(event.target.files[0])
-  //         const parts = ifcUrl.split('/')
-  //         ifcUrl = parts[parts.length - 1]
-  //         navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
-  //       },
-  //       false,
-  //   )
-  //   viewerContainer.appendChild(fileInput)
-  //   fileInput.click()
-  // }
+  function loadLocalFile() {
+    const viewerContainer = document.getElementById('viewer-container')
+    const fileInput = document.createElement('input')
+    fileInput.setAttribute('type', 'file')
+    fileInput.classList.add('file-input')
+    fileInput.addEventListener(
+        'change',
+        (event) => {
+          let ifcUrl = URL.createObjectURL(event.target.files[0])
+          const parts = ifcUrl.split('/')
+          ifcUrl = parts[parts.length - 1]
+          navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
+        },
+        false,
+    )
+    viewerContainer.appendChild(fileInput)
+    fileInput.click()
+  }
 
 
   /**
@@ -310,9 +309,6 @@ export default function CadView({
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
       <div className={classes.menusWrapper}>
-        {/* <ToolBar
-          fileOpen={loadLocalFile}
-          offsetTop={PANEL_TOP}/> */}
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
@@ -341,14 +337,13 @@ export default function CadView({
             }
           />}
         <div className={classes.itemPanelContainer}>
-          <ItemPanelButton
+          <ItemPanelControl
             viewer={viewer}
             element={selectedElement}
-            close = {()=>setShowItemPanel(false)}
             topOffset = {PANEL_TOP}
             placeCutPlane = {()=>placeCutPlane()}
             unSelectItem = {()=>unSelectItems()}
-            toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}/>
+          />
         </div>
         <div className={classes.iconGroup}>
           <IconGroup
@@ -357,7 +352,10 @@ export default function CadView({
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
           />
         </div>
-        <LogoDark className = {classes.logo}/>:
+        <LogoDark className = {classes.logo}/>
+        <div className = {classes.infoGroup}>
+          <InfoGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
+        </div>
       </div>
     </div>
   )
@@ -409,7 +407,7 @@ function initViewer(pathPrefix) {
 
 
 const PANEL_TOP = 20
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles(() => ({
   pageContainer: {
     position: 'absolute',
     top: '0px',
@@ -484,14 +482,14 @@ const useStyles = makeStyles((theme) => ({
   },
   iconGroup: {
     'position': 'absolute',
-    'bottom': `40px`,
-    'right': '20px',
+    'bottom': '400px',
+    'right': '6px',
     'border': 'none',
-    'zIndex': 1000,
+    'zIndex': 0,
     '@media (max-width: 900px)': {
-      bottom: `0px`,
-      top: '62px',
-      right: '12px',
+      'bottom': `0px`,
+      'top': '62px',
+      'right': '28px',
     },
   },
   logo: {
@@ -501,9 +499,17 @@ const useStyles = makeStyles((theme) => ({
     'width': '200px',
     '@media (max-width: 900px)': {
       position: 'absolute',
-      bottom: '30px',
+      bottom: '28px',
       left: '26px',
-      width: '100px',
+      width: '140px',
+    },
+  },
+  infoGroup: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'right': '20px',
+    '@media (max-width: 900px)': {
+      'bottom': `20px`,
     },
   },
 }))

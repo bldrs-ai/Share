@@ -4,8 +4,8 @@ import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import ShortcutsControl from './ShortcutsPanel'
 import GuidePanelControl from './GuidePanel'
-import CutPlane from '../assets/3D/cutplane.svg'
-import Delete from '../assets/3D/clear.svg'
+import CutPlane from '../assets/2D/CutPlane.svg'
+import Delete from '../assets/2D/Delete.svg'
 
 
 /**
@@ -22,7 +22,7 @@ export default function IconGroup({placeCutPlane, unSelectItem, toggleShortCutsP
       { width > 500 ?
           <div className = {classes.container}>
             <ShortcutsControl />
-            <Tooltip title="Clear Selection" placement="left">
+            <Tooltip title="Clear Selection" placement="top">
               <IconButton onClick ={unSelectItem} aria-label="cutPlane" size="small">
                 <Delete className = {classes.icon}/>
               </IconButton>
@@ -51,21 +51,16 @@ export default function IconGroup({placeCutPlane, unSelectItem, toggleShortCutsP
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '40px',
-    'paddingTop': '5px',
-    'paddingBottom': '5px',
-    'height': 'auto',
+    'width': '80px',
     'display': 'flex',
     'flexDirection': 'column',
-    'justifyContent': 'space-around',
+    'justifyContent': 'space-between',
     'alignItems': 'center',
-    'borderRadius': '20px',
-    'backgroundColor': '#D8D8D8',
-    'boxShadow': '2px 2px 8px #888888',
     'zIndex': 10,
     '@media (max-width: 900px)': {
-      background: 'none',
-      boxShadow: 'none',
+      'width': '10px',
+      'flexDirection': 'column',
+      'justifyContent': 'space-between',
     },
   },
   icon: {

@@ -3,7 +3,7 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Close from '../assets/3D/clear.svg'
-import Question from '../assets/3D/help.svg'
+import Question from '../assets/2D/Question.svg'
 
 
 /**

@@ -6,7 +6,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
 import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
-import SettingsIcon from '../assets/3D/more.svg'
+import SettingsIcon from '../assets/2D/Settings.svg'
 
 
 /**
@@ -54,7 +54,7 @@ export default function Settings({toggleTheme, mode}) {
         style = {{height: 180}}
         PaperProps={{
           style: {
-            transform: 'translateX(12px) translateY(50px)',
+            transform: 'translateX(-6px) translateY(-52px)',
           },
         }}
       >

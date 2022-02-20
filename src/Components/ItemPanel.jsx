@@ -11,7 +11,7 @@ import MenuButton from '../Components/MenuButton'
  * @param {Number} topOffset
  * @return {Object}
  */
-export default function ItemPanelButton({viewer, element, topOffset}) {
+export default function ItemPanelControl({viewer, element, topOffset}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
   return (
