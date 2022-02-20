@@ -30,7 +30,6 @@ test('IfcManager.getType', () => {
     expressID: 1,
     Name: 'Building',
   }
-  // expect(getType(new MockViewer().IFC.loader.ifcManager, elt)).toEqual('IFCELEMENT')
   expect(getType(new MockModel, elt)).toEqual('IFCELEMENT')
 })
 

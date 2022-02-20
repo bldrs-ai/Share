@@ -20,7 +20,6 @@ export function isTypeValue(obj) {
  * @return {string} String representation of an IFC element type, e.g. 'IFCELEMENT'
  */
 export function getType(model, elt) {
-  // return model.ifcManager.getIfcType(0, elt.expressID)
   return model.getIfcType(elt.expressID)
 }
 
