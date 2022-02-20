@@ -72,7 +72,7 @@ export default function CadView({
 
   useEffect(() => {
     (async () => {
-      onViewer()
+      await onViewer()
     })()
   }, [viewer])
 
