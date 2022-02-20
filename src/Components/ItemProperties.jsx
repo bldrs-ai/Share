@@ -255,9 +255,9 @@ function row(d1, d2, serial) {
   if (d2 === null) {
     return (<tr key={serial}><td key={serial + '-double-data'} colSpan="2">{d1}</td></tr>)
   }
-  //BUG FIX: temporary fix for issue #93
+  // BUG FIX: temporary fix for issue #93
   if (typeof d1 === 'object' || typeof d2 === 'object') {
-   return
+    return
   }
   return <Row d1={d1} d2={d2} serial={serial} />
 }
