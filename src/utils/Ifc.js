@@ -11,26 +11,27 @@ export function isTypeValue(obj) {
   return obj['type'] != null && obj['value'] != null
 }
 
+
 /**
  * Get the IFC type.
+ * @param {Object} model IFC model.
  * @param {Object} elt IFC element.
- * @param {Object} viewer Instance of a viewer.
  * @return {string} String representation of an IFC element type, e.g. 'IFCELEMENT'
  */
-export function getType(elt, viewer) {
-  const ifcMgr = viewer.IFC.loader.ifcManager
-  const id = elt.expressID
-  return ifcMgr.getIfcType(0, id)
+export function getType(model, elt) {
+  // return model.ifcManager.getIfcType(0, elt.expressID)
+  return model.getIfcType(elt.expressID)
 }
+
 
 /**
  * Format the type, e.g. given an element of type 'IFCANNOTATION' return 'Note'.
+ * @param {Object} model IFC model.
  * @param {Object} elt IFC element.
- * @param {Object} viewer Instance of a viewer.
  * @return {string} A nice human-readable string of the element type of the given element.
  */
-export function prettyType(elt, viewer) {
-  switch (getType(elt, viewer)) {
+export function prettyType(model, elt) {
+  switch (getType(model, elt)) {
     case 'IFCANNOTATION': return 'Note'
     case 'IFCBEAM': return 'Beam'
     case 'IFCBUILDING': return 'Building'
@@ -55,6 +56,7 @@ export function prettyType(elt, viewer) {
   }
 }
 
+
 /**
  * Helper to get the named property value from the given element,
  * or else undefined. Equivalent to `element[propertyName].value`, but with checks.
@@ -71,6 +73,7 @@ function getValueOrUndefined(element, propertyName) {
   return undefined
 }
 
+
 /**
  * Return the name of the given element if it exists otherwise null.
  * @param {Object} elt IFC element.
@@ -80,13 +83,14 @@ export function getName(elt) {
   return elt.Name ? elt.Name.value.trim() : null
 }
 
+
 /**
  * Return legible name.
+ * @param {Object} model IFC model.
  * @param {Object} element IFC element.
- * @param {Object} viewer IFC viewer.
  * @return {string} A human-readable name.
  */
-export function reifyName(element, viewer) {
+export function reifyName(model, element) {
   if (element.LongName) {
     if (element.LongName.value) {
       return decodeIFCString(element.LongName.value.trim())
@@ -96,8 +100,9 @@ export function reifyName(element, viewer) {
       return decodeIFCString(element.Name.value.trim())
     }
   }
-  return prettyType(element, viewer) + ''
+  return prettyType(model, element) + ''
 }
+
 
 /**
  * Get the 'Description' property of the given element.
@@ -132,13 +137,13 @@ export function decodeIFCString(ifcString) {
 
 /**
  * Recursive dereference of nested IFC. If ref.type is (1-4), viewer and typeValCb will not be used.
- * @param {Object} ref The element to dereference.
- * @param {Object} viewer Instance of IfcViewerApi.
- * @param {Number} serial Serial number for react IDs.
+ * @param {Object} ref The element to dereference
+ * @param {Object} model IFC model
+ * @param {Number} serial Serial number for react IDs
  * @param {function} typeValCb async callback for rendering sub-object
  * @return {any} A flattened version of the referenced element.  TODO(pablo): clarify type.
  */
-export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
+export async function deref(ref, model = null, serial = 0, typeValCb = null) {
   if (ref === null || ref === undefined) {
     throw new Error('Ref undefined or null: ', ref)
   }
@@ -149,10 +154,10 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
       case 3: return ref.value // no idea.. values are typically in CAPS
       case 4: return ref.value // typically measures of space, time or angle.
       case 5: {
-        // TODO, only recursion uses the viewer, serial.
+        // TODO, only recursion uses the model, serial.
         const refId = stoi(ref.value)
         return await typeValCb(
-            await viewer.getProperties(0, refId), viewer, serial)
+            await model.getItemProperties(refId), model, serial)
       }
       default:
         return 'Unknown type: ' + ref.value
@@ -160,8 +165,8 @@ export async function deref(ref, viewer = null, serial = 0, typeValCb = null) {
   } else if (Array.isArray(ref)) {
     return (await Promise.all(ref.map(
         async (v, ndx) => isTypeValue(v) ?
-        await deref(v, viewer, ndx, typeValCb) :
-        await typeValCb(v, viewer, ndx),
+        await deref(v, model, ndx, typeValCb) :
+        await typeValCb(v, model, ndx),
     )))
   }
   if (typeof ref === 'object') {

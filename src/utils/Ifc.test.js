@@ -1,4 +1,4 @@
-import {MockViewer} from './IfcMock.test'
+import {MockViewer, MockModel} from './IfcMock.test'
 import {
   decodeIFCString,
   deref,
@@ -30,7 +30,8 @@ test('IfcManager.getType', () => {
     expressID: 1,
     Name: 'Building',
   }
-  expect(getType(elt, new MockViewer)).toEqual('IFCELEMENT')
+  // expect(getType(new MockViewer().IFC.loader.ifcManager, elt)).toEqual('IFCELEMENT')
+  expect(getType(new MockModel, elt)).toEqual('IFCELEMENT')
 })
 
 
@@ -64,7 +65,7 @@ test('deref reference typeVal', async () => {
     value: 0,
   }
   expect(isTypeValue(tv)).toBeTruthy()
-  expect(await deref(tv, new MockViewer({
+  expect(await deref(tv, new MockModel({
     0: {
       type: 1,
       value: label,

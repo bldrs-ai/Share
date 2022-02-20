@@ -40,7 +40,7 @@ const NavTreePropTypes = {
 }
 
 const NavTree = ({
-  viewer,
+  model,
   element,
   pathPrefix,
   onElementSelect,
@@ -128,14 +128,13 @@ const NavTree = ({
     return <TreeItem ContentComponent={CustomContent} {...props} />
   }
 
-
   let i = 0
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
-      label={reifyName(element, viewer)}
+      label={reifyName(model, element)}
       onClick={() => onElementSelect(element)}
     >
       {element.children && element.children.length > 0 ?
@@ -144,7 +143,7 @@ const NavTree = ({
           return (
             <React.Fragment key={childKey}>
               <NavTree
-                viewer={viewer}
+                model={model}
                 element={child}
                 pathPrefix={pathPrefix}
                 onElementSelect={onElementSelect}

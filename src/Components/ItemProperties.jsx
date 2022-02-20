@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useEffect, useState} from 'react'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -16,20 +16,23 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
 
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets.
- * @param {Object} viewer
+ * @param {Object} model
  * @param {Object} element
  * @return {Object} The ItemProperties react component.
  */
-export default function ItemProperties({viewer, element}) {
-  const [propTable, setPropTable] = React.useState(null)
-  const [psetsList, setPsetsList] = React.useState(null)
+export default function ItemProperties({model, element}) {
+  const [propTable, setPropTable] = useState(null)
+  const [psetsList, setPsetsList] = useState(null)
   const classes = useStyles({})
-  React.useEffect(() => {
+
+
+  useEffect(() => {
     (async () => {
-      setPropTable(await createPropertyTable(element, viewer))
-      setPsetsList(await createPsetsList(element, viewer, classes))
+      setPropTable(await createPropertyTable(model, element))
+      setPsetsList(await createPsetsList(model, element, classes))
     })()
-  }, [element, viewer, classes])
+  }, [model, element, classes])
+
 
   return (
     <div className={classes.propsContainer}>
@@ -43,13 +46,13 @@ export default function ItemProperties({viewer, element}) {
 
 /**
  * Recursive display of tables.
+ * @param {Object} model
  * @param {Object} props
- * @param {Object} viewer
  * @param {Number} serial
  * @param {boolean} isPset Is property set.
  * @return {Object}
  */
-async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
+async function createPropertyTable(model, props, serial = 0, isPset = false) {
   return (
     <table key={serial + '-table'}>
       <tbody>
@@ -60,7 +63,7 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
                   .map(
                       async (key, ndx) => {
                         const val = props[key]
-                        return await prettyProps(key, val, viewer, ndx)
+                        return await prettyProps(model, key, val, ndx)
                       },
                   ),
           )
@@ -72,13 +75,13 @@ async function createPropertyTable(props, viewer, serial = 0, isPset = false) {
 
 
 /**
+ * @param {Object} model
  * @param {Object} element
- * @param {Object} viewer
  * @param {Object} classes
  * @return {Object}
  */
-async function createPsetsList(element, viewer, classes) {
-  const psets = await viewer.IFC.loader.ifcManager.getPropertySets(0, element.expressID)
+async function createPsetsList(model, element, classes) {
+  const psets = await model.getPropertySets(element.expressID)
   return (
     <ul className={classes.psetsList}>
       {await Promise.all(
@@ -97,7 +100,7 @@ async function createPsetsList(element, viewer, classes) {
                         </Typography>
                       </AccordionSummary>
                       <AccordionDetails className = {classes.accordianDetails}>
-                        {await createPropertyTable(ps, viewer, 0, true)}
+                        {await createPropertyTable(model, ps, 0, true)}
                       </AccordionDetails>
                     </Accordion>
                   </li>
@@ -112,14 +115,14 @@ async function createPsetsList(element, viewer, classes) {
 /**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
+ * @param {Object} model
  * @param {string} key
  * @param {Object|string} value
- * @param {Object} viewer
  * @param {Number} serial
  * @param {boolean} isPset Is property set.
  * @return {Object}
  */
-async function prettyProps(key, value, viewer, serial = 0) {
+async function prettyProps(model, key, value, serial = 0) {
 /* eslint-enable */
   let label = '' + key
   if (label.startsWith('Ref')) {
@@ -151,33 +154,33 @@ async function prettyProps(key, value, viewer, serial = 0) {
       debug().warn('prettyProps, skipping prop for key: ', key)
       return null
     case 'Quantities':
-      return await quantities(key, value, viewer, serial)
+      return await quantities(model, key, value, serial)
     case 'HasProperties':
-      return await hasProperties(key, value, viewer, serial)
+      return await hasProperties(model, key, value, serial)
     case 'UnitsInContext':
     case 'Representations':
     default:
       return row(
           label,
-          await deref(value, viewer, serial,
-              async (v, vwr, srl) => await createPropertyTable(v, vwr, srl)),
+          await deref(value, model, serial,
+              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
           serial)
   }
 }
 
 
 /**
+ * @param {Object} model
  * @param {string} key Used only for debug
  * @param {Array} hasPropertiesArr
- * @param {Object} viewer
  * @param {Number} serial
  * @return {Object} Table rows for given hasPropertiesArr
  */
-async function hasProperties(key, hasPropertiesArr, viewer, serial) {
+async function hasProperties(model, key, hasPropertiesArr, serial) {
   if (!Array.isArray(hasPropertiesArr)) {
     throw new Error('hasPropertiesArr should be array')
   }
-  return await unpackHelper(hasPropertiesArr, viewer, serial, (dObj, rows) => {
+  return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
     const value = (dObj.NominalValue === undefined || dObj.NominalValue == null) ?
       '<error>' :
@@ -188,14 +191,14 @@ async function hasProperties(key, hasPropertiesArr, viewer, serial) {
 
 
 /**
+ * @param {Object} model
  * @param {string} key Used only for debug
  * @param {Object} quantitiesObj
- * @param {Object} viewer
  * @param {Number} serial
  * @return {Object}
  */
-async function quantities(key, quantitiesObj, viewer, serial) {
-  return await unpackHelper(quantitiesObj, viewer, serial, (ifcElt, rows) => {
+async function quantities(model, key, quantitiesObj, serial) {
+  return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
     const name = decodeIFCString(ifcElt.Name.value)
     let val = 'value'
     for (const key in ifcElt) {
@@ -212,13 +215,13 @@ async function quantities(key, quantitiesObj, viewer, serial) {
 
 /**
  * Convert a HasProperties to react component.
+ * @param {Object} model
  * @param {Array} eltArr
- * @param {Object} viewer
  * @param {Number} serial
  * @param {function} ifcToRowCb Callback to convert an IFC elt to a table row
  * @return {Object} The react component or null if fail
  */
-async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
+async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
   // HasProperties behaves a little special.
   if (Array.isArray(eltArr)) {
     const rows = []
@@ -230,8 +233,12 @@ async function unpackHelper(eltArr, viewer, serial, ifcToRowCb) {
           throw new Error('Array contains non-reference type')
         }
         const refId = stoi(p.value)
-        const ifcElt = await viewer.getProperties(0, refId)
-        ifcToRowCb(ifcElt, rows)
+        if (model.getItemProperties) {
+          const ifcElt = await model.getItemProperties(refId)
+          ifcToRowCb(ifcElt, rows)
+        } else {
+          console.error('model has no getProperties method: ', model)
+        }
       }
     }
     return (

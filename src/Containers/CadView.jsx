@@ -62,6 +62,7 @@ export default function CadView({
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
+  const [model, setModel] = useState(null)
 
 
   /** Load the full resolved model path. */
@@ -81,11 +82,31 @@ export default function CadView({
       debug().warn('CadView#useEffect[viewer], viewer is null!')
       return
     }
-    debug().log('CadView#useEffect[viewer], calling loadIfc')
-    loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
-    debug().log('CadView#useEffect[viewer], done loading new ifc')
+    (async () => {
+      debug().log('CadView#useEffect[viewer], calling loadIfc')
+      const model = await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+      setModel(model)
+      debug().log('CadView#useEffect[viewer], done loading new ifc')
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer])
+
+
+  useEffect(() => {
+    if (model == null) {
+      return
+    }
+    (async () => {
+      const newId = model.modelID
+      // setModelId(newId)
+      debug().log('CadView#useEffect[model]: model, viewer, newId', model, viewer, newId)
+      const rootElt = await model.ifcManager.getSpatialStructure(0, true)
+      onModelLoad(model, rootElt)
+      setShowNavPanel(true)
+      debug().log('CadView#useEffect[model]: done.  rootElt: ', rootElt)
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
 
 
   useEffect(() => {
@@ -111,12 +132,12 @@ export default function CadView({
       debug(3).log('CadView#loadIfc: got: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
-    setIsLoading(true)
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
+    setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        true,
+        true, // fit to frame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -131,12 +152,22 @@ export default function CadView({
           setIsLoading(false)
         },
     )
-    debug().log(`CadView#loadIfc: filepath(${filepath}) with model, viewer: `,
-        model, viewer)
-    viewer.IFC.addIfcModel(model)
-    const rootElt = await model.ifcManager.getSpatialStructure(0, true)
-    onModelLoad(rootElt, viewer, filepath)
+    gtag('event', 'select_content', {
+      content_type: 'ifc_model',
+      item_id: filepath,
+    })
     setIsLoading(false)
+
+    // Fix for https://github.com/buildrs/Share/issues/91
+    //
+    // TODO(pablo): huge hack. Somehow this is getting incremented to
+    // 1 even though we have a new IfcViewer instance for each file
+    // load.  That modelID is used in the IFCjs code as [modelID] and
+    // leads to undefined refs e.g. in prePickIfcItem.  The id should
+    // always be 0.
+    model.modelID = 0
+
+    return model
   }
 
 
@@ -163,33 +194,30 @@ export default function CadView({
 
   /**
    * Analyze loaded IFC model to configure UI elements.
+   * @param {Object} m
    * @param {Object} rootElt Root of the IFC model.
-   * @param {Object} viewer
-   * @param {string} pathLoaded
    */
-  function onModelLoad(rootElt, viewer, pathLoaded) {
-    debug().log('CadView#onModelLoad...', rootElt)
-    gtag('event', 'select_content', {
-      content_type: 'ifc_model',
-      item_id: pathLoaded,
-    })
+  function onModelLoad(m, rootElt) {
+    debug().log('CadView#onModelLoad...', m, rootElt)
+    if (rootElt.expressID == undefined) {
+      throw new Error('Model has undefined root express ID')
+    }
     setRootElement(rootElt)
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
-    initSearch(rootElt, viewer)
-    setShowNavPanel(true)
+    initSearch(m, rootElt)
   }
 
 
   /**
+   * @param {Object} m The IfcViewerAPI instance.
    * @param {Object} rootElt Root ifc elment for recursive indexing.
-   * @param {Object} viewer The IfcViewerAPI instance.
    */
-  function initSearch(rootElt, viewer) {
+  function initSearch(m, rootElt) {
     searchIndex.clearIndex()
-    debug().log('CadView#initSearch')
+    debug().log('CadView#initSearch: ', m, rootElt)
     debug().time('build searchIndex')
-    searchIndex.indexElement(rootElt, viewer)
+    searchIndex.indexElement(m, rootElt)
     debug().timeEnd('build searchIndex')
     debug().log('searchIndex: ', searchIndex)
     onSearch()
@@ -327,7 +355,7 @@ export default function CadView({
 
         {showNavPanel &&
           <NavPanel
-            viewer={viewer}
+            model={model}
             element={rootElement}
             selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
@@ -340,13 +368,13 @@ export default function CadView({
           />}
         <div className={classes.itemPanelContainer}>
           <ItemPanelButton
-            viewer={viewer}
+            model={model}
             element={selectedElement}
-            close = {()=>setShowItemPanel(false)}
-            topOffset = {PANEL_TOP}
-            placeCutPlane = {()=>placeCutPlane()}
-            unSelectItem = {()=>unSelectItems()}
-            toggleShortCutsPanel = {()=>setShowShortCuts(!showShortCuts)}/>
+            close={()=>setShowItemPanel(false)}
+            topOffset={PANEL_TOP}
+            placeCutPlane={()=>placeCutPlane()}
+            unSelectItem={()=>unSelectItems()}
+            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
         </div>
         <div className={classes.iconGroup}>
           <IconGroup
@@ -370,38 +398,37 @@ function initViewer(pathPrefix) {
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
-  const viewer = new IfcViewerAPI({
+  const v = new IfcViewerAPI({
     container,
     backgroundColor: new Color('#a0a0a0'),
   })
-  debug().log('CadView#initViewer: viewer created: ', viewer)
+  debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
-  viewer.IFC.setWasmPath('./static/js/')
-  viewer.addAxes()
-  viewer.addGrid(50, 50)
-  viewer.clipper.active = true
-
+  v.IFC.setWasmPath('./static/js/')
+  v.addAxes()
+  v.addGrid(50, 50)
+  v.clipper.active = true
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    viewer.prePickIfcItem(event)
+    v.prePickIfcItem()
   }
 
   window.onkeydown = (event) => {
     // add a plane
     if (event.code === 'KeyQ') {
-      viewer.clipper.createPlane()
+      v.clipper.createPlane()
     }
     // delete all planes
     if (event.code === 'KeyW') {
-      viewer.clipper.deletePlane()
+      v.clipper.deletePlane()
     }
     if (event.code == 'KeyA') {
-      viewer.IFC.unpickIfcItems()
+      v.IFC.unpickIfcItems()
     }
   }
 
-  return viewer
+  return v
 }
 
 

@@ -6,40 +6,45 @@ import MenuButton from '../Components/MenuButton'
 
 
 /**
- * @param {Object} viewer
+ * @param {Number} model
  * @param {Object} element
  * @param {Number} topOffset
  * @return {Object}
  */
-export default function ItemPanelButton({viewer, element, topOffset}) {
+export default function ItemPanelButton({model, element, topOffset}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
   return (
     <div className={classes.toggleButton}>
       <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
-      {showItemPanel && <ItemPanel
-        viewer = {viewer}
-        element = {element}
-        close = {()=>setShowItemPanel(false)}
-        topOffset = {topOffset}
-        open = {showItemPanel}
-      />}
+      {showItemPanel &&
+       <ItemPanel
+         model={model}
+         element={element}
+         close={()=>setShowItemPanel(false)}
+         topOffset={topOffset}
+         open={showItemPanel}
+       />}
     </div>
   )
 }
 
 
 /**
- * @param {Object} viewer
+ * @param {Object} model
  * @param {Object} element
  * @param {function} close
  * @param {Number} topOffset
  * @return {Object}
  */
-function ItemPanel({viewer, element, close, topOffset}) {
+function ItemPanel({model, element, close, topOffset}) {
   return (
     <ItemPropertiesDrawer
-      content = {<ItemProperties viewer = {viewer} element = {element}/>}
+      content = {
+        <ItemProperties
+          model={model}
+          element={element} />
+      }
       title = {'IFC Information'}
       onClose = {close}
       open = {open}

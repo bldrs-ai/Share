@@ -15,11 +15,11 @@ export default class SearchIndex {
 
   /**
    * Recursively visits elt and indexes properties.
+   * @param {Object} model IFC model.
    * @param {Object} elt async callback for rendering sub-object
-   * @param {Object} viewer IfcViewerApi instance.
    */
-  indexElement(elt, viewer) {
-    const type = Ifc.getType(elt, viewer)
+  indexElement(model, elt) {
+    const type = Ifc.getType(model, elt)
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt)
       if (type.startsWith('IFC')) {
@@ -33,7 +33,7 @@ export default class SearchIndex {
       this.indexElementByStringSet(this.eltsByName, this.tokenize(name), elt)
     }
 
-    const reifiedName = Ifc.reifyName(elt, viewer)
+    const reifiedName = Ifc.reifyName(model, elt)
     if (reifiedName) {
       this.indexElementByString(this.eltsByName, reifiedName, elt)
       this.indexElementByStringSet(this.eltsByName, this.tokenize(reifiedName), elt)
@@ -52,7 +52,7 @@ export default class SearchIndex {
 
     // Recurse.
     for (const child of elt.children) {
-      this.indexElement(child, viewer)
+      this.indexElement(model, child)
     }
   }
 
