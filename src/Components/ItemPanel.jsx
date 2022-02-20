@@ -6,7 +6,8 @@ import MenuButton from '../Components/MenuButton'
 
 
 /**
- * Container for ItemProperties.
+ * Container for ItemProperties.  ItemProperties is wrapped in an
+ * ItemPropertiesDrawer to toggle hiding.
  * @param {Object} model IFC model
  * @param {Object} element The currently selected IFC element
  * @param {Number} topOffset Screen offset position
@@ -19,31 +20,12 @@ export default function ItemPanelButton({model, element, topOffset}) {
     <div className={classes.toggleButton}>
       <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
       {showItemPanel &&
-       <ItemPanel
-         model={model}
-         element={element}
-         onCloseCb={() => setShowItemPanel(false)}
-         topOffset={topOffset}
+       <ItemPropertiesDrawer
+         content={<ItemProperties model={model} element={element} />}
+         title={'IFC Information'}
+         onClose={() => setShowItemPanel(false)}
        />}
     </div>
-  )
-}
-
-
-/**
- * @param {Object} model IFC model
- * @param {Object} element IFC element
- * @param {function} onCloseCb onClose callback
- * @param {Number} topOffset Distance from top in pixels for this panel.
- * @return {Object}
- */
-function ItemPanel({model, element, onCloseCb, topOffset}) {
-  return (
-    <ItemPropertiesDrawer
-      content={<ItemProperties model={model} element={element} />}
-      title={'IFC Information'}
-      onClose={onCloseCb}
-    />
   )
 }
 

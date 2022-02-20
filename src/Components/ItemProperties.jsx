@@ -240,7 +240,7 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
           const ifcElt = await model.getItemProperties(refId)
           ifcToRowCb(ifcElt, rows)
         } else {
-          console.error('model has no getProperties method: ', model)
+          debug().warn('model has no getProperties method: ', model)
         }
       }
     }
