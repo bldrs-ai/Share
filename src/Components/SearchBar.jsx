@@ -9,7 +9,7 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Hamburger from '../assets/2D/Menu.svg'
-import Search from '../assets/2D/search.svg'
+import Search from '../assets/2D/Search.svg'
 import debug from '../utils/debug'
 
 
