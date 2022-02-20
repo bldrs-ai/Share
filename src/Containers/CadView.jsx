@@ -64,57 +64,53 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
 
-
-  /** Load the full resolved model path. */
+  /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
-    debug().log('CadView#useEffect[modelPath], setting new viewer')
-    setShowNavPanel(false)
-    setShowSearchBar(false)
-    setShowItemPanel(false)
-    setViewer(initViewer(pathPrefix))
-    debug().log('CadView#useEffect[modelPath], done setting new viewer')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onModelPath()
   }, [modelPath])
 
 
   useEffect(() => {
-    if (viewer == null) {
-      debug().warn('CadView#useEffect[viewer], viewer is null!')
-      return
-    }
     (async () => {
-      debug().log('CadView#useEffect[viewer], calling loadIfc')
-      const model = await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
-      setModel(model)
-      debug().log('CadView#useEffect[viewer], done loading new ifc')
+      onViewer()
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer])
 
 
   useEffect(() => {
-    if (model == null) {
-      return
-    }
     (async () => {
-      const newId = model.modelID
-      // setModelId(newId)
-      debug().log('CadView#useEffect[model]: model, viewer, newId', model, viewer, newId)
-      const rootElt = await model.ifcManager.getSpatialStructure(0, true)
-      onModelLoad(model, rootElt)
-      setShowNavPanel(true)
-      debug().log('CadView#useEffect[model]: done.  rootElt: ', rootElt)
+      await onModel()
     })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
 
   useEffect(() => {
-    debug().log('CadView#useEffect[searchParams]')
-    onSearch()
-    debug().log('CadView#useEffect[searchParams]: done')
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    onSearchParams()
   }, [searchParams])
+  /* eslint-enable */
+
+
+  /**
+   * Begin setup for new model. Turn off nav, search and item and init
+   * new viewer.
+   */
+  function onModelPath() {
+    setShowNavPanel(false)
+    setShowSearchBar(false)
+    setShowItemPanel(false)
+    setViewer(initViewer(pathPrefix))
+    debug().log('CadView#onModelPath, done setting new viewer')
+  }
+
+
+  /** When viewer is ready, load IFC model. */
+  async function onViewer() {
+    if (viewer == null) {
+      debug().warn('CadView#onViewer, viewer is null')
+      return
+    }
+    await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+  }
 
 
   /**
@@ -125,11 +121,10 @@ export default function CadView({
     debug().log(`CadView#loadIfc: `, filepath, viewer)
     if (pathPrefix.endsWith('new')) {
       const l = window.location
-      debug(3).log('CadView#loadIfc: parsing blob from url: ', l)
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
-      debug(3).log('CadView#loadIfc: got: ', filepath)
+      debug(3).log('CadView#loadIfc: parsed blob: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
@@ -166,8 +161,7 @@ export default function CadView({
     // leads to undefined refs e.g. in prePickIfcItem.  The id should
     // always be 0.
     model.modelID = 0
-
-    return model
+    setModel(model)
   }
 
 
@@ -192,20 +186,20 @@ export default function CadView({
   }
 
 
-  /**
-   * Analyze loaded IFC model to configure UI elements.
-   * @param {Object} m
-   * @param {Object} rootElt Root of the IFC model.
-   */
-  function onModelLoad(m, rootElt) {
-    debug().log('CadView#onModelLoad...', m, rootElt)
+  /** Analyze loaded IFC model to configure UI elements. */
+  async function onModel() {
+    if (model == null) {
+      return
+    }
+    const rootElt = await model.ifcManager.getSpatialStructure(0, true)
     if (rootElt.expressID == undefined) {
       throw new Error('Model has undefined root express ID')
     }
-    setRootElement(rootElt)
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
-    initSearch(m, rootElt)
+    initSearch(model, rootElt)
+    setRootElement(rootElt)
+    setShowNavPanel(true)
   }
 
 
@@ -219,18 +213,8 @@ export default function CadView({
     debug().time('build searchIndex')
     searchIndex.indexElement(m, rootElt)
     debug().timeEnd('build searchIndex')
-    debug().log('searchIndex: ', searchIndex)
-    onSearch()
+    onSearchParams()
     setShowSearchBar(true)
-  }
-
-
-  /** Clear active search state and unpick active scene elts. */
-  function clearSearch() {
-    setSelectedElements([])
-    if (viewer) {
-      viewer.IFC.unpickIfcItems()
-    }
   }
 
 
@@ -238,13 +222,13 @@ export default function CadView({
    * Search for the query in the index and select matching items in UI elts.
    * @param {string} query The search query.
    */
-  function onSearch() {
+  function onSearchParams() {
     const sp = new URLSearchParams(window.location.search)
     let query = sp.get('q')
     if (query) {
       query = query.trim()
       if (query === '') {
-        throw new Error('CadView#onSearch: empty query in search handler')
+        throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
@@ -254,6 +238,15 @@ export default function CadView({
       })
     } else {
       clearSearch()
+    }
+  }
+
+
+  /** Clear active search state and unpick active scene elts. */
+  function clearSearch() {
+    setSelectedElements([])
+    if (viewer) {
+      viewer.IFC.unpickIfcItems()
     }
   }
 
