@@ -5,7 +5,7 @@ import {makeStyles} from '@mui/styles'
 
 const useStyles = makeStyles({
   drawerPaper: {
-    'marginTop': '65px',
+    'marginTop': '0px',
     'width': '350px',
     'borderRadius': '0px',
     'marginLeft': '20px',

@@ -7,13 +7,15 @@ import SearchIndex from './SearchIndex.js'
 import ItemPanelButton from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import ToolBar from '../Components/ToolBar'
+// import ToolBar from '../Components/ToolBar'
 import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+// import LogoLight from '../assets/3D/logo6.svg'
+import LogoDark from '../assets/3D/logo6.svg'
 
 
 /**
@@ -141,24 +143,24 @@ export default function CadView({
 
 
   /** Upload a local IFC file for display. */
-  function loadLocalFile() {
-    const viewerContainer = document.getElementById('viewer-container')
-    const fileInput = document.createElement('input')
-    fileInput.setAttribute('type', 'file')
-    fileInput.classList.add('file-input')
-    fileInput.addEventListener(
-        'change',
-        (event) => {
-          let ifcUrl = URL.createObjectURL(event.target.files[0])
-          const parts = ifcUrl.split('/')
-          ifcUrl = parts[parts.length - 1]
-          navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
-        },
-        false,
-    )
-    viewerContainer.appendChild(fileInput)
-    fileInput.click()
-  }
+  // function loadLocalFile() {
+  //   const viewerContainer = document.getElementById('viewer-container')
+  //   const fileInput = document.createElement('input')
+  //   fileInput.setAttribute('type', 'file')
+  //   fileInput.classList.add('file-input')
+  //   fileInput.addEventListener(
+  //       'change',
+  //       (event) => {
+  //         let ifcUrl = URL.createObjectURL(event.target.files[0])
+  //         const parts = ifcUrl.split('/')
+  //         ifcUrl = parts[parts.length - 1]
+  //         navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
+  //       },
+  //       false,
+  //   )
+  //   viewerContainer.appendChild(fileInput)
+  //   fileInput.click()
+  // }
 
 
   /**
@@ -308,9 +310,9 @@ export default function CadView({
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
       <div className={classes.menusWrapper}>
-        <ToolBar
+        {/* <ToolBar
           fileOpen={loadLocalFile}
-          offsetTop={PANEL_TOP}/>
+          offsetTop={PANEL_TOP}/> */}
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
@@ -355,6 +357,7 @@ export default function CadView({
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
           />
         </div>
+        <LogoDark className = {classes.logo}/>:
       </div>
     </div>
   )
@@ -405,7 +408,7 @@ function initViewer(pathPrefix) {
 }
 
 
-const PANEL_TOP = 84
+const PANEL_TOP = 20
 const useStyles = makeStyles((theme) => ({
   pageContainer: {
     position: 'absolute',
@@ -487,8 +490,20 @@ const useStyles = makeStyles((theme) => ({
     'zIndex': 1000,
     '@media (max-width: 900px)': {
       bottom: `0px`,
-      top: '140px',
-      right: '14px',
+      top: '62px',
+      right: '12px',
+    },
+  },
+  logo: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'left': '40px',
+    'width': '200px',
+    '@media (max-width: 900px)': {
+      position: 'absolute',
+      bottom: '30px',
+      left: '26px',
+      width: '100px',
     },
   },
 }))

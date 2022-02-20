@@ -13,7 +13,7 @@ export default function SnackBarMessage({message, type, open}) {
   return (
     <Snackbar
       open={open}
-      anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
+      anchorOrigin={{vertical: 'bottom', horizontal: 'right'}}
     >
       <Alert
         severity={type}

@@ -88,7 +88,7 @@ export default function NavPanel({
 const useStyles = makeStyles({
   contextualMenu: {
     'position': 'absolute',
-    'top': '144px',
+    'top': '90px',
     'left': '23px',
     'overflow': 'auto',
     'width': '308px',
@@ -96,8 +96,9 @@ const useStyles = makeStyles({
     'alignItems': 'center',
     'maxHeight': '50%',
     '@media (max-width: 900px)': {
-      maxHeight: '30%',
-      width: '250px',
+      'maxHeight': '30%',
+      'width': '250px',
+      'top': '80px',
     },
   },
   treeContainer: {
