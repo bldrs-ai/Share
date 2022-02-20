@@ -6,10 +6,11 @@ import MenuButton from '../Components/MenuButton'
 
 
 /**
- * @param {Number} model
- * @param {Object} element
- * @param {Number} topOffset
- * @return {Object}
+ * Container for ItemProperties.
+ * @param {Object} model IFC model
+ * @param {Object} element The currently selected IFC element
+ * @param {Number} topOffset Screen offset position
+ * @return {Object} The ItemPanelButton react component
  */
 export default function ItemPanelButton({model, element, topOffset}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
@@ -21,9 +22,8 @@ export default function ItemPanelButton({model, element, topOffset}) {
        <ItemPanel
          model={model}
          element={element}
-         close={()=>setShowItemPanel(false)}
+         onCloseCb={() => setShowItemPanel(false)}
          topOffset={topOffset}
-         open={showItemPanel}
        />}
     </div>
   )
@@ -31,23 +31,18 @@ export default function ItemPanelButton({model, element, topOffset}) {
 
 
 /**
- * @param {Object} model
- * @param {Object} element
- * @param {function} close
- * @param {Number} topOffset
+ * @param {Object} model IFC model
+ * @param {Object} element IFC element
+ * @param {function} onCloseCb onClose callback
+ * @param {Number} topOffset Distance from top in pixels for this panel.
  * @return {Object}
  */
-function ItemPanel({model, element, close, topOffset}) {
+function ItemPanel({model, element, onCloseCb, topOffset}) {
   return (
     <ItemPropertiesDrawer
-      content = {
-        <ItemProperties
-          model={model}
-          element={element} />
-      }
-      title = {'IFC Information'}
-      onClose = {close}
-      open = {open}
+      content={<ItemProperties model={model} element={element} />}
+      title={'IFC Information'}
+      onClose={onCloseCb}
     />
   )
 }

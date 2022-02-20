@@ -12,10 +12,10 @@ import ExpansionPanel from './ExpansionPanel'
 
 
 /**
- * ItemProperties displays IFC element properties and possibly PropertySets.
- * @param {Object} model
- * @param {Object} element
- * @return {Object} The ItemProperties react component.
+ * ItemProperties displays IFC element properties and possibly PropertySets
+ * @param {Object} model IFC model
+ * @param {Object} element The currently selected IFC element
+ * @return {Object} The ItemProperties react component
  */
 export default function ItemProperties({model, element}) {
   const [propTable, setPropTable] = useState(null)
@@ -44,41 +44,47 @@ export default function ItemProperties({model, element}) {
 
 
 /**
- * Recursive display of tables.
- * @param {Object} model
- * @param {Object} props
+ * Recursive display of tables.  The recursion is:
+ *
+ *    createPropertyTable -> prettyProps -> createPropertyTable
+ *
+ * @param {Object} model IFC model
+ * @param {Object} ifcProps Caller should pass the root IFC element.
+ *    Recursive calls will pass children
  * @param {Number} serial
- * @param {boolean} isPset Is property set.
- * @return {Object}
+ * @param {boolean} isPset Is property set
+ * @return {Object} A property table react component
  */
-async function createPropertyTable(model, props, serial = 0, isPset = false) {
+async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) {
+  const ROWS = []
+  let rowKey = 0
+  for (const key in ifcProps) {
+    if (isPset && (key == 'expressID' || key == 'Name')) {
+      continue
+    }
+    const val = ifcProps[key]
+    const propRow = await prettyProps(model, key, val, rowKey++)
+    if (propRow) {
+      if (propRow.key == null) {
+        throw new Error(`Row for key=(${key}) created with invalid react key`)
+      }
+      ROWS.push(propRow)
+    }
+  }
   return (
     <table key={serial + '-table'}>
-      <tbody key={serial + '-body'}>
-        {
-          await Promise.all(
-              Object.keys(props)
-                  .filter((key) => !(isPset && (key == 'expressID' || key == 'Name')))
-                  .map(
-                      async (key, ndx) => {
-                        const val = props[key]
-                        return await prettyProps(model, key, val, ndx)
-                      },
-                  ),
-          )
-        }
-      </tbody>
+      <tbody>{ROWS}</tbody>
     </table>
   )
 }
 
 
 /**
- * @param {Object} model
- * @param {Object} element
- * @param {Object} classes
- * @param {boolean} expandAll
- * @return {Object}
+ * @param {Object} model IFC model
+ * @param {Object} element IFC element
+ * @param {Object} classes Styles
+ * @param {boolean} expandAll React state expansion toggle
+ * @return {Object} A list of property sets react component
  */
 async function createPsetsList(model, element, classes, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
@@ -108,33 +114,24 @@ async function createPsetsList(model, element, classes, expandAll) {
 /**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
- * @param {Object} model
- * @param {string} key
- * @param {Object|string} value
+ * @param {Object} model IFC model
+ * @param {string} propName Property name
+ * @param {Object|string} propValue Property value
  * @param {Number} serial
- * @param {boolean} isPset Is property set.
  * @return {Object}
  */
-async function prettyProps(model, key, value, serial = 0) {
-/* eslint-enable */
-  let label = '' + key
+async function prettyProps(model, propName, propValue, serial = 0) {
+  /* eslint-enable */
+  let label = '' + propName
   if (label.startsWith('Ref')) {
     label = label.substring(3)
   }
-  if (value === null || value === undefined || value == '') {
-    debug().warn(`prettyProps: undefined value(${value}) for key(${key})`)
+  if (propValue === null || propValue === undefined || propValue == '') {
+    debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
     return null
   }
-  debug().log('prettyProps, switching on key,value: ', key, value)
-  switch (key) {
-    case 'Coordinates':
-    case 'RefLatitude':
-    case 'RefLongitude':
-      return row(label, dms(
-          await deref(value[0]),
-          await deref(value[1]),
-          await deref(value[2])), serial)
-    case 'expressID': return row('Express Id', value, serial)
+  debug().log(`prettyProps: switching on propName(${propName})`)
+  switch (propName) {
     case 'type':
     case 'CompositionType':
     case 'GlobalId':
@@ -143,33 +140,47 @@ async function prettyProps(model, key, value, serial = 0) {
     case 'OwnerHistory':
     case 'Representation':
     case 'RepresentationContexts':
-    case 'Tag':
-      debug().warn('prettyProps, skipping prop for key: ', key)
-      return null
-    case 'Quantities':
-      return await quantities(model, key, value, serial)
-    case 'HasProperties':
-      return await hasProperties(model, key, value, serial)
-    case 'UnitsInContext':
     case 'Representations':
-    default:
+    case 'Tag':
+    case 'UnitsInContext':
+      debug().warn('prettyProps, skipping prop for propName: ', propName)
+      return null
+    case 'Coordinates':
+    case 'RefLatitude':
+    case 'RefLongitude':
+      return row(label, dms(
+          await deref(propValue[0]),
+          await deref(propValue[1]),
+          await deref(propValue[2])), serial)
+    case 'expressID':
+      return row('Express Id', propValue, serial)
+    case 'Quantities':
+      return await quantities(model, propValue, serial)
+    case 'HasProperties':
+      return await hasProperties(model, propValue, serial)
+    default: {
+      // Not sure where else to put this.. but seems better than handling in deref.
+      if (propValue.type == 0) {
+        return null
+      }
       return row(
           label,
-          await deref(value, model, serial,
+          await deref(
+              propValue, model, serial,
               async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
           serial)
+    }
   }
 }
 
 
 /**
- * @param {Object} model
- * @param {string} key Used only for debug
- * @param {Array} hasPropertiesArr
+ * @param {Object} model IFC model
+ * @param {Array} hasPropertiesArr Array of HasProperties elements
  * @param {Number} serial
  * @return {Object} Table rows for given hasPropertiesArr
  */
-async function hasProperties(model, key, hasPropertiesArr, serial) {
+async function hasProperties(model, hasPropertiesArr, serial) {
   if (!Array.isArray(hasPropertiesArr)) {
     throw new Error('hasPropertiesArr should be array')
   }
@@ -184,13 +195,12 @@ async function hasProperties(model, key, hasPropertiesArr, serial) {
 
 
 /**
- * @param {Object} model
- * @param {string} key Used only for debug
- * @param {Object} quantitiesObj
+ * @param {Object} model IFC model
+ * @param {Object} quantitiesObj Quantities element
  * @param {Number} serial
- * @return {Object}
+ * @return {Object} Table of quantities
  */
-async function quantities(model, key, quantitiesObj, serial) {
+async function quantities(model, quantitiesObj, serial) {
   return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
     const name = decodeIFCString(ifcElt.Name.value)
     let val = 'value'
@@ -207,9 +217,9 @@ async function quantities(model, key, quantitiesObj, serial) {
 
 
 /**
- * Convert a HasProperties to react component.
- * @param {Object} model
- * @param {Array} eltArr
+ * Convert a HasProperties to react component
+ * @param {Object} model IFC model
+ * @param {Array} eltArr Array of IFC elements
  * @param {Number} serial
  * @param {function} ifcToRowCb Callback to convert an IFC elt to a table row
  * @return {Object} The react component or null if fail
@@ -238,7 +248,7 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
       <tr key={serial++}>
         <td>
           <table>
-            <tbody >{rows}</tbody>
+            <tbody>{rows}</tbody>
           </table>
         </td>
       </tr>
@@ -250,56 +260,64 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
 
 
 /**
- * @param {Object} d1
- * @param {Object} d2
+ * HTML table row
+ * @param {Object} d1 Table cell data 1
+ * @param {Object} d2 Table cell data 2
  * @param {Number} serial
- * @return {Object}
+ * @return {Object} Table row react component
  */
 function row(d1, d2, serial) {
-  if (serial == undefined) {
+  if (serial === undefined) {
     throw new Error('Must have serial for key')
   }
   if (d2 === null) {
-    return (<tr key={serial}><td key={serial + '-double-data'} colSpan="2">{d1}</td></tr>)
+    return (
+      <tr key={serial}><td colSpan="2">{d1}</td></tr>
+    )
   }
-  return (
-    <Row d1={d1} d2={d2} serial={serial} />
-  )
+  return <Row key={serial} d1={d1} d2={d2} />
 }
 
-
-/**
- * @param {Number} deg
- * @param {Number} min
- * @param {Number} sec
- * @return {string}
- */
-const dms = (deg, min, sec) => {
-  return `${deg}° ${min}' ${sec}''`
-}
 
 /**
  * Wrapper component for a table row
- * @param {String} d1
- * @param {String} d2
- * @param {Number} serial
+ * @param {Object} d1 Table cell data 1
+ * @param {Object} d2 Table cell data 2
  * @return {Object} The react component
  */
-function Row({d1, d2, serial}) {
+function Row({d1, d2}) {
+  if (d1 === null || d1 === undefined ||
+      d1 === null || d1 === undefined) {
+    debug().warn('Row with invalid data: ', d1, d2)
+  }
   return (
-    <tr key={serial}>
+    <tr>
       <Tooltip
         title={d1}
-        placement="top">
-        <td >{d1}</td>
+        placement="top"
+        key="tool1">
+        <td>{d1}</td>
       </Tooltip>
       <Tooltip
         title={d2}
-        placement="top">
-        <td key="b">{d2}</td>
+        placement="top"
+        key="tool2">
+        <td>{d2}</td>
       </Tooltip>
     </tr>
   )
+}
+
+
+/**
+ * A coordinate in Degree-Minutes-Seconds (DMS) syntax, e..g. 1° 2' 3''
+ * @param {Number} deg Degrees
+ * @param {Number} min Minutes
+ * @param {Number} sec Seconds
+ * @return {string} Formatted DMS coorindate string
+ */
+const dms = (deg, min, sec) => {
+  return `${deg}° ${min}' ${sec}''`
 }
 
 

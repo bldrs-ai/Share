@@ -65,25 +65,29 @@ export default function CadView({
   const [model, setModel] = useState(null)
 
   /* eslint-disable react-hooks/exhaustive-deps */
+  // ModelPath changes in parent (ShareRoutes) from user and
+  // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     onModelPath()
   }, [modelPath])
 
 
+  // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
       await onViewer()
     })()
   }, [viewer])
 
-
+  // Model changes in onViewer (above)
   useEffect(() => {
     (async () => {
       await onModel()
     })()
   }, [model])
 
-
+  // searchParams changes in parent (ShareRoutes) from user and
+  // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
@@ -204,8 +208,11 @@ export default function CadView({
 
 
   /**
+   * Index the model starting at the given rootElt, clearing any
+   * previous index data and parses any incoming search params in the
+   * URL.  Enables search bar when done.
    * @param {Object} m The IfcViewerAPI instance.
-   * @param {Object} rootElt Root ifc elment for recursive indexing.
+   * @param {Object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
     searchIndex.clearIndex()

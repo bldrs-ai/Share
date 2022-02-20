@@ -1,3 +1,4 @@
+import debug from './debug'
 import {stoi} from './strings'
 
 
@@ -170,7 +171,7 @@ export async function deref(ref, model = null, serial = 0, typeValCb = null) {
     )))
   }
   if (typeof ref === 'object') {
-    console.warn('should not be object: ', ref)
+    debug().warn('should not be object: ', ref)
   }
   return ref // typically number or string.
 }
