@@ -1,8 +1,4 @@
 import React, {useEffect, useState} from 'react'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
-import Typography from '@mui/material/Typography'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
@@ -11,7 +7,8 @@ import {
   deref,
 } from '../utils/Ifc'
 import {stoi} from '../utils/strings'
-import ExpandIcon from '../assets/ExpandIcon.svg'
+import Toggle from './Toggle'
+import ExpansionPanel from './ExpansionPanel'
 
 
 /**
@@ -23,22 +20,24 @@ import ExpandIcon from '../assets/ExpandIcon.svg'
 export default function ItemProperties({model, element}) {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
+  const [expandAll, setExpandAll] = useState(false)
   const classes = useStyles({})
-
 
   useEffect(() => {
     (async () => {
       setPropTable(await createPropertyTable(model, element))
-      setPsetsList(await createPsetsList(model, element, classes))
+      setPsetsList(await createPsetsList(model, element, classes, expandAll))
     })()
-  }, [model, element, classes])
-
+  }, [model, element, classes, expandAll])
 
   return (
     <div className={classes.propsContainer}>
-      <h2 className = {classes.sectionTitle}>Properties</h2>
+      <h2 className={classes.sectionTitle}>Properties</h2>
       {propTable || 'Loading...'}
-      <h2 className = {classes.sectionTitle}>Property Sets</h2>
+      <h2 className={classes.sectionTitle}>
+        <div>Property Sets</div>
+        <Toggle onChange={() => setExpandAll(!expandAll)} />
+      </h2>
       {psetsList || 'Loading...'}
     </div>)
 }
@@ -55,7 +54,7 @@ export default function ItemProperties({model, element}) {
 async function createPropertyTable(model, props, serial = 0, isPset = false) {
   return (
     <table key={serial + '-table'}>
-      <tbody>
+      <tbody key={serial + '-body'}>
         {
           await Promise.all(
               Object.keys(props)
@@ -78,9 +77,10 @@ async function createPropertyTable(model, props, serial = 0, isPset = false) {
  * @param {Object} model
  * @param {Object} element
  * @param {Object} classes
+ * @param {boolean} expandAll
  * @return {Object}
  */
-async function createPsetsList(model, element, classes) {
+async function createPsetsList(model, element, classes, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
   return (
     <ul className={classes.psetsList}>
@@ -88,21 +88,13 @@ async function createPsetsList(model, element, classes) {
           psets.map(
               async (ps, ndx) => {
                 return (
-                  <li key={ndx} className={classes.section} >
-                    <Accordion className={classes.accordian} defaultExpanded={false}>
-                      <AccordionSummary
-                        expandIcon={<ExpandIcon className = {classes.icons} />}
-                        aria-controls="panel1a-content"
-                        id="panel1a-header"
-                      >
-                        <Typography className = {classes.accordionTitle}>
-                          {decodeIFCString(ps.Name.value) || 'Property Set'}
-                        </Typography>
-                      </AccordionSummary>
-                      <AccordionDetails className = {classes.accordianDetails}>
-                        {await createPropertyTable(model, ps, 0, true)}
-                      </AccordionDetails>
-                    </Accordion>
+                  <li key={ndx} className={classes.section}>
+                    <ExpansionPanel
+                      summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+                      detail={await createPropertyTable(model, ps, 0, true)}
+                      expandState={expandAll}
+                      classes={classes}
+                    />
                   </li>
                 )
               },
@@ -110,6 +102,7 @@ async function createPsetsList(model, element, classes) {
     </ul>
   )
 }
+
 
 /* eslint-disable max-len*/
 /**
@@ -270,14 +263,7 @@ function row(d1, d2, serial) {
     return (<tr key={serial}><td key={serial + '-double-data'} colSpan="2">{d1}</td></tr>)
   }
   return (
-    <tr key={serial}>
-      <Tooltip title={d1} placement="top">
-        <td>{d1}</td>
-      </Tooltip>
-      <Tooltip title={d2} placement="top">
-        <td key="b">{d2}</td>
-      </Tooltip>
-    </tr>
+    <Row d1={d1} d2={d2} serial={serial} />
   )
 }
 
@@ -290,6 +276,30 @@ function row(d1, d2, serial) {
  */
 const dms = (deg, min, sec) => {
   return `${deg}° ${min}' ${sec}''`
+}
+
+/**
+ * Wrapper component for a table row
+ * @param {String} d1
+ * @param {String} d2
+ * @param {Number} serial
+ * @return {Object} The react component
+ */
+function Row({d1, d2, serial}) {
+  return (
+    <tr key={serial}>
+      <Tooltip
+        title={d1}
+        placement="top">
+        <td >{d1}</td>
+      </Tooltip>
+      <Tooltip
+        title={d2}
+        placement="top">
+        <td key="b">{d2}</td>
+      </Tooltip>
+    </tr>
+  )
 }
 
 
@@ -325,7 +335,6 @@ const useStyles = makeStyles({
     marginLeft: '10px',
     width: '308px',
     height: '400px',
-    overflow: 'scroll',
     paddingBottom: '30px',
   },
   section: {
@@ -334,6 +343,10 @@ const useStyles = makeStyles({
     marginBottom: '5px',
   },
   sectionTitle: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItem: 'center',
     maxWidth: '320px',
     overflowWrap: 'break-word',
     fontFamily: 'Helvetica',
@@ -343,7 +356,7 @@ const useStyles = makeStyles({
     paddingLeft: '4px',
     paddingRight: '4px',
     paddingBottom: '10px',
-    borderBottom: ' 1px solid lightgrey',
+    borderBottom: '1px solid lightgrey',
   },
   icons: {
     width: '20px',
@@ -352,7 +365,6 @@ const useStyles = makeStyles({
     maxWidth: '320px',
   },
   accordianDetails: {
-    overflow: 'scroll',
   },
   accordionTitle: {
     width: '200px',
