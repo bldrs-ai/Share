@@ -6,44 +6,26 @@ import MenuButton from '../Components/MenuButton'
 
 
 /**
- * @param {Object} viewer
- * @param {Object} element
- * @param {Number} topOffset
- * @return {Object}
+ * Container for ItemProperties.  ItemProperties is wrapped in an
+ * ItemPropertiesDrawer to toggle hiding.
+ * @param {Object} model IFC model
+ * @param {Object} element The currently selected IFC element
+ * @param {Number} topOffset Screen offset position
+ * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({viewer, element, topOffset}) {
+export default function ItemPanelButton({model, element, topOffset}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
   return (
     <div className={classes.toggleButton}>
       <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
-      {showItemPanel && <ItemPanel
-        viewer = {viewer}
-        element = {element}
-        close = {()=>setShowItemPanel(false)}
-        topOffset = {topOffset}
-        open = {showItemPanel}
-      />}
+      {showItemPanel &&
+       <ItemPropertiesDrawer
+         content={<ItemProperties model={model} element={element} />}
+         title={'IFC Information'}
+         onClose={() => setShowItemPanel(false)}
+       />}
     </div>
-  )
-}
-
-
-/**
- * @param {Object} viewer
- * @param {Object} element
- * @param {function} close
- * @param {Number} topOffset
- * @return {Object}
- */
-function ItemPanel({viewer, element, close, topOffset}) {
-  return (
-    <ItemPropertiesDrawer
-      content = {<ItemProperties viewer = {viewer} element = {element}/>}
-      title = {'IFC Information'}
-      onClose = {close}
-      open = {open}
-    />
   )
 }
 
