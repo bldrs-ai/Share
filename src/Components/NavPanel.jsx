@@ -9,7 +9,7 @@ import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
 import NodeClosed from '../assets/2D/NodeClosed.svg'
 import NodeOpen from '../assets/2D/NodeOpened.svg'
-import Tree from '../assets/2D/Tree.svg'
+import Hamburger from '../assets/2D/Menu.svg'
 
 /** Navigation panel control is a button that toggles the visibility of nav panel
  * @param {Number} topOffset global offset defined in the cad view
@@ -24,15 +24,15 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
         <IconButton onClick={() => {
           onClickMenuCb()
         }}>
-          <Tree className = {classes.treeIcon}/>
+          <Hamburger className = {classes.treeIcon}/>
         </IconButton>
       </Tooltip>
     </div>
   )
 }
 
-/** Navigation panel contains hierarchical tree of IFC elements
- * @param {Object} viewer
+/**
+ * @param {Object} model
  * @param {Object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
@@ -43,7 +43,7 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
  * @return {Object}
  */
 export default function NavPanel({
-  viewer,
+  model,
   element,
   selectedElements,
   defaultExpandedElements,
@@ -93,7 +93,7 @@ export default function NavPanel({
         >
           {
             <NavTree
-              viewer={viewer}
+              model={model}
               element={element}
               pathPrefix={pathPrefix}
               onElementSelect={onElementSelect}

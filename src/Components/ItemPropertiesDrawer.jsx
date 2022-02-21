@@ -1,42 +1,44 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
-import Close from '../assets/Close.svg'
 import {makeStyles} from '@mui/styles'
+import Close from '../assets/Close.svg'
 
 
-const ItemPropertiesDrawer = ({
+/**
+ * ItemPropertiesDrawer contains the ItemPanel and allows for
+ * show/hide from the right of the screen.
+ * @param {string} title Title for the drawer
+ * @param {function} onClose Callback
+ * @param {Object} content The contained ItemPanel
+ * @return {Object} ItemPropertiesDrawer react component
+ */
+export default function ItemPropertiesDrawer({
   title,
   onClose,
   content,
-  open,
-}) => {
+}) {
   const classes = useStyles()
-  const anchor = window.innerWidth > 500?'right':'bottom'
-
+  const anchor = window.innerWidth > 500 ? 'right' : 'bottom'
   return (
-    <>
-      <React.Fragment key={'right'}>
-        <Drawer
-          elevation={3}
-          anchor={anchor}
-          open={true || open}
-          variant='persistent'
-          classes={{paper: classes.drawerPaper}}
-        >
-          <div className ={classes.drawerContainer}>
-            <div className={classes.headerWrapper} >
-              <div className={classes.title}>{title}</div>
-              <div className = {classes.closeContainer}>
-                <Close className={classes.close} onClick={onClose}/>
-              </div>
-            </div>
-            <div className = {classes.contentContainer}>
-              {content}
-            </div>
+    <Drawer
+      elevation={3}
+      anchor={anchor}
+      variant='persistent'
+      classes={{paper: classes.drawerPaper}}
+      open={true}
+    >
+      <div className={classes.drawerContainer}>
+        <div className={classes.headerWrapper} >
+          <div className={classes.title}>{title}</div>
+          <div className={classes.closeContainer}>
+            <Close className={classes.close} onClick={onClose}/>
           </div>
-        </Drawer>
-      </React.Fragment>
-    </>
+        </div>
+        <div className={classes.contentContainer}>
+          {content}
+        </div>
+      </div>
+    </Drawer>
   )
 }
 
@@ -112,4 +114,3 @@ const useStyles = makeStyles({
   },
 })
 
-export default ItemPropertiesDrawer
