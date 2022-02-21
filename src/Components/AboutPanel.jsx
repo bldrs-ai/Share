@@ -2,7 +2,7 @@ import React from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/3D/attention.svg'
+import About from '../assets/2D/Warning.svg'
 
 
 /**
@@ -63,7 +63,7 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
 
 const useStyles = makeStyles({
   container: {
-    position: 'absolute',
+    position: 'fixed',
     top: '0px',
     left: '0px',
     width: '100%',

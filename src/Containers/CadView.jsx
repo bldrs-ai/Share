@@ -7,13 +7,14 @@ import SearchIndex from './SearchIndex.js'
 import ItemPanelButton from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import ToolBar from '../Components/ToolBar'
+import BaseGroup from '../Components/BaseGroup'
 import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import LogoDark from '../assets/2D/Logo.svg'
 
 
 /**
@@ -336,9 +337,6 @@ export default function CadView({
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
       <div className={classes.menusWrapper}>
-        <ToolBar
-          fileOpen={loadLocalFile}
-          offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
@@ -382,6 +380,10 @@ export default function CadView({
             unSelectItem={()=>unSelectItems()}
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
           />
+        </div>
+        <LogoDark className = {classes.logo}/>
+        <div className = {classes.baseGroup}>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>
     </div>
@@ -432,14 +434,19 @@ function initViewer(pathPrefix) {
 }
 
 
-const PANEL_TOP = 84
-const useStyles = makeStyles((theme) => ({
+const PANEL_TOP = 20
+const useStyles = makeStyles(() => ({
   pageContainer: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    width: '100%',
-    height: '100%',
+    'position': 'absolute',
+    'top': '0px',
+    'left': '0px',
+    'minWidth': '100vw',
+    'minHeight': '100vh',
+    '@media (max-width: 900px)': {
+      height: ' calc(100vh - calc(100vh - 100%))',
+      minHeight: '-webkit-fill-available',
+    },
+
   },
   viewerContainer: {
     zIndex: 0,
@@ -460,7 +467,7 @@ const useStyles = makeStyles((theme) => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: '23px',
+    left: '26px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -508,14 +515,34 @@ const useStyles = makeStyles((theme) => ({
   },
   iconGroup: {
     'position': 'absolute',
-    'bottom': `40px`,
-    'right': '20px',
+    'top': '70px',
+    'right': '2px',
     'border': 'none',
-    'zIndex': 1000,
+    'zIndex': 0,
     '@media (max-width: 900px)': {
-      bottom: `0px`,
-      top: '140px',
-      right: '14px',
+      'bottom': `0px`,
+      'top': '62px',
+      'right': '28px',
+    },
+  },
+  logo: {
+    'position': 'absolute',
+    'bottom': '12px',
+    'left': '30px',
+    'width': '120px',
+    '@media (max-width: 900px)': {
+      position: 'absolute',
+      bottom: '28px',
+      left: '26px',
+      width: '140px',
+    },
+  },
+  baseGroup: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'right': '20px',
+    '@media (max-width: 900px)': {
+      'bottom': `20px`,
     },
   },
 }))
