@@ -10,7 +10,7 @@ import NodeOpen from '../assets/3D/nodeOpen.svg'
 
 
 /**
- * @param {Object} viewer
+ * @param {Object} model
  * @param {Object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
@@ -21,7 +21,7 @@ import NodeOpen from '../assets/3D/nodeOpen.svg'
  * @return {Object}
  */
 export default function NavPanel({
-  viewer,
+  model,
   element,
   selectedElements,
   defaultExpandedElements,
@@ -71,7 +71,7 @@ export default function NavPanel({
         >
           {
             <NavTree
-              viewer={viewer}
+              model={model}
               element={element}
               pathPrefix={pathPrefix}
               onElementSelect={onElementSelect}

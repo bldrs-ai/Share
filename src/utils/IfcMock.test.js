@@ -24,9 +24,47 @@ test('MockViewer getPropertySets', async () => {
   expect(val).toEqual([])
 })
 
-/**
- * Create a mock IFC viewer
- */
+
+/** Create a mock IFC model */
+export class MockModel {
+  /** @param {Object} propsById Mock IFC properties. */
+  constructor(propsById = {}) {
+    this.propsById = propsById
+  }
+
+
+  /**
+   * @param {Number} expressId
+   * @return {Object}
+   */
+  getItemProperties(expressId) {
+    return this.propsById[expressId]
+  }
+
+
+  /**
+   * @param {Number} expressId
+   * @return {Promise}
+   */
+  getPropertySets(expressId) {
+    return new Promise((resolve, reject) => {
+      resolve([])
+    })
+  }
+
+
+  /**
+   * @param {Object} elt IFC element
+   * @param {Object} viewer IfcViewerApi instance
+   * @return {string}
+   */
+  getIfcType(elt, viewer) {
+    return 'IFCELEMENT'
+  }
+}
+
+
+/** Create a mock IFC viewer */
 export class MockViewer {
   /** @param {Object} propsById Mock IFC properties. */
   constructor(propsById = {}) {
