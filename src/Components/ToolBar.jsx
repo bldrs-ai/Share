@@ -12,14 +12,14 @@ import Open from '../assets/3D/open.svg'
 
 
 /**
+ * @param {Object} viewer
  * @param {Function} fileOpen
  * @param {Number} offsetTop
- * @return {Object} React component.
+ * @return {Object} The ToolBar react component
  */
-export default function ToolBar({fileOpen, offsetTop}) {
+export default function ToolBar({viewer, fileOpen, offsetTop}) {
   const classes = useStyles()
   const themeMode = useTheme()
-
   return (
     <AppBar
       elevation={0}
@@ -43,12 +43,25 @@ export default function ToolBar({fileOpen, offsetTop}) {
           </IconButton>
         </div>
         <div className = {classes.rightContainer}>
+          <button onClick={() => onCamera(viewer)}>Camera</button>
           <AboutControl offsetTop = {offsetTop}/>
           <Settings />
         </div>
       </Toolbar>
     </AppBar>
   )
+}
+
+
+/**
+ * Handler for onCamera button.
+ * @param {Object} viewer
+ */
+function onCamera(viewer) {
+  const camera = viewer.IFC.context.ifcCamera.cameraControls
+  const pos = camera.getPosition()
+  const {x, y, z} = pos
+  window.location.hash = `c=${x},${y},${z}`
 }
 
 
