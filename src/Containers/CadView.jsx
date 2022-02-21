@@ -420,7 +420,6 @@ const useStyles = makeStyles(() => ({
     'left': '0px',
     'minWidth': '100vw',
     'minHeight': '100vh',
-    // border:'1px solid red',
     '@media (max-width: 900px)': {
       height: ' calc(100vh - calc(100vh - 100%))',
       minHeight: '-webkit-fill-available',
@@ -506,9 +505,9 @@ const useStyles = makeStyles(() => ({
   },
   logo: {
     'position': 'absolute',
-    'bottom': '10px',
+    'bottom': '12px',
     'left': '40px',
-    'width': '200px',
+    'width': '120px',
     '@media (max-width: 900px)': {
       position: 'absolute',
       bottom: '28px',
