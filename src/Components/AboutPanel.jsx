@@ -2,7 +2,7 @@ import React from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/2D/Warning.svg'
+import About from '../assets/Icons/Warning.svg'
 
 
 /**
