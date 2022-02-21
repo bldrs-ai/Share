@@ -5,10 +5,9 @@ import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
 import ItemPanelButton from '../Components/ItemPanel'
-import {NavPanelControl} from '../Components/NavPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import InfoGroup from '../Components/InfoGroup'
+import BaseGroup from '../Components/BaseGroup'
 import IconGroup from '../Components/IconGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
@@ -352,11 +351,6 @@ export default function CadView({
           )}
         </div>
 
-        <NavPanelControl
-          topOffset = {PANEL_TOP}
-          onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-        />
-
         {showNavPanel &&
           <NavPanel
             model={model}
@@ -388,8 +382,8 @@ export default function CadView({
           />
         </div>
         <LogoDark className = {classes.logo}/>
-        <div className = {classes.infoGroup}>
-          <InfoGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
+        <div className = {classes.baseGroup}>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>
     </div>
@@ -473,7 +467,7 @@ const useStyles = makeStyles(() => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: '80px',
+    left: '26px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -543,7 +537,7 @@ const useStyles = makeStyles(() => ({
       width: '140px',
     },
   },
-  infoGroup: {
+  baseGroup: {
     'position': 'absolute',
     'bottom': '10px',
     'right': '20px',

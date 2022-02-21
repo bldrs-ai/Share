@@ -9,6 +9,7 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Search from '../assets/2D/Search.svg'
+import Hamburger from '../assets/2D/Menu.svg'
 import debug from '../utils/debug'
 
 
@@ -62,6 +63,12 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
 
   return (
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
+      <IconButton
+        className={classes.iconButton}
+        aria-label='menu'
+        onClick={onClickMenuCb}>
+        <Hamburger className={classes.icon}/>
+      </IconButton>
       <InputBase
         inputRef={searchInputRef}
         value={inputText}
@@ -143,13 +150,13 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 const useStyles = makeStyles({
   root: {
-    'padding': '2px 2px 2px 20px',
+    'padding': '2px 2px 2px 2px',
     'display': 'flex',
     'alignItems': 'center',
-    'width': 228,
+    'width': 300,
     '@media (max-width: 900px)': {
-      'padding': '2px 2px 2px 20px',
-      'width': 210,
+      'padding': '2px 2px 2px 2px',
+      'width': 244,
     },
   },
   iconButton: {

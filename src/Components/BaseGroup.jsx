@@ -7,12 +7,12 @@ import AboutControl from './AboutPanel'
 import Open from '../assets/2D/Open.svg'
 
 
-/**
- * @param {Function} fileOpen
+/**Base group contains Settings, ModelUpload, About
+ * @param {Function} fileOpen opens a file dialog for new model upload
  * @param {Number} offsetTop
  * @return {Object} React component.
  */
-export default function InfoGroup({fileOpen, offsetTop}) {
+export default function BaseGroup({fileOpen, offsetTop}) {
   const classes = useStyles()
   return (
     <div className = {classes.container}>
@@ -33,16 +33,17 @@ export default function InfoGroup({fileOpen, offsetTop}) {
   )
 }
 
+
 const useStyles = makeStyles({
   icon: {
-    width: '30px',
-    height: '30px',
+    'width': '30px',
+    'height': '30px',
   },
   container: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    width: '140px',
-    alignItems: 'center',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'space-between',
+    'width': '140px',
+    'alignItems': 'center',
   },
 })
