@@ -1,8 +1,8 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
+import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/3D/attention.svg'
+import About from '../assets/2D/Warning.svg'
 
 
 /**
@@ -15,9 +15,9 @@ export default function AboutControl({offsetTop}) {
   const classes = useStyles()
   return (
     <div >
-      <Typography className = {classes.about} onClick={() => {
-        setOpen(!open)
-      }}>About</Typography>
+      <IconButton onClick = {()=>setOpen(!open)}>
+        <About className = {classes.icon}/>
+      </IconButton>
       {open && <AboutPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTopCssStr={offsetTop}/>}
