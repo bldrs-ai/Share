@@ -148,7 +148,7 @@ const useStyles = makeStyles({
     'top': (props) =>`${props.topOffset}px`,
     'left': '30px',
     '@media (max-width: 900px)': {
-   'left': '20px',
+      'left': '20px',
     },
   },
 })

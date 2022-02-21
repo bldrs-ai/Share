@@ -415,11 +415,11 @@ function initViewer(pathPrefix) {
 const PANEL_TOP = 20
 const useStyles = makeStyles(() => ({
   pageContainer: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    minWidth: '100vw',
-    minHeight: '100vh',
+    'position': 'absolute',
+    'top': '0px',
+    'left': '0px',
+    'minWidth': '100vw',
+    'minHeight': '100vh',
     // border:'1px solid red',
     '@media (max-width: 900px)': {
       height: ' calc(100vh - calc(100vh - 100%))',
