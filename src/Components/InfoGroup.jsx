@@ -1,5 +1,6 @@
 import React from 'react'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import Settings from './Settings'
 import AboutControl from './AboutPanel'
@@ -16,15 +17,17 @@ export default function InfoGroup({fileOpen, offsetTop}) {
   return (
     <div className = {classes.container}>
       <AboutControl offsetTop = {offsetTop}/>
-      <IconButton
-        aria-label='account of current user'
-        aria-controls='menu-appbar'
-        aria-haspopup='true'
-        onClick={fileOpen}
-        color='inherit'
-      >
-        <Open className = {classes.icon}/>
-      </IconButton>
+      <Tooltip title="Upload Model" placement="top">
+        <IconButton
+          aria-label='account of current user'
+          aria-controls='menu-appbar'
+          aria-haspopup='true'
+          onClick={fileOpen}
+          color='inherit'
+        >
+          <Open className = {classes.icon}/>
+        </IconButton>
+      </Tooltip>
       <Settings />
     </div>
   )

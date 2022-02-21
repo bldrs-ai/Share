@@ -488,8 +488,8 @@ const useStyles = makeStyles(() => ({
   },
   iconGroup: {
     'position': 'absolute',
-    'bottom': '400px',
-    'right': '6px',
+    'top': '70px',
+    'right': '2px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {

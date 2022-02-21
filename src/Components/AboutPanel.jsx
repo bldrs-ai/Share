@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/2D/Warning.svg'
 
@@ -15,9 +16,11 @@ export default function AboutControl({offsetTop}) {
   const classes = useStyles()
   return (
     <div >
-      <IconButton onClick = {()=>setOpen(!open)}>
-        <About className = {classes.icon}/>
-      </IconButton>
+      <Tooltip title="About" placement="top">
+        <IconButton onClick = {()=>setOpen(!open)}>
+          <About className = {classes.icon}/>
+        </IconButton>
+      </Tooltip>
       {open && <AboutPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTopCssStr={offsetTop}/>}

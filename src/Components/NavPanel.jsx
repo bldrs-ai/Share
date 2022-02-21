@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Paper from '@mui/material/Paper'
+import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
 import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
@@ -19,13 +20,13 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
   const classes = useStyles({topOffset: topOffset})
   return (
     <div className={classes.toggleButton}>
-      <IconButton onClick={() => {
-        onClickMenuCb()
-      }}
-      >
-        <Tree className = {classes.treeIcon}/>
-      </IconButton>
-
+      <Tooltip title="Model Navigation" placement="bottom">
+        <IconButton onClick={() => {
+          onClickMenuCb()
+        }}>
+          <Tree className = {classes.treeIcon}/>
+        </IconButton>
+      </Tooltip>
     </div>
   )
 }
