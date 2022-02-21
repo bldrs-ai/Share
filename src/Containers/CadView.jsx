@@ -528,7 +528,7 @@ const useStyles = makeStyles(() => ({
   logo: {
     'position': 'absolute',
     'bottom': '12px',
-    'left': '40px',
+    'left': '30px',
     'width': '120px',
     '@media (max-width: 900px)': {
       position: 'absolute',
