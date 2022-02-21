@@ -5,6 +5,7 @@ import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
 import ItemPanelControl from '../Components/ItemPanel'
+import {NavPanelControl} from '../Components/NavPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import InfoGroup from '../Components/InfoGroup'
@@ -178,7 +179,7 @@ export default function CadView({
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
     initSearch(rootElt, viewer)
-    setShowNavPanel(true)
+    // setShowNavPanel(true)
   }
 
 
@@ -323,6 +324,11 @@ export default function CadView({
           )}
         </div>
 
+        <NavPanelControl
+          topOffset = {PANEL_TOP}
+          onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+        />
+
         {showNavPanel &&
           <NavPanel
             viewer={viewer}
@@ -434,7 +440,7 @@ const useStyles = makeStyles(() => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: '23px',
+    left: '80px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',

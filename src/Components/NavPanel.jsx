@@ -2,14 +2,35 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
+import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
 import NodeClosed from '../assets/2D/NodeClosed.svg'
 import NodeOpen from '../assets/2D/NodeOpened.svg'
+import Tree from '../assets/2D/Tree.svg'
 
+/** Navigation panel control is a button that toggles the visibility of nav panel
+ * @param {Number} topOffset global offset defined in the cad view
+ * @param {function} onClickMenuCb callback passed from cad view
+ * @return {Object} The button react component
+ */
+export function NavPanelControl({topOffset, onClickMenuCb}) {
+  const classes = useStyles({topOffset: topOffset})
+  return (
+    <div className={classes.toggleButton}>
+      <IconButton onClick={() => {
+        onClickMenuCb()
+      }}
+      >
+        <Tree className = {classes.treeIcon}/>
+      </IconButton>
 
-/**
+    </div>
+  )
+}
+
+/** Navigation panel contains hierarchical tree of IFC elements
  * @param {Object} viewer
  * @param {Object} element
  * @param {Array} selectedElements
@@ -113,8 +134,20 @@ const useStyles = makeStyles({
     width: '220px',
     backgroundColor: 'lightGray',
   },
+  treeIcon: {
+    width: 30,
+    height: 30,
+  },
   icon: {
     width: 12,
     height: 12,
+  },
+  toggleButton: {
+    'position': 'absolute',
+    'top': (props) =>`${props.topOffset}px`,
+    'left': '30px',
+    '@media (max-width: 900px)': {
+      right: '10px',
+    },
   },
 })
