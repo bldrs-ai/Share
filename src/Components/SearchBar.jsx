@@ -162,7 +162,7 @@ const useStyles = makeStyles({
   inputBase: {
     'flex': 1,
     '& input': {
-      fontSize: '18px',
+      fontSize: '16px',
     },
   },
 })

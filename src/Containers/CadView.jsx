@@ -418,8 +418,14 @@ const useStyles = makeStyles(() => ({
     position: 'absolute',
     top: '0px',
     left: '0px',
-    width: '100%',
-    height: '100%',
+    minWidth: '100vw',
+    minHeight: '100vh',
+    // border:'1px solid red',
+    '@media (max-width: 900px)': {
+      height: ' calc(100vh - calc(100vh - 100%))',
+      minHeight: '-webkit-fill-available',
+    },
+
   },
   viewerContainer: {
     zIndex: 0,
