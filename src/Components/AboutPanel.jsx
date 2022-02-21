@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/2D/Warning.svg'
+import About from '../assets/icons/Warning.svg'
 
 
 /**

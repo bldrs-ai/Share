@@ -7,9 +7,9 @@ import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
-import NodeClosed from '../assets/2D/NodeClosed.svg'
-import NodeOpen from '../assets/2D/NodeOpened.svg'
-import Hamburger from '../assets/2D/Menu.svg'
+import NodeClosed from '../assets/icons/NodeClosed.svg'
+import NodeOpen from '../assets/icons/NodeOpened.svg'
+import Hamburger from '../assets/icons/Menu.svg'
 
 /** Navigation panel control is a button that toggles the visibility of nav panel
  * @param {Number} topOffset global offset defined in the cad view

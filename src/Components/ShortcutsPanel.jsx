@@ -3,8 +3,8 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/2D/Delete.svg'
-import Question from '../assets/2D/Question.svg'
+import Close from '../assets/icons/Delete.svg'
+import Question from '../assets/icons/Question.svg'
 
 
 /**
