@@ -9,8 +9,6 @@ import Delete from '../assets/Icons/Delete.svg'
 
 
 /**
- * @param {function} placeCutPlane
- * @param {function} unSelectItem
  * @param {function} toggleShortCutsPanel
  * @return {Object}
  */
