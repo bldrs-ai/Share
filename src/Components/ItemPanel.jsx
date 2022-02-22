@@ -6,24 +6,32 @@ import MenuButton from '../Components/MenuButton'
 
 
 /**
- * Container for ItemProperties.  ItemProperties is wrapped in an
+ * Container for ItemProperties. ItemProperties is wrapped in an
  * ItemPropertiesDrawer to toggle hiding.
  * @param {Object} model IFC model
  * @param {Object} element The currently selected IFC element
  * @param {Number} topOffset Screen offset position
  * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({model, element, topOffset}) {
+export default function ItemPanelButton({model, element, topOffset, toggle, open}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
+  console.log('open', open)
+
   return (
     <div className={classes.toggleButton}>
-      <MenuButton onClick={() => setShowItemPanel(!showItemPanel)} />
+      <MenuButton onClick={() => {
+        toggle();
+        setShowItemPanel(!showItemPanel)
+      }} />
       {showItemPanel &&
        <ItemPropertiesDrawer
          content={<ItemProperties model={model} element={element} />}
          title={'IFC Information'}
-         onClose={() => setShowItemPanel(false)}
+         onClose={() => {
+          toggle();
+          setShowItemPanel(false)}
+        }
        />}
     </div>
   )

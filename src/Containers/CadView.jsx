@@ -322,7 +322,6 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
-    setShowItemPanel(false)
 
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
@@ -368,13 +367,14 @@ export default function CadView({
           <ItemPanelButton
             model={model}
             element={selectedElement}
-            close={()=>setShowItemPanel(false)}
+            open = {showItemPanel}
+            toggle={()=>setShowItemPanel(!showItemPanel)}
             topOffset={PANEL_TOP}
             placeCutPlane={()=>placeCutPlane()}
             unSelectItem={()=>unSelectItems()}
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
         </div>
-        <div className={classes.iconGroup}>
+        <div className={showItemPanel?classes.iconGroupOpen:classes.iconGroup}>
           <IconGroup
             placeCutPlane={()=>placeCutPlane()}
             unSelectItem={()=>unSelectItems()}
@@ -382,7 +382,7 @@ export default function CadView({
           />
         </div>
         <LogoDark className = {classes.logo}/>
-        <div className = {classes.baseGroup}>
+        <div className = {showItemPanel?classes.baseGroupOpen:classes.baseGroup}>
           <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>
@@ -525,6 +525,18 @@ const useStyles = makeStyles(() => ({
       'right': '28px',
     },
   },
+  iconGroupOpen: {
+    'position': 'absolute',
+    'top': '70px',
+    'right': '342px',
+    'border': 'none',
+    'zIndex': 0,
+    '@media (max-width: 900px)': {
+      'bottom': `0px`,
+      'top': '62px',
+      'right': '28px',
+    },
+  },
   logo: {
     'position': 'absolute',
     'bottom': '12px',
@@ -541,6 +553,14 @@ const useStyles = makeStyles(() => ({
     'position': 'absolute',
     'bottom': '10px',
     'right': '20px',
+    '@media (max-width: 900px)': {
+      'bottom': `20px`,
+    },
+  },
+  baseGroupOpen: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'right': '360px',
     '@media (max-width: 900px)': {
       'bottom': `20px`,
     },
