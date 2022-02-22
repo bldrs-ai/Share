@@ -8,7 +8,7 @@ import ItemPanelButton from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
-import IconGroup from '../Components/IconGroup'
+import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
@@ -375,7 +375,7 @@ export default function CadView({
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
         </div>
         <div className={showItemPanel?classes.iconGroupOpen:classes.iconGroup}>
-          <IconGroup
+          <OperationsGroup
             placeCutPlane={()=>placeCutPlane()}
             unSelectItem={()=>unSelectItems()}
             toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
