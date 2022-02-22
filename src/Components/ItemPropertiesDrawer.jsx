@@ -45,7 +45,7 @@ export default function ItemPropertiesDrawer({
 
 const useStyles = makeStyles({
   drawerPaper: {
-    'marginTop': '65px',
+    'marginTop': '0px',
     'width': '350px',
     'borderRadius': '0px',
     'marginLeft': '20px',
@@ -84,6 +84,7 @@ const useStyles = makeStyles({
   closeContainer: {
     'position': 'relative',
     'right': '20px',
+    'top': '4px',
     '@media (max-width: 900px)': {
       maxHeight: '200px',
       right: '20px',
@@ -96,8 +97,8 @@ const useStyles = makeStyles({
     'zIndex': 1000,
     'cursor': 'pointer',
     '@media (max-width: 900px)': {
-      height: '30px',
-      width: '30px',
+      height: '20px',
+      width: '20px',
     },
   },
   contentContainer: {
@@ -112,3 +113,4 @@ const useStyles = makeStyles({
     },
   },
 })
+
