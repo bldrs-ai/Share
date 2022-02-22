@@ -62,9 +62,8 @@ const useStyles = makeStyles({
     'display': 'flex',
     'justifyContent': 'space-between',
     'alignItems': 'center',
-    'margin': '16px 10px 8px 10px',
+    'margin': '30px 10px 8px 10px',
     'paddingBottom': '12px',
-    'borderBottom': '1px solid #494747',
     '@media (max-width: 900px)': {
       paddingBottom: '10px',
       borderBottom: 'none',
@@ -73,8 +72,7 @@ const useStyles = makeStyles({
   title: {
     fontFamily: 'Helvetica',
     fontSize: '20px',
-    fontWeight: '200px',
-    color: '#696969',
+    fontWeight: 200,
     marginLeft: '13px',
   },
   closeContainer: {
