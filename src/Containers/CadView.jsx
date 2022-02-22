@@ -58,7 +58,7 @@ export default function CadView({
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
-  // eslint-disable-next-line no-unused-vars
+
   const [showItemPanel, setShowItemPanel] = useState(false)
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [isLoading, setIsLoading] = useState(false)

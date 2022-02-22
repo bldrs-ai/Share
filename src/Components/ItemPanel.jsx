@@ -21,7 +21,7 @@ export default function ItemPanelButton({model, element, topOffset, toggle, open
   return (
     <div className={classes.toggleButton}>
       <MenuButton onClick={() => {
-        toggle();
+        toggle()
         setShowItemPanel(!showItemPanel)
       }} />
       {showItemPanel &&
@@ -29,9 +29,10 @@ export default function ItemPanelButton({model, element, topOffset, toggle, open
          content={<ItemProperties model={model} element={element} />}
          title={'IFC Information'}
          onClose={() => {
-          toggle();
-          setShowItemPanel(false)}
-        }
+           toggle()
+           setShowItemPanel(false)
+         }
+         }
        />}
     </div>
   )
