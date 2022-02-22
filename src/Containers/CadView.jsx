@@ -345,6 +345,7 @@ export default function CadView({
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              showNavPanel = {showNavPanel}
               isOpen={showNavPanel}
             />
           )}

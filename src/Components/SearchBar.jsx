@@ -10,6 +10,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Search from '../assets/Icons/Search.svg'
 import Hamburger from '../assets/Icons/Menu.svg'
+import Close from '../assets/Icons/Close.svg'
 import debug from '../utils/debug'
 
 
@@ -18,7 +19,7 @@ import debug from '../utils/debug'
  * @param {boolean} isOpen toggle
  * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, isOpen}) {
+export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -26,6 +27,7 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   const classes = useStyles()
+console.log('show nav panel', showNavPanel)
 
 
   useEffect(() => {
@@ -67,7 +69,7 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
         className={classes.iconButton}
         aria-label='menu'
         onClick={onClickMenuCb}>
-        <Hamburger className={classes.icon}/>
+        {showNavPanel?<Close className={classes.icon}/>:<Hamburger className={classes.icon}/>}
       </IconButton>
       <InputBase
         inputRef={searchInputRef}
