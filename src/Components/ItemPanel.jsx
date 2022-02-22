@@ -12,17 +12,17 @@ import Hamburger from '../assets/Icons/Menu.svg'
  * @param {Object} model IFC model
  * @param {Object} element The currently selected IFC element
  * @param {Number} topOffset Screen offset position
- * @param {function} setShowitempanel toggles the state of the showItemPanel in cadView
+ * @param {function} onClickCb
  * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({model, element, topOffset, setShowitempanel}) {
+export default function ItemPanelButton({model, element, topOffset, onClickCb}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
 
   return (
     <div className={classes.toggleButton}>
       <IconButton onClick={() => {
-        setShowitempanel()
+        onClickCb()
         setShowItemPanel(!showItemPanel)
       }} >
         <Hamburger className={classes.icon}/>
@@ -32,7 +32,7 @@ export default function ItemPanelButton({model, element, topOffset, setShowitemp
          content={<ItemProperties model={model} element={element} />}
          title={'IFC Information'}
          onClose={() => {
-           setShowitempanel()
+           onClickCb()
            setShowItemPanel(false)
          }}
        />}

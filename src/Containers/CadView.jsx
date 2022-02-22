@@ -367,7 +367,7 @@ export default function CadView({
           model={model}
           element={selectedElement}
           open={showItemPanel}
-          setShowitempanel={() => setShowItemPanel(!showItemPanel)}
+          onClickCb={() => setShowItemPanel(!showItemPanel)}
           topOffset={PANEL_TOP}
           placeCutPlane={() => placeCutPlane()}
           unSelectItem={() => unSelectItems()}

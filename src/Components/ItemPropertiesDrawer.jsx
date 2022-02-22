@@ -30,7 +30,7 @@ export default function ItemPropertiesDrawer({
       <div className={classes.drawerContainer}>
         <div className={classes.headerWrapper} >
           <div className={classes.title}>{title}</div>
-          <Close className={classes.close} onClick = {onClose}/>
+          <Close className={classes.close} onClick={onClose}/>
         </div>
         <div className={classes.contentContainer}>
           {content}
