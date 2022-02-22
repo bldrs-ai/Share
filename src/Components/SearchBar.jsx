@@ -27,7 +27,6 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   const classes = useStyles()
-console.log('show nav panel', showNavPanel)
 
 
   useEffect(() => {
