@@ -1,8 +1,10 @@
 import React, {useState} from 'react'
 import {makeStyles} from '@mui/styles'
+import IconButton from '@mui/material/IconButton'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
-import MenuButton from '../Components/MenuButton'
+import Hamburger from '../assets/Icons/Menu.svg'
+import Close from '../assets/Icons/Close.svg'
 
 
 /**
@@ -19,11 +21,15 @@ export default function ItemPanelButton({model, element, topOffset, toggle, open
   console.log('open', open)
 
   return (
-    <div className={classes.toggleButton}>
-      <MenuButton onClick={() => {
+    <div className={showItemPanel?classes.toggleButtonOpen:classes.toggleButton}>
+      <IconButton onClick={() => {
         toggle()
         setShowItemPanel(!showItemPanel)
-      }} />
+      }} >
+        {showItemPanel?
+            <Close className = {classes.icon}/>:
+            <Hamburger className = {classes.icon}/>}
+      </IconButton>
       {showItemPanel &&
        <ItemPropertiesDrawer
          content={<ItemProperties model={model} element={element} />}
@@ -31,8 +37,7 @@ export default function ItemPanelButton({model, element, topOffset, toggle, open
          onClose={() => {
            toggle()
            setShowItemPanel(false)
-         }
-         }
+         }}
        />}
     </div>
   )
@@ -44,6 +49,14 @@ const useStyles = makeStyles({
     'position': 'absolute',
     'top': (props) =>`${props.topOffset}px`,
     'right': '20px',
+    '@media (max-width: 900px)': {
+      right: '10px',
+    },
+  },
+  toggleButtonOpen: {
+    'position': 'absolute',
+    'top': (props) =>`${props.topOffset}px`,
+    'right': '360px',
     '@media (max-width: 900px)': {
       right: '10px',
     },
@@ -80,5 +93,9 @@ const useStyles = makeStyles({
     height: '24px',
     marginRight: '10px',
     cursor: 'pointer',
+  },
+  icon: {
+    width: '30px',
+    height: '30px',
   },
 })

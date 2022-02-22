@@ -349,7 +349,6 @@ export default function CadView({
             />
           )}
         </div>
-
         {showNavPanel &&
           <NavPanel
             model={model}
@@ -363,17 +362,15 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <div className={classes.itemPanelContainer}>
-          <ItemPanelButton
-            model={model}
-            element={selectedElement}
-            open = {showItemPanel}
-            toggle={()=>setShowItemPanel(!showItemPanel)}
-            topOffset={PANEL_TOP}
-            placeCutPlane={()=>placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
-        </div>
+        <ItemPanelButton
+          model={model}
+          element={selectedElement}
+          open = {showItemPanel}
+          toggle={()=>setShowItemPanel(!showItemPanel)}
+          topOffset={PANEL_TOP}
+          placeCutPlane={()=>placeCutPlane()}
+          unSelectItem={()=>unSelectItems()}
+          toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
         <div className={showItemPanel?classes.iconGroupOpen:classes.iconGroup}>
           <OperationsGroup
             placeCutPlane={()=>placeCutPlane()}

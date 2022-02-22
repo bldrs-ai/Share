@@ -1,7 +1,6 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Close.svg'
 
 
 /**
@@ -30,9 +29,6 @@ export default function ItemPropertiesDrawer({
       <div className={classes.drawerContainer}>
         <div className={classes.headerWrapper} >
           <div className={classes.title}>{title}</div>
-          <div className={classes.closeContainer}>
-            <Close className={classes.close} onClick={onClose}/>
-          </div>
         </div>
         <div className={classes.contentContainer}>
           {content}

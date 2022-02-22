@@ -50,7 +50,7 @@ export default function ItemProperties({model, element}) {
  *
  * @param {Object} model IFC model
  * @param {Object} ifcProps Caller should pass the root IFC element.
- *    Recursive calls will pass children
+ * Recursive calls will pass children
  * @param {Number} serial
  * @param {boolean} isPset Is property set
  * @return {Object} A property table react component
