@@ -33,17 +33,17 @@ export default function ItemProperties({model, element}) {
   return (
     <div className={classes.propsContainer}>
       {
-        Object.keys(element).length === 0
-          ? <h2 className={classes.noElement}>No element selected</h2>
-          : <>
-              <h2 className={classes.sectionTitle}>Properties</h2>
-              {propTable || 'Loading...'}
-              <h2 className={classes.sectionTitle}>
+        Object.keys(element).length === 0 ?
+          <h2 className={classes.noElement}>No element selected</h2> :
+          <>
+            <h2 className={classes.sectionTitle}>Properties</h2>
+            {propTable || 'Loading...'}
+            <h2 className={classes.sectionTitle}>
                 Property Sets
-                <Toggle onChange={() => setExpandAll(!expandAll)} />
-              </h2>
-              {psetsList || 'Loading...'}
-            </>
+              <Toggle onChange={() => setExpandAll(!expandAll)} />
+            </h2>
+            {psetsList || 'Loading...'}
+          </>
       }
     </div>)
 }
