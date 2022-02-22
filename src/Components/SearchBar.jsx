@@ -8,8 +8,8 @@ import InputBase from '@mui/material/InputBase'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Search from '../assets/icons/Search.svg'
-import Hamburger from '../assets/icons/Menu.svg'
+import Search from '../assets/Icons/Search.svg'
+import Hamburger from '../assets/Icons/Menu.svg'
 import debug from '../utils/debug'
 
 
