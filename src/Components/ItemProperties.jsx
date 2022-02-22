@@ -32,17 +32,18 @@ export default function ItemProperties({model, element}) {
 
   return (
     <div className={classes.propsContainer}>
-      {Object.keys(element).length === 0 ?
-      <h2 className={classes.noElement}>No element selected</h2> :
-      <>
-        <h2 className={classes.sectionTitle}>Properties</h2>
-        {propTable || 'Loading...'}
-        <h2 className={classes.sectionTitle}>
-          Property Sets
-          <Toggle onChange={() => setExpandAll(!expandAll)} />
-        </h2>
-        {psetsList || 'Loading...'}
-      </>
+      {
+        Object.keys(element).length === 0 ?
+          <h2 className={classes.noElement}>No element selected</h2> :
+          <>
+            <h2 className={classes.sectionTitle}>Properties</h2>
+            {propTable || 'Loading...'}
+            <h2 className={classes.sectionTitle}>
+                Property Sets
+              <Toggle onChange={() => setExpandAll(!expandAll)} />
+            </h2>
+            {psetsList || 'Loading...'}
+          </>
       }
     </div>)
 }
@@ -377,6 +378,7 @@ const useStyles = makeStyles({
     fontWeight: 200,
     paddingLeft: '4px',
     paddingRight: '4px',
+    borderBottom: '1px solid grey',
   },
   noElement: {
     maxWidth: '320px',

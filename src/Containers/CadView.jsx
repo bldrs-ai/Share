@@ -345,7 +345,7 @@ export default function CadView({
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel = {showNavPanel}
+              showNavPanel={showNavPanel}
               isOpen={showNavPanel}
             />
           )}
@@ -366,21 +366,21 @@ export default function CadView({
         <ItemPanelButton
           model={model}
           element={selectedElement}
-          open = {showItemPanel}
-          toggle={()=>setShowItemPanel(!showItemPanel)}
+          open={showItemPanel}
+          setShowitempanel={() => setShowItemPanel(!showItemPanel)}
           topOffset={PANEL_TOP}
-          placeCutPlane={()=>placeCutPlane()}
-          unSelectItem={()=>unSelectItems()}
-          toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
-        <div className={showItemPanel?classes.iconGroupOpen:classes.iconGroup}>
+          placeCutPlane={() => placeCutPlane()}
+          unSelectItem={() => unSelectItems()}
+          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}/>
+        <div className={showItemPanel ? classes.iconGroupOpen : classes.iconGroup}>
           <OperationsGroup
-            placeCutPlane={()=>placeCutPlane()}
+            placeCutPlane={() => placeCutPlane()}
             unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
+            toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
           />
         </div>
-        <LogoDark className = {classes.logo}/>
-        <div className = {showItemPanel?classes.baseGroupOpen:classes.baseGroup}>
+        <LogoDark className={classes.logo}/>
+        <div className={showItemPanel ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>

@@ -12,13 +12,13 @@ import About from '../assets/Icons/Warning.svg'
  * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
-  const [open, setOpen]=useState(true)
+  const [open, setOpen] = useState(true)
   const classes = useStyles()
   return (
     <div >
       <Tooltip title="About" placement="top">
-        <IconButton onClick = {()=>setOpen(!open)}>
-          <About className = {classes.icon}/>
+        <IconButton onClick={() => setOpen(!open)}>
+          <About className={classes.icon}/>
         </IconButton>
       </Tooltip>
       {open && <AboutPanel openToggle={()=>{

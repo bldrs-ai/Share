@@ -1,10 +1,9 @@
 import React, {useState} from 'react'
-import {makeStyles} from '@mui/styles'
 import IconButton from '@mui/material/IconButton'
+import {makeStyles} from '@mui/styles'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
 import Hamburger from '../assets/Icons/Menu.svg'
-import Close from '../assets/Icons/Close.svg'
 
 
 /**
@@ -13,29 +12,27 @@ import Close from '../assets/Icons/Close.svg'
  * @param {Object} model IFC model
  * @param {Object} element The currently selected IFC element
  * @param {Number} topOffset Screen offset position
+ * @param {function} setShowitempanel toggles the state of the showItemPanel in cadView
  * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({model, element, topOffset, toggle, open}) {
+export default function ItemPanelButton({model, element, topOffset, setShowitempanel}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
-  console.log('open', open)
 
   return (
-    <div className={showItemPanel?classes.toggleButtonOpen:classes.toggleButton}>
+    <div className={classes.toggleButton}>
       <IconButton onClick={() => {
-        toggle()
+        setShowitempanel()
         setShowItemPanel(!showItemPanel)
       }} >
-        {showItemPanel?
-            <Close className = {classes.icon}/>:
-            <Hamburger className = {classes.icon}/>}
+        <Hamburger className={classes.icon}/>
       </IconButton>
       {showItemPanel &&
        <ItemPropertiesDrawer
          content={<ItemProperties model={model} element={element} />}
          title={'IFC Information'}
          onClose={() => {
-           toggle()
+           setShowitempanel()
            setShowItemPanel(false)
          }}
        />}

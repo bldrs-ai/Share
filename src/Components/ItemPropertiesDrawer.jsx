@@ -1,6 +1,7 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
+import Close from '../assets/Icons/Delete.svg'
 
 
 /**
@@ -29,6 +30,7 @@ export default function ItemPropertiesDrawer({
       <div className={classes.drawerContainer}>
         <div className={classes.headerWrapper} >
           <div className={classes.title}>{title}</div>
+          <Close className={classes.close} onClick = {onClose}/>
         </div>
         <div className={classes.contentContainer}>
           {content}
@@ -74,11 +76,12 @@ const useStyles = makeStyles({
     fontSize: '20px',
     fontWeight: 200,
     marginLeft: '13px',
+    borderBottom: '1px solid grey',
   },
   closeContainer: {
     'position': 'relative',
-    'right': '20px',
-    'top': '4px',
+    'right': '40px',
+    'top': '6px',
     '@media (max-width: 900px)': {
       maxHeight: '200px',
       right: '20px',
@@ -86,8 +89,10 @@ const useStyles = makeStyles({
     },
   },
   close: {
-    'height': '20px',
-    'width': '20px',
+    'position': 'relative',
+    'right': '20px',
+    'height': '24px',
+    'width': '24px',
     'zIndex': 1000,
     'cursor': 'pointer',
     '@media (max-width: 900px)': {

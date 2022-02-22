@@ -12,7 +12,7 @@ import Open from '../assets/3D/open.svg'
 
 
 /**
- * @param {Function} fileOpen
+ * @param {function} fileOpen
  * @param {Number} offsetTop
  * @return {Object} React component.
  */

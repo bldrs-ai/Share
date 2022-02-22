@@ -9,10 +9,12 @@ import Delete from '../assets/Icons/Delete.svg'
 
 
 /**
- * @param {function} toggleShortCutsPanel
+ * OperationsGroup contains tools for cut plane, deselecting items and toggling shortcut visibility
+ * @param {function} placeCutPlane places cut plances for mobile devices
+ * @param {function} unSelectItem deselects currently selected element
  * @return {Object}
  */
-export default function OperationsGroup({placeCutPlane, unSelectItem, toggleShortCutsPanel}) {
+export default function OperationsGroup({placeCutPlane, unSelectItem}) {
   const classes = useStyles()
   const width = window.innerWidth
   return (

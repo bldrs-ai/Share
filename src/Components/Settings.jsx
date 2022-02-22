@@ -40,7 +40,7 @@ export default function Settings({toggleTheme, mode}) {
           onClick={handleMenu}
           color='inherit'
         >
-          <SettingsIcon className = {classes.icon}/>
+          <SettingsIcon className={classes.icon}/>
         </IconButton>
       </Tooltip>
       <Menu

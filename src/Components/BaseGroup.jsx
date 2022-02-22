@@ -7,8 +7,9 @@ import AboutControl from './AboutPanel'
 import Open from '../assets/Icons/Open.svg'
 
 
-/** Base group contains Settings, ModelUpload, About
- * @param {Function} fileOpen opens a file dialog for new model upload
+/**
+ * Base group contains Settings, ModelUpload, About
+ * @param {function} fileOpen opens a file dialog for new model upload
  * @param {Number} offsetTop
  * @return {Object} React component.
  */
