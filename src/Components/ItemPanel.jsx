@@ -22,20 +22,22 @@ export default function ItemPanelButton({model, element, topOffset, onClickCb}) 
   return (
     <div className={classes.toggleButton}>
       <IconButton onClick={() => {
-        onClickCb()
         setShowItemPanel(!showItemPanel)
+        onClickCb()
       }} >
         <Hamburger className={classes.icon}/>
       </IconButton>
-      {showItemPanel &&
-       <ItemPropertiesDrawer
-         content={<ItemProperties model={model} element={element} />}
-         title={'IFC Information'}
-         onClose={() => {
-           onClickCb()
-           setShowItemPanel(false)
-         }}
-       />}
+      {
+        showItemPanel
+          && <ItemPropertiesDrawer
+               content={<ItemProperties model={model} element={element} />}
+               title={'IFC Information'}
+               onClose={() => {
+                 setShowItemPanel(false)
+                 onClickCb()
+               }}
+            />
+      }
     </div>
   )
 }
