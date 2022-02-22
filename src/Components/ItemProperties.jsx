@@ -29,12 +29,11 @@ export default function ItemProperties({model, element}) {
       setPsetsList(await createPsetsList(model, element, classes, expandAll))
     })()
   }, [model, element, classes, expandAll])
-    console.log('element', Object.keys(element).length)
 
   return (
     <div className={classes.propsContainer}>
-    {Object.keys(element).length === 0 ?
-      <h2 className={classes.noElement}>No element selected</h2>:
+      {Object.keys(element).length === 0 ?
+      <h2 className={classes.noElement}>No element selected</h2> :
       <>
         <h2 className={classes.sectionTitle}>Properties</h2>
         {propTable || 'Loading...'}
@@ -44,7 +43,7 @@ export default function ItemProperties({model, element}) {
         </h2>
         {psetsList || 'Loading...'}
       </>
-    }
+      }
     </div>)
 }
 
@@ -379,12 +378,12 @@ const useStyles = makeStyles({
     paddingLeft: '4px',
     paddingRight: '4px',
   },
- noElement: {
+  noElement: {
     maxWidth: '320px',
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: 200,
-    width:'300px'
+    width: '300px',
   },
   icons: {
     width: '20px',
