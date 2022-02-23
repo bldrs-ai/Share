@@ -39,7 +39,7 @@ export default function ItemProperties({model, element}) {
             <h2 className={classes.sectionTitle}>Properties</h2>
             {propTable || 'Loading...'}
             <h2 className={classes.sectionTitle}>
-                Property Sets
+              Property Sets
               <Toggle onChange={() => setExpandAll(!expandAll)} />
             </h2>
             {psetsList || 'Loading...'}
@@ -293,7 +293,7 @@ function row(d1, d2, serial) {
  */
 function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
-      d1 === null || d1 === undefined) {
+    d1 === null || d1 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   return (

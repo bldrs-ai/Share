@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/2D_Icons/Warning.svg'
+import About from '../assets/2D_Icons/Wave.svg'
 import Hello from '../assets/2D_Icons/Hello.svg'
 
 
@@ -19,12 +19,12 @@ export default function AboutControl({offsetTop}) {
     <div >
       <Tooltip title="About" placement="top">
         <IconButton onClick={() => setOpen(!open)}>
-          <About className={classes.icon}/>
+          <About className={classes.icon} />
         </IconButton>
       </Tooltip>
-      {open && <AboutPanel openToggle={()=>{
+      {open && <AboutPanel openToggle={() => {
         setOpen(!open)
-      }} offsetTopCssStr={offsetTop}/>}
+      }} offsetTopCssStr={offsetTop} />}
     </div>)
 }
 
@@ -39,15 +39,15 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
   const classes = useStyles({offsetTop: offsetTopCssStr})
 
   return (
-    <div className = {classes.container}
-      role = "none"
-      onClick = {openToggle}
+    <div className={classes.container}
+      role="none"
+      onClick={openToggle}
       onKeyDown={openToggle} >
       <Paper elevation={3} className={classes.panel}>
-        <h1 className = {classes.title}><Hello className={classes.hello}/></h1>
+        <h1 className={classes.title}><Hello className={classes.hello} /></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
-          <a href = {'https://github.com/buildrs/Share'} target="_new">
+          <a href={'https://github.com/buildrs/Share'} target="_new">
             github.com/buildrs/Share
           </a>
         </p>
@@ -79,7 +79,8 @@ const useStyles = makeStyles({
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
-    paddingTop: '10px'},
+    paddingTop: '10px',
+  },
   panel: {
     'position': 'relative',
     'top': (props) => props.offsetTop,

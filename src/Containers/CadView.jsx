@@ -371,17 +371,17 @@ export default function CadView({
           topOffset={PANEL_TOP}
           placeCutPlane={() => placeCutPlane()}
           unSelectItem={() => unSelectItems()}
-          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}/>
+          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)} />
         <div className={showItemPanel ? classes.iconGroupOpen : classes.iconGroup}>
           <OperationsGroup
             placeCutPlane={() => placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
+            unSelectItem={() => unSelectItems()}
             toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
           />
         </div>
-        <LogoDark className={classes.logo}/>
+        <LogoDark className={classes.logo} />
         <div className={showItemPanel ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP} />
         </div>
       </div>
     </div>
@@ -406,7 +406,7 @@ function initViewer(pathPrefix) {
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.addAxes()
-  v.addGrid(20, 20)
+  v.addGrid(10, 10)
   v.clipper.active = true
 
   // Highlight items when hovering over them

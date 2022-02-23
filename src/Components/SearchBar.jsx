@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import {
   useLocation,
   useNavigate,
@@ -7,11 +7,11 @@ import {
 import InputBase from '@mui/material/InputBase'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
+import { makeStyles } from '@mui/styles'
 import debug from '../utils/debug'
 import Search from '../assets/2D_Icons/Search.svg'
-import Hamburger from '../assets/2D_Icons/MenuClear.svg'
-import Close from '../assets/2D_Icons/CloseClear.svg'
+import TreeOpen from '../assets/2D_Icons/TreeOpen.svg'
+import TreeClose from '../assets/2D_Icons/TreeClose.svg'
 
 
 /**
@@ -20,7 +20,7 @@ import Close from '../assets/2D_Icons/CloseClear.svg'
  * @param {boolean} showNavPanel toggle
  * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, showNavPanel}) {
+export default function SearchBar({ onClickMenuCb, showNavPanel }) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -58,7 +58,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         search: `?q=${inputText}`,
       })
     } else {
-      setSearchParams({q: inputText})
+      setSearchParams({ q: inputText })
     }
     searchInputRef.current.blur()
   }
@@ -69,21 +69,23 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         className={classes.iconButton}
         aria-label='menu'
         onClick={onClickMenuCb}>
-        {showNavPanel ? <Close className={classes.icon}/> : <Hamburger className={classes.icon}/>}
+        {showNavPanel
+          ? <TreeOpen className={classes.icon} />
+          : <TreeClose className={classes.icon} />}
       </IconButton>
       <InputBase
         inputRef={searchInputRef}
         value={inputText}
         onChange={onInputChange}
         placeholder='Search building'
-        inputProps={{'aria-label': 'search'}}
+        inputProps={{ 'aria-label': 'search' }}
         className={classes.inputBase}
       />
       <IconButton
         type='submit'
         className={classes.iconButton}
         aria-label='search' >
-        <Search className={classes.icon}/>
+        <Search className={classes.icon} />
       </IconButton>
     </Paper>
   )
