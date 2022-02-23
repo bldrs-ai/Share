@@ -1,10 +1,13 @@
 import React, {useState} from 'react'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/2D_Icons/Wave.svg'
 import Hello from '../assets/2D_Icons/Hello.svg'
+import Slider from '@mui/material/Slider'
+import Delete from '../assets/2D_Icons/Delete.svg'
 
 
 /**
@@ -28,6 +31,20 @@ export default function AboutControl({offsetTop}) {
     </div>)
 }
 
+const marks = [
+  {
+    value: 0,
+    label: 'mild',
+  },
+  {
+    value: 10,
+    label: 'medium',
+  },
+  {
+    value: 20,
+    label: 'high',
+  },
+]
 
 /**
  * About Panel component
@@ -43,7 +60,9 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
       role="none"
       onClick={openToggle}
       onKeyDown={openToggle} >
-      <Paper elevation={3} className={classes.panel}>
+      <Paper elevation={3} className={classes.panel} onClick={(event) => {
+        event.stopPropagation()
+      }}>
         <h1 className={classes.title}><Hello className={classes.hello} /></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
@@ -59,6 +78,28 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
           <li>Select IFC element</li>
           <li>Obtain IFC element properties </li>
         </ul>
+        <div style={{width: '100%', textAlign: 'center'}}>
+          <h2>Cookies</h2>
+          <Slider
+            sx={{width: 240, textAlign: 'center'}}
+            defaultValue={30}
+            step={10}
+            marks={marks}
+            min={0}
+            max={20} />
+          <div style={{width: '100%', textAlign: 'left'}}>
+            <ul>
+              <li>Mild - ...</li>
+              <li>Medium - ...</li>
+              <li>High - ...</li>
+            </ul>
+          </div>
+        </div>
+        <div
+          style={{position: 'absolute', right: '20px', bottom: '10px'}}
+          onClick={openToggle}>
+          <Delete style={{width: '30px'}} />
+        </div>
       </Paper>
     </div>
   )
@@ -74,6 +115,7 @@ const useStyles = makeStyles({
     height: '100vh',
     display: 'flex',
     justifyContent: 'center',
+    zIndex: 2000,
   },
   title: {
     width: '100%',
@@ -85,12 +127,12 @@ const useStyles = makeStyles({
     'position': 'relative',
     'top': (props) => props.offsetTop,
     'width': '320px',
-    'height': '380px',
+    'height': '580px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
       width: '84%',
-      height: '400px',
+      height: '590px',
     },
     '& h1, & h2': {
       color: '#696969',
