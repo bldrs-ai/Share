@@ -47,14 +47,12 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   /** A demux to help forward to the index file, load a new model or do nothing. */
   function onChangeUrlParams() {
-    console.log('Share HASH: ', window.location.hash)
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
     if (mp === null) {
       // TODO: probe for index.ifc
       navigate(appPrefix + '/v/p/index.ifc')
       return
     }
-    console.log('Share HASH 2: ', window.location.hash)
     if (modelPath === null ||
         modelPath.filepath && modelPath.filepath != mp.filepath ||
         modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
@@ -140,7 +138,7 @@ function getModelPath(installPrefix, pathPrefix, urlParams) {
       filepath: filepath,
       eltPath: parts[1],
     }
-    console.log('Share#getModelPath: is a project file: ', m, window.location.hash)
+    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
       org: urlParams['org'],

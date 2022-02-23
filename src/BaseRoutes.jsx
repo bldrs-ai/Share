@@ -31,15 +31,14 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     const referrer = document.referrer
-    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer)
+    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
     if (referrer) {
-      const ref = new URL(referrer)
+      const ref = new URL(referrer + window.location.hash)
       if (ref.pathname.length > 1) {
         navigate(ref)
       }
-    }
-    if (location.pathname === installPrefix ||
-        location.pathname === (installPrefix + '/')) {
+    } else if (location.pathname === installPrefix ||
+               location.pathname === (installPrefix + '/')) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
       navigate(installPrefix + '/share')
     }
