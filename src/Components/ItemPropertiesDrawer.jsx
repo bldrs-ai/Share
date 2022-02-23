@@ -1,7 +1,7 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Icons/Delete.svg'
+import Close from '../assets/3D/Delete.svg'
 
 
 /**
