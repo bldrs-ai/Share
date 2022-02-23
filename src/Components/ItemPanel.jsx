@@ -4,7 +4,7 @@ import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
-import Hamburger from '../assets/Icons/Menu.svg'
+import Hamburger from '../assets/2D_Icons/Menu.svg'
 
 
 /**

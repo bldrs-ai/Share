@@ -4,7 +4,7 @@ import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import Settings from './Settings'
 import AboutControl from './AboutPanel'
-import Open from '../assets/Icons/Open.svg'
+import Open from '../assets/2D_Icons/Open.svg'
 
 
 /**

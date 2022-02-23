@@ -6,9 +6,9 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import Settings from './Settings'
 import AboutControl from './AboutPanel'
-import LogoLight from '../assets/Icons/logo5.svg'
-import LogoDark from '../assets/Icons/logo5.svg'
-import Open from '../assets/Icons/open.svg'
+import LogoLight from '../assets/2D_Icons/logo5.svg'
+import LogoDark from '../assets/2D_Icons/logo5.svg'
+import Open from '../assets/2D_Icons/open.svg'
 
 
 /**

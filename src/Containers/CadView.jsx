@@ -14,7 +14,7 @@ import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import LogoDark from '../assets/Icons/Logo.svg'
+import LogoDark from '../assets/2D_Icons/Logo.svg'
 
 
 /**

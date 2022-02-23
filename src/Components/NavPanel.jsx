@@ -7,9 +7,9 @@ import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
-import NodeClosed from '../assets/Icons/NodeClosed.svg'
-import NodeOpen from '../assets/Icons/NodeOpened.svg'
-import Hamburger from '../assets/Icons/Menu.svg'
+import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
+import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
+import Hamburger from '../assets/2D_Icons/Menu.svg'
 
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel

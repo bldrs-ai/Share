@@ -9,9 +9,9 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
-import Search from '../assets/Icons/Search.svg'
-import Hamburger from '../assets/Icons/MenuClear.svg'
-import Close from '../assets/Icons/CloseClear.svg'
+import Search from '../assets/2D_Icons/Search.svg'
+import Hamburger from '../assets/2D_Icons/MenuClear.svg'
+import Close from '../assets/2D_Icons/CloseClear.svg'
 
 
 /**
