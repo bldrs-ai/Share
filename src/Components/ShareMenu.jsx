@@ -1,10 +1,10 @@
-import React, { useContext, useState } from 'react'
+import React, {useContext, useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import { makeStyles, useTheme } from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
-import { ColorModeContext } from '../Share'
+import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
 import Share from '../assets/3D/Share.svg'
 
@@ -14,7 +14,7 @@ import Share from '../assets/3D/Share.svg'
  * @param {Object} mode
  * @return {Object}
  */
-export default function ShareMenu({ toggleTheme, mode }) {
+export default function ShareMenu({toggleTheme, mode}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
   const classes = useStyles()
@@ -51,7 +51,7 @@ export default function ShareMenu({ toggleTheme, mode }) {
         }}
         open={open}
         onClose={handleClose}
-        style={{ height: 180 }}
+        style={{height: 180}}
         PaperProps={{
           style: {
             transform: 'translateX(12px) translateY(50px)',
