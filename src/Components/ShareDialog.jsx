@@ -10,9 +10,10 @@ import Copy from '../assets/3D/Copy.svg'
 import Copied from '../assets/3D/Copied.svg'
 import Checkbox from '@mui/material/Checkbox'
 import TextField from '@mui/material/TextField'
-// import {
-//   useLocation,
-// } from 'react-router-dom'
+import CameraControl, { HASH_PREFIX } from './CameraControl'
+import { addHashParams } from '../utils/location'
+import { roundCoord } from '../utils/math'
+import { useLocation } from 'react-router-dom'
 
 
 /**
@@ -20,7 +21,7 @@ import TextField from '@mui/material/TextField'
  * @param {Number} offsetTop offset tree element
  * @return {Object} The AboutControl react component.
  */
-export default function ShareDialogControl({ offsetTop }) {
+export default function ShareDialogControl({ offsetTop, viewer }) {
   const [open, setOpen] = React.useState(false)
   const classes = useStyles()
   return (
@@ -28,7 +29,7 @@ export default function ShareDialogControl({ offsetTop }) {
       <Typography className={classes.about} onClick={() => {
         setOpen(!open)
       }}><ShareIcon className={classes.icon} /></Typography>
-      {open && <ShareDialog openToggle={() => {
+      {open && <ShareDialog viewer={viewer} openToggle={() => {
         setOpen(!open)
       }} offsetTopCssStr={offsetTop} />}
     </div>)
@@ -41,41 +42,58 @@ export default function ShareDialogControl({ offsetTop }) {
  * @param {string} offsetTopCssStr
  * @return {Component} The AboutPanel react component.
  */
-function ShareDialog({ openToggle, offsetTopCssStr }) {
+function ShareDialog({ openToggle, offsetTopCssStr, viewer }) {
   const classes = useStyles({ offsetTop: offsetTopCssStr })
   const [copy, setCopy] = useState(false)
-  // const location = useLocation()
+  const [capture, setCapture] = useState(false)
+  const location = useLocation()
 
+  const toggleCameraUrlLocation = () => {
+    setCapture(!capture)
+    if (capture) {
+      addHashParams(
+        window.location,
+        HASH_PREFIX,
+        roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4))
+    } else {
+      addHashParams(
+        window.location,
+        HASH_PREFIX,
+      )
+    }
+  }
 
   return (
     <div className={classes.container}
       role="none"
-    // onClick={openToggle}
-    // onKeyDown={openToggle}
+      onClick={openToggle}
+      onKeyDown={openToggle}
     >
-      <Paper elevation={3} className={classes.panel}>
+      <Paper elevation={3} className={classes.panel} onClick={(event) => event.stopPropagation()}>
         <h1 className={classes.title}><ShareClear /></h1>
         <p>Share the link</p>
         <div className={classes.link}>
           <TextField id="outlined-basic"
             label="Link"
             variant="outlined"
-            value={location}
+            value={window.location}
             style={{ width: '280px' }} />
           {copy ?
             <Copied className={classes.copy} /> :
-            <Copy className={classes.copy} onClick={() => {
-              setCopy(true)
-              navigator.clipboard.writeText(location)
-            }
-            } />}
+            <Copy className={classes.copy}
+              onClick={() => {
+                setCopy(true)
+                navigator.clipboard.writeText(location)
+              }
+              }
+            />}
         </div>
-
         <ul>
           <li ><Checkbox
             icon={<CheckOn className={classes.check} />}
             checkedIcon={<CheckOff className={classes.check} />}
-          /> Camera</li>
+            onChange={() => toggleCameraUrlLocation()}
+          />Camera</li>
           <li><Checkbox
             icon={<CheckOn className={classes.check} />}
             checkedIcon={<CheckOff className={classes.check} />}
@@ -89,6 +107,7 @@ function ShareDialog({ openToggle, offsetTopCssStr }) {
             checkedIcon={<CheckOff className={classes.check} />}
           /> Private Share</li>
         </ul>
+        <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />
       </Paper >
     </div >
   )

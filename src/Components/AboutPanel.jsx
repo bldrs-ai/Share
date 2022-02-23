@@ -3,7 +3,6 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/3D/attention.svg'
-import {useLocation} from 'react-router-dom'
 
 
 /**
@@ -14,8 +13,6 @@ import {useLocation} from 'react-router-dom'
 export default function AboutControl({offsetTop}) {
   const [open, setOpen] = React.useState(false)
   const classes = useStyles()
-  const location = useLocation()
-  console.log('location', location)
   return (
     <div >
       <Typography className={classes.about} onClick={() => {

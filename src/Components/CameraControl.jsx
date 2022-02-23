@@ -17,11 +17,9 @@ import {roundCoord} from '../utils/math'
 export default function CameraControl({camera}) {
   debug().log('CameraControl: camera: ', camera)
   const location = useLocation()
-
   useEffect(() => {
     onLoad(camera, location)
   }, [camera, location])
-
   return <button onClick={() => onClick(camera)}>Camera</button>
 }
 

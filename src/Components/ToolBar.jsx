@@ -48,7 +48,7 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
           {viewer && <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />}
           <AboutControl offsetTop={offsetTop} />
           <Settings />
-          <ShareDialogControl />
+          <ShareDialogControl viewer={viewer} />
         </div>
       </Toolbar>
     </AppBar>
