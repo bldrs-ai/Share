@@ -1,12 +1,12 @@
-import React, {useEffect, useState} from 'react'
+import React, { useEffect, useState } from 'react'
 import Tooltip from '@mui/material/Tooltip'
-import {makeStyles} from '@mui/styles'
+import { makeStyles } from '@mui/styles'
 import debug from '../utils/debug'
 import {
   decodeIFCString,
   deref,
 } from '../utils/Ifc'
-import {stoi} from '../utils/strings'
+import { stoi } from '../utils/strings'
 import Toggle from './Toggle'
 import ExpansionPanel from './ExpansionPanel'
 
@@ -17,7 +17,7 @@ import ExpansionPanel from './ExpansionPanel'
  * @param {Object} element The currently selected IFC element
  * @return {Object} The ItemProperties react component
  */
-export default function ItemProperties({model, element}) {
+export default function ItemProperties({ model, element }) {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
@@ -33,13 +33,13 @@ export default function ItemProperties({model, element}) {
   return (
     <div className={classes.propsContainer}>
       {
-        Object.keys(element).length === 0 ?
-          <h2 className={classes.noElement}>No element selected</h2> :
-          <>
+        Object.keys(element).length === 0
+          ? <h2 className={classes.noElement}>No element selected</h2>
+          : <>
             <h2 className={classes.sectionTitle}>Properties</h2>
             {propTable || 'Loading...'}
             <h2 className={classes.sectionTitle}>
-                Property Sets
+              Property Sets
               <Toggle onChange={() => setExpandAll(!expandAll)} />
             </h2>
             {psetsList || 'Loading...'}
@@ -97,20 +97,20 @@ async function createPsetsList(model, element, classes, expandAll) {
   return (
     <ul className={classes.psetsList}>
       {await Promise.all(
-          psets.map(
-              async (ps, ndx) => {
-                return (
-                  <li key={ndx} className={classes.section}>
-                    <ExpansionPanel
-                      summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-                      detail={await createPropertyTable(model, ps, 0, true)}
-                      expandState={expandAll}
-                      classes={classes}
-                    />
-                  </li>
-                )
-              },
-          ))}
+        psets.map(
+          async (ps, ndx) => {
+            return (
+              <li key={ndx} className={classes.section}>
+                <ExpansionPanel
+                  summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+                  detail={await createPropertyTable(model, ps, 0, true)}
+                  expandState={expandAll}
+                  classes={classes}
+                />
+              </li>
+            )
+          },
+        ))}
     </ul>
   )
 }
@@ -155,9 +155,9 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     case 'RefLatitude':
     case 'RefLongitude':
       return row(label, dms(
-          await deref(propValue[0]),
-          await deref(propValue[1]),
-          await deref(propValue[2])), serial)
+        await deref(propValue[0]),
+        await deref(propValue[1]),
+        await deref(propValue[2])), serial)
     case 'expressID':
       return row('Express Id', propValue, serial)
     case 'Quantities':
@@ -170,11 +170,11 @@ async function prettyProps(model, propName, propValue, serial = 0) {
         return null
       }
       return row(
-          label,
-          await deref(
-              propValue, model, serial,
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
-          serial)
+        label,
+        await deref(
+          propValue, model, serial,
+          async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
+        serial)
     }
   }
 }
@@ -291,9 +291,9 @@ function row(d1, d2, serial) {
  * @param {Object} d2 Table cell data 2
  * @return {Object} The react component
  */
-function Row({d1, d2}) {
+function Row({ d1, d2 }) {
   if (d1 === null || d1 === undefined ||
-      d1 === null || d1 === undefined) {
+    d1 === null || d1 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   return (
