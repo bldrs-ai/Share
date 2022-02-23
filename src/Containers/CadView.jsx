@@ -400,13 +400,13 @@ function initViewer(pathPrefix) {
   container.textContent = ''
   const v = new IfcViewerAPI({
     container,
-    backgroundColor: new Color('#a0a0a0'),
+    backgroundColor: new Color('#ededed'),
   })
   debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.addAxes()
-  v.addGrid(50, 50)
+  v.addGrid(20, 20)
   v.clipper.active = true
 
   // Highlight items when hovering over them

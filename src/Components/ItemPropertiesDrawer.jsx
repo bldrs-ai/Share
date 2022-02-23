@@ -21,7 +21,7 @@ export default function ItemPropertiesDrawer({
   const anchor = window.innerWidth > 500 ? 'right' : 'bottom'
   return (
     <Drawer
-      elevation={3}
+      elevation={4}
       anchor={anchor}
       variant='persistent'
       classes={{paper: classes.drawerPaper}}

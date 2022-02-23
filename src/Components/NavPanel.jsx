@@ -77,7 +77,7 @@ export default function NavPanel({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.contextualMenu}>
+    <Paper className={classes.contextualMenu} >
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'

@@ -80,7 +80,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
           dark: '#42a5f5',
         },
         background: {
-          paper: mode === 'light' ? '#DCDCDC' : '#252525',
+          paper: mode === 'light' ? '#FFFFFF' : '#252525',
         },
         tonalOffset: 1,
       },

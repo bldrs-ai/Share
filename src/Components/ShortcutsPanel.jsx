@@ -19,13 +19,15 @@ export default function ShortcutsControl({offsetTop}) {
       <IconButton onClick={() => {
         setOpen(!open)
       }}>
-      <Question className = {classes.icon}/>
+        <Question className = {classes.icon}/>
         {
-          open
-            && <ShortcutsPanel
-                  openToggle={() => {setOpen(!open)}}
-                  offsetTop={offsetTop}
-                />
+          open &&
+            <ShortcutsPanel
+              openToggle={() => {
+                setOpen(!open)
+              }}
+              offsetTop={offsetTop}
+            />
         }
       </IconButton>
     </Tooltip>

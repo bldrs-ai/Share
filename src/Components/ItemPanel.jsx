@@ -28,15 +28,15 @@ export default function ItemPanelButton({model, element, topOffset, onClickCb}) 
         <Hamburger className={classes.icon}/>
       </IconButton>
       {
-        showItemPanel
-          && <ItemPropertiesDrawer
-               content={<ItemProperties model={model} element={element} />}
-               title={'IFC Information'}
-               onClose={() => {
-                 setShowItemPanel(false)
-                 onClickCb()
-               }}
-            />
+        showItemPanel &&
+          <ItemPropertiesDrawer
+            content={<ItemProperties model={model} element={element} />}
+            title={'IFC Information'}
+            onClose={() => {
+              setShowItemPanel(false)
+              onClickCb()
+            }}
+          />
       }
     </div>
   )
