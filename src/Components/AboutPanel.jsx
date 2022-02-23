@@ -3,6 +3,7 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/3D/attention.svg'
+import {useLocation} from 'react-router-dom'
 
 
 /**
@@ -11,16 +12,18 @@ import About from '../assets/3D/attention.svg'
  * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
-  const [open, setOpen]=React.useState(true)
+  const [open, setOpen] = React.useState(false)
   const classes = useStyles()
+  const location = useLocation()
+  console.log('location', location)
   return (
     <div >
-      <Typography className = {classes.about} onClick={() => {
+      <Typography className={classes.about} onClick={() => {
         setOpen(!open)
       }}>About</Typography>
-      {open && <AboutPanel openToggle={()=>{
+      {open && <AboutPanel openToggle={() => {
         setOpen(!open)
-      }} offsetTopCssStr={offsetTop}/>}
+      }} offsetTopCssStr={offsetTop} />}
     </div>)
 }
 
@@ -35,15 +38,15 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
   const classes = useStyles({offsetTop: offsetTopCssStr})
 
   return (
-    <div className = {classes.container}
-      role = "none"
-      onClick = {openToggle}
+    <div className={classes.container}
+      role="none"
+      onClick={openToggle}
       onKeyDown={openToggle} >
       <Paper elevation={3} className={classes.panel}>
-        <h1 className = {classes.title}><About/></h1>
+        <h1 className={classes.title}><About /></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
-          <a href = {'https://github.com/buildrs/Share'} target="_new">
+          <a href={'https://github.com/buildrs/Share'} target="_new">
             github.com/buildrs/Share
           </a>
         </p>
@@ -75,7 +78,8 @@ const useStyles = makeStyles({
     width: '100%',
     display: 'flex',
     justifyContent: 'center',
-    paddingTop: '10px'},
+    paddingTop: '10px',
+  },
   panel: {
     'position': 'relative',
     'top': (props) => props.offsetTop,

@@ -7,7 +7,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import AboutControl from './AboutPanel'
 import CameraControl from './CameraControl'
 import Settings from './Settings'
-import ShareMenu from './ShareMenu'
+import ShareDialogControl from './ShareDialog'
 import LogoLight from '../assets/3D/logo5.svg'
 import LogoDark from '../assets/3D/logo5.svg'
 import Open from '../assets/3D/open.svg'
@@ -48,7 +48,7 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
           {viewer && <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />}
           <AboutControl offsetTop={offsetTop} />
           <Settings />
-          <ShareMenu />
+          <ShareDialogControl />
         </div>
       </Toolbar>
     </AppBar>
