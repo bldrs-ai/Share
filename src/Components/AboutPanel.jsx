@@ -1,5 +1,4 @@
 import React, {useState} from 'react'
-import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -62,7 +61,7 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
       onKeyDown={openToggle} >
       <Paper elevation={3} className={classes.panel} onClick={(event) => {
         event.stopPropagation()
-      }}>
+      }} >
         <h1 className={classes.title}><Hello className={classes.hello} /></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
@@ -97,7 +96,10 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
         </div>
         <div
           style={{position: 'absolute', right: '20px', bottom: '10px'}}
-          onClick={openToggle}>
+          onClick={openToggle}
+          onKeyDown={openToggle}
+          role="none"
+        >
           <Delete style={{width: '30px'}} />
         </div>
       </Paper>
