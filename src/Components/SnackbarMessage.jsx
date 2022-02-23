@@ -1,6 +1,7 @@
 import React from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
+import {makeStyles} from '@mui/styles'
 
 
 /**
@@ -10,6 +11,7 @@ import MuiAlert from '@mui/material/Alert'
  * @return {Object}
  */
 export default function SnackBarMessage({message, type, open}) {
+  const classes = useStyles()
   return (
     <Snackbar
       open={open}
@@ -17,6 +19,7 @@ export default function SnackBarMessage({message, type, open}) {
     >
       <Alert
         severity={type}
+        className = {classes.root}
         sx = {{backgroundColor: '#848484'}}
       >
         {message}
@@ -25,7 +28,18 @@ export default function SnackBarMessage({message, type, open}) {
   )
 }
 
-
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={1} ref={ref} variant='filled' {...props} />
 })
+
+const useStyles = makeStyles({
+  root: {
+    'position': 'relative',
+    'bottom': '60px',
+    'left': '6px',
+    '@media (max-width: 900px)': {
+      'left': '18px',
+      'bottom': '90px',
+    },
+  }})
+

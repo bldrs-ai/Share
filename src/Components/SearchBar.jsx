@@ -8,17 +8,19 @@ import InputBase from '@mui/material/InputBase'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Hamburger from '../assets/3D/tree.svg'
-import Search from '../assets/3D/search.svg'
 import debug from '../utils/debug'
+import Search from '../assets/Icons/Search.svg'
+import Hamburger from '../assets/Icons/MenuClear.svg'
+import Close from '../assets/Icons/CloseClear.svg'
 
 
 /**
+ * Search bar component
  * @param {function} onClickMenuCb callback
- * @param {boolean} isOpen toggle
+ * @param {boolean} showNavPanel toggle
  * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, isOpen}) {
+export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -67,7 +69,7 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
         className={classes.iconButton}
         aria-label='menu'
         onClick={onClickMenuCb}>
-        <Hamburger className={classes.icon}/>
+        {showNavPanel ? <Close className={classes.icon}/> : <Hamburger className={classes.icon}/>}
       </IconButton>
       <InputBase
         inputRef={searchInputRef}
@@ -75,7 +77,8 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
         onChange={onInputChange}
         placeholder='Search building'
         inputProps={{'aria-label': 'search'}}
-        className={classes.inputBase}/>
+        className={classes.inputBase}
+      />
       <IconButton
         type='submit'
         className={classes.iconButton}
@@ -149,20 +152,17 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 const useStyles = makeStyles({
   root: {
-    'padding': '2px 4px',
+    'padding': '2px 2px 2px 2px',
     'display': 'flex',
     'alignItems': 'center',
     'width': 300,
     '@media (max-width: 900px)': {
-      width: 240,
+      'padding': '2px 2px 2px 2px',
+      'width': 244,
     },
   },
   iconButton: {
     padding: 10,
-  },
-  divider: {
-    height: 28,
-    margin: 4,
   },
   icon: {
     width: '30px',
@@ -170,12 +170,8 @@ const useStyles = makeStyles({
   },
   inputBase: {
     'flex': 1,
-    'marginLeft': '5px',
-    'fontWeight': 600,
-    'fontFamily': 'Helvetica',
-    'color': '#696969',
     '& input': {
-      fontSize: '18px',
+      fontSize: '16px',
     },
   },
 })
