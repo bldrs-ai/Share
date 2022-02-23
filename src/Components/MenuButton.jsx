@@ -1,7 +1,7 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import IconButton from '@mui/material/IconButton'
-import Hamburger from '../assets/3D/menu.svg'
+import Hamburger from '../assets/Icons/menu.svg'
 import Tooltip from '@mui/material/Tooltip'
 
 const useStyles = makeStyles({
