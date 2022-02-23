@@ -3,7 +3,7 @@ const VERBOSE = 3
 const DEBUG = 1
 const INFO = 1
 const OFF = 0
-let DEBUG_LEVEL = OFF
+let DEBUG_LEVEL = VERBOSE
 
 
 /**

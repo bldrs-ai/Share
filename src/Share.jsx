@@ -141,10 +141,6 @@ function getModelPath(installPrefix, pathPrefix, urlParams) {
       eltPath: parts[1],
     }
     console.log('Share#getModelPath: is a project file: ', m, window.location.hash)
-    if (window.location.hash) {
-      console.log('Share#getModelPath: adding back hash: ', window.location.hash)
-      m.filepath += window.location.hash
-    }
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
       org: urlParams['org'],

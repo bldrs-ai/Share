@@ -4,8 +4,9 @@ import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
-import Settings from './Settings'
 import AboutControl from './AboutPanel'
+import CameraControl from './CameraControl'
+import Settings from './Settings'
 import LogoLight from '../assets/3D/logo5.svg'
 import LogoDark from '../assets/3D/logo5.svg'
 import Open from '../assets/3D/open.svg'
@@ -42,26 +43,14 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
             <Open className = {classes.icon}/>
           </IconButton>
         </div>
-        <div className = {classes.rightContainer}>
-          <button onClick={() => onCamera(viewer)}>Camera</button>
-          <AboutControl offsetTop = {offsetTop}/>
-          <Settings />
+        <div className={classes.rightContainer}>
+          {viewer && <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />}
+          <AboutControl offsetTop={offsetTop} />
+          <Settings/>
         </div>
       </Toolbar>
     </AppBar>
   )
-}
-
-
-/**
- * Handler for onCamera button.
- * @param {Object} viewer
- */
-function onCamera(viewer) {
-  const camera = viewer.IFC.context.ifcCamera.cameraControls
-  const pos = camera.getPosition()
-  const {x, y, z} = pos
-  window.location.hash = `c=${x},${y},${z}`
 }
 
 

@@ -114,27 +114,8 @@ export default function CadView({
       return
     }
     await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
-    setCamera()
-    window.onhashchange = () => {
-      console.log('hashChange')
-      setCamera()
-    }
   }
 
-
-  /** Set camera position from window location hash. */
-  function setCamera() {
-    console.log('setCamera')
-    const match = window.location.hash.match(/#c=(-?\d+(?:.\d+)),(-?\d+(?:.\d+)),(-?\d+(?:.\d+))/)
-    if (match) {
-      const x = parseFloat(match[1]).toPrecision(5)
-      const y = parseFloat(match[2]).toPrecision(5)
-      const z = parseFloat(match[3]).toPrecision(5)
-      const camera = viewer.IFC.context.ifcCamera.cameraControls
-      console.log('CAMERA: ', camera)
-      camera.setPosition(x, y, z, true)
-    }
-  }
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
