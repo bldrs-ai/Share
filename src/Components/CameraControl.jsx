@@ -2,6 +2,7 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
 import debug from '../utils/debug'
 import {addHashParams} from '../utils/location'
+import {roundCoord} from '../utils/math'
 
 
 /**
@@ -74,5 +75,5 @@ function onClick(camera) {
   // TODO(pablo): Ideally this would be hanled by react-router
   // location, but doesn't seem to be supported yet in v6.
   // See also https://stackoverflow.com/a/71210781/3630172
-  addHashParams(window.location, HASH_PREFIX, camera.getPosition())
+  addHashParams(window.location, HASH_PREFIX, roundCoord(...camera.getPosition(), 4))
 }
