@@ -4,6 +4,7 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/Icons/Warning.svg'
+import Hello from '../assets/Icons/Hello.svg'
 
 
 /**
@@ -43,7 +44,7 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
       onClick = {openToggle}
       onKeyDown={openToggle} >
       <Paper elevation={3} className={classes.panel}>
-        <h1 className = {classes.title}><About/></h1>
+        <h1 className = {classes.title}><Hello className={classes.hello}/></h1>
         <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
         <p> We are open source 🌱 Please visit our repository:&nbsp;
           <a href = {'https://github.com/buildrs/Share'} target="_new">
@@ -130,6 +131,9 @@ const useStyles = makeStyles({
     width: '30px',
     height: '30px',
     cursor: 'pointer',
+  },
+  hello: {
+    height: '50px',
   },
   closeButton: {
     'float': 'right',

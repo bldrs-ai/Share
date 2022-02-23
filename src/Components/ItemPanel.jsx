@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
@@ -15,18 +16,20 @@ import Hamburger from '../assets/Icons/Menu.svg'
  * @param {function} onClickCb
  * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({model, element, topOffset, onClickCb}) {
+export default function ItemPanelControl({model, element, topOffset, onClickCb}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
 
   return (
     <div className={classes.toggleButton}>
-      <IconButton onClick={() => {
-        setShowItemPanel(!showItemPanel)
-        onClickCb()
-      }} >
-        <Hamburger className={classes.icon}/>
-      </IconButton>
+      <Tooltip title="Properties" placement="left">
+        <IconButton onClick={() => {
+          setShowItemPanel(!showItemPanel)
+          onClickCb()
+        }} >
+          <Hamburger className={classes.icon}/>
+        </IconButton>
+      </Tooltip>
       {
         showItemPanel &&
           <ItemPropertiesDrawer

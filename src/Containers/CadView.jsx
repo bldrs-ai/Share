@@ -4,7 +4,7 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelButton from '../Components/ItemPanel'
+import ItemPanelControl from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
@@ -363,7 +363,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <ItemPanelButton
+        <ItemPanelControl
           model={model}
           element={selectedElement}
           open={showItemPanel}
