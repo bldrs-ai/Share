@@ -2,8 +2,8 @@ import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Icons/Clear.svg'
-import Question from '../assets/Icons/Question.svg'
+import Close from '../assets/2D_Icons/Clear.svg'
+import Question from '../assets/2D_Icons/Question.svg'
 
 
 /**

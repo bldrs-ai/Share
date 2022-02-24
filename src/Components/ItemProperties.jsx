@@ -378,6 +378,7 @@ const useStyles = makeStyles({
     fontWeight: 200,
     paddingLeft: '4px',
     paddingRight: '4px',
+    paddingBottom: '4px',
     borderBottom: '1px solid grey',
   },
   noElement: {

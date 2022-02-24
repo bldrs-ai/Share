@@ -1,17 +1,19 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import Checkbox from '@mui/material/Checkbox'
+import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import {CAMERA_PREFIX} from './CameraControl'
 import {addHashParams} from '../utils/location'
 import {roundCoord} from '../utils/math'
-import ShareIcon from '../assets/3D/Share.svg'
-import ShareClear from '../assets/3D/ShareClear.svg'
-import CheckOn from '../assets/3D/CheckOn.svg'
-import CheckOff from '../assets/3D/CheckOff.svg'
-import Copy from '../assets/3D/Copy.svg'
-import Copied from '../assets/3D/Copied.svg'
+import ShareIcon from '../assets/3D_Icons/Share.svg'
+import ShareClear from '../assets/3D_Icons/ShareClear.svg'
+import CheckOn from '../assets/3D_Icons/CheckOn.svg'
+import CheckOff from '../assets/3D_Icons/CheckOff.svg'
+import Copy from '../assets/3D_Icons/Copy.svg'
+import Copied from '../assets/3D_Icons/Copied.svg'
 
 
 /**
@@ -25,12 +27,15 @@ export default function ShareDialogControl({offsetTop, viewer}) {
   const classes = useStyles()
   return (
     <div >
-      <ShareIcon
-        className={classes.icon}
-        onClick={() => {
-          setOpen(!open)
-        }}
-      />
+      <Tooltip title="Share link" placement="left">
+        <IconButton
+          onClick={() => {
+            setOpen(!open)
+          }}
+          aria-label='Share link'>
+          <ShareIcon className={classes.icon} />
+        </IconButton>
+      </Tooltip>
       {open &&
         <ShareDialog
           viewer={viewer}

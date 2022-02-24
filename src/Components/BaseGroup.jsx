@@ -4,7 +4,7 @@ import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import Settings from './Settings'
 import AboutControl from './AboutPanel'
-import Open from '../assets/Icons/Open.svg'
+import Open from '../assets/2D_Icons/Open.svg'
 
 
 /**
@@ -16,17 +16,14 @@ import Open from '../assets/Icons/Open.svg'
 export default function BaseGroup({fileOpen, offsetTop}) {
   const classes = useStyles()
   return (
-    <div className = {classes.container}>
-      <AboutControl offsetTop = {offsetTop}/>
-      <Tooltip title="Upload Model" placement="top">
+    <div className={classes.container}>
+      <AboutControl offsetTop={offsetTop} />
+      <Tooltip title="Upload model" placement="top">
         <IconButton
-          aria-label='account of current user'
-          aria-controls='menu-appbar'
-          aria-haspopup='true'
+          aria-label='Upload model'
           onClick={fileOpen}
-          color='inherit'
-        >
-          <Open className = {classes.icon}/>
+          color='inherit'>
+          <Open className={classes.icon} />
         </IconButton>
       </Tooltip>
       <Settings />

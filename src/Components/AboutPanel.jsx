@@ -3,7 +3,13 @@ import Paper from '@mui/material/Paper'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/Icons/Warning.svg'
+import About from '../assets/2D_Icons/Wave.svg'
+import Slider from '@mui/material/Slider'
+import Delete from '../assets/2D_Icons/Delete.svg'
+import LogoB from '../assets/LogoB.svg'
+import Shareifc from '../assets/2D_Icons/Shareifc.svg'
+import Openifc from '../assets/2D_Icons/Openifc.svg'
+import Githubifc from '../assets/2D_Icons/Githubifc.svg'
 
 
 /**
@@ -18,15 +24,29 @@ export default function AboutControl({offsetTop}) {
     <div >
       <Tooltip title="About" placement="top">
         <IconButton onClick={() => setOpen(!open)}>
-          <About className={classes.icon}/>
+          <About className={classes.icon} />
         </IconButton>
       </Tooltip>
-      {open && <AboutPanel openToggle={()=>{
+      {open && <AboutPanel openToggle={() => {
         setOpen(!open)
       }} offsetTopCssStr={offsetTop} />}
     </div>)
 }
 
+const marks = [
+  {
+    value: 0,
+    label: 'mild',
+  },
+  {
+    value: 10,
+    label: 'medium',
+  },
+  {
+    value: 20,
+    label: 'high',
+  },
+]
 
 /**
  * About Panel component
@@ -42,23 +62,51 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
       role="none"
       onClick={openToggle}
       onKeyDown={openToggle} >
-      <Paper elevation={3} className={classes.panel}>
-        <h1 className={classes.title}><About /></h1>
-        <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
-        <p> We are open source 🌱 Please visit our repository:&nbsp;
-          <a href={'https://github.com/buildrs/Share'} target="_new">
-            github.com/buildrs/Share
-          </a>
-        </p>
+      <Paper elevation={3} className={classes.panel} onClick={(event) => {
+        event.stopPropagation()
+      }} >
+        <h1 className={classes.title}><LogoB className={classes.hello} /></h1>
+        <p><strong>BLDRS</strong> is a collaborative environment to view and share IFC models.</p>
         <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
         <h2 >Features:</h2>
-        <ul>
-          <li>View local IFCs</li>
-          <li>View IFCs hosted on Github </li>
-          <li>Share IFC models</li>
+        <ul style={{marginLeft: '-10px'}}>
+          <li><Openifc className={classes.iconSmall} /> Upload IFC file</li>
+          <li><Githubifc className={classes.iconSmall} /> Open IFC files hosted on GitHub</li>
+          <li><Shareifc className={classes.iconSmall} /> Share IFC model</li>
         </ul>
-      </Paper>
-    </div>
+        <div style={{width: '100%', textAlign: 'center'}}>
+          <h2>Cookies</h2>
+          <Slider
+            sx={{width: 240, textAlign: 'center'}}
+            defaultValue={30}
+            step={10}
+            marks={marks}
+            min={0}
+            max={20} />
+          <div style={{width: '100%', textAlign: 'left'}}>
+            <ul>
+              <li>Mild - ...</li>
+              <li>Medium - ...</li>
+              <li>High - ...</li>
+            </ul>
+          </div>
+          <div className={classes.openSource}>
+            We are open source 🌱 Please visit our repository:&nbsp;
+            <a href={'https://github.com/buildrs/Share'} target="_new">
+              github.com/buildrs/Share
+            </a>
+          </div>
+        </div>
+        <div
+          style={{position: 'absolute', right: '20px', bottom: '10px'}}
+          onClick={openToggle}
+          onKeyDown={openToggle}
+          role="none"
+        >
+          <Delete style={{width: '30px'}} />
+        </div>
+      </Paper >
+    </div >
   )
 }
 
@@ -72,6 +120,7 @@ const useStyles = makeStyles({
     height: '100vh',
     display: 'flex',
     justifyContent: 'center',
+    zIndex: 2000,
   },
   title: {
     width: '100%',
@@ -83,12 +132,12 @@ const useStyles = makeStyles({
     'position': 'relative',
     'top': (props) => props.offsetTop,
     'width': '320px',
-    'height': '380px',
+    'height': '600px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
       width: '84%',
-      height: '400px',
+      height: '590px',
     },
     '& h1, & h2': {
       color: '#696969',
@@ -111,7 +160,13 @@ const useStyles = makeStyles({
       },
     },
     '& li': {
+      marginBottom: '6px',
       fontWeight: 200,
+      listStyleType: 'none',
+      display: 'flex',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+
     },
     '& a': {
       color: 'lime',
@@ -119,7 +174,7 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      cornerRadius: '2px',
+      borderRadius: '2px',
     },
   },
   about: {
@@ -131,6 +186,12 @@ const useStyles = makeStyles({
     height: '30px',
     cursor: 'pointer',
   },
+  iconSmall: {
+    marginRight: '10px',
+  },
+  hello: {
+    height: '50px',
+  },
   closeButton: {
     'float': 'right',
     'cursor': 'pointer',
@@ -139,5 +200,9 @@ const useStyles = makeStyles({
       width: '24px',
       height: '20px',
     },
+  },
+  openSource: {
+    'fontWeight': 200,
+    'lineHeight': '24px',
   },
 })

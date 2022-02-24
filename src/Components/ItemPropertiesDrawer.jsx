@@ -1,7 +1,7 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Icons/Delete.svg'
+import Close from '../assets/2D_Icons/Delete.svg'
 
 
 /**
@@ -21,7 +21,7 @@ export default function ItemPropertiesDrawer({
   const anchor = window.innerWidth > 500 ? 'right' : 'bottom'
   return (
     <Drawer
-      elevation={3}
+      elevation={4}
       anchor={anchor}
       variant='persistent'
       classes={{paper: classes.drawerPaper}}

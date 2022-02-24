@@ -2,13 +2,14 @@ import React, {useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
+import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import {Octokit} from '@octokit/rest'
 import debug from '../utils/debug'
 import {addHashListener, addHashParams, getHashParams} from '../utils/location'
 import PkgJson from '../../package.json'
-import Comment from '../assets/Comment.svg'
+import Comment from '../assets/2D_Icons/Comment.svg'
 
 
 /**
@@ -39,19 +40,20 @@ export default function IssuesControl({viewer}) {
 
   return (
     <div>
-      <IconButton
-        onClick={() => {
-          if (commentsIsOpen) {
-            setCommentsIsOpen(false)
-          } else {
-            setCommentsIsOpen(true)
-            onClick(setText)
-          }
-        }}
-        aria-label='issues'
-      >
-        <Comment className={classes.icon}/>
-      </IconButton>
+      <Tooltip title="Show issues" placement="left">
+        <IconButton
+          onClick={() => {
+            if (commentsIsOpen) {
+              setCommentsIsOpen(false)
+            } else {
+              setCommentsIsOpen(true)
+              onClick(setText)
+            }
+          }}
+          aria-label='Show issues'>
+          <Comment className={classes.icon} />
+        </IconButton>
+      </Tooltip>
       {(commentsIsOpen && text) &&
        <CommentPanel
          text={text}

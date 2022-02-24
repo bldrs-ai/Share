@@ -4,7 +4,7 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelButton from '../Components/ItemPanel'
+import ItemPanelControl from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
@@ -14,7 +14,7 @@ import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import LogoDark from '../assets/Icons/Logo.svg'
+import LogoDark from '../assets/2D_Icons/Logo.svg'
 
 
 /**
@@ -288,6 +288,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
+    setSelectedElement({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -363,7 +364,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <ItemPanelButton
+        <ItemPanelControl
           model={model}
           element={selectedElement}
           open={showItemPanel}
@@ -371,18 +372,19 @@ export default function CadView({
           topOffset={PANEL_TOP}
           placeCutPlane={() => placeCutPlane()}
           unSelectItem={() => unSelectItems()}
-          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}/>
-        <div className={showItemPanel ? classes.iconGroupOpen : classes.iconGroup}>
+          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)} />
+        <div className={showItemPanel ? classes.operationsGroupOpen : classes.operationsGroup}>
           <OperationsGroup
             viewer={viewer}
             placeCutPlane={() => placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
+            unSelectItem={() => unSelectItems()}
             toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
+            selectedElement={selectedElement}
           />
         </div>
-        <LogoDark className={classes.logo}/>
+        <LogoDark className={classes.logo} />
         <div className={showItemPanel ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP} />
         </div>
       </div>
     </div>
@@ -401,13 +403,13 @@ function initViewer(pathPrefix) {
   container.textContent = ''
   const v = new IfcViewerAPI({
     container,
-    backgroundColor: new Color('#a0a0a0'),
+    backgroundColor: new Color('#ededed'),
   })
   debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.addAxes()
-  v.addGrid(50, 50)
+  v.addGrid(10, 10)
   v.clipper.active = true
 
   // Highlight items when hovering over them
@@ -512,10 +514,10 @@ const useStyles = makeStyles(() => ({
     border: 'none',
     zIndex: 1000,
   },
-  iconGroup: {
+  operationsGroup: {
     'position': 'absolute',
-    'top': '70px',
-    'right': '2px',
+    'bottom': '70px',
+    'right': '3px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -524,9 +526,9 @@ const useStyles = makeStyles(() => ({
       'right': '28px',
     },
   },
-  iconGroupOpen: {
+  operationsGroupOpen: {
     'position': 'absolute',
-    'top': '70px',
+    'bottom': '70px',
     'right': '342px',
     'border': 'none',
     'zIndex': 0,

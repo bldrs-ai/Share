@@ -1,9 +1,10 @@
 import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
-import Hamburger from '../assets/Icons/Menu.svg'
+import Hamburger from '../assets/2D_Icons/Info.svg'
 
 
 /**
@@ -15,30 +16,36 @@ import Hamburger from '../assets/Icons/Menu.svg'
  * @param {function} onClickCb
  * @return {Object} The ItemPanelButton react component
  */
-export default function ItemPanelButton({model, element, topOffset, onClickCb}) {
+export default function ItemPanelControl({model, element, topOffset, onClickCb}) {
   const [showItemPanel, setShowItemPanel] = useState(false)
   const classes = useStyles({topOffset: topOffset})
 
   return (
-    <div className={classes.toggleButton}>
-      <IconButton onClick={() => {
-        setShowItemPanel(!showItemPanel)
-        onClickCb()
-      }} >
-        <Hamburger className={classes.icon}/>
-      </IconButton>
-      {
-        showItemPanel &&
-          <ItemPropertiesDrawer
-            content={<ItemProperties model={model} element={element} />}
-            title={'IFC Information'}
-            onClose={() => {
-              setShowItemPanel(false)
-              onClickCb()
-            }}
-          />
+    <>
+      {Object.keys(element).length > 0 &&
+       <div className={classes.toggleButton}>
+         <Tooltip title="Properties" placement="left">
+           <IconButton
+             onClick={() => {
+               setShowItemPanel(!showItemPanel)
+               onClickCb()
+             }} >
+             <Hamburger className={classes.icon} />
+           </IconButton>
+         </Tooltip>
+       </div>
       }
-    </div>
+      {showItemPanel &&
+       <ItemPropertiesDrawer
+         content={<ItemProperties model={model} element={element} />}
+         title={'IFC Information'}
+         onClose={() => {
+           setShowItemPanel(false)
+           onClickCb()
+         }}
+       />
+      }
+    </>
   )
 }
 
@@ -46,7 +53,7 @@ export default function ItemPanelButton({model, element, topOffset, onClickCb}) 
 const useStyles = makeStyles({
   toggleButton: {
     'position': 'absolute',
-    'top': (props) =>`${props.topOffset}px`,
+    'top': (props) => `${props.topOffset}px`,
     'right': '20px',
     '@media (max-width: 900px)': {
       right: '10px',
@@ -54,7 +61,7 @@ const useStyles = makeStyles({
   },
   toggleButtonOpen: {
     'position': 'absolute',
-    'top': (props) =>`${props.topOffset}px`,
+    'top': (props) => `${props.topOffset}px`,
     'right': '360px',
     '@media (max-width: 900px)': {
       right: '10px',

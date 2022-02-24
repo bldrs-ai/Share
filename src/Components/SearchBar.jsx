@@ -9,9 +9,9 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
-import Search from '../assets/Icons/Search.svg'
-import Hamburger from '../assets/Icons/MenuClear.svg'
-import Close from '../assets/Icons/CloseClear.svg'
+import Search from '../assets/2D_Icons/Search.svg'
+import TreeOpen from '../assets/2D_Icons/TreeOpen.svg'
+import TreeClose from '../assets/2D_Icons/TreeClose.svg'
 
 
 /**
@@ -69,7 +69,9 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         className={classes.iconButton}
         aria-label='menu'
         onClick={onClickMenuCb}>
-        {showNavPanel ? <Close className={classes.icon}/> : <Hamburger className={classes.icon}/>}
+        {showNavPanel ?
+          <TreeOpen className={classes.icon} /> :
+          <TreeClose className={classes.icon} />}
       </IconButton>
       <InputBase
         inputRef={searchInputRef}
@@ -83,7 +85,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         type='submit'
         className={classes.iconButton}
         aria-label='search' >
-        <Search className={classes.icon}/>
+        <Search className={classes.icon} />
       </IconButton>
     </Paper>
   )
