@@ -26,12 +26,12 @@ export default function OperationsGroup({viewer, placeCutPlane, unSelectItem}) {
   return (
     <div>
       { viewer &&
-        <>
+        <div className = {classes.container}>
           <ShareDialogControl viewer={viewer} />
           <IssuesControl viewer={viewer} />
           <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls}
           />
-        </>
+        </div>
       }
       { width > 500 ?
           <div className = {classes.container}>
