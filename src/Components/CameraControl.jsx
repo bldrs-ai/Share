@@ -1,10 +1,13 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
 import debug from '../utils/debug'
-import {addHashParams} from '../utils/location'
+import {addHashListener, addHashParams, getHashParams} from '../utils/location'
 import {roundCoord} from '../utils/math'
 
 
+// TODO(pablo): CameraControl has to be loaded into DOM for any of the
+// handlers below to function, but we also decided not to display it
+// as its own button.  So for now it's hidden.
 /**
  * The CameraControl is a button that adds the current camera position
  * to the URL hash.  On load, this component also reads the current
@@ -20,12 +23,19 @@ export default function CameraControl({camera}) {
   useEffect(() => {
     onLoad(camera, location)
   }, [camera, location])
-  return <button onClick={() => onClick(camera)}>Camera</button>
+  // NOTE: NOT DISPLAYED
+  return (
+    <button
+      style={{display: 'none'}}
+      onClick={() => onClick(camera)}>
+      Camera
+    </button>
+  )
 }
 
 
 /** The prefix to use for camera coordinate in the URL hash. */
-export const HASH_PREFIX = 'c'
+export const CAMERA_PREFIX = 'c'
 
 
 /**
@@ -37,7 +47,7 @@ export const HASH_PREFIX = 'c'
 function onLoad(camera, location) {
   debug().log('CameraControl#onLoad')
   onHash(camera, location)
-  window.onhashchange = () => onHash(camera, location)
+  addHashListener('camera', () => onHash(camera, location))
 }
 
 
@@ -51,8 +61,12 @@ function onLoad(camera, location) {
 export function onHash(camera, location) {
   debug().log('CameraControl#onHash')
   const regex = new RegExp(
-      `#${HASH_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
-  const match = location.hash.match(regex)
+      `${CAMERA_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
+  const params = getHashParams(location, CAMERA_PREFIX)
+  if (params == undefined) {
+    return
+  }
+  const match = params.match(regex)
   if (match) {
     const x = parseFloat(parseFloat(match[1]).toPrecision(5))
     const y = parseFloat(parseFloat(match[2]).toPrecision(5))
@@ -73,5 +87,5 @@ function onClick(camera) {
   // TODO(pablo): Ideally this would be hanled by react-router
   // location, but doesn't seem to be supported yet in v6.
   // See also https://stackoverflow.com/a/71210781/3630172
-  addHashParams(window.location, HASH_PREFIX, roundCoord(...camera.getPosition(), 4))
+  addHashParams(window.location, CAMERA_PREFIX, roundCoord(...camera.getPosition(), 4))
 }

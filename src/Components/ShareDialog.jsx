@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import Checkbox from '@mui/material/Checkbox'
 import TextField from '@mui/material/TextField'
 import {makeStyles} from '@mui/styles'
-import {HASH_PREFIX} from './CameraControl'
+import {CAMERA_PREFIX} from './CameraControl'
 import {addHashParams} from '../utils/location'
 import {roundCoord} from '../utils/math'
 import ShareIcon from '../assets/3D/Share.svg'
@@ -56,7 +56,6 @@ function ShareDialog({togglePanel, offsetTop, viewer}) {
   const classes = useStyles({offsetTop})
   const [copy, setCopy] = useState(false)
   const [capture, setCapture] = useState(true)
-  const [privateShare, setPrivateShare] = useState(false)
 
   const toggleCameraUrlLocation = () => {
     setCapture(!capture)
@@ -64,12 +63,12 @@ function ShareDialog({togglePanel, offsetTop, viewer}) {
     capture ?
       addHashParams(
           window.location,
-          HASH_PREFIX,
+          CAMERA_PREFIX,
           roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4)) :
-      // TODO(oleg) replace with remove hashParams function
       addHashParams(
           window.location,
-          HASH_PREFIX,
+          CAMERA_PREFIX,
+          {},
       )
   }
 
@@ -83,6 +82,8 @@ function ShareDialog({togglePanel, offsetTop, viewer}) {
   const onCopy = () => {
     setCopy(true)
     navigator.clipboard.writeText(location)
+    // TODO(pablo): use ref
+    document.getElementById('outlined-basic').select()
   }
 
   return (
@@ -104,19 +105,10 @@ function ShareDialog({togglePanel, offsetTop, viewer}) {
             <Copy className={classes.copy} onClick={onCopy} />}
         </div>
         <ul>
-          <Check title={'Camera'} onChange={() => {
+          <Check title={'Include camera position'} onChange={() => {
             toggleCameraUrlLocation()
           }} />
-          <Check title={'Element Visibility'} disabled />
-          <Check title={'Private Share'} onChange={() => {
-            setPrivateShare(!privateShare)
-          }} />
         </ul>
-        {privateShare &&
-          <div>
-            <p style={{width: '100%'}}>To learn about privated sharing click here</p>
-          </div>
-        }
       </Paper>
     </div >
   )
@@ -158,7 +150,7 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'top': (props) => props.offsetTop + 'px',
     'width': '320px',
-    'height': '350px',
+    'height': '250px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
@@ -184,6 +176,9 @@ const useStyles = makeStyles({
       '@media (max-width: 900px)': {
         lineHeight: '22px',
       },
+    },
+    '& ul': {
+      padding: '0',
     },
     '& li': {
       fontWeight: 200,

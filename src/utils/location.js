@@ -1,3 +1,25 @@
+
+const hashListeners = {}
+window.onhashchange = () => {
+  for (const name in hashListeners) {
+    if (Object.prototype.hasOwnProperty.call(hashListeners, name)) {
+      const listener = hashListeners[name]
+      listener()
+    }
+  }
+}
+
+
+/**
+ * @param {string} name Name of listener.  Can be used to later remove
+ * listener. TODO: add remove method
+ * @param {function} onHashCb Called when window.location.hash changes
+ */
+export function addHashListener(name, onHashCb) {
+  hashListeners[name] = onHashCb
+}
+
+
 /**
  * Serialize the given paramObj and add it to the current
  * location.hash
@@ -19,6 +41,43 @@ export function addHashParams(location, name, params, includeNames = false) {
     const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
     encodedParams += `${separator}${encodedParam}`
   }
-  // TODO(pablo): accomodate existing params
-  location.hash = `${name}:${encodedParams}`
+  const sets = location.hash.substring(1).split('::')
+  const setMap = {}
+  for (let i = 0; i < sets.length; i++) {
+    const set = sets[i]
+    if (set == '') {
+      continue
+    }
+    const setParts = set.split(':')
+    const setName = setParts[0]
+    const setValue = setParts[1]
+    setMap[setName] = setValue
+  }
+  setMap[name] = encodedParams
+  let newHash = ''
+  for (const setKey in setMap) {
+    if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
+      const setValue = setMap[setKey]
+      newHash += (newHash.length == 0 ? '' : '::') + `${setKey}:${setValue}`
+    }
+  }
+  location.hash = newHash
+}
+
+
+/**
+ * @param {Object} location
+ * @param {String} name prefix of the params to fetch
+ * @return {string|undfined} The encoded params
+ */
+export function getHashParams(location, name) {
+  const sets = location.hash.substring(1).split('::')
+  const prefix = name + ':'
+  for (let i = 0; i < sets.length; i++) {
+    const set = sets[i]
+    if (set.startsWith(prefix)) {
+      return set
+    }
+  }
+  return undefined
 }
