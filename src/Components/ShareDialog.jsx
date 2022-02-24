@@ -1,19 +1,18 @@
 import React, { useState } from 'react'
 import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
 import { makeStyles } from '@mui/styles'
 import ShareIcon from '../assets/3D/Share.svg'
 import ShareClear from '../assets/3D/ShareClear.svg'
 import CheckOn from '../assets/3D/CheckOn.svg'
 import CheckOff from '../assets/3D/CheckOff.svg'
 import Copy from '../assets/3D/Copy.svg'
+import Delete from '../assets/Delete.svg'
 import Copied from '../assets/3D/Copied.svg'
 import Checkbox from '@mui/material/Checkbox'
 import TextField from '@mui/material/TextField'
-import CameraControl, { HASH_PREFIX } from './CameraControl'
+import { HASH_PREFIX } from './CameraControl'
 import { addHashParams } from '../utils/location'
 import { roundCoord } from '../utils/math'
-import { useLocation } from 'react-router-dom'
 
 
 /**
@@ -26,90 +25,100 @@ export default function ShareDialogControl({ offsetTop, viewer }) {
   const classes = useStyles()
   return (
     <div >
-      <Typography className={classes.about} onClick={() => {
-        setOpen(!open)
-      }}><ShareIcon className={classes.icon} /></Typography>
-      {open && <ShareDialog viewer={viewer} openToggle={() => {
-        setOpen(!open)
-      }} offsetTopCssStr={offsetTop} />}
+      <div className={classes.about} onClick={() => { setOpen(!open) }}>
+        <ShareIcon className={classes.icon} />
+      </div>
+      {open &&
+        <ShareDialog
+          viewer={viewer}
+          togglePanel={() => { setOpen(!open) }}
+          offsetTopCssStr={offsetTop} />
+      }
     </div>)
 }
 
 
 /**
  * About Panel component
- * @param {boolean} openToggle Reactive toggle state for panel.
+ * @param {boolean} togglePanel Reactive toggle state for panel.
  * @param {string} offsetTopCssStr
  * @return {Component} The AboutPanel react component.
  */
-function ShareDialog({ openToggle, offsetTopCssStr, viewer }) {
+function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
   const classes = useStyles({ offsetTop: offsetTopCssStr })
   const [copy, setCopy] = useState(false)
-  const [capture, setCapture] = useState(false)
-  const location = useLocation()
+  const [capture, setCapture] = useState(true)
+  const [privateShare, setPrivateShare] = useState(false)
 
   const toggleCameraUrlLocation = () => {
     setCapture(!capture)
-    if (capture) {
-      addHashParams(
+    copy && setCopy(false)
+    capture
+      ? addHashParams(
         window.location,
         HASH_PREFIX,
         roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4))
-    } else {
-      addHashParams(
+      //TODO replace with remove hashParams function
+      : addHashParams(
         window.location,
-        HASH_PREFIX,
+        HASH_PREFIX
       )
-    }
+  }
+
+  const closeDialog = () => {
+    togglePanel()
+    setCopy(false)
+    setCapture(false)
+  }
+  const onCopy = () => {
+    setCopy(true)
+    navigator.clipboard.writeText(location)
   }
 
   return (
     <div className={classes.container}
       role="none"
-      onClick={openToggle}
-      onKeyDown={openToggle}
+      onClick={closeDialog}
     >
       <Paper elevation={3} className={classes.panel} onClick={(event) => event.stopPropagation()}>
-        <h1 className={classes.title}><ShareClear /></h1>
-        <p>Share the link</p>
-        <div className={classes.link}>
+        <h1 className={classes.clearIcon}><ShareClear /></h1>
+        <p>Share the model link</p>
+        <div className={classes.urlContainer}>
           <TextField id="outlined-basic"
-            label="Link"
             variant="outlined"
             value={window.location}
-            style={{ width: '280px' }} />
-          {copy ?
-            <Copied className={classes.copy} /> :
-            <Copy className={classes.copy}
-              onClick={() => {
-                setCopy(true)
-                navigator.clipboard.writeText(location)
-              }
-              }
-            />}
+            className={classes.input}
+          />
+          {copy
+            ? <Copied className={classes.copy} onClick={onCopy} />
+            : <Copy className={classes.copy} onClick={onCopy} />}
         </div>
         <ul>
-          <li ><Checkbox
-            icon={<CheckOn className={classes.check} />}
-            checkedIcon={<CheckOff className={classes.check} />}
-            onChange={() => toggleCameraUrlLocation()}
-          />Camera</li>
-          <li><Checkbox
-            icon={<CheckOn className={classes.check} />}
-            checkedIcon={<CheckOff className={classes.check} />}
-          />Element visibility</li>
-          <li><Checkbox
-            icon={<CheckOn className={classes.check} />}
-            checkedIcon={<CheckOff className={classes.check} />}
-          /> Cutplanes</li>
-          <li><Checkbox
-            icon={<CheckOn className={classes.check} />}
-            checkedIcon={<CheckOff className={classes.check} />}
-          /> Private Share</li>
+          <Check title={'Camera'} onChange={() => { toggleCameraUrlLocation() }} />
+          <Check title={'Element Visibility'} disabled />
+          <Check title={'Private Share'} onChange={() => { setPrivateShare(!privateShare) }} />
         </ul>
-        <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />
+        {privateShare &&
+          <div>
+            <p style={{ width: '100%' }}>To learn about privated sharing click <a>here</a></p>
+          </div>
+        }
       </Paper >
     </div >
+  )
+}
+
+const Check = ({ title, onChange = () => { } }) => {
+  const classes = useStyles()
+  return (
+    <li>
+      <Checkbox
+        onChange={onChange}
+        icon={<CheckOn className={classes.check} />}
+        checkedIcon={<CheckOff className={classes.check} />}
+      />
+      {title}
+    </li>
   )
 }
 
@@ -135,7 +144,7 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'top': (props) => props.offsetTop,
     'width': '320px',
-    'height': '340px',
+    'height': '350px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
@@ -174,8 +183,12 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      cornerRadius: '2px',
+      borderRadius: '5px',
+      cursor: 'pointer'
     },
+  },
+  input: {
+    width: '280px',
   },
   about: {
     cursor: 'pointer',
@@ -184,6 +197,14 @@ const useStyles = makeStyles({
   icon: {
     width: '30px',
     height: '30px',
+    cursor: 'pointer',
+  },
+  clearIcon: {
+    paddingTop: '20px',
+  },
+  close: {
+    width: '20px',
+    height: '20px',
     cursor: 'pointer',
   },
   copy: {
@@ -205,10 +226,15 @@ const useStyles = makeStyles({
       height: '20px',
     },
   },
-  link: {
+  urlContainer: {
     width: '100%',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
+  closeContainer: {
+    position: 'absolute',
+    right: '20px',
+    bottom: '10px'
+  }
 })

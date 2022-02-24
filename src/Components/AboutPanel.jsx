@@ -1,7 +1,7 @@
 import React from 'react'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import {makeStyles} from '@mui/styles'
+import { makeStyles } from '@mui/styles'
 import About from '../assets/3D/attention.svg'
 
 
@@ -10,7 +10,7 @@ import About from '../assets/3D/attention.svg'
  * @param {Number} offsetTop offset tree element
  * @return {Object} The AboutControl react component.
  */
-export default function AboutControl({offsetTop}) {
+export default function AboutControl({ offsetTop }) {
   const [open, setOpen] = React.useState(false)
   const classes = useStyles()
   return (
@@ -31,8 +31,8 @@ export default function AboutControl({offsetTop}) {
  * @param {string} offsetTopCssStr
  * @return {Component} The AboutPanel react component.
  */
-function AboutPanel({openToggle, offsetTopCssStr}) {
-  const classes = useStyles({offsetTop: offsetTopCssStr})
+function AboutPanel({ openToggle, offsetTopCssStr }) {
+  const classes = useStyles({ offsetTop: offsetTopCssStr })
 
   return (
     <div className={classes.container}
@@ -50,10 +50,9 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
         <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
         <h2 >Features:</h2>
         <ul>
-          <li>Upload IFC file</li>
-          <li>Share IFC model with the URL address</li>
-          <li>Select IFC element</li>
-          <li>Obtain IFC element properties </li>
+          <li>View local IFCs</li>
+          <li>View IFCs hosted on Github </li>
+          <li>Share IFC models</li>
         </ul>
       </Paper>
     </div>
