@@ -1,18 +1,17 @@
-import React, { useState } from 'react'
+import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
-import { makeStyles } from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import ShareIcon from '../assets/3D/Share.svg'
 import ShareClear from '../assets/3D/ShareClear.svg'
 import CheckOn from '../assets/3D/CheckOn.svg'
 import CheckOff from '../assets/3D/CheckOff.svg'
 import Copy from '../assets/3D/Copy.svg'
-import Delete from '../assets/Delete.svg'
 import Copied from '../assets/3D/Copied.svg'
 import Checkbox from '@mui/material/Checkbox'
 import TextField from '@mui/material/TextField'
-import { HASH_PREFIX } from './CameraControl'
-import { addHashParams } from '../utils/location'
-import { roundCoord } from '../utils/math'
+import {HASH_PREFIX} from './CameraControl'
+import {addHashParams} from '../utils/location'
+import {roundCoord} from '../utils/math'
 
 
 /**
@@ -20,18 +19,25 @@ import { roundCoord } from '../utils/math'
  * @param {Number} offsetTop offset tree element
  * @return {Object} The AboutControl react component.
  */
-export default function ShareDialogControl({ offsetTop, viewer }) {
+export default function ShareDialogControl({offsetTop, viewer}) {
   const [open, setOpen] = React.useState(false)
   const classes = useStyles()
   return (
     <div >
-      <div className={classes.about} onClick={() => { setOpen(!open) }}>
+      <div
+        className={classes.about}
+        role='none'
+        onClick={() => {
+          setOpen(!open)
+        }}>
         <ShareIcon className={classes.icon} />
       </div>
       {open &&
         <ShareDialog
           viewer={viewer}
-          togglePanel={() => { setOpen(!open) }}
+          togglePanel={() => {
+            setOpen(!open)
+          }}
           offsetTopCssStr={offsetTop} />
       }
     </div>)
@@ -44,8 +50,8 @@ export default function ShareDialogControl({ offsetTop, viewer }) {
  * @param {string} offsetTopCssStr
  * @return {Component} The AboutPanel react component.
  */
-function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
-  const classes = useStyles({ offsetTop: offsetTopCssStr })
+function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
+  const classes = useStyles({offsetTop: offsetTopCssStr})
   const [copy, setCopy] = useState(false)
   const [capture, setCapture] = useState(true)
   const [privateShare, setPrivateShare] = useState(false)
@@ -53,15 +59,15 @@ function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
   const toggleCameraUrlLocation = () => {
     setCapture(!capture)
     copy && setCopy(false)
-    capture
-      ? addHashParams(
-        window.location,
-        HASH_PREFIX,
-        roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4))
-      //TODO replace with remove hashParams function
-      : addHashParams(
-        window.location,
-        HASH_PREFIX
+    capture ?
+      addHashParams(
+          window.location,
+          HASH_PREFIX,
+          roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4)) :
+      // TODO replace with remove hashParams function
+      addHashParams(
+          window.location,
+          HASH_PREFIX,
       )
   }
 
@@ -89,18 +95,22 @@ function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
             value={window.location}
             className={classes.input}
           />
-          {copy
-            ? <Copied className={classes.copy} onClick={onCopy} />
-            : <Copy className={classes.copy} onClick={onCopy} />}
+          {copy ?
+            <Copied className={classes.copy} onClick={onCopy} /> :
+            <Copy className={classes.copy} onClick={onCopy} />}
         </div>
         <ul>
-          <Check title={'Camera'} onChange={() => { toggleCameraUrlLocation() }} />
+          <Check title={'Camera'} onChange={() => {
+            toggleCameraUrlLocation()
+          }} />
           <Check title={'Element Visibility'} disabled />
-          <Check title={'Private Share'} onChange={() => { setPrivateShare(!privateShare) }} />
+          <Check title={'Private Share'} onChange={() => {
+            setPrivateShare(!privateShare)
+          }} />
         </ul>
         {privateShare &&
           <div>
-            <p style={{ width: '100%' }}>To learn about privated sharing click <a>here</a></p>
+            <p style={{width: '100%'}}>To learn about privated sharing click here</p>
           </div>
         }
       </Paper >
@@ -108,7 +118,7 @@ function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
   )
 }
 
-const Check = ({ title, onChange = () => { } }) => {
+const Check = ({title, onChange = () => { }}) => {
   const classes = useStyles()
   return (
     <li>
@@ -184,7 +194,7 @@ const useStyles = makeStyles({
       paddingRight: '4px',
       paddingBottom: '2px',
       borderRadius: '5px',
-      cursor: 'pointer'
+      cursor: 'pointer',
     },
   },
   input: {
@@ -235,6 +245,6 @@ const useStyles = makeStyles({
   closeContainer: {
     position: 'absolute',
     right: '20px',
-    bottom: '10px'
-  }
+    bottom: '10px',
+  },
 })
