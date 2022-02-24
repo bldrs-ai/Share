@@ -3,7 +3,7 @@ import AppBar from '@mui/material/AppBar'
 import IconButton from '@mui/material/IconButton'
 import Toolbar from '@mui/material/Toolbar'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
+import { makeStyles, useTheme } from '@mui/styles'
 import AboutControl from './AboutPanel'
 import CameraControl from './CameraControl'
 import Settings from './Settings'
@@ -19,7 +19,7 @@ import Open from '../assets/3D/open.svg'
  * @param {Number} offsetTop
  * @return {Object} The ToolBar react component
  */
-export default function ToolBar({viewer, fileOpen, offsetTop}) {
+export default function ToolBar({ viewer, fileOpen, offsetTop }) {
   const classes = useStyles()
   const themeMode = useTheme()
   return (
@@ -31,9 +31,9 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
       <Toolbar variant='regular' className={classes.toolBar} >
         <div className={classes.leftContainer} >
           <Typography variant='h6' className={classes.title}>
-            {themeMode.palette.mode === 'light' ?
-              <LogoDark className={classes.logo} /> :
-              <LogoLight className={classes.logo} />}
+            {themeMode.palette.mode === 'light'
+              ? <LogoDark className={classes.logo} />
+              : <LogoLight className={classes.logo} />}
           </Typography>
           <IconButton
             edge='start'

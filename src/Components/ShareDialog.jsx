@@ -1,26 +1,27 @@
-import React, {useState} from 'react'
+import React, { useState } from 'react'
 import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
+import Checkbox from '@mui/material/Checkbox'
+import TextField from '@mui/material/TextField'
+import { makeStyles } from '@mui/styles'
+import { HASH_PREFIX } from './CameraControl'
+import { addHashParams } from '../utils/location'
+import { roundCoord } from '../utils/math'
 import ShareIcon from '../assets/3D/Share.svg'
 import ShareClear from '../assets/3D/ShareClear.svg'
 import CheckOn from '../assets/3D/CheckOn.svg'
 import CheckOff from '../assets/3D/CheckOff.svg'
 import Copy from '../assets/3D/Copy.svg'
 import Copied from '../assets/3D/Copied.svg'
-import Checkbox from '@mui/material/Checkbox'
-import TextField from '@mui/material/TextField'
-import {HASH_PREFIX} from './CameraControl'
-import {addHashParams} from '../utils/location'
-import {roundCoord} from '../utils/math'
 
 
 /**
  * Button to toggle About panel on and off
  * @param {Number} offsetTop offset tree element
+ * @param {Object} viewer ifc viewer
  * @return {Object} The AboutControl react component.
  */
-export default function ShareDialogControl({offsetTop, viewer}) {
-  const [open, setOpen] = React.useState(false)
+export default function ShareDialogControl({ offsetTop, viewer }) {
+  const [open, setOpen] = useState(false)
   const classes = useStyles()
   return (
     <div >
@@ -32,7 +33,8 @@ export default function ShareDialogControl({offsetTop, viewer}) {
         }}>
         <ShareIcon className={classes.icon} />
       </div>
-      {open &&
+      {open
+        &&
         <ShareDialog
           viewer={viewer}
           togglePanel={() => {
@@ -45,13 +47,14 @@ export default function ShareDialogControl({offsetTop, viewer}) {
 
 
 /**
- * About Panel component
+ * ShareDialog Panel component
  * @param {boolean} togglePanel Reactive toggle state for panel.
  * @param {string} offsetTopCssStr
+ * @param {Object} viewer IFC viewer
  * @return {Component} The AboutPanel react component.
  */
-function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
-  const classes = useStyles({offsetTop: offsetTopCssStr})
+function ShareDialog({ togglePanel, offsetTopCssStr, viewer }) {
+  const classes = useStyles({ offsetTopCssStr })
   const [copy, setCopy] = useState(false)
   const [capture, setCapture] = useState(true)
   const [privateShare, setPrivateShare] = useState(false)
@@ -59,15 +62,15 @@ function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
   const toggleCameraUrlLocation = () => {
     setCapture(!capture)
     copy && setCopy(false)
-    capture ?
+    capture
+      ? addHashParams(
+        window.location,
+        HASH_PREFIX,
+        roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4)) :
+      // TODO(oleg) replace with remove hashParams function
       addHashParams(
-          window.location,
-          HASH_PREFIX,
-          roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4)) :
-      // TODO replace with remove hashParams function
-      addHashParams(
-          window.location,
-          HASH_PREFIX,
+        window.location,
+        HASH_PREFIX,
       )
   }
 
@@ -76,6 +79,8 @@ function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
     setCopy(false)
     setCapture(false)
   }
+
+
   const onCopy = () => {
     setCopy(true)
     navigator.clipboard.writeText(location)
@@ -95,9 +100,9 @@ function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
             value={window.location}
             className={classes.input}
           />
-          {copy ?
-            <Copied className={classes.copy} onClick={onCopy} /> :
-            <Copy className={classes.copy} onClick={onCopy} />}
+          {copy
+            ? <Copied className={classes.copy} onClick={onCopy} />
+            : <Copy className={classes.copy} onClick={onCopy} />}
         </div>
         <ul>
           <Check title={'Camera'} onChange={() => {
@@ -108,17 +113,17 @@ function ShareDialog({togglePanel, offsetTopCssStr, viewer}) {
             setPrivateShare(!privateShare)
           }} />
         </ul>
-        {privateShare &&
-          <div>
-            <p style={{width: '100%'}}>To learn about privated sharing click here</p>
+        {privateShare
+          && <div>
+            <p style={{ width: '100%' }}>To learn about privated sharing click here</p>
           </div>
         }
-      </Paper >
+      </Paper>
     </div >
   )
 }
 
-const Check = ({title, onChange = () => { }}) => {
+const Check = ({ title, onChange = () => { } }) => {
   const classes = useStyles()
   return (
     <li>
@@ -152,7 +157,7 @@ const useStyles = makeStyles({
   panel: {
     'position': 'relative',
     'textAlign': 'center',
-    'top': (props) => props.offsetTop,
+    'top': (props) => props.offsetTop + 'px',
     'width': '320px',
     'height': '350px',
     'fontFamily': 'Helvetica',
