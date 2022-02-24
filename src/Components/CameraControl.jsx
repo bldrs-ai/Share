@@ -1,7 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
 import debug from '../utils/debug'
-import {addHashParams} from '../utils/location'
+import {addHashParams, getHashParams} from '../utils/location'
 import {roundCoord} from '../utils/math'
 
 
@@ -27,7 +27,7 @@ export default function CameraControl({camera}) {
 
 
 /** The prefix to use for camera coordinate in the URL hash. */
-export const HASH_PREFIX = 'c'
+export const CAMERA_PREFIX = 'c'
 
 
 /**
@@ -53,8 +53,12 @@ function onLoad(camera, location) {
 export function onHash(camera, location) {
   debug().log('CameraControl#onHash')
   const regex = new RegExp(
-      `#${HASH_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
-  const match = location.hash.match(regex)
+      `${CAMERA_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
+  const params = getHashParams(location, CAMERA_PREFIX)
+  if (params == undefined) {
+    return
+  }
+  const match = params.match(regex)
   if (match) {
     const x = parseFloat(parseFloat(match[1]).toPrecision(5))
     const y = parseFloat(parseFloat(match[2]).toPrecision(5))
@@ -75,5 +79,5 @@ function onClick(camera) {
   // TODO(pablo): Ideally this would be hanled by react-router
   // location, but doesn't seem to be supported yet in v6.
   // See also https://stackoverflow.com/a/71210781/3630172
-  addHashParams(window.location, HASH_PREFIX, roundCoord(...camera.getPosition(), 4))
+  addHashParams(window.location, CAMERA_PREFIX, roundCoord(...camera.getPosition(), 4))
 }

@@ -6,6 +6,7 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import AboutControl from './AboutPanel'
 import CameraControl from './CameraControl'
+import IssuesControl from './IssuesControl'
 import Settings from './Settings'
 import LogoLight from '../assets/3D/logo5.svg'
 import LogoDark from '../assets/3D/logo5.svg'
@@ -45,6 +46,7 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
         </div>
         <div className={classes.rightContainer}>
           {viewer && <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />}
+          {viewer && <IssuesControl viewer={viewer} />}
           <AboutControl offsetTop={offsetTop} />
           <Settings/>
         </div>
