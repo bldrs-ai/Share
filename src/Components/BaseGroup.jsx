@@ -16,9 +16,9 @@ import Open from '../assets/2D_Icons/Open.svg'
 export default function BaseGroup({fileOpen, offsetTop}) {
   const classes = useStyles()
   return (
-    <div className = {classes.container}>
-      <AboutControl offsetTop = {offsetTop}/>
-      <Tooltip title="Upload Model" placement="top">
+    <div className={classes.container}>
+      <AboutControl offsetTop={offsetTop} />
+      <Tooltip title="Upload" placement="top">
         <IconButton
           aria-label='account of current user'
           aria-controls='menu-appbar'
@@ -26,7 +26,7 @@ export default function BaseGroup({fileOpen, offsetTop}) {
           onClick={fileOpen}
           color='inherit'
         >
-          <Open className = {classes.icon}/>
+          <Open className={classes.icon} />
         </IconButton>
       </Tooltip>
       <Settings />

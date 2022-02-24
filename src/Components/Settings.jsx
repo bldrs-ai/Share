@@ -2,7 +2,6 @@ import React, {useContext, useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import Tooltip from '@mui/material/Tooltip'
 import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
 import {ColorModeContext} from '../Share'
@@ -32,17 +31,17 @@ export default function Settings({toggleTheme, mode}) {
 
   return (
     <div>
-      <Tooltip title="Settings" placement="top">
-        <IconButton
-          aria-label='account of current user'
-          aria-controls='menu-appbar'
-          aria-haspopup='true'
-          onClick={handleMenu}
-          color='inherit'
-        >
-          <SettingsIcon className={classes.icon}/>
-        </IconButton>
-      </Tooltip>
+      {/* <Tooltip title="Settings" placement="top"> */}
+      <IconButton
+        aria-label='account of current user'
+        aria-controls='menu-appbar'
+        aria-haspopup='true'
+        onClick={handleMenu}
+        color='inherit'
+      >
+        <SettingsIcon className={classes.icon} />
+      </IconButton>
+      {/* </Tooltip> */}
       <Menu
         id='menu-appbar'
         elevation={2}
@@ -53,7 +52,7 @@ export default function Settings({toggleTheme, mode}) {
         }}
         open={open}
         onClose={handleClose}
-        style = {{height: 180}}
+        style={{height: 180}}
         PaperProps={{
           style: {
             transform: 'translateX(-6px) translateY(-52px)',
@@ -65,7 +64,7 @@ export default function Settings({toggleTheme, mode}) {
           <div>Theme: {themeMode.palette.mode}</div>
           <Toggle defaultChecked onChange={() => {
             theme.toggleColorMode('dark')
-          }}/>
+          }} />
         </MenuItem>
       </Menu>
     </div>

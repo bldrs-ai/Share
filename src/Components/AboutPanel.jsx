@@ -7,6 +7,9 @@ import About from '../assets/2D_Icons/Wave.svg'
 import Slider from '@mui/material/Slider'
 import Delete from '../assets/2D_Icons/Delete.svg'
 import LogoB from '../assets/LogoB.svg'
+import Shareifc from '../assets/2D_Icons/Shareifc.svg'
+import Openifc from '../assets/2D_Icons/Openifc.svg'
+import Githubifc from '../assets/2D_Icons/Githubifc.svg'
 
 
 /**
@@ -63,13 +66,13 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
         event.stopPropagation()
       }} >
         <h1 className={classes.title}><LogoB className={classes.hello} /></h1>
-        <p><strong>BLDRS</strong> is a collaborative environment enabled by IFCs.</p>
+        <p><strong>BLDRS</strong> is a collaborative environment to view and share IFC models.</p>
         <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
         <h2 >Features:</h2>
-        <ul>
-          <li>Upload IFC file</li>
-          <li>Open IFC files hosted on GitHub</li>
-          <li>Share IFC model with the URL link</li>
+        <ul style={{marginLeft: '-10px'}}>
+          <li><Openifc className={classes.iconSmall} /> Upload IFC file</li>
+          <li><Githubifc className={classes.iconSmall} /> Open IFC files hosted on GitHub</li>
+          <li><Shareifc className={classes.iconSmall} /> Share IFC model</li>
         </ul>
         <div style={{width: '100%', textAlign: 'center'}}>
           <h2>Cookies</h2>
@@ -129,7 +132,7 @@ const useStyles = makeStyles({
     'position': 'relative',
     'top': (props) => props.offsetTop,
     'width': '320px',
-    'height': '580px',
+    'height': '600px',
     'fontFamily': 'Helvetica',
     'padding': '1em 1em',
     '@media (max-width: 900px)': {
@@ -157,7 +160,13 @@ const useStyles = makeStyles({
       },
     },
     '& li': {
+      marginBottom: '6px',
       fontWeight: 200,
+      listStyleType: 'none',
+      display: 'flex',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+
     },
     '& a': {
       color: 'lime',
@@ -176,6 +185,9 @@ const useStyles = makeStyles({
     width: '30px',
     height: '30px',
     cursor: 'pointer',
+  },
+  iconSmall: {
+    marginRight: '10px',
   },
   hello: {
     height: '50px',

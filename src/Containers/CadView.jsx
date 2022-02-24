@@ -288,6 +288,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
+    setSelectedElement({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -372,11 +373,12 @@ export default function CadView({
           placeCutPlane={() => placeCutPlane()}
           unSelectItem={() => unSelectItems()}
           toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)} />
-        <div className={showItemPanel ? classes.iconGroupOpen : classes.iconGroup}>
+        <div className={showItemPanel ? classes.operationsGroupOpen : classes.operationsGroup}>
           <OperationsGroup
             placeCutPlane={() => placeCutPlane()}
             unSelectItem={() => unSelectItems()}
             toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
+            selectedElement={selectedElement}
           />
         </div>
         <LogoDark className={classes.logo} />
@@ -511,10 +513,10 @@ const useStyles = makeStyles(() => ({
     border: 'none',
     zIndex: 1000,
   },
-  iconGroup: {
+  operationsGroup: {
     'position': 'absolute',
-    'top': '70px',
-    'right': '2px',
+    'bottom': '70px',
+    'right': '5px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -523,9 +525,9 @@ const useStyles = makeStyles(() => ({
       'right': '28px',
     },
   },
-  iconGroupOpen: {
+  operationsGroupOpen: {
     'position': 'absolute',
-    'top': '70px',
+    'bottom': '70px',
     'right': '342px',
     'border': 'none',
     'zIndex': 0,

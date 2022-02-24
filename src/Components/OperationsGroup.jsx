@@ -14,35 +14,39 @@ import Delete from '../assets/2D_Icons/Delete.svg'
  * @param {function} unSelectItem deselects currently selected element
  * @return {Object}
  */
-export default function OperationsGroup({placeCutPlane, unSelectItem}) {
+export default function OperationsGroup({placeCutPlane, unSelectItem, selectedElement}) {
   const classes = useStyles()
   const width = window.innerWidth
+  const isSelected = Object.keys(selectedElement).length !== 0
+  console.log('is Selected', isSelected)
   return (
     <div>
-      { width > 500 ?
-          <div className = {classes.container}>
-            <ShortcutsControl />
+      {width > 500 ?
+        <div className={classes.container}>
+          {isSelected &&
             <Tooltip title="Clear Selection" placement="left">
-              <IconButton onClick ={unSelectItem} aria-label="cutPlane" size="small">
-                <Delete className = {classes.icon}/>
+              <IconButton onClick={unSelectItem} aria-label="cutPlane" size="small">
+                <Delete className={classes.icon} />
               </IconButton>
             </Tooltip>
-          </div> :
-          <div className = {classes.container}>
-            <IconButton aria-label="cutPlane" size="small">
-              <GuidePanelControl/>
+          }
+          <ShortcutsControl />
+        </div> :
+        <div className={classes.container}>
+          <IconButton aria-label="cutPlane" size="small">
+            <GuidePanelControl />
+          </IconButton>
+          <Tooltip title="Section Plane" placement="left">
+            <IconButton onClick={placeCutPlane} aria-label="cutPlane" size="small">
+              <CutPlane className={classes.icon} />
             </IconButton>
-            <Tooltip title="Section Plane" placement="left">
-              <IconButton onClick ={placeCutPlane} aria-label="cutPlane" size="small">
-                <CutPlane className = {classes.icon}/>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Clear Selection" placement="left">
-              <IconButton onClick ={unSelectItem} aria-label="cutPlane" size="small">
-                <Delete className = {classes.icon}/>
-              </IconButton>
-            </Tooltip>
-          </div>
+          </Tooltip>
+          <Tooltip title="Clear Selection" placement="left">
+            <IconButton onClick={unSelectItem} aria-label="cutPlane" size="small">
+              <Delete className={classes.icon} />
+            </IconButton>
+          </Tooltip>
+        </div>
       }
     </div>
   )
