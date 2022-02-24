@@ -4,9 +4,9 @@ import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import About from '../assets/2D_Icons/Wave.svg'
-import Hello from '../assets/2D_Icons/Hello.svg'
 import Slider from '@mui/material/Slider'
 import Delete from '../assets/2D_Icons/Delete.svg'
+import LogoB from '../assets/LogoB.svg'
 
 
 /**
@@ -62,20 +62,14 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
       <Paper elevation={3} className={classes.panel} onClick={(event) => {
         event.stopPropagation()
       }} >
-        <h1 className={classes.title}><Hello className={classes.hello} /></h1>
-        <p><strong>BLDRS</strong> is a collaborative integration environment for IFCs 🙂</p>
-        <p> We are open source 🌱 Please visit our repository:&nbsp;
-          <a href={'https://github.com/buildrs/Share'} target="_new">
-            github.com/buildrs/Share
-          </a>
-        </p>
+        <h1 className={classes.title}><LogoB className={classes.hello} /></h1>
+        <p><strong>BLDRS</strong> is a collaborative environment enabled by IFCs.</p>
         <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
         <h2 >Features:</h2>
         <ul>
           <li>Upload IFC file</li>
-          <li>Share IFC model with the URL address</li>
-          <li>Select IFC element</li>
-          <li>Obtain IFC element properties </li>
+          <li>Open IFC files hosted on GitHub</li>
+          <li>Share IFC model with the URL link</li>
         </ul>
         <div style={{width: '100%', textAlign: 'center'}}>
           <h2>Cookies</h2>
@@ -93,6 +87,12 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
               <li>High - ...</li>
             </ul>
           </div>
+          <div className={classes.openSource}>
+            We are open source 🌱 Please visit our repository:&nbsp;
+            <a href={'https://github.com/buildrs/Share'} target="_new">
+              github.com/buildrs/Share
+            </a>
+          </div>
         </div>
         <div
           style={{position: 'absolute', right: '20px', bottom: '10px'}}
@@ -102,8 +102,8 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
         >
           <Delete style={{width: '30px'}} />
         </div>
-      </Paper>
-    </div>
+      </Paper >
+    </div >
   )
 }
 
@@ -165,7 +165,7 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      cornerRadius: '2px',
+      borderRadius: '2px',
     },
   },
   about: {
@@ -188,5 +188,9 @@ const useStyles = makeStyles({
       width: '24px',
       height: '20px',
     },
+  },
+  openSource: {
+    'fontWeight': 200,
+    'lineHeight': '24px',
   },
 })
