@@ -7,6 +7,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import AboutControl from './AboutPanel'
 import CameraControl from './CameraControl'
 import Settings from './Settings'
+import ShareDialogControl from './ShareDialog'
 import LogoLight from '../assets/3D/logo5.svg'
 import LogoDark from '../assets/3D/logo5.svg'
 import Open from '../assets/3D/open.svg'
@@ -26,13 +27,13 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
       elevation={0}
       position='absolute'
       color='primary'
-      className = {classes.appBar}>
+      className={classes.appBar}>
       <Toolbar variant='regular' className={classes.toolBar} >
         <div className={classes.leftContainer} >
           <Typography variant='h6' className={classes.title}>
-            {themeMode.palette.mode==='light'?
-              <LogoDark className = {classes.logo}/>:
-            <LogoLight className = {classes.logo}/>}
+            {themeMode.palette.mode === 'light' ?
+              <LogoDark className={classes.logo} /> :
+              <LogoLight className={classes.logo} />}
           </Typography>
           <IconButton
             edge='start'
@@ -40,13 +41,14 @@ export default function ToolBar({viewer, fileOpen, offsetTop}) {
             aria-label='menu'
             onClick={fileOpen}
           >
-            <Open className = {classes.icon}/>
+            <Open className={classes.icon} />
           </IconButton>
         </div>
         <div className={classes.rightContainer}>
           {viewer && <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />}
           <AboutControl offsetTop={offsetTop} />
-          <Settings/>
+          <Settings />
+          <ShareDialogControl viewer={viewer} />
         </div>
       </Toolbar>
     </AppBar>
