@@ -7,13 +7,14 @@ import SearchIndex from './SearchIndex.js'
 import ItemPanelButton from '../Components/ItemPanel'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import ToolBar from '../Components/ToolBar'
-import IconGroup from '../Components/IconGroup'
+import BaseGroup from '../Components/BaseGroup'
+import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import LogoDark from '../assets/Icons/Logo.svg'
 
 
 /**
@@ -57,7 +58,7 @@ export default function CadView({
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
-  // eslint-disable-next-line no-unused-vars
+
   const [showItemPanel, setShowItemPanel] = useState(false)
   const [showShortCuts, setShowShortCuts] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -321,7 +322,6 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
-    setShowItemPanel(false)
 
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
@@ -336,10 +336,6 @@ export default function CadView({
         <div className={classes.viewContainer} id='viewer-container'></div>
       </div>
       <div className={classes.menusWrapper}>
-        <ToolBar
-          viewer={viewer}
-          fileOpen={loadLocalFile}
-          offsetTop={PANEL_TOP}/>
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
@@ -349,11 +345,11 @@ export default function CadView({
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              showNavPanel={showNavPanel}
               isOpen={showNavPanel}
             />
           )}
         </div>
-
         {showNavPanel &&
           <NavPanel
             model={model}
@@ -367,22 +363,26 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <div className={classes.itemPanelContainer}>
-          <ItemPanelButton
-            model={model}
-            element={selectedElement}
-            close={()=>setShowItemPanel(false)}
-            topOffset={PANEL_TOP}
-            placeCutPlane={()=>placeCutPlane()}
+        <ItemPanelButton
+          model={model}
+          element={selectedElement}
+          open={showItemPanel}
+          onClickCb={() => setShowItemPanel(!showItemPanel)}
+          topOffset={PANEL_TOP}
+          placeCutPlane={() => placeCutPlane()}
+          unSelectItem={() => unSelectItems()}
+          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}/>
+        <div className={showItemPanel ? classes.iconGroupOpen : classes.iconGroup}>
+          <OperationsGroup
+            viewer={viewer}
+            placeCutPlane={() => placeCutPlane()}
             unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
-        </div>
-        <div className={classes.iconGroup}>
-          <IconGroup
-            placeCutPlane={()=>placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
+            toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
           />
+        </div>
+        <LogoDark className={classes.logo}/>
+        <div className={showItemPanel ? classes.baseGroupOpen : classes.baseGroup}>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>
     </div>
@@ -433,14 +433,19 @@ function initViewer(pathPrefix) {
 }
 
 
-const PANEL_TOP = 84
-const useStyles = makeStyles((theme) => ({
+const PANEL_TOP = 20
+const useStyles = makeStyles(() => ({
   pageContainer: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    width: '100%',
-    height: '100%',
+    'position': 'absolute',
+    'top': '0px',
+    'left': '0px',
+    'minWidth': '100vw',
+    'minHeight': '100vh',
+    '@media (max-width: 900px)': {
+      height: ' calc(100vh - calc(100vh - 100%))',
+      minHeight: '-webkit-fill-available',
+    },
+
   },
   viewerContainer: {
     zIndex: 0,
@@ -461,7 +466,7 @@ const useStyles = makeStyles((theme) => ({
   searchContainer: {
     position: 'absolute',
     top: `${PANEL_TOP}px`,
-    left: '23px',
+    left: '26px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -509,14 +514,54 @@ const useStyles = makeStyles((theme) => ({
   },
   iconGroup: {
     'position': 'absolute',
-    'bottom': `40px`,
-    'right': '20px',
+    'top': '70px',
+    'right': '2px',
     'border': 'none',
-    'zIndex': 1000,
+    'zIndex': 0,
     '@media (max-width: 900px)': {
-      bottom: `0px`,
-      top: '140px',
-      right: '14px',
+      'bottom': `0px`,
+      'top': '62px',
+      'right': '28px',
+    },
+  },
+  iconGroupOpen: {
+    'position': 'absolute',
+    'top': '70px',
+    'right': '342px',
+    'border': 'none',
+    'zIndex': 0,
+    '@media (max-width: 900px)': {
+      'bottom': `0px`,
+      'top': '62px',
+      'right': '28px',
+    },
+  },
+  logo: {
+    'position': 'absolute',
+    'bottom': '12px',
+    'left': '30px',
+    'width': '120px',
+    '@media (max-width: 900px)': {
+      position: 'absolute',
+      bottom: '28px',
+      left: '26px',
+      width: '140px',
+    },
+  },
+  baseGroup: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'right': '20px',
+    '@media (max-width: 900px)': {
+      'bottom': `20px`,
+    },
+  },
+  baseGroupOpen: {
+    'position': 'absolute',
+    'bottom': '10px',
+    'right': '360px',
+    '@media (max-width: 900px)': {
+      'bottom': `20px`,
     },
   },
 }))

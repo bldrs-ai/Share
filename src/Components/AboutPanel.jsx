@@ -1,8 +1,9 @@
-import React from 'react'
+import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
-import Typography from '@mui/material/Typography'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import About from '../assets/3D/attention.svg'
+import About from '../assets/Icons/Warning.svg'
 
 
 /**
@@ -11,14 +12,16 @@ import About from '../assets/3D/attention.svg'
  * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
-  const [open, setOpen] = React.useState(false)
+  const [open, setOpen] = useState(true)
   const classes = useStyles()
   return (
     <div >
-      <Typography className={classes.about} onClick={() => {
-        setOpen(!open)
-      }}>About</Typography>
-      {open && <AboutPanel openToggle={() => {
+      <Tooltip title="About" placement="top">
+        <IconButton onClick={() => setOpen(!open)}>
+          <About className={classes.icon}/>
+        </IconButton>
+      </Tooltip>
+      {open && <AboutPanel openToggle={()=>{
         setOpen(!open)
       }} offsetTopCssStr={offsetTop} />}
     </div>)
@@ -62,7 +65,7 @@ function AboutPanel({openToggle, offsetTopCssStr}) {
 
 const useStyles = makeStyles({
   container: {
-    position: 'absolute',
+    position: 'fixed',
     top: '0px',
     left: '0px',
     width: '100%',

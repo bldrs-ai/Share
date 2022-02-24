@@ -1,13 +1,36 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Paper from '@mui/material/Paper'
+import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
+import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
-import NodeClosed from '../assets/3D/nodeClosed.svg'
-import NodeOpen from '../assets/3D/nodeOpen.svg'
+import NodeClosed from '../assets/Icons/NodeClosed.svg'
+import NodeOpen from '../assets/Icons/NodeOpened.svg'
+import Hamburger from '../assets/Icons/Menu.svg'
 
+/**
+ * Navigation panel control is a button that toggles the visibility of nav panel
+ * @param {Number} topOffset global offset defined in the cad view
+ * @param {function} onClickMenuCb callback passed from cad view
+ * @return {Object} The button react component
+ */
+export function NavPanelControl({topOffset, onClickMenuCb}) {
+  const classes = useStyles({topOffset: topOffset})
+  return (
+    <div className={classes.toggleButton}>
+      <Tooltip title="Model Navigation" placement="bottom">
+        <IconButton onClick={() => {
+          onClickMenuCb()
+        }}>
+          <Hamburger className={classes.treeIcon}/>
+        </IconButton>
+      </Tooltip>
+    </div>
+  )
+}
 
 /**
  * @param {Object} model
@@ -88,7 +111,7 @@ export default function NavPanel({
 const useStyles = makeStyles({
   contextualMenu: {
     'position': 'absolute',
-    'top': '144px',
+    'top': '80px',
     'left': '23px',
     'overflow': 'auto',
     'width': '308px',
@@ -96,24 +119,37 @@ const useStyles = makeStyles({
     'alignItems': 'center',
     'maxHeight': '50%',
     '@media (max-width: 900px)': {
-      maxHeight: '30%',
-      width: '250px',
+      'maxHeight': '30%',
+      'width': '250px',
+      'top': '80px',
     },
   },
   treeContainer: {
-    paddingTop: '14px',
-    paddingBottom: '14px',
-    overflow: 'scroll',
+    'paddingTop': '14px',
+    'paddingBottom': '14px',
+    'overflow': 'scroll',
   },
   paper: {
-    display: 'flex',
-    overflow: 'auto',
-    flexDirection: 'column',
-    width: '220px',
-    backgroundColor: 'lightGray',
+    'display': 'flex',
+    'overflow': 'auto',
+    'flexDirection': 'column',
+    'width': '220px',
+    'backgroundColor': 'lightGray',
+  },
+  treeIcon: {
+    'width': '30px',
+    'height': '30px',
   },
   icon: {
-    width: 12,
-    height: 12,
+    'width': '12px',
+    'height': '12px',
+  },
+  toggleButton: {
+    'position': 'absolute',
+    'top': (props) =>`${props.topOffset}px`,
+    'left': '30px',
+    '@media (max-width: 900px)': {
+      'left': '20px',
+    },
   },
 })

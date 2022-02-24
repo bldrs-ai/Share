@@ -15,24 +15,22 @@ import Copied from '../assets/3D/Copied.svg'
 
 
 /**
- * Button to toggle About panel on and off
+ * Button to toggle ShareDialog on and off
  * @param {Number} offsetTop offset tree element
  * @param {Object} viewer ifc viewer
- * @return {Object} The AboutControl react component.
+ * @return {Object} The ShareDialog react component.
  */
 export default function ShareDialogControl({offsetTop, viewer}) {
   const [open, setOpen] = useState(false)
   const classes = useStyles()
   return (
     <div >
-      <div
-        className={classes.about}
-        role='none'
+      <ShareIcon
+        className={classes.icon}
         onClick={() => {
           setOpen(!open)
-        }}>
-        <ShareIcon className={classes.icon} />
-      </div>
+        }}
+      />
       {open &&
         <ShareDialog
           viewer={viewer}

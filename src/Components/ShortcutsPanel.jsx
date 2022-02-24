@@ -1,9 +1,10 @@
 import React from 'react'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/3D/clear.svg'
-import Question from '../assets/3D/help.svg'
+import Close from '../assets/Icons/Delete.svg'
+import Question from '../assets/Icons/Question.svg'
 
 
 /**
@@ -14,13 +15,23 @@ export default function ShortcutsControl({offsetTop}) {
   const [open, setOpen]=React.useState(false)
   const classes = useStyles()
   return (
-    <IconButton onClick={() => {
-      setOpen(!open)
-    }}>
-      <Question className = {classes.icon}/> {open && <ShortcutsPanel openToggle={()=>{
+    <Tooltip title="Shortcuts" placement="left">
+      <IconButton onClick={() => {
         setOpen(!open)
-      }} offsetTop={offsetTop}/>}
-    </IconButton>)
+      }}>
+        <Question className = {classes.icon}/>
+        {
+          open &&
+            <ShortcutsPanel
+              openToggle={() => {
+                setOpen(!open)
+              }}
+              offsetTop={offsetTop}
+            />
+        }
+      </IconButton>
+    </Tooltip>
+  )
 }
 
 

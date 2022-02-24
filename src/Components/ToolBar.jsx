@@ -16,7 +16,7 @@ import Open from '../assets/3D/open.svg'
 
 /**
  * @param {Object} viewer
- * @param {Function} fileOpen
+ * @param {function} fileOpen
  * @param {Number} offsetTop
  * @return {Object} The ToolBar react component
  */

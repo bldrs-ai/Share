@@ -1,7 +1,7 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import Close from '../assets/Close.svg'
+import Close from '../assets/Icons/Delete.svg'
 
 
 /**
@@ -30,9 +30,7 @@ export default function ItemPropertiesDrawer({
       <div className={classes.drawerContainer}>
         <div className={classes.headerWrapper} >
           <div className={classes.title}>{title}</div>
-          <div className={classes.closeContainer}>
-            <Close className={classes.close} onClick={onClose}/>
-          </div>
+          <Close className={classes.close} onClick={onClose}/>
         </div>
         <div className={classes.contentContainer}>
           {content}
@@ -45,7 +43,7 @@ export default function ItemPropertiesDrawer({
 
 const useStyles = makeStyles({
   drawerPaper: {
-    'marginTop': '65px',
+    'marginTop': '0px',
     'width': '350px',
     'borderRadius': '0px',
     'marginLeft': '20px',
@@ -66,9 +64,8 @@ const useStyles = makeStyles({
     'display': 'flex',
     'justifyContent': 'space-between',
     'alignItems': 'center',
-    'margin': '16px 10px 8px 10px',
+    'margin': '30px 10px 8px 10px',
     'paddingBottom': '12px',
-    'borderBottom': '1px solid #494747',
     '@media (max-width: 900px)': {
       paddingBottom: '10px',
       borderBottom: 'none',
@@ -77,13 +74,14 @@ const useStyles = makeStyles({
   title: {
     fontFamily: 'Helvetica',
     fontSize: '20px',
-    fontWeight: '200px',
-    color: '#696969',
+    fontWeight: 200,
     marginLeft: '13px',
+    borderBottom: '1px solid grey',
   },
   closeContainer: {
     'position': 'relative',
-    'right': '20px',
+    'right': '40px',
+    'top': '6px',
     '@media (max-width: 900px)': {
       maxHeight: '200px',
       right: '20px',
@@ -91,13 +89,15 @@ const useStyles = makeStyles({
     },
   },
   close: {
-    'height': '20px',
-    'width': '20px',
+    'position': 'relative',
+    'right': '20px',
+    'height': '24px',
+    'width': '24px',
     'zIndex': 1000,
     'cursor': 'pointer',
     '@media (max-width: 900px)': {
-      height: '30px',
-      width: '30px',
+      height: '20px',
+      width: '20px',
     },
   },
   contentContainer: {
@@ -112,3 +112,4 @@ const useStyles = makeStyles({
     },
   },
 })
+

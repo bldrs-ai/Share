@@ -32,13 +32,19 @@ export default function ItemProperties({model, element}) {
 
   return (
     <div className={classes.propsContainer}>
-      <h2 className={classes.sectionTitle}>Properties</h2>
-      {propTable || 'Loading...'}
-      <h2 className={classes.sectionTitle}>
-        <div>Property Sets</div>
-        <Toggle onChange={() => setExpandAll(!expandAll)} />
-      </h2>
-      {psetsList || 'Loading...'}
+      {
+        Object.keys(element).length === 0 ?
+          <h2 className={classes.noElement}>No element selected</h2> :
+          <>
+            <h2 className={classes.sectionTitle}>Properties</h2>
+            {propTable || 'Loading...'}
+            <h2 className={classes.sectionTitle}>
+              Property Sets
+              <Toggle onChange={() => setExpandAll(!expandAll)} />
+            </h2>
+            {psetsList || 'Loading...'}
+          </>
+      }
     </div>)
 }
 
@@ -50,7 +56,7 @@ export default function ItemProperties({model, element}) {
  *
  * @param {Object} model IFC model
  * @param {Object} ifcProps Caller should pass the root IFC element.
- *    Recursive calls will pass children
+ * Recursive calls will pass children
  * @param {Number} serial
  * @param {boolean} isPset Is property set
  * @return {Object} A property table react component
@@ -287,7 +293,7 @@ function row(d1, d2, serial) {
  */
 function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
-      d1 === null || d1 === undefined) {
+    d1 === null || d1 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   return (
@@ -364,17 +370,22 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItem: 'center',
+    alignItems: 'center',
     maxWidth: '320px',
     overflowWrap: 'break-word',
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: 200,
-    color: '#696969',
     paddingLeft: '4px',
     paddingRight: '4px',
-    paddingBottom: '10px',
-    borderBottom: '1px solid lightgrey',
+    borderBottom: '1px solid grey',
+  },
+  noElement: {
+    maxWidth: '320px',
+    fontFamily: 'Helvetica',
+    fontSize: '20px',
+    fontWeight: 200,
+    width: '300px',
   },
   icons: {
     width: '20px',
