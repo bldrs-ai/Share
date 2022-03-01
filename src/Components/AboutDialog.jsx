@@ -42,31 +42,32 @@ export default function AboutControl({offsetTop}) {
  * @return {Component} React component
  */
 function AboutDialog({closeDialog}) {
+  const classes = useStyles()
   return (
     <Dialog
-      icon={<AboutIcon/>}
-      headerText='Share the model link'
+      icon={<LogoB/>}
+      headerText=''
       closeFn={closeDialog}
-      content={<AboutContent/>}/>)
+      clazzes={classes}
+      content={<AboutContent clazzes={classes}/>}/>)
 }
 
 
 /**
  * The content portion of the AboutDialog
+ * @param {Object} clazzes node
  * @return {Object} React component
  */
-function AboutContent() {
-  const classes = useStyles()
+function AboutContent({clazzes}) {
   return (
-    <div className={classes.content}>
-      <h1><LogoB className={classes.hello} /></h1>
+    <div className={clazzes.content}>
       <p><strong>BLDRS</strong> is a collaborative environment to view and share IFC models.</p>
       <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
       <h2>Features:</h2>
-      <ul style={{marginLeft: '-10px'}}>
-        <li><Openifc className={classes.iconSmall}/> Upload IFC file</li>
-        <li><Githubifc className={classes.iconSmall}/> Open IFC files hosted on GitHub</li>
-        <li><Shareifc className={classes.iconSmall}/> Share IFC model</li>
+      <ul>
+        <li><Openifc className={clazzes.iconSmall}/> Upload IFC file</li>
+        <li><Githubifc className={clazzes.iconSmall}/> Open IFC files hosted on GitHub</li>
+        <li><Shareifc className={clazzes.iconSmall}/> Share IFC model</li>
       </ul>
       <div style={{width: '100%', textAlign: 'center'}}>
         <h3>Cookies</h3>
@@ -77,14 +78,7 @@ function AboutContent() {
           marks={marks}
           min={0}
           max={20}/>
-        <div style={{width: '100%', textAlign: 'left'}}>
-          <ul>
-            <li>Mild - ...</li>
-            <li>Medium - ...</li>
-            <li>High - ...</li>
-          </ul>
-        </div>
-        <div className={classes.openSource}>
+        <div className={clazzes.openSource}>
           We are open source 🌱 Please visit our repository:&nbsp;
           <a href={'https://github.com/buildrs/Share'} target="_new">
             github.com/buildrs/Share
@@ -96,36 +90,19 @@ function AboutContent() {
 
 
 const marks = [
-  {value: 0, label: 'mild'},
-  {value: 10, label: 'medium'},
-  {value: 20, label: 'high'},
+  {value: 0, label: 'Functional', info: 'Functional cookies'},
+  {value: 10, label: 'Anon. track', info: 'Anonymous tracking'},
+  {value: 20, label: 'Telemetry', info: 'Partially localized'},
 ]
 
 
 const useStyles = makeStyles({
-  container: {
-    position: 'fixed',
-    top: '0px',
-    left: '0px',
-    width: '100%',
-    height: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-    zIndex: 2000,
-  },
-  title: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-    paddingTop: '10px',
-  },
-  panel: {
+  content: {
     'position': 'relative',
     'top': (props) => props.offsetTop,
-    'width': '320px',
-    'height': '600px',
+    'width': '100%',
+    'height': 'auto',
     'fontFamily': 'Helvetica',
-    'padding': '1em 1em',
     '@media (max-width: 900px)': {
       width: '84%',
       height: '590px',
@@ -150,6 +127,13 @@ const useStyles = makeStyles({
         lineHeight: '22px',
       },
     },
+    '& ul': {
+      width: '100%',
+      margin: 0,
+      padding: 0,
+      textAlign: 'left',
+      listStyleType: 'none',
+    },
     '& li': {
       marginBottom: '6px',
       fontWeight: 200,
@@ -157,7 +141,8 @@ const useStyles = makeStyles({
       display: 'flex',
       justifyContent: 'flex-start',
       alignItems: 'center',
-
+      margin: 0,
+      padding: 0,
     },
     '& a': {
       color: 'lime',

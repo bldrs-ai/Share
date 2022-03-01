@@ -53,7 +53,6 @@ function ShortcutsDialog({setIsDialogDisplayed}) {
 
 const useStyles = makeStyles({
   content: {
-    'height': '300px',
     'fontFamily': 'Helvetica',
     'padding': '1em',
     '& ul, & li': {

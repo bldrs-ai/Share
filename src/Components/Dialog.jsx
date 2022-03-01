@@ -10,11 +10,12 @@ import {makeStyles} from '@mui/styles'
  * @param {Object} icon Leading icon above header description
  * @param {string} headerText Short message describing the operation
  * @param {function} closeFn
- * @param {Object} Content node
+ * @param {Object} clazzes node
+ * @param {Object} content node
  * @return {Object} React component
  */
-export default function Dialog({icon, headerText, closeFn, content}) {
-  const classes = useStyles()
+export default function Dialog({icon, headerText, closeFn, clazzes, content}) {
+  const classes = {...useStyles(), ...clazzes}
   return (
     <div onClick={closeFn} className={classes.root} role='none'>
       <Paper onClick={(event) => event.stopPropagation()} elevation={3}>
@@ -35,7 +36,7 @@ const useStyles = makeStyles({
     'top': '0px',
     'left': '0px',
     'width': '100vw',
-    'height': '100vh',
+    'height': '100%',
     'display': 'flex',
     'justifyContent': 'center',
     'backgroundColor': 'rgba(100, 100, 100, 0.5)',
@@ -50,8 +51,8 @@ const useStyles = makeStyles({
       'textAlign': 'center',
       'top': '10vh',
       'width': '300px',
-      'height': '350px',
-      'minWidth': '30em',
+      'height': 'auto',
+      'maxHeight': '80vh',
       'fontFamily': 'Helvetica',
       'padding': '1em',
       '@media (max-width: 900px)': {

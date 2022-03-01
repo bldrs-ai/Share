@@ -25,10 +25,9 @@ import CommentIcon from '../assets/2D_Icons/Comment.svg'
  * @return {Object} React component
  */
 export default function IssuesControl({viewer}) {
+  const location = useLocation()
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(parseHashParams(location) ? true : false)
-  // debug().log('IssuesControl: viewer: ', viewer)
-  const location = useLocation()
   const [text, setText] = useState('')
   const [next, setNext] = useState('')
   useEffect(() => {
