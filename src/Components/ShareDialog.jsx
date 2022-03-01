@@ -1,252 +1,146 @@
-import React, {useState} from 'react'
-import Paper from '@mui/material/Paper'
+import React, {createRef, useEffect, useState} from 'react'
 import Checkbox from '@mui/material/Checkbox'
-import IconButton from '@mui/material/IconButton'
+import FormControlLabel from '@mui/material/FormControlLabel'
+import FormGroup from '@mui/material/FormGroup'
 import TextField from '@mui/material/TextField'
-import Tooltip from '@mui/material/Tooltip'
+import ToggleButton from '@mui/material/ToggleButton'
 import {makeStyles} from '@mui/styles'
-import {CAMERA_PREFIX} from './CameraControl'
-import {addHashParams} from '../utils/location'
-import {roundCoord} from '../utils/math'
-import ShareIcon from '../assets/3D_Icons/Share.svg'
-import ShareClear from '../assets/3D_Icons/ShareClear.svg'
-import CheckOn from '../assets/3D_Icons/CheckOn.svg'
-import CheckOff from '../assets/3D_Icons/CheckOff.svg'
-import Copy from '../assets/3D_Icons/Copy.svg'
-import Copied from '../assets/3D_Icons/Copied.svg'
+import {ControlButton} from './Buttons'
+import Dialog from './Dialog'
+import {
+  addCameraUrlParams,
+  hasValidUrlParams as urlHasCameraCoords,
+  removeCameraUrlParams,
+} from './CameraControl'
+import {assertDefinedBoolean} from '../utils/assert'
+import CopyIcon from '../assets/2D_Icons/Copy.svg'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
 
 
 /**
- * Button to toggle ShareDialog on and off
- * @param {Number} offsetTop offset tree element
+ * This button hosts the ShareDialog component and toggles it open and
+ * closed.
  * @param {Object} viewer ifc viewer
- * @return {Object} The ShareDialog react component.
+ * @return {Object} The button react component, with a hosted
+ *   ShareDialog component
  */
-export default function ShareDialogControl({offsetTop, viewer}) {
-  const [open, setOpen] = useState(false)
-  const classes = useStyles()
+export default function ShareControl({viewer}) {
+  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
-    <div >
-      <Tooltip title="Share link" placement="left">
-        <IconButton
-          onClick={() => {
-            setOpen(!open)
-          }}
-          aria-label='Share link'>
-          <ShareIcon className={classes.icon} />
-        </IconButton>
-      </Tooltip>
-      {open &&
+    <ControlButton
+      title='Share this model'
+      toggleValue='share'
+      icon={<ShareIcon/>}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      dialog={
         <ShareDialog
           viewer={viewer}
-          togglePanel={() => {
-            setOpen(!open)
-          }}
-          offsetTop={offsetTop} />
-      }
-    </div>)
+          setIsDialogDisplayed={setIsDialogDisplayed}/>
+      }/>
+  )
 }
 
 
 /**
- * ShareDialog Panel component
- * @param {boolean} togglePanel Reactive toggle state for panel.
- * @param {Number} offsetTop
+ * The ShareDialog component lets the user control what state is
+ * included in the shared URL and assists in copying the URL to
+ * clipboard.
  * @param {Object} viewer IFC viewer
- * @return {Component} The AboutPanel react component.
+ * @param {function} setIsDialogDisplayed
+ * @return {Component} The react component
  */
-function ShareDialog({togglePanel, offsetTop, viewer}) {
-  const classes = useStyles({offsetTop})
-  const [copy, setCopy] = useState(false)
-  const [capture, setCapture] = useState(true)
+function ShareDialog({viewer, setIsDialogDisplayed}) {
+  const [isLinkCopied, setIsLinkCopied] = useState(false)
+  const [isCameraInUrl, setIsCameraInUrl] =
+      useState(assertDefinedBoolean(urlHasCameraCoords()))
+  const toggleCameraIncluded = () => setIsCameraInUrl(!isCameraInUrl)
+  const urlTextFieldRef = createRef()
+  const classes = useStyles()
 
-  const toggleCameraUrlLocation = () => {
-    setCapture(!capture)
-    copy && setCopy(false)
-    capture ?
-      addHashParams(
-          window.location,
-          CAMERA_PREFIX,
-          roundCoord(...viewer.IFC.context.ifcCamera.cameraControls.getPosition(), 4)) :
-      addHashParams(
-          window.location,
-          CAMERA_PREFIX,
-          {},
-      )
-  }
+  useEffect(() => {
+    if (viewer) {
+      if (isCameraInUrl) {
+        addCameraUrlParams(viewer)
+      } else {
+        removeCameraUrlParams()
+      }
+    }
+  }, [viewer, isCameraInUrl])
 
   const closeDialog = () => {
-    togglePanel()
-    setCopy(false)
-    setCapture(false)
+    setIsDialogDisplayed(false)
+    setIsLinkCopied(false)
   }
 
-
-  const onCopy = () => {
-    setCopy(true)
+  const onCopy = (event) => {
+    setIsLinkCopied(true)
     navigator.clipboard.writeText(location)
-    // TODO(pablo): use ref
-    document.getElementById('outlined-basic').select()
+    urlTextFieldRef.current.select()
+  }
+
+  const CameraButton = () => {
+    return (
+      <ToggleButton value='cameraInclude' selected={isCameraInUrl}>
+        <CameraIcon/>
+      </ToggleButton>)
   }
 
   return (
-    <div className={classes.container}
-      role="none"
-      onClick={closeDialog}
-    >
-      <Paper elevation={3} className={classes.panel} onClick={(event) => event.stopPropagation()}>
-        <h1 className={classes.clearIcon}><ShareClear /></h1>
-        <p>Share the model link</p>
-        <div className={classes.urlContainer}>
-          <TextField id="outlined-basic"
-            variant="outlined"
-            value={window.location}
-            className={classes.input}
-          />
-          {copy ?
-            <Copied className={classes.copy} onClick={onCopy} /> :
-            <Copy className={classes.copy} onClick={onCopy} />}
+    <Dialog
+      icon={<ShareIcon/>}
+      headerText='Share the model link'
+      closeFn={closeDialog}
+      content={
+        <div className={classes.content}>
+          <div>
+            <TextField
+              value={window.location}
+              inputRef={urlTextFieldRef}
+              variant='outlined'/>
+            <ToggleButton
+              value='copy'
+              selected={isLinkCopied}
+              onClick={onCopy}
+              aria-label='Copy the link'
+              color='success'>
+              <CopyIcon/>
+            </ToggleButton>
+          </div>
+          <FormGroup>
+            <FormControlLabel
+              label={'Include camera position'}
+              control={
+                <Checkbox
+                  onClick={toggleCameraIncluded}
+                  icon={<CameraButton/>}
+                  checkedIcon={<CameraButton/>}
+                  color='success'/>
+              }/>
+          </FormGroup>
         </div>
-        <ul>
-          <Check title={'Include camera position'} onChange={() => {
-            toggleCameraUrlLocation()
-          }} />
-        </ul>
-      </Paper>
-    </div >
-  )
-}
-
-const Check = ({title, onChange = () => {}}) => {
-  const classes = useStyles()
-  return (
-    <li>
-      <Checkbox
-        onChange={onChange}
-        icon={<CheckOn className={classes.check} />}
-        checkedIcon={<CheckOff className={classes.check} />}
-      />
-      {title}
-    </li>
-  )
+      }/>)
 }
 
 
 const useStyles = makeStyles({
-  container: {
-    position: 'fixed',
-    top: '120px',
-    left: '0px',
-    width: '100%',
-    height: '100vh',
-    display: 'flex',
-    justifyContent: 'center',
-  },
-  title: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'center',
-    paddingTop: '10px',
-  },
-  panel: {
-    'position': 'relative',
-    'textAlign': 'center',
-    'top': (props) => props.offsetTop + 'px',
-    'width': '320px',
-    'height': '250px',
-    'fontFamily': 'Helvetica',
-    'padding': '1em 1em',
-    '@media (max-width: 900px)': {
-      width: '84%',
-      height: '400px',
+  content: {
+    'marginTop': '2em',
+    '& .MuiTextField-root': {
+      width: '80%',
     },
-    '& h1, & h2': {
-      color: '#696969',
-      fontWeight: 200,
+    '& input': {
+      width: '100%',
     },
-    '& h1': {
-      marginTop: 0,
-      fontWeight: 200,
-    },
-    '& h2': {
-      textAlign: 'center',
-      fontSize: '20px',
-    },
-    '& p': {
-      'fontWeight': 200,
-      'textAlign': 'center',
-      'lineHeight': '19px',
-      '@media (max-width: 900px)': {
-        lineHeight: '22px',
+    '& .MuiFormGroup-root': {
+      'width': '75%',
+      'alignItems': 'center',
+      'verticalAlign': 'middle',
+      'margin': '1em auto 2em auto',
+      '& .MuiButtonBase-root svg': {
+        border: 'solid 1px grey',
       },
     },
-    '& ul': {
-      padding: '0',
-    },
-    '& li': {
-      fontWeight: 200,
-      display: 'flex',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-    },
-    '& a': {
-      color: 'lime',
-      backgroundColor: '#848484',
-      paddingLeft: '4px',
-      paddingRight: '4px',
-      paddingBottom: '2px',
-      borderRadius: '5px',
-      cursor: 'pointer',
-    },
-  },
-  input: {
-    width: '280px',
-  },
-  about: {
-    cursor: 'pointer',
-    paddingRight: '10px',
-  },
-  icon: {
-    width: '30px',
-    height: '30px',
-    cursor: 'pointer',
-  },
-  clearIcon: {
-    paddingTop: '20px',
-  },
-  close: {
-    width: '20px',
-    height: '20px',
-    cursor: 'pointer',
-  },
-  copy: {
-    width: '30px',
-    height: '30px',
-    cursor: 'pointer',
-  },
-  check: {
-    width: '16px',
-    height: '16px',
-    cursor: 'pointer',
-  },
-  closeButton: {
-    'float': 'right',
-    'cursor': 'pointer',
-    'marginTop': '8px',
-    '& svg': {
-      width: '24px',
-      height: '20px',
-    },
-  },
-  urlContainer: {
-    width: '100%',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  closeContainer: {
-    position: 'absolute',
-    right: '20px',
-    bottom: '10px',
   },
 })

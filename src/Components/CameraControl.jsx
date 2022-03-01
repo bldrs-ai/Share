@@ -1,7 +1,12 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
 import debug from '../utils/debug'
-import {addHashListener, addHashParams, getHashParams} from '../utils/location'
+import {
+  addHashListener,
+  addHashParams,
+  getHashParams,
+  removeHashParams,
+} from '../utils/location'
 import {roundCoord} from '../utils/math'
 
 
@@ -14,10 +19,12 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @param {Object} camera The camera object from IFCjs/Threejs.
+ * @param {Object} viewer The IFC viewer, which contains the
+ *   cameraControls
  * @return {Object} React component
  */
-export default function CameraControl({camera}) {
+export default function CameraControl({viewer}) {
+  const camera = viewer.IFC.context.ifcCamera.cameraControls
   debug().log('CameraControl: camera: ', camera)
   const location = useLocation()
   useEffect(() => {
@@ -60,22 +67,68 @@ function onLoad(camera, location) {
  */
 export function onHash(camera, location) {
   debug().log('CameraControl#onHash')
-  const regex = new RegExp(
-      `${CAMERA_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
-  const params = getHashParams(location, CAMERA_PREFIX)
-  if (params == undefined) {
+  const encodedParams = getHashParams(location, CAMERA_PREFIX)
+  if (encodedParams == undefined) {
     return
   }
-  const match = params.match(regex)
+  const coords = parseHashParams(encodedParams)
+  if (coords == undefined) {
+    return
+  }
+  if (coords) {
+    camera.setPosition(...coords, true) // true: animate to new coordinate
+  }
+}
+
+
+const regex = new RegExp(
+    `${CAMERA_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
+
+
+/**
+ * @param {string} encodedParams
+ * @return {Object|undefined} The coordinates if present and valid else undefined
+ */
+function parseHashParams(encodedParams) {
+  const match = encodedParams.match(regex)
   if (match) {
     const x = parseFloat(parseFloat(match[1]).toPrecision(5))
     const y = parseFloat(parseFloat(match[2]).toPrecision(5))
     const z = parseFloat(parseFloat(match[3]).toPrecision(5))
     debug().log('CameraControl#onHash: setting camera position x:(${x}), y:(${y}), z:(${z})')
-    camera.setPosition(x, y, z, true) // true: animate to new coordinate
+    return [x, y, z]
   } else {
     debug().log('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)
   }
+}
+
+
+/** @return {boolean} True iff the camera hash params are present. */
+export function hasValidUrlParams() {
+  const encoded = getHashParams(window.location, CAMERA_PREFIX)
+  if (encoded && parseHashParams(encoded)) {
+    return true
+  }
+  return false
+}
+
+
+/**
+ * Adds camera coords to url.
+ * @param {Object} viewer IFCjs viewer that contains a camera.
+ */
+export function addCameraUrlParams(viewer) {
+  const camera = viewer.IFC.context.ifcCamera
+  addHashParams(
+      window.location,
+      CAMERA_PREFIX,
+      roundCoord(...camera.cameraControls.getPosition(), 4))
+}
+
+
+/** Removes camera params from the URL if present */
+export function removeCameraUrlParams() {
+  removeHashParams(window.location, CAMERA_PREFIX)
 }
 
 

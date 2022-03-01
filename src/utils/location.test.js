@@ -1,4 +1,8 @@
-import {addHashParams, getHashParams} from './location'
+import {
+  addHashParams,
+  getHashParams,
+  removeHashParams,
+} from './location'
 
 
 test('addHashParams', () => {
@@ -34,7 +38,7 @@ test('addHashParams', () => {
 })
 
 
-test('addHashParams', () => {
+test('getHashParams', () => {
   let loc
 
   loc = {hash: '#a:1'}
@@ -44,4 +48,29 @@ test('addHashParams', () => {
   expect(getHashParams(loc, 'a')).toBe('a:1')
   expect(getHashParams(loc, 'b')).toBe('b:2')
   expect(getHashParams(loc, 'c')).toBe(undefined)
+})
+
+
+test('removeHashParams', () => {
+  let loc
+
+  loc = {hash: '#'}
+  removeHashParams(loc, 'a')
+  expect(loc).toStrictEqual({hash: ''})
+
+  loc = {hash: '#a:1'}
+  removeHashParams(loc, 'a')
+  expect(loc).toStrictEqual({hash: ''})
+
+  loc = {hash: '#a:1::b:2'}
+  removeHashParams(loc, 'a')
+  expect(loc).toStrictEqual({hash: 'b:2'})
+
+  loc = {hash: '#a:1::b:2'}
+  removeHashParams(loc, 'b')
+  expect(loc).toStrictEqual({hash: 'a:1'})
+
+  loc = {hash: '#a:1::b:2::c:3'}
+  removeHashParams(loc, 'b')
+  expect(loc).toStrictEqual({hash: 'a:1::c:3'})
 })

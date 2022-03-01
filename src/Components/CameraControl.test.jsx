@@ -7,9 +7,9 @@ import CameraControl, {
 
 
 test('CameraControl', () => {
-  const camera = {}
+  const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
   render(mockRoutes(
-      <CameraControl camera={camera} />,
+      <CameraControl viewer={viewer} />,
   ))
   expect(screen.getByText('Camera')).toBeInTheDocument()
 })

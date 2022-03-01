@@ -1606,6 +1606,11 @@
   dependencies:
     "@octokit/openapi-types" "^11.2.0"
 
+"@pablo-mayrgundter/cookies.js@^1.0.0":
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/@pablo-mayrgundter/cookies.js/-/cookies.js-1.0.0.tgz#6172de0bb10fbeb94b2ce386453b52c0928095ba"
+  integrity sha512-1Fumemx3JDCu93GSLL+nncpDTNaRaRh4pR0MszDyPfbWp99sAauFaQGzLXRWlLsa5ZWa95ACgku98+fNmVPNJg==
+
 "@popperjs/core@^2.4.4":
   version "2.11.0"
   resolved "https://registry.yarnpkg.com/@popperjs/core/-/core-2.11.0.tgz#6734f8ebc106a0860dff7f92bf90df193f0935d7"

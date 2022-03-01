@@ -81,3 +81,28 @@ export function getHashParams(location, name) {
   }
   return undefined
 }
+
+
+/**
+ * Removes the given named hash param.
+ * @param {Object} location
+ * @param {String} name prefix of the params to fetch
+ */
+export function removeHashParams(location, name) {
+  const sets = location.hash.substring(1).split('::')
+  const prefix = name + ':'
+  let newParamsEncoded = ''
+  for (let i = 0; i < sets.length; i++) {
+    const set = sets[i]
+    if (set.startsWith(prefix)) {
+      continue
+    }
+    const separator = newParamsEncoded.length == 0 ? '' : '::'
+    newParamsEncoded += separator + set
+  }
+  location.hash = newParamsEncoded
+  if (location.hash == '') {
+    history.pushState(
+        '', document.title, window.location.pathname + window.location.search)
+  }
+}

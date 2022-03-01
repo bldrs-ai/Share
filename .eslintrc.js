@@ -1,40 +1,41 @@
 module.exports = {
-  'env': {
-    'browser': true,
-    'es2021': true,
-    'node': true,
-    'jest': true,
+  env: {
+    browser: true,
+    es2021: true,
+    node: true,
+    jest: true,
   },
   'extends': [
     'google',
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
-    "plugin:jsx-a11y/recommended",
+    'plugin:jsx-a11y/recommended',
   ],
-  'parserOptions': {
-    'ecmaFeatures': {
-      'jsx': true,
+  parserOptions: {
+    ecmaFeatures: {
+      jsx: true,
     },
-    'ecmaVersion': 'latest',
-    'sourceType': 'module',
+    ecmaVersion: 'latest',
+    sourceType: 'module',
   },
-  'plugins': [
+  plugins: [
     'react',
     'jsx-a11y',
   ],
-  'rules': {
-    'react/prop-types': 'off',
-    'semi': ['error', 'never'],
+  rules: {
     'max-len': ['error', 100],
     'no-irregular-whitespace': ['error'],
     'no-trailing-spaces': ['error'],
-    'prefer-rest-params': 'off'
+    'prefer-rest-params': 'off',
+    'quote-props': ['error', 'consistent-as-needed'],
+    'react/prop-types': 'off',
+    'semi': ['error', 'never'],
   },
-  'settings': {
-    'react': {
-      'version': 'latest',
+  settings: {
+    react: {
+      version: 'latest',
     },
   },
-  'reportUnusedDisableDirectives': true
+  reportUnusedDisableDirectives: true,
 }

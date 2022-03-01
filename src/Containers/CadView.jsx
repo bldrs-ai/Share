@@ -59,8 +59,8 @@ export default function CadView({
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
 
-  const [showItemPanel, setShowItemPanel] = useState(false)
-  const [showShortCuts, setShowShortCuts] = useState(false)
+  const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
@@ -102,7 +102,7 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    setShowItemPanel(false)
+    setIsItemPanelOpen(false)
     setViewer(initViewer(pathPrefix))
     debug().log('CadView#onModelPath, done setting new viewer')
   }
@@ -267,22 +267,17 @@ export default function CadView({
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName == 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
-        if (item.modelID === undefined || item.id === undefined) return
-        const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-        if (modelPath.gitpath) {
-          navigate(pathPrefix + modelPath.getRepoPath() + path)
-        } else {
-          navigate(pathPrefix + modelPath.filepath + path)
+        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+          const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
+          if (modelPath.gitpath) {
+            navigate(pathPrefix + modelPath.getRepoPath() + path)
+          } else {
+            navigate(pathPrefix + modelPath.filepath + path)
+          }
+          setSelectedElement(item)
         }
-        setSelectedElement(item)
       }
     }
-  }
-
-
-  /** Add a clipping plane. */
-  function placeCutPlane() {
-    viewer.clipper.createPlane()
   }
 
 
@@ -323,7 +318,6 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
-
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
@@ -364,27 +358,22 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <ItemPanelControl
-          model={model}
-          element={selectedElement}
-          open={showItemPanel}
-          onClickCb={() => setShowItemPanel(!showItemPanel)}
-          topOffset={PANEL_TOP}
-          placeCutPlane={() => placeCutPlane()}
-          unSelectItem={() => unSelectItems()}
-          toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)} />
-        <div className={showItemPanel ? classes.operationsGroupOpen : classes.operationsGroup}>
-          <OperationsGroup
-            viewer={viewer}
-            placeCutPlane={() => placeCutPlane()}
-            unSelectItem={() => unSelectItems()}
-            toggleShortCutsPanel={() => setShowShortCuts(!showShortCuts)}
-            selectedElement={selectedElement}
-          />
+        <div className={isItemPanelOpen ?
+                        classes.operationsGroupOpen :
+                        classes.operationsGroup}>
+          {viewer &&
+           <OperationsGroup
+             viewer={viewer}
+             unSelectItem={unSelectItems}
+             itemPanel={
+               <ItemPanelControl
+                 model={model}
+                 element={selectedElement}
+                 isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <LogoDark className={classes.logo} />
-        <div className={showItemPanel ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP} />
+        <LogoDark className={classes.logo}/>
+        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
         </div>
       </div>
     </div>
@@ -413,9 +402,9 @@ function initViewer(pathPrefix) {
   v.clipper.active = true
 
   // Highlight items when hovering over them
-  window.onmousemove = (event) => {
-    v.prePickIfcItem()
-  }
+  // window.onmousemove = (event) => {
+  //  v.prePickIfcItem()
+  // }
 
   window.onkeydown = (event) => {
     // add a plane
@@ -516,26 +505,28 @@ const useStyles = makeStyles(() => ({
   },
   operationsGroup: {
     'position': 'absolute',
-    'bottom': '70px',
+    'height': '100vh',
+    'top': 0,
     'right': '3px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
-      'bottom': `0px`,
-      'top': '62px',
-      'right': '28px',
+      bottom: `0px`,
+      top: '62px',
+      right: '28px',
     },
   },
   operationsGroupOpen: {
     'position': 'absolute',
-    'bottom': '70px',
+    'height': '100vh',
+    'top': 0,
     'right': '342px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
-      'bottom': `0px`,
-      'top': '62px',
-      'right': '28px',
+      bottom: `0px`,
+      top: '62px',
+      right: '28px',
     },
   },
   logo: {
@@ -555,7 +546,7 @@ const useStyles = makeStyles(() => ({
     'bottom': '10px',
     'right': '20px',
     '@media (max-width: 900px)': {
-      'bottom': `20px`,
+      bottom: `20px`,
     },
   },
   baseGroupOpen: {
@@ -563,7 +554,7 @@ const useStyles = makeStyles(() => ({
     'bottom': '10px',
     'right': '360px',
     '@media (max-width: 900px)': {
-      'bottom': `20px`,
+      bottom: `20px`,
     },
   },
 }))

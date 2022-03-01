@@ -1,14 +1,13 @@
 import React from 'react'
-import Tooltip from '@mui/material/Tooltip'
-import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
-import GuidePanelControl from './GuidePanel'
-import IssuesControl from './IssuesControl'
-import ShareDialogControl from './ShareDialog'
-import ShortcutsControl from './ShortcutsPanel'
+import GuideControl from './GuideDialog'
+import IssuesControl from './IssuesDialog'
+import ShareControl from './ShareDialog'
+import ShortcutsControl from './ShortcutsDialog'
 import CutPlane from '../assets/Icons/CutPlane.svg'
-import Clear from '../assets/2D_Icons/Clear.svg'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import {TooltipIconButton} from './Buttons'
 
 
 /**
@@ -16,47 +15,38 @@ import Clear from '../assets/2D_Icons/Clear.svg'
  * toggling shortcut visibility
  *
  * @param {Object} viewer The IFC viewer
- * @param {function} placeCutPlane places cut plances for mobile devices
  * @param {function} unSelectItem deselects currently selected element
+ * @param {function} itemPanel The ItemPanel component
  * @return {Object}
  */
-export default function OperationsGroup({viewer, placeCutPlane, unSelectItem}) {
+export default function OperationsGroup({viewer, unSelectItem, itemPanel}) {
   const classes = useStyles()
   const width = window.innerWidth
+
+  /** Add a clipping plane. */
+  function placeCutPlane() {
+    viewer.clipper.createPlane()
+  }
+
   return (
-    <div>
-      { viewer &&
-        <div className={classes.container}>
-          <ShareDialogControl viewer={viewer} />
-          <IssuesControl viewer={viewer} />
-          <CameraControl camera={viewer.IFC.context.ifcCamera.cameraControls} />
-        </div>
-      }
-      { width > 500 ?
-          <div className = {classes.container}>
-            <ShortcutsControl />
-            <Tooltip title="Clear selection" placement="left">
-              <IconButton onClick={unSelectItem} aria-label="cutPlane" size="small">
-                <Clear className={classes.icon}/>
-              </IconButton>
-            </Tooltip>
-          </div> :
-          <div className = {classes.container}>
-            <IconButton aria-label="cutPlane" size="small">
-              <GuidePanelControl/>
-            </IconButton>
-            <Tooltip title="Section plane" placement="left">
-              <IconButton onClick ={placeCutPlane} aria-label="cutPlane" size="small">
-                <CutPlane className = {classes.icon}/>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Clear selection" placement="left">
-              <IconButton onClick={unSelectItem} aria-label="cutPlane" size="small">
-                <Clear className={classes.icon} />
-              </IconButton>
-            </Tooltip>
-          </div>
-      }
+    <div className={classes.container}>
+      <div className={classes.shareAndIssues}>
+        <ShareControl viewer={viewer}/>
+        <IssuesControl viewer={viewer}/>
+      </div>
+      <div className={classes.clearAndCut}>
+        {itemPanel}
+        <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
+        { width > 500 ?
+          <ShortcutsControl/> :
+          <>
+            <TooltipIconButton title="Add cut plane" icon={<GuideControl/>}/>
+            <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlane/>}/>
+          </>
+        }
+      </div>
+      {/* Invisible */}
+      <CameraControl viewer={viewer}/>
     </div>
   )
 }
@@ -64,22 +54,20 @@ export default function OperationsGroup({viewer, placeCutPlane, unSelectItem}) {
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '80px',
-    'display': 'flex',
-    'flexDirection': 'column',
-    'justifyContent': 'space-between',
-    'alignItems': 'center',
+    // Actually want 100 - size of settings button
+    'height': '100vh',
     'zIndex': 10,
+    'margin': '10px 10px 0 0',
     '@media (max-width: 900px)': {
-      'width': '10px',
-      'flexDirection': 'column',
-      'justifyContent': 'space-between',
+      width: '10px',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
     },
   },
-  icon: {
-    width: '30px',
-    height: '30px',
-    cursor: 'pointer',
+  clearAndCut: {
+    position: 'absolute',
+    bottom: 0,
+    paddingBottom: '60px',
   },
 }))
 

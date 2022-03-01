@@ -159,8 +159,8 @@ const useStyles = makeStyles({
     'alignItems': 'center',
     'width': 300,
     '@media (max-width: 900px)': {
-      'padding': '2px 2px 2px 2px',
-      'width': 244,
+      padding: '2px 2px 2px 2px',
+      width: 244,
     },
   },
   iconButton: {
