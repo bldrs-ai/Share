@@ -1,6 +1,6 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
-import AboutControl from './AboutDialog'
+import AboutControl from './AboutControl'
 import Settings from './Settings'
 import {TooltipIconButton} from './Buttons'
 import OpenIcon from '../assets/2D_Icons/Open.svg'

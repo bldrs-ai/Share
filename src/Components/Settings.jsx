@@ -26,7 +26,6 @@ export default function Settings({toggleTheme, mode}) {
     <div>
       <TooltipToggleButton
         title='Settings'
-        toggleValue='settings'
         onClick={(event) => handleMenu(event) }
         icon={<SettingsIcon/>}/>
       {isOpen &&

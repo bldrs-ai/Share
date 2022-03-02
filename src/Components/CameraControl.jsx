@@ -25,7 +25,6 @@ import {roundCoord} from '../utils/math'
  */
 export default function CameraControl({viewer}) {
   const camera = viewer.IFC.context.ifcCamera.cameraControls
-  debug().log('CameraControl: camera: ', camera)
   const location = useLocation()
   useEffect(() => {
     onLoad(camera, location)

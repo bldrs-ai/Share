@@ -3,6 +3,7 @@ import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
+import {assertDefined} from '../utils/assert'
 
 
 /**
@@ -15,11 +16,12 @@ import {makeStyles} from '@mui/styles'
  */
 export function TooltipIconButton({
   title,
-  onClick,
   icon,
+  onClick,
   placement='left',
   size='medium',
 }) {
+  assertDefined(title, icon, onClick)
   const classes = useStyles()
   return (
     <div className={classes.root}>
@@ -35,31 +37,34 @@ export function TooltipIconButton({
 
 /**
  * @param {string} title Tooltip text
- * @param {string} toggleValue Unique key for toggle group
- * @param {function} onClick
  * @param {Object} icon
+ * @param {function} onClick
  * @param {string} placement Default: left
  * @return {Object} React component
  */
 export function TooltipToggleButton({
   title,
-  toggleValue,
-  onClick,
   icon,
+  onClick,
   placement='left',
 }) {
+  assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
   const classes = useStyles()
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
         <ToggleButton
-          value={toggleValue}
+          value={title}
           selected={isPressed}
           onClick={(event) => {
             setIsPressed(!isPressed)
-            if (event === null || event === undefined) throw new Error('Undefined event!')
-            onClick(event)
+            if (event === null || event === undefined) {
+              console.error('Buttons#TooltipToggleButton: undefined event')
+            }
+            if (onClick) {
+              onClick(event)
+            }
           }}
           color='success'>
           {icon}
@@ -88,13 +93,15 @@ export function ControlButton({
   placement='left',
   dialog,
 }) {
+  if (toggleValue) throw new Error('Remove me')
+  assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
   const classes = useStyles()
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement='left'>
         <ToggleButton
-          value={toggleValue}
+          value={title}
           selected={isDialogDisplayed}
           onClick={toggleIsDialogDisplayed}
           color='success'>

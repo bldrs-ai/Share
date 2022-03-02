@@ -1,13 +1,13 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
-import GuideControl from './GuideDialog'
-import IssuesControl from './IssuesDialog'
-import ShareControl from './ShareDialog'
-import ShortcutsControl from './ShortcutsDialog'
+import GuideControl from './GuideControl'
+import IssuesControl from './IssuesControl'
+import ShareControl from './ShareControl'
+import ShortcutsControl from './ShortcutsControl'
+import {TooltipIconButton} from './Buttons'
 import CutPlane from '../assets/Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import {TooltipIconButton} from './Buttons'
 
 
 /**

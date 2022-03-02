@@ -137,7 +137,7 @@ export default function CadView({
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        true, // fit to frame
+        false, // fit to frame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -397,14 +397,14 @@ function initViewer(pathPrefix) {
   debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
-  v.addAxes()
-  v.addGrid(10, 10)
+  // v.addAxes()
+  // v.addGrid(10, 10)
   v.clipper.active = true
 
   // Highlight items when hovering over them
-  // window.onmousemove = (event) => {
-  //  v.prePickIfcItem()
-  // }
+  window.onmousemove = (event) => {
+    v.prePickIfcItem()
+  }
 
   window.onkeydown = (event) => {
     // add a plane
