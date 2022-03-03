@@ -27,7 +27,11 @@ test('addHashParams', () => {
   loc = {hash: '#test:b=0'}
   addHashParams(loc, 'test', {a: 1}, true)
   expect(loc.hash).toBe('test:a=1')
+})
 
+
+test('addHashParamsMultiple', () => {
+  let loc
   loc = {hash: '#other:a=0::otter:b=3'}
   addHashParams(loc, 'test', {a: 1}, true)
   expect(loc.hash).toBe('other:a=0::otter:b=3::test:a=1')
@@ -35,6 +39,13 @@ test('addHashParams', () => {
   loc = {hash: '#other:a=0::test:a=0::otter:b=3'}
   addHashParams(loc, 'test', {a: 1}, true)
   expect(loc.hash).toBe('other:a=0::test:a=1::otter:b=3')
+})
+
+
+test('addHashParams with tilde', () => {
+  const loc = {hash: '#other:a=0::otter:b=3'}
+  addHashParams(loc, 'test', {a: 1}, true)
+  expect(loc.hash).toBe('other:a=0::otter:b=3::test:a=1')
 })
 
 

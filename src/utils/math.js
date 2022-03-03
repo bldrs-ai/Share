@@ -12,8 +12,8 @@ export function numToFloat(num) {
  * @param {Number} numDigits Number of digits to round to, default = 0
  * @return {Number} The rounded number
  */
-export function round(num, numDigits = 1) {
-  return numToFloat(numToFloat(num).toPrecision(numDigits))
+export function round(num, numDigits = 0) {
+  return numToFloat(numToFloat(num).toFixed(numDigits))
 }
 
 
@@ -24,6 +24,6 @@ export function round(num, numDigits = 1) {
  * @param {Number} numDigits Number of digits to round to, default = 0
  * @return {Array} Array of [x, y, z]
  */
-export function roundCoord(x, y, z, numDigits = 1) {
+export function roundCoord(x, y, z, numDigits = 0) {
   return [x, y, z].map((n) => round(n, numDigits))
 }

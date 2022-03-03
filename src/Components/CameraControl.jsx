@@ -65,7 +65,6 @@ function onLoad(camera, location) {
  * @param {Object} location window.location
  */
 export function onHash(camera, location) {
-  debug().log('CameraControl#onHash')
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
   if (encodedParams == undefined) {
     return
@@ -75,29 +74,48 @@ export function onHash(camera, location) {
     return
   }
   if (coords) {
-    camera.setPosition(...coords, true) // true: animate to new coordinate
+    camera.setPosition(coords[0], coords[1], coords[2], true)
+    if (coords.length == 6) {
+      camera.setTarget(coords[3], coords[4], coords[5], true)
+    }
   }
 }
 
 
-const regex = new RegExp(
-    `${CAMERA_PREFIX}:(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?),(-?\\d+(?:\\.\\d+)?)`)
+const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
+const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
+const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
+const regex = new RegExp(paramPattern)
 
 
+// Exported for testing
 /**
  * @param {string} encodedParams
  * @return {Object|undefined} The coordinates if present and valid else undefined
  */
-function parseHashParams(encodedParams) {
+export function parseHashParams(encodedParams) {
   const match = encodedParams.match(regex)
-  if (match) {
-    const x = parseFloat(parseFloat(match[1]).toPrecision(5))
-    const y = parseFloat(parseFloat(match[2]).toPrecision(5))
-    const z = parseFloat(parseFloat(match[3]).toPrecision(5))
-    debug().log('CameraControl#onHash: setting camera position x:(${x}), y:(${y}), z:(${z})')
-    return [x, y, z]
+  const stof = (str) => {
+    const val = parseFloat(parseFloat(str).toFixed(2))
+    if (isFinite(val)) {
+      const rounded = parseFloat(val.toFixed(0))
+      return rounded == val ? rounded : val
+    } else {
+      console.warn('Invalid coordinate: ', str)
+    }
+  }
+  debug().log('CameraControl#onHash: match: ', match)
+  if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
+    const x = stof(match[1])
+    const y = stof(match[2])
+    const z = stof(match[3])
+    if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
+      return [x, y, z]
+    } else {
+      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])]
+    }
   } else {
-    debug().log('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)
+    debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)
   }
 }
 
@@ -118,10 +136,15 @@ export function hasValidUrlParams() {
  */
 export function addCameraUrlParams(viewer) {
   const camera = viewer.IFC.context.ifcCamera
-  addHashParams(
-      window.location,
-      CAMERA_PREFIX,
-      roundCoord(...camera.cameraControls.getPosition(), 4))
+  const position = camera.cameraControls.getPosition()
+  let camArr = roundCoord(...position, 2)
+  const target = camera.cameraControls.getTarget()
+  if (target.x == 0 && target.y == 0 && target.z == 0) {
+    camArr = camArr.concat(0)
+  } else {
+    camArr = camArr.concat(roundCoord(...target, 2))
+  }
+  addHashParams(window.location, CAMERA_PREFIX, camArr)
 }
 
 

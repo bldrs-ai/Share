@@ -50,7 +50,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
     if (mp === null) {
       // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/index.ifc#c:-80,10,100')
+      navigate(appPrefix + '/v/p/index.ifc#c:-15.18,9.32,52.05,14.69,8.96,11.19')
       return
     }
     if (modelPath === null ||

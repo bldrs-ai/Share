@@ -20,9 +20,9 @@ test('numToFloat', () => {
 test('round', () => {
   expect(round(τ)).toBe(6)
   expect(round(τ+'')).toBe(6)
-  expect(round(τ, 2)).toBe(6.3)
-  expect(round(τ+'', 2)).toBe(6.3)
-  expect(round(τ, 3)).toBe(6.28)
+  expect(round(τ, 2)).toBe(6.28)
+  expect(round(τ+'', 2)).toBe(6.28)
+  expect(round(τ, 3)).toBe(6.283)
 })
 
 test('roundCoord', () => {
