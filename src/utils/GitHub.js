@@ -92,7 +92,7 @@ const MOCK_ISSUE = {
     title: 'Hello Mock Issue!',
     body: `1) Welcome to this awesome awesome\r
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-13.03,9.719,26.88\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-12.07,16.66,24.78,11.39,3.15,2.89\r
 \`\`\`\r
 `,
   },
@@ -104,7 +104,7 @@ const MOCK_COMMENTS = {
     {
       body: `2) How awesome??  Awesome awesome\r
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-20.73,25.54,5.982\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8::c:67.92,21.64,3.99,25.2,2.35,4.6\r
 \`\`\`\r
 `,
     },

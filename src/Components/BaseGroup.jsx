@@ -2,13 +2,13 @@ import React from 'react'
 import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
 import Settings from './Settings'
-import {TooltipIconButton} from './Buttons'
+import {TooltipToggleButton} from './Buttons'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 
 
 /**
  * Base group contains Settings, ModelUpload, About
- * @param {Object} itemPanel ItemPanel component
+ * @param {Object} fileOpen ItemPanel component
  * @return {Object} React component
  */
 export default function BaseGroup({fileOpen}) {
@@ -16,7 +16,11 @@ export default function BaseGroup({fileOpen}) {
   return (
     <div className={classes.root}>
       <AboutControl/>
-      <TooltipIconButton title="Upload model" onClick={fileOpen} icon={<OpenIcon/>}/>
+      <TooltipToggleButton
+        title='Upload model'
+        icon={<OpenIcon/>}
+        onClick={fileOpen}
+        placement='top'/>
       <Settings/>
     </div>
   )

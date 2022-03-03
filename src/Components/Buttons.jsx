@@ -99,7 +99,7 @@ export function ControlButton({
   const classes = useStyles()
   return (
     <div className={classes.root}>
-      <Tooltip title={title} describeChild placement='left'>
+      <Tooltip title={title} describeChild placement={placement}>
         <ToggleButton
           value={title}
           selected={isDialogDisplayed}

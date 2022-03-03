@@ -141,13 +141,10 @@ const useStyles = makeStyles({
       width: '20em',
     },
     '& .MuiFormGroup-root': {
-      'width': '75%',
-      'alignItems': 'center',
-      'verticalAlign': 'middle',
-      'margin': '1em auto 2em auto',
-      '& .MuiButtonBase-root svg': {
-        border: 'solid 1px grey',
-      },
+      width: '75%',
+      alignItems: 'center',
+      verticalAlign: 'middle',
+      margin: '1em auto 2em auto',
     },
   },
 })

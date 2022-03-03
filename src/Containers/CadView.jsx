@@ -373,7 +373,7 @@ export default function CadView({
         </div>
         <LogoDark className={classes.logo}/>
         <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
+          <BaseGroup fileOpen={loadLocalFile}/>
         </div>
       </div>
     </div>
@@ -424,7 +424,6 @@ function initViewer(pathPrefix) {
 }
 
 
-const PANEL_TOP = 20
 const useStyles = makeStyles(() => ({
   pageContainer: {
     'position': 'absolute',
@@ -456,7 +455,12 @@ const useStyles = makeStyles(() => ({
   },
   searchContainer: {
     position: 'absolute',
-    top: `${PANEL_TOP}px`,
+    // TODO(pablo): we were passing this around as it's used in a few
+    // places, but there's now only 1 dialog object that also uses it
+    // and it has multiple callers; passing that variable around seems
+    // overkill. I don't like not having it as a variable, but going
+    // to hardcode for now and look into passing via the theme later.
+    top: `20px`,
     left: '26px',
     display: 'flex',
     flexDirection: 'row',

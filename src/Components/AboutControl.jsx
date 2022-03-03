@@ -24,6 +24,7 @@ export default function AboutControl({offsetTop}) {
       icon={<AboutIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
+      placement='top'
       dialog={
         <AboutDialog
           closeDialog={() => {

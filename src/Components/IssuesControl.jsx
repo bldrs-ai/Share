@@ -1,6 +1,5 @@
 import React, {useEffect, useState} from 'react'
-import {useLocation} from 'react-router'
-import {Link} from 'react-router-dom'
+import {useLocation, useNavigate} from 'react-router'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
@@ -29,11 +28,13 @@ import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
  */
 export default function IssuesControl({viewer}) {
   const location = useLocation()
+  const navigate = useNavigate()
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(parseHashParams(location) ? true : false)
   const [text, setText] = useState('')
-  const prev = useState(window.location.href)
   const [next, setNext] = useState(null)
+
+
   useEffect(() => {
     if (location) {
       const p = parseHashParams(location)
@@ -59,7 +60,7 @@ export default function IssuesControl({viewer}) {
       setIsDialogDisplayed(true)
     } else {
       removeHashParams(window.location, ISSUE_PREFIX)
-      setText(null)
+      setText('')
       setIsDialogDisplayed(false)
     }
   }
@@ -79,7 +80,11 @@ export default function IssuesControl({viewer}) {
       setIsDialogDisplayed={showIssues}
       dialog={
         text ?
-          <CommentPanel body={body} title={title} prev={prev} next={next}/> :
+          <CommentPanel
+            body={body}
+            title={title}
+            next={next}
+            navigate={navigate}/> :
         <></>
       }/>)
 }
@@ -89,11 +94,12 @@ export default function IssuesControl({viewer}) {
  * Displays the comment panel
  * @param {string} body The comment body
  * @param {string|null} title The comment title, optional
- * @param {string|null} prev Full URL for next comment link href
  * @param {string|null} next Full URL for next comment link href
+ * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-function CommentPanel({body, title, prev, next}) {
+function CommentPanel({body, title, next, navigate}) {
+  const [count, setCount] = useState(0)
   const classes = useStyles()
   return (
     <div className={classes.issueContainer}>
@@ -103,10 +109,20 @@ function CommentPanel({body, title, prev, next}) {
         {title && <h1>{title}</h1>}
         <Typography paragraph={true}>{body}</Typography>
         <div>
-          {prev &&
-           <a href={prev}><NavPrevIcon/></a>}
+          {count > 0 &&
+           <NavPrevIcon
+             onClick={() => {
+               if (count > 0) {
+                 setCount(count - 1)
+                 navigate(-1)
+               }
+             }}/>}
           {next &&
-           <Link to={next}><NavNextIcon/></Link>}
+           <NavNextIcon
+             onClick={() => {
+               setCount(count + 1)
+               navigate(next)
+             }}/>}
         </div>
       </Paper>
     </div>
@@ -220,7 +236,7 @@ const useStyles = makeStyles({
       padding: '1em',
     },
     '& h1, & p': {
-      fontWeight: 200,
+      fontWeight: 300,
     },
     '& h1': {
       fontSize: '1.2em',

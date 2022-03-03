@@ -22,7 +22,6 @@ export default function ItemPanelControl({model, element, isOpenState}) {
          icon={<ListIcon/>}
          onClick={() => {
            isOpenState.set(!isOpenState.value)
-           // onClickCb()
          }}>
        </TooltipIconButton>
       }
@@ -32,7 +31,6 @@ export default function ItemPanelControl({model, element, isOpenState}) {
          title={'IFC Information'}
          onClose={() => {
            isOpenState.set(false)
-           // onClickCb()
          }}
        />
       }
