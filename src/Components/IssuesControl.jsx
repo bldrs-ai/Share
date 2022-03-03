@@ -121,7 +121,7 @@ function CommentPanel({body, title, next, navigate}) {
            <NavNextIcon
              onClick={() => {
                setCount(count + 1)
-               navigate(next)
+               window.location = next
              }}/>}
         </div>
       </Paper>
