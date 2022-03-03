@@ -159,8 +159,5 @@ export function removeCameraUrlParams() {
  * @param {Object} camera The IFCjs camera
  */
 function onClick(camera) {
-  // TODO(pablo): Ideally this would be hanled by react-router
-  // location, but doesn't seem to be supported yet in v6.
-  // See also https://stackoverflow.com/a/71210781/3630172
   addHashParams(window.location, CAMERA_PREFIX, roundCoord(...camera.getPosition(), 4))
 }

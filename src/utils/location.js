@@ -10,6 +10,9 @@ window.onhashchange = () => {
 }
 
 
+// TODO(pablo): Ideally this would be hanled by react-router
+// location, but doesn't seem to be supported yet in v6.
+// See also https://stackoverflow.com/a/71210781/3630172
 /**
  * @param {string} name Name of listener.  Can be used to later remove
  * listener. TODO: add remove method
