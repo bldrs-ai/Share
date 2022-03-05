@@ -153,7 +153,7 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  maxHeight: 100%;
+  max-height: 100%;
 }
 /*! normalize.css v8.0.1 | MIT License | github.com/necolas/normalize.css */
 /*# sourceMappingURL=index.css.map */
