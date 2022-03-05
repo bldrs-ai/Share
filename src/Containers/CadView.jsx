@@ -463,7 +463,8 @@ const useStyles = makeStyles(() => ({
     // overkill. I don't like not having it as a variable, but going
     // to hardcode for now and look into passing via the theme later.
     top: `20px`,
-    left: '26px',
+    left: '20px',
+    width: '300px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',

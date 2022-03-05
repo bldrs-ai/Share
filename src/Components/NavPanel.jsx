@@ -112,9 +112,9 @@ const useStyles = makeStyles({
   contextualMenu: {
     'position': 'absolute',
     'top': '80px',
-    'left': '23px',
+    'left': '20px',
     'overflow': 'auto',
-    'width': '308px',
+    'width': '300px',
     'justifyContent': 'space-around',
     'alignItems': 'center',
     'maxHeight': '50%',

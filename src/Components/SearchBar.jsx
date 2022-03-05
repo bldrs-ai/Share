@@ -144,19 +144,16 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 const useStyles = makeStyles({
   root: {
-    'padding': '2px 2px 2px 2px',
     'display': 'flex',
+    'width': '300px',
     'alignItems': 'center',
-    'width': 300,
+    'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
       padding: '2px 2px 2px 2px',
       width: 244,
     },
   },
   inputBase: {
-    'flex': 1,
-    '& input': {
-      fontSize: '16px',
-    },
+    flex: 1,
   },
 })

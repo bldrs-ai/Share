@@ -31,7 +31,7 @@ export default function CameraControl({viewer}) {
   }, [camera, location])
   // NOTE: NOT DISPLAYED
   return (
-    <>Camera</>
+    <div style={{display: 'none'}}>Camera</div>
   )
 }
 

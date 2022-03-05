@@ -5,7 +5,7 @@ import IssuesControl from './IssuesControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
-import CutPlane from '../assets/Icons/CutPlane.svg'
+import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 
 
@@ -36,7 +36,7 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
         {itemPanelControl}
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
-        <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlane/>}/>
+        <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>
       </div>
       {/* Invisible */}
       <CameraControl viewer={viewer}/>
