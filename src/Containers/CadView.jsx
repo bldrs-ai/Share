@@ -4,7 +4,7 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelControl from '../Components/ItemPanel'
+import ItemPanelControl from '../Components/ItemPanelControl'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
@@ -14,7 +14,7 @@ import gtag from '../utils/gtag'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import LogoDark from '../assets/2D_Icons/Logo.svg'
+import LogoIcon from '../assets/2D_Icons/Logo.svg'
 
 
 /**
@@ -64,6 +64,8 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const [firstLoad, setFirstLoad] = useState(true)
+
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -137,7 +139,7 @@ export default function CadView({
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        false, // fit to frame
+        firstLoad ? false : true, // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -150,13 +152,13 @@ export default function CadView({
           console.error('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-        },
-    )
+        })
     gtag('event', 'select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
     setIsLoading(false)
+    setFirstLoad(false)
 
     // Fix for https://github.com/buildrs/Share/issues/91
     //
@@ -358,6 +360,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
+        <LogoIcon className={classes.logo}/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
@@ -365,13 +368,12 @@ export default function CadView({
            <OperationsGroup
              viewer={viewer}
              unSelectItem={unSelectItems}
-             itemPanel={
+             itemPanelControl={
                <ItemPanelControl
                  model={model}
                  element={selectedElement}
                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <LogoDark className={classes.logo}/>
         <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup fileOpen={loadLocalFile}/>
         </div>
@@ -484,57 +486,46 @@ const useStyles = makeStyles(() => ({
     zIndex: 100,
   },
   operationsGroup: {
-    'position': 'absolute',
-    'height': '100vh',
-    'top': 0,
-    'right': '3px',
-    'border': 'none',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      bottom: `0px`,
-      top: '62px',
-      right: '28px',
-    },
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    border: 'none',
+    zIndex: 0,
   },
   operationsGroupOpen: {
     'position': 'absolute',
-    'height': '100vh',
     'top': 0,
     'right': '342px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
-      bottom: `0px`,
-      top: '62px',
-      right: '28px',
+      right: 0,
+      height: '50%',
     },
   },
   logo: {
     'position': 'absolute',
-    'bottom': '12px',
+    'bottom': '28px',
     'left': '30px',
-    'width': '120px',
+    'width': '140px',
     '@media (max-width: 900px)': {
       position: 'absolute',
-      bottom: '28px',
+      bottom: '33px',
       left: '26px',
-      width: '140px',
+      width: '120px',
     },
   },
   baseGroup: {
-    'position': 'absolute',
-    'bottom': '10px',
-    'right': '20px',
-    '@media (max-width: 900px)': {
-      bottom: `20px`,
-    },
+    position: 'absolute',
+    bottom: '10px',
+    right: '20px',
   },
   baseGroupOpen: {
     'position': 'absolute',
     'bottom': '10px',
     'right': '360px',
     '@media (max-width: 900px)': {
-      bottom: `20px`,
+      display: 'none',
     },
   },
 }))

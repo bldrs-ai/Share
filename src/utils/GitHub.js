@@ -90,7 +90,7 @@ class MockOctokit {
 const MOCK_ISSUE = {
   data: {
     title: 'Hello Mock Issue!',
-    body: `1) Welcome to this awesome awesome\r
+    body: `1) This is an issue\r
 \`\`\`\r
 url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-12.07,16.66,24.78,11.39,3.15,2.89\r
 \`\`\`\r
@@ -102,9 +102,16 @@ url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-12.07,16.66,24.78,11
 const MOCK_COMMENTS = {
   data: [
     {
-      body: `2) How awesome??  Awesome awesome\r
+      body: `2) And a comment\r
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8::c:67.92,21.64,3.99,25.2,2.35,4.6\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:67.92,21.64,3.99,25.2,2.35,4.6\r
+\`\`\`\r
+`,
+    },
+    {
+      body: `3) And another\r
+\`\`\`\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-12.07,16.66,24.78,11.39,3.15,2.89\r
 \`\`\`\r
 `,
     },

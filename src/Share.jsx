@@ -9,6 +9,7 @@ import {ThemeProvider, createTheme} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import debug from './utils/debug'
 import 'normalize.css'
+import './index.css'
 
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -50,7 +51,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
     if (mp === null) {
       // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/index.ifc#c:-15.18,9.32,52.05,14.69,8.96,11.19')
+      navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
       return
     }
     if (modelPath === null ||
@@ -71,17 +72,21 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 
   const theme = useMemo(() => {
+    const palette = {
+      main: '#C8C8C8',
+      light: 'white', // was '#e3f2fd',
+      dark: '#252525', // was '#42a5f5',
+    }
+    const getColor = (mode, colors = ['light', 'dark']) => {
+      return mode === 'light' ? palette[colors[0]] : palette[colors[1]]
+    }
     return createTheme({
       palette: {
         mode,
-        primary: {
-          main: '#C8C8C8',
-          light: '#e3f2fd',
-          dark: '#42a5f5',
-        },
         background: {
-          paper: mode === 'light' ? '#FFFFFF' : '#252525',
+          paper: getColor(mode, ['light', 'dark']),
         },
+        fill: mode === 'light' ? 'black' : 'white',
         tonalOffset: 1,
       },
       shape: {

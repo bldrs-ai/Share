@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
-import {makeStyles} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
 
@@ -16,13 +16,13 @@ import {assertDefined} from '../utils/assert'
  */
 export function TooltipIconButton({
   title,
-  icon,
   onClick,
+  icon,
   placement='left',
   size='medium',
 }) {
   assertDefined(title, icon, onClick)
-  const classes = useStyles()
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -36,21 +36,21 @@ export function TooltipIconButton({
 
 
 /**
+ * @param {function} onClick
  * @param {string} title Tooltip text
  * @param {Object} icon
- * @param {function} onClick
  * @param {string} placement Default: left
  * @return {Object} React component
  */
 export function TooltipToggleButton({
+  onClick,
   title,
   icon,
-  onClick,
   placement='left',
 }) {
   assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
-  const classes = useStyles()
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -76,7 +76,6 @@ export function TooltipToggleButton({
 
 /**
  * @param {string} title The text for tooltip
- * @param {string} toggleValue Unique key for toggle group
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
  * @param {Object} icon The header icon
@@ -86,17 +85,15 @@ export function TooltipToggleButton({
  */
 export function ControlButton({
   title,
-  toggleValue,
   isDialogDisplayed,
   setIsDialogDisplayed,
   icon,
   placement='left',
   dialog,
 }) {
-  if (toggleValue) throw new Error('Remove me')
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
-  const classes = useStyles()
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -114,7 +111,29 @@ export function ControlButton({
 }
 
 
-const useStyles = makeStyles({
+/**
+ * A FormButton is a TooltipIconButton but with parameterized type for
+ * form actions.
+ * @param {string} title
+ * @param {Object} icon
+ * @return {Object} React component
+ */
+export function FormButton({title, icon, type='submit', placement='left', size='medium'}) {
+  assertDefined(title, icon)
+  const classes = useStyles(useTheme())
+  return (
+    <div className={classes.root}>
+      <Tooltip title={title} describeChild placement={placement}>
+        <IconButton type={type} size={size}>
+          {icon}
+        </IconButton>
+      </Tooltip>
+    </div>
+  )
+}
+
+
+const useStyles = makeStyles((theme) => ({
   root: {
     '& button': {
       width: '50px',
@@ -127,7 +146,8 @@ const useStyles = makeStyles({
       height: '30px',
       border: 'none',
       borderRadius: '50%',
-      backgroundColor: 'white',
+      backgroundColor: theme.palette.background.paper,
+      fill: theme.palette.fill,
     },
   },
-})
+}))

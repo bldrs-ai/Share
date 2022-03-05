@@ -10,11 +10,9 @@ import Share from '../assets/3D/Share.svg'
 
 
 /**
- * @param {function} toggleTheme
- * @param {Object} mode
- * @return {Object}
+ * @return {Object} React component
  */
-export default function ShareMenu({toggleTheme, mode}) {
+export default function ShareMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
   const classes = useStyles()

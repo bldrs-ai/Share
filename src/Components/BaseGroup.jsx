@@ -30,13 +30,11 @@ export default function BaseGroup({fileOpen}) {
 const useStyles = makeStyles({
   root: {
     position: 'absolute',
-    width: '140px',
-    bottom: 0,
+    bottom: '20px',
     right: 0,
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginRight: '3px',
   },
 })

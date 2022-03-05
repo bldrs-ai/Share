@@ -36,7 +36,6 @@ export default function ItemProperties({model, element}) {
         Object.keys(element).length === 0 ?
           <h2 className={classes.noElement}>No element selected</h2> :
           <>
-            <h2 className={classes.sectionTitle}>Properties</h2>
             {propTable || 'Loading...'}
             <h2 className={classes.sectionTitle}>
               Property Sets
@@ -64,6 +63,18 @@ export default function ItemProperties({model, element}) {
 async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) {
   const ROWS = []
   let rowKey = 0
+  if (ifcProps.constructor && ifcProps.constructor.name &&
+      ifcProps.constructor.name != 'IfcPropertySet') {
+    ROWS.push(
+        <tr key='ifcType'>
+          <td key='ifcTypeLabel'>IFC Type</td>
+          <Tooltip title={ifcProps.constructor.name} placement='top'>
+            <td key='ifcTypeValue'>
+              {ifcProps.constructor.name}
+            </td>
+          </Tooltip>
+        </tr>)
+  }
   for (const key in ifcProps) {
     if (isPset && (key == 'expressID' || key == 'Name')) {
       continue
@@ -136,7 +147,6 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
     return null
   }
-  debug().log(`prettyProps: switching on propName(${propName})`)
   switch (propName) {
     case 'type':
     case 'CompositionType':
@@ -144,6 +154,7 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     case 'ObjectPlacement':
     case 'ObjectType':
     case 'OwnerHistory':
+    case 'PredefinedType':
     case 'Representation':
     case 'RepresentationContexts':
     case 'Representations':
@@ -300,14 +311,14 @@ function Row({d1, d2}) {
     <tr>
       <Tooltip
         title={d1}
-        placement="top"
-        key="tool1">
+        placement='top'
+        key='tool1'>
         <td>{d1}</td>
       </Tooltip>
       <Tooltip
         title={d2}
-        placement="top"
-        key="tool2">
+        placement='top'
+        key='tool2'>
         <td>{d2}</td>
       </Tooltip>
     </tr>
@@ -329,13 +340,12 @@ const dms = (deg, min, sec) => {
 
 const useStyles = makeStyles({
   propsContainer: {
-    'padding': '0.5em',
     '& td': {
       verticalAlign: 'top',
       paddingBottom: '1em',
       whiteSpace: 'nowrap',
-      width: '130px',
-      maxWidth: '130px',
+      width: '50%',
+      minWidth: '130px',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       fontFamily: 'Helvetica',
@@ -353,33 +363,20 @@ const useStyles = makeStyles({
       width: '280px',
       overflow: 'hidden',
     },
+    '& .MuiAccordionDetails-root': {
+      padding: 0,
+    },
   },
   psetsList: {
     padding: '0px',
-    marginLeft: '10px',
-    width: '308px',
-    height: '400px',
+    margin: '1em 0',
+    minHeight: '400px',
     paddingBottom: '30px',
   },
   section: {
     listStyle: 'none',
     maxWidth: '400px',
     marginBottom: '5px',
-  },
-  sectionTitle: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    maxWidth: '320px',
-    overflowWrap: 'break-word',
-    fontFamily: 'Helvetica',
-    fontSize: '20px',
-    fontWeight: 200,
-    paddingLeft: '4px',
-    paddingRight: '4px',
-    paddingBottom: '4px',
-    borderBottom: '1px solid grey',
   },
   noElement: {
     maxWidth: '320px',
@@ -393,8 +390,6 @@ const useStyles = makeStyles({
   },
   accordian: {
     maxWidth: '320px',
-  },
-  accordianDetails: {
   },
   accordionTitle: {
     width: '200px',

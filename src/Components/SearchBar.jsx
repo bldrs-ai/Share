@@ -5,13 +5,12 @@ import {
   useSearchParams,
 } from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
-import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
+import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import Search from '../assets/2D_Icons/Search.svg'
-import TreeOpen from '../assets/2D_Icons/TreeOpen.svg'
-import TreeClose from '../assets/2D_Icons/TreeClose.svg'
+import SearchIcon from '../assets/2D_Icons/Search.svg'
+import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
@@ -65,14 +64,10 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-      <IconButton
-        className={classes.iconButton}
-        aria-label='menu'
-        onClick={onClickMenuCb}>
-        {showNavPanel ?
-          <TreeOpen className={classes.icon} /> :
-          <TreeClose className={classes.icon} />}
-      </IconButton>
+      <TooltipToggleButton
+        title='Toggle tree view'
+        onClick={onClickMenuCb}
+        icon={<TreeIcon/>}/>
       <InputBase
         inputRef={searchInputRef}
         value={inputText}
@@ -81,12 +76,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         inputProps={{'aria-label': 'search'}}
         className={classes.inputBase}
       />
-      <IconButton
-        type='submit'
-        className={classes.iconButton}
-        aria-label='search' >
-        <Search className={classes.icon} />
-      </IconButton>
+      <FormButton title='search' icon={<SearchIcon/>}/>
     </Paper>
   )
 }
@@ -162,13 +152,6 @@ const useStyles = makeStyles({
       padding: '2px 2px 2px 2px',
       width: 244,
     },
-  },
-  iconButton: {
-    padding: 10,
-  },
-  icon: {
-    width: '30px',
-    height: '30px',
   },
   inputBase: {
     'flex': 1,

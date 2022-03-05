@@ -27,7 +27,8 @@ export default function Settings({toggleTheme, mode}) {
       <TooltipToggleButton
         title='Settings'
         onClick={(event) => handleMenu(event) }
-        icon={<SettingsIcon/>}/>
+        icon={<SettingsIcon/>}
+        placement='left-start'/>
       {isOpen &&
        <Menu
          id='menu-appbar'

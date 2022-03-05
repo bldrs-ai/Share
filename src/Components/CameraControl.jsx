@@ -31,11 +31,7 @@ export default function CameraControl({viewer}) {
   }, [camera, location])
   // NOTE: NOT DISPLAYED
   return (
-    <button
-      style={{display: 'none'}}
-      onClick={() => onClick(camera)}>
-      Camera
-    </button>
+    <>Camera</>
   )
 }
 
@@ -151,13 +147,4 @@ export function addCameraUrlParams(viewer) {
 /** Removes camera params from the URL if present */
 export function removeCameraUrlParams() {
   removeHashParams(window.location, CAMERA_PREFIX)
-}
-
-
-/**
- * Handler for onClick to add the camera position to the URL hash.
- * @param {Object} camera The IFCjs camera
- */
-function onClick(camera) {
-  addHashParams(window.location, CAMERA_PREFIX, roundCoord(...camera.getPosition(), 4))
 }

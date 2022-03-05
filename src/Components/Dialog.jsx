@@ -46,10 +46,6 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'fontFamily': 'Helvetica',
     'padding': '1em',
-    '@media (max-width: 900px)': {
-      width: '84%',
-      height: '400px',
-    },
     '& > svg': {
       width: '40px',
       height: '40px',
