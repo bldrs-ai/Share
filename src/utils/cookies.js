@@ -1,6 +1,9 @@
-// TOOD: Fix: @pablo-mayrgundter/cookies.js
+// TOOD: I copied this code in from @pablo-mayrgundter/cookies.js
+// since its NPM was broken.
+import gtag from '../utils/gtag'
 
 
+// FUNCTIONAL COOKIES FIRST, GTAGS AFTER
 /**
  * @param {string} name Name of the cookie
  * @return {boolean} True iff the cookie is set
@@ -45,4 +48,23 @@ export function setCookie(name, value, exdays=1) {
   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
   const expires = 'expires=' + d.toUTCString()
   document.cookie = `${name}=${value};${expires};path=/`
+}
+
+
+// GTAGS
+/**
+ * A passthrough to GTags that can be toggled by user preference.
+ *
+ *   https://developers.google.com/tag-platform/gtagjs/reference
+ *
+ * @param {string} command
+ * @param {object} commandParameters
+ * @param {object} additionalConfigInfo
+ */
+export function setGtagCookie(command, commandParameters, additionalConfigInfo) {
+  if (command != 'config') {
+    // TODO: not sure all gtags should be passed through, so err for now.
+    throw new Error('gtags cookie with non-config command being used: ' + command)
+  }
+  gtag(command, commandParameters, additionalConfigInfo)
 }

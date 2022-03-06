@@ -83,7 +83,7 @@ export default function NavPanel({
           aria-label='IFC Navigator'
           defaultCollapseIcon={<NodeOpen className = {classes.icon} />}
           defaultExpandIcon={<NodeClosed className = {classes.icon} />}
-          sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto'}}
+          sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto', overflowX: 'hidden'}}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
           selected={selectedElements}

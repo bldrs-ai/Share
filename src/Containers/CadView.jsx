@@ -10,8 +10,8 @@ import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import gtag from '../utils/gtag'
 import debug from '../utils/debug'
+import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import LogoIcon from '../assets/2D_Icons/Logo.svg'
@@ -153,7 +153,7 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
         })
-    gtag('event', 'select_content', {
+    Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
@@ -243,7 +243,7 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
       setDefaultExpandedElements(resultIDs.map((id) => id + ''))
-      gtag('event', 'search', {
+      Privacy.recordEvent('search', {
         search_term: query,
       })
     } else {

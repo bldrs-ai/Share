@@ -2,8 +2,9 @@ import React, {useState} from 'react'
 import Slider from '@mui/material/Slider'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
+import debug from '../utils/debug'
 import {ControlButton} from './Buttons'
-import {isCookieSet, setCookie} from '../utils/cookies'
+import * as Privacy from '../privacy/Privacy'
 import AboutIcon from '../assets/2D_Icons/Wave.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
@@ -17,7 +18,8 @@ import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
  * @return {Object} The AboutControl react component.
  */
 export default function AboutControl({offsetTop}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(!isCookieSet(COOKIE_NAME))
+  const [isDialogDisplayed, setIsDialogDisplayed] =
+        useState(Privacy.getLocalBoolean({component: 'about', name: 'isFirstTime'}))
   return (
     <ControlButton
       title='About BLDRS'
@@ -29,7 +31,7 @@ export default function AboutControl({offsetTop}) {
         <AboutDialog
           closeDialog={() => {
             setIsDialogDisplayed(false)
-            setCookie(COOKIE_NAME, 'viewed')
+            Privacy.setLocalBoolean({component: 'about', name: 'isFirstTime', value: false})
           }}/>
       }/>
   )
@@ -59,6 +61,19 @@ function AboutDialog({closeDialog}) {
  * @return {Object} React component
  */
 function AboutContent({clazzes}) {
+  const marks = [
+    {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
+    {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
+    {value: 20, label: 'Market', info: 'Google\'s guess of your location and demographic'},
+  ]
+  const setPrivacy = (event) => {
+    debug().log('AboutContent#setPrivacy: ', event.target.value)
+    switch (event.target.value) {
+      case 0: Privacy.setUsageAndMarketEnabled(false, false); break
+      case 10: Privacy.setUsageAndMarketEnabled(true, false); break
+      case 20: Privacy.setUsageAndMarketEnabled(true, true); break
+    }
+  }
   return (
     <div className={clazzes.content}>
       <p><strong>BLDRS</strong> is a collaborative environment to view and share IFC models.</p>
@@ -70,30 +85,21 @@ function AboutContent({clazzes}) {
         <li><ShareIcon/> Share IFC models</li>
       </ul>
       <div style={{width: '100%', textAlign: 'center'}}>
-        <h3>Cookies</h3>
+        <h3>Privacy</h3>
         <Slider
-          sx={{width: 240, textAlign: 'center'}}
+          onChange={setPrivacy}
+          marks={marks}
           defaultValue={30}
           step={10}
-          marks={marks}
           min={0}
-          max={20}/>
+          max={20}
+          sx={{width: 240, textAlign: 'center'}}/>
         <p>We are open source 🌱 Please visit our repository:&nbsp;
           <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
         </p>
       </div>
     </div>)
 }
-
-
-const marks = [
-  {value: 0, label: 'Functional', info: 'Site settings'},
-  {value: 10, label: 'Telemetry', info: 'Movement around the site'},
-  {value: 20, label: 'Cohort', info: 'Anonymized location and demographic'},
-]
-
-
-const COOKIE_NAME = 'about'
 
 
 const useStyles = makeStyles({
