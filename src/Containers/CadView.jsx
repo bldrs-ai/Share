@@ -4,17 +4,17 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelControl from '../Components/ItemPanelControl'
-import NavPanel from '../Components/NavPanel'
-import SearchBar from '../Components/SearchBar'
 import BaseGroup from '../Components/BaseGroup'
+import ItemPanelControl from '../Components/ItemPanelControl'
+import Logo from '../Components/Logo'
+import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
+import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import LogoIcon from '../assets/2D_Icons/Logo.svg'
 
 
 /**
@@ -360,7 +360,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <LogoIcon className={classes.logo}/>
+        <Logo/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
@@ -502,18 +502,6 @@ const useStyles = makeStyles(() => ({
     '@media (max-width: 900px)': {
       right: 0,
       height: '50%',
-    },
-  },
-  logo: {
-    'position': 'fixed',
-    'bottom': '20px',
-    'left': '30px',
-    'width': '140px',
-    '@media (max-width: 900px)': {
-      position: 'fixed',
-      bottom: '20px',
-      left: '26px',
-      width: '120px',
     },
   },
   baseGroup: {
