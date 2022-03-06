@@ -77,7 +77,7 @@ export default function NavPanel({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.contextualMenu} >
+    <Paper className={classes.root} >
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
@@ -90,8 +90,7 @@ export default function NavPanel({
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key='tree'
-        >
+          key='tree'>
           {
             <NavTree
               model={model}
@@ -109,7 +108,7 @@ export default function NavPanel({
 
 
 const useStyles = makeStyles({
-  contextualMenu: {
+  root: {
     'position': 'absolute',
     'top': '80px',
     'left': '20px',
@@ -122,12 +121,13 @@ const useStyles = makeStyles({
       maxHeight: '30%',
       width: '250px',
       top: '80px',
+      zIndex: '1', // Above operations group
     },
   },
   treeContainer: {
     paddingTop: '14px',
     paddingBottom: '14px',
-    overflow: 'scroll',
+    overflow: 'auto',
   },
   paper: {
     display: 'flex',

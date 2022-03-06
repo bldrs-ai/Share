@@ -49,7 +49,6 @@ const useStyles = makeStyles({
   container: {
     // Actually want 100 - size of settings button
     height: 'calc(100vh - 40px)',
-    zIndex: 10,
     margin: '20px 20px 0 0',
   },
   lowerGroup: {

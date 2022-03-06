@@ -328,23 +328,19 @@ export default function CadView({
 
 
   return (
-    <div className={classes.pageContainer}>
-      <div className={classes.viewWrapper}>
-        <div className={classes.viewContainer} id='viewer-container'></div>
-      </div>
+    <div className={classes.root}>
+      <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
-          open={isLoading}
-        />
-        <div className={classes.searchContainer}>
+          open={isLoading}/>
+        <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
               showNavPanel={showNavPanel}
-              isOpen={showNavPanel}
-            />
+              isOpen={showNavPanel}/>
           )}
         </div>
         {showNavPanel &&
@@ -358,8 +354,7 @@ export default function CadView({
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }
-          />}
+            }/>}
         <Logo/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
@@ -427,7 +422,7 @@ function initViewer(pathPrefix) {
 
 
 const useStyles = makeStyles({
-  pageContainer: {
+  root: {
     'position': 'absolute',
     'top': '0px',
     'left': '0px',
@@ -439,23 +434,7 @@ const useStyles = makeStyles({
     },
 
   },
-  viewerContainer: {
-    zIndex: 0,
-  },
-  toolBar: {
-    zIndex: 100,
-  },
-  menuToolbarContainer: {
-    'width': '100%',
-    'display': 'flex',
-    'justifyContent': 'flex-end',
-    'marginTop': '10px',
-    'border': '1px solid red',
-    '@media (max-width: 900px)': {
-      marginTop: '40px',
-    },
-  },
-  searchContainer: {
+  search: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
     // places, but there's now only 1 dialog object that also uses it
@@ -470,7 +449,7 @@ const useStyles = makeStyles({
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
-  viewContainer: {
+  view: {
     position: 'absolute',
     top: '0px',
     left: '0px',
@@ -480,18 +459,20 @@ const useStyles = makeStyles({
     height: '100vh',
     margin: 'auto',
   },
-  viewWrapper: {
-    zIndex: 0,
-  },
-  menusWrapper: {
-    zIndex: 100,
-  },
   operationsGroup: {
-    position: 'fixed',
-    top: 0,
-    right: 0,
-    border: 'none',
-    zIndex: 0,
+    'position': 'fixed',
+    'top': 0,
+    'right': 0,
+    'border': 'none',
+    'zIndex': 0,
+    '@media (max-width: 900px)': {
+      right: 0,
+      height: '50%',
+    },
+    '@media (max-width: 350px)': {
+      top: '75px',
+      height: '50%',
+    },
   },
   operationsGroupOpen: {
     'position': 'fixed',
@@ -501,6 +482,10 @@ const useStyles = makeStyles({
     'zIndex': 0,
     '@media (max-width: 900px)': {
       right: 0,
+      height: '50%',
+    },
+    '@media (max-width: 350px)': {
+      top: '120px',
       height: '50%',
     },
   },

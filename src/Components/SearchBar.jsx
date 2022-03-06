@@ -72,7 +72,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         inputRef={searchInputRef}
         value={inputText}
         onChange={onInputChange}
-        placeholder='Search building'
+        placeholder='Search model'
         inputProps={{'aria-label': 'search'}}
         className={classes.inputBase}
       />

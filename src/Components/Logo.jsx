@@ -26,6 +26,9 @@ const useStyles = makeStyles((theme) => ({
       left: '26px',
       width: '120px',
     },
+    '@media (max-width: 350px)': {
+      display: 'none',
+    },
     '& .left-face': {
       fill: theme.palette.logo.leftFace,
     },

@@ -67,7 +67,7 @@ test('SeachBar', () => {
   render(mockRoutes(
       <MockComponent/>,
   ))
-  expect(screen.getByPlaceholderText('Search building')).toBeInTheDocument()
+  expect(screen.getByPlaceholderText('Search model')).toBeInTheDocument()
 })
 
 

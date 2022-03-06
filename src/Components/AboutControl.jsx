@@ -48,7 +48,7 @@ function AboutDialog({closeDialog}) {
   return (
     <Dialog
       icon={<LogoB/>}
-      headerText=''
+      headerText='BLDRS'
       closeFn={closeDialog}
       clazzes={classes}
       content={<AboutContent clazzes={classes}/>}/>)
@@ -76,8 +76,9 @@ function AboutContent({clazzes}) {
   }
   return (
     <div className={clazzes.content}>
-      <p><strong>BLDRS</strong> is a collaborative environment to view and share IFC models.</p>
-      <p>We are just getting started, stay tuned for the upcoming MVP release 🚀</p>
+      <p><strong>Build Every Thing Together</strong></p>
+      <p>We are open source 🌱 Please visit our repository:&nbsp;
+        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a></p>
       <h2>Features</h2>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
@@ -93,10 +94,7 @@ function AboutContent({clazzes}) {
           step={10}
           min={0}
           max={20}
-          sx={{width: 240, textAlign: 'center'}}/>
-        <p>We are open source 🌱 Please visit our repository:&nbsp;
-          <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
-        </p>
+          sx={{width: '80%', textAlign: 'center'}}/>
       </div>
     </div>)
 }
@@ -105,22 +103,19 @@ function AboutContent({clazzes}) {
 const useStyles = makeStyles({
   content: {
     'width': '325px',
-    'fontFamily': 'Helvetica',
-    '@media (max-width: 900px)': {
-      width: '84%',
-      height: '590px',
-    },
+    /*
     '& h1, & h2, & h3': {
       color: '#696969',
       fontWeight: 200,
     },
     '& h1': {
       fontWeight: 200,
+      display: 'none',
     },
     '& h2': {
       textAlign: 'center',
       fontSize: '20px',
-    },
+    },*/
     '& ul': {
       width: '100%',
       margin: 0,
@@ -134,12 +129,16 @@ const useStyles = makeStyles({
       display: 'flex',
       justifyContent: 'flex-start',
       alignItems: 'center',
-      margin: '0 1em',
+      margin: '0.5em',
       padding: 0,
       fontWeight: 200,
+      fontSize: '0.9em',
       // TODO(pablo): appears to be removed but not sure why.  Here to
       // make sure.
       listStyleType: 'none',
+    },
+    '& li svg': {
+      marginRight: '0.5em',
     },
     '& p': {
       'fontWeight': 200,

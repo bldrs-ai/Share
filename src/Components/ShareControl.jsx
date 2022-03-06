@@ -13,9 +13,9 @@ import {
   removeCameraUrlParams,
 } from './CameraControl'
 import {assertDefinedBoolean} from '../utils/assert'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import CopyIcon from '../assets/2D_Icons/Copy.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
 
 
 /**
@@ -141,10 +141,13 @@ const useStyles = makeStyles({
       width: '20em',
     },
     '& .MuiFormGroup-root': {
-      width: '75%',
+      width: '100%',
       alignItems: 'center',
       verticalAlign: 'middle',
-      margin: '1em auto 2em auto',
+      margin: 0,
+    },
+    '& .MuiFormControlLabel-root': {
+      margin: 0,
     },
   },
 })

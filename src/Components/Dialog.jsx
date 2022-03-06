@@ -1,6 +1,8 @@
-import React from 'react'
+import React, {useState} from 'react'
+import MuiDialog from '@mui/material/Dialog'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import CheckIcon from '@mui/icons-material/Check'
-import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
 import {makeStyles} from '@mui/styles'
 
@@ -16,51 +18,42 @@ import {makeStyles} from '@mui/styles'
  */
 export default function Dialog({icon, headerText, closeFn, clazzes, content}) {
   const classes = {...useStyles(), ...clazzes}
+  const isOpen = useState(false)
   return (
-    <div onClick={closeFn} className={classes.root} role='none'>
-      <Paper onClick={(event) => event.stopPropagation()} className={classes.dialog} elevation={3}>
-        {icon}
-        <h1>{headerText}</h1>
+    <MuiDialog open={isOpen} onClose={closeFn} className={classes.root}>
+      <DialogTitle>
+        <div>{icon}</div>
+        {headerText}
+      </DialogTitle>
+      <DialogContent>
         {content}
-        <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={closeFn} onKeyDown={closeFn}/>
-      </Paper>
-    </div>)
+      </DialogContent>
+      <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={closeFn} onKeyDown={closeFn}/>
+    </MuiDialog>)
 }
 
 
 const useStyles = makeStyles({
   root: {
-    position: 'fixed',
-    top: '0px',
-    left: '0px',
-    width: '100vw',
-    height: '100vh',
-    backgroundColor: 'rgba(50, 50, 100, 0.5)',
-    zIndex: 3,
-  },
-  dialog: {
-    'position': 'absolute',
-    'top': '50%',
-    'left': '50%',
-    'transform': 'translate(-50%, -50%)',
     'textAlign': 'center',
     'fontFamily': 'Helvetica',
-    'padding': '1em',
-    '& > svg': {
-      width: '40px',
-      height: '40px',
-      marginTop: '20px',
+    '& .MuiButtonBase-root': {
+      padding: 0,
+      margin: '0.5em',
+      borderRadius: '50%',
+      border: 'none',
+    },
+    '& svg': {
+      padding: 0,
+      margin: 0,
+      width: '30px',
+      height: '30px',
       border: 'solid 0.5px grey',
+      fill: 'black',
       borderRadius: '50%',
     },
-    '& h1, & h2, & p': {
-      'color': '#696969',
-      'fontWeight': 200,
-      'lineHeight': '19px',
-      'margin': '1em',
-      '@media (max-width: 900px)': {
-        lineHeight: '22px',
-      },
+    '& h1, & h2, & h3, & p': {
+      fontWeight: 300,
     },
     '& h1': {
       fontSize: '1.2em',
@@ -68,5 +61,9 @@ const useStyles = makeStyles({
     '& h2': {
       fontSize: '1.1em',
     },
+    '& h3': {
+      fontSize: '1em',
+    },
   },
 })
+
