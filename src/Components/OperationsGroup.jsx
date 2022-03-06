@@ -34,9 +34,9 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
       </div>
       <div className={classes.lowerGroup}>
         {itemPanelControl}
+        <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
-        <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>
       </div>
       {/* Invisible */}
       <CameraControl viewer={viewer}/>

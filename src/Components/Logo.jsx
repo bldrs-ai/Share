@@ -18,6 +18,7 @@ const useStyles = makeStyles((theme) => ({
   logo: {
     'position': 'fixed',
     'bottom': '20px',
+    'paddingBottom': '3px',
     'left': '30px',
     'width': '140px',
     '@media (max-width: 900px)': {
@@ -30,13 +31,13 @@ const useStyles = makeStyles((theme) => ({
       display: 'none',
     },
     '& .left-face': {
-      fill: theme.palette.logo.leftFace,
+      fill: theme.palette.primary.light,
     },
     '& .right-face': {
-      fill: theme.palette.logo.rightFace,
+      fill: theme.palette.primary.dark,
     },
     '& .edges': {
-      stroke: theme.palette.logo.edges,
+      stroke: theme.palette.primary.main,
     },
   },
 }))

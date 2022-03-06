@@ -101,7 +101,7 @@ export function ControlButton({
           value={title}
           selected={isDialogDisplayed}
           onClick={toggleIsDialogDisplayed}
-          color='success'>
+          color='primary'>
           {icon}
         </ToggleButton>
       </Tooltip>
@@ -146,8 +146,8 @@ const useStyles = makeStyles((theme) => ({
       height: '30px',
       border: 'none',
       borderRadius: '50%',
-      backgroundColor: theme.palette.background.paper,
-      fill: theme.palette.fill,
+      backgroundColor: theme.palette.primary.main,
+      fill: theme.palette.primary.contrastText,
     },
   },
 }))

@@ -19,6 +19,7 @@ export default function ItemPanelControl({model, element, isOpenState}) {
   if (model) {
     if (element.Name && element.Name.value) {
       titleStr = decodeIFCString(element.Name.value)
+      document.title = titleStr
     } else if (element.constructor && element.constructor.name) {
       titleStr = element.constructor.name
     }

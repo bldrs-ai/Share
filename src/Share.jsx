@@ -6,10 +6,11 @@ import React, {
 } from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider, createTheme} from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
-import {loadTheme} from './Theme'
+import * as Privacy from './privacy/Privacy'
+import {Themes, loadTheme} from './Theme'
 import debug from './utils/debug'
-import 'normalize.css'
 import './index.css'
 
 // TODO: This isn't used.
@@ -30,7 +31,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
-  const [mode, setMode] = useState('light')
+  const [mode, setMode] = useState(Privacy.getCookie({
+    component: 'theme',
+    name: 'mode',
+    defaultValue: Themes.Day}))
 
 
   /**
@@ -51,8 +55,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   function onChangeUrlParams() {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
     if (mp === null) {
-      // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+      navToDefault(navigate, appPrefix)
       return
     }
     if (modelPath === null ||
@@ -66,10 +69,15 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   const colorMode = useMemo(
       () => ({
+        isDay: () => mode == Themes.Day,
         toggleColorMode: () => {
-          setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'))
+          setMode((prevMode) => {
+            const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
+            Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
+            return newMode
+          })
         },
-      }), [])
+      }), [mode])
 
 
   const theme = useMemo(() => {
@@ -78,17 +86,30 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 
   return (
-    modelPath && <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
-        <CadView
-          installPrefix={installPrefix}
-          appPrefix={appPrefix}
-          pathPrefix={pathPrefix}
-          modelPath={modelPath}
-        />
-      </ThemeProvider>
-    </ColorModeContext.Provider>
-  )
+    modelPath &&
+      <CssBaseline>
+        <ColorModeContext.Provider value={colorMode}>
+          <ThemeProvider theme={theme}>
+            <CadView
+              installPrefix={installPrefix}
+              appPrefix={appPrefix}
+              pathPrefix={pathPrefix}
+              modelPath={modelPath}
+            />
+          </ThemeProvider>
+        </ColorModeContext.Provider>
+      </CssBaseline>)
+}
+
+
+/**
+ * Navigate to index.ifc with nice camera setting.
+ * @param {Object} navigate
+ * @param {string} appPrefix
+ */
+export function navToDefault(navigate, appPrefix) {
+  // TODO: probe for index.ifc
+  navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
 }
 
 

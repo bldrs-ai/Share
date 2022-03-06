@@ -87,7 +87,6 @@ const useStyles = makeStyles((props) => ({
     'overflow': 'auto',
     'height': '90%',
     '@media (max-width: 900px)': {
-      maxHeight: '200px',
       overflow: 'auto',
     },
   },

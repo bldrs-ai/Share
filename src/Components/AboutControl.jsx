@@ -1,10 +1,14 @@
-import React, {useState} from 'react'
+import React, {useContext, useState} from 'react'
 import Slider from '@mui/material/Slider'
-import {makeStyles} from '@mui/styles'
+import Typography from '@mui/material/Typography'
+import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
+import Switch from '@mui/material/Switch'
+import PkgJson from '../../package.json'
 import debug from '../utils/debug'
-import {ControlButton} from './Buttons'
 import * as Privacy from '../privacy/Privacy'
+import {ColorModeContext} from '../Share'
+import {ControlButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Wave.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
@@ -19,7 +23,10 @@ import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
  */
 export default function AboutControl({offsetTop}) {
   const [isDialogDisplayed, setIsDialogDisplayed] =
-        useState(Privacy.getLocalBoolean({component: 'about', name: 'isFirstTime'}))
+        useState(Privacy.getCookieBoolean({
+          component: 'about',
+          name: 'isFirstTime',
+          defaultValue: true}))
   return (
     <ControlButton
       title='About BLDRS'
@@ -29,9 +36,10 @@ export default function AboutControl({offsetTop}) {
       placement='top'
       dialog={
         <AboutDialog
-          closeDialog={() => {
+          isDialogDisplayed={isDialogDisplayed}
+          setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
-            Privacy.setLocalBoolean({component: 'about', name: 'isFirstTime', value: false})
+            Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
           }}/>
       }/>
   )
@@ -40,18 +48,18 @@ export default function AboutControl({offsetTop}) {
 
 /**
  * The AboutDialog component
- * @param {function} closeDialog Function to close the dialog
+ * @param {boolean} isDialogDisplayed
+ * @param {function} setIsDialogDisplayed
  * @return {Component} React component
  */
-function AboutDialog({closeDialog}) {
-  const classes = useStyles()
+function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<LogoB/>}
       headerText='BLDRS'
-      closeFn={closeDialog}
-      clazzes={classes}
-      content={<AboutContent clazzes={classes}/>}/>)
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      content={<AboutContent/>}/>)
 }
 
 
@@ -61,32 +69,38 @@ function AboutDialog({closeDialog}) {
  * @return {Object} React component
  */
 function AboutContent({clazzes}) {
+  const classes = useStyles()
+  const themeMode = useTheme()
+  const theme = useContext(ColorModeContext)
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
-    {value: 20, label: 'Market', info: 'Google\'s guess of your location and demographic'},
+    {value: 20, label: 'Social', info: 'Google\'s guess of your location and demographic'},
   ]
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
     switch (event.target.value) {
-      case 0: Privacy.setUsageAndMarketEnabled(false, false); break
-      case 10: Privacy.setUsageAndMarketEnabled(true, false); break
-      case 20: Privacy.setUsageAndMarketEnabled(true, true); break
+      case 0: Privacy.setUsageAndSocialEnabled(false, false); break
+      case 10: Privacy.setUsageAndSocialEnabled(true, false); break
+      case 20: Privacy.setUsageAndSocialEnabled(true, true); break
     }
   }
   return (
-    <div className={clazzes.content}>
-      <p><strong>Build Every Thing Together</strong></p>
-      <p>We are open source 🌱 Please visit our repository:&nbsp;
-        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a></p>
-      <h2>Features</h2>
+    <div className={classes.content}>
+      <Typography
+        variant='h3'
+        color='secondary'
+        gutterBottom={true}>Build Every Thing Together</Typography>
+      <Typography paragraph={true}>We are open source 🌱<br/>
+        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
+      </Typography>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
-        <li><GitHubIcon/> Open IFC models hosted on GitHub</li>
+        <li><GitHubIcon/> Open IFC models from GitHub</li>
         <li><ShareIcon/> Share IFC models</li>
       </ul>
-      <div style={{width: '100%', textAlign: 'center'}}>
-        <h3>Privacy</h3>
+      <div className={classes.settings}>
+        <Typography variant='h5' color='info'>Privacy</Typography>
         <Slider
           onChange={setPrivacy}
           marks={marks}
@@ -94,7 +108,15 @@ function AboutContent({clazzes}) {
           step={10}
           min={0}
           max={20}
+          color='info'
           sx={{width: '80%', textAlign: 'center'}}/>
+        <Typography variant='h5' color='info'>Theme: {themeMode.mode}</Typography>
+        <Switch
+          checked={theme.isDay()}
+          onChange={() => theme.toggleColorMode()}/>
+        <Typography
+          variant='body2'
+          color='info'>{PkgJson.version}</Typography>
       </div>
     </div>)
 }
@@ -102,20 +124,10 @@ function AboutContent({clazzes}) {
 
 const useStyles = makeStyles({
   content: {
-    'width': '325px',
-    /*
-    '& h1, & h2, & h3': {
-      color: '#696969',
-      fontWeight: 200,
+    'minHeight': '300px',
+    '& .MuiTypography-body1': {
+      padding: '1em 0',
     },
-    '& h1': {
-      fontWeight: 200,
-      display: 'none',
-    },
-    '& h2': {
-      textAlign: 'center',
-      fontSize: '20px',
-    },*/
     '& ul': {
       width: '100%',
       margin: 0,
@@ -138,23 +150,24 @@ const useStyles = makeStyles({
       listStyleType: 'none',
     },
     '& li svg': {
+      width: '25px',
+      height: '25px',
       marginRight: '0.5em',
     },
-    '& p': {
-      'fontWeight': 200,
-      'textAlign': 'center',
-      'lineHeight': '24px',
-      '@media (max-width: 900px)': {
-        lineHeight: '22px',
-      },
-    },
     '& a': {
-      color: 'lime',
-      backgroundColor: '#848484',
+      color: 'grey',
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
       borderRadius: '2px',
+    },
+  },
+  settings: {
+    'opacity': '0.7',
+    'margin': '2em 0 0 0',
+    'fontSize': '0.8em',
+    '& .MuiTypography-body2': {
+      fontSize: '0.8em',
     },
   },
 })

@@ -1,4 +1,5 @@
 import React, {useState} from 'react'
+import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
 import {useWindowDimensions} from './Hooks'
@@ -15,18 +16,22 @@ export default function ShortcutsControl() {
   return (
     <ControlButton
       title='Shortcut keys'
-      icon={<QuestionIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      dialog={<ShortcutsDialog setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
+      icon={<QuestionIcon/>}
+      dialog={
+        <ShortcutsDialog
+          isDialogDisplayed={isDialogDisplayed}
+          setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
 }
 
 
 /**
+ * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
  * @return {Object} React component
  */
-function ShortcutsDialog({setIsDialogDisplayed}) {
+function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const classes = useStyles()
   const {width} = useWindowDimensions()
   const isLandscape = width > 500
@@ -34,7 +39,8 @@ function ShortcutsDialog({setIsDialogDisplayed}) {
     <Dialog
       icon={<QuestionIcon/>}
       headerText='Shortcuts'
-      closeFn={() =>setIsDialogDisplayed(false)}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         isLandscape ?
           (<ul className={classes.content}>
@@ -47,7 +53,7 @@ function ShortcutsDialog({setIsDialogDisplayed}) {
             <li>Press <strong>A to clear selected element</strong></li>
           </ul>) :
           (<div>
-            <h1>Guide</h1>
+            <Typography variant='h1'>Guide</Typography>
             <p>To select an element:</p>
             <ul>
               <li>Double tap an element</li>

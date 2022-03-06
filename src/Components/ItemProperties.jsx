@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import Switch from '@mui/material/Switch'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
@@ -7,7 +8,6 @@ import {
   deref,
 } from '../utils/Ifc'
 import {stoi} from '../utils/strings'
-import Toggle from './Toggle'
 import ExpansionPanel from './ExpansionPanel'
 
 
@@ -37,9 +37,11 @@ export default function ItemProperties({model, element}) {
           <h2 className={classes.noElement}>No element selected</h2> :
           <>
             {propTable || 'Loading...'}
-            <h2 className={classes.sectionTitle}>
+            <h2>
               Property Sets
-              <Toggle onChange={() => setExpandAll(!expandAll)} />
+              <Switch
+                checked={expandAll}
+                onChange={() => setExpandAll(!expandAll)}/>
             </h2>
             {psetsList || 'Loading...'}
           </>
@@ -365,6 +367,10 @@ const useStyles = makeStyles({
     },
     '& .MuiAccordionDetails-root': {
       padding: 0,
+    },
+    '& .MuiSwitch-root': {
+      'float': 'right',
+      '& fake': {},
     },
   },
   psetsList: {

@@ -1,7 +1,6 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
-import Settings from './Settings'
 import {TooltipToggleButton} from './Buttons'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 
@@ -15,13 +14,12 @@ export default function BaseGroup({fileOpen}) {
   const classes = useStyles()
   return (
     <div className={classes.root}>
-      <AboutControl/>
       <TooltipToggleButton
         title='Upload model'
         icon={<OpenIcon/>}
         onClick={fileOpen}
         placement='top'/>
-      <Settings/>
+      <AboutControl/>
     </div>
   )
 }
@@ -29,9 +27,6 @@ export default function BaseGroup({fileOpen}) {
 
 const useStyles = makeStyles({
   root: {
-    position: 'fixed',
-    bottom: '20px',
-    right: '20px',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',

@@ -1,22 +1,20 @@
 import React, {useContext, useState} from 'react'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Switch from '@mui/material/Switch'
 import {makeStyles, useTheme} from '@mui/styles'
 import {TooltipToggleButton} from './Buttons'
-import Toggle from './Toggle'
 import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
 import SettingsIcon from '../assets/2D_Icons/Settings.svg'
 
 
 /**
- * @param {function} toggleTheme
- * @param {Object} mode
- * @return {Object}
+ * @return {Object} React component
  */
-export default function Settings({toggleTheme, mode}) {
+export default function Settings() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const isOpen = Boolean(anchorEl)
+  const isOpen = Boolean(anchorEl == null)
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
@@ -49,7 +47,7 @@ export default function Settings({toggleTheme, mode}) {
          <MenuItem className={classes.menuItem} disableRipple>Version: {PkgJson.version}</MenuItem>
          <MenuItem className={classes.menuItem} disableRipple >
            <p>Theme: {themeMode.palette.mode}</p>
-           <Toggle defaultChecked onChange={() => theme.toggleColorMode('dark')}/>
+           <Switch defaultChecked onChange={() => theme.toggleColorMode('dark')}/>
          </MenuItem>
        </Menu>}
     </div>)

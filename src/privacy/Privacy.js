@@ -1,4 +1,7 @@
-import {getBoolean, setCookie} from './functional'
+import {
+  getCookie as getCookiePrivate,
+  getCookieBoolean as getCookieBooleanPrivate,
+  setCookie as setCookiePrivate} from './functional'
 import {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed} from './analytics'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
@@ -8,27 +11,52 @@ export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
 
 
 /**
- * @param {boolean} isUsageEnabled
- * @param {boolean} isMarketEnabled
+ * @param {string} component
+ * @param {string} name
+ * @param {string} defaultValue
+ * @return {boolean} value of the setting
  */
-export function setUsageAndMarketEnabled(isUsageEnabled, isMarketEnabled) {
-  assertDefined(isUsageEnabled, isMarketEnabled)
-  debug().log('Privacy#setUsageAndMarketEnabled: ', isUsageEnabled, isMarketEnabled)
-  setLocalBoolean({component: 'cookies', name: 'usage', value: isUsageEnabled})
-  setLocalBoolean({component: 'cookies', name: 'market', value: isMarketEnabled})
+export function getCookie({component, name, defaultValue}) {
+  return getCookiePrivate(name, defaultValue)
+}
+
+
+/**
+ * @param {boolean} isUsageEnabled
+ * @param {boolean} isSocialEnabled
+ */
+export function setUsageAndSocialEnabled(isUsageEnabled, isSocialEnabled) {
+  assertDefined(isUsageEnabled, isSocialEnabled)
+  debug().log('Privacy#setUsageAndSocialEnabled: ', isUsageEnabled, isSocialEnabled)
+  setCookieBoolean({component: 'cookies', name: 'usage', value: isUsageEnabled})
+  setCookieBoolean({component: 'cookies', name: 'social', value: isSocialEnabled})
 }
 
 
 /**
  * @param {string} component
  * @param {string} name
+ * @param {boolean} defaultValue
  * @return {boolean} value of the setting
  */
-export function getLocalBoolean({component, name}) {
-  assertDefined(component, name)
-  const value = getBoolean(name)
-  debug().log('Privacy#getLocalBoolean: ', component, name, value)
+export function getCookieBoolean({component, name, defaultValue}) {
+  assertDefined(component, name, defaultValue)
+  const value = getCookieBooleanPrivate(name, defaultValue)
+  if (value == undefined) {
+    return defaultValue
+  }
+  debug().log('Privacy#getCookieBoolean: ', component, name, value)
   return value
+}
+
+
+/**
+ * @param {string} component
+ * @param {string} name
+ * @param {string} value
+ */
+export function setCookie({component, name, value}) {
+  setCookiePrivate(name, value)
 }
 
 
@@ -37,8 +65,7 @@ export function getLocalBoolean({component, name}) {
  * @param {string} name
  * @param {boolean} value
  */
-export function setLocalBoolean({component, name, value}) {
+export function setCookieBoolean({component, name, value}) {
   assertDefined(component, name, value)
-  debug().log('Privacy#setLocalBoolean: ', component, name, value)
-  setCookie(name, value)
+  setCookiePrivate(name, value)
 }

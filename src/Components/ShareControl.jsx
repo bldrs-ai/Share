@@ -36,6 +36,7 @@ export default function ShareControl({viewer}) {
       dialog={
         <ShareDialog
           viewer={viewer}
+          isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}/>
       }/>
   )
@@ -47,10 +48,11 @@ export default function ShareControl({viewer}) {
  * included in the shared URL and assists in copying the URL to
  * clipboard.
  * @param {Object} viewer IFC viewer
+ * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
  * @return {Component} The react component
  */
-function ShareDialog({viewer, setIsDialogDisplayed}) {
+function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(assertDefinedBoolean(urlHasCameraCoords()))
   const urlTextFieldRef = createRef()
@@ -99,7 +101,8 @@ function ShareDialog({viewer, setIsDialogDisplayed}) {
     <Dialog
       icon={<ShareIcon/>}
       headerText='Share the model link'
-      closeFn={closeDialog}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={closeDialog}
       content={
         <div className={classes.content}>
           <div>

@@ -1,34 +1,45 @@
-import React, {useState} from 'react'
+import React from 'react'
 import MuiDialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import CheckIcon from '@mui/icons-material/Check'
-import {TooltipIconButton} from './Buttons'
 import {makeStyles} from '@mui/styles'
+import {TooltipIconButton} from './Buttons'
+import {assertDefined} from '../utils/assert'
 
 
 /**
  * A generic base dialog component.
  * @param {Object} icon Leading icon above header description
  * @param {string} headerText Short message describing the operation
- * @param {function} closeFn
- * @param {Object} clazzes node
+ * @param {boolean} isDialogDisplayed
+ * @param {function} setIsDialogDisplayed
+ * @param {Object} clazzes Optional classes
  * @param {Object} content node
  * @return {Object} React component
  */
-export default function Dialog({icon, headerText, closeFn, clazzes, content}) {
+export default function Dialog({
+  icon,
+  headerText,
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+  clazzes={},
+  content,
+}) {
+  assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)
   const classes = {...useStyles(), ...clazzes}
-  const isOpen = useState(false)
+  const close = () => setIsDialogDisplayed(false)
   return (
-    <MuiDialog open={isOpen} onClose={closeFn} className={classes.root}>
+    <MuiDialog
+      open={isDialogDisplayed}
+      onClose={close}
+      className={classes.root}>
       <DialogTitle>
         <div>{icon}</div>
         {headerText}
       </DialogTitle>
-      <DialogContent>
-        {content}
-      </DialogContent>
-      <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={closeFn} onKeyDown={closeFn}/>
+      <DialogContent>{content}</DialogContent>
+      <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
     </MuiDialog>)
 }
 
@@ -51,18 +62,6 @@ const useStyles = makeStyles({
       border: 'solid 0.5px grey',
       fill: 'black',
       borderRadius: '50%',
-    },
-    '& h1, & h2, & h3, & p': {
-      fontWeight: 300,
-    },
-    '& h1': {
-      fontSize: '1.2em',
-    },
-    '& h2': {
-      fontSize: '1.1em',
-    },
-    '& h3': {
-      fontSize: '1em',
     },
   },
 })

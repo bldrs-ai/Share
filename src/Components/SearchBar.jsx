@@ -149,8 +149,7 @@ const useStyles = makeStyles({
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
-      padding: '2px 2px 2px 2px',
-      width: 244,
+      width: '250px',
     },
   },
   inputBase: {

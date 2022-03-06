@@ -4,7 +4,10 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
+import {navToDefault} from '../Share.jsx'
+import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ItemPanelControl from '../Components/ItemPanelControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
@@ -58,13 +61,12 @@ export default function CadView({
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
-
+  const [alert, setAlert] = useState(null)
   const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
-  const [firstLoad, setFirstLoad] = useState(true)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -119,6 +121,8 @@ export default function CadView({
     await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
   }
 
+  const setAlertMessage = (msg) =>
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -139,7 +143,7 @@ export default function CadView({
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        firstLoad ? false : true, // fitToFrame
+        urlHasCameraParams() ? false : true, // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -149,26 +153,28 @@ export default function CadView({
           }
         },
         (error) => {
-          console.error('CadView#loadIfc$onError', error)
+          console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
+          setAlertMessage('Could not load file: ' + filepath)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
     setIsLoading(false)
-    setFirstLoad(false)
 
-    // Fix for https://github.com/buildrs/Share/issues/91
-    //
-    // TODO(pablo): huge hack. Somehow this is getting incremented to
-    // 1 even though we have a new IfcViewer instance for each file
-    // load.  That modelID is used in the IFCjs code as [modelID] and
-    // leads to undefined refs e.g. in prePickIfcItem.  The id should
-    // always be 0.
-    model.modelID = 0
-    setModel(model)
+    if (model) {
+      // Fix for https://github.com/buildrs/Share/issues/91
+      //
+      // TODO(pablo): huge hack. Somehow this is getting incremented to
+      // 1 even though we have a new IfcViewer instance for each file
+      // load.  That modelID is used in the IFCjs code as [modelID] and
+      // leads to undefined refs e.g. in prePickIfcItem.  The id should
+      // always be 0.
+      model.modelID = 0
+      setModel(model)
+    }
   }
 
 
@@ -372,6 +378,7 @@ export default function CadView({
         <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup fileOpen={loadLocalFile}/>
         </div>
+        {alert}
       </div>
     </div>
   )
@@ -490,13 +497,13 @@ const useStyles = makeStyles({
     },
   },
   baseGroup: {
-    position: 'absolute',
-    bottom: '10px',
+    position: 'fixed',
+    bottom: '20px',
     right: '20px',
   },
   baseGroupOpen: {
-    'position': 'absolute',
-    'bottom': '10px',
+    'position': 'fixed',
+    'bottom': '20px',
     'right': '360px',
     '@media (max-width: 900px)': {
       display: 'none',

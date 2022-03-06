@@ -118,7 +118,6 @@ export default function NavTree({
               textDecoration: 'none',
               fontFamily: 'helvetica',
               fontWeight: 200,
-              color: '#696969',
               marginLeft: 8,
             }}
           >

@@ -1,5 +1,6 @@
 import gtag from '../utils/gtag'
 import * as Functional from './functional'
+import {assertDefined} from '../utils/assert'
 
 
 /**
@@ -11,7 +12,8 @@ import * as Functional from './functional'
  * @param {object} additionalConfigInfo
  */
 export function recordEvent(commandParameters, additionalConfigInfo) {
-  if (Functional.getBoolean({component: 'cookies', name: 'isAnalyticsAllowed'})) {
+  assertDefined(commandParameters)
+  if (isAnalyticsAllowed()) {
     gtag('event', commandParameters, additionalConfigInfo)
   }
 }
@@ -21,7 +23,7 @@ export function recordEvent(commandParameters, additionalConfigInfo) {
  * @return {boolean} is analytics enabled
  */
 export function isAnalyticsAllowed() {
-  return Functional.getBoolean({component: 'cookies', name: 'isAnalyticsAllowed'})
+  return Functional.getCookieBoolean('isAnalyticsAllowed', false) // defaultValue
 }
 
 
@@ -29,6 +31,7 @@ export function isAnalyticsAllowed() {
  * Enable or disable analytics cookies
  * @param {boolean} isAllowed Is analytics enabled
  */
-export function setIsAnalyticsAllowed(isAllowed=false) {
+export function setIsAnalyticsAllowed(isAllowed) {
+  assertDefined(isAllowed)
   Functional.setBoolean({component: 'cookies', name: 'isAnalyticsAllowed', value: isAllowed})
 }
