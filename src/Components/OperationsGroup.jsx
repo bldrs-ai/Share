@@ -53,9 +53,9 @@ const useStyles = makeStyles({
     margin: '20px 20px 0 0',
   },
   lowerGroup: {
-    position: 'absolute',
+    position: 'fixed',
     bottom: 0,
-    paddingBottom: '60px',
+    paddingBottom: '70px',
     // 4x the size of a button
     minHeight: '200px',
   },

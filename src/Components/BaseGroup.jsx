@@ -29,9 +29,9 @@ export default function BaseGroup({fileOpen}) {
 
 const useStyles = makeStyles({
   root: {
-    position: 'absolute',
+    position: 'fixed',
     bottom: '20px',
-    right: 0,
+    right: '20px',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
