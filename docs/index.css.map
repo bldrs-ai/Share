@@ -2,6 +2,6 @@
   "version": 3,
   "sources": ["../src/index.css"],
   "sourcesContent": ["body {\n  overscroll-behavior: none;\n  overflow: hidden;\n  padding: 0;\n  height: 100%;\n  max-height: 100%;\n}\n"],
-  "mappings": ";AAAA;AACE;AACA;AACA;AACA;AACA;AAAA;",
+  "mappings": "AAAA,KACE,yBACA,gBAFF,UAIE,YACA",
   "names": []
 }
