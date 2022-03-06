@@ -426,7 +426,7 @@ function initViewer(pathPrefix) {
 }
 
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles({
   pageContainer: {
     'position': 'absolute',
     'top': '0px',
@@ -517,4 +517,4 @@ const useStyles = makeStyles(() => ({
       display: 'none',
     },
   },
-}))
+})
