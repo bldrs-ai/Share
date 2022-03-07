@@ -226,7 +226,7 @@ function setPanelText(title, body, setText, setNext) {
 const useStyles = makeStyles({
   issueContainer: {
     'position': 'fixed',
-    'top': '130px',
+    'top': '150px',
     'right': '30px',
     'fontFamily': 'Helvetica',
     'display': 'flex',
