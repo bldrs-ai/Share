@@ -121,7 +121,6 @@ const useStyles = makeStyles({
       maxHeight: '30%',
       width: '250px',
       top: '80px',
-      zIndex: '1', // Above operations group
     },
   },
   treeContainer: {
