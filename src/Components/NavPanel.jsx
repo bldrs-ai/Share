@@ -7,11 +7,12 @@ import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
-import NodeClosed from '../assets/icons/NodeClosed.svg'
-import NodeOpen from '../assets/icons/NodeOpened.svg'
-import Hamburger from '../assets/icons/Menu.svg'
+import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
+import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
+import Hamburger from '../assets/2D_Icons/Menu.svg'
 
-/** Navigation panel control is a button that toggles the visibility of nav panel
+/**
+ * Navigation panel control is a button that toggles the visibility of nav panel
  * @param {Number} topOffset global offset defined in the cad view
  * @param {function} onClickMenuCb callback passed from cad view
  * @return {Object} The button react component
@@ -24,7 +25,7 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
         <IconButton onClick={() => {
           onClickMenuCb()
         }}>
-          <Hamburger className = {classes.treeIcon}/>
+          <Hamburger className={classes.treeIcon}/>
         </IconButton>
       </Tooltip>
     </div>
@@ -76,21 +77,20 @@ export default function NavPanel({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.contextualMenu}>
+    <Paper className={classes.root} >
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
           defaultCollapseIcon={<NodeOpen className = {classes.icon} />}
           defaultExpandIcon={<NodeClosed className = {classes.icon} />}
-          sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto'}}
+          sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto', overflowX: 'hidden'}}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
           selected={selectedElements}
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key='tree'
-        >
+          key='tree'>
           {
             <NavTree
               model={model}
@@ -108,47 +108,48 @@ export default function NavPanel({
 
 
 const useStyles = makeStyles({
-  contextualMenu: {
+  root: {
     'position': 'absolute',
     'top': '80px',
-    'left': '23px',
+    'left': '20px',
     'overflow': 'auto',
-    'width': '308px',
+    'width': '300px',
     'justifyContent': 'space-around',
     'alignItems': 'center',
     'maxHeight': '50%',
     '@media (max-width: 900px)': {
-      'maxHeight': '30%',
-      'width': '250px',
-      'top': '80px',
+      maxHeight: '30%',
+      width: '250px',
+      top: '80px',
+      zIndex: '1', // Above operations group
     },
   },
   treeContainer: {
-    'paddingTop': '14px',
-    'paddingBottom': '14px',
-    'overflow': 'scroll',
+    paddingTop: '14px',
+    paddingBottom: '14px',
+    overflow: 'auto',
   },
   paper: {
-    'display': 'flex',
-    'overflow': 'auto',
-    'flexDirection': 'column',
-    'width': '220px',
-    'backgroundColor': 'lightGray',
+    display: 'flex',
+    overflow: 'auto',
+    flexDirection: 'column',
+    width: '220px',
+    backgroundColor: 'lightGray',
   },
   treeIcon: {
-    'width': '30px',
-    'height': '30px',
+    width: '30px',
+    height: '30px',
   },
   icon: {
-    'width': '12px',
-    'height': '12px',
+    width: '12px',
+    height: '12px',
   },
   toggleButton: {
     'position': 'absolute',
     'top': (props) =>`${props.topOffset}px`,
     'left': '30px',
     '@media (max-width: 900px)': {
-      'left': '20px',
+      left: '20px',
     },
   },
 })

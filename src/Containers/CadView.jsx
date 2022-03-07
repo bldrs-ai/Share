@@ -4,17 +4,20 @@ import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import SearchIndex from './SearchIndex.js'
-import ItemPanelButton from '../Components/ItemPanel'
-import NavPanel from '../Components/NavPanel'
-import SearchBar from '../Components/SearchBar'
+import {navToDefault} from '../Share.jsx'
+import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
-import IconGroup from '../Components/IconGroup'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import ItemPanelControl from '../Components/ItemPanelControl'
+import Logo from '../Components/Logo'
+import NavPanel from '../Components/NavPanel'
+import OperationsGroup from '../Components/OperationsGroup'
+import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import gtag from '../utils/gtag'
 import debug from '../utils/debug'
+import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import LogoDark from '../assets/3D/logo6.svg'
 
 
 /**
@@ -58,12 +61,13 @@ export default function CadView({
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
-  // eslint-disable-next-line no-unused-vars
-  const [showItemPanel, setShowItemPanel] = useState(false)
-  const [showShortCuts, setShowShortCuts] = useState(false)
+  const [alert, setAlert] = useState(null)
+  const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -102,7 +106,7 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    setShowItemPanel(false)
+    setIsItemPanelOpen(false)
     setViewer(initViewer(pathPrefix))
     debug().log('CadView#onModelPath, done setting new viewer')
   }
@@ -117,6 +121,8 @@ export default function CadView({
     await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
   }
 
+  const setAlertMessage = (msg) =>
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -137,7 +143,7 @@ export default function CadView({
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        true, // fit to frame
+        urlHasCameraParams() ? false : true, // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -147,26 +153,28 @@ export default function CadView({
           }
         },
         (error) => {
-          console.error('CadView#loadIfc$onError', error)
+          console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-        },
-    )
-    gtag('event', 'select_content', {
+          setAlertMessage('Could not load file: ' + filepath)
+        })
+    Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
     setIsLoading(false)
 
-    // Fix for https://github.com/buildrs/Share/issues/91
-    //
-    // TODO(pablo): huge hack. Somehow this is getting incremented to
-    // 1 even though we have a new IfcViewer instance for each file
-    // load.  That modelID is used in the IFCjs code as [modelID] and
-    // leads to undefined refs e.g. in prePickIfcItem.  The id should
-    // always be 0.
-    model.modelID = 0
-    setModel(model)
+    if (model) {
+      // Fix for https://github.com/buildrs/Share/issues/91
+      //
+      // TODO(pablo): huge hack. Somehow this is getting incremented to
+      // 1 even though we have a new IfcViewer instance for each file
+      // load.  That modelID is used in the IFCjs code as [modelID] and
+      // leads to undefined refs e.g. in prePickIfcItem.  The id should
+      // always be 0.
+      model.modelID = 0
+      setModel(model)
+    }
   }
 
 
@@ -241,7 +249,7 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
       setDefaultExpandedElements(resultIDs.map((id) => id + ''))
-      gtag('event', 'search', {
+      Privacy.recordEvent('search', {
         search_term: query,
       })
     } else {
@@ -267,27 +275,23 @@ export default function CadView({
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName == 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
-        if (item.modelID === undefined || item.id === undefined) return
-        const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-        if (modelPath.gitpath) {
-          navigate(pathPrefix + modelPath.getRepoPath() + path)
-        } else {
-          navigate(pathPrefix + modelPath.filepath + path)
+        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+          const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
+          if (modelPath.gitpath) {
+            navigate(pathPrefix + modelPath.getRepoPath() + path)
+          } else {
+            navigate(pathPrefix + modelPath.filepath + path)
+          }
+          setSelectedElement(item)
         }
-        setSelectedElement(item)
       }
     }
   }
 
 
-  /** Add a clipping plane. */
-  function placeCutPlane() {
-    viewer.clipper.createPlane()
-  }
-
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
+    setSelectedElement({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -322,8 +326,6 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
-    setShowItemPanel(false)
-
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
@@ -332,25 +334,21 @@ export default function CadView({
 
 
   return (
-    <div className={classes.pageContainer}>
-      <div className={classes.viewWrapper}>
-        <div className={classes.viewContainer} id='viewer-container'></div>
-      </div>
+    <div className={classes.root}>
+      <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
           message={loadingMessage}
           type={'info'}
-          open={isLoading}
-        />
-        <div className={classes.searchContainer}>
+          open={isLoading}/>
+        <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              isOpen={showNavPanel}
-            />
+              showNavPanel={showNavPanel}
+              isOpen={showNavPanel}/>
           )}
         </div>
-
         {showNavPanel &&
           <NavPanel
             model={model}
@@ -362,29 +360,25 @@ export default function CadView({
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }
-          />}
-        <div className={classes.itemPanelContainer}>
-          <ItemPanelButton
-            model={model}
-            element={selectedElement}
-            close={()=>setShowItemPanel(false)}
-            topOffset={PANEL_TOP}
-            placeCutPlane={()=>placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}/>
+            }/>}
+        <Logo/>
+        <div className={isItemPanelOpen ?
+                        classes.operationsGroupOpen :
+                        classes.operationsGroup}>
+          {viewer &&
+           <OperationsGroup
+             viewer={viewer}
+             unSelectItem={unSelectItems}
+             itemPanelControl={
+               <ItemPanelControl
+                 model={model}
+                 element={selectedElement}
+                 isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={classes.iconGroup}>
-          <IconGroup
-            placeCutPlane={()=>placeCutPlane()}
-            unSelectItem={()=>unSelectItems()}
-            toggleShortCutsPanel={()=>setShowShortCuts(!showShortCuts)}
-          />
+        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+          <BaseGroup fileOpen={loadLocalFile}/>
         </div>
-        <LogoDark className = {classes.logo}/>
-        <div className = {classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile} offsetTop={PANEL_TOP}/>
-        </div>
+        {alert}
       </div>
     </div>
   )
@@ -402,13 +396,13 @@ function initViewer(pathPrefix) {
   container.textContent = ''
   const v = new IfcViewerAPI({
     container,
-    backgroundColor: new Color('#a0a0a0'),
+    backgroundColor: new Color('#ededed'),
   })
   debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
-  v.addAxes()
-  v.addGrid(50, 50)
+  // v.addAxes()
+  // v.addGrid(10, 10)
   v.clipper.active = true
 
   // Highlight items when hovering over them
@@ -434,9 +428,8 @@ function initViewer(pathPrefix) {
 }
 
 
-const PANEL_TOP = 20
-const useStyles = makeStyles(() => ({
-  pageContainer: {
+const useStyles = makeStyles({
+  root: {
     'position': 'absolute',
     'top': '0px',
     'left': '0px',
@@ -448,32 +441,22 @@ const useStyles = makeStyles(() => ({
     },
 
   },
-  viewerContainer: {
-    zIndex: 0,
-  },
-  toolBar: {
-    zIndex: 100,
-  },
-  menuToolbarContainer: {
-    'width': '100%',
-    'display': 'flex',
-    'justifyContent': 'flex-end',
-    'marginTop': '10px',
-    'border': '1px solid red',
-    '@media (max-width: 900px)': {
-      marginTop: '40px',
-    },
-  },
-  searchContainer: {
+  search: {
     position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '26px',
+    // TODO(pablo): we were passing this around as it's used in a few
+    // places, but there's now only 1 dialog object that also uses it
+    // and it has multiple callers; passing that variable around seems
+    // overkill. I don't like not having it as a variable, but going
+    // to hardcode for now and look into passing via the theme later.
+    top: `20px`,
+    left: '20px',
+    width: '300px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
   },
-  viewContainer: {
+  view: {
     position: 'absolute',
     top: '0px',
     left: '0px',
@@ -483,66 +466,47 @@ const useStyles = makeStyles(() => ({
     height: '100vh',
     margin: 'auto',
   },
-  viewWrapper: {
-    zIndex: 0,
-  },
-  menusWrapper: {
-    zIndex: 100,
-  },
-  aboutPanelContainer: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '0px',
-    right: '0px',
-    minWidth: '200px',
-    maxWidth: '500px',
-    width: '100%',
-    margin: '0em auto',
-    border: 'none',
-    zIndex: 1000,
-  },
-  shortCutPanelContainer: {
-    position: 'absolute',
-    top: `${PANEL_TOP}px`,
-    left: '0px',
-    right: '0px',
-    minWidth: '200px',
-    maxWidth: '500px',
-    width: '100%',
-    margin: '0em auto',
-    border: 'none',
-    zIndex: 1000,
-  },
-  iconGroup: {
-    'position': 'absolute',
-    'top': '70px',
-    'right': '2px',
+  operationsGroup: {
+    'position': 'fixed',
+    'top': 0,
+    'right': 0,
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
-      'bottom': `0px`,
-      'top': '62px',
-      'right': '28px',
+      right: 0,
+      height: '50%',
+    },
+    '@media (max-width: 350px)': {
+      top: '75px',
+      height: '50%',
     },
   },
-  logo: {
-    'position': 'absolute',
-    'bottom': '12px',
-    'left': '30px',
-    'width': '120px',
+  operationsGroupOpen: {
+    'position': 'fixed',
+    'top': 0,
+    'right': '342px',
+    'border': 'none',
+    'zIndex': 0,
     '@media (max-width: 900px)': {
-      position: 'absolute',
-      bottom: '28px',
-      left: '26px',
-      width: '140px',
+      right: 0,
+      height: '50%',
+    },
+    '@media (max-width: 350px)': {
+      top: '120px',
+      height: '50%',
     },
   },
   baseGroup: {
-    'position': 'absolute',
-    'bottom': '10px',
-    'right': '20px',
+    position: 'fixed',
+    bottom: '20px',
+    right: '20px',
+  },
+  baseGroupOpen: {
+    'position': 'fixed',
+    'bottom': '20px',
+    'right': '360px',
     '@media (max-width: 900px)': {
-      'bottom': `20px`,
+      display: 'none',
     },
   },
-}))
+})

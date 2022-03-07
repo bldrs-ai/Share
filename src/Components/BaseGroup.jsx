@@ -1,49 +1,35 @@
 import React from 'react'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
 import {makeStyles} from '@mui/styles'
-import Settings from './Settings'
-import AboutControl from './AboutPanel'
-import Open from '../assets/icons/Open.svg'
+import AboutControl from './AboutControl'
+import {TooltipToggleButton} from './Buttons'
+import OpenIcon from '../assets/2D_Icons/Open.svg'
 
 
-/** Base group contains Settings, ModelUpload, About
- * @param {Function} fileOpen opens a file dialog for new model upload
- * @param {Number} offsetTop
- * @return {Object} React component.
+/**
+ * Base group contains Settings, ModelUpload, About
+ * @param {Object} fileOpen ItemPanel component
+ * @return {Object} React component
  */
-export default function BaseGroup({fileOpen, offsetTop}) {
+export default function BaseGroup({fileOpen}) {
   const classes = useStyles()
   return (
-    <div className = {classes.container}>
-      <AboutControl offsetTop = {offsetTop}/>
-      <Tooltip title="Upload Model" placement="top">
-        <IconButton
-          aria-label='account of current user'
-          aria-controls='menu-appbar'
-          aria-haspopup='true'
-          onClick={fileOpen}
-          color='inherit'
-        >
-          <Open className = {classes.icon}/>
-        </IconButton>
-      </Tooltip>
-      <Settings />
+    <div className={classes.root}>
+      <TooltipToggleButton
+        title='Upload model'
+        icon={<OpenIcon/>}
+        onClick={fileOpen}
+        placement='top'/>
+      <AboutControl/>
     </div>
   )
 }
 
 
 const useStyles = makeStyles({
-  icon: {
-    'width': '30px',
-    'height': '30px',
-  },
-  container: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'space-between',
-    'width': '140px',
-    'alignItems': 'center',
+  root: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
 })

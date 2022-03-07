@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "0.1.0-r352",
+  "version": "1.0.0-r247",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
@@ -22,6 +22,7 @@
     "@mui/material": "^5.0.1",
     "@mui/styled-engine": "^5.0.1",
     "@mui/styles": "^5.1.0",
+    "@octokit/rest": "^18.12.0",
     "normalize.css": "^8.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
@@ -33,6 +34,7 @@
   "devDependencies": {
     "@babel/preset-env": "^7.16.4",
     "@babel/preset-react": "^7.16.0",
+    "@pablo-mayrgundter/cookies.js": "^1.0.0",
     "@testing-library/dom": "^8.11.1",
     "@testing-library/jest-dom": "^5.15.0",
     "@testing-library/react": "^12.1.2",

@@ -1,10 +1,11 @@
-import svgrPlugin from 'esbuild-plugin-svgr';
+import svgrPlugin from 'esbuild-plugin-svgr'
 
-const entry = 'src/index.jsx';
-const buildDir = 'docs';
+const entry = 'src/index.jsx'
+const buildDir = 'docs'
 const build = {
   entryPoints: [entry],
   bundle: true,
+  minify: true,
   // Splitting
   // Entry points (our src/index.jsx) are currently not named with
   // cache-busting segments, like index-x84nfi.js, so we should be
@@ -19,6 +20,6 @@ const build = {
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
   plugins: [svgrPlugin()],
-};
+}
 
-export { build };
+export {build}

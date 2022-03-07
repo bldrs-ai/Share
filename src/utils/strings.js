@@ -10,3 +10,13 @@ export function stoi(s) {
   }
   return i
 }
+
+
+/**
+ * Create a simple key by removing any non alpha-numeric character
+ * @param {string} str To convert
+ * @return {string} The converted result
+ */
+export function toKey(str) {
+  return str.replace(/[^a-zA-Z0-9]+/, '')
+}

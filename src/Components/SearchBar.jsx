@@ -5,20 +5,21 @@ import {
   useSearchParams,
 } from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
-import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Search from '../assets/icons/Search.svg'
-import Hamburger from '../assets/icons/Menu.svg'
+import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
+import SearchIcon from '../assets/2D_Icons/Search.svg'
+import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
+ * Search bar component
  * @param {function} onClickMenuCb callback
- * @param {boolean} isOpen toggle
+ * @param {boolean} showNavPanel toggle
  * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, isOpen}) {
+export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -63,26 +64,19 @@ export default function SearchBar({onClickMenuCb, isOpen}) {
 
   return (
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-      <IconButton
-        className={classes.iconButton}
-        aria-label='menu'
-        onClick={onClickMenuCb}>
-        <Hamburger className={classes.icon}/>
-      </IconButton>
+      <TooltipToggleButton
+        title='Toggle tree view'
+        onClick={onClickMenuCb}
+        icon={<TreeIcon/>}/>
       <InputBase
         inputRef={searchInputRef}
         value={inputText}
         onChange={onInputChange}
-        placeholder='Search building'
+        placeholder='Search model'
         inputProps={{'aria-label': 'search'}}
         className={classes.inputBase}
       />
-      <IconButton
-        type='submit'
-        className={classes.iconButton}
-        aria-label='search' >
-        <Search className={classes.icon}/>
-      </IconButton>
+      <FormButton title='search' icon={<SearchIcon/>}/>
     </Paper>
   )
 }
@@ -150,26 +144,15 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 const useStyles = makeStyles({
   root: {
-    'padding': '2px 2px 2px 2px',
     'display': 'flex',
+    'width': '300px',
     'alignItems': 'center',
-    'width': 300,
+    'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
-      'padding': '2px 2px 2px 2px',
-      'width': 244,
+      width: '250px',
     },
-  },
-  iconButton: {
-    padding: 10,
-  },
-  icon: {
-    width: '30px',
-    height: '30px',
   },
   inputBase: {
-    'flex': 1,
-    '& input': {
-      fontSize: '16px',
-    },
+    flex: 1,
   },
 })
