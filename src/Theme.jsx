@@ -38,7 +38,7 @@ export function loadTheme(createTheme, mode) {
   const night = {
     primary: {
       light: grey[nightLight],
-      main: grey[nightMain],
+      main: blueGrey[nightMain],
       dark: grey[nightDark],
       contrastText: grey[nightContrast],
     },
@@ -50,7 +50,6 @@ export function loadTheme(createTheme, mode) {
     },
   }
   // https://mui.com/customization/dark-mode/
-  // const night = {mode: 'dark'}
   const typography = {
     h1: {fontSize: '1.4rem'},
     h2: {fontSize: '1.3rem'},
@@ -58,13 +57,17 @@ export function loadTheme(createTheme, mode) {
     h4: {fontSize: '1.1rem'},
     h5: {fontSize: '1rem'},
   }
+  let activePalette = mode == Themes.Day ? day : night
+  activePalette = {...activePalette, ...{
+    background: {
+      paper: activePalette.primary.main,
+    },
+  }}
   const theme = {
     mode,
-    palette: mode == Themes.Day ? day : night,
     typography: typography,
     shape: {borderRadius: 10},
+    palette: activePalette,
   }
-  const t = createTheme(theme)
-  console.log('theme', t)
-  return t
+  return createTheme(theme)
 }
