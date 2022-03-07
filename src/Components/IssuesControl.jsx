@@ -117,16 +117,16 @@ function CommentPanel({body, title, next, navigate}) {
     <MuiDialog
       open={isOpen}
       onClose={() => setIsOpen(false)}
-      TransitionComponent={Transition}
       fullWidth={fullWidth}
       scroll='paper'
+      TransitionComponent={Transition}
       BackdropProps={{style: {opacity: 0}}}
       PaperProps={{
         style: {
           padding: 0,
           margin: 0,
           minHeight: '220px',
-          maxHeight: '300px',
+          maxHeight: '250px',
           width: fullWidth ? '100%' : 'default'}}}
       className={classes.issueDialog}>
       {title &&
@@ -259,8 +259,17 @@ function setPanelText(title, body, setText, setNext) {
 const useStyles = makeStyles({
   issueDialog: {
     'fontFamily': 'Helvetica',
-    '& > div': {
-      'align-items': 'end',
+    '& .MuiDialog-container': {
+      alignItems: 'flex-end',
+    },
+    '& .MuiDialogTitle-root h1': {
+      fontSize: '1.1em',
+      margin: 0,
+    },
+    '& .MuiDialogActions-root': {
+      borderTop: 'solid 1px lightgrey',
+      margin: '0.5em 1em',
+      padding: '0em',
     },
     '& .MuiPaper-root': {
       padding: '1em',
@@ -274,8 +283,8 @@ const useStyles = makeStyles({
     '& svg': {
       padding: 0,
       margin: 0,
-      width: '30px',
-      height: '30px',
+      width: '25px',
+      height: '25px',
       border: 'solid 0.5px grey',
       fill: 'black',
       borderRadius: '50%',

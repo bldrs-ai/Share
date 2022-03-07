@@ -89,8 +89,8 @@ class MockOctokit {
 
 const MOCK_ISSUE = {
   data: {
-    title: 'Hello Mock Issue!',
-    body: `1) This is an issue\r
+    title: 'Welcome to Bldrs: Share',
+    body: `Build Every Thing Together.\r
 \`\`\`\r
 url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
 \`\`\`\r
@@ -117,8 +117,13 @@ url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:-45.81,18.08,112.36,-
 `,
     },
     {
-      body: `3) And another\r
-\`\`\`\r
+      body: `The key insights from Tech: Cross-functional online collaboration
+unlocks team flow, productivity and creativity. Your team extends
+outside of your organization and software developers are essential
+team members. An ecosystem of app Creators developing on a powerful
+operating system Platform is the most scalable architecture. Open
+workspaces, open standards and open source code the most powerful way
+to work. Cooperation is the unfair advantage.\r \`\`\`\r
 url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
 \`\`\`\r
 `,
