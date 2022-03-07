@@ -113,7 +113,6 @@ function CommentPanel({body, title, next, navigate}) {
   const [isOpen, setIsOpen] = useState(true)
   const [fullWidth] = useState(window.innerWidth <= 900)
   const classes = useStyles()
-  console.log('FULL WIDTH: ', fullWidth)
   return (
     <MuiDialog
       open={isOpen}
