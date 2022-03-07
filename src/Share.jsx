@@ -109,7 +109,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
-  navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+  if (window.innerWidth <= 900) {
+    navigate(appPrefix + '/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28')
+  } else {
+    navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+  }
 }
 
 
