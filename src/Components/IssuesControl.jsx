@@ -1,7 +1,12 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router'
-import Paper from '@mui/material/Paper'
+import DialogActions from '@mui/material/DialogActions'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import IconButton from '@mui/material/IconButton'
+import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
+import Slide from '@mui/material/Slide'
 import {makeStyles} from '@mui/styles'
 import {ControlButton} from './Buttons'
 import debug from '../utils/debug'
@@ -90,6 +95,11 @@ export default function IssuesControl({viewer}) {
 }
 
 
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />
+})
+
+
 /**
  * Displays the comment panel
  * @param {string} body The comment body
@@ -100,32 +110,56 @@ export default function IssuesControl({viewer}) {
  */
 function CommentPanel({body, title, next, navigate}) {
   const [count, setCount] = useState(0)
+  const [isOpen, setIsOpen] = useState(true)
+  const [fullWidth] = useState(window.innerWidth <= 900)
   const classes = useStyles()
+  console.log('FULL WIDTH: ', fullWidth)
   return (
-    <div className={classes.issueContainer}>
-      <Paper
-        onClick={(event) => event.stopPropagation()}
-        elevation={3}>
-        {title && <h1>{title}</h1>}
+    <MuiDialog
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      TransitionComponent={Transition}
+      fullWidth={fullWidth}
+      scroll='paper'
+      BackdropProps={{style: {opacity: 0}}}
+      PaperProps={{
+        style: {
+          padding: 0,
+          margin: 0,
+          minHeight: '220px',
+          maxHeight: '300px',
+          width: fullWidth ? '100%' : 'default'}}}
+      className={classes.issueDialog}>
+      {title &&
+       <DialogTitle>
+         <h1>{title}</h1>
+       </DialogTitle>}
+      <DialogContent>
         <Typography paragraph={true}>{body}</Typography>
+      </DialogContent>
+      <DialogActions sx={{justifyContent: 'center'}}>
         <div>
           {count > 0 &&
-           <NavPrevIcon
+           <IconButton
              onClick={() => {
                if (count > 0) {
                  setCount(count - 1)
                  navigate(-1)
                }
-             }}/>}
+             }}>
+             <NavPrevIcon/>
+           </IconButton>}
           {next &&
-           <NavNextIcon
+           <IconButton
              onClick={() => {
                setCount(count + 1)
                window.location = next
-             }}/>}
+             }}>
+             <NavNextIcon/>
+           </IconButton>}
         </div>
-      </Paper>
-    </div>
+      </DialogActions>
+    </MuiDialog>
   )
 }
 
@@ -224,32 +258,34 @@ function setPanelText(title, body, setText, setNext) {
 
 
 const useStyles = makeStyles({
-  issueContainer: {
-    'position': 'fixed',
-    'top': '150px',
-    'right': '30px',
+  issueDialog: {
     'fontFamily': 'Helvetica',
-    'display': 'flex',
-    'justifyContent': 'center',
+    '& > div': {
+      'align-items': 'end',
+    },
     '& .MuiPaper-root': {
-      width: '300px',
       padding: '1em',
+    },
+    '& .MuiButtonBase-root': {
+      padding: 0,
+      margin: '0.5em',
+      borderRadius: '50%',
+      border: 'none',
+    },
+    '& svg': {
+      padding: 0,
+      margin: 0,
+      width: '30px',
+      height: '30px',
+      border: 'solid 0.5px grey',
+      fill: 'black',
+      borderRadius: '50%',
     },
     '& h1, & p': {
       fontWeight: 300,
     },
     '& h1': {
       fontSize: '1.2em',
-    },
-    '& .MuiPaper-root > div': {
-      display: 'flex',
-      justifyContent: 'center',
-    },
-    '& svg': {
-      width: '20px',
-      height: '20px',
-      border: 'solid 1px grey',
-      margin: '1em 1em 0em 1em',
     },
   },
 })

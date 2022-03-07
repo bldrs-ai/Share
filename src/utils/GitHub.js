@@ -102,7 +102,15 @@ url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-12.07,16.66,24.78,11
 const MOCK_COMMENTS = {
   data: [
     {
-      body: `2) And a comment\r
+      body: `The Architecture, Engineering and Construction industries are trying
+to face challenging problems of the future with tools anchored in the
+past. Meanwhile, a new dynamic has propelled the Tech industry:
+online, collaborative, open development.
+
+We can't imagine a future where building the rest of the world hasn't
+been transformed by these new ways of working. We are part of that
+transformation.\r
+
 \`\`\`\r
 url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:67.92,21.64,3.99,25.2,2.35,4.6\r
 \`\`\`\r
