@@ -92,7 +92,7 @@ const MOCK_ISSUE = {
     title: 'Hello Mock Issue!',
     body: `1) This is an issue\r
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-12.07,16.66,24.78,11.39,3.15,2.89\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
 \`\`\`\r
 `,
   },
@@ -112,14 +112,14 @@ been transformed by these new ways of working. We are part of that
 transformation.\r
 
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:67.92,21.64,3.99,25.2,2.35,4.6\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:-45.81,18.08,112.36,-43.48,15.73,-4.34\r
 \`\`\`\r
 `,
     },
     {
       body: `3) And another\r
 \`\`\`\r
-url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-12.07,16.66,24.78,11.39,3.15,2.89\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
 \`\`\`\r
 `,
     },
