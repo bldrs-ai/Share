@@ -51,7 +51,7 @@ export function getCookie(name, defaultValue) {
       return c.substring(namePrefix.length, c.length)
     }
   }
-  return ''
+  return defaultValue + ''
 }
 
 

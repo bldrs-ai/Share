@@ -1,6 +1,6 @@
 {
   "name": "buildrs",
-  "version": "1.0.0-r324",
+  "version": "1.0.0-r245",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
   "scripts": {
