@@ -1,13 +1,13 @@
-import React, { useEffect, useState } from 'react'
+import React, {useEffect, useState} from 'react'
+import Switch from '@mui/material/Switch'
 import Tooltip from '@mui/material/Tooltip'
-import { makeStyles } from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
 import {
   decodeIFCString,
   deref,
 } from '../utils/Ifc'
-import { stoi } from '../utils/strings'
-import Toggle from './Toggle'
+import {stoi} from '../utils/strings'
 import ExpansionPanel from './ExpansionPanel'
 
 
@@ -17,7 +17,7 @@ import ExpansionPanel from './ExpansionPanel'
  * @param {Object} element The currently selected IFC element
  * @return {Object} The ItemProperties react component
  */
-export default function ItemProperties({ model, element }) {
+export default function ItemProperties({model, element}) {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
@@ -33,14 +33,15 @@ export default function ItemProperties({ model, element }) {
   return (
     <div className={classes.propsContainer}>
       {
-        Object.keys(element).length === 0
-          ? <h2 className={classes.noElement}>No element selected</h2>
-          : <>
-            <h2 className={classes.sectionTitle}>Properties</h2>
+        Object.keys(element).length === 0 ?
+          <h2 className={classes.noElement}>No element selected</h2> :
+          <>
             {propTable || 'Loading...'}
-            <h2 className={classes.sectionTitle}>
+            <h2>
               Property Sets
-              <Toggle onChange={() => setExpandAll(!expandAll)} />
+              <Switch
+                checked={expandAll}
+                onChange={() => setExpandAll(!expandAll)}/>
             </h2>
             {psetsList || 'Loading...'}
           </>
@@ -64,6 +65,18 @@ export default function ItemProperties({ model, element }) {
 async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) {
   const ROWS = []
   let rowKey = 0
+  if (ifcProps.constructor && ifcProps.constructor.name &&
+      ifcProps.constructor.name != 'IfcPropertySet') {
+    ROWS.push(
+        <tr key='ifcType'>
+          <td key='ifcTypeLabel'>IFC Type</td>
+          <Tooltip title={ifcProps.constructor.name} placement='top'>
+            <td key='ifcTypeValue'>
+              {ifcProps.constructor.name}
+            </td>
+          </Tooltip>
+        </tr>)
+  }
   for (const key in ifcProps) {
     if (isPset && (key == 'expressID' || key == 'Name')) {
       continue
@@ -97,20 +110,20 @@ async function createPsetsList(model, element, classes, expandAll) {
   return (
     <ul className={classes.psetsList}>
       {await Promise.all(
-        psets.map(
-          async (ps, ndx) => {
-            return (
-              <li key={ndx} className={classes.section}>
-                <ExpansionPanel
-                  summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-                  detail={await createPropertyTable(model, ps, 0, true)}
-                  expandState={expandAll}
-                  classes={classes}
-                />
-              </li>
-            )
-          },
-        ))}
+          psets.map(
+              async (ps, ndx) => {
+                return (
+                  <li key={ndx} className={classes.section}>
+                    <ExpansionPanel
+                      summary={decodeIFCString(ps.Name.value) || 'Property Set'}
+                      detail={await createPropertyTable(model, ps, 0, true)}
+                      expandState={expandAll}
+                      classes={classes}
+                    />
+                  </li>
+                )
+              },
+          ))}
     </ul>
   )
 }
@@ -136,7 +149,6 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
     return null
   }
-  debug().log(`prettyProps: switching on propName(${propName})`)
   switch (propName) {
     case 'type':
     case 'CompositionType':
@@ -144,6 +156,7 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     case 'ObjectPlacement':
     case 'ObjectType':
     case 'OwnerHistory':
+    case 'PredefinedType':
     case 'Representation':
     case 'RepresentationContexts':
     case 'Representations':
@@ -155,9 +168,9 @@ async function prettyProps(model, propName, propValue, serial = 0) {
     case 'RefLatitude':
     case 'RefLongitude':
       return row(label, dms(
-        await deref(propValue[0]),
-        await deref(propValue[1]),
-        await deref(propValue[2])), serial)
+          await deref(propValue[0]),
+          await deref(propValue[1]),
+          await deref(propValue[2])), serial)
     case 'expressID':
       return row('Express Id', propValue, serial)
     case 'Quantities':
@@ -170,11 +183,11 @@ async function prettyProps(model, propName, propValue, serial = 0) {
         return null
       }
       return row(
-        label,
-        await deref(
-          propValue, model, serial,
-          async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
-        serial)
+          label,
+          await deref(
+              propValue, model, serial,
+              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
+          serial)
     }
   }
 }
@@ -291,7 +304,7 @@ function row(d1, d2, serial) {
  * @param {Object} d2 Table cell data 2
  * @return {Object} The react component
  */
-function Row({ d1, d2 }) {
+function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
     d1 === null || d1 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
@@ -300,14 +313,14 @@ function Row({ d1, d2 }) {
     <tr>
       <Tooltip
         title={d1}
-        placement="top"
-        key="tool1">
+        placement='top'
+        key='tool1'>
         <td>{d1}</td>
       </Tooltip>
       <Tooltip
         title={d2}
-        placement="top"
-        key="tool2">
+        placement='top'
+        key='tool2'>
         <td>{d2}</td>
       </Tooltip>
     </tr>
@@ -329,13 +342,12 @@ const dms = (deg, min, sec) => {
 
 const useStyles = makeStyles({
   propsContainer: {
-    'padding': '0.5em',
     '& td': {
       verticalAlign: 'top',
       paddingBottom: '1em',
       whiteSpace: 'nowrap',
-      width: '130px',
-      maxWidth: '130px',
+      width: '50%',
+      minWidth: '130px',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
       fontFamily: 'Helvetica',
@@ -353,32 +365,24 @@ const useStyles = makeStyles({
       width: '280px',
       overflow: 'hidden',
     },
+    '& .MuiAccordionDetails-root': {
+      padding: 0,
+    },
+    '& .MuiSwitch-root': {
+      'float': 'right',
+      '& fake': {},
+    },
   },
   psetsList: {
     padding: '0px',
-    marginLeft: '10px',
-    width: '308px',
-    height: '400px',
+    margin: '1em 0',
+    minHeight: '400px',
     paddingBottom: '30px',
   },
   section: {
     listStyle: 'none',
     maxWidth: '400px',
     marginBottom: '5px',
-  },
-  sectionTitle: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    maxWidth: '320px',
-    overflowWrap: 'break-word',
-    fontFamily: 'Helvetica',
-    fontSize: '20px',
-    fontWeight: 200,
-    paddingLeft: '4px',
-    paddingRight: '4px',
-    borderBottom: '1px solid grey',
   },
   noElement: {
     maxWidth: '320px',
@@ -392,8 +396,6 @@ const useStyles = makeStyles({
   },
   accordian: {
     maxWidth: '320px',
-  },
-  accordianDetails: {
   },
   accordionTitle: {
     width: '200px',

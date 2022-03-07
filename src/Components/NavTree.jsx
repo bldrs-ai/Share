@@ -39,14 +39,23 @@ const NavTreePropTypes = {
   nodeId: PropTypes.string.isRequired,
 }
 
-const NavTree = ({
+
+/**
+ * @param {Object} model IFC model
+ * @param {Object} element IFC element of the model
+ * @param {string} pathPrefix URL prefix for constructing links to
+ *   elements, recursively grown as passed down the tree
+ * @param {string} onElementSelect Callback when tree item element is selected
+ * @param {string} setExpandedElements React state setter to update items to expand in tree
+ * @return {Object} React component
+ */
+export default function NavTree({
   model,
   element,
   pathPrefix,
   onElementSelect,
   setExpandedElements,
-  keyPrefix = '',
-}) => {
+}) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
       classes,
@@ -93,12 +102,10 @@ const NavTree = ({
           [classes.disabled]: disabled,
         })}
         onMouseDown={handleMouseDown}
-        ref={ref}
-        style = {{width: '160px'}}
-      >
+        ref={ref}>
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
             jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} style={{marginLeft: 16}}>
+        <div onClick={handleExpansionClick} style={{marginLeft: 10}}>
           {icon}
         </div>
         <Typography onClick={handleSelectionClick} >
@@ -111,7 +118,6 @@ const NavTree = ({
               textDecoration: 'none',
               fontFamily: 'helvetica',
               fontWeight: 200,
-              color: '#696969',
               marginLeft: 8,
             }}
           >
@@ -135,11 +141,10 @@ const NavTree = ({
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName(model, element)}
-      onClick={() => onElementSelect(element)}
-    >
+      onClick={() => onElementSelect(element)}>
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {
-          const childKey = `${keyPrefix}-${i++}`
+          const childKey = `${pathPrefix}-${i++}`
           return (
             <React.Fragment key={childKey}>
               <NavTree
@@ -148,7 +153,6 @@ const NavTree = ({
                 pathPrefix={pathPrefix}
                 onElementSelect={onElementSelect}
                 setExpandedElements={setExpandedElements}
-                keyPrefix={childKey}
               />
             </React.Fragment>
           )
@@ -157,5 +161,3 @@ const NavTree = ({
     </CustomTreeItem>
   )
 }
-
-export default NavTree

@@ -38,8 +38,8 @@ const useStyles = makeStyles({
     'bottom': '60px',
     'left': '6px',
     '@media (max-width: 900px)': {
-      'left': '18px',
-      'bottom': '90px',
+      left: '18px',
+      bottom: '90px',
     },
   }})
 

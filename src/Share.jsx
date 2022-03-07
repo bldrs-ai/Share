@@ -6,9 +6,12 @@ import React, {
 } from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider, createTheme} from '@mui/material/styles'
+import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
+import * as Privacy from './privacy/Privacy'
+import {Themes, loadTheme} from './Theme'
 import debug from './utils/debug'
-import 'normalize.css'
+import './index.css'
 
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -28,7 +31,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
-  const [mode, setMode] = useState('light')
+  const [mode, setMode] = useState(Privacy.getCookie({
+    component: 'theme',
+    name: 'mode',
+    defaultValue: Themes.Day}))
 
 
   /**
@@ -49,8 +55,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   function onChangeUrlParams() {
     const mp = getModelPath(installPrefix, pathPrefix, urlParams)
     if (mp === null) {
-      // TODO: probe for index.ifc
-      navigate(appPrefix + '/v/p/index.ifc')
+      navToDefault(navigate, appPrefix)
       return
     }
     if (modelPath === null ||
@@ -64,45 +69,47 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   const colorMode = useMemo(
       () => ({
+        isDay: () => mode == Themes.Day,
         toggleColorMode: () => {
-          setMode((prevMode) => (prevMode === 'light' ? 'dark' : 'light'))
+          setMode((prevMode) => {
+            const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
+            Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
+            return newMode
+          })
         },
-      }), [])
+      }), [mode])
 
 
   const theme = useMemo(() => {
-    return createTheme({
-      palette: {
-        mode,
-        primary: {
-          main: '#C8C8C8',
-          light: '#e3f2fd',
-          dark: '#42a5f5',
-        },
-        background: {
-          paper: mode === 'light' ? '#DCDCDC' : '#252525',
-        },
-        tonalOffset: 1,
-      },
-      shape: {
-        borderRadius: 10,
-      },
-    })
+    return loadTheme(createTheme, mode)
   }, [mode])
 
 
   return (
-    modelPath && <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
-        <CadView
-          installPrefix={installPrefix}
-          appPrefix={appPrefix}
-          pathPrefix={pathPrefix}
-          modelPath={modelPath}
-        />
-      </ThemeProvider>
-    </ColorModeContext.Provider>
-  )
+    modelPath &&
+      <CssBaseline>
+        <ColorModeContext.Provider value={colorMode}>
+          <ThemeProvider theme={theme}>
+            <CadView
+              installPrefix={installPrefix}
+              appPrefix={appPrefix}
+              pathPrefix={pathPrefix}
+              modelPath={modelPath}
+            />
+          </ThemeProvider>
+        </ColorModeContext.Provider>
+      </CssBaseline>)
+}
+
+
+/**
+ * Navigate to index.ifc with nice camera setting.
+ * @param {Object} navigate
+ * @param {string} appPrefix
+ */
+export function navToDefault(navigate, appPrefix) {
+  // TODO: probe for index.ifc
+  navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
 }
 
 
@@ -138,7 +145,7 @@ function getModelPath(installPrefix, pathPrefix, urlParams) {
       filepath: filepath,
       eltPath: parts[1],
     }
-    debug().log('Share#getModelPath: is a project file: ', m)
+    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
       org: urlParams['org'],
