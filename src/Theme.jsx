@@ -56,6 +56,7 @@ export function loadTheme(createTheme, mode) {
     h3: {fontSize: '1.2rem'},
     h4: {fontSize: '1.1rem'},
     h5: {fontSize: '1rem'},
+    body2: {fontSize: '.8rem'},
   }
   let activePalette = mode == Themes.Day ? day : night
   activePalette = {...activePalette, ...{

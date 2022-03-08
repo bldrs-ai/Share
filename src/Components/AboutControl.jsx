@@ -88,17 +88,25 @@ function AboutContent({clazzes}) {
   return (
     <div className={classes.content}>
       <Typography
-        variant='h3'
-        color='secondary'
-        gutterBottom={true}>Build Every Thing Together</Typography>
-      <Typography paragraph={true}>We are open source 🌱<br/>
-        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
+        variant='h4'
+        gutterBottom={false}>Build Every Thing Together</Typography>
+      <Typography gutterBottom={false} >We are open source 🌱<br/>
+        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a><br/>
+        <div className={classes.version}>
+          <Typography variant='body2'>{PkgJson.version}</Typography>
+        </div>
       </Typography>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
         <li><GitHubIcon/> Open IFC models from GitHub</li>
         <li><ShareIcon/> Share IFC models</li>
       </ul>
+      <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
+      <div className = {classes.demoContainer}>
+        <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
+          <img alt="logo" src="/demo.png" className = {classes.demo} />
+        </a>
+      </div>
       <div className={classes.settings}>
         <Typography variant='h5' color='info'>Privacy</Typography>
         <Slider
@@ -108,15 +116,7 @@ function AboutContent({clazzes}) {
           step={10}
           min={0}
           max={20}
-          color='info'
           sx={{width: '80%', textAlign: 'center'}}/>
-        <Typography variant='h5' color='info'>Theme: {themeMode.mode}</Typography>
-        <Switch
-          checked={theme.isDay()}
-          onChange={() => theme.toggleColorMode()}/>
-        <Typography
-          variant='body2'
-          color='info'>{PkgJson.version}</Typography>
       </div>
     </div>)
 }
@@ -130,8 +130,10 @@ const useStyles = makeStyles({
     },
     '& ul': {
       width: '100%',
-      margin: 0,
-      padding: 0,
+      margin: '0px',
+      marginTop: '-10px',
+      marginBottom: '15px',
+      padding: '0px',
       textAlign: 'left',
       // TODO(pablo): appears to be removed but not sure why.  Here to
       // make sure.
@@ -142,7 +144,7 @@ const useStyles = makeStyles({
       justifyContent: 'flex-start',
       alignItems: 'center',
       margin: '0.5em',
-      padding: 0,
+      padding: '0px',
       fontWeight: 200,
       fontSize: '0.9em',
       // TODO(pablo): appears to be removed but not sure why.  Here to
@@ -162,12 +164,57 @@ const useStyles = makeStyles({
       borderRadius: '2px',
     },
   },
+  version: {
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
+  },
+  demo: {
+    height: '100px',
+    textAlign: 'center',
+    marginTop: '10px',
+    borderRadius:'10px',
+  },
+  demoContainer: {
+    display:'flex',
+    flexDirection:'row',
+    justifyContent:'center',
+    height: '50px',
+  },
   settings: {
-    'opacity': '0.7',
-    'margin': '2em 0 0 0',
-    'fontSize': '0.8em',
-    '& .MuiTypography-body2': {
-      fontSize: '0.8em',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    margin: '5em 0 0 0',
+    textAlign: 'center',
+    paddingTop:'20px',
+    borderTop : '1px solid lightGrey',
+    '& .MuiSlider-thumb': {
+      backgroundColor: 'green',
+      width: '15px',
+      height: '15px',
+    },
+    '& .MuiSlider-track': {
+      color: 'lightGray',
+    },
+    '& .MuiSlider-rail': {
+      color: 'lightGray',
+    },
+  },
+  toggle: {
+    'width': '50px',
+    '& .MuiSwitch-switchBase.Mui-checked': {
+      'color': 'green',
+      '&:hover': {
+        backgroundColor: 'green',
+      },
+    },
+    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+      backgroundColor: 'gray',
+    },
+    '& .MuiSwitch-thumb': {
+      backgroundColor: 'lightGrey',
     },
   },
 })
