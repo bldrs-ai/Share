@@ -64,7 +64,7 @@ export function loadTheme(createTheme, mode) {
       background: {
         paper: activePalette.primary.main,
       },
-    }
+    },
   }
   const theme = {
     mode,
