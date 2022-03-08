@@ -54,15 +54,18 @@ export function loadTheme(createTheme, mode) {
     h1: {fontSize: '1.4rem'},
     h2: {fontSize: '1.3rem'},
     h3: {fontSize: '1.2rem'},
-    h4: {fontSize: '1.1rem'},
+    h4: {fontSize: '1.1rem', color: 'grey'},
     h5: {fontSize: '1rem'},
+    body2: {fontSize: '.9rem'},
   }
   let activePalette = mode == Themes.Day ? day : night
-  activePalette = {...activePalette, ...{
-    background: {
-      paper: activePalette.primary.main,
-    },
-  }}
+  activePalette = {
+    ...activePalette, ...{
+      background: {
+        paper: activePalette.primary.main,
+      },
+    }
+  }
   const theme = {
     mode,
     typography: typography,
