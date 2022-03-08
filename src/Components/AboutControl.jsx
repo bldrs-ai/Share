@@ -104,7 +104,7 @@ function AboutContent({clazzes}) {
       <div className = {classes.demoContainer}>
         <Typography variant='h5' color='info'>Demo:</Typography>
         <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
-          <img alt="logo" src="/logo192.png" className = {classes.demo} />
+          <img alt="logo" src="./logo192.png" className = {classes.demo} />
         </a>
       </div>
       <div className={classes.settings}>
