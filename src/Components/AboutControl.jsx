@@ -3,7 +3,6 @@ import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
@@ -87,10 +86,9 @@ function AboutContent({clazzes}) {
         variant='h4'
         gutterBottom={false}>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source 🌱<br/>
-        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a><br/>
-        <div className={classes.version}>
-          <Typography variant='body2'>{PkgJson.version}</Typography>
-        </div>
+        <a href='https://github.com/buildrs/Share' target='_new'>
+          github.com/buildrs/Share
+        </a>
       </Typography>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
@@ -100,11 +98,11 @@ function AboutContent({clazzes}) {
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
       <div className = {classes.demoContainer}>
         <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
-          <img alt="logo" src="/Tinyhouse.png" className = {classes.demo} />
+          <img alt="Tinyhouse" src="/Tinyhouse.png" className = {classes.demo} />
         </a>
         {/* eslint-disable-next-line */}
         <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
-          <img alt="logo" src="/Schependomlaan.png" className = {classes.demo} />
+          <img alt="Schependomlaan" src="/Schependomlaan.png" className = {classes.demo} />
         </a>
       </div>
       <div className={classes.settings}>
@@ -161,7 +159,6 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      borderRadius: '2px',
     },
   },
   version: {
