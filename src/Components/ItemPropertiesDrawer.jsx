@@ -70,7 +70,8 @@ const useStyles = makeStyles((props) => ({
       fontSize: '1.2em',
       fontWeight: 200,
       marginLeft: '1em 0',
-      borderBottom: '1px solid grey',
+      paddingBottom:'.5em',
+      borderBottom: '1px solid lightGrey',
     },
   },
   headerBar: {

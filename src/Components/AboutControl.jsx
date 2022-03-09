@@ -1,13 +1,11 @@
-import React, {useContext, useState} from 'react'
+import React, {useState} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import Switch from '@mui/material/Switch'
 import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Share'
 import {ControlButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Wave.svg'
 import LogoB from '../assets/LogoB.svg'
@@ -70,8 +68,6 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({clazzes}) {
   const classes = useStyles()
-  const themeMode = useTheme()
-  const theme = useContext(ColorModeContext)
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
@@ -104,7 +100,10 @@ function AboutContent({clazzes}) {
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
       <div className = {classes.demoContainer}>
         <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
-          <img alt="logo" src="/demo.png" className = {classes.demo} />
+          <img alt="logo" src="/Tinyhouse.png" className = {classes.demo} />
+        </a>
+        <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
+          <img alt="logo" src="/Schependomlaan.png" className = {classes.demo} />
         </a>
       </div>
       <div className={classes.settings}>
@@ -173,23 +172,24 @@ const useStyles = makeStyles({
     height: '100px',
     textAlign: 'center',
     marginTop: '10px',
-    borderRadius:'10px',
+    borderRadius: '10px',
+    border:'1px solid lightGrey'
   },
   demoContainer: {
-    display:'flex',
-    flexDirection:'row',
-    justifyContent:'center',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     height: '50px',
   },
   settings: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    margin: '5em 0 0 0',
-    textAlign: 'center',
-    paddingTop:'20px',
-    borderTop : '1px solid lightGrey',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    'margin': '5em 0 0 0',
+    'textAlign': 'center',
+    'paddingTop': '20px',
+    'borderTop': '1px solid lightGrey',
     '& .MuiSlider-thumb': {
       backgroundColor: 'green',
       width: '15px',

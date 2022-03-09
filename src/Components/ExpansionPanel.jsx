@@ -19,6 +19,7 @@ export default function Property({detail, summary, expandState, classes}) {
   const [expand, setExpand] = useState()
   return (
     <Accordion
+      elevation={0}
       className={classes.accordian}
       expanded={expand === true}
       onChange={() => setExpand(!expand)}>
@@ -26,6 +27,7 @@ export default function Property({detail, summary, expandState, classes}) {
         expandIcon={<ExpandIcon className={classes.icons} />}
         aria-controls="panel1a-content"
         id="panel1a-header"
+        sx = {{borderBottom:'1px solid lightGrey'}}
       >
         <Typography className={classes.accordionTitle}>
           {summary}
