@@ -70,7 +70,7 @@ const useStyles = makeStyles((props) => ({
       fontSize: '1.2em',
       fontWeight: 200,
       marginLeft: '1em 0',
-      paddingBottom:'.5em',
+      paddingBottom: '.5em',
       borderBottom: '1px solid lightGrey',
     },
   },

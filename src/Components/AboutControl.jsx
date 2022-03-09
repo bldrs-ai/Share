@@ -102,6 +102,7 @@ function AboutContent({clazzes}) {
         <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
           <img alt="logo" src="/Tinyhouse.png" className = {classes.demo} />
         </a>
+        {/* eslint-disable-next-line */}
         <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
           <img alt="logo" src="/Schependomlaan.png" className = {classes.demo} />
         </a>
@@ -173,7 +174,7 @@ const useStyles = makeStyles({
     textAlign: 'center',
     marginTop: '10px',
     borderRadius: '10px',
-    border:'1px solid lightGrey'
+    border: '1px solid lightGrey',
   },
   demoContainer: {
     display: 'flex',
