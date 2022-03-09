@@ -1,13 +1,10 @@
-import React, {useContext, useState} from 'react'
+import React, {useState} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import Switch from '@mui/material/Switch'
-import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Share'
 import {ControlButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Wave.svg'
 import LogoB from '../assets/LogoB.svg'
@@ -70,8 +67,6 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({clazzes}) {
   const classes = useStyles()
-  const themeMode = useTheme()
-  const theme = useContext(ColorModeContext)
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
@@ -88,17 +83,28 @@ function AboutContent({clazzes}) {
   return (
     <div className={classes.content}>
       <Typography
-        variant='h3'
-        color='secondary'
-        gutterBottom={true}>Build Every Thing Together</Typography>
-      <Typography paragraph={true}>We are open source 🌱<br/>
-        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
+        variant='h4'
+        gutterBottom={false}>Build Every Thing Together</Typography>
+      <Typography gutterBottom={false} >We are open source 🌱<br/>
+        <a href='https://github.com/buildrs/Share' target='_new'>
+          github.com/buildrs/Share
+        </a>
       </Typography>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
         <li><GitHubIcon/> Open IFC models from GitHub</li>
         <li><ShareIcon/> Share IFC models</li>
       </ul>
+      <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
+      <div className = {classes.demoContainer}>
+        <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
+          <img alt="Tinyhouse" src="/Tinyhouse.png" className = {classes.demo} />
+        </a>
+        {/* eslint-disable-next-line */}
+        <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
+          <img alt="Schependomlaan" src="/Schependomlaan.png" className = {classes.demo} />
+        </a>
+      </div>
       <div className={classes.settings}>
         <Typography variant='h5' color='info'>Privacy</Typography>
         <Slider
@@ -108,15 +114,7 @@ function AboutContent({clazzes}) {
           step={10}
           min={0}
           max={20}
-          color='info'
           sx={{width: '80%', textAlign: 'center'}}/>
-        <Typography variant='h5' color='info'>Theme: {themeMode.mode}</Typography>
-        <Switch
-          checked={theme.isDay()}
-          onChange={() => theme.toggleColorMode()}/>
-        <Typography
-          variant='body2'
-          color='info'>{PkgJson.version}</Typography>
       </div>
     </div>)
 }
@@ -130,8 +128,10 @@ const useStyles = makeStyles({
     },
     '& ul': {
       width: '100%',
-      margin: 0,
-      padding: 0,
+      margin: '0px',
+      marginTop: '-10px',
+      marginBottom: '15px',
+      padding: '0px',
       textAlign: 'left',
       // TODO(pablo): appears to be removed but not sure why.  Here to
       // make sure.
@@ -142,7 +142,7 @@ const useStyles = makeStyles({
       justifyContent: 'flex-start',
       alignItems: 'center',
       margin: '0.5em',
-      padding: 0,
+      padding: '0px',
       fontWeight: 200,
       fontSize: '0.9em',
       // TODO(pablo): appears to be removed but not sure why.  Here to
@@ -159,15 +159,60 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      borderRadius: '2px',
     },
   },
+  version: {
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
+  },
+  demo: {
+    height: '100px',
+    textAlign: 'center',
+    marginTop: '10px',
+    borderRadius: '10px',
+    border: '1px solid lightGrey',
+  },
+  demoContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    height: '50px',
+  },
   settings: {
-    'opacity': '0.7',
-    'margin': '2em 0 0 0',
-    'fontSize': '0.8em',
-    '& .MuiTypography-body2': {
-      fontSize: '0.8em',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    'margin': '5em 0 0 0',
+    'textAlign': 'center',
+    'paddingTop': '20px',
+    'borderTop': '1px solid lightGrey',
+    '& .MuiSlider-thumb': {
+      backgroundColor: 'green',
+      width: '15px',
+      height: '15px',
+    },
+    '& .MuiSlider-track': {
+      color: 'lightGray',
+    },
+    '& .MuiSlider-rail': {
+      color: 'lightGray',
+    },
+  },
+  toggle: {
+    'width': '50px',
+    '& .MuiSwitch-switchBase.Mui-checked': {
+      'color': 'green',
+      '&:hover': {
+        backgroundColor: 'green',
+      },
+    },
+    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+      backgroundColor: 'gray',
+    },
+    '& .MuiSwitch-thumb': {
+      backgroundColor: 'lightGrey',
     },
   },
 })
