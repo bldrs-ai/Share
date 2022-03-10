@@ -46,10 +46,10 @@ export default function ItemPropertiesDrawer({
 const useStyles = makeStyles((props) => ({
   drawer: {
     '& > .MuiPaper-root': {
-      width: (props) => props.isLandscape ? '320px' : 'auto',
+      'width': (props) => props.isLandscape ? '320px' : 'auto',
       // This lets the h1 in ItemProperties use 1em padding but have
       // its mid-line align with the text in SearchBar
-      padding: '4px 1em',
+      'padding': '4px 1em',
       '@media (max-width: 900px)': {
         width: 'auto',
         height: '300px',
@@ -75,7 +75,7 @@ const useStyles = makeStyles((props) => ({
     'margin': '1em 0',
     '@media (max-width: 900px)': {
       borderBottom: 'none',
-      height:'20px',
+      height: '20px',
     },
   },
   content: {
