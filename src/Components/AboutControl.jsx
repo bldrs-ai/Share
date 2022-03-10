@@ -167,17 +167,24 @@ const useStyles = makeStyles({
     },
   },
   demo: {
-    height: '100px',
-    textAlign: 'center',
-    marginTop: '10px',
-    borderRadius: '10px',
-    border: '1px solid lightGrey',
+    'height': '100px',
+    'textAlign': 'center',
+    'marginTop': '10px',
+    'borderRadius': '10px',
+    'border': '1px solid lightGrey',
+    '@media (max-width: 900px)': {
+      height: '60px',
+    },
   },
   demoContainer: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    height: '50px',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'space-between',
+    'height': '50px',
+    '@media (max-width: 900px)': {
+      height: '0px',
+      justifyContent: 'center',
+    },
   },
   settings: {
     'display': 'flex',
@@ -188,6 +195,9 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'paddingTop': '20px',
     'borderTop': '1px solid lightGrey',
+    '@media (max-width: 900px)': {
+      paddingTop: '10px',
+    },
     '& .MuiSlider-thumb': {
       backgroundColor: 'green',
       width: '15px',
