@@ -22,7 +22,7 @@ const useStyles = makeStyles((theme) => ({
     'paddingBottom': '3px',
     'left': '30px',
     'width': '140px',
-    'cursor':'pointer',
+    'cursor': 'pointer',
     '@media (max-width: 900px)': {
       position: 'fixed',
       bottom: '20px',
