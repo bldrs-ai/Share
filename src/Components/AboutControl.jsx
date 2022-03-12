@@ -6,7 +6,7 @@ import Dialog from './Dialog'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
-import AboutIcon from '../assets/2D_Icons/Wave.svg'
+import AboutIcon from '../assets/2D_Icons/Wave_person.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -171,7 +171,7 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'marginTop': '10px',
     'borderRadius': '10px',
-    'border': '1px solid lightGrey',
+    'boxShadow': 'rgba(50, 50, 93, 0.25) 0px 6px 12px -2px, rgba(0, 0, 0, 0.3) 0px 3px 7px -3px',
     '@media (max-width: 900px)': {
       height: '60px',
     },
