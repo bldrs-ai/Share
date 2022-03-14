@@ -407,7 +407,7 @@ export default function CadView({
  * @return {Object} IfcViewerAPI viewer
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
-  debug(-1).log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
+  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
