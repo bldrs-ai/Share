@@ -6,7 +6,7 @@ import Dialog from './Dialog'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
-import AboutIcon from '../assets/2D_Icons/Wave.svg'
+import AboutIcon from '../assets/2D_Icons/Wave_person.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -167,17 +167,24 @@ const useStyles = makeStyles({
     },
   },
   demo: {
-    height: '100px',
-    textAlign: 'center',
-    marginTop: '10px',
-    borderRadius: '10px',
-    border: '1px solid lightGrey',
+    'height': '100px',
+    'textAlign': 'center',
+    'marginTop': '10px',
+    'borderRadius': '10px',
+    'boxShadow': 'rgba(50, 50, 93, 0.25) 0px 6px 12px -2px, rgba(0, 0, 0, 0.3) 0px 3px 7px -3px',
+    '@media (max-width: 900px)': {
+      height: '60px',
+    },
   },
   demoContainer: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    height: '50px',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'space-between',
+    'height': '50px',
+    '@media (max-width: 900px)': {
+      height: '0px',
+      justifyContent: 'center',
+    },
   },
   settings: {
     'display': 'flex',
@@ -188,6 +195,9 @@ const useStyles = makeStyles({
     'textAlign': 'center',
     'paddingTop': '20px',
     'borderTop': '1px solid lightGrey',
+    '@media (max-width: 900px)': {
+      paddingTop: '10px',
+    },
     '& .MuiSlider-thumb': {
       backgroundColor: 'green',
       width: '15px',

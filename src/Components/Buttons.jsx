@@ -66,7 +66,7 @@ export function TooltipToggleButton({
               onClick(event)
             }
           }}
-          color='success'>
+          color='primary'>
           {icon}
         </ToggleButton>
       </Tooltip>

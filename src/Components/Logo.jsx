@@ -4,12 +4,13 @@ import {makeStyles, useTheme} from '@mui/styles'
 
 
 /**
+ * @param {function} onClick function triggered when logo is cliked
  * @return {Object} React component
  */
-export default function Logo() {
+export default function Logo({onClick}) {
   const classes = useStyles(useTheme())
   return (
-    <LogoIcon className={classes.logo}/>
+    <LogoIcon className={classes.logo} onClick = {onClick}/>
   )
 }
 
@@ -21,6 +22,7 @@ const useStyles = makeStyles((theme) => ({
     'paddingBottom': '3px',
     'left': '30px',
     'width': '140px',
+    'cursor': 'pointer',
     '@media (max-width: 900px)': {
       position: 'fixed',
       bottom: '20px',

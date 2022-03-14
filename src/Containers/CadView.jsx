@@ -361,7 +361,7 @@ export default function CadView({
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
-        <Logo/>
+        <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
