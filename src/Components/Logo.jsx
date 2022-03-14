@@ -1,6 +1,9 @@
 import React, {useContext} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import {ColorModeContext} from '../Share'
+import PkgJson from '../../package.json'
 import {TooltipIconButton} from './Buttons'
 import LogoIcon from '../assets/2D_Icons/Logo.svg'
 
@@ -14,13 +17,15 @@ export default function Logo({onClick}) {
   const theme = useContext(ColorModeContext)
   return (
     <div className={classes.logoGroup}>
-      <LogoIcon onClick={onClick}/>
       <TooltipIconButton
         title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
                ` to ${theme.isDay() ? 'Night' : 'Day'}`}
         onClick={() => theme.toggleColorMode()}
         icon={theme.isDay() ? '☼' : '☽'}>
       </TooltipIconButton>
+      <Tooltip title={`Bldrs: ${PkgJson.version}`} describeChild placement="right">
+        <IconButton disableRipple onClick={onClick}><LogoIcon/></IconButton>
+      </Tooltip>
     </div>
   )
 }
@@ -29,11 +34,10 @@ export default function Logo({onClick}) {
 const useStyles = makeStyles((theme) => ({
   logoGroup: {
     'position': 'fixed',
-    'bottom': 0,
-    'left': 0,
-    'margin': '0 0 30px 33px',
+    'bottom': '90px',
+    'left': '25px',
+    'width': '140px',
     'height': '50px',
-    'cursor': 'pointer',
     '@media (max-width: 900px)': {
       position: 'fixed',
       bottom: 0,
@@ -54,12 +58,6 @@ const useStyles = makeStyles((theme) => ({
       '& .edges': {
         stroke: theme.palette.primary.contrastText,
       },
-    },
-    '& button': {
-      position: 'relative',
-      top: '-5em',
-      left: '-0.5em',
-      fontSize: '1.5em',
     },
   },
 }))

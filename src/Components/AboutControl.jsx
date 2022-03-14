@@ -3,7 +3,6 @@ import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
@@ -116,9 +115,6 @@ function AboutContent({clazzes}) {
           min={0}
           max={20}
           sx={{width: '80%', textAlign: 'center'}}/>
-        <Typography
-          variant='body2'
-          color='info'>Bldrs: {PkgJson.version}</Typography>
       </div>
     </div>)
 }
