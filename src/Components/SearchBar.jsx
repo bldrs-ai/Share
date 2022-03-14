@@ -148,5 +148,8 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': {
       width: '250px',
     },
+    '& .MuiInputBase-root': {
+      flex: 1,
+    },
   },
 })
