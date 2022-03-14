@@ -98,11 +98,11 @@ function AboutContent({clazzes}) {
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
       <div className = {classes.demoContainer}>
         <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
-          <img alt="Tinyhouse" src="/Tinyhouse.png" className = {classes.demo} />
+          <img alt="Tinyhouse" src="/Tinyhouse.png" className={classes.demo}/>
         </a>
         {/* eslint-disable-next-line */}
         <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
-          <img alt="Schependomlaan" src="/Schependomlaan.png" className = {classes.demo} />
+          <img alt="Schependomlaan" src="/Schependomlaan.png" className={classes.demo}/>
         </a>
       </div>
       <div className={classes.settings}>
