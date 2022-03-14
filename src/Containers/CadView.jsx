@@ -1,10 +1,10 @@
-import React, {useEffect, useState} from 'react'
+import React, {useContext, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams} from 'react-router-dom'
 import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import {ColorModeContext, navToDefault} from '../Share'
 import SearchIndex from './SearchIndex.js'
-import {navToDefault} from '../Share.jsx'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -58,6 +58,7 @@ export default function CadView({
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
+  const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
@@ -107,7 +108,13 @@ export default function CadView({
     setShowNavPanel(false)
     setShowSearchBar(false)
     setIsItemPanelOpen(false)
-    setViewer(initViewer(pathPrefix))
+    const theme = colorModeContext.getTheme()
+    setViewer(initViewer(
+        pathPrefix,
+        (theme &&
+         theme.palette &&
+         theme.palette.background &&
+         theme.palette.background.paper) || '0xabcdef'))
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -118,6 +125,7 @@ export default function CadView({
       debug().warn('CadView#onViewer, viewer is null')
       return
     }
+    addThemeListener()
     await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
   }
 
@@ -333,6 +341,14 @@ export default function CadView({
   }
 
 
+  const addThemeListener = () => {
+    colorModeContext.addThemeChangeListener((newMode, theme) => {
+      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
+        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
+      }
+    })
+  }
+
   return (
     <div className={classes.root}>
       <div className={classes.view} id='viewer-container'></div>
@@ -361,7 +377,7 @@ export default function CadView({
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
-        <Logo/>
+        <Logo appPrefix={appPrefix}/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
@@ -387,22 +403,21 @@ export default function CadView({
 
 /**
  * @param {string} pathPrefix e.g. /share/v/p
+ * @param {string} backgroundColorStr CSS str like '#abcdef'
  * @return {Object} IfcViewerAPI viewer
  */
-function initViewer(pathPrefix) {
-  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix)
+function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
+  debug(-1).log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
   const v = new IfcViewerAPI({
     container,
-    backgroundColor: new Color('#ededed'),
+    backgroundColor: new Color(backgroundColorStr),
   })
   debug().log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
-  // v.addAxes()
-  // v.addGrid(10, 10)
   v.clipper.active = true
 
   // Highlight items when hovering over them
@@ -461,7 +476,6 @@ const useStyles = makeStyles({
     top: '0px',
     left: '0px',
     textAlign: 'center',
-    color: 'blue',
     width: '100vw',
     height: '100vh',
     margin: 'auto',

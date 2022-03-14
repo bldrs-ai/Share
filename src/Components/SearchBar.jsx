@@ -72,10 +72,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         inputRef={searchInputRef}
         value={inputText}
         onChange={onInputChange}
-        placeholder='Search model'
-        inputProps={{'aria-label': 'search'}}
-        className={classes.inputBase}
-      />
+        placeholder={'Search model'}/>
       <FormButton title='search' icon={<SearchIcon/>}/>
     </Paper>
   )
@@ -151,8 +148,5 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': {
       width: '250px',
     },
-  },
-  inputBase: {
-    flex: 1,
   },
 })

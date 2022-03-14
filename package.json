@@ -1,8 +1,11 @@
 {
   "name": "buildrs",
-  "version": "1.0.0-r259",
+  "version": "1.0.0-r260",
   "main": "src/index.jsx",
   "homepage": "https://github.com/buildrs/Share",
+  "bugs": {
+    "url": "https://github.com/buildrs/Share/issues"
+  },
   "scripts": {
     "clean": "rm -rf docs ; cp -r public docs",
     "new-version": "node --experimental-json-modules src/utils/version.mjs > package.json.new && mv package.json.new package.json",

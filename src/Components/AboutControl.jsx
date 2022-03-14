@@ -1,13 +1,11 @@
-import React, {useContext, useState} from 'react'
+import React, {useState} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import Switch from '@mui/material/Switch'
 import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Share'
 import {ControlButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Wave.svg'
 import LogoB from '../assets/LogoB.svg'
@@ -70,8 +68,6 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({clazzes}) {
   const classes = useStyles()
-  const themeMode = useTheme()
-  const theme = useContext(ColorModeContext)
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
@@ -110,10 +106,6 @@ function AboutContent({clazzes}) {
           max={20}
           color='info'
           sx={{width: '80%', textAlign: 'center'}}/>
-        <Typography variant='h5' color='info'>Theme: {themeMode.mode}</Typography>
-        <Switch
-          checked={theme.isDay()}
-          onChange={() => theme.toggleColorMode()}/>
         <Typography
           variant='body2'
           color='info'>{PkgJson.version}</Typography>
