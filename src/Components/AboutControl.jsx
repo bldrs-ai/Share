@@ -118,7 +118,7 @@ function AboutContent({clazzes}) {
           sx={{width: '80%', textAlign: 'center'}}/>
         <Typography
           variant='body2'
-          color='info'>{PkgJson.version}</Typography>
+          color='info'>Bldrs: {PkgJson.version}</Typography>
       </div>
     </div>)
 }
@@ -129,6 +129,10 @@ const useStyles = makeStyles({
     'minHeight': '300px',
     '& .MuiTypography-body1': {
       padding: '1em 0',
+    },
+    '& .MuiTypography-body2': {
+      padding: '1em 0',
+      opacity: 0.5,
     },
     '& ul': {
       width: '100%',
