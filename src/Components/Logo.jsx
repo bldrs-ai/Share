@@ -38,14 +38,12 @@ const useStyles = makeStyles((theme) => ({
     'left': '25px',
     'width': '140px',
     'height': '50px',
-    '@media (max-width: 900px)': {
-      position: 'fixed',
-      bottom: 0,
-      left: 0,
-      width: '120px',
-    },
     '& svg': {
       'width': '140px',
+      '@media (max-width: 900px)': {
+        width: '120px',
+        marginBottom: '-50px',
+      },
       '@media (max-width: 350px)': {
         display: 'none',
       },
