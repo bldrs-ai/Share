@@ -1,18 +1,11 @@
-import React, {
-  createContext,
-  useMemo,
-  useEffect,
-  useState,
-} from 'react'
+import React, {createContext, useEffect, useState} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
-import {ThemeProvider, createTheme} from '@mui/material/styles'
+import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
-import * as Privacy from './privacy/Privacy'
-import {Themes, loadTheme} from './Theme'
+import useTheme from './Theme'
 import debug from './utils/debug'
 import './index.css'
-
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
@@ -31,10 +24,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
-  const [mode, setMode] = useState(Privacy.getCookie({
-    component: 'theme',
-    name: 'mode',
-    defaultValue: Themes.Day}))
 
 
   /**
@@ -67,23 +56,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  const colorMode = useMemo(
-      () => ({
-        isDay: () => mode == Themes.Day,
-        toggleColorMode: () => {
-          setMode((prevMode) => {
-            const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-            Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
-            return newMode
-          })
-        },
-      }), [mode])
-
-
-  const theme = useMemo(() => {
-    return loadTheme(createTheme, mode)
-  }, [mode])
-
+  const {theme, colorMode} = useTheme()
 
   return (
     modelPath &&

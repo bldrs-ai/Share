@@ -133,7 +133,6 @@ const useStyles = makeStyles({
     overflow: 'auto',
     flexDirection: 'column',
     width: '220px',
-    backgroundColor: 'lightGray',
   },
   treeIcon: {
     width: '30px',

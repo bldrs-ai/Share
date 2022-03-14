@@ -126,6 +126,10 @@ const useStyles = makeStyles({
     '& .MuiTypography-body1': {
       padding: '1em 0',
     },
+    '& .MuiTypography-body2': {
+      padding: '1em 0',
+      opacity: 0.5,
+    },
     '& ul': {
       width: '100%',
       margin: '0px',
