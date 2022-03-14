@@ -28,7 +28,7 @@ export default function Logo({appPrefix}) {
           title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
                  ` to ${theme.isDay() ? 'Night' : 'Day'}`}
           onClick={() => theme.toggleColorMode()}
-          icon={theme.isDay() ? '🌞' : '🌛'}>
+          icon={theme.isDay() ? '☼' : '☽'}>
         </TooltipIconButton>
       </div>
     </div>
