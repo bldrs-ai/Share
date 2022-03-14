@@ -1,36 +1,26 @@
-import React, {useContext, useState} from 'react'
-import {useNavigate} from 'react-router-dom'
+import React, {useContext} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
-import {ColorModeContext, navToDefault} from '../Share'
+import {ColorModeContext} from '../Share'
 import {TooltipIconButton} from './Buttons'
 import LogoIcon from '../assets/2D_Icons/Logo.svg'
 
 
 /**
- * @param {string} appPrefix
+ * @param {function} onClick function triggered when logo is cliked
  * @return {Object} React component
  */
-export default function Logo({appPrefix}) {
-  const [isControlDisplayed, setIsControlDisplayed] = useState(false)
+export default function Logo({onClick}) {
   const classes = useStyles(useTheme())
   const theme = useContext(ColorModeContext)
-  const navigate = useNavigate()
-
   return (
     <div className={classes.logoGroup}>
-      <LogoIcon
-        onClick={() => setIsControlDisplayed(!isControlDisplayed)}
-        onDoubleClick={() => navToDefault(navigate, appPrefix)}
-      />
-      <div
-        style={{display: isControlDisplayed ? 'inherit' : 'none'}}>
-        <TooltipIconButton
-          title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
-                 ` to ${theme.isDay() ? 'Night' : 'Day'}`}
-          onClick={() => theme.toggleColorMode()}
-          icon={theme.isDay() ? '☼' : '☽'}>
-        </TooltipIconButton>
-      </div>
+      <LogoIcon onClick={onClick}/>
+      <TooltipIconButton
+        title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
+               ` to ${theme.isDay() ? 'Night' : 'Day'}`}
+        onClick={() => theme.toggleColorMode()}
+        icon={theme.isDay() ? '☼' : '☽'}>
+      </TooltipIconButton>
     </div>
   )
 }
@@ -41,8 +31,9 @@ const useStyles = makeStyles((theme) => ({
     'position': 'fixed',
     'bottom': 0,
     'left': 0,
-    'margin': '0 0 20px 20px',
+    'margin': '0 0 30px 33px',
     'height': '50px',
+    'cursor': 'pointer',
     '@media (max-width: 900px)': {
       position: 'fixed',
       bottom: 0,
@@ -67,6 +58,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       position: 'relative',
       top: '-5em',
+      left: '-0.5em',
       fontSize: '1.5em',
     },
   },

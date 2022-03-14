@@ -84,6 +84,7 @@ function loadTheme(mode) {
     h3: {fontSize: '1.2rem'},
     h4: {fontSize: '1.1rem'},
     h5: {fontSize: '1rem'},
+    body2: {fontSize: '.8rem'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that

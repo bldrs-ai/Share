@@ -377,7 +377,7 @@ export default function CadView({
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
-        <Logo appPrefix={appPrefix}/>
+        <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
@@ -498,7 +498,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 0,
-    'right': '342px',
+    'right': '308px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -518,7 +518,7 @@ const useStyles = makeStyles({
   baseGroupOpen: {
     'position': 'fixed',
     'bottom': '20px',
-    'right': '360px',
+    'right': '326px',
     '@media (max-width: 900px)': {
       display: 'none',
     },
