@@ -3,12 +3,11 @@ import {useLocation, useNavigate} from 'react-router'
 import DialogActions from '@mui/material/DialogActions'
 import DialogTitle from '@mui/material/DialogTitle'
 import DialogContent from '@mui/material/DialogContent'
-import IconButton from '@mui/material/IconButton'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
 import Slide from '@mui/material/Slide'
 import {makeStyles} from '@mui/styles'
-import {ControlButton} from './Buttons'
+import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
 import {
   addHashParams,
@@ -139,23 +138,25 @@ function CommentPanel({body, title, next, navigate}) {
       <DialogActions sx={{justifyContent: 'center'}}>
         <div>
           {count > 0 &&
-           <IconButton
+           <TooltipIconButton
+             title='Back'
              onClick={() => {
                if (count > 0) {
                  setCount(count - 1)
                  navigate(-1)
                }
-             }}>
-             <NavPrevIcon/>
-           </IconButton>}
+             }}
+             icon={<NavPrevIcon/>}
+             placement='left'/>}
           {next &&
-           <IconButton
+           <TooltipIconButton
+             title='Next'
              onClick={() => {
                setCount(count + 1)
                window.location = next
-             }}>
-             <NavNextIcon/>
-           </IconButton>}
+             }}
+             icon={<NavNextIcon/>}
+             placement='right'/>}
         </div>
       </DialogActions>
     </MuiDialog>
@@ -286,7 +287,6 @@ const useStyles = makeStyles({
       width: '25px',
       height: '25px',
       border: 'solid 0.5px grey',
-      fill: 'black',
       borderRadius: '50%',
     },
     '& h1, & p': {
