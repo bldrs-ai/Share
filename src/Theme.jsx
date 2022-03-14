@@ -60,43 +60,24 @@ const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-//  const dayLight = 50
   const dayMain = 100
-  //  const dayDark = 300
-  //  const dayContrast = 800
   const day = {
     primary: {
-      //      light: grey[dayLight],
       main: grey[dayMain],
-      //      dark: grey[dayDark],
-      //      contrastText: grey[dayContrast],
     },
     secondary: {
-      //      light: blueGrey[dayLight],
       main: blueGrey[dayMain],
-      //      dark: blueGrey[dayDark],
-      //      contrastText: blueGrey[dayContrast],
     },
   }
-  //  const nightLight = 300
   const nightMain = 800
-  //  const nightDark = 900
-  //  const nightContrast = 50
   const night = {
     primary: {
-      //      light: grey[nightLight],
       main: grey[nightMain],
-      //      dark: grey[nightDark],
-      //      contrastText: grey[nightContrast],
     },
     secondary: {
-      //      light: blueGrey[nightLight],
       main: blueGrey[nightMain],
-      //      dark: blueGrey[nightDark],
-      //      contrastText: blueGrey[nightContrast],
     },
   }
-  // https://mui.com/customization/dark-mode/
   const typography = {
     h1: {fontSize: '1.4rem'},
     h2: {fontSize: '1.3rem'},
@@ -104,14 +85,19 @@ function loadTheme(mode) {
     h4: {fontSize: '1.1rem'},
     h5: {fontSize: '1rem'},
   }
+  // TODO(pablo): still not sure how this works.  The docs make it
+  // look like we don't need an explicit color scheme for dark; that
+  // it will be created automatically.  I think I've had that working
+  // before, but this is all that works now.
+  // https://mui.com/customization/dark-mode/
   let activePalette = mode == Themes.Day ? day : night
   activePalette = {...activePalette, ...{
+    mode: mode == Themes.Day ? 'light' : 'dark',
     background: {
       paper: activePalette.primary.main,
     },
   }}
   const theme = {
-    mode,
     typography: typography,
     shape: {borderRadius: 10},
     palette: activePalette,

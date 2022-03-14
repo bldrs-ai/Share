@@ -61,7 +61,7 @@ const useStyles = makeStyles((theme) => ({
         fill: theme.palette.primary.dark,
       },
       '& .edges': {
-        stroke: theme.palette.primary.main,
+        stroke: theme.palette.primary.contrastText,
       },
     },
     '& button': {
