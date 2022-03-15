@@ -104,7 +104,7 @@ function AboutContent({installPrefix}) {
           <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
         </a>
         {/* eslint-disable-next-line */}
-        <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:-21.69,9.2,18.51,3.24,3.21,-0.58'>
+        <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:-19.95,17.97,25.31,4.52,0.65,1.24'>
           <img
             alt="Schependomlaan"
             src={`${installPrefix}/Schependomlaan.png`}
