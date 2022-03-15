@@ -7,10 +7,12 @@ import OpenIcon from '../assets/2D_Icons/Open.svg'
 
 /**
  * Base group contains Settings, ModelUpload, About
+ * @param {string} installPrefix Serving prefix for the app, for use in
+ * constructing static asset links.
  * @param {Object} fileOpen ItemPanel component
  * @return {Object} React component
  */
-export default function BaseGroup({fileOpen}) {
+export default function BaseGroup({installPrefix, fileOpen}) {
   const classes = useStyles()
   return (
     <div className={classes.root}>
@@ -19,7 +21,7 @@ export default function BaseGroup({fileOpen}) {
         icon={<OpenIcon/>}
         onClick={fileOpen}
         placement='top'/>
-      <AboutControl/>
+      <AboutControl installPrefix={installPrefix}/>
     </div>
   )
 }
