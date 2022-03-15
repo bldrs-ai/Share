@@ -15,10 +15,10 @@ import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
 
 /**
  * Button to toggle About panel on and off
- * @param {Number} offsetTop offset tree element
+ * @param {string} installPrefix For use in static asset links.
  * @return {Object} The AboutControl react component.
  */
-export default function AboutControl({offsetTop}) {
+export default function AboutControl({installPrefix}) {
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(Privacy.getCookieBoolean({
           component: 'about',
@@ -37,7 +37,8 @@ export default function AboutControl({offsetTop}) {
           setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
             Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
-          }}/>
+          }}
+          installPrefix={installPrefix}/>
       }/>
   )
 }
@@ -47,25 +48,26 @@ export default function AboutControl({offsetTop}) {
  * The AboutDialog component
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
+ * @param {string} installPrefix node
  * @return {Component} React component
  */
-function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
   return (
     <Dialog
       icon={<LogoB/>}
       headerText='BLDRS'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent/>}/>)
+      content={<AboutContent installPrefix={installPrefix}/>}/>)
 }
 
 
 /**
  * The content portion of the AboutDialog
- * @param {Object} clazzes node
+ * @param {string} installPrefix node
  * @return {Object} React component
  */
-function AboutContent({clazzes}) {
+function AboutContent({installPrefix}) {
   const classes = useStyles()
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
@@ -97,12 +99,16 @@ function AboutContent({clazzes}) {
       </ul>
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
       <div className = {classes.demoContainer}>
-        <a href='https://bldrs.ai/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc'>
-          <img alt="Tinyhouse" src="/Tinyhouse.png" className={classes.demo}/>
+        {/* eslint-disable-next-line */}
+        <a href={`${installPrefix}/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-12.84,3.53,9.64,-5.33,2.61,1.71`}>
+          <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
         </a>
         {/* eslint-disable-next-line */}
-        <a href='https://bldrs.ai/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc'>
-          <img alt="Schependomlaan" src="/Schependomlaan.png" className={classes.demo}/>
+        <a href={`${installPrefix}/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:-19.95,17.97,25.31,4.52,0.65,1.24`}>
+          <img
+            alt="Schependomlaan"
+            src={`${installPrefix}/Schependomlaan.png`}
+            className={classes.demo}/>
         </a>
       </div>
       <div className={classes.settings}>

@@ -392,7 +392,7 @@ export default function CadView({
                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
         <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup fileOpen={loadLocalFile}/>
+          <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
