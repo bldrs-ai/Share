@@ -5,7 +5,7 @@ const buildDir = 'docs'
 const build = {
   entryPoints: [entry],
   bundle: true,
-  minify: true,
+  minify: false,
   // Splitting
   // Entry points (our src/index.jsx) are currently not named with
   // cache-busting segments, like index-x84nfi.js, so we should be

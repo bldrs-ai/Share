@@ -3,7 +3,7 @@ import MuiDialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import CheckIcon from '@mui/icons-material/Check'
-import {makeStyles} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
 import {assertDefined} from '../utils/assert'
 
@@ -27,7 +27,7 @@ export default function Dialog({
   content,
 }) {
   assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)
-  const classes = {...useStyles(), ...clazzes}
+  const classes = {...useStyles(useTheme()), ...clazzes}
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
@@ -44,7 +44,7 @@ export default function Dialog({
 }
 
 
-const useStyles = makeStyles({
+const useStyles = makeStyles((theme) => ({
   root: {
     'textAlign': 'center',
     'fontFamily': 'Helvetica',
@@ -60,9 +60,9 @@ const useStyles = makeStyles({
       width: '30px',
       height: '30px',
       border: 'solid 0.5px grey',
-      fill: 'black',
       borderRadius: '50%',
+      fill: theme.palette.primary.contrastText,
     },
   },
-})
+}))
 

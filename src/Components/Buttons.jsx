@@ -18,19 +18,19 @@ export function TooltipIconButton({
   title,
   onClick,
   icon,
-  placement='left',
+  placement='right',
   size='medium',
 }) {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
   return (
-    <div className={classes.root}>
+    <span className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
         <IconButton onClick={onClick} size={size}>
           {icon}
         </IconButton>
       </Tooltip>
-    </div>
+    </span>
   )
 }
 
@@ -66,7 +66,7 @@ export function TooltipToggleButton({
               onClick(event)
             }
           }}
-          color='success'>
+          color='primary'>
           {icon}
         </ToggleButton>
       </Tooltip>
@@ -146,7 +146,6 @@ const useStyles = makeStyles((theme) => ({
       height: '30px',
       border: 'none',
       borderRadius: '50%',
-      backgroundColor: theme.palette.primary.main,
       fill: theme.palette.primary.contrastText,
     },
   },

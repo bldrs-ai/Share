@@ -7,6 +7,7 @@ import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import {useWindowDimensions} from './Hooks'
 
 
 /**
@@ -20,6 +21,8 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
  */
 export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
   const classes = useStyles()
+  const {width} = useWindowDimensions()
+  const isMobile = width < 500
 
   /** Add a clipping plane. */
   function placeCutPlane() {
@@ -34,7 +37,10 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
       </div>
       <div className={classes.lowerGroup}>
         {itemPanelControl}
-        <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>
+        {isMobile ?
+          <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>:
+          ''
+        }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>

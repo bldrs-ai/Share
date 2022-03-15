@@ -1,15 +1,12 @@
-import React, {useContext, useState} from 'react'
+import React, {useState} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import Switch from '@mui/material/Switch'
-import PkgJson from '../../package.json'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Share'
 import {ControlButton} from './Buttons'
-import AboutIcon from '../assets/2D_Icons/Wave.svg'
+import AboutIcon from '../assets/2D_Icons/Wave_person.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -18,10 +15,10 @@ import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
 
 /**
  * Button to toggle About panel on and off
- * @param {Number} offsetTop offset tree element
+ * @param {string} installPrefix For use in static asset links.
  * @return {Object} The AboutControl react component.
  */
-export default function AboutControl({offsetTop}) {
+export default function AboutControl({installPrefix}) {
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(Privacy.getCookieBoolean({
           component: 'about',
@@ -40,7 +37,8 @@ export default function AboutControl({offsetTop}) {
           setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
             Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
-          }}/>
+          }}
+          installPrefix={installPrefix}/>
       }/>
   )
 }
@@ -50,28 +48,27 @@ export default function AboutControl({offsetTop}) {
  * The AboutDialog component
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
+ * @param {string} installPrefix node
  * @return {Component} React component
  */
-function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
   return (
     <Dialog
       icon={<LogoB/>}
       headerText='BLDRS'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent/>}/>)
+      content={<AboutContent installPrefix={installPrefix}/>}/>)
 }
 
 
 /**
  * The content portion of the AboutDialog
- * @param {Object} clazzes node
+ * @param {string} installPrefix node
  * @return {Object} React component
  */
-function AboutContent({clazzes}) {
+function AboutContent({installPrefix}) {
   const classes = useStyles()
-  const themeMode = useTheme()
-  const theme = useContext(ColorModeContext)
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
@@ -88,17 +85,32 @@ function AboutContent({clazzes}) {
   return (
     <div className={classes.content}>
       <Typography
-        variant='h3'
-        color='secondary'
-        gutterBottom={true}>Build Every Thing Together</Typography>
-      <Typography paragraph={true}>We are open source 🌱<br/>
-        <a href='https://github.com/buildrs/Share' target='_new'>github.com/buildrs/Share</a>
+        variant='h4'
+        gutterBottom={false}>Build Every Thing Together</Typography>
+      <Typography gutterBottom={false} >We are open source 🌱<br/>
+        <a href='https://github.com/buildrs/Share' target='_new'>
+          github.com/buildrs/Share
+        </a>
       </Typography>
       <ul>
         <li><OpenIcon/> View local IFC models</li>
         <li><GitHubIcon/> Open IFC models from GitHub</li>
         <li><ShareIcon/> Share IFC models</li>
       </ul>
+      <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
+      <div className = {classes.demoContainer}>
+        {/* eslint-disable-next-line */}
+        <a href={`${installPrefix}/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-12.84,3.53,9.64,-5.33,2.61,1.71`}>
+          <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
+        </a>
+        {/* eslint-disable-next-line */}
+        <a href={`${installPrefix}/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:-19.95,17.97,25.31,4.52,0.65,1.24`}>
+          <img
+            alt="Schependomlaan"
+            src={`${installPrefix}/Schependomlaan.png`}
+            className={classes.demo}/>
+        </a>
+      </div>
       <div className={classes.settings}>
         <Typography variant='h5' color='info'>Privacy</Typography>
         <Slider
@@ -108,15 +120,7 @@ function AboutContent({clazzes}) {
           step={10}
           min={0}
           max={20}
-          color='info'
           sx={{width: '80%', textAlign: 'center'}}/>
-        <Typography variant='h5' color='info'>Theme: {themeMode.mode}</Typography>
-        <Switch
-          checked={theme.isDay()}
-          onChange={() => theme.toggleColorMode()}/>
-        <Typography
-          variant='body2'
-          color='info'>{PkgJson.version}</Typography>
       </div>
     </div>)
 }
@@ -128,10 +132,16 @@ const useStyles = makeStyles({
     '& .MuiTypography-body1': {
       padding: '1em 0',
     },
+    '& .MuiTypography-body2': {
+      padding: '1em 0',
+      opacity: 0.5,
+    },
     '& ul': {
       width: '100%',
-      margin: 0,
-      padding: 0,
+      margin: '0px',
+      marginTop: '-10px',
+      marginBottom: '15px',
+      padding: '0px',
       textAlign: 'left',
       // TODO(pablo): appears to be removed but not sure why.  Here to
       // make sure.
@@ -142,7 +152,7 @@ const useStyles = makeStyles({
       justifyContent: 'flex-start',
       alignItems: 'center',
       margin: '0.5em',
-      padding: 0,
+      padding: '0px',
       fontWeight: 200,
       fontSize: '0.9em',
       // TODO(pablo): appears to be removed but not sure why.  Here to
@@ -159,15 +169,70 @@ const useStyles = makeStyles({
       paddingLeft: '4px',
       paddingRight: '4px',
       paddingBottom: '2px',
-      borderRadius: '2px',
+    },
+  },
+  version: {
+    '@media (max-width: 900px)': {
+      display: 'none',
+    },
+  },
+  demo: {
+    'height': '100px',
+    'textAlign': 'center',
+    'marginTop': '10px',
+    'borderRadius': '10px',
+    'boxShadow': 'rgba(50, 50, 93, 0.25) 0px 6px 12px -2px, rgba(0, 0, 0, 0.3) 0px 3px 7px -3px',
+    '@media (max-width: 900px)': {
+      height: '60px',
+    },
+  },
+  demoContainer: {
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'space-between',
+    'height': '50px',
+    '@media (max-width: 900px)': {
+      height: '0px',
+      justifyContent: 'center',
     },
   },
   settings: {
-    'opacity': '0.7',
-    'margin': '2em 0 0 0',
-    'fontSize': '0.8em',
-    '& .MuiTypography-body2': {
-      fontSize: '0.8em',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    'margin': '5em 0 0 0',
+    'textAlign': 'center',
+    'paddingTop': '20px',
+    'borderTop': '1px solid lightGrey',
+    '@media (max-width: 900px)': {
+      paddingTop: '10px',
+    },
+    '& .MuiSlider-thumb': {
+      backgroundColor: 'green',
+      width: '15px',
+      height: '15px',
+    },
+    '& .MuiSlider-track': {
+      color: 'lightGray',
+    },
+    '& .MuiSlider-rail': {
+      color: 'lightGray',
+    },
+  },
+  toggle: {
+    'width': '50px',
+    '& .MuiSwitch-switchBase.Mui-checked': {
+      'color': 'green',
+      '&:hover': {
+        backgroundColor: 'green',
+      },
+    },
+    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+      backgroundColor: 'gray',
+    },
+    '& .MuiSwitch-thumb': {
+      backgroundColor: 'lightGrey',
     },
   },
 })

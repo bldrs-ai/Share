@@ -1,18 +1,11 @@
-import React, {
-  createContext,
-  useMemo,
-  useEffect,
-  useState,
-} from 'react'
+import React, {createContext, useEffect, useState} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
-import {ThemeProvider, createTheme} from '@mui/material/styles'
+import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
-import * as Privacy from './privacy/Privacy'
-import {Themes, loadTheme} from './Theme'
+import useTheme from './Theme'
 import debug from './utils/debug'
 import './index.css'
-
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
@@ -31,10 +24,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
-  const [mode, setMode] = useState(Privacy.getCookie({
-    component: 'theme',
-    name: 'mode',
-    defaultValue: Themes.Day}))
 
 
   /**
@@ -67,23 +56,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }
 
 
-  const colorMode = useMemo(
-      () => ({
-        isDay: () => mode == Themes.Day,
-        toggleColorMode: () => {
-          setMode((prevMode) => {
-            const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-            Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
-            return newMode
-          })
-        },
-      }), [mode])
-
-
-  const theme = useMemo(() => {
-    return loadTheme(createTheme, mode)
-  }, [mode])
-
+  const {theme, colorMode} = useTheme()
 
   return (
     modelPath &&
@@ -109,7 +82,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
-  navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+  if (window.innerWidth <= 900) {
+    navigate(appPrefix + '/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28')
+  } else {
+    navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+  }
 }
 
 

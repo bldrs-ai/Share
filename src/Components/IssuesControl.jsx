@@ -1,9 +1,13 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router'
-import Paper from '@mui/material/Paper'
+import DialogActions from '@mui/material/DialogActions'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
+import Slide from '@mui/material/Slide'
 import {makeStyles} from '@mui/styles'
-import {ControlButton} from './Buttons'
+import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
 import {
   addHashParams,
@@ -90,6 +94,11 @@ export default function IssuesControl({viewer}) {
 }
 
 
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />
+})
+
+
 /**
  * Displays the comment panel
  * @param {string} body The comment body
@@ -100,32 +109,57 @@ export default function IssuesControl({viewer}) {
  */
 function CommentPanel({body, title, next, navigate}) {
   const [count, setCount] = useState(0)
+  const [isOpen, setIsOpen] = useState(true)
+  const [fullWidth] = useState(window.innerWidth <= 900)
   const classes = useStyles()
   return (
-    <div className={classes.issueContainer}>
-      <Paper
-        onClick={(event) => event.stopPropagation()}
-        elevation={3}>
-        {title && <h1>{title}</h1>}
+    <MuiDialog
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      fullWidth={fullWidth}
+      scroll='paper'
+      TransitionComponent={Transition}
+      BackdropProps={{style: {opacity: 0}}}
+      PaperProps={{
+        style: {
+          padding: 0,
+          margin: 0,
+          minHeight: '220px',
+          maxHeight: '250px',
+          width: fullWidth ? '100%' : 'default'}}}
+      className={classes.issueDialog}>
+      {title &&
+       <DialogTitle>
+         <h1>{title}</h1>
+       </DialogTitle>}
+      <DialogContent>
         <Typography paragraph={true}>{body}</Typography>
+      </DialogContent>
+      <DialogActions sx={{justifyContent: 'center'}}>
         <div>
           {count > 0 &&
-           <NavPrevIcon
+           <TooltipIconButton
+             title='Back'
              onClick={() => {
                if (count > 0) {
                  setCount(count - 1)
                  navigate(-1)
                }
-             }}/>}
+             }}
+             icon={<NavPrevIcon/>}
+             placement='left'/>}
           {next &&
-           <NavNextIcon
+           <TooltipIconButton
+             title='Next'
              onClick={() => {
                setCount(count + 1)
                window.location = next
-             }}/>}
+             }}
+             icon={<NavNextIcon/>}
+             placement='right'/>}
         </div>
-      </Paper>
-    </div>
+      </DialogActions>
+    </MuiDialog>
   )
 }
 
@@ -224,32 +258,42 @@ function setPanelText(title, body, setText, setNext) {
 
 
 const useStyles = makeStyles({
-  issueContainer: {
-    'position': 'fixed',
-    'top': '70px',
-    'right': '80px',
+  issueDialog: {
     'fontFamily': 'Helvetica',
-    'display': 'flex',
-    'justifyContent': 'center',
+    '& .MuiDialog-container': {
+      alignItems: 'flex-end',
+    },
+    '& .MuiDialogTitle-root h1': {
+      fontSize: '1.1em',
+      margin: 0,
+    },
+    '& .MuiDialogActions-root': {
+      borderTop: 'solid 1px lightgrey',
+      margin: '0.5em 1em',
+      padding: '0em',
+    },
     '& .MuiPaper-root': {
-      width: '300px',
       padding: '1em',
+    },
+    '& .MuiButtonBase-root': {
+      padding: 0,
+      margin: '0.5em',
+      borderRadius: '50%',
+      border: 'none',
+    },
+    '& svg': {
+      padding: 0,
+      margin: 0,
+      width: '25px',
+      height: '25px',
+      border: 'solid 0.5px grey',
+      borderRadius: '50%',
     },
     '& h1, & p': {
       fontWeight: 300,
     },
     '& h1': {
       fontSize: '1.2em',
-    },
-    '& .MuiPaper-root > div': {
-      display: 'flex',
-      justifyContent: 'center',
-    },
-    '& svg': {
-      width: '20px',
-      height: '20px',
-      border: 'solid 1px grey',
-      margin: '1em 1em 0em 1em',
     },
   },
 })

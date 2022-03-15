@@ -40,6 +40,7 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': {
       left: '18px',
       bottom: '90px',
+      width: '220px',
     },
   }})
 
