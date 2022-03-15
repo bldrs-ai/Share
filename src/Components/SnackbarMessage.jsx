@@ -41,6 +41,9 @@ const useStyles = makeStyles({
       left: '18px',
       bottom: '90px',
       width: '220px',
+      inlineSize: '220px',
+      overflow:'visible',
+      overflowWrap: 'anywhere'
     },
   }})
 
