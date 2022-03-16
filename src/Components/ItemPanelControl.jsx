@@ -2,6 +2,8 @@ import React from 'react'
 import ItemProperties from './ItemProperties'
 import ItemPropertiesDrawer from './ItemPropertiesDrawer'
 import {TooltipIconButton} from './Buttons'
+import {useIsMobile} from './Hooks'
+import MobileDrawer from './MobileDrawer'
 import {decodeIFCString} from '../utils/Ifc'
 import ListIcon from '../assets/2D_Icons/List.svg'
 
@@ -24,22 +26,26 @@ export default function ItemPanelControl({model, element, isOpenState}) {
       titleStr = element.constructor.name
     }
   }
-  // TODO(pablo) fix this sx hack
-  return (
-    <div style={{height: '50px'}}>
-      {element && Object.keys(element).length > 0 &&
-       <TooltipIconButton
-         title='Properties'
-         icon={<ListIcon/>}
-         onClick={() => isOpenState.set(!isOpenState.value)}>
-       </TooltipIconButton>
-      }
-      {isOpenState.value &&
-       <ItemPropertiesDrawer
-         content={<ItemProperties model={model} element={element}/>}
-         title={titleStr}
-         onClose={() => isOpenState.set(false)}/>
-      }
-    </div>
-  )
+  const isMobile = useIsMobile()
+  const itemProps = <ItemProperties model={model} element={element}/>
+  if (element) {
+    return (
+      <>
+        {Object.keys(element).length > 0 &&
+         <TooltipIconButton
+           title='Properties'
+           icon={<ListIcon/>}
+           onClick={() => isOpenState.set(!isOpenState.value)}/>}
+        {isOpenState.value &&
+         (isMobile ? <MobileDrawer content={itemProps}/> :
+         <ItemPropertiesDrawer
+           content={itemProps}
+           title={titleStr}
+           onClose={() => isOpenState.set(false)}/>)}
+      </>
+    )
+  }
+  return null
 }
+
+

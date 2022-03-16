@@ -2,31 +2,29 @@ import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
+import {MOBILE_WIDTH} from './Hooks'
+import {preprocessMediaQuery} from '../utils/mediaQuery'
 import CloseIcon from '../assets/2D_Icons/Delete.svg'
-import {useWindowDimensions} from './Hooks'
 
 
 /**
  * ItemPropertiesDrawer contains the ItemPanel and allows for
  * show/hide from the right of the screen.
  * @param {string} title Title for the drawer
- * @param {function} onClose Callback
  * @param {Object} content The contained ItemPanel
+ * @param {function} onClose Callback
  * @return {Object} ItemPropertiesDrawer react component
  */
 export default function ItemPropertiesDrawer({
   title,
-  onClose,
   content,
+  onClose,
 }) {
-  const {width} = useWindowDimensions()
-  const isLandscape = width > 500
-  const anchor = isLandscape ? 'right' : 'bottom'
-  const classes = useStyles({isLandscape: isLandscape})
+  const classes = useStyles()
   return (
     <Drawer
       open={true}
-      anchor={anchor}
+      anchor={'right'}
       variant='persistent'
       elevation={4}
       className={classes.drawer}>
@@ -43,16 +41,16 @@ export default function ItemPropertiesDrawer({
 }
 
 
-const useStyles = makeStyles((props) => ({
+const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   drawer: {
     '& > .MuiPaper-root': {
-      'width': (props) => props.isLandscape ? '320px' : 'auto',
+      'width': '20em',
       // This lets the h1 in ItemProperties use 1em padding but have
       // its mid-line align with the text in SearchBar
       'padding': '4px 1em',
-      '@media (max-width: 900px)': {
+      '@media (max-width: MOBILE_WIDTH)': {
         width: 'auto',
-        height: '300px',
+        height: '250px',
       },
     },
     '& .MuiPaper-root': {
@@ -73,7 +71,7 @@ const useStyles = makeStyles((props) => ({
     'justifyContent': 'space-between',
     'alignItems': 'center',
     'margin': '1em 0',
-    '@media (max-width: 900px)': {
+    '@media (max-width: MOBILE_WIDTH)': {
       borderBottom: 'none',
       height: '20px',
     },
@@ -81,9 +79,8 @@ const useStyles = makeStyles((props) => ({
   content: {
     'overflow': 'auto',
     'height': '90%',
-    '@media (max-width: 900px)': {
+    '@media (max-width: MOBILE_WIDTH)': {
       overflow: 'auto',
     },
   },
-}))
-
+})))

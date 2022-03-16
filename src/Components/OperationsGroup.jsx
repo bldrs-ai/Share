@@ -7,7 +7,7 @@ import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import {useWindowDimensions} from './Hooks'
+import {useIsMobile} from './Hooks'
 
 
 /**
@@ -21,8 +21,7 @@ import {useWindowDimensions} from './Hooks'
  */
 export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
   const classes = useStyles()
-  const {width} = useWindowDimensions()
-  const isMobile = width < 500
+  const isMobile = useIsMobile()
 
   /** Add a clipping plane. */
   function placeCutPlane() {
