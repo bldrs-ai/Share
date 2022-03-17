@@ -27,15 +27,17 @@ beforeAll(() => {
 
 import React from 'react'
 import {render} from '@testing-library/react'
-import {mockRoutes} from '../BaseRoutesMock.test'
+import {MockRoutes} from '../BaseRoutesMock.test'
 import Share from './Share'
 
 
 test('Share', () => {
-  const {getByText} = render(mockRoutes(
-      <Share
-        installPrefix={'/'}
-        appPrefix={'share'}
-        pathPrefix={'v/p'} /> ))
+  const {getByText} = render(
+      <MockRoutes
+        contentElt={
+          <Share
+            installPrefix={'/'}
+            appPrefix={'share'}
+            pathPrefix={'v/p'} />}/>)
   expect(getByText(/BLDRS/i)).toBeInTheDocument()
 })

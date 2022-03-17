@@ -2,12 +2,12 @@ import esbuild from 'esbuild'
 import http from 'http'
 import * as common from './common.js'
 
-const port = 8080;
+const port = 8080
 
 esbuild.serve({
   port: port,
-  servedir: common.build.outdir
-}, common.build).then(result => {
+  servedir: common.build.outdir,
+}, common.build).then((result) => {
   // The result tells us where esbuild's local server is
   const {host, port} = result
 
@@ -21,10 +21,10 @@ esbuild.serve({
     }
 
     // Forward each incoming request to esbuild
-    const proxyReq = http.request(options, proxyRes => {
+    const proxyReq = http.request(options, (proxyRes) => {
       // If esbuild returns "not found", send a custom 404 page
       if (proxyRes.statusCode === 404) {
-        res.writeHead(404, { 'Content-Type': 'text/html' });
+        res.writeHead(404, {'Content-Type': 'text/html'})
         res.end(
 `<!DOCTYPE html>
 <html>
@@ -50,20 +50,20 @@ esbuild.serve({
   <body>
     Resource not found.  Redirecting...
   </body>
-</html>`);
-        return;
+</html>`)
+        return
       }
 
       // Otherwise, forward the response from esbuild to the client
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
-      proxyRes.pipe(res, { end: true });
-    });
+      res.writeHead(proxyRes.statusCode, proxyRes.headers)
+      proxyRes.pipe(res, {end: true})
+    })
 
     // Forward the body of the request to esbuild
-    req.pipe(proxyReq, { end: true });
-  }).listen(port);
+    req.pipe(proxyReq, {end: true})
+  }).listen(port)
   console.log(`serving on http://localhost:${port} and watching...`)
 }).catch((error) => {
-  console.error(`could not start serving: `, error);
+  console.error(`could not start serving: `, error)
   process.exit(1)
 })

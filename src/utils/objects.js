@@ -9,3 +9,14 @@ export function deleteProperties(obj) {
     }
   }
 }
+
+
+/**
+ * @param {Object} obj
+ * @return {boolean} True iff val is an object
+ */
+export function isObject(obj) {
+  // Search for Daan in:
+  // https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript
+  return obj === Object(obj) && Object.prototype.toString.call(obj) !== '[object Array]'
+}

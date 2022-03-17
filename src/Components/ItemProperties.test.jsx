@@ -4,16 +4,17 @@ import ItemProperties from './ItemProperties'
 // eslint-disable-next-line no-unused-vars
 import testObj from './ItemProperties.testobj.json'
 import {MockModel, newMockStringValueElt} from '../utils/IfcMock.test'
-import {mockRoutes} from '../BaseRoutesMock.test'
+import {MockRoutes} from '../BaseRoutesMock.test'
 
 
 test('ItemProperties for single element', async () => {
   const testLabel = 'Test node label'
-  const {getByText} = render(mockRoutes(
-      <ItemProperties
-        model={new MockModel}
-        element={newMockStringValueElt(testLabel)} />,
-  ))
+  const {getByText} = render(
+      <MockRoutes
+        contentElt={
+          <ItemProperties
+            model={new MockModel}
+            element={newMockStringValueElt(testLabel)}/>}/>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })
@@ -21,11 +22,12 @@ test('ItemProperties for single element', async () => {
 
 test('ItemProperties for single element', async () => {
   const testLabel = 'Test node label'
-  const {getByText} = render(mockRoutes(
-      <ItemProperties
-        model={new MockModel}
-        element={newMockStringValueElt(testLabel)} />,
-  ))
+  const {getByText} = render(
+      <MockRoutes
+        contentElt={
+          <ItemProperties
+            model={new MockModel}
+            element={newMockStringValueElt(testLabel)}/>}/>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })

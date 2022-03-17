@@ -60,22 +60,20 @@ const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const dayMain = 100
   const day = {
     primary: {
-      main: grey[dayMain],
+      main: grey[100],
     },
     secondary: {
-      main: blueGrey[dayMain],
+      main: blueGrey[100],
     },
   }
-  const nightMain = 800
   const night = {
     primary: {
-      main: grey[nightMain],
+      main: grey[800],
     },
     secondary: {
-      main: blueGrey[nightMain],
+      main: blueGrey[600],
     },
   }
   const typography = {

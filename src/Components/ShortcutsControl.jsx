@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import {useWindowDimensions} from './Hooks'
+import {useIsMobile} from './Hooks'
 import QuestionIcon from '../assets/2D_Icons/Question.svg'
 import {ControlButton} from './Buttons'
 
@@ -33,8 +33,7 @@ export default function ShortcutsControl() {
  */
 function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const classes = useStyles()
-  const {width} = useWindowDimensions()
-  const isLandscape = width > 500
+  const isMobile = useIsMobile()
   return (
     <Dialog
       icon={<QuestionIcon/>}
@@ -42,7 +41,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
-        isLandscape ?
+        isMobile ?
           (<ul className={classes.content}>
             <p>To attach a section plane:</p>
             <li>Hover over an element</li>
