@@ -3,7 +3,7 @@ import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
-import ExpandIcon from '../assets/2D_Icons/ExpandIcon.svg'
+import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 
 /**
@@ -24,11 +24,10 @@ export default function Property({detail, summary, expandState, classes}) {
       expanded={expand === true}
       onChange={() => setExpand(!expand)}>
       <AccordionSummary
-        expandIcon={<ExpandIcon className={classes.icons} />}
+        expandIcon={<CaretIcon/>}
         aria-controls="panel1a-content"
         id="panel1a-header"
-        sx = {{borderBottom: '1px solid lightGrey'}}
-      >
+        className={classes.accordionSummary}>
         <Typography className={classes.accordionTitle}>
           {summary}
         </Typography>

@@ -1,8 +1,10 @@
 import React, {useState} from 'react'
-import {makeStyles} from '@mui/styles'
 import Box from '@mui/material/Box'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {styled} from '@mui/material/styles'
+import {makeStyles} from '@mui/styles'
+import {TooltipIconButton} from './Buttons'
+import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 
 /**
@@ -24,7 +26,9 @@ export default function MobileDrawer({content}) {
         swipeAreaWidth={drawerBleeding}
         disableSwipeToOpen={false}>
         <StyledBox className={classes.contentContainer}>
-          <Puller onClick={toggleDrawer}/>
+          <div className={classes.openToggle}>
+            <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>
+          </div>
           {content}
         </StyledBox>
       </SwipeableDrawer>
@@ -42,17 +46,6 @@ const StyledBox = styled(Box)(({theme}) => ({
 }))
 
 
-const Puller = styled(Box)(({theme}) => ({
-  width: 30,
-  height: 6,
-  backgroundColor: theme.palette.secondary.main,
-  borderRadius: 3,
-  position: 'absolute',
-  top: 8,
-  left: 'calc(50% - 15px)',
-}))
-
-
 const useStyles = makeStyles((props) => ({
   swipeDrawer: {
     '& .MuiDrawer-root': {
@@ -65,6 +58,14 @@ const useStyles = makeStyles((props) => ({
       overflow: (props) => props.isOpen ? 'scroll' : 'visible',
     },
   },
+  openToggle: {
+    'position': 'absolute',
+    'right': '1.25em',
+    'top': '0.5em',
+    '& svg': {
+      transform: (props) => props.isOpen ? 'none' : 'rotate(180deg)',
+    },
+  },
   contentContainer: {
     position: 'absolute',
     visibility: 'visible',
@@ -72,6 +73,7 @@ const useStyles = makeStyles((props) => ({
     right: 0,
     left: 0,
     padding: '1em',
+    borderTop: 'solid 1px grey',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
   },

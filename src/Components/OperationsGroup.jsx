@@ -21,13 +21,6 @@ import {useIsMobile} from './Hooks'
  */
 export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
   const classes = useStyles()
-  const isMobile = useIsMobile()
-
-  /** Add a clipping plane. */
-  function placeCutPlane() {
-    viewer.clipper.createPlane()
-  }
-
   return (
     <div className={classes.container}>
       <div className={classes.shareAndIssues}>
@@ -36,8 +29,11 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
       </div>
       <div className={classes.lowerGroup}>
         {itemPanelControl}
-        {isMobile ?
-          <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>:
+        {useIsMobile() ?
+         <TooltipIconButton
+           title="Section plane"
+           onClick={() => viewer.clipper.createPlane()}
+           icon={<CutPlaneIcon/>}/>:
           ''
         }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
@@ -60,8 +56,8 @@ const useStyles = makeStyles({
     position: 'fixed',
     bottom: 0,
     paddingBottom: '70px',
-    // 4x the size of a button
-    minHeight: '200px',
+    // 3x the size of a button
+    minHeight: '150px',
   },
 })
 

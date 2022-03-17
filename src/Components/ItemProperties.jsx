@@ -1,12 +1,10 @@
 import React, {useEffect, useState} from 'react'
 import Switch from '@mui/material/Switch'
 import Tooltip from '@mui/material/Tooltip'
-import {makeStyles} from '@mui/styles'
+import Typography from '@mui/material/Typography'
+import {makeStyles, useTheme} from '@mui/styles'
+import {decodeIFCString, deref} from '../utils/Ifc'
 import debug from '../utils/debug'
-import {
-  decodeIFCString,
-  deref,
-} from '../utils/Ifc'
 import {stoi} from '../utils/strings'
 import ExpansionPanel from './ExpansionPanel'
 
@@ -21,7 +19,7 @@ export default function ItemProperties({model, element}) {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
-  const classes = useStyles({})
+  const classes = useStyles(useTheme())
 
   useEffect(() => {
     (async () => {
@@ -57,11 +55,11 @@ export default function ItemProperties({model, element}) {
  * @param {Number} maxWidth (default 20)
  * @return {Object} React component
  */
-function paragraphMaybeWithTooltip(str, maxWidth=20) {
+function paragraphMaybeWithTooltip(str, maxWidth=15) {
+  const inner = (<Typography variant='body1'>{str}</Typography>)
   return (
     str.length > maxWidth ?
-      <Tooltip title={str} placement='top'><p>{str}</p></Tooltip> :
-      <p>{str}</p>
+      <Tooltip title={str} placement='top'>{inner}</Tooltip> : inner
   )
 }
 
@@ -86,7 +84,7 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
     ROWS.push(
         <tr key='ifcType'>
           <td>
-            <h3>IFC Type</h3>
+            <h3>IFC Type:</h3>
             {paragraphMaybeWithTooltip(ifcProps.constructor.name)}
           </td>
         </tr>)
@@ -326,7 +324,7 @@ function Row({d1, d2}) {
   return (
     <tr>
       <td colSpan={2}>
-        <h3>{d1}</h3>
+        <h3>{d1}:</h3>
         {paragraphMaybeWithTooltip(d2)}
       </td>
     </tr>
@@ -346,7 +344,7 @@ const dms = (deg, min, sec) => {
 }
 
 
-const useStyles = makeStyles({
+const useStyles = makeStyles((theme) => ({
   propsContainer: {
     '& h2, & h3, p': {
       margin: '0.25em 0',
@@ -354,7 +352,7 @@ const useStyles = makeStyles({
     },
     '& h2': {
       fontSize: '1.1em',
-      fontWeight: 800,
+      fontWeight: 600,
       margin: '1em 0 0.5em 0',
     },
     '& h3': {
@@ -390,13 +388,29 @@ const useStyles = makeStyles({
       width: '100%',
       padding: 0,
       margin: '0 0 0.5em 0',
+      borderBottom: '1px solid lightGrey',
+    },
+    '& .MuiAccordionSummary-root svg': {
+      width: '20px',
+      height: '20px',
+      border: 'solid 1px grey',
+      borderRadius: '50%',
+      fill: theme.palette.primary.contrastText,
     },
     '& .MuiAccordionDetails-root': {
       padding: 0,
     },
     '& .MuiSwitch-root': {
       'float': 'right',
-      '& fake': {},
+      '& ignoreQuotesOnFloatAbove': {},
+      'bottom': '0.1em',
+    },
+    '& .MuiSwitch-track': {
+      backgroundColor: theme.palette.primary.contrastText,
+      opacity: 0.5,
+    },
+    '& .MuiSwitch-thumb': {
+      backgroundColor: theme.palette.primary.contrastText,
     },
   },
   psetsList: {
@@ -422,7 +436,8 @@ const useStyles = makeStyles({
     width: '100%',
   },
   accordionTitle: {
+    width: '200px',
     textOverflow: 'ellipsis',
     overflowWrap: 'break-word',
   },
-})
+}))

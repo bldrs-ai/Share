@@ -1,7 +1,6 @@
-import React, {useMemo} from 'react'
-import {ThemeProvider, createTheme} from '@mui/material/styles'
+import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {mockRoutes} from '../BaseRoutesMock.test'
+import {MockRoutes} from '../BaseRoutesMock.test'
 import SearchBar, {
   containsIfcPath,
   stripIfcPathFromLocation,
@@ -64,28 +63,14 @@ test('stripIfcPathFromLocation', () => {
 
 
 test('SeachBar', () => {
-  render(mockRoutes(
-      <MockComponent/>,
-  ))
+  render(<MockRoutes contentElt={<MockComponent/>}/>)
   expect(screen.getByPlaceholderText('Search model')).toBeInTheDocument()
 })
 
 
 /**
- * TODO(pablo): move this theme wrapper into BaseRoutesMock or smth.
  * @return {Object} React component
  */
 function MockComponent() {
-  const theme = useMemo(() => createTheme({
-    palette: {
-      background: {
-        paper: 'white',
-      },
-    },
-  }), [])
-  return (
-    <ThemeProvider theme={theme}>
-      <SearchBar onClickMenuCb={() => {}} isOpen={true} />
-    </ThemeProvider>
-  )
+  return <SearchBar onClickMenuCb={() => {}} isOpen={true}/>
 }

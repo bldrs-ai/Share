@@ -5,6 +5,7 @@ import {TooltipIconButton} from './Buttons'
 import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
 import {decodeIFCString} from '../utils/Ifc'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 
 
@@ -34,7 +35,7 @@ export default function ItemPanelControl({model, element, isOpenState}) {
         {Object.keys(element).length > 0 &&
          <TooltipIconButton
            title='Properties'
-           icon={<ListIcon/>}
+           icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
            onClick={() => isOpenState.set(!isOpenState.value)}/>}
         {isOpenState.value &&
          (isMobile ? <MobileDrawer content={itemProps}/> :
