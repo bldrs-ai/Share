@@ -1,6 +1,17 @@
 import {useState, useEffect} from 'react'
 
 
+export const MOBILE_WIDTH = 500
+
+
+/**
+ * @return {boolean} True iff window width <= MOBILE_WIDTH.
+ */
+export function useIsMobile() {
+  return useWindowDimensions().width <= MOBILE_WIDTH
+}
+
+
 /**
  * @return {Object} {width, height}
  */

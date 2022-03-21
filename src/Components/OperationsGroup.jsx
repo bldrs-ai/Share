@@ -7,7 +7,7 @@ import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import {useWindowDimensions} from './Hooks'
+import {useIsMobile} from './Hooks'
 
 
 /**
@@ -21,14 +21,6 @@ import {useWindowDimensions} from './Hooks'
  */
 export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
   const classes = useStyles()
-  const {width} = useWindowDimensions()
-  const isMobile = width < 500
-
-  /** Add a clipping plane. */
-  function placeCutPlane() {
-    viewer.clipper.createPlane()
-  }
-
   return (
     <div className={classes.container}>
       <div className={classes.shareAndIssues}>
@@ -37,8 +29,11 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
       </div>
       <div className={classes.lowerGroup}>
         {itemPanelControl}
-        {isMobile ?
-          <TooltipIconButton title="Section plane" onClick={placeCutPlane} icon={<CutPlaneIcon/>}/>:
+        {useIsMobile() ?
+         <TooltipIconButton
+           title="Section plane"
+           onClick={() => viewer.clipper.createPlane()}
+           icon={<CutPlaneIcon/>}/>:
           ''
         }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
@@ -61,8 +56,8 @@ const useStyles = makeStyles({
     position: 'fixed',
     bottom: 0,
     paddingBottom: '70px',
-    // 4x the size of a button
-    minHeight: '200px',
+    // 3x the size of a button
+    minHeight: '150px',
   },
 })
 

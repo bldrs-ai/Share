@@ -1,6 +1,6 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {mockRoutes} from '../BaseRoutesMock.test'
+import {MockRoutes} from '../BaseRoutesMock.test'
 import CameraControl, {
   onHash,
   parseHashParams,
@@ -19,9 +19,7 @@ test('parseHashParams, 6 params', () => {
 
 test('CameraControl', () => {
   const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
-  render(mockRoutes(
-      <CameraControl viewer={viewer} />,
-  ))
+  render(<MockRoutes contentElt={<CameraControl viewer={viewer}/>}/>)
   expect(screen.getByText('Camera')).toBeInTheDocument()
 })
 

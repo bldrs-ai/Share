@@ -1,6 +1,6 @@
 import React from 'react'
 import {render} from '@testing-library/react'
-import {mockRoutes} from './BaseRoutesMock.test'
+import {MockRoutes} from './BaseRoutesMock.test'
 import BaseRoutes from './BaseRoutes'
 import {setDebugLevel} from './utils/debug'
 
@@ -13,8 +13,8 @@ setDebugLevel(0)
  */
 test('BaseRoutes', () => {
   const testLabel = 'Test node label'
-  const {getByText} = render(mockRoutes(
-      <BaseRoutes testElt={<>{testLabel}</>} />,
-  ))
+  const {getByText} = render(
+      <MockRoutes
+        contentElt={<BaseRoutes testElt={<>{testLabel}</>}/>}/>)
   expect(getByText(testLabel)).toBeInTheDocument()
 })
