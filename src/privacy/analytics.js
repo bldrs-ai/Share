@@ -12,6 +12,8 @@ import {assertDefined} from '../utils/assert'
  * @param {object} additionalConfigInfo
  */
 export function recordEvent(commandParameters, additionalConfigInfo) {
+  console.log('command parameters', commandParameters)
+  console.log('additional Config Info', additionalConfigInfo)
   assertDefined(commandParameters)
   if (isAnalyticsAllowed()) {
     gtag('event', commandParameters, additionalConfigInfo)
