@@ -22,6 +22,20 @@ export function getCookie({component, name, defaultValue}) {
 
 
 /**
+ * @param {string} level (functional, usage, social)
+ * @return {boolean} for specified privacy level
+ */
+export function getPrivacy(level) {
+  return (
+    getCookieBoolean({
+      component: 'privacy',
+      name: level,
+      defaultValue: true})
+  )
+}
+
+
+/**
  * @param {boolean} isUsageEnabled
  * @param {boolean} isSocialEnabled
  */
