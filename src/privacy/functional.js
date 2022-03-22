@@ -39,16 +39,14 @@ export function isCookieSet(name) {
  */
 export function getCookie(name, defaultValue) {
   assertDefined(name, defaultValue)
-  const namePrefix = name + '='
   const decodedCookie = decodeURIComponent(document.cookie)
-  const ca = decodedCookie.split(';')
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i]
-    while (c.charAt(0) == ' ') {
-      c = c.substring(1)
-    }
-    if (c.indexOf(namePrefix) == 0) {
-      return c.substring(namePrefix.length, c.length)
+  const properties = decodedCookie.split(';')
+  for (let i = 0; i < properties.length; i++) {
+    const parts = properties[i].trim().split('=')
+    const propName = parts[0]
+    const propValue = parts[1]
+    if (propName == name) {
+      return propValue
     }
   }
   return defaultValue + ''
@@ -61,6 +59,7 @@ export function getCookie(name, defaultValue) {
  * @param {Number} exdays Number of days cookie should last
  */
 export function setCookie(name, value, exdays=7) {
+  console.log('SET: ', name, value)
   const d = new Date()
   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
   const expires = 'expires=' + d.toUTCString()

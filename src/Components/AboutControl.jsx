@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
@@ -69,6 +69,24 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
  */
 function AboutContent({installPrefix}) {
   const classes = useStyles()
+  const [privacySlider, setPrivacySlider] = useState(0)
+  useEffect(()=>{
+    if (getPrivacy('social') === 'true') {
+      setPrivacySlider(20)
+    } else if (getPrivacy('usage') === 'true') {
+      setPrivacySlider(10)
+    } else {
+      setPrivacySlider(0)
+    }
+  }, [])
+  const getPrivacy = (level) => {
+    return (
+      Privacy.getCookie({
+        component: 'privacy',
+        name: level,
+        defaultValue: true})
+    )
+  }
   const marks = [
     {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
     {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
@@ -77,11 +95,21 @@ function AboutContent({installPrefix}) {
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
     switch (event.target.value) {
-      case 0: Privacy.setUsageAndSocialEnabled(false, false); break
-      case 10: Privacy.setUsageAndSocialEnabled(true, false); break
-      case 20: Privacy.setUsageAndSocialEnabled(true, true); break
+      case 0:
+        Privacy.setUsageAndSocialEnabled(false, false)
+        setPrivacySlider(0)
+        break
+      case 10:
+        Privacy.setUsageAndSocialEnabled(true, false)
+        setPrivacySlider(10)
+        break
+      case 20:
+        Privacy.setUsageAndSocialEnabled(true, true)
+        setPrivacySlider(20)
+        break
     }
   }
+
   return (
     <div className={classes.content}>
       <Typography
@@ -116,7 +144,7 @@ function AboutContent({installPrefix}) {
         <Slider
           onChange={setPrivacy}
           marks={marks}
-          defaultValue={30}
+          value={privacySlider}
           step={10}
           min={0}
           max={20}

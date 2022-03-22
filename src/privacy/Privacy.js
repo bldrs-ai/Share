@@ -11,10 +11,10 @@ export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
 
 
 /**
- * @param {string} component
+ * @param {string} component required by gtag but currently unused
  * @param {string} name
  * @param {string} defaultValue
- * @return {boolean} value of the setting
+ * @return {string} value of the setting
  */
 export function getCookie({component, name, defaultValue}) {
   return getCookiePrivate(name, defaultValue)
@@ -51,7 +51,7 @@ export function getCookieBoolean({component, name, defaultValue}) {
 
 
 /**
- * @param {string} component
+ * @param {string} component required by gtag but currently unused
  * @param {string} name
  * @param {string} value
  */
