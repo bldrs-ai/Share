@@ -1,6 +1,6 @@
 Share is a web-based BIM integration environment using [IFC.js](https://github.com/IFCjs/web-ifc-viewer) and React with IFC hosted in git.
 
-Join the [Buildrs Discord](https://discord.gg/UByF2x6s).
+Join the [Bldrs Discord](https://discord.gg/UByF2x6s).
 
 
 # Setup
@@ -26,7 +26,7 @@ Build the static serving directory, including any of your IFC files
 
 Your files will now be ready to serve from your site. E.g. For our example site, the _haus.ifc_ in the build directory is linked as:
 
-https://buildrs.github.io/Share/build/#haus.ifc
+https://bldrs.ai/share/v/p/index.ifc
 
 # Dev
 
