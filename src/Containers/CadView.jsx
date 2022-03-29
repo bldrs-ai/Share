@@ -173,7 +173,7 @@ export default function CadView({
     setIsLoading(false)
 
     if (model) {
-      // Fix for https://github.com/buildrs/Share/issues/91
+      // Fix for https://github.com/bldrs-ai/Share/issues/91
       //
       // TODO(pablo): huge hack. Somehow this is getting incremented to
       // 1 even though we have a new IfcViewer instance for each file

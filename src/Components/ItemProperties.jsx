@@ -365,7 +365,7 @@ const useStyles = makeStyles((theme) => ({
       fontWeight: 400,
     },
     '& td': {
-      // As of https://github.com/buildrs/Share/pull/148
+      // As of https://github.com/bldrs-ai/Share/pull/148
       // There should only be 1 table data per row now.
       width: '100%',
       minWidth: '130px',

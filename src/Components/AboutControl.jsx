@@ -88,8 +88,8 @@ function AboutContent({installPrefix}) {
         variant='h4'
         gutterBottom={false}>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source 🌱<br/>
-        <a href='https://github.com/buildrs/Share' target='_new'>
-          github.com/buildrs/Share
+        <a href='https://github.com/bldrs-ai/Share' target='_new'>
+          github.com/bldrs-ai/Share
         </a>
       </Typography>
       <ul>
