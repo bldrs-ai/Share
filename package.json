@@ -1,10 +1,10 @@
 {
-  "name": "buildrs",
-  "version": "1.0.0-r270",
+  "name": "bldrs-ai",
+  "version": "1.0.0-r260",
   "main": "src/index.jsx",
-  "homepage": "https://github.com/buildrs/Share",
+  "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
-    "url": "https://github.com/buildrs/Share/issues"
+    "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
     "clean": "rm -rf docs ; cp -r public docs",

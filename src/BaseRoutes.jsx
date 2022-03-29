@@ -11,15 +11,15 @@ import debug from './utils/debug'
 
 
 /**
- * From URL design: https://github.com/buildrs/Share/wiki/URL-Structure
+ * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
  *
  *   http://host/<app>/<view>/<object>
  *
  * which when fully expanded becomes:
  *
- *   http://host/share/v/p/haus.ifc
- *   http://host/share/v/gh/buildrs/Share/main/public/haus.ifc
+ *   http://host/share/v/p/indec.ifc
+ *   http://host/share/v/gh/bldrs-ai/Share/main/public/index.ifc
  *
  * @param {testElt} For unit test allow use of a stub here instead of loading the app.
  * @return {Object}

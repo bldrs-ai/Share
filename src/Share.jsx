@@ -97,7 +97,7 @@ export function navToDefault(navigate, appPrefix) {
  *   {filepath: '/file.ifc'}
  *
  * or a global GitHub path:
- *   {gitpath: 'http://host/share/v/gh/buildrs/Share/main/haus.ifc'}
+ *   {gitpath: 'http://host/share/v/gh/bldrs-ai/Share/main/index.ifc'}
  *
  * @param {string} installPrefix e.g. /share
  * @param {string} pathPrefix e.g. /share/v/p

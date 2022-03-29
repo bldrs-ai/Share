@@ -12,7 +12,7 @@ import debug from './utils/debug'
 
 /**
  * Forward page from /share to /share/v/p per spect at:
- *   https://github.com/buildrs/Share/wiki/URL-Structure
+ *   https://github.com/bldrs-ai/Share/wiki/URL-Structure
  * @param {string} appPrefix The install prefix, e.g. /share.
  * @return {Object}
  */
@@ -33,7 +33,7 @@ function Forward({appPrefix}) {
 
 
 /**
- * For URL design see: https://github.com/buildrs/Share/wiki/URL-Structure
+ * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
  * A new model path will cause a new instance of CadView to be
  * instantiated, including a new IFC.js viewer.  Thus, each model has

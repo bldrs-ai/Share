@@ -43,7 +43,7 @@ For GitHub Pages demos, see [choosing-a-publishing-source](https://docs.github.c
 Quick reference for how to merge from upstream into your fork:
 
 ```
-# First time only: git remote add upstream https://github.com/buildrs/Share
+# First time only: git remote add upstream https://github.com/bldrs-ai/Share
 # After PR is accepted/merged in main, to sync you fork:
 > git fetch upstream
 > git merge upstream/main
