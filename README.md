@@ -8,9 +8,7 @@ Join the [Bldrs Discord](https://discord.gg/fYnUd7cP).
 ```
 # Install npms
 > yarn install
-# Update the serving wasm to the installed version
-> cp node_modules/web-ifc/web-ifc.wasm public/static/js/
-# Run server; this will open your browser to http://localhost:3000/
+# Run server; this will open your browser to http://localhost:8080/
 > yarn serve
 ```
 
@@ -19,12 +17,16 @@ Join the [Bldrs Discord](https://discord.gg/fYnUd7cP).
 Build the static serving directory, including any of your IFC files
 
 ```
+> cp $IFC_FILES ./public # Optional if you have IFC files to publish
 > yarn build
-> cp $IFC_FILES ./docs # Optional if you have IFC files to publish
+> yarn serve # to test IFC files
+...
+serving on http://localhost:8080 and watching...
+...
 > git add . ; git ci -m 'Publishing new version.' ; git push
 ```
 
-Your files will now be ready to serve from your site. E.g. For our example site, the _haus.ifc_ in the build directory is linked as:
+Your files will now be ready to serve from your site. E.g. For our example site, the _index.ifc_ in the build directory is linked as:
 
 https://bldrs.ai/share/v/p/index.ifc
 
@@ -46,7 +48,8 @@ Quick reference for how to merge from upstream into your fork:
 # First time only: git remote add upstream https://github.com/bldrs-ai/Share
 # After PR is accepted/merged in main, to sync you fork:
 > git fetch upstream
-> git merge upstream/main
+> git merge upstream/main --no-commit
+# then review the changes and proceed creating a commit and PR as usual
 ```
 
 
@@ -55,7 +58,4 @@ Quick reference for how to merge from upstream into your fork:
 Misc links
 
 https://testing-library.com/docs/react-testing-library/example-intro
-
 https://stackoverflow.com/questions/56952728/jest-tests-on-react-components-unexpected-token
-
-check from oleg's local
