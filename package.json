@@ -12,7 +12,7 @@
     "copy-web-asm": "cp node_modules/web-ifc/*.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
-    "lint": "yarn eslint --fix `find src -name '*.jsx'` `find src -name '*.js'`",
+    "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
     "test": "jest",
     "precommit": "yarn test && yarn lint"
   },
