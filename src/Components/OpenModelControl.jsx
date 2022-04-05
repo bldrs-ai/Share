@@ -13,7 +13,7 @@ import {ControlButton} from './Buttons'
  * @return {Object} React component
  */
 export default function OpenModelControl({fileOpen}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(true)
+  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
     <ControlButton
       title='Shortcut keys'
