@@ -66,11 +66,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               role = 'button'
               tabIndex={0}
               onKeyPress = {()=>{
-                fileOpen()
+                // fileOpen()
                 setIsDialogDisplayed(false)
               }}
               onClick = {()=>{
-                fileOpen()
+                // fileOpen()
                 setIsDialogDisplayed(false)
               }}> open</span>
           </p>
