@@ -2,12 +2,14 @@ import React, {useState} from 'react'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
+import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
+import LocalFileOpen from '../assets/2D_Icons/LocalFileOpen.svg'
 import Warning from '../assets/2D_Icons/Warning.svg'
 import {ControlButton} from './Buttons'
 
 
 /**
- * Displays keyboard shortcuts like how to add a cut plane.
+ * Displays open warning.
  * @return {Object} React component
  */
 export default function OpenModelControl({fileOpen}) {
@@ -41,20 +43,37 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <p>We encourage to use GITHUB for model hosting.</p>
-          <p>We further explain the process of ifc management
-            <span className = {classes.link}>here</span>
+          <GitHubIcon/>
+          <p className={classes.bullet}>
+            To take advantage of all features of BLDRS, we recommend using GitHub for model hosting.
+            <br/>
+            For more info visit our &nbsp;
+            <a
+              className = {classes.link}
+              target="_blank"
+              href = 'https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+              rel="noreferrer">wiki</a>
+            <br/>
+            <b>To access models hosted on GitHub, paste the model link into the search bar.</b>
           </p>
-          <p>If the model is hosted on GITHUB,
-            it is accessed by pasting a GITHUB link into the search bar.</p>
-          <p>When the model is opened locally there is
-            no way to save the data or share the model.</p>
-          <p>If you still want to open the model from the local drive. Click open icon.</p>
-          <span className={classes.openIcon} role="button" tabIndex={0}
-            onKeyDown={()=>{}}
-            onClick = {()=>{
-              fileOpen(), setIsDialogDisplayed(false)
-            }}><OpenIcon/></span>
+          <LocalFileOpen/>
+          <p className={classes.bullet}>
+            <b>Models accessed from local drive cannot be saved or shared.</b>
+            <br/>
+            If you still want to proceed -
+            <span
+              className = {classes.link}
+              role = 'button'
+              tabIndex={0}
+              onKeyPress = {()=>{
+                fileOpen()
+                setIsDialogDisplayed(false)
+              }}
+              onClick = {()=>{
+                fileOpen()
+                setIsDialogDisplayed(false)
+              }}> open</span>
+          </p>
         </div>
       }/>
   )
@@ -63,11 +82,15 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 
 const useStyles = makeStyles({
   content: {
+    width: '270px',
+  },
+  bullet: {
     textAlign: 'left',
   },
   link: {
     color: 'blue',
     borderBottom: '1px solid blue',
+    cursor: 'pointer',
   },
   openIcon: {
     textAlign: 'center',
