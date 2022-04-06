@@ -141,8 +141,8 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 
 
 /**
- * Checks if url is found
- * @param {Object} input check
+ * Check if input is url
+ * @param {Object} input
  * @return {boolean} return true if url is found
  */
 export function containsUrl(input) {
