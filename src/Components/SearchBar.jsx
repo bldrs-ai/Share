@@ -59,6 +59,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     } else {
       setSearchParams({q: inputText})
     }
+    console.log('on seearch submit', containsUrl(inputText))
     searchInputRef.current.blur()
   }
 
@@ -136,6 +137,22 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
     return newPath
   }
   throw new Error('Expected URL of the form <base>/file.ifc<path>[?query]')
+}
+
+
+/**
+ * Checks if url is found
+ * @param {Object} input check
+ * @return {boolean} return true if url is found
+ */
+export function containsUrl(input) {
+  // eslint-disable-next-line
+  let urlRegex =/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/ig;
+  if (input.match(urlRegex)) {
+    return true
+  } else {
+    return false
+  }
 }
 
 
