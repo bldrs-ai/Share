@@ -56,7 +56,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
           </p> */}
           <LocalFileOpen/>
           <p className={classes.bullet}>
-            <b>Warning: Models accessed from local drive cannot be saved or shared.</b>
+            <b>Models accessed from local drive cannot be saved or shared.</b>
             <br/>
             <span
               className = {classes.link}
