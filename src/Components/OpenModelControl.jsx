@@ -2,9 +2,7 @@ import React, {useState} from 'react'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
-import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
 import LocalFileOpen from '../assets/2D_Icons/LocalFileOpen.svg'
-import Warning from '../assets/2D_Icons/Warning.svg'
 import {ControlButton} from './Buttons'
 
 
@@ -37,13 +35,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const classes = useStyles()
   return (
     <Dialog
-      icon={<Warning/>}
-      headerText='Open Warning'
+      icon={<OpenIcon/>}
+      headerText='Model Access'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <GitHubIcon/>
+          {/* <LocalFileOpen/>
           <p className={classes.bullet}>
             To take advantage of all features of BLDRS, we recommend using GitHub for model hosting.
             <br/>
@@ -55,22 +53,21 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               rel="noreferrer">wiki</a>
             <br/>
             <b>To access models hosted on GitHub, paste the model link into the search bar.</b>
-          </p>
+          </p> */}
           <LocalFileOpen/>
           <p className={classes.bullet}>
-            <b>Models accessed from local drive cannot be saved or shared.</b>
+            <b>Warning: Models accessed from local drive cannot be saved or shared.</b>
             <br/>
-            If you still want to proceed -
             <span
               className = {classes.link}
               role = 'button'
               tabIndex={0}
               onKeyPress = {()=>{
-                // fileOpen()
+                fileOpen()
                 setIsDialogDisplayed(false)
               }}
               onClick = {()=>{
-                // fileOpen()
+                fileOpen()
                 setIsDialogDisplayed(false)
               }}> open</span>
           </p>
