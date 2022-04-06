@@ -24,7 +24,7 @@ export function recordEvent(commandParameters, additionalConfigInfo) {
  * @return {boolean} is social level of privacy enabled
  */
 export function isAnalyticsAllowed() {
-  return Privacy.getPrivacy('social', false) // defaultValue
+  return Privacy.isPrivacySocialEnabled() // defaultValue
 }
 
 

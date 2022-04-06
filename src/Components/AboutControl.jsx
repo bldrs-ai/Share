@@ -71,9 +71,9 @@ function AboutContent({installPrefix}) {
   const classes = useStyles()
   const [privacySlider, setPrivacySlider] = useState(0)
   useEffect(()=>{
-    if (Privacy.getPrivacy('social')) {
+    if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(20)
-    } else if (Privacy.getPrivacy('usage')) {
+    } else if (Privacy.isPrivacyUsageEnabled()) {
       setPrivacySlider(10)
     } else {
       setPrivacySlider(0)
