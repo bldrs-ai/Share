@@ -48,7 +48,6 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
-
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
@@ -59,9 +58,22 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     } else {
       setSearchParams({q: inputText})
     }
-    console.log('on seearch submit', containsUrl(inputText))
+    if (urlParameters(inputText)) {
+      const parameters = urlParameters(inputText)
+      const modelPath = `
+      /share/v/gh
+      /${parameters.org}
+      /${parameters.repo}
+      /${parameters.branch}
+      /${parameters.fileName}`
+
+      navigate({
+        pathname: modelPath,
+      })
+    }
     searchInputRef.current.blur()
   }
+
 
   return (
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
@@ -145,12 +157,18 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
  * @param {Object} input
  * @return {boolean} return true if url is found
  */
-export function containsUrl(input) {
-  // eslint-disable-next-line
-  let urlRegex =/[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/ig;
-  if (input.match(urlRegex)) {
-    return true
-  } else {
+export function urlParameters(input) {
+  try {
+    const url = new URL(input)
+    const arr = url.pathname.split('/')
+    const urlParameters = {
+      org: arr[1],
+      repo: arr[2],
+      branch: arr[4],
+      fileName: arr[5],
+    }
+    return urlParameters
+  } catch {
     return false
   }
 }
