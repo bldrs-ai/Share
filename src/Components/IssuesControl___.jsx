@@ -1,18 +1,23 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router'
-import Paper from '@mui/material/Paper'
+import DialogActions from '@mui/material/DialogActions'
+import DialogTitle from '@mui/material/DialogTitle'
+import DialogContent from '@mui/material/DialogContent'
+import MuiDialog from '@mui/material/Dialog'
+import Typography from '@mui/material/Typography'
+import Slide from '@mui/material/Slide'
+import {makeStyles} from '@mui/styles'
 import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
 import {
-  addHashParams,
+  // addHashParams,
   getHashParams,
-  removeHashParams,
+  // removeHashParams,
 } from '../utils/location'
-import {makeStyles} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import IssueCard from './IssueCard'
+import NavPrevIcon from '../assets/2D_Icons/NavPrev.svg'
+import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
 
 
 /**
@@ -25,10 +30,10 @@ import IssueCard from './IssueCard'
  * @param {Object} viewer The viewer object from IFCjs.
  * @return {Object} React component
  */
-export default function IssuesControl({viewer}) {
+export default function IssuesControl({viewer, onClick}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const [isDialogDisplayed, setIsDialogDisplayed] =
+  const [isDialogDisplayed] =
         useState(parseHashParams(location) ? true : false)
   const [text, setText] = useState('')
   const [next, setNext] = useState(null)
@@ -53,17 +58,17 @@ export default function IssuesControl({viewer}) {
   }, [location])
 
 
-  // TODO: do a fetch to validate content before displaying panel
-  const showIssues = (doShow) => {
-    if (doShow) {
-      addHashParams(window.location, ISSUE_PREFIX, {id: 8})
-      setIsDialogDisplayed(true)
-    } else {
-      removeHashParams(window.location, ISSUE_PREFIX)
-      setText('')
-      setIsDialogDisplayed(false)
-    }
-  }
+  // // TODO: do a fetch to validate content before displaying panel
+  // const showIssues = (doShow) => {
+  //   if (doShow) {
+  //     addHashParams(window.location, ISSUE_PREFIX, {id: 8})
+  //     setIsDialogDisplayed(true)
+  //   } else {
+  //     removeHashParams(window.location, ISSUE_PREFIX)
+  //     setText('')
+  //     setIsDialogDisplayed(false)
+  //   }
+  // }
 
   let title = null
   let body = text
@@ -77,18 +82,22 @@ export default function IssuesControl({viewer}) {
       title='Show issues'
       icon={<CommentIcon/>}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={showIssues}
+      setIsDialogDisplayed={onClick}
       dialog={
         text ?
           <CommentPanel
             body={body}
             title={title}
             next={next}
-            onClick = {showIssues}
             navigate={navigate}/> :
         <></>
       }/>)
 }
+
+
+const Transition = React.forwardRef(function Transition(props, ref) {
+  return <Slide direction="up" ref={ref} {...props} />
+})
 
 
 /**
@@ -99,42 +108,60 @@ export default function IssuesControl({viewer}) {
  * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-export function CommentPanel({onClick}) {
+function CommentPanel({body, title, next, navigate}) {
+  const [count, setCount] = useState(0)
+  const [isOpen, setIsOpen] = useState(true)
+  const [fullWidth] = useState(window.innerWidth <= 900)
   const classes = useStyles()
   return (
-    <Paper className = {classes.commentsContainer}>
-      <div style = {{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        margin: 12,
-      }}>
-        <div>All Comments</div>
-        <TooltipIconButton
-          title='Share'
-          size = 'small'
-          placement = 'bottom'
-          onClick={()=>onClick()}
-          icon={<CloseIcon/>}/>
-      </div>
-      <IssueCard title = {'Welcome to BLDRS'} content = {`Welcome Welcome`}/>
-      <IssueCard title = {'Future'} content = {`The Architecture,
-      Engineering and Construction industries are trying to
-      face challenging problems of the future with tools anchored in the past.
-      Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-      open development. We can't imagine a future where building the rest of the world
-      hasn't been transformed by these new ways of working. We are part of that transformation.`}/>
-      <IssueCard title = {'Key Insight'} content = {`The key insights from Tech:
-      Cross-functional online collaboration unlocks team flow, productivity and creativity.
-      Your team extends outside of your organization and software developers are essential
-      team members.An ecosystem of app Creators developing on a powerful operating system
-      Platform is the most scalable architecture.Open workspaces, open standards and open
-      source code the most powerful way to work. Cooperation is the unfair advantage.`}/>
-      <IssueCard title = {'We are in the process'} content = {`Now we're building.
-      We've met and dreamed and planned with a handful of visionaries around the world.
-      We're ready to work together to make something big.`}/>
-      <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
-    </Paper>
+    <MuiDialog
+      open={isOpen}
+      onClose={() => setIsOpen(false)}
+      fullWidth={fullWidth}
+      scroll='paper'
+      TransitionComponent={Transition}
+      BackdropProps={{style: {opacity: 0}}}
+      PaperProps={{
+        style: {
+          padding: 0,
+          margin: 0,
+          minHeight: '260px',
+          maxHeight: '260px',
+          width: fullWidth ? '100%' : '350px'}}}
+      className={classes.issueDialog}>
+      {title &&
+       <DialogTitle className = {classes.title}>
+         <h1>{title || '...'}</h1>
+       </DialogTitle>
+      }
+      <DialogContent>
+        <Typography paragraph={true}>{body}</Typography>
+      </DialogContent>
+      <DialogActions sx={{justifyContent: 'center', height: '60px'}}>
+        <div >
+          {count > 0 &&
+           <TooltipIconButton
+             title='Back'
+             onClick={() => {
+               if (count > 0) {
+                 setCount(count - 1)
+                 navigate(-1)
+               }
+             }}
+             icon={<NavPrevIcon/>}
+             placement='left'/>}
+          {next &&
+           <TooltipIconButton
+             title='Next'
+             onClick={() => {
+               setCount(count + 1)
+               window.location = next
+             }}
+             icon={<NavNextIcon/>}
+             placement='right'/>}
+        </div>
+      </DialogActions>
+    </MuiDialog>
   )
 }
 
@@ -231,21 +258,45 @@ function setPanelText(title, body, setText, setNext) {
   }
 }
 
+
 const useStyles = makeStyles({
-  commentsContainer: {
-    'width': '290px',
-    'height': '90%',
-    'position': 'absolute',
-    'top': '20px',
-    'right': '100px',
-    'border': '1px solid lightGrey',
-    'overflow': 'scroll',
-    '@media (max-width: 900px)': {
-      width: '290px',
-      height: '270px',
-      position: 'absolute',
-      top: '300px',
-      right: '80px',
+  issueDialog: {
+    'fontFamily': 'Helvetica',
+    '& .MuiDialog-container': {
+      alignItems: 'flex-end',
+    },
+    '& .MuiDialogTitle-root h1': {
+      fontSize: '1.1em',
+      margin: 0,
+      borderBottom: '1px solid lightGrey',
+    },
+    '& .MuiDialogActions-root': {
+      borderTop: 'solid 1px lightgrey',
+      margin: '0.5em 1em',
+      padding: '0em',
+    },
+    '& .MuiPaper-root': {
+      padding: '1em',
+    },
+    '& .MuiButtonBase-root': {
+      padding: 0,
+      margin: '0.5em',
+      borderRadius: '50%',
+      border: 'none',
+    },
+    '& svg': {
+      padding: 0,
+      margin: 0,
+      width: '25px',
+      height: '25px',
+      border: 'solid 0.5px grey',
+      borderRadius: '50%',
+    },
+    '& h1, & p': {
+      fontWeight: 300,
+    },
+    '& h1': {
+      fontSize: '1.2em',
     },
   },
 })

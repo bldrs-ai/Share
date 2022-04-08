@@ -9,6 +9,7 @@ import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ItemPanelControl from '../Components/ItemPanelControl'
+// import CommentsDrawer from '../Components/CommentsDrawer'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -63,6 +64,7 @@ export default function CadView({
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  // const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true)
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
@@ -377,6 +379,11 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
         <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
+        {/* <CommentsDrawer
+          isOpenState={isCommentPanelOpen}
+          onClose = {()=>
+            isCommentPanelOpen?setIsCommentPanelOpen(false):setIsCommentPanelOpen(true)}
+        /> */}
         <div className={isItemPanelOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>

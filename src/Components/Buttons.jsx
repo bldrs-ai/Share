@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
 
@@ -22,7 +22,7 @@ export function TooltipIconButton({
   size='medium',
 }) {
   assertDefined(title, icon, onClick)
-  const classes = useStyles(useTheme())
+  const classes = useStyles(size === 'small' ? {buttonWidth: '30px'} : {buttonWidth: '50px'})
   return (
     <span className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -95,7 +95,7 @@ export function ControlButton({
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(size === 'small' ? {buttonWidth: '30px'} : {buttonWidth: '50px'})
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -152,3 +152,4 @@ const useStyles = makeStyles((theme) => ({
     },
   },
 }))
+
