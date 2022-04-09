@@ -10,6 +10,7 @@ test('getCookie', () => {
   expect(retValue).toBe('true')
 })
 
+
 test('getCookieBoolean', () => {
   Privacy.setCookie({component: 'component', name: 'name', value: 'true'})
   const retValue = Privacy.getCookieBoolean({
@@ -19,11 +20,13 @@ test('getCookieBoolean', () => {
   expect(retValue).toBe(true)
 })
 
+
 test('isPrivacySocialEnabled', () => {
   Privacy.setCookie({component: 'privacy', name: 'social', value: 'true'})
   const retValue = Privacy.isPrivacySocialEnabled()
   expect(retValue).toBe(true)
 })
+
 
 test('isPrivacyUsageEnabled', () => {
   Privacy.setCookie({component: 'privacy', name: 'usage', value: 'true'})
