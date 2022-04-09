@@ -66,7 +66,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
       /${parameters.repo}
       /${parameters.branch}
       /${parameters.fileName}`
-
+      console.log('model path', modelPath)
       navigate({
         pathname: modelPath,
       })
