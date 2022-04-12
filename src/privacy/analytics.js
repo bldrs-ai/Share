@@ -1,5 +1,6 @@
 import gtag from '../utils/gtag'
 import * as Functional from './functional'
+import * as Privacy from './Privacy'
 import {assertDefined} from '../utils/assert'
 
 
@@ -20,10 +21,10 @@ export function recordEvent(commandParameters, additionalConfigInfo) {
 
 
 /**
- * @return {boolean} is analytics enabled
+ * @return {boolean} is social level of privacy enabled
  */
 export function isAnalyticsAllowed() {
-  return Functional.getCookieBoolean('isAnalyticsAllowed', false) // defaultValue
+  return Privacy.isPrivacySocialEnabled()
 }
 
 
