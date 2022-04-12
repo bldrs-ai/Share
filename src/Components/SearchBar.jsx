@@ -10,6 +10,8 @@ import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
+import LinkIcon from '../assets/2D_Icons/Link.svg'
+import ClearIcon from '../assets/2D_Icons/Close.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
@@ -26,8 +28,8 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const [inputText, setInputText] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles()
-
+  const inputWidth = Number(inputText.length)*11
+  const classes = useStyles({width: inputWidth})
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -44,40 +46,33 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
     // Searches from SearchBar clear current URL's IFC path.
-    if (containsIfcPath(location)) {
-      const newPath = stripIfcPathFromLocation(location)
-      navigate({
-        pathname: newPath,
-        search: `?q=${inputText}`,
-      })
-    } else {
-      setSearchParams({q: inputText})
-    }
     if (urlParameters(inputText)) {
       const parameters = urlParameters(inputText)
-      const modelPath = `
-      /share/v/gh
-      /${parameters.org}
-      /${parameters.repo}
-      /${parameters.branch}
-      /${parameters.fileName}`
-      console.log('model path', modelPath)
-      navigate({
-        pathname: modelPath,
-      })
+      {/* eslint-disable-next-line */}
+      const modelPath = `/share/v/gh/${parameters.org}/${parameters.repo}/${parameters.branch}/${parameters.fileName}`
+      navigate(modelPath, {replace: true})
+    } else {
+      if (containsIfcPath(location)) {
+        const newPath = stripIfcPathFromLocation(location)
+        navigate({
+          pathname: newPath,
+          search: `?q=${inputText}`,
+        })
+      } else {
+        setSearchParams({q: inputText})
+      }
     }
     searchInputRef.current.blur()
   }
 
-
   return (
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
       <TooltipToggleButton
+        placement = 'bottom'
         title='Toggle tree view'
         onClick={onClickMenuCb}
         icon={<TreeIcon/>}/>
@@ -86,7 +81,26 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         value={inputText}
         onChange={onInputChange}
         placeholder={'Search model'}/>
-      <FormButton title='search' icon={<SearchIcon/>}/>
+      <TooltipToggleButton
+        title='clear'
+        size = 'small'
+        placement = 'bottom'
+        onClick={()=>setInputText('')}
+        icon={<ClearIcon/>}/>
+      <FormButton
+        title='search'
+        size = 'small'
+        placement = 'bottom'
+        icon={<SearchIcon/>}/>
+      <TooltipToggleButton
+        title={`Type GitHUB URL to access IFCs hosted on GitHUB.
+                Click on the link icon to learn more.`}
+        size = 'small'
+        placement = 'right'
+        onClick={()=>{
+          window.open('https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting')
+        }}
+        icon={<LinkIcon/>}/>
     </Paper>
   )
 }
@@ -177,11 +191,15 @@ export function urlParameters(input) {
 const useStyles = makeStyles({
   root: {
     'display': 'flex',
-    'width': '300px',
+    'minWidth': '300px',
+    'width': (props) => props.width,
+    'maxWidth': '800px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
-      width: '250px',
+      minWidth: '300px',
+      width: '300px',
+      maxWidth: '300px',
     },
     '& .MuiInputBase-root': {
       flex: 1,

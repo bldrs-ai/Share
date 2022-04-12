@@ -35,13 +35,13 @@ const Alert = React.forwardRef(function Alert(props, ref) {
 const useStyles = makeStyles({
   root: {
     'position': 'relative',
-    'bottom': '60px',
+    'bottom': '70px',
     'left': '6px',
     '@media (max-width: 900px)': {
       left: '18px',
       bottom: '90px',
-      width: '220px',
-      inlineSize: '220px',
+      width: '305px',
+      inlineSize: '305px',
       overflow: 'visible',
       overflowWrap: 'anywhere',
     },
