@@ -33,6 +33,43 @@ function Forward({appPrefix}) {
 
 
 /**
+ * Check if input is a valid url
+ * @param {Object} input
+ * @return {boolean} return true if url is found
+ */
+export function isValidModelURL(input) {
+  {/* eslint-disable-next-line */}
+  const urlRegex = '((http|https)://)(www.)?' + '[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]' + '{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)'
+  const isValid = input.match(urlRegex)
+  if (isValid) {
+    return true
+  } else {
+    return false
+  }
+}
+
+
+/**
+ * construct a valid path to the GitHUB model
+ * @param {Object} input
+ * @return {string} model URL
+ */
+export function constructModelURL(input) {
+  const url = new URL(input)
+  const URLParamtersArr = url.pathname.split('/')
+  const URLParameters = {
+    org: URLParamtersArr[1],
+    repo: URLParamtersArr[2],
+    branch: URLParamtersArr[4],
+    fileName: URLParamtersArr[5],
+  }
+  {/* eslint-disable-next-line */}
+  const modelPath = `/share/v/gh/${URLParameters.org}/${URLParameters.repo}/${URLParameters.branch}/${URLParameters.fileName}`
+  return modelPath
+}
+
+
+/**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
  * A new model path will cause a new instance of CadView to be

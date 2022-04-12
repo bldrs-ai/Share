@@ -9,6 +9,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
+import {isValidModelURL, constructModelURL} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
@@ -49,22 +50,20 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
-    // Searches from SearchBar clear current URL's IFC path.
-    if (urlParameters(inputText)) {
-      const parameters = urlParameters(inputText)
-      {/* eslint-disable-next-line */}
-      const modelPath = `/share/v/gh/${parameters.org}/${parameters.repo}/${parameters.branch}/${parameters.fileName}`
+    if (isValidModelURL(inputText)) {
+      const modelPath = constructModelURL(inputText)
       navigate(modelPath, {replace: true})
+      return
+    }
+    // Searches from SearchBar clear current URL's IFC path.
+    if (containsIfcPath(location)) {
+      const newPath = stripIfcPathFromLocation(location)
+      navigate({
+        pathname: newPath,
+        search: `?q=${inputText}`,
+      })
     } else {
-      if (containsIfcPath(location)) {
-        const newPath = stripIfcPathFromLocation(location)
-        navigate({
-          pathname: newPath,
-          search: `?q=${inputText}`,
-        })
-      } else {
-        setSearchParams({q: inputText})
-      }
+      setSearchParams({q: inputText})
     }
     searchInputRef.current.blur()
   }
@@ -163,28 +162,6 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
     return newPath
   }
   throw new Error('Expected URL of the form <base>/file.ifc<path>[?query]')
-}
-
-
-/**
- * Check if input is url
- * @param {Object} input
- * @return {boolean} return true if url is found
- */
-export function urlParameters(input) {
-  try {
-    const url = new URL(input)
-    const arr = url.pathname.split('/')
-    const urlParameters = {
-      org: arr[1],
-      repo: arr[2],
-      branch: arr[4],
-      fileName: arr[5],
-    }
-    return urlParameters
-  } catch {
-    return false
-  }
 }
 
 
