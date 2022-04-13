@@ -14,7 +14,8 @@
     "serve": "yarn build && node config/serve.js",
     "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
     "test": "jest",
-    "precommit": "yarn test && yarn lint"
+    "precommit": "yarn test && yarn lint",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@babel/core": "^7.15.5",
@@ -53,7 +54,8 @@
     "gl": "^5.0.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
-    "jsdom": "^19.0.0"
+    "jsdom": "^19.0.0",
+    "husky": "^7.0.0"
   },
   "jest": {
     "verbose": false,
