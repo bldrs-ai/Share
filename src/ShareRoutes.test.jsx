@@ -19,7 +19,6 @@ test('isValidModelURL', () => {
 
 // invalid url format: no https://
 test('isValidModelURL', () => {
-  // eslint-disable-next-line
   const retValue = isValidModelURL('github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
   expect(retValue).toBe(false)
 })
@@ -27,7 +26,6 @@ test('isValidModelURL', () => {
 
 // ivalid url format: mistake in domain name
 test('isValidModelURL', () => {
-  // eslint-disable-next-line
   const retValue = isValidModelURL('githubcom/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
   expect(retValue).toBe(false)
 })
