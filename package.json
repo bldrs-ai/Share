@@ -1,6 +1,6 @@
 {
   "name": "bldrs-ai",
-  "version": "1.0.0-r275",
+  "version": "1.0.0-r276",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -61,8 +61,7 @@
     "verbose": false,
     "testEnvironment": "jsdom",
     "testPathIgnorePatterns": [
-      "src/Share.test.js",
-      "src/ShareRoutes.test.js"
+      "src/Share.test.js"
     ],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",

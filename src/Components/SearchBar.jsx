@@ -9,7 +9,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import {isValidModelURL, constructModelURL} from '../ShareRoutes'
+import {isValidModelURL, constructModelPath} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
@@ -51,7 +51,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
     if (isValidModelURL(inputText)) {
-      const modelPath = constructModelURL(inputText)
+      const modelPath = constructModelPath(inputText)
       navigate(modelPath, {replace: true})
       return
     }

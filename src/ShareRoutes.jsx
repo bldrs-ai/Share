@@ -54,7 +54,7 @@ export function isValidModelURL(input) {
  * @param {Object} input
  * @return {string} model URL
  */
-export function constructModelURL(input) {
+export function constructModelPath(input) {
   const url = new URL(input)
   const URLParamtersArr = url.pathname.split('/')
   const URLParameters = {
