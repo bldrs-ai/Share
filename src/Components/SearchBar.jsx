@@ -97,7 +97,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         size = 'small'
         placement = 'right'
         onClick={()=>{
-          window.open('https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting')
+          window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
         }}
         icon={<LinkIcon/>}/>
     </Paper>

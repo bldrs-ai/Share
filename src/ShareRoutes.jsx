@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {assertDefined} from './utils/assert'
 import Share from './Share'
 import debug from './utils/debug'
 
@@ -38,6 +39,7 @@ function Forward({appPrefix}) {
  * @return {boolean} return true if url is found
  */
 export function isValidModelURL(input) {
+  assertDefined(input)
   {/* eslint-disable-next-line */}
   const urlRegex = '((http|https)://)(www.)?' + '[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]' + '{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)'
   const isValid = input.match(urlRegex)
@@ -51,7 +53,7 @@ export function isValidModelURL(input) {
 
 /**
  * construct a valid path to the GitHUB model
- * @param {Object} input
+ * @param {string} input
  * @return {string} model URL
  */
 export function constructModelPath(input) {
