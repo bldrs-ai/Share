@@ -14,13 +14,13 @@ import {assertDefined} from '../utils/assert'
  * @param {string} size
  * @return {Object} React component
  */
-export function TooltipIconButton({
+export const TooltipIconButton = ({
   title,
   onClick,
   icon,
-  placement='right',
-  size='medium',
-}) {
+  placement = 'right',
+  size = 'medium',
+}) => {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
   return (
