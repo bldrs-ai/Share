@@ -24,13 +24,11 @@ export const TooltipIconButton = ({
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
   return (
-    <span className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement}>
-        <IconButton onClick={onClick} size={size}>
-          {icon}
-        </IconButton>
-      </Tooltip>
-    </span>
+    <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}>
+      <IconButton onClick={onClick} size={size}>
+        {icon}
+      </IconButton>
+    </Tooltip>
   )
 }
 
