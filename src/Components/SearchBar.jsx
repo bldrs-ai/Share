@@ -30,7 +30,11 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const [error, setError] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles({inputTextLength: Number(inputText.length) * 11})
+  // input length is dynamically calculated in order to fit the input string into the Text input
+  const calculatedInputWidth = Number(inputText.length) * 10 + 130
+  // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
+  // TODO(oleg): find a cleaner way to achieve this
+  const classes = useStyles({inputWidth: calculatedInputWidth})
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -50,7 +54,9 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
-    setError('')
+    if (error.length>0) {
+      setError('')
+    }
     // if url is typed into the search bar open the model
     if (isURL(inputText)) {
       if (isValidModelURL(inputText)) {
@@ -106,7 +112,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           placement = 'bottom'
           icon={<SearchIcon/>}/>
         <TooltipToggleButton
-          title={`Type GitHUB URL to access IFCs hosted on GitHUB.
+          title={`Enter GitHub URL to access IFCs hosted on GitHub.
                   Click on the link icon to learn more.`}
           size = 'small'
           placement = 'right'
@@ -188,8 +194,8 @@ const useStyles = makeStyles({
   root: {
     'display': 'flex',
     'minWidth': '300px',
-    'width': (props) => props.inputTextLength,
-    'maxWidth': '800px',
+    'width': (props) => props.inputWidth,
+    'maxWidth': '700px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
