@@ -1,5 +1,5 @@
 {
-  "name": "bldrs-ai",
+  "name": "bldrs",
   "version": "1.0.0-r263",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -12,9 +12,10 @@
     "copy-web-asm": "cp node_modules/web-ifc/*.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
-    "lint": "yarn eslint --fix `find src -name '*.jsx'` `find src -name '*.js'`",
+    "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
     "test": "jest",
-    "precommit": "yarn test && yarn lint"
+    "precommit": "yarn test && yarn lint",
+    "prepare": "husky install"
   },
   "dependencies": {
     "@auth0/auth0-react": "^1.9.0",
@@ -54,7 +55,8 @@
     "gl": "^5.0.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
-    "jsdom": "^19.0.0"
+    "jsdom": "^19.0.0",
+    "husky": "^7.0.0"
   },
   "jest": {
     "verbose": false,
