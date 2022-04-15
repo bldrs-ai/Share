@@ -54,12 +54,12 @@ export function isValidModelURL(input) {
   try {
     const url = new URL(input)
     const parsed = new URL(url)
-    if (parsed.hostname !== 'github.com' &&
-        parsed.hostname !== 'www.github.com' &&
-        parsed.hostname !== 'raw.githubusercontent.com') {
-      return false
+    if (parsed.hostname === 'github.com' ||
+        parsed.hostname === 'www.github.com' ||
+        parsed.hostname === 'raw.githubusercontent.com') {
+      return true
     }
-    return true
+    return false
   } catch (e) {
     return false
   }

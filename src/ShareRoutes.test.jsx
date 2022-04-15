@@ -21,12 +21,14 @@ test('isUrl: invalid url format', () => {
 
 test('isValidModelURL: valid url format', () => {
   const retValue = isValidModelURL('https://www.github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  console.log('ret value', retValue)
   expect(retValue).toBe(true)
 })
 
 
 test('isValidModelURL: valid url format: no wwww', () => {
   const retValue = isValidModelURL('https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  console.log('ret value', retValue)
   expect(retValue).toBe(true)
 })
 
