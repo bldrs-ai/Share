@@ -14,7 +14,6 @@ import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
-import {ClassRounded} from '@mui/icons-material'
 
 
 /**
@@ -53,12 +52,12 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     event.preventDefault()
     setError('')
     // if url is typed into the search bar open the model
-    if(isURL(inputText)){
+    if (isURL(inputText)) {
       if (isValidModelURL(inputText)) {
         const modelPath = parseIfcURL(inputText)
         navigate(modelPath, {replace: true})
         return
-      }else{
+      } else {
         setError(`Please enter a valid url. Click on the LINK icon to learn more`)
       }
     }
@@ -77,50 +76,50 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   }
 
   return (
-  <div>
-    <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-      <TooltipToggleButton
-        placement = 'bottom'
-        title='Toggle tree view'
-        onClick={onClickMenuCb}
-        icon={<TreeIcon/>}/>
-      <InputBase
-        inputRef={searchInputRef}
-        value={inputText}
-        onChange={onInputChange}
-        error = {true}
-        placeholder={'Search model'}/>
-      {inputText.length>0?
+    <div>
+      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
         <TooltipToggleButton
-          title='clear'
+          placement = 'bottom'
+          title='Toggle tree view'
+          onClick={onClickMenuCb}
+          icon={<TreeIcon/>}/>
+        <InputBase
+          inputRef={searchInputRef}
+          value={inputText}
+          onChange={onInputChange}
+          error = {true}
+          placeholder={'Search model'}/>
+        {inputText.length>0?
+          <TooltipToggleButton
+            title='clear'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>{
+              setInputText('')
+              setError('')
+            }}
+            icon={<ClearIcon/>}/>:null
+        }
+        <FormButton
+          title='search'
           size = 'small'
           placement = 'bottom'
+          icon={<SearchIcon/>}/>
+        <TooltipToggleButton
+          title={`Type GitHUB URL to access IFCs hosted on GitHUB.
+                  Click on the link icon to learn more.`}
+          size = 'small'
+          placement = 'right'
           onClick={()=>{
-            setInputText('')
-            setError('')
+            window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
           }}
-          icon={<ClearIcon/>}/>:null
+          icon={<LinkIcon/>}/>
+      </Paper>
+      { inputText.length>0 &&
+        error.length>0 &&
+        <div className = {classes.error}>{error}</div>
       }
-      <FormButton
-        title='search'
-        size = 'small'
-        placement = 'bottom'
-        icon={<SearchIcon/>}/>
-      <TooltipToggleButton
-        title={`Type GitHUB URL to access IFCs hosted on GitHUB.
-                Click on the link icon to learn more.`}
-        size = 'small'
-        placement = 'right'
-        onClick={()=>{
-          window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
-        }}
-        icon={<LinkIcon/>}/>
-    </Paper>
-    { inputText.length>0 &&
-      error.length>0 &&
-      <div className = {classes.error}>{error}</div>
-    }
-  </div>
+    </div>
   )
 }
 
@@ -202,10 +201,10 @@ const useStyles = makeStyles({
       flex: 1,
     },
   },
-  error:{
+  error: {
     marginLeft: '10px',
     marginTop: '3px',
     fontSize: '10px',
-    color: 'red'
-  }
+    color: 'red',
+  },
 })
