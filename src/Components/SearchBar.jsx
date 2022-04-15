@@ -58,7 +58,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         navigate(modelPath, {replace: true})
         return
       } else {
-        setError(`Please enter a valid url. Click on the LINK icon to learn more`)
+        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
     }
 
