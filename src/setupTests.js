@@ -14,5 +14,9 @@ disableDebug()
 
 // https://github.com/auth0/auth0-react/issues/248
 jest.mock('@auth0/auth0-react', () => ({
-  Auth0Provider: ({children}) => <div>{children}</div>,
+  Auth0Provider: ({children}) => <>{children}</>,
 }))
+
+// jest.mock('env', () => ({
+//   env: process.env,
+// }))

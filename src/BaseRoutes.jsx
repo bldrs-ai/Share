@@ -9,6 +9,7 @@ import {
 import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
 
 
 /**
@@ -26,9 +27,11 @@ import debug from './utils/debug'
  * @return {Object}
  */
 export default function BaseRoutes({testElt = null}) {
+  const appPrefix = '/share'
+  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const installedAppPrefix = installPrefix + appPrefix
   const location = useLocation()
   const navigate = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   useEffect(() => {
     const referrer = document.referrer
     debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
@@ -39,8 +42,8 @@ export default function BaseRoutes({testElt = null}) {
       }
     } else if (location.pathname === installPrefix ||
                location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', installedAppPrefix)
+      navigate(installedAppPrefix)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -49,8 +52,8 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = installPrefix + '/*'
   return (
     <Auth0Provider
-      domain="bldrs.us.auth0.com"
-      clientId="xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv"
+      domain={REACT_APP_AUTH0_DOMAIN}
+      clientId={REACT_APP_AUTH0_CLIENT_ID}
       redirectUri={window.location.origin}>
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
@@ -60,7 +63,7 @@ export default function BaseRoutes({testElt = null}) {
               testElt ||
                 <ShareRoutes
                   installPrefix={installPrefix}
-                  appPrefix={installPrefix + '/share'} />
+                  appPrefix={installedAppPrefix} />
             }/>
           <Route
             path="login/*"

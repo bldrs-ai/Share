@@ -1,4 +1,6 @@
+import envFilePlugin from 'esbuild-envfile-plugin'
 import svgrPlugin from 'esbuild-plugin-svgr'
+
 
 const entry = 'src/index.jsx'
 const buildDir = 'docs'
@@ -22,7 +24,7 @@ const build = {
   sourcemap: true,
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
-  plugins: [svgrPlugin()],
+  plugins: [svgrPlugin(), envFilePlugin],
 }
 
 export {build}
