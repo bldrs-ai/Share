@@ -40,36 +40,60 @@ function Forward({appPrefix}) {
  */
 export function isValidModelURL(input) {
   assertDefined(input)
-  {/* eslint-disable-next-line */}
-  const urlRegex = '((http|https)://)(www.)?' + '[a-zA-Z0-9@:%._\\+~#?&//=]{2,256}\\.[a-z]' + '{2,6}\\b([-a-zA-Z0-9@:%._\\+~#?&//=]*)'
-  const isValid = input.match(urlRegex)
-  if (isValid) {
+  try {
+    const url = new URL(input)
+    const parsed = new URL(url)
+    if (parsed.hostname !== 'github.com' &&
+        parsed.hostname !== 'www.github.com' &&
+        parsed.hostname !== 'raw.githubusercontent.com') {
+      return false
+    }
     return true
-  } else {
+  } catch (e) {
     return false
   }
 }
 
 
 /**
- * construct a valid path to the GitHUB model
- * @param {string} input
- * @return {string} model URL
+ * ParseIfcURL parses Github repository URLs or raw content URLs
+ * @param {string} url
+ * @return {string} Structured path to the model repositore
  */
-export function constructModelPath(input) {
-  const url = new URL(input)
-  const URLParamtersArr = url.pathname.split('/')
-  const URLParameters = {
-    org: URLParamtersArr[1],
-    repo: URLParamtersArr[2],
-    branch: URLParamtersArr[4],
-    fileName: URLParamtersArr[5],
+export const parseIfcURL = (url) => {
+  assertDefined(url)
+  const parsed = new URL(url)
+  const parts = parsed.pathname.split('/')
+  switch (parsed.hostname) {
+    case 'github.com':
+    case 'www.github.com':
+      if (parts.length > 4 || parts[3] === 'blob') {
+        const URLParameters = {
+          org: parts[1],
+          repo: parts[2],
+          branch: parts[4],
+          path: parts[5],
+        }
+        const modelPath = `/share/v/gh/${URLParameters.org}/${URLParameters.repo}/${URLParameters.branch}/${URLParameters.path}`
+        return modelPath
+      }
+      throw new Error('unsupported Github repository URL')
+    case 'raw.githubusercontent.com':
+      if (parts.length > 3) {
+        const URLParameters = {
+          org: parts[1],
+          repo: parts[2],
+          branch: parts[3],
+          path: parts[4],
+        }
+        const modelPath = `/share/v/gh/${URLParameters.org}/${URLParameters.repo}/${URLParameters.branch}/${URLParameters.path}`
+        return modelPath
+      }
+      throw new Error('unsupported Github user content URL')
+    default:
+      throw new Error('unexpected case!')
   }
-  {/* eslint-disable-next-line */}
-  const modelPath = `/share/v/gh/${URLParameters.org}/${URLParameters.repo}/${URLParameters.branch}/${URLParameters.fileName}`
-  return modelPath
 }
-
 
 /**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure

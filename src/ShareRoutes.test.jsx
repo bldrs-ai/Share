@@ -1,40 +1,75 @@
-import {isValidModelURL, constructModelPath} from './ShareRoutes'
+import {isValidModelURL, parseIfcURL} from './ShareRoutes'
 
 
-// valid url format
-test('isValidModelURL', () => {
-  // eslint-disable-next-line
+test('isValidModelURL: valid url format', () => {
   const retValue = isValidModelURL('https://www.github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
   expect(retValue).toBe(true)
 })
 
 
-// valid url format: no wwww
-test('isValidModelURL', () => {
-  // eslint-disable-next-line
+test('isValidModelURL: valid url format: no wwww', () => {
   const retValue = isValidModelURL('https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
   expect(retValue).toBe(true)
 })
 
 
-// invalid url format: no https://
-test('isValidModelURL', () => {
-  const retValue = isValidModelURL('github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
-  expect(retValue).toBe(false)
+test('isValidModelURL: invalid url format: no https://', () => {
+  try {
+    const retValue = isValidModelURL('github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+    expect(retValue).toBe(false)
+  } catch (e) {
+    expect(e.message).toBe('github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  }
 })
 
 
-// ivalid url format: mistake in domain name
-test('isValidModelURL', () => {
-  const retValue = isValidModelURL('githubcom/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
-  expect(retValue).toBe(false)
+test('isValidModelURL: ivalid url format: mistake in domain name', () => {
+  try {
+    const retValue = isValidModelURL('githubcom/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+    expect(retValue).toBe(false)
+  } catch (e) {
+    expect(e.message).toBe('githubcom/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  }
 })
 
 
-// test constructModel URL
-test('constructModelURL', () => {
-  // eslint-disable-next-line
-  const retValue = constructModelPath('https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
-  expect(retValue).toBe('/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+test('isValidModelURL: invalid url format: mistake in domain name', () => {
+  try {
+    const retValue = isValidModelURL('www.google.com')
+    expect(retValue).toBe(false)
+  } catch (e) {
+    expect(e.message).toBe('Invalid URL: www.google.com')
+  }
+})
+
+
+test('parseIfcURL: correct link', () => {
+  try {
+    const retValue = parseIfcURL('https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+    expect(retValue).toBe('/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+  } catch (e) {
+    console.log('error', e.message)
+    expect(e.message).toBe('Invalid URL: https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  }
+})
+
+
+test('parseIfcURL: invalid URL', () => {
+  try {
+    const retValue = parseIfcURL('github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+    expect(retValue).toBe('/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+  } catch (e) {
+    expect(e.message).toBe('Invalid URL: github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc')
+  }
+})
+
+
+test('parseIfcURL: test raw path', () => {
+  try {
+    const retValue = parseIfcURL('https://raw.githubusercontent.com/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+    expect(retValue).toBe('/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+  } catch (e) {
+    expect(e.message).toBe('Invalid URL: https://raw.githubusercontent.com/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc')
+  }
 })
 

@@ -21,6 +21,7 @@ export default function SnackBarMessage({message, type, open}) {
         severity={type}
         className = {classes.root}
         sx = {{backgroundColor: '#848484'}}
+        icon={false}
       >
         {message}
       </Alert>
