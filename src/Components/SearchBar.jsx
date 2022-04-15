@@ -9,11 +9,12 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import {isValidModelURL, parseIfcURL} from '../ShareRoutes'
+import {isURL, isValidModelURL, parseIfcURL} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import {ClassRounded} from '@mui/icons-material'
 
 
 /**
@@ -27,10 +28,10 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
+  const [error, setError] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const inputWidth = Number(inputText.length)*11
-  const classes = useStyles({width: inputWidth})
+  const classes = useStyles({inputTextLength: Number(inputText.length) * 11})
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -50,12 +51,18 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
+    setError('')
     // if url is typed into the search bar open the model
-    if (isValidModelURL(inputText)) {
-      const modelPath = parseIfcURL(inputText)
-      navigate(modelPath, {replace: true})
-      return
+    if(isURL(inputText)){
+      if (isValidModelURL(inputText)) {
+        const modelPath = parseIfcURL(inputText)
+        navigate(modelPath, {replace: true})
+        return
+      }else{
+        setError(`Please enter a valid url. Click on the LINK icon to learn more`)
+      }
     }
+
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
@@ -70,6 +77,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   }
 
   return (
+  <div>
     <Paper component='form' className={classes.root} onSubmit={onSubmit}>
       <TooltipToggleButton
         placement = 'bottom'
@@ -80,13 +88,17 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         inputRef={searchInputRef}
         value={inputText}
         onChange={onInputChange}
+        error = {true}
         placeholder={'Search model'}/>
       {inputText.length>0?
         <TooltipToggleButton
           title='clear'
           size = 'small'
           placement = 'bottom'
-          onClick={()=>setInputText('')}
+          onClick={()=>{
+            setInputText('')
+            setError('')
+          }}
           icon={<ClearIcon/>}/>:null
       }
       <FormButton
@@ -104,6 +116,11 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         }}
         icon={<LinkIcon/>}/>
     </Paper>
+    { inputText.length>0 &&
+      error.length>0 &&
+      <div className = {classes.error}>{error}</div>
+    }
+  </div>
   )
 }
 
@@ -172,7 +189,7 @@ const useStyles = makeStyles({
   root: {
     'display': 'flex',
     'minWidth': '300px',
-    'width': (props) => props.width,
+    'width': (props) => props.inputTextLength,
     'maxWidth': '800px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
@@ -185,4 +202,10 @@ const useStyles = makeStyles({
       flex: 1,
     },
   },
+  error:{
+    marginLeft: '10px',
+    marginTop: '3px',
+    fontSize: '10px',
+    color: 'red'
+  }
 })

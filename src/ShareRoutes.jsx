@@ -34,6 +34,17 @@ function Forward({appPrefix}) {
 
 
 /**
+ * Check if input is a url
+ * @param {input} input
+ * @return {boolean} return true if url is found
+ */
+ export function isURL(input) {
+  assertDefined(input)
+  return input.includes('https://') || input.includes('www')
+}
+
+
+/**
  * Check if input is a valid url
  * @param {Object} input
  * @return {boolean} return true if url is found

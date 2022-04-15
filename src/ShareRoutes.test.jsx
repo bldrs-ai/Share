@@ -1,4 +1,22 @@
-import {isValidModelURL, parseIfcURL} from './ShareRoutes'
+import {isURL, isValidModelURL, parseIfcURL} from './ShareRoutes'
+
+
+test('isURL: valid url format', () => {
+  const retValue = isURL('www.google.com')
+  expect(retValue).toBe(true)
+})
+
+
+test('isURL: valid url format', () => {
+  const retValue = isURL('https://google.com')
+  expect(retValue).toBe(true)
+})
+
+
+test('isUrl: invalid url format', () => {
+  const retValue = isURL('google')
+  expect(retValue).toBe(false)
+})
 
 
 test('isValidModelURL: valid url format', () => {
