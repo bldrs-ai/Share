@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
@@ -24,13 +25,13 @@ export function TooltipIconButton({
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
   return (
-    <span className={classes.root}>
+    <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
         <IconButton onClick={onClick} size={size}>
           {icon}
         </IconButton>
       </Tooltip>
-    </span>
+    </div>
   )
 }
 
@@ -127,6 +128,37 @@ export function FormButton({title, icon, type='submit', placement='left', size='
         <IconButton type={type} size={size}>
           {icon}
         </IconButton>
+      </Tooltip>
+    </div>
+  )
+}
+
+
+/**
+ * @param {string} fullString Tooltip text
+ * @param {function} onClick
+ * @param {string} placement
+ * @param {string} size
+ * @return {Object} React component
+ */
+export function TooltipLetterButton({
+  fullString,
+  onClick,
+  placement='right',
+  size='medium',
+}) {
+  assertDefined(fullString, onClick)
+  if (fullString.length == 0) {
+    throw new Error('Cannot make a TooltipLetterButton with empty string')
+  }
+  const classes = useStyles(useTheme())
+  const innerTextLetter = fullString.charAt(0).toUpperCase()
+  return (
+    <div className={classes.root}>
+      <Tooltip title={fullString} describeChild placement={placement}>
+        <button onClick={onClick}>
+          <Typography variant='p' color='info'>{innerTextLetter}</Typography>
+        </button>
       </Tooltip>
     </div>
   )

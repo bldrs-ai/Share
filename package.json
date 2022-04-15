@@ -1,6 +1,6 @@
 {
   "name": "bldrs-ai",
-  "version": "1.0.0-r260",
+  "version": "1.0.0-r263",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -17,6 +17,7 @@
     "precommit": "yarn test && yarn lint"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^1.9.0",
     "@babel/core": "^7.15.5",
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",

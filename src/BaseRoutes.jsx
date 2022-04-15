@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
@@ -28,7 +29,6 @@ export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
-
   useEffect(() => {
     const referrer = document.referrer
     debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
@@ -45,19 +45,28 @@ export default function BaseRoutes({testElt = null}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+
   const basePath = installPrefix + '/*'
   return (
-    <Routes>
-      <Route path={basePath} element={<Outlet/>}>
-        <Route
-          path="share/*"
-          element={
-            testElt ||
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={installPrefix + '/share'} />
-          }/>
-      </Route>
-    </Routes>
+    <Auth0Provider
+      domain="bldrs.us.auth0.com"
+      clientId="xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv"
+      redirectUri={window.location.origin}>
+      <Routes>
+        <Route path={basePath} element={<Outlet/>}>
+          <Route
+            path="share/*"
+            element={
+              testElt ||
+                <ShareRoutes
+                  installPrefix={installPrefix}
+                  appPrefix={installPrefix + '/share'} />
+            }/>
+          <Route
+            path="login/*"
+            element={<h1>Login</h1>}/>
+        </Route>
+      </Routes>
+    </Auth0Provider>
   )
 }
