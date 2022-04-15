@@ -54,7 +54,7 @@ export default function BaseRoutes({testElt = null}) {
     <Auth0Provider
       domain={REACT_APP_AUTH0_DOMAIN}
       clientId={REACT_APP_AUTH0_CLIENT_ID}
-      redirectUri={window.location.origin + installPrefix}>
+      redirectUri={window.location.origin + installedAppPrefix}>
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
