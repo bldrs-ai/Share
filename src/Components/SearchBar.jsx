@@ -9,7 +9,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import {isURL, isValidModelURL, parseIfcURL} from '../ShareRoutes'
+import {isUrl, urlLooksValid, parseIfcURL} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
@@ -58,8 +58,8 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
       setError('')
     }
     // if url is typed into the search bar open the model
-    if (isURL(inputText)) {
-      if (isValidModelURL(inputText)) {
+    if (isUrl(inputText)) {
+      if (urlLooksValid(inputText)) {
         const modelPath = parseIfcURL(inputText)
         navigate(modelPath, {replace: true})
         return
@@ -95,7 +95,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           onChange={onInputChange}
           error = {true}
           placeholder={'Search model'}/>
-        {inputText.length>0?
+        {inputText.length> 0 ?
           <TooltipToggleButton
             title='clear'
             size = 'small'
