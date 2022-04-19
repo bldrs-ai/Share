@@ -9,7 +9,10 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import {isUrl, urlLooksValid, parseIfcURL} from '../ShareRoutes'
+import {
+  looksLikeLink,
+  githubUrlOrPathToSharePath,
+} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
@@ -58,14 +61,14 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
       setError('')
     }
     // if url is typed into the search bar open the model
-    if (isUrl(inputText)) {
-      if (urlLooksValid(inputText)) {
-        const modelPath = parseIfcURL(inputText)
+    if (looksLikeLink(inputText)) {
+      try {
+        const modelPath = githubUrlOrPathToSharePath(inputText)
         navigate(modelPath, {replace: true})
-        return
-      } else {
+      } catch {
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
+      return
     }
 
     // Searches from SearchBar clear current URL's IFC path.

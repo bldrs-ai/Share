@@ -102,9 +102,9 @@ function Forward({appPrefix}) {
  * @param {input} input
  * @return {boolean} return true if url is found
  */
-export function isUrl(input) {
+export function looksLikeLink(input) {
   assertDefined(input)
-  return input.startsWith('https://') || input.includes('www')
+  return input.includes('/') || input.endsWith('.ifc')
 }
 
 
@@ -113,21 +113,19 @@ export function isUrl(input) {
  * @param {Object} urlStr
  * @return {boolean} return true if url is found
  */
-export function urlLooksValid(urlStr) {
+export function trimToPath(urlStr) {
   assertDefined(urlStr)
-  let url
-  try {
-    url = new URL(urlStr)
-  } catch (e) {
-    return false
+  urlStr = urlStr.trim()
+  if (urlStr.startsWith('http://')) {
+    urlStr = urlStr.substring('http://'.length)
+  } else if (urlStr.startsWith('https://')) {
+    urlStr = urlStr.substring('https://'.length)
   }
-  switch (url.hostname) {
-    case 'github.com':
-    case 'www.github.com':
-    case 'raw.githubusercontent.com':
-      return true
+  const firstSlashNdx = urlStr.indexOf('/')
+  if (firstSlashNdx == -1) {
+    return undefined
   }
-  return false
+  return urlStr.substring(firstSlashNdx)
 }
 
 
@@ -141,29 +139,29 @@ const pathParts = [
 
 
 /** Matches strings like '/org/repo/branch/dir1/dir2/file.ifc' */
-const re = new RegExp(`^/${pathParts.join('/')}$`)
+const re = new RegExp(`^(?:.*com)?/${pathParts.join('/')}$`)
 
 
 /**
  * Convert a Github repository URL or partial path to a Share path
  * rooted at an organization.
- * @param {string} urlOrPath
+ * @param {string} urlWithPath
  * @return {string} Structured path to the model repository
  */
-export function extractOrgPrefixedPath(urlOrPath) {
-  const match = re.exec(urlOrPath.split('.com')[1]) // TODO actually handle
+export function extractOrgPrefixedPath(urlWithPath) {
+  const match = re.exec(urlWithPath) // TODO actually handle
   if (match) {
     const {groups: {org, repo, branch, file}} = match
     return `/${org}/${repo}/${branch}/${file}`
   }
-  return ''
+  throw new Error('Not a url with path: ' + urlWithPath)
 }
 
 
 /**
- * @param {string} urlOrPath
+ * @param {string} urlWithPath
  * @return {string} Structured path to the model repository
  */
-export function githubUrlOrPathToSharePath(urlOrPath) {
-  return '/share/v/gh' + extractOrgPrefixedPath(urlOrPath)
+export function githubUrlOrPathToSharePath(urlWithPath) {
+  return '/share/v/gh' + extractOrgPrefixedPath(urlWithPath)
 }

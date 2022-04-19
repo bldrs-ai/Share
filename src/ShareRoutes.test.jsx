@@ -1,58 +1,58 @@
 import {
-  isUrl,
-  urlLooksValid,
+  looksLikeLink,
+  trimToPath,
   githubUrlOrPathToSharePath} from './ShareRoutes'
 
 
+const path = '/org/repo/branch/file.ifc'
+const pathAbc = '/org/repo/branch/a/b/c/file.ifc'
+const pathBlob = '/org/repo/blob/branch/file.ifc'
+const pathBlobAbc = '/org/repo/blob/branch/a/b/c/file.ifc'
+const tests = [
+  {s: 'http://www.github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: 'http://github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: 'http://www.github.com/org/repo/blob/branch/a/b/c/file.ifc', out: pathBlobAbc},
+  {s: 'http://github.com/org/repo/blob/branch/a/b/c/file.ifc', out: pathBlobAbc},
+  {s: 'https://www.github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: 'https://github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: 'github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: 'githubcom/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: '/org/repo/blob/branch/file.ifc', out: pathBlob},
+  {s: '/org/repo/branch/file.ifc', out: path},
+  {s: '/org/repo/blob/branch/a/b/c/file.ifc', out: pathBlobAbc},
+  {s: '/org/repo/branch/a/b/c/file.ifc', out: pathAbc},
+  {s: 'www.google.com', err: 'Not a url with path: www.google.com'},
+]
+
+
 describe('ShareRoutes', () => {
-  test('isUrl', () => {
-    [
-      {s: 'www.google.com', valid: true},
-      {s: 'https://google.com', valid: true},
-      {s: 'google', valid: false},
-    ].forEach((pair) => {
-      expect(isUrl(pair.s)).toBe(pair.valid)
+  test('looksLikeLink', () => {
+    tests.forEach((pair) => {
+      expect(looksLikeLink(pair.s)).toBe(pair.out !== undefined)
     })
   })
 
 
-  test('urlLooksValid', () => {
-    [
-      {s: 'https://www.github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc', valid: true},
-      {s: 'https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc', valid: true},
-      {s: 'github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc', valid: false},
-      {s: 'githubcom/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc', valid: false},
-      {s: 'www.google.com', valid: false},
-    ].forEach((pair) => {
-      expect(urlLooksValid(pair.s)).toBe(pair.valid)
+  test('trimToPath', () => {
+    tests.forEach((pair) => {
+      expect(trimToPath(pair.s)).toBe(pair.out)
     })
   })
 
 
   test('githubUrlOrPathToSharePath', () => {
-    [
-      {
-        s: 'https://github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc',
-        out: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-      }, {
-        s: 'github.com/Swiss-Property-AG/Portfolio/blob/main/EISVOGEL.ifc',
-        out: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-      }, {
-        s: 'https://raw.githubusercontent.com/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-        out: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-      },
-    ].forEach((pair) => {
-      if (pair.err) {
+    tests.forEach((pair) => {
+      if (pair.out) {
+        const out = pair.out.replace(/blob\//, '')
+        expect(githubUrlOrPathToSharePath(pair.s)).toBe('/share/v/gh' + out)
+      } else {
         try {
           githubUrlOrPathToSharePath(pair.s)
         } catch (e) {
-          console.log('error: ', e)
           expect(e.message).toBe(pair.err)
           return
         }
         throw new Error('Expected parse error for input: ' + pair.s)
-      } else {
-        expect(githubUrlOrPathToSharePath(pair.s)).toBe(pair.out)
       }
     })
   })
