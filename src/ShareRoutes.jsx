@@ -104,7 +104,12 @@ function Forward({appPrefix}) {
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return input.includes('/') || input.endsWith('.ifc')
+  return input.endsWith('.ifc') && (
+    input.startsWith('http') ||
+      input.startsWith('/') ||
+      input.startsWith('bldrs') ||
+      input.startsWith('github') ||
+      input.startsWith('localhost'))
 }
 
 
@@ -115,17 +120,22 @@ export function looksLikeLink(input) {
  */
 export function trimToPath(urlStr) {
   assertDefined(urlStr)
-  urlStr = urlStr.trim()
-  if (urlStr.startsWith('http://')) {
-    urlStr = urlStr.substring('http://'.length)
-  } else if (urlStr.startsWith('https://')) {
-    urlStr = urlStr.substring('https://'.length)
+  let s = urlStr.trim()
+  if (s.startsWith('http://')) {
+    s = s.substring('http://'.length)
+  } else if (s.startsWith('https://')) {
+    s = s.substring('https://'.length)
   }
-  const firstSlashNdx = urlStr.indexOf('/')
+  // Allow use of links like bldrs.ai/share/v/gh and localhost:8080/share/v/gh
+  const sharePathNdx = s.indexOf('share/v/gh')
+  if (sharePathNdx > 0) {
+    s = s.substring(sharePathNdx + 'share/v/gh'.length)
+  }
+  const firstSlashNdx = s.indexOf('/')
   if (firstSlashNdx == -1) {
-    return undefined
+    throw new Error('Expected at least one slash for file path: ' + urlStr)
   }
-  return urlStr.substring(firstSlashNdx)
+  return s.substring(firstSlashNdx)
 }
 
 
@@ -154,7 +164,7 @@ export function extractOrgPrefixedPath(urlWithPath) {
     const {groups: {org, repo, branch, file}} = match
     return `/${org}/${repo}/${branch}/${file}`
   }
-  throw new Error('Not a url with path: ' + urlWithPath)
+  throw new Error('Expected a multi-part file path: ' + urlWithPath)
 }
 
 

@@ -12,6 +12,7 @@ import debug from '../utils/debug'
 import {
   looksLikeLink,
   githubUrlOrPathToSharePath,
+  trimToPath,
 } from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
@@ -57,15 +58,16 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
-    if (error.length>0) {
+    if (error.length > 0) {
       setError('')
     }
     // if url is typed into the search bar open the model
     if (looksLikeLink(inputText)) {
       try {
-        const modelPath = githubUrlOrPathToSharePath(inputText)
+        const modelPath = githubUrlOrPathToSharePath(trimToPath(inputText))
         navigate(modelPath, {replace: true})
-      } catch {
+      } catch (e) {
+        console.error(e)
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
       return
