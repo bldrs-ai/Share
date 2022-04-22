@@ -6,7 +6,6 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
-import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
@@ -32,6 +31,7 @@ export default function BaseRoutes({testElt = null}) {
   const installedAppPrefix = installPrefix + appPrefix
   const location = useLocation()
   const navigate = useNavigate()
+
   useEffect(() => {
     const referrer = document.referrer
     debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
@@ -47,7 +47,6 @@ export default function BaseRoutes({testElt = null}) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-
 
   const basePath = installPrefix + '/*'
   return (

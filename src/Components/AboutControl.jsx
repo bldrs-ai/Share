@@ -119,7 +119,6 @@ function AboutContent({installPrefix}) {
       </ul>
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
       <div className = {classes.demoContainer}>
-        {/* eslint-disable-next-line */}
         <a href={`${installPrefix}/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-12.84,3.53,9.64,-5.33,2.61,1.71`}>
           <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
         </a>

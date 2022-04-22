@@ -2,7 +2,6 @@ import React from 'react'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
 import IssuesControl from './IssuesControl'
-import LoginControl from './LoginControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
@@ -24,7 +23,6 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
   const classes = useStyles()
   return (
     <div className={classes.container}>
-      <LoginControl/>
       <div className={classes.shareAndIssues}>
         <ShareControl viewer={viewer}/>
         <IssuesControl viewer={viewer}/>
@@ -50,13 +48,9 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
 
 const useStyles = makeStyles({
   container: {
-    paddingTop: '10px',
     // Actually want 100 - size of settings button
     height: 'calc(100vh - 40px)',
     margin: '20px 20px 0 0',
-  },
-  shareAndIssues: {
-    marginTop: '20px',
   },
   lowerGroup: {
     position: 'fixed',
