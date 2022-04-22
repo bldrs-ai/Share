@@ -141,7 +141,6 @@ async function createPsetsList(model, element, classes, expandAll) {
 }
 
 
-/* eslint-disable max-len*/
 /**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm

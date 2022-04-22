@@ -41,7 +41,6 @@ export default function CadView({
 }) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
-
   // React router
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
@@ -465,7 +464,6 @@ const useStyles = makeStyles({
     // to hardcode for now and look into passing via the theme later.
     top: `20px`,
     left: '20px',
-    width: '300px',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
