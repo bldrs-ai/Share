@@ -12,7 +12,6 @@ import debug from '../utils/debug'
 import {
   looksLikeLink,
   githubUrlOrPathToSharePath,
-  trimToPath,
 } from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
@@ -64,7 +63,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     // if url is typed into the search bar open the model
     if (looksLikeLink(inputText)) {
       try {
-        const modelPath = githubUrlOrPathToSharePath(trimToPath(inputText))
+        const modelPath = githubUrlOrPathToSharePath(inputText)
         navigate(modelPath, {replace: true})
       } catch (e) {
         console.error(e)

@@ -114,9 +114,23 @@ export function looksLikeLink(input) {
 
 
 /**
+ * @param {string} urlWithPath
+ * @return {string} Structured path to the model repository
+ * @throws Error if the argument doesn't match the path pattern.
+ */
+export function githubUrlOrPathToSharePath(urlWithPath) {
+  return '/share/v/gh' + extractOrgPrefixedPath(trimToPath(urlWithPath))
+}
+
+
+// Functions below exported only for testing.
+/**
  * Look for any obvious problems with the given url.
  * @param {Object} urlStr
  * @return {boolean} return true if url is found
+ * @throws Error if the argument have path slash '/' characters after
+ * trimming host and appinstal prefix.
+ * @private
  */
 export function trimToPath(urlStr) {
   assertDefined(urlStr)
@@ -148,8 +162,11 @@ const pathParts = [
 ]
 
 
-/** Matches strings like '/org/repo/branch/dir1/dir2/file.ifc' */
-const re = new RegExp(`^(?:.*com)?/${pathParts.join('/')}$`)
+/**
+ * Matches strings like '/org/repo/branch/dir1/dir2/file.ifc' with
+ * an optional host prefix.
+ */
+const re = new RegExp(`^/${pathParts.join('/')}$`)
 
 
 /**
@@ -157,6 +174,8 @@ const re = new RegExp(`^(?:.*com)?/${pathParts.join('/')}$`)
  * rooted at an organization.
  * @param {string} urlWithPath
  * @return {string} Structured path to the model repository
+ * @throws Error if the argument doesn't match the path pattern.
+ * @private
  */
 export function extractOrgPrefixedPath(urlWithPath) {
   const match = re.exec(urlWithPath) // TODO actually handle
@@ -165,13 +184,4 @@ export function extractOrgPrefixedPath(urlWithPath) {
     return `/${org}/${repo}/${branch}/${file}`
   }
   throw new Error('Expected a multi-part file path: ' + urlWithPath)
-}
-
-
-/**
- * @param {string} urlWithPath
- * @return {string} Structured path to the model repository
- */
-export function githubUrlOrPathToSharePath(urlWithPath) {
-  return '/share/v/gh' + extractOrgPrefixedPath(urlWithPath)
 }
