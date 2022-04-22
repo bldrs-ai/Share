@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
@@ -24,13 +25,13 @@ export function TooltipIconButton({
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
   return (
-    <span className={classes.root}>
+    <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
         <IconButton onClick={onClick} size={size}>
           {icon}
         </IconButton>
       </Tooltip>
-    </span>
+    </div>
   )
 }
 
@@ -46,12 +47,11 @@ export function TooltipToggleButton({
   onClick,
   title,
   icon,
-  size = 'medium',
   placement='left',
 }) {
   assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -90,12 +90,11 @@ export function ControlButton({
   setIsDialogDisplayed,
   icon,
   placement='left',
-  size = 'medium',
   dialog,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -122,7 +121,7 @@ export function ControlButton({
  */
 export function FormButton({title, icon, type='submit', placement='left', size='medium'}) {
   assertDefined(title, icon)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -135,11 +134,42 @@ export function FormButton({title, icon, type='submit', placement='left', size='
 }
 
 
+/**
+ * @param {string} fullString Tooltip text
+ * @param {function} onClick
+ * @param {string} placement
+ * @param {string} size
+ * @return {Object} React component
+ */
+export function TooltipLetterButton({
+  fullString,
+  onClick,
+  placement='right',
+  size='medium',
+}) {
+  assertDefined(fullString, onClick)
+  if (fullString.length == 0) {
+    throw new Error('Cannot make a TooltipLetterButton with empty string')
+  }
+  const classes = useStyles(useTheme())
+  const innerTextLetter = fullString.charAt(0).toUpperCase()
+  return (
+    <div className={classes.root}>
+      <Tooltip title={fullString} describeChild placement={placement}>
+        <button onClick={onClick}>
+          <Typography variant='p' color='info'>{innerTextLetter}</Typography>
+        </button>
+      </Tooltip>
+    </div>
+  )
+}
+
+
 const useStyles = makeStyles((theme) => ({
   root: {
     '& button': {
-      width: (props) => props.buttonWidth || '50px',
-      height: (props) => props.buttonWidth || '50px',
+      width: '50px',
+      height: '50px',
       border: 'none',
       borderRadius: '50%',
     },

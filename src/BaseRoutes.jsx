@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
