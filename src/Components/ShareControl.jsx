@@ -109,7 +109,9 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
             <TextField
               value={window.location}
               inputRef={urlTextFieldRef}
-              variant='outlined'/>
+              variant='outlined'
+              InputProps={{readOnly: true}}
+            />
             <ToggleButton
               value='copy'
               selected={isLinkCopied}
