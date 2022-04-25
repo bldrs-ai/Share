@@ -41,19 +41,21 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          {/* <LocalFileOpen/>
+          <LocalFileOpen/>
           <p className={classes.bullet}>
             To take advantage of all features of BLDRS, we recommend using GitHub for model hosting.
+            <br/>
+            <b>To access models hosted on GitHub, paste the model link into the search bar.</b>
             <br/>
             For more info visit our &nbsp;
             <a
               className = {classes.link}
               target="_blank"
-              href = 'https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+              href = 'https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
               rel="noreferrer">wiki</a>
             <br/>
-            <b>To access models hosted on GitHub, paste the model link into the search bar.</b>
-          </p> */}
+
+          </p>
           <LocalFileOpen/>
           <p className={classes.bullet}>
             <b>Models accessed from local drive cannot be saved or shared.</b>
