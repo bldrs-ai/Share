@@ -9,7 +9,12 @@ import {
 import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
-import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
+
+
+// Enable when we build app in GitHub actions.
+// import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
+const REACT_APP_AUTH0_DOMAIN = 'bldrs.us.auth0.com'
+const REACT_APP_AUTH0_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
 
 
 /**
@@ -54,7 +59,7 @@ export default function BaseRoutes({testElt = null}) {
     <Auth0Provider
       domain={REACT_APP_AUTH0_DOMAIN}
       clientId={REACT_APP_AUTH0_CLIENT_ID}
-      redirectUri={window.location.origin + installedAppPrefix}>
+      redirectUri={window.location.origin + '/'}>
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
