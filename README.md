@@ -39,7 +39,7 @@ If you want to contribute, please use the [fork and and branch](https://blog.sco
 
 PR requirements:
  - Focused: one logical/wholistic change.  Less is more.
- - Clear: Well-factored, commented, no debugging, etc.
+ - Clear: Well-factored, commented, no debugging, etc.  [Good commit messages](https://cbea.ms/git-commit/).
  - Tested: focused and clear unit tests.
  - Demonstrated: a link to a live demo of your PR hosted at your fork's GitHub pages.
 
