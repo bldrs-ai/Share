@@ -13,8 +13,10 @@ import debug from './utils/debug'
 
 // Enable when we build app in GitHub actions.
 // import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
-const REACT_APP_AUTH0_DOMAIN = 'bldrs.us.auth0.com'
+// Localhost app:
+// const REACT_APP_AUTH0_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
 const REACT_APP_AUTH0_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+const REACT_APP_AUTH0_DOMAIN = 'bldrs.us.auth0.com'
 
 
 /**

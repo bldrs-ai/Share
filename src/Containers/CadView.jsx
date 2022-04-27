@@ -19,6 +19,8 @@ import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
+import createAuth0Client from '@auth0/auth0-spa-js'
+
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -148,40 +150,62 @@ export default function CadView({
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
-    const model = await viewer.IFC.loadIfcUrl(
-        filepath,
-        urlHasCameraParams() ? false : true, // fitToFrame
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.loaded)) {
-            const loadedBytes = progressEvent.loaded
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        },
-        (error) => {
-          console.warn('CadView#loadIfc$onError', error)
-          // TODO(pablo): error modal.
-          setIsLoading(false)
-          setAlertMessage('Could not load file: ' + filepath)
-        })
-    Privacy.recordEvent('select_content', {
-      content_type: 'ifc_model',
-      item_id: filepath,
-    })
-    setIsLoading(false)
 
-    if (model) {
-      // Fix for https://github.com/bldrs-ai/Share/issues/91
-      //
-      // TODO(pablo): huge hack. Somehow this is getting incremented to
-      // 1 even though we have a new IfcViewer instance for each file
-      // load.  That modelID is used in the IFCjs code as [modelID] and
-      // leads to undefined refs e.g. in prePickIfcItem.  The id should
-      // always be 0.
-      model.modelID = 0
-      setModel(model)
-    }
+    const auth0 = await createAuth0Client({
+      domain: 'bldrs.us.auth0.com',
+//      client_id: 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp',
+      client_id: 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv',
+      redirect_uri: window.location.origin + '/',
+    })
+    auth0
+        .getTokenSilently()
+        .then(async (accessToken) => {
+          console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken ? true : false)
+          viewer.IFC.loader.requestHeader = {
+            'Authorization': `Bearer ${accessToken}`,
+//            'Access-Control-Request-Method': 'GET',
+//            'Access-Control-Request-Headers': 'Content-Type, Accept',
+            'Access-Control-Allow-Origin': 'http://localhost:8080',
+            'Origin': 'http://localhost:8080',
+          }
+          viewer.IFC.loader.withCredentials = true
+
+          const model = await viewer.IFC.loadIfcUrl(
+            filepath,
+            urlHasCameraParams() ? false : true, // fitToFrame
+            (progressEvent) => {
+              if (Number.isFinite(progressEvent.loaded)) {
+                const loadedBytes = progressEvent.loaded
+                const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+                setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+                debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+              }
+            },
+            (error) => {
+              console.warn('CadView#loadIfc$onError', error)
+              // TODO(pablo): error modal.
+              setIsLoading(false)
+              setAlertMessage('Could not load file: ' + filepath)
+            })
+          Privacy.recordEvent('select_content', {
+            content_type: 'ifc_model',
+            item_id: filepath,
+          })
+
+          setIsLoading(false)
+
+          if (model) {
+            // Fix for https://github.com/bldrs-ai/Share/issues/91
+            //
+            // TODO(pablo): huge hack. Somehow this is getting incremented to
+            // 1 even though we have a new IfcViewer instance for each file
+            // load.  That modelID is used in the IFCjs code as [modelID] and
+            // leads to undefined refs e.g. in prePickIfcItem.  The id should
+            // always be 0.
+            model.modelID = 0
+            setModel(model)
+          }
+        })
   }
 
 
