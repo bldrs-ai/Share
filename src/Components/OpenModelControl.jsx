@@ -15,7 +15,6 @@ export default function OpenModelControl({fileOpen}) {
   return (
     <ControlButton
       title='Open IFC'
-      placement='top'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<OpenIcon/>}
