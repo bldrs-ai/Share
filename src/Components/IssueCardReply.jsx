@@ -72,6 +72,7 @@ const useStyles = makeStyles({
     margin: '10px',
     marginRight: '10px',
     overflow: 'scroll',
+    border: '1px solid lightgrey',
   },
   title: {
     display: 'flex',

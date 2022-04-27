@@ -120,7 +120,6 @@ export function CommentPanel({onClick}) {
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        <IssueCardReply/>
         <IssueCard title = {'Welcome to BLDRS'} content = {`Welcome Welcome`}/>
         <IssueCard title = {'Future'} content = {`The Architecture,
         Engineering and Construction industries are trying to
@@ -138,6 +137,7 @@ export function CommentPanel({onClick}) {
         We've met and dreamed and planned with a handful of visionaries around the world.
         We're ready to work together to make something big.`}/>
         <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
+        <IssueCardReply/>
       </div>
     </Paper>
   )
@@ -247,9 +247,10 @@ const useStyles = makeStyles({
     'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
       width: '290px',
-      height: '270px',
+      height: '330px',
+      minHeight: '300px',
       position: 'absolute',
-      top: '300px',
+      top: '240px',
       right: '80px',
     },
   },
@@ -271,7 +272,10 @@ const useStyles = makeStyles({
     paddingBottom: '10px',
   },
   cardsContainer: {
-    overflow: 'scroll',
-    maxHeight: '78%',
+    'overflow': 'scroll',
+    'height': '78%',
+    '@media (max-width: 900px)': {
+      height: '210px',
+    },
   },
 })
