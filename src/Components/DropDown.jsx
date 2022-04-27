@@ -8,19 +8,20 @@ import {makeStyles} from '@mui/styles'
  * Dropdown select
  * @return {Object} React component
  */
-export default function DropDown() {
-  const [selection, setSelection] = React.useState('')
+export default function DropDown({onSelect, options}) {
+  const [selected, setSelected] = React.useState('')
   const classes = useStyles()
 
-  // const handleChange = (event) => {
-  //   setSelection(event.target.value)
-  // }
+  const handleChange = (event) => {
+    setSelected(event.target.value)
+    onSelect(event.target.value)
+  }
 
   return (
     <TextField
       className={classes.root}
-      value={selection}
-      onChange={(e) => setSelection(e.target.value)}
+      value={selected}
+      onChange={(e) => handleChange(e)}
       variant='outlined'
       label='Connected models'
       select
