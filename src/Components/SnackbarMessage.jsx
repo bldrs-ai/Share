@@ -41,8 +41,8 @@ const useStyles = makeStyles({
     '@media (max-width: 900px)': {
       left: '18px',
       bottom: '90px',
-      width: '305px',
-      inlineSize: '305px',
+      width: '280px',
+      inlineSize: '280px',
       overflow: 'visible',
       overflowWrap: 'anywhere',
     },

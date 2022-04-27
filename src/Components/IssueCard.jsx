@@ -5,6 +5,8 @@ import {makeStyles} from '@mui/styles'
 import Delete from '../assets/2D_Icons/Close.svg'
 // import Clear from '../assets/2D_Icons/Clear.svg'
 import Share from '../assets/2D_Icons/Share.svg'
+import Check from '../assets/2D_Icons/Check.svg'
+import Reply from '../assets/2D_Icons/Reply.svg'
 // import Navigate from '../assets/2D_Icons/Navigate.svg'
 import {TooltipIconButton} from './Buttons'
 
@@ -79,6 +81,18 @@ export default function IssueCard({title = 'Title', content = sampleText}) {
         </div>
         <div>
           <TooltipIconButton
+            title='Reply'
+            size = 'small'
+            placement = 'bottom'
+            onClick={() => {}}
+            icon={<Reply/>}/>
+          <TooltipIconButton
+            title='Resolve'
+            size = 'small'
+            placement = 'bottom'
+            onClick={() => {}}
+            icon={<Check/>}/>
+          <TooltipIconButton
             title='Delete'
             size = 'small'
             placement = 'bottom'
@@ -110,8 +124,9 @@ const useStyles = makeStyles({
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottom: '1px solid lightGrey',
-    marginTop: '5px',
+    marginTop: '10px',
     marginBottom: '5px',
+    paddingBottom: '5px',
     marginLeft: '5px',
     marginRight: '5px',
     paddingLeft: '5px',

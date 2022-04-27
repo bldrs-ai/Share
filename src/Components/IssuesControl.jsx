@@ -13,6 +13,8 @@ import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
+import IssueCardReply from './IssueCardReply'
+import SearchBar from './SearchComments'
 
 
 /**
@@ -103,37 +105,40 @@ export function CommentPanel({onClick}) {
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
-      <div style = {{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        margin: 12,
-      }}>
-        <div>All Comments</div>
-        <TooltipIconButton
-          title='Share'
-          size = 'small'
-          placement = 'bottom'
-          onClick={()=>onClick()}
-          icon={<CloseIcon/>}/>
+      <div className = {classes.titleContainer}>
+        <div className = {classes.title}>
+          <div>All Comments</div>
+          <TooltipIconButton
+            title='Share'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onClick()}
+            icon={<CloseIcon/>}/>
+        </div>
+        <SearchBar onClickMenuCb = {()=>{}}/>
       </div>
-      <IssueCard title = {'Welcome to BLDRS'} content = {`Welcome Welcome`}/>
-      <IssueCard title = {'Future'} content = {`The Architecture,
-      Engineering and Construction industries are trying to
-      face challenging problems of the future with tools anchored in the past.
-      Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-      open development. We can't imagine a future where building the rest of the world
-      hasn't been transformed by these new ways of working. We are part of that transformation.`}/>
-      <IssueCard title = {'Key Insight'} content = {`The key insights from Tech:
-      Cross-functional online collaboration unlocks team flow, productivity and creativity.
-      Your team extends outside of your organization and software developers are essential
-      team members.An ecosystem of app Creators developing on a powerful operating system
-      Platform is the most scalable architecture.Open workspaces, open standards and open
-      source code the most powerful way to work. Cooperation is the unfair advantage.`}/>
-      <IssueCard title = {'We are in the process'} content = {`Now we're building.
-      We've met and dreamed and planned with a handful of visionaries around the world.
-      We're ready to work together to make something big.`}/>
-      <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
+      <div>
+      </div>
+      <div className = {classes.cardsContainer}>
+        <IssueCardReply/>
+        <IssueCard title = {'Welcome to BLDRS'} content = {`Welcome Welcome`}/>
+        <IssueCard title = {'Future'} content = {`The Architecture,
+        Engineering and Construction industries are trying to
+        face challenging problems of the future with tools anchored in the past.
+        Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+        open development. We can't imagine a future where building the rest of the world
+        hasn't been transformed by these new ways of working. We are part of that transformation.`}/>
+        <IssueCard title = {'Key Insight'} content = {`The key insights from Tech:
+        Cross-functional online collaboration unlocks team flow, productivity and creativity.
+        Your team extends outside of your organization and software developers are essential
+        team members.An ecosystem of app Creators developing on a powerful operating system
+        Platform is the most scalable architecture.Open workspaces, open standards and open
+        source code the most powerful way to work. Cooperation is the unfair advantage.`}/>
+        <IssueCard title = {'We are in the process'} content = {`Now we're building.
+        We've met and dreamed and planned with a handful of visionaries around the world.
+        We're ready to work together to make something big.`}/>
+        <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
+      </div>
     </Paper>
   )
 }
@@ -234,12 +239,12 @@ function setPanelText(title, body, setText, setNext) {
 const useStyles = makeStyles({
   commentsContainer: {
     'width': '290px',
-    'height': '90%',
+    'height': '88%',
+    'minHeight': '560px',
     'position': 'absolute',
     'top': '20px',
-    'right': '100px',
+    'right': '86px',
     'border': '1px solid lightGrey',
-    'overflow': 'scroll',
     '@media (max-width: 900px)': {
       width: '290px',
       height: '270px',
@@ -247,5 +252,26 @@ const useStyles = makeStyles({
       top: '300px',
       right: '80px',
     },
+  },
+  titleContainer: {
+    height: '100px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: '4px',
+  },
+  title: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: '20px',
+    width: '90%',
+    margin: '12px 12px 6px 12px',
+    paddingBottom: '10px',
+  },
+  cardsContainer: {
+    overflow: 'scroll',
+    maxHeight: '78%',
   },
 })

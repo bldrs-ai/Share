@@ -203,8 +203,8 @@ const useStyles = makeStyles({
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
+      minWidth: '280px',
+      width: '80%',
       maxWidth: '300px',
     },
     '& .MuiInputBase-root': {
