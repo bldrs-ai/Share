@@ -34,7 +34,6 @@ export default function ShortcutsControl() {
 function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const classes = useStyles()
   const isMobile = useIsMobile()
-  console.log('is mobile', isMobile)
   return (
     <Dialog
       icon={<QuestionIcon/>}

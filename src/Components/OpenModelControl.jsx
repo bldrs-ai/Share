@@ -7,7 +7,7 @@ import {ControlButton} from './Buttons'
 
 
 /**
- * Displays open warning.
+ * Display sample model control button
  * @return {Object} React component
  */
 export default function OpenModelControl({fileOpen}) {
