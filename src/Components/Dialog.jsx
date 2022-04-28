@@ -59,7 +59,6 @@ const useStyles = makeStyles((theme) => ({
       margin: 0,
       width: '30px',
       height: '30px',
-      border: 'solid 0.5px grey',
       borderRadius: '50%',
       fill: theme.palette.primary.contrastText,
     },

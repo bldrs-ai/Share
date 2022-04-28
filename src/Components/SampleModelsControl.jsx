@@ -42,14 +42,18 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen})
   const handleSelect = (e) =>{
     setSelected(e.target.value)
     const modelPath = {
-      10: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc',
-      20: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-      30: '/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc',
-      40: '/share/v/gh/Swiss-Property-AG/Portfolio/main/MOMENTUM%20TINYHOUSE.ifc',
-      50: '/share/v/gh/Swiss-Property-AG/Portfolio/main/NIEDERSCHERLI.ifc',
+      1: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc',
+      2: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
+      3: '/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc',
+      4: '/share/v/gh/Swiss-Property-AG/Portfolio/main/MOMENTUM%20TINYHOUSE.ifc',
+      5: '/share/v/gh/Swiss-Property-AG/Portfolio/main/NIEDERSCHERLI.ifc',
+      // eslint-disable-next-line max-len
+      6: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/5007/2907#c:-115.5,-36.4,109.55,0,-41.93,13.88',
+      // eslint-disable-next-line max-len
+      7: '/share/v/gh/Alhakam/BIMsage/master/BIMsage-Source/BIMsage/src/test/resources/ontology/20200121_Promnitz_Stones.ifc/70/91/116/131/80830#c:-7.58,-3.45,0,0.11,-1.73,-0.32',
+      // eslint-disable-next-line max-len
+      8: '/share/v/gh/wikihouseproject/Skylark/main/SKYLARK250/Design%20kit/SKYLARK250_design-kit_simple/SKYLARK250_design-kit_chassis_simple.ifc/1/24/30/37/122447#c:-13.26,5.63,9.29,-3.39,3.81,0.72',
     }
-    console.log('selected', selected)
-    console.log('modelPath', modelPath[e.target.value])
     navigate({
       pathname: modelPath[e.target.value],
     })
@@ -65,23 +69,46 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen})
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
+          <div style = {{textAlign: 'left'}}>
+            <p>
+              We believe GitHub can provide a foundation for the new BIM ecosystem.
+            </p>
+            <p>
+              Models hosted on GitHub are accessed in BLDRS by dropping a GitHub link into the search bar.
+            </p>
+            <p>
+              Please visit our
+              &nbsp;
+              <a
+                className = {classes.link}
+                target="_blank"
+                href = 'https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+                rel="noreferrer">wiki</a>
+              &nbsp; to learn more.
+            </p>
+            <p>
+              Currently there are thousands of IFC files hosted on github, we highlighted several of them:
+            </p>
+          </div>
           <div >
             <TextField
               className={classes.root}
               value={selected}
               onChange={(e) => handleSelect(e)}
               variant='outlined'
-              label='Connected models'
+              label='Highlighted IFCs'
               select
               size = 'small'
             >
               <MenuItem value=''>
                 <em>None</em>
               </MenuItem>
-              <MenuItem value={10}>ASTRA.ifc</MenuItem>
-              <MenuItem value={20}>EISVOGEL.ifc</MenuItem>
-              <MenuItem value={30}>KNIK.ifc</MenuItem>
-              <MenuItem value={40}>MOMENTUM TINYHOUSE.ifc</MenuItem>
+              <MenuItem value={6}>STRUCTURAL DETAIL</MenuItem>
+              <MenuItem value={1}>RESIDENTIAL BUILDING - ASTRA</MenuItem>
+              <MenuItem value={4}>TINY HOUSE</MenuItem>
+              <MenuItem value={2}>RESIDENTIAL BUILDING - EISVOGEL</MenuItem>
+              <MenuItem value={7}>HIGH RESOLUTION SCAN</MenuItem>
+              <MenuItem value={8}>MODULAR CONSTRUCTION</MenuItem>
             </TextField>
           </div>
         </div>
@@ -94,11 +121,16 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen})
 const useStyles = makeStyles({
   content: {
     width: '260px',
-    height: '60px',
+    height: '360px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
     alignItems: 'center',
+  },
+  link: {
+    color: 'blue',
+    borderBottom: '1px solid blue',
+    cursor: 'pointer',
   },
   root: {
     'width': '260px',
