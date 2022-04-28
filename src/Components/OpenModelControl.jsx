@@ -14,7 +14,8 @@ export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
     <ControlButton
-      title='Shortcut keys'
+      title='Open IFC'
+      placement='top'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<OpenIcon/>}

@@ -71,7 +71,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen})
         <div className={classes.content}>
           <div style = {{textAlign: 'left'}}>
             <p>
-              We believe GitHub can provide a foundation for the new BIM ecosystem.
+              We believe GitHub provides an excellent foundation for the new BIM ecosystem.
             </p>
             <p>
               Models hosted on GitHub are accessed in BLDRS by dropping a GitHub link into the search bar.
@@ -121,7 +121,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen})
 const useStyles = makeStyles({
   content: {
     width: '260px',
-    height: '360px',
+    height: '380px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
