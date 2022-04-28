@@ -9,7 +9,7 @@ import {useNavigate} from 'react-router-dom'
 
 
 /**
- * Displays open warning.
+ * Display sample models control button
  * @return {Object} React component
  */
 export default function SampleModelsControl({fileOpen}) {
