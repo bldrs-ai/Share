@@ -20,10 +20,12 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: [
+    'import',
     'react',
     'jsx-a11y',
   ],
   rules: {
+    'import/newline-after-import': ['error', { 'count': 2 }],
     'max-len': ['error', 100],
     'no-irregular-whitespace': ['error'],
     'no-trailing-spaces': ['error'],
