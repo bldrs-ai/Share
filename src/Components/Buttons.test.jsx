@@ -4,6 +4,7 @@ import {TooltipIconButton} from './Buttons'
 import QuestionIcon from '../assets/2D_Icons/Question.svg'
 import {MockComponent} from '../__mocks__/MockComponent'
 
+
 describe('<TooltipIconButton />', () => {
   test('should throw error if missing required props', () => {
     expect(() => render(<MockComponent>
