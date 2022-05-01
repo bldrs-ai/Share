@@ -14,7 +14,7 @@
     "serve": "yarn build && node config/serve.js",
     "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.js'`",
     "test": "jest",
-    "precommit": "yarn test && yarn lint",
+    "precommit": "yarn lint && yarn test",
     "prepare": "husky install"
   },
   "dependencies": {
