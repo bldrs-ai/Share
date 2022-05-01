@@ -2,9 +2,6 @@ import useTheme from '../Theme'
 import {ThemeProvider} from '@mui/material/styles'
 import React, {createContext} from 'react'
 
-const ColorModeContext = createContext({
-  toggleColorMode: () => {},
-})
 
 /**
  * @param {Object} children React component(s)
@@ -21,3 +18,7 @@ export const MockComponent = ({children}) => {
     </ColorModeContext.Provider>
   )
 }
+
+const ColorModeContext = createContext({
+  toggleColorMode: () => {},
+})
