@@ -2,6 +2,11 @@
 # yarn lockfile v1
 
 
+"@alex_neo/jest-expect-message@^1.0.5":
+  version "1.0.5"
+  resolved "https://registry.yarnpkg.com/@alex_neo/jest-expect-message/-/jest-expect-message-1.0.5.tgz#bdc96f5764cb42ab677941c1ac86b2e4bea96fa7"
+  integrity sha512-1eBykZCd0pPGl5qKtV6Z5ARA6yuhXzHsVN2h5GH5/H6svYa37Jr7vMio5OFpiw1LBHtscrZs7amSkZkcwm0cvQ==
+
 "@ampproject/remapping@^2.1.0":
   "integrity" "sha512-hoyByceqwKirw7w3Z7gnIIZC3Wx3J484Y3L/cMpXFbr7d9ZQj2mODrirNzcJa+SM3UlpWXYvKV4RlRpFXlWgXg=="
   "resolved" "https://registry.npmjs.org/@ampproject/remapping/-/remapping-2.1.2.tgz"

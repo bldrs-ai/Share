@@ -1,6 +1,6 @@
 {
-  "name": "buildrs",
-  "version": "1.0.0-r273",
+  "name": "bldrs",
+  "version": "1.0.0-r276",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -36,6 +36,7 @@
     "web-vitals": "^2.1.0"
   },
   "devDependencies": {
+    "@alex_neo/jest-expect-message": "^1.0.5",
     "@babel/preset-env": "^7.16.4",
     "@babel/preset-react": "^7.16.0",
     "@pablo-mayrgundter/cookies.js": "^1.0.0",
@@ -62,8 +63,7 @@
     "verbose": false,
     "testEnvironment": "jsdom",
     "testPathIgnorePatterns": [
-      "src/Share.test.js",
-      "src/ShareRoutes.test.js"
+      "src/Share.test.js"
     ],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",
@@ -76,7 +76,8 @@
       "^.+\\.css$": "identity-obj-proxy"
     },
     "setupFilesAfterEnv": [
-      "<rootDir>/src/setupTests.js"
+      "<rootDir>/src/setupTests.js",
+      "@alex_neo/jest-expect-message"
     ]
   }
 }
