@@ -1,7 +1,10 @@
-Share is a web-based BIM integration environment using [IFC.js](https://github.com/IFCjs/web-ifc-viewer) and React.
+Share is a web-based BIM & CAD integration environment.
 
-Join the [Bldrs Discord](https://discord.gg/fYnUd7cP).
+Join the [Bldrs Discord](https://discord.gg/apWHfDtkJs).
 
+# Design
+
+See [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design) on the [wiki](https://github.com/bldrs-ai/Share/wiki).
 
 # Setup
 
@@ -37,6 +40,7 @@ If you want to contribute, please use the [fork and and branch](https://blog.sco
 PR requirements:
  - Focused: one logical/wholistic change.  Less is more.
  - Clear: Well-factored, commented, no debugging, etc.
+ - [Good commit messages](https://cbea.ms/git-commit/). "a commit message shows whether a developer is a good collaborator"
  - Tested: focused and clear unit tests.
  - Demonstrated: a link to a live demo of your PR hosted at your fork's GitHub pages.
 
