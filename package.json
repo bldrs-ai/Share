@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r276",
+  "version": "1.0.0-r290",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -27,6 +27,7 @@
     "@mui/styled-engine": "^5.0.1",
     "@mui/styles": "^5.1.0",
     "@octokit/rest": "^18.12.0",
+    "material-icons": "^1.10.9",
     "normalize.css": "^8.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",

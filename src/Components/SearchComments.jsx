@@ -90,7 +90,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         <TooltipToggleButton
           placement = 'bottom'
           size = 'small'
-          title='Filter'
+          title='Sort + Filter'
           onClick={onClickMenuCb}
           icon={<FilterIcon/>}/>
         <InputBase

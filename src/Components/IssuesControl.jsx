@@ -13,6 +13,7 @@ import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
+import IssueCard1 from './IssueCard1'
 import IssueCardReply from './IssueCardReply'
 import SearchBar from './SearchComments'
 
@@ -137,6 +138,7 @@ export function CommentPanel({onClick}) {
         We've met and dreamed and planned with a handful of visionaries around the world.
         We're ready to work together to make something big.`}/>
         <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
+        <IssueCard1/>
         <IssueCardReply/>
       </div>
     </Paper>
@@ -274,6 +276,11 @@ const useStyles = makeStyles({
   cardsContainer: {
     'overflow': 'scroll',
     'height': '78%',
+    // 'display': 'flex',
+    // 'flexDirection': 'column',
+    // 'justifyContent': 'center',
+    // 'alignItems': 'center',
+    // 'border': '1px solid red',
     '@media (max-width: 900px)': {
       height: '210px',
     },
