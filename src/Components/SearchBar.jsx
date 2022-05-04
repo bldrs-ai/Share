@@ -9,7 +9,13 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
+import {
+  looksLikeLink,
+  githubUrlOrPathToSharePath,
+} from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
+import LinkIcon from '../assets/2D_Icons/Link.svg'
+import ClearIcon from '../assets/2D_Icons/Close.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
@@ -24,10 +30,14 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
+  const [error, setError] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles()
-
+  // input length is dynamically calculated in order to fit the input string into the Text input
+  const calculatedInputWidth = Number(inputText.length) * 10 + 130
+  // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
+  // TODO(oleg): find a cleaner way to achieve this
+  const classes = useStyles({inputWidth: calculatedInputWidth})
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -44,10 +54,23 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
-
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
+    if (error.length > 0) {
+      setError('')
+    }
+    // if url is typed into the search bar open the model
+    if (looksLikeLink(inputText)) {
+      try {
+        const modelPath = githubUrlOrPathToSharePath(inputText)
+        navigate(modelPath, {replace: true})
+      } catch (e) {
+        console.error(e)
+        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
+      }
+      return
+    }
 
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
@@ -63,18 +86,50 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   }
 
   return (
-    <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-      <TooltipToggleButton
-        title='Toggle tree view'
-        onClick={onClickMenuCb}
-        icon={<TreeIcon/>}/>
-      <InputBase
-        inputRef={searchInputRef}
-        value={inputText}
-        onChange={onInputChange}
-        placeholder={'Search model'}/>
-      <FormButton title='search' icon={<SearchIcon/>}/>
-    </Paper>
+    <div>
+      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
+        <TooltipToggleButton
+          placement = 'bottom'
+          title='Toggle tree view'
+          onClick={onClickMenuCb}
+          icon={<TreeIcon/>}/>
+        <InputBase
+          inputRef={searchInputRef}
+          value={inputText}
+          onChange={onInputChange}
+          error = {true}
+          placeholder={'Search model'}/>
+        {inputText.length> 0 ?
+          <TooltipToggleButton
+            title='clear'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>{
+              setInputText('')
+              setError('')
+            }}
+            icon={<ClearIcon/>}/>:null
+        }
+        <FormButton
+          title='search'
+          size = 'small'
+          placement = 'bottom'
+          icon={<SearchIcon/>}/>
+        <TooltipToggleButton
+          title={`Enter GitHub URL to access IFCs hosted on GitHub.
+                  Click on the link icon to learn more.`}
+          size = 'small'
+          placement = 'right'
+          onClick={()=>{
+            window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
+          }}
+          icon={<LinkIcon/>}/>
+      </Paper>
+      { inputText.length>0 &&
+        error.length>0 &&
+        <div className = {classes.error}>{error}</div>
+      }
+    </div>
   )
 }
 
@@ -142,14 +197,24 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
 const useStyles = makeStyles({
   root: {
     'display': 'flex',
-    'width': '300px',
+    'minWidth': '300px',
+    'width': (props) => props.inputWidth,
+    'maxWidth': '700px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     '@media (max-width: 900px)': {
-      width: '250px',
+      minWidth: '300px',
+      width: '300px',
+      maxWidth: '300px',
     },
     '& .MuiInputBase-root': {
       flex: 1,
     },
+  },
+  error: {
+    marginLeft: '10px',
+    marginTop: '3px',
+    fontSize: '10px',
+    color: 'red',
   },
 })

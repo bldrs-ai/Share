@@ -110,7 +110,7 @@ export default function NavPanel({
 const useStyles = makeStyles({
   root: {
     'position': 'absolute',
-    'top': '80px',
+    'top': '94px',
     'left': '20px',
     'overflow': 'auto',
     'width': '300px',

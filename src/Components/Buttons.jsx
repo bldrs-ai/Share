@@ -46,11 +46,12 @@ export function TooltipToggleButton({
   onClick,
   title,
   icon,
+  size = 'medium',
   placement='left',
 }) {
   assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
-  const classes = useStyles(useTheme())
+  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -89,11 +90,12 @@ export function ControlButton({
   setIsDialogDisplayed,
   icon,
   placement='left',
+  size = 'medium',
   dialog,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
-  const classes = useStyles(useTheme())
+  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -120,7 +122,7 @@ export function ControlButton({
  */
 export function FormButton({title, icon, type='submit', placement='left', size='medium'}) {
   assertDefined(title, icon)
-  const classes = useStyles(useTheme())
+  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
@@ -136,8 +138,8 @@ export function FormButton({title, icon, type='submit', placement='left', size='
 const useStyles = makeStyles((theme) => ({
   root: {
     '& button': {
-      width: '50px',
-      height: '50px',
+      width: (props) => props.buttonWidth || '50px',
+      height: (props) => props.buttonWidth || '50px',
       border: 'none',
       borderRadius: '50%',
     },
