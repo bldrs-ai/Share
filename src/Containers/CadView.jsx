@@ -161,7 +161,7 @@ export default function CadView({
         .getTokenSilently()
         .then(async (accessToken) => {
           console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken ? true : false)
-          //viewer.IFC.loader.withCredentials = true
+          // viewer.IFC.loader.withCredentials = true
           viewer.IFC.loader.requestHeader = {
             'Access-Control-Allow-Credentials': 'true',
             'Access-Control-Request-Method': 'GET',
