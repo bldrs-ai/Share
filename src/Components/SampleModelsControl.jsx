@@ -12,19 +12,18 @@ import {useNavigate} from 'react-router-dom'
  * Display sample models control button
  * @return {Object} React component
  */
-export default function SampleModelsControl({fileOpen}) {
+export default function SampleModelsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
 
   return (
     <ControlButton
       placement='top'
-      title='Models'
+      title='Sample Models'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<ModelIcon/>}
       dialog={
         <SampleModelsDialog
-          fileOpen={fileOpen}
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
 }
@@ -35,7 +34,7 @@ export default function SampleModelsControl({fileOpen}) {
  * @param {function} setIsDialogDisplayed
  * @return {Object} React component
  */
-function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
+function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [selected, setSelected] = React.useState('')
   const classes = useStyles()
   const navigate = useNavigate()
