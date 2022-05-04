@@ -153,25 +153,26 @@ export default function CadView({
 
     const auth0 = await createAuth0Client({
       domain: 'bldrs.us.auth0.com',
-//      client_id: 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp',
+      // client_id: 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp',
       client_id: 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv',
-      redirect_uri: window.location.origin + '/',
+      redirect_uri: window.location.origin,
     })
     auth0
         .getTokenSilently()
         .then(async (accessToken) => {
           console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken ? true : false)
+          //viewer.IFC.loader.withCredentials = true
           viewer.IFC.loader.requestHeader = {
-            'Authorization': `Bearer ${accessToken}`,
-//            'Access-Control-Request-Method': 'GET',
-//            'Access-Control-Request-Headers': 'Content-Type, Accept',
+            'Access-Control-Allow-Credentials': 'true',
+            'Access-Control-Request-Method': 'GET',
+            // 'Access-Control-Request-Headers': 'Accept, Content-Type, Origin',
             'Access-Control-Allow-Origin': 'http://localhost:8080',
             'Origin': 'http://localhost:8080',
+            'Authorization': `Bearer ${accessToken}`,
           }
-          viewer.IFC.loader.withCredentials = true
 
           const model = await viewer.IFC.loadIfcUrl(
-            filepath,
+              filepath,
             urlHasCameraParams() ? false : true, // fitToFrame
             (progressEvent) => {
               if (Number.isFinite(progressEvent.loaded)) {
