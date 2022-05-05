@@ -21,7 +21,7 @@ export const TooltipIconButton = ({
   icon,
   placement = 'right',
   size = 'medium',
-  'data-testid': dataTestId,
+  dataTestId = 'test-button',
 }) => {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
