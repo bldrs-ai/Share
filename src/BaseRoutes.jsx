@@ -41,11 +41,14 @@ export default function BaseRoutes({testElt = null}) {
                location.pathname === (installPrefix + '/')) {
       console.log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
       navigate(installPrefix + '/share')
+    } else {
+      console.log('window.location: ', window.location)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const basePath = installPrefix + '/'
+  console.log('base path: ', basePath)
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
