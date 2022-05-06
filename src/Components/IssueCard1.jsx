@@ -31,7 +31,7 @@ const ExpandMore = styled((props) => {
  * IssueCard
  * @return {Object} React Component
  */
-export default function IssueCard() {
+export default function IssueCard({title, date = 'May 2, 2022', content, media = false}) {
   const [expanded, setExpanded] = React.useState(false)
 
   const handleExpandClick = () => {
@@ -39,7 +39,7 @@ export default function IssueCard() {
   }
 
   return (
-    <Card sx={{maxWidth: 270, border: '1px solid lightgrey', marginLeft: '10px'}}>
+    <Card sx={{maxWidth: 270, border: '1px solid lightgrey', marginLeft: '10px', marginBottom: '5px'}}>
       <CardHeader
         avatar={
           <Avatar sx={{bgcolor: red[600]}} aria-label='recipe'>
@@ -51,20 +51,20 @@ export default function IssueCard() {
             <MoreVertIcon style = {{width: 20, height: 20}}/>
           </IconButton>
         }
-        title='Load bearing capacity?'
+        title={title}
         subheader='May 2, 2022'
       />
-      <CardMedia
-        component='img'
-        height='194'
-        image='https://help.autodesk.com/cloudhelp/2019/ENU/Revit-Model/images/GUID-365E0138-294A-4F6C-B8A4-83332CC9DDDB.png'
-        alt='Structure'
-      />
+      {media ?
+        <CardMedia
+          component='img'
+          height='194'
+          image='https://help.autodesk.com/cloudhelp/2019/ENU/Revit-Model/images/GUID-365E0138-294A-4F6C-B8A4-83332CC9DDDB.png'
+          alt='Structure'
+        /> : null
+      }
       <CardContent>
         <Typography variant='body2' color='text.secondary'>
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do
-          eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad
-          minim veniam, quis nostrud exercitation ullamco
+          {content}
         </Typography>
       </CardContent>
       <CardActions disableSpacing>

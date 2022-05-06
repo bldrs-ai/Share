@@ -25,19 +25,21 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText}) {
+export default function IssueCard({title = 'Title', content = sampleText, setSelected}) {
   const [expand, setExpand] = useState(false)
   const [select, setSelect] = useState(false)
   const contentHeight = expand ? 'auto' : '70px'
   const cardHeight = expand ? 'auto' : '174px'
   const classes = useStyles({cardHeight: cardHeight, contentHeight: contentHeight, select: select})
-  // const navigate = select?<Clear/>:<Navigate/>
   return (
-    <Paper elevation = {0} className = {classes.container}>
+    <Paper elevation = {0} className = {classes.container}
+    >
       <div className = {classes.title}
         role = 'button'
-        onClick = {() => {
-          select ? setSelect(false):setSelect(true)
+        onClick = {(e) => {
+          select ? setSelect(false) : setSelect(true)
+          console.log('in the on click', select)
+          setSelected()
         }}
         onKeyPress = {() => {
           select ? setSelect(false):setSelect(true)
@@ -47,9 +49,10 @@ export default function IssueCard({title = 'Title', content = sampleText}) {
         <div>
           {title}
         </div>
-        <div className = {classes.avatarIcon}
-          style = {{cursor: 'pointer'}}
-        />
+        <div className = {classes.titleRightContainer}>
+          <div className = {classes.select}>{select?'un-select':'select'}</div>
+          <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
+        </div>
       </div>
       <div className = {classes.content}>
         {content}
@@ -198,5 +201,17 @@ const useStyles = makeStyles({
     height: 16,
     borderRadius: '50%',
     backgroundColor: 'blue',
+  },
+  titleRightContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  select: {
+    border: '1px solid lightgrey',
+    padding: '2px 4px 2px 4px',
+    borderRadius: '6px',
+    marginRight: '10px',
   },
 })

@@ -13,7 +13,7 @@ import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
-import IssueCard1 from './IssueCard1'
+// import IssueCard1 from './IssueCard1'
 import IssueCardReply from './IssueCardReply'
 import SearchBar from './SearchComments'
 
@@ -94,6 +94,39 @@ export default function IssuesControl({viewer}) {
 }
 
 
+const issues = [
+  {
+    title: 'Welcome to BLDRS',
+    content: 'Welcome Welcome',
+  },
+  {
+    title: 'Future',
+    content: `The Architecture,
+    Engineering and Construction industries are trying to
+    face challenging problems of the future with tools anchored in the past.
+    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+    open development. We can't imagine a future where building the rest of the world
+    hasn't been transformed by these new ways of working. We are part of that transformation.`,
+    media: true,
+  },
+  {
+    title: 'Key Insight',
+    content: `The key insights from Tech:
+    Cross-functional online collaboration unlocks team flow, productivity and creativity.
+    Your team extends outside of your organization and software developers are essential
+    team members.An ecosystem of app Creators developing on a powerful operating system
+    Platform is the most scalable architecture.Open workspaces, open standards and open
+    source code the most powerful way to work. Cooperation is the unfair advantage.`,
+  },
+  {
+    title: 'We are in the process',
+    content: `Now we're building.
+    We've met and dreamed and planned with a handful of visionaries around the world.
+    We're ready to work together to make something big`,
+  },
+]
+
+
 /**
  * Displays the comment panel
  * @param {string} body The comment body
@@ -103,7 +136,9 @@ export default function IssuesControl({viewer}) {
  * @return {Object} React component
  */
 export function CommentPanel({onClick}) {
+  const [selected, setSelected] = useState(null)
   const classes = useStyles()
+  console.log('selected', selected)
   return (
     <Paper className = {classes.commentsContainer}>
       <div className = {classes.titleContainer}>
@@ -121,25 +156,19 @@ export function CommentPanel({onClick}) {
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        <IssueCard title = {'Welcome to BLDRS'} content = {`Welcome Welcome`}/>
-        <IssueCard title = {'Future'} content = {`The Architecture,
-        Engineering and Construction industries are trying to
-        face challenging problems of the future with tools anchored in the past.
-        Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-        open development. We can't imagine a future where building the rest of the world
-        hasn't been transformed by these new ways of working. We are part of that transformation.`}/>
-        <IssueCard title = {'Key Insight'} content = {`The key insights from Tech:
-        Cross-functional online collaboration unlocks team flow, productivity and creativity.
-        Your team extends outside of your organization and software developers are essential
-        team members.An ecosystem of app Creators developing on a powerful operating system
-        Platform is the most scalable architecture.Open workspaces, open standards and open
-        source code the most powerful way to work. Cooperation is the unfair advantage.`}/>
-        <IssueCard title = {'We are in the process'} content = {`Now we're building.
-        We've met and dreamed and planned with a handful of visionaries around the world.
-        We're ready to work together to make something big.`}/>
-        <IssueCard title = {'Invitation'} content = {'Come build with us ...'}/>
-        <IssueCard1/>
-        <IssueCardReply/>
+        {selected === null?
+          issues.map((issue, index)=>{
+            <IssueCard
+              key = {index}
+              title = {issue.title}
+              content = {issue.content}
+              setSelected = {()=>setSelected(index)}/>
+          }):
+          <div>
+            <IssueCard title = {issues[selected].title} content = {issues[selected].content} setSelected = {()=>setSelected(null)}/>
+            <IssueCardReply/>
+          </div>
+        }
       </div>
     </Paper>
   )
