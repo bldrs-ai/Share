@@ -7,7 +7,7 @@ import {
   useNavigate,
 } from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
-// import debug from './utils/debug'
+import debug from './utils/debug'
 
 
 /**
@@ -31,20 +31,19 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     const referrer = document.referrer
-    console.log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
+    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
     if (referrer) {
       const ref = new URL(referrer + window.location.hash)
       if (ref.pathname.length > 1) {
         navigate(ref)
       } else {
-        console.log('fallthrough referrer: ', location)
+        console.log('fallthrough referrer')
+        navigate(installPrefix + '/share')
       }
     } else if (location.pathname === installPrefix ||
                location.pathname === (installPrefix + '/')) {
-      console.log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
       navigate(installPrefix + '/share')
-    } else {
-      console.log('window.location: ', window.location)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
