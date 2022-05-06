@@ -36,6 +36,8 @@ export default function BaseRoutes({testElt = null}) {
       const ref = new URL(referrer + window.location.hash)
       if (ref.pathname.length > 1) {
         navigate(ref)
+      } else {
+        console.log('fallthrough referrer: ', location)
       }
     } else if (location.pathname === installPrefix ||
                location.pathname === (installPrefix + '/')) {
@@ -48,7 +50,6 @@ export default function BaseRoutes({testElt = null}) {
   }, [])
 
   const basePath = installPrefix + '/'
-  console.log('base path: ', basePath)
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
