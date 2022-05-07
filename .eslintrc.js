@@ -12,7 +12,13 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
   ],
+  parser: '@babel/eslint-parser',
   parserOptions: {
+    babelOptions: {
+     plugins: [
+       '@babel/syntax-import-assertions'
+     ],
+    },
     ecmaFeatures: {
       jsx: true,
     },
