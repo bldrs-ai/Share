@@ -9,6 +9,7 @@ import Check from '../assets/2D_Icons/Check.svg'
 import Reply from '../assets/2D_Icons/Reply.svg'
 // import Navigate from '../assets/2D_Icons/Navigate.svg'
 import {TooltipIconButton} from './Buttons'
+import IssueCardInput from './IssueCardInput'
 
 
 const sampleText = ` Lorem ipsum dolor sit amet, consectetur adipiscing elit,
@@ -25,14 +26,18 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText, setSelected}) {
+export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false}) {
   const [expand, setExpand] = useState(false)
   const [select, setSelect] = useState(false)
+  const [reply, setReply] = useState(false)
   const contentHeight = expand ? 'auto' : '70px'
-  const cardHeight = expand ? 'auto' : '174px'
+  const cardHeight = expand || reply ? 'auto' : '174px'
   const classes = useStyles({cardHeight: cardHeight, contentHeight: contentHeight, select: select})
   return (
-    <Paper elevation = {0} className = {classes.container}
+    <Paper
+      elevation = {0}
+      className = {classes.container}
+      style={selected?{border: '1px solid green'}:{}}
     >
       <div className = {classes.title}
         role = 'button'
@@ -50,7 +55,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
           {title}
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.select}>{select?'un-select':'select'}</div>
+          <div className = {classes.select}>{selected?'un-select':'select'}</div>
           <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
         </div>
       </div>
@@ -84,11 +89,11 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
         </div>
         <div>
           <TooltipIconButton
-            title='Reply'
+            title='Share'
             size = 'small'
             placement = 'bottom'
             onClick={() => {}}
-            icon={<Reply/>}/>
+            icon={<Share/>}/>
           <TooltipIconButton
             title='Resolve'
             size = 'small'
@@ -102,13 +107,14 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
             onClick={() => {}}
             icon={<Delete/>}/>
           <TooltipIconButton
-            title='Share'
+            title='Reply'
             size = 'small'
             placement = 'bottom'
-            onClick={() => {}}
-            icon={<Share/>}/>
+            onClick={()=>setReply(true)}
+            icon={<Reply/>}/>
         </div>
       </div>
+      {reply ? <IssueCardInput onSubmit = {()=>setReply(false)}/> : null}
     </Paper>
   )
 }
