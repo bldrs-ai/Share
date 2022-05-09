@@ -18,6 +18,19 @@ export async function getIssue(issueId) {
 
 
 /**
+ * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
+ * below for the expected structure.
+ * @param {Number} issueId
+ * @return {Object} The issue object.
+ */
+export async function getIssues() {
+  const issues = await getGitHub('issues')
+  debug().log('GitHub: issue: ', issues)
+  return issues
+}
+
+
+/**
  * The comments should have the following structure:
  * @param {Number} issueId
  * @param {Number} commentId
@@ -51,6 +64,8 @@ export async function getComment(issueId, commentId) {
  * @return {Object} The object at the resource
  */
 async function getGitHub(path, args) {
+  console.log('get github', path)
+  console.log('get github args', args)
   const account = {
     owner: 'pablo-mayrgundter',
     repo: 'Share',
@@ -78,6 +93,7 @@ class MockOctokit {
    */
   request(path, account, args) {
     debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
+    console.log('mock path', path)
     switch (true) {
       case /.*\/issues\/{.+}$/.test(path): return MOCK_ISSUE
       case /.*\/issues\/{.+}\/comments$/.test(path): return MOCK_COMMENTS

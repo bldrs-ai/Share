@@ -9,7 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
-import {getIssue, getComment} from '../utils/GitHub'
+import {getIssue, getComment, getIssues} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
@@ -39,7 +39,6 @@ export default function IssuesControl({viewer}) {
   useEffect(() => {
     if (location) {
       const p = parseHashParams(location)
-      console.log('parsed hash params', p)
       if (p && p.issueId) {
         if (Number.isInteger(p.commentId)) {
           (async () => {
@@ -165,7 +164,6 @@ const images = [
 export function CommentPanel({onClick}) {
   const [selected, setSelected] = useState(null)
   const classes = useStyles()
-  console.log('selected', selected)
   return (
     <Paper className = {classes.commentsContainer}>
       <div className = {classes.titleContainer}>
@@ -267,6 +265,8 @@ function parseHashParams(location) {
  */
 async function showIssue(issueId, setText, setNext) {
   const issue = await getIssue(issueId)
+  const issues = await getIssues()
+  console.log('issues', issues)
   debug().log(`IssuesControl#showIssue: id:(${issueId}), getIssue result: `, issue)
   if (issue && issue.data && issue.data.body) {
     const title = issue.data.title

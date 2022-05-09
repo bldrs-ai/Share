@@ -42,7 +42,6 @@ export default function IssuesControl({viewer}) {
   useEffect(() => {
     if (location) {
       const p = parseHashParams(location)
-      console.log('parsed hash params', p)
       if (p && p.issueId) {
         if (Number.isInteger(p.commentId)) {
           (async () => {
