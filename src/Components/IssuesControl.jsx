@@ -9,10 +9,13 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
-import {getIssue, getComment, getIssues} from '../utils/GitHub'
+import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
+import AddCommentIcon from '../assets/2D_Icons/AddComment.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
+import Back from '../assets/2D_Icons/Back.svg'
 import IssueCard from './IssueCard'
+import IssueCardInput from './IssueCardInput'
 import IssueCardReply from './IssueCardReply'
 import SearchBar from './SearchComments'
 
@@ -34,6 +37,7 @@ export default function IssuesControl({viewer}) {
         useState(parseHashParams(location) ? true : false)
   const [text, setText] = useState('')
   const [next, setNext] = useState(null)
+  const [addComment, setAddComment] = useState(false)
 
 
   useEffect(() => {
@@ -80,14 +84,21 @@ export default function IssuesControl({viewer}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={showIssues}
       dialog={
-        text ?
-          <CommentPanel
+        addComment ?
+          <CommentPanelAdd
             body={body}
             title={title}
             next={next}
             onClick = {showIssues}
+            onAddComment = {()=>setAddComment(!addComment)}
             navigate={navigate}/> :
-        <></>
+          <CommentPanelAll
+            body={body}
+            title={title}
+            next={next}
+            onClick = {showIssues}
+            onAddComment = {()=>setAddComment(!addComment)}
+            navigate={navigate}/>
       }/>)
 }
 
@@ -140,16 +151,11 @@ const replies = [
   },
 ]
 const images = [
-  `https://cdn.wallpaper.com
-  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
-  `https://cdn.wallpaper.com
-  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
-  `https://images.adsttc.com
-  /media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
-  `https://cdn.wallpaper.com
-  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
-  `https://cdn.wallpaper.com
-  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
 ]
 
 
@@ -161,20 +167,28 @@ const images = [
  * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-export function CommentPanel({onClick}) {
+export function CommentPanelAll({onClick, onAddComment}) {
   const [selected, setSelected] = useState(null)
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
       <div className = {classes.titleContainer}>
         <div className = {classes.title}>
-          <div>All Comments</div>
-          <TooltipIconButton
-            title='Share'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>onClick()}
-            icon={<CloseIcon/>}/>
+          <div>{selected !== null ? issues[selected].title : 'All Comments'}</div>
+          <div>
+            <TooltipIconButton
+              title='Add'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onAddComment()}
+              icon={<AddCommentIcon/>}/>
+            <TooltipIconButton
+              title='Share'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onClick()}
+              icon={<CloseIcon/>}/>
+          </div>
         </div>
         <SearchBar onClickMenuCb = {()=>{}}/>
       </div>
@@ -223,6 +237,51 @@ export function CommentPanel({onClick}) {
   )
 }
 
+
+/**
+ * Displays the comment panel
+ * @param {string} body The comment body
+ * @param {string|null} title The comment title, optional
+ * @param {string|null} next Full URL for next comment link href
+ * @param {function|null} navigate React router navigate for back button
+ * @return {Object} React component
+ */
+export function CommentPanelAdd({onClick, onAddComment}) {
+  const classes = useStyles()
+  return (
+    <Paper className = {classes.addContainer}>
+      <div className = {classes.titleContainer}>
+        <div className = {classes.title}>
+          <div>Add a Comment</div>
+          <div>
+            <TooltipIconButton
+              title='Back'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onAddComment()}
+              icon={<Back/>}/>
+            <TooltipIconButton
+              title='Close'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onClick()}
+              icon={<CloseIcon/>}/>
+          </div>
+        </div>
+        <SearchBar onClickMenuCb = {()=>{}}/>
+      </div>
+      <div>
+      </div>
+      <div style = {{fontSize: '14px', width: '100%', paddingLeft: '15px', paddingRight: '15px', display: 'flex', justifyContent: 'center'}}>
+          Comments are anchored to an element, please select an element to attach a comment.
+      </div>
+      <div className = {classes.cardsContainer}>
+        <IssueCardInput onSubmit={()=>onAddComment()}/>
+      </div>
+    </Paper>
+  )
+}
+
 /** The prefix to use for issue id in the URL hash. */
 export const ISSUE_PREFIX = 'i'
 
@@ -265,8 +324,6 @@ function parseHashParams(location) {
  */
 async function showIssue(issueId, setText, setNext) {
   const issue = await getIssue(issueId)
-  const issues = await getIssues()
-  console.log('issues', issues)
   debug().log(`IssuesControl#showIssue: id:(${issueId}), getIssue result: `, issue)
   if (issue && issue.data && issue.data.body) {
     const title = issue.data.title
@@ -322,7 +379,24 @@ const useStyles = makeStyles({
   commentsContainer: {
     'width': '290px',
     'height': '88%',
-    'minHeight': '560px',
+    'minHeight': '330px',
+    'position': 'absolute',
+    'top': '20px',
+    'right': '86px',
+    'border': '1px solid lightGrey',
+    '@media (max-width: 900px)': {
+      width: '290px',
+      height: '330px',
+      minHeight: '300px',
+      position: 'absolute',
+      top: '240px',
+      right: '80px',
+    },
+  },
+  addContainer: {
+    'width': '290px',
+    'height': 'auto',
+    'minHeight': '330px',
     'position': 'absolute',
     'top': '20px',
     'right': '86px',
