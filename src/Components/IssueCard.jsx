@@ -26,13 +26,12 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false}) {
+export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
   const [expand, setExpand] = useState(false)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
   const contentHeight = expand ? 'auto' : '70px'
-  const cardHeight = expand || reply ? 'auto' : '174px'
-  const classes = useStyles({cardHeight: cardHeight, contentHeight: contentHeight, select: select})
+  const classes = useStyles({contentHeight: contentHeight, select: select})
   return (
     <Paper
       elevation = {0}
@@ -59,10 +58,19 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
           <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
         </div>
       </div>
-      <div className = {classes.content}>
+      <div style = {{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+        {imageSrc.length !=0 &&
+        <img
+          alt = 'cardImage'
+          style = {{height: '100px'}}
+          src = {imageSrc}/>
+        }
+      </div>
+
+      <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'}:null}>
         {content}
       </div>
-      {content.length>170 ?
+      {content.length> 170 ?
       <div className = {classes.showLess}
         onClick = {(event) => {
           event.preventDefault()
@@ -74,7 +82,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
       >
         show{' '}
         {expand ? 'less' : 'more'}
-      </div>:
+      </div> :
       <div className = {classes.showLessEmpty}/>
       }
       <div className = {classes.actions}>
@@ -92,7 +100,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
             title='Reply'
             size = 'small'
             placement = 'bottom'
-            onClick={()=>setReply(true)}
+            onClick={()=>setReply(!reply)}
             icon={<Reply/>}/>
           <TooltipIconButton
             title='Resolve'
@@ -121,7 +129,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
 
 const useStyles = makeStyles({
   container: {
-    height: (props) => props.cardHeight,
+    height: 'auto',
     margin: '10px',
     marginRight: '10px',
     border: (props) => props.select ? '2px solid green':'1px solid lightGrey',

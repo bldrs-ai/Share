@@ -4,17 +4,12 @@ import {grey} from '@mui/material/colors'
 import {makeStyles} from '@mui/styles'
 import Check from '../assets/2D_Icons/Check.svg'
 import Markup from '../assets/2D_Icons/Markup.svg'
-import {TooltipIconButton} from './Buttons'
+import Camera from '../assets/2D_Icons/Camera.svg'
+import Image from '../assets/2D_Icons/Image.svg'
+import ScreenShot from '../assets/2D_Icons/ScreenShot.svg'
+import {TooltipToggleButton} from './Buttons'
 import InputBase from '@mui/material/InputBase'
 
-
-const sampleText = ` Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit
-in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
-Excepteur sint occaecat cupidatat non proident,
-sunt in culpa qui officia deserunt mollit anim id est laborum.`
 
 /**
  * Issue card
@@ -22,7 +17,7 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCardInput({onSubmit = ()=>{}, title = 'Title', content = sampleText}) {
+export default function IssueCardInput({onSubmit = ()=>{}}) {
   const classes = useStyles()
   return (
     <Paper elevation = {0} className = {classes.container}>
@@ -45,20 +40,36 @@ export default function IssueCardInput({onSubmit = ()=>{}, title = 'Title', cont
           size="small"/>
       </div>
       <div className = {classes.actions}>
-        <div>
-          <TooltipIconButton
-            title='Mark up'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Markup/>}/>
-          <TooltipIconButton
-            title='Resolve'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => onSubmit()}
-            icon={<Check/>}/>
-        </div>
+        <TooltipToggleButton
+          title='Include Camera View'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<Camera/>}/>
+        <TooltipToggleButton
+          title='Include Model Screen Shot'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<ScreenShot/>}/>
+        <TooltipToggleButton
+          title='Upload Image'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<Image/>}/>
+        <TooltipToggleButton
+          title='Mark up mode'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<Markup/>}/>
+        <TooltipToggleButton
+          title='Submit'
+          size = 'small'
+          placement = 'bottom'
+          onClick={()=>onSubmit()}
+          icon={<Check/>}/>
       </div>
     </Paper>
   )

@@ -140,6 +140,18 @@ const replies = [
     source code the most powerful way to work. Cooperation is the unfair advantage.`,
   },
 ]
+const images = [
+  `https://cdn.wallpaper.com
+  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
+  `https://cdn.wallpaper.com
+  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://images.adsttc.com
+  /media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
+  `https://cdn.wallpaper.com
+  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://cdn.wallpaper.com
+  /main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+]
 
 
 /**
@@ -178,6 +190,7 @@ export function CommentPanel({onClick}) {
                 key = {index}
                 title = {issue.title}
                 content = {issue.content}
+                // imageSrc = {images[index]}
                 setSelected = {()=>setSelected(index)}/>
             )
           }):
@@ -197,6 +210,7 @@ export function CommentPanel({onClick}) {
                 title = {replies[0].title}
                 content = {issues[2].content}
                 setSelected = {()=>setSelected(null)}
+                imageSrc = {images[2]}
               />
               <IssueCardReply
                 title = {replies[1].title}

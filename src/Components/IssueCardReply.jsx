@@ -26,7 +26,7 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false}) {
+export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
   const [expand, setExpand] = useState(false)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
@@ -55,9 +55,16 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
           {title}
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.select}>{selected?'un-select':'select'}</div>
           <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
         </div>
+      </div>
+      <div style = {{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+        {imageSrc.length !=0 &&
+        <img
+          alt = 'cardImage'
+          style = {{height: '100px'}}
+          src = {imageSrc}/>
+        }
       </div>
       <div className = {classes.content}>
         {content}
@@ -121,7 +128,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
 
 const useStyles = makeStyles({
   container: {
-    height: (props) => props.cardHeight,
+    height: 'auto',
     width: '250px',
     margin: '10px',
     marginRight: '10px',
