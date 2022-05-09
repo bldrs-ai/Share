@@ -89,11 +89,11 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
         </div>
         <div>
           <TooltipIconButton
-            title='Share'
+            title='Reply'
             size = 'small'
             placement = 'bottom'
-            onClick={() => {}}
-            icon={<Share/>}/>
+            onClick={()=>setReply(true)}
+            icon={<Reply/>}/>
           <TooltipIconButton
             title='Resolve'
             size = 'small'
@@ -107,11 +107,11 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
             onClick={() => {}}
             icon={<Delete/>}/>
           <TooltipIconButton
-            title='Reply'
+            title='Share'
             size = 'small'
             placement = 'bottom'
-            onClick={()=>setReply(true)}
-            icon={<Reply/>}/>
+            onClick={() => {}}
+            icon={<Share/>}/>
         </div>
       </div>
       {reply ? <IssueCardInput onSubmit = {()=>setReply(false)}/> : null}
