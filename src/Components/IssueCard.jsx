@@ -34,8 +34,8 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
   const [reply, setReply] = useState(false)
 
   const contentHeight = expandText ? 'auto' : '70px'
-  const imageHeight = expandImage ? '200px' : '100px'
-  const classes = useStyles({contentHeight: contentHeight, select: select, imageHeight: imageHeight})
+  const imageWidth = expandImage ? '92%' : '150px'
+  const classes = useStyles({contentHeight: contentHeight, select: select, imageWidth: imageWidth})
   return (
     <Paper
       elevation = {0}
@@ -244,7 +244,7 @@ const useStyles = makeStyles({
     marginRight: '10px',
   },
   image: {
-    height: (props) => props.imageHeight,
+    width: (props) => props.imageWidth,
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
   },
