@@ -134,7 +134,9 @@ const useStyles = makeStyles({
   container: {
     padding: '10px',
     border: (props) => props.select ? '2px solid green':'1px solid lightGrey',
-
+    width:'270px',
+    marginBottom:'20px',
+    marginLeft:'10px',
   },
   title: {
     display: 'flex',

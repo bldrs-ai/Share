@@ -172,7 +172,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
   return (
     <Paper className = {classes.commentsContainer}>
       <div className = {classes.title}>
-        <div>{selected !== null ? issues[selected].title : 'All Comments'}</div>
+        <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
         <div>
           <TooltipIconButton
             title='Add'
@@ -181,7 +181,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             onClick={()=>onAddComment()}
             icon={<AddCommentIcon/>}/>
           <TooltipIconButton
-            title='Share'
+            title='Close'
             size = 'small'
             placement = 'bottom'
             onClick={()=>onClick()}
@@ -390,7 +390,7 @@ const useStyles = makeStyles({
     'position': 'absolute',
     'top': '20px',
     'right': '86px',
-    'border': '1px solid lightGrey',
+    // 'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
       width: '290px',
       height: '330px',
