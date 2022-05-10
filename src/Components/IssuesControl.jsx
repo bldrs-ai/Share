@@ -108,25 +108,25 @@ const issues = [
     title: 'Welcome to BLDRS',
     content: 'Welcome Welcome',
   },
-  {
-    title: 'Future',
-    content: `The Architecture,
-    Engineering and Construction industries are trying to
-    face challenging problems of the future with tools anchored in the past.
-    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-    open development. We can't imagine a future where building the rest of the world
-    hasn't been transformed by these new ways of working. We are part of that transformation.`,
-    media: true,
-  },
-  {
-    title: 'Key Insight',
-    content: `The key insights from Tech:
-    Cross-functional online collaboration unlocks team flow, productivity and creativity.
-    Your team extends outside of your organization and software developers are essential
-    team members.An ecosystem of app Creators developing on a powerful operating system
-    Platform is the most scalable architecture.Open workspaces, open standards and open
-    source code the most powerful way to work. Cooperation is the unfair advantage.`,
-  },
+  // {
+  //   title: 'Future',
+  //   content: `The Architecture,
+  //   Engineering and Construction industries are trying to
+  //   face challenging problems of the future with tools anchored in the past.
+  //   Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+  //   open development. We can't imagine a future where building the rest of the world
+  //   hasn't been transformed by these new ways of working. We are part of that transformation.`,
+  //   media: true,
+  // },
+  // {
+  //   title: 'Key Insight',
+  //   content: `The key insights from Tech:
+  //   Cross-functional online collaboration unlocks team flow, productivity and creativity.
+  //   Your team extends outside of your organization and software developers are essential
+  //   team members.An ecosystem of app Creators developing on a powerful operating system
+  //   Platform is the most scalable architecture.Open workspaces, open standards and open
+  //   source code the most powerful way to work. Cooperation is the unfair advantage.`,
+  // },
 ]
 
 const replies = [
@@ -202,8 +202,10 @@ export function CommentPanelAll({onClick, onAddComment}) {
                 key = {index}
                 title = {issue.title}
                 content = {issue.content}
-                // imageSrc = {images[index]}
-                setSelected = {()=>setSelected(index)}/>
+                imageSrc = {images[index]}
+                setSelected = {()=>{
+                  setSelected(index)
+                }}/>
             )
           }):
           <div>
@@ -272,10 +274,11 @@ export function CommentPanelAdd({onClick, onAddComment}) {
       </div>
       <div>
       </div>
-      <div style = {{fontSize: '14px', width: '100%', paddingLeft: '15px', paddingRight: '15px', display: 'flex', justifyContent: 'center'}}>
-          Comments are anchored to an element, please select an element to attach a comment.
-      </div>
+
       <div className = {classes.cardsContainer}>
+        <div style = {{fontSize: '14px', width: '100%', paddingLeft: '15px', paddingRight: '15px', display: 'flex', justifyContent: 'center'}}>
+          Comments are anchored to an element, please select an element to attach a comment.
+        </div>
         <IssueCardInput onSubmit={()=>onAddComment()}/>
       </div>
     </Paper>
@@ -406,6 +409,7 @@ const useStyles = makeStyles({
       height: '330px',
       minHeight: '300px',
       position: 'absolute',
+      overflow: 'scroll',
       top: '240px',
       right: '80px',
     },

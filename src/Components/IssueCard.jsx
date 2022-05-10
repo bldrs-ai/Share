@@ -7,6 +7,7 @@ import Delete from '../assets/2D_Icons/Close.svg'
 import Share from '../assets/2D_Icons/Share.svg'
 import Check from '../assets/2D_Icons/Check.svg'
 import Reply from '../assets/2D_Icons/Reply.svg'
+import Expand from '../assets/2D_Icons/Expand.svg'
 // import Navigate from '../assets/2D_Icons/Navigate.svg'
 import {TooltipIconButton} from './Buttons'
 import IssueCardInput from './IssueCardInput'
@@ -27,16 +28,19 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @return {Object} React component
  */
 export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
-  const [expand, setExpand] = useState(false)
+  const [expandText, setExpandText] = useState(false)
+  const [expandImage, setExpandImage] = useState(false)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
-  const contentHeight = expand ? 'auto' : '70px'
-  const classes = useStyles({contentHeight: contentHeight, select: select})
+
+  const contentHeight = expandText ? 'auto' : '70px'
+  const imageHeight = expandImage ? '200px' : '100px'
+  const classes = useStyles({contentHeight: contentHeight, select: select, imageHeight: imageHeight})
   return (
     <Paper
       elevation = {0}
       className = {classes.container}
-      style={selected?{border: '1px solid green'}:{}}
+      style={selected ? {border: '1px solid green'} : {}}
     >
       <div className = {classes.title}
         role = 'button'
@@ -61,12 +65,23 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
       <div style = {{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
         {imageSrc.length !=0 &&
         <img
+          className = {classes.image}
           alt = 'cardImage'
-          style = {{height: '100px'}}
           src = {imageSrc}/>
         }
       </div>
-
+      <span style = {{
+        width: '100%',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        alignItems: 'center'}}>
+        <TooltipIconButton
+          title='Expand Image'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => setExpandImage(!expandImage)}
+          icon={<Expand/>}/>
+      </span>
       <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'}:null}>
         {content}
       </div>
@@ -74,14 +89,14 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
       <div className = {classes.showLess}
         onClick = {(event) => {
           event.preventDefault()
-          expand ? setExpand(false) : setExpand(true)
+          expandText ? setExpandText(false) : setExpandText(true)
         }}
         role = 'button'
         tabIndex={0}
-        onKeyPress = {() => expand?setExpand(false):setExpand(true)}
+        onKeyPress = {() => expandText ? setExpandText(false) : setExpandText(true)}
       >
         show{' '}
-        {expand ? 'less' : 'more'}
+        {expandText ? 'less' : 'more'}
       </div> :
       <div className = {classes.showLessEmpty}/>
       }
@@ -129,7 +144,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
 
 const useStyles = makeStyles({
   container: {
-    height: 'auto',
+    // height: 'auto',
     margin: '10px',
     marginRight: '10px',
     border: (props) => props.select ? '2px solid green':'1px solid lightGrey',
@@ -227,5 +242,10 @@ const useStyles = makeStyles({
     padding: '2px 4px 2px 4px',
     borderRadius: '6px',
     marginRight: '10px',
+  },
+  image: {
+    height: (props) => props.imageHeight,
+    borderRadius: '10px',
+    border: '1px solid #DCDCDC',
   },
 })
