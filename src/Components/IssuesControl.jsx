@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react'
-import {useLocation, useNavigate} from 'react-router'
+import {useLocation, useNavigate, useParams} from 'react-router'
 import Paper from '@mui/material/Paper'
 import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
@@ -108,27 +108,26 @@ const issues = [
     title: 'Welcome to BLDRS',
     content: 'Welcome Welcome',
   },
-  // {
-  //   title: 'Future',
-  //   content: `The Architecture,
-  //   Engineering and Construction industries are trying to
-  //   face challenging problems of the future with tools anchored in the past.
-  //   Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-  //   open development. We can't imagine a future where building the rest of the world
-  //   hasn't been transformed by these new ways of working. We are part of that transformation.`,
-  //   media: true,
-  // },
-  // {
-  //   title: 'Key Insight',
-  //   content: `The key insights from Tech:
-  //   Cross-functional online collaboration unlocks team flow, productivity and creativity.
-  //   Your team extends outside of your organization and software developers are essential
-  //   team members.An ecosystem of app Creators developing on a powerful operating system
-  //   Platform is the most scalable architecture.Open workspaces, open standards and open
-  //   source code the most powerful way to work. Cooperation is the unfair advantage.`,
-  // },
+  {
+    title: 'Future',
+    content: `The Architecture,
+    Engineering and Construction industries are trying to
+    face challenging problems of the future with tools anchored in the past.
+    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+    open development. We can't imagine a future where building the rest of the world
+    hasn't been transformed by these new ways of working. We are part of that transformation.`,
+    media: true,
+  },
+  {
+    title: 'Key Insight',
+    content: `The key insights from Tech:
+    Cross-functional online collaboration unlocks team flow, productivity and creativity.
+    Your team extends outside of your organization and software developers are essential
+    team members.An ecosystem of app Creators developing on a powerful operating system
+    Platform is the most scalable architecture.Open workspaces, open standards and open
+    source code the most powerful way to work. Cooperation is the unfair advantage.`,
+  },
 ]
-
 const replies = [
   {
     title: 'RE: Future',
@@ -172,24 +171,24 @@ export function CommentPanelAll({onClick, onAddComment}) {
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
-      <div className = {classes.titleContainer}>
-        <div className = {classes.title}>
-          <div>{selected !== null ? issues[selected].title : 'All Comments'}</div>
-          <div>
-            <TooltipIconButton
-              title='Add'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>onAddComment()}
-              icon={<AddCommentIcon/>}/>
-            <TooltipIconButton
-              title='Share'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>onClick()}
-              icon={<CloseIcon/>}/>
-          </div>
+      <div className = {classes.title}>
+        <div>{selected !== null ? issues[selected].title : 'All Comments'}</div>
+        <div>
+          <TooltipIconButton
+            title='Add'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onAddComment()}
+            icon={<AddCommentIcon/>}/>
+          <TooltipIconButton
+            title='Share'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onClick()}
+            icon={<CloseIcon/>}/>
         </div>
+      </div>
+      <div className = {classes.searchContainer}>
         <SearchBar onClickMenuCb = {()=>{}}/>
       </div>
       <div>
@@ -200,6 +199,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             return (
               <IssueCard
                 key = {index}
+                expandedImage = {index === 0?true:false}
                 title = {issue.title}
                 content = {issue.content}
                 imageSrc = {images[index]}
@@ -211,6 +211,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
           <div>
             <IssueCard
               title = {issues[selected].title}
+              imageSrc = {images[selected]}
               content = {issues[selected].content}
               setSelected = {()=>setSelected(null)}
               selected = {true}
@@ -250,35 +251,38 @@ export function CommentPanelAll({onClick, onAddComment}) {
  */
 export function CommentPanelAdd({onClick, onAddComment}) {
   const classes = useStyles()
+  const params = useParams()
+  const isElementSelected = params['*'].includes('.ifc/')
   return (
     <Paper className = {classes.addContainer}>
-      <div className = {classes.titleContainer}>
-        <div className = {classes.title}>
-          <div>Add a Comment</div>
-          <div>
-            <TooltipIconButton
-              title='Back'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>onAddComment()}
-              icon={<Back/>}/>
-            <TooltipIconButton
-              title='Close'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>onClick()}
-              icon={<CloseIcon/>}/>
-          </div>
+      <div className = {classes.title}>
+        <div>Add a Comment</div>
+        <div>
+          <TooltipIconButton
+            title='Back'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onAddComment()}
+            icon={<Back/>}/>
+          <TooltipIconButton
+            title='Close'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onClick()}
+            icon={<CloseIcon/>}/>
         </div>
-        <SearchBar onClickMenuCb = {()=>{}}/>
       </div>
       <div>
       </div>
 
       <div className = {classes.cardsContainer}>
-        <div style = {{fontSize: '14px', width: '100%', paddingLeft: '15px', paddingRight: '15px', display: 'flex', justifyContent: 'center'}}>
-          Comments are anchored to an element, please select an element to attach a comment.
-        </div>
+        {
+          isElementSelected ?
+          null :
+          <div className = {classes.selectMessage}>
+            Comments are anchored on an element, please select an element to attach a comment.
+          </div>
+        }
         <IssueCardInput onSubmit={()=>onAddComment()}/>
       </div>
     </Paper>
@@ -399,7 +403,7 @@ const useStyles = makeStyles({
   addContainer: {
     'width': '290px',
     'height': 'auto',
-    'minHeight': '330px',
+    // 'minHeight': '330px',
     'position': 'absolute',
     'top': '20px',
     'right': '86px',
@@ -414,8 +418,8 @@ const useStyles = makeStyles({
       right: '80px',
     },
   },
-  titleContainer: {
-    height: '100px',
+  searchContainer: {
+    height: '60px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
@@ -426,21 +430,28 @@ const useStyles = makeStyles({
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: '20px',
+    height: '40px',
     width: '90%',
-    margin: '12px 12px 6px 12px',
+    margin: '12px 12px 0px 12px',
     paddingBottom: '10px',
   },
   cardsContainer: {
-    'overflow': 'scroll',
+    'overflowY': 'scroll',
+    'overflowX': 'hidden',
     'height': '78%',
-    // 'display': 'flex',
-    // 'flexDirection': 'column',
-    // 'justifyContent': 'center',
-    // 'alignItems': 'center',
-    // 'border': '1px solid red',
+    '&::-webkit-scrollbar': {
+      display: 'none',
+    },
     '@media (max-width: 900px)': {
       height: '210px',
     },
+  },
+  selectMessage: {
+    fontSize: '14px',
+    width: '100%',
+    paddingLeft: '15px',
+    paddingRight: '15px',
+    display: 'flex',
+    justifyContent: 'center',
   },
 })

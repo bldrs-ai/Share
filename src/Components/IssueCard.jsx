@@ -3,12 +3,9 @@ import Paper from '@mui/material/Paper'
 import {grey} from '@mui/material/colors'
 import {makeStyles} from '@mui/styles'
 import Delete from '../assets/2D_Icons/Close.svg'
-// import Clear from '../assets/2D_Icons/Clear.svg'
 import Share from '../assets/2D_Icons/Share.svg'
 import Check from '../assets/2D_Icons/Check.svg'
 import Reply from '../assets/2D_Icons/Reply.svg'
-import Expand from '../assets/2D_Icons/Expand.svg'
-// import Navigate from '../assets/2D_Icons/Navigate.svg'
 import {TooltipIconButton} from './Buttons'
 import IssueCardInput from './IssueCardInput'
 
@@ -27,14 +24,14 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
+export default function IssueCard({expandedImage = false, title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
   const [expandText, setExpandText] = useState(false)
-  const [expandImage, setExpandImage] = useState(false)
+  const [expandImage, setExpandImage] = useState(expandedImage)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
 
   const contentHeight = expandText ? 'auto' : '70px'
-  const imageWidth = expandImage ? '92%' : '150px'
+  const imageWidth = expandImage ? '100%' : '100px'
   const classes = useStyles({contentHeight: contentHeight, select: select, imageWidth: imageWidth})
   return (
     <Paper
@@ -62,26 +59,17 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
           <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
         </div>
       </div>
-      <div style = {{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
+      <div className = {classes.imageContainer}>
         {imageSrc.length !=0 &&
-        <img
-          className = {classes.image}
-          alt = 'cardImage'
-          src = {imageSrc}/>
+        // eslint-disable-next-line
+        <div onClick = {() => setExpandImage(!expandImage)}>
+          <img
+            className = {classes.image}
+            alt = 'cardImage'
+            src = {imageSrc}/>
+        </div>
         }
       </div>
-      <span style = {{
-        width: '100%',
-        display: 'flex',
-        justifyContent: 'flex-end',
-        alignItems: 'center'}}>
-        <TooltipIconButton
-          title='Expand Image'
-          size = 'small'
-          placement = 'bottom'
-          onClick={() => setExpandImage(!expandImage)}
-          icon={<Expand/>}/>
-      </span>
       <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'}:null}>
         {content}
       </div>
@@ -144,11 +132,9 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
 
 const useStyles = makeStyles({
   container: {
-    // height: 'auto',
-    margin: '10px',
-    marginRight: '10px',
+    padding: '10px',
     border: (props) => props.select ? '2px solid green':'1px solid lightGrey',
-    overflow: 'scroll',
+
   },
   title: {
     display: 'flex',
@@ -247,5 +233,11 @@ const useStyles = makeStyles({
     width: (props) => props.imageWidth,
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
+    cursor: 'pointer',
+  },
+  imageContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })
