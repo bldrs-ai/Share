@@ -39,24 +39,23 @@ export default function IssueCard({expandedImage = false, title = 'Title', conte
       className = {classes.container}
       style={selected ? {border: '1px solid green'} : {}}
     >
-      <div className = {classes.title}
-        role = 'button'
-        onClick = {(e) => {
-          select ? setSelect(false) : setSelect(true)
-          console.log('in the on click', select)
-          setSelected()
-        }}
-        onKeyPress = {() => {
-          select ? setSelect(false):setSelect(true)
-        }}
-        tabIndex={0}
-      >
+      <div className = {classes.title}>
         <div>
           {title}
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.select}>{selected?'un-select':'select'}</div>
-          <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
+          <div className = {classes.select}
+            role = 'button'
+            onClick = {(e) => {
+              select ? setSelect(false) : setSelect(true)
+              console.log('in the on click', select)
+              setSelected()
+            }}
+            onKeyPress = {() => {
+              select ? setSelect(false):setSelect(true)
+            }}
+            tabIndex={0}>{selected?'un-select':'select'}</div>
+          <div className = {classes.avatarIcon}/>
         </div>
       </div>
       <div className = {classes.imageContainer}>
@@ -156,7 +155,6 @@ const useStyles = makeStyles({
     overflow: 'fix',
     fontSize: '14px',
     fontFamily: 'Helvetica',
-    cursor: 'pointer',
   },
   content: {
     height: (props) => props.contentHeight,
@@ -233,6 +231,7 @@ const useStyles = makeStyles({
     padding: '2px 4px 2px 4px',
     borderRadius: '6px',
     marginRight: '10px',
+    cursor: 'pointer',
   },
   image: {
     width: (props) => props.imageWidth,

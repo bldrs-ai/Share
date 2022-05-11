@@ -106,7 +106,7 @@ export default function IssuesControl({viewer}) {
 const issues = [
   {
     title: 'Welcome to BLDRS',
-    content: 'Welcome Welcome',
+    content: 'Add a comment..',
   },
   {
     title: 'Future',
@@ -123,7 +123,7 @@ const issues = [
     content: `The key insights from Tech:
     Cross-functional online collaboration unlocks team flow, productivity and creativity.
     Your team extends outside of your organization and software developers are essential
-    team members.An ecosystem of app Creators developing on a powerful operating system
+    team members.An ecosystem of app Creators developing on a powerful operating system. /n
     Platform is the most scalable architecture.Open workspaces, open standards and open
     source code the most powerful way to work. Cooperation is the unfair advantage.`,
   },
@@ -191,7 +191,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             <IssueCard
               title = {issues[selected].title}
               imageSrc = {images[selected]}
-              content = {issues[selected].content}
+              content = {'Add a reply..'}
               setSelected = {()=>setSelected(null)}
               selected = {true}
             />
