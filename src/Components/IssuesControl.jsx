@@ -153,12 +153,22 @@ export function CommentPanelAll({onClick, onAddComment}) {
       <div className = {classes.title}>
         <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
         <div>
-          <TooltipIconButton
-            title='Add'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>onAddComment()}
-            icon={<AddCommentIcon/>}/>
+          {selected !== null?
+            <TooltipIconButton
+              title='Back'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>setSelected(null)}
+              icon={<Back/>}/>:
+            <TooltipIconButton
+              title='Add'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onAddComment()}
+              icon={<AddCommentIcon/>}
+            />
+
+          }
           <TooltipIconButton
             title='Close'
             size = 'small'
