@@ -128,31 +128,10 @@ const issues = [
     source code the most powerful way to work. Cooperation is the unfair advantage.`,
   },
 ]
-const replies = [
-  {
-    title: 'RE: Future',
-    content: `The Architecture,
-    Engineering and Construction industries are trying to
-    face challenging problems of the future with tools anchored in the past.
-    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-    open development. We can't imagine a future where building the rest of the world
-    hasn't been transformed by these new ways of working. We are part of that transformation.`,
-    media: true,
-  },
-  {
-    title: 'RE: RE: Future',
-    content: `The key insights from Tech:
-    Cross-functional online collaboration unlocks team flow, productivity and creativity.
-    Your team extends outside of your organization and software developers are essential
-    team members.An ecosystem of app Creators developing on a powerful operating system
-    Platform is the most scalable architecture.Open workspaces, open standards and open
-    source code the most powerful way to work. Cooperation is the unfair advantage.`,
-  },
-]
 const images = [
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
   `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
 ]
@@ -199,7 +178,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             return (
               <IssueCard
                 key = {index}
-                expandedImage = {index === 0?true:false}
+                expandedImage = {index === 0 || index === 2?true:false}
                 title = {issue.title}
                 content = {issue.content}
                 imageSrc = {images[index]}
@@ -222,14 +201,14 @@ export function CommentPanelAll({onClick, onAddComment}) {
               justifyContent: 'flex-end',
               alignItems: 'flex-end'}}>
               <IssueCardReply
-                title = {replies[0].title}
-                content = {issues[2].content}
+                title = {'First Reply'}
+                content = {'This is a the first reply to the issues thread'}
                 setSelected = {()=>setSelected(null)}
                 imageSrc = {images[2]}
               />
               <IssueCardReply
-                title = {replies[1].title}
-                content = {issues[2].content}
+                title = {'Second Reply'}
+                content = {'This is a the second reply to the issues thread'}
                 setSelected = {()=>setSelected(null)}
               />
             </div>
@@ -403,11 +382,9 @@ const useStyles = makeStyles({
   addContainer: {
     'width': '290px',
     'height': 'auto',
-    // 'minHeight': '330px',
     'position': 'absolute',
     'top': '20px',
     'right': '86px',
-    'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
       width: '290px',
       height: '330px',
@@ -453,5 +430,6 @@ const useStyles = makeStyles({
     paddingRight: '15px',
     display: 'flex',
     justifyContent: 'center',
+    color: 'red',
   },
 })

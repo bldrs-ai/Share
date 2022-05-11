@@ -81,7 +81,7 @@ const useStyles = makeStyles({
     width: 'auto',
     margin: '10px',
     marginRight: '10px',
-    // border: '1px solid lightgrey',
+    border: '1px solid transparent',
   },
   title: {
     display: 'flex',

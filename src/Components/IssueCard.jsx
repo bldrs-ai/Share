@@ -1,6 +1,5 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
-import {grey} from '@mui/material/colors'
 import {makeStyles} from '@mui/styles'
 import Delete from '../assets/2D_Icons/Close.svg'
 import Share from '../assets/2D_Icons/Share.svg'
@@ -29,6 +28,7 @@ export default function IssueCard({expandedImage = false, title = 'Title', conte
   const [expandImage, setExpandImage] = useState(expandedImage)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
+  console.log('image path from card', imageSrc)
 
   const contentHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
@@ -90,12 +90,15 @@ export default function IssueCard({expandedImage = false, title = 'Title', conte
       }
       <div className = {classes.actions}>
         <div className = {classes.avatarIconContainer}>
-          <div className = {classes.avatarIcon}/>
           <div className = {classes.avatarIcon}
             style = {{
-              backgroundColor: 'green',
+              backgroundColor: 'lime'}}
+          />
+          <div className = {classes.avatarIcon}
+            style = {{
+              backgroundColor: 'DimGray',
               position: 'relative',
-              right: '10px'}}
+              right: '14px'}}
           />
         </div>
         <div>
@@ -134,9 +137,9 @@ const useStyles = makeStyles({
   container: {
     padding: '10px',
     border: (props) => props.select ? '2px solid green':'1px solid lightGrey',
-    width:'270px',
-    marginBottom:'20px',
-    marginLeft:'10px',
+    width: '270px',
+    marginBottom: '20px',
+    marginLeft: '10px',
   },
   title: {
     display: 'flex',
@@ -177,11 +180,11 @@ const useStyles = makeStyles({
     paddingLeft: '5px',
     overflow: 'fix',
     fontSize: '10px',
-    color: 'blue',
+    color: '#70AB32',
   },
   showLessEmpty: {
     marginTop: '5px',
-    border: `1px solid ${grey[100]}`,
+    border: `1px solid transparent`,
     height: '12px',
     widht: '10px',
     marginBottom: '5px',
@@ -214,10 +217,10 @@ const useStyles = makeStyles({
     alignItems: 'center',
   },
   avatarIcon: {
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 19,
     borderRadius: '50%',
-    backgroundColor: 'blue',
+    backgroundColor: 'grey',
   },
   titleRightContainer: {
     display: 'flex',

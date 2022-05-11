@@ -62,7 +62,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
         {imageSrc.length !=0 &&
         <img
           alt = 'cardImage'
-          style = {{height: '100px'}}
+          style = {{width: '95%'}}
           src = {imageSrc}/>
         }
       </div>
@@ -86,10 +86,14 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
       }
       <div className = {classes.actions}>
         <div className = {classes.avatarIconContainer}>
-          <div className = {classes.avatarIcon}/>
           <div className = {classes.avatarIcon}
             style = {{
-              backgroundColor: 'green',
+              backgroundColor: 'lightGrey',
+            }}
+          />
+          <div className = {classes.avatarIcon}
+            style = {{
+              backgroundColor: '#FF00F5',
               position: 'relative',
               right: '10px'}}
           />
@@ -99,7 +103,7 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
             title='Reply'
             size = 'small'
             placement = 'bottom'
-            onClick={()=>setReply(true)}
+            onClick={()=>setReply(!reply)}
             icon={<Reply/>}/>
           <TooltipIconButton
             title='Resolve'
@@ -132,7 +136,7 @@ const useStyles = makeStyles({
     width: '250px',
     margin: '10px',
     marginRight: '10px',
-    border: '1px solid blue',
+    border: '1px solid grey',
   },
   title: {
     display: 'flex',
@@ -153,15 +157,15 @@ const useStyles = makeStyles({
   },
   content: {
     height: (props) => props.contentHeight,
-    marginTop: '5px',
+    marginTop: '14px',
     marginBottom: '5px',
     marginLeft: '5px',
     marginRight: '5px',
     paddingLeft: '5px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    fontSize: '12px',
-    lineHeight: '14px',
+    fontSize: '14px',
+    lineHeight: '18px',
     fontFamily: 'Helvetica',
   },
   showLess: {
@@ -213,7 +217,7 @@ const useStyles = makeStyles({
     width: 16,
     height: 16,
     borderRadius: '50%',
-    backgroundColor: 'blue',
+    backgroundColor: '#30F2E7',
   },
   titleRightContainer: {
     display: 'flex',
