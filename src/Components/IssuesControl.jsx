@@ -106,7 +106,7 @@ export default function IssuesControl({viewer}) {
 const issues = [
   {
     title: 'Welcome to BLDRS',
-    content: 'Add a comment..',
+    content: 'Welcome to Comments',
   },
   {
     title: 'Future',
@@ -191,7 +191,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             <IssueCard
               title = {issues[selected].title}
               imageSrc = {images[selected]}
-              content = {'Add a reply..'}
+              content = {'Welcome to Comments'}
               setSelected = {()=>setSelected(null)}
               selected = {true}
             />
@@ -201,15 +201,15 @@ export function CommentPanelAll({onClick, onAddComment}) {
               justifyContent: 'flex-end',
               alignItems: 'flex-end'}}>
               <IssueCardReply
-                title = {'First Reply'}
-                content = {'This is a the first reply to the issues thread'}
+                title = {'RE: First Reply'}
+                content = {issues[2].content}
                 setSelected = {()=>setSelected(null)}
-                imageSrc = {images[2]}
               />
               <IssueCardReply
-                title = {'Second Reply'}
-                content = {'This is a the second reply to the issues thread'}
+                title = {'RE: Second Reply'}
+                content = {issues[2].content}
                 setSelected = {()=>setSelected(null)}
+                imageSrc = {images[2]}
               />
             </div>
           </div>
@@ -259,7 +259,7 @@ export function CommentPanelAdd({onClick, onAddComment}) {
           isElementSelected ?
           null :
           <div className = {classes.selectMessage}>
-            Comments are anchored on an element, please select an element to attach a comment.
+            Please select an element to attach a comment.
           </div>
         }
         <IssueCardInput onSubmit={()=>onAddComment()}/>
