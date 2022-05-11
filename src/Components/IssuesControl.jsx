@@ -251,10 +251,7 @@ export function CommentPanelAdd({onClick, onAddComment}) {
             icon={<CloseIcon/>}/>
         </div>
       </div>
-      <div>
-      </div>
-
-      <div className = {classes.cardsContainer}>
+      <div className = {classes.cardsContainerAdd}>
         {
           isElementSelected ?
           null :
@@ -369,7 +366,6 @@ const useStyles = makeStyles({
     'position': 'absolute',
     'top': '20px',
     'right': '86px',
-    // 'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
       width: '290px',
       height: '330px',
@@ -387,10 +383,8 @@ const useStyles = makeStyles({
     'right': '86px',
     '@media (max-width: 900px)': {
       width: '290px',
-      height: '330px',
-      minHeight: '300px',
+      height: 'auto',
       position: 'absolute',
-      overflow: 'scroll',
       top: '240px',
       right: '80px',
     },
@@ -421,6 +415,17 @@ const useStyles = makeStyles({
     },
     '@media (max-width: 900px)': {
       height: '210px',
+    },
+  },
+  cardsContainerAdd: {
+    'overflowY': 'scroll',
+    'overflowX': 'hidden',
+    'height': '78%',
+    '&::-webkit-scrollbar': {
+      display: 'none',
+    },
+    '@media (max-width: 900px)': {
+      height: 'auto',
     },
   },
   selectMessage: {
