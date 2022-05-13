@@ -71,7 +71,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
         <ShareControl viewer={viewer}/>
       </ButtonGroup>
       {!isMobile && <Divider />}
-      <ButtonGroup orientation="vertical" >
+      <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
