@@ -25,7 +25,10 @@ export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}
     <div className={classes.container}>
       <div className={classes.shareAndIssues}>
         <ShareControl viewer={viewer}/>
-        <IssuesControl viewer={viewer}/>
+        {
+          // vyzn customization: 
+          // Hide the issues control.
+        }
       </div>
       <div className={classes.lowerGroup}>
         {itemPanelControl}

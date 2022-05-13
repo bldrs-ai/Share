@@ -110,7 +110,9 @@ export default function NavPanel({
 const useStyles = makeStyles({
   root: {
     'position': 'absolute',
-    'top': '94px',
+    // vyzn customization: 
+    // Move the panel to the top since the search bar is not located there anymore.
+    'top': '20px',
     'left': '20px',
     'overflow': 'auto',
     'width': '300px',

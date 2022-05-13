@@ -456,18 +456,12 @@ const useStyles = makeStyles({
 
   },
   search: {
+    // vyzn customization: 
+    // Center the search box instead of positioning it at the left hand side.
     position: 'absolute',
-    // TODO(pablo): we were passing this around as it's used in a few
-    // places, but there's now only 1 dialog object that also uses it
-    // and it has multiple callers; passing that variable around seems
-    // overkill. I don't like not having it as a variable, but going
-    // to hardcode for now and look into passing via the theme later.
-    top: `20px`,
-    left: '20px',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
+    top: '20px',
+    left: '50%',
+    transform: 'translate(-50%, 0%)'
   },
   view: {
     position: 'absolute',
