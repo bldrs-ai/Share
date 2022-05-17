@@ -39,7 +39,9 @@ export default function Dialog({
         {headerText}
       </DialogTitle>
       <DialogContent>{content}</DialogContent>
-      <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
+      <div>
+        <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
+      </div>
     </MuiDialog>)
 }
 
