@@ -1,20 +1,34 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {styled} from '@mui/material/styles'
 import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
+import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
+import useStore from '../utils/store'
 
 
 /**
  * @param {Object} content React component to be wrapped
  * @return {Object} React component
  */
-export default function MobileDrawer({content}) {
+export default function MobileDrawer() {
   const [open, setOpen] = useState(false)
   const toggleDrawer = () => setOpen(!open)
   const classes = useStyles({isOpen: open})
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  // const openDrawer = useStore((state) => state.openDrawer)
+  const closeDrawer = useStore((state) => state.closeDrawer)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+
+  useEffect(()=>{
+    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
+      closeDrawer()
+    }
+  }, [isCommentsOn, isPropertiesOn, closeDrawer, isDrawerOpen])
+
   return (
     <div className={classes.swipeDrawer}>
       <SwipeableDrawer
@@ -29,7 +43,14 @@ export default function MobileDrawer({content}) {
           <div className={classes.openToggle}>
             <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>
           </div>
-          {content}
+          <div className={classes.content}>
+            <div>
+              {isCommentsOn?<CommentsPanel/>:null}
+            </div>
+            <div>
+              {isPropertiesOn?<PropertiesPanel/>:null }
+            </div>
+          </div>
         </StyledBox>
       </SwipeableDrawer>
     </div>
@@ -76,5 +97,16 @@ const useStyles = makeStyles((props) => ({
     borderTop: 'solid 1px grey',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
+  },
+  content: {
+    'overflow': 'auto',
+    'height': '90%',
+    'marginTop': '40px',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'space-between',
+    '@media (max-width: MOBILE_WIDTH)': {
+      overflow: 'auto',
+    },
   },
 }))

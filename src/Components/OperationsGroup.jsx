@@ -1,13 +1,46 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
-import IssuesControl from './IssuesControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+import CommentIcon from '../assets/2D_Icons/Comment.svg'
+import ListIcon from '../assets/2D_Icons/List.svg'
 import {useIsMobile} from './Hooks'
+import SidePanelControl from '../Components/SidePanelControl'
+import useStore from '../utils/store'
+
+
+const CommentsPanel = ()=> {
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  return (
+    <>
+      {/* {toggleIsCommentsOn ? <div>comments</div>:null} */}
+      <div style = {{width: '100%', height: '300px', background: 'yellow'}}>comments</div>
+      <TooltipIconButton
+        title='toggle drawer'
+        onClick={toggleIsCommentsOn}
+        icon={<CloseIcon/>}/>
+    </>
+  )
+}
+
+const PropertiesPanel = ()=> {
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  return (
+    <>
+      {/* {toggleIsPropertiesOn ? <div>properties</div>:null} */}
+      <div style = {{width: '100%', height: '300px', background: 'lime'}}>properties</div>
+      <TooltipIconButton
+        title='toggle drawer'
+        onClick={toggleIsPropertiesOn}
+        icon={<CloseIcon/>}/>
+    </>
+  )
+}
 
 
 /**
@@ -19,16 +52,34 @@ import {useIsMobile} from './Hooks'
  * @param {function} itemPanelControl The ItemPanel component
  * @return {Object}
  */
-export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
+export default function OperationsGroup({viewer, unSelectItem, sidePanelControl}) {
   const classes = useStyles()
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
   return (
     <div className={classes.container}>
       <div className={classes.shareAndIssues}>
         <ShareControl viewer={viewer}/>
-        <IssuesControl viewer={viewer}/>
+        <SidePanelControl
+          icon ={<CommentIcon/>}
+          content = {<CommentsPanel/>}
+          onClick = {()=>{
+            openDrawer()
+            toggleIsCommentsOn()
+          }}
+        />
       </div>
       <div className={classes.lowerGroup}>
-        {itemPanelControl}
+        <SidePanelControl
+          icon ={<ListIcon/>}
+          content = {<PropertiesPanel/>}
+          onClick = {()=>{
+            console.log('side panel is triggered')
+            openDrawer()
+            toggleIsPropertiesOn()
+          }}
+        />
         {useIsMobile() ?
          <TooltipIconButton
            title="Section plane"

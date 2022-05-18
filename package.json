@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r293",
+  "version": "1.0.0-r292",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -34,7 +34,8 @@
     "react-router-dom": "^6.0.2",
     "three": "^0.135",
     "web-ifc-viewer": "^1.0.137",
-    "web-vitals": "^2.1.0"
+    "web-vitals": "^2.1.0",
+    "zustand": "^4.0.0-rc.1"
   },
   "devDependencies": {
     "@alex_neo/jest-expect-message": "^1.0.5",

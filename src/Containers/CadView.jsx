@@ -19,6 +19,7 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import useStore from '../utils/store'
 
 
 /**
@@ -69,6 +70,7 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -391,13 +393,13 @@ export default function CadView({
            <OperationsGroup
              viewer={viewer}
              unSelectItem={unSelectItems}
-             itemPanelControl={
-               <ItemPanelControl
+             sidePanelControl={
+               <SidePanelControl
                  model={model}
                  element={selectedElement}
                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
