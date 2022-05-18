@@ -17,7 +17,7 @@ export const CommentsPanel = ()=> {
             icon={<CloseIcon/>}/>
         </div>
       </div>
-      <div style = {{width: '100%', height: '200px', background: 'lime', marginTop: '10px'}}>...</div>
+      <div style = {{width: '100%', height: '200px', background: 'yellow', marginTop: '10px'}}>...</div>
     </>
   )
 }

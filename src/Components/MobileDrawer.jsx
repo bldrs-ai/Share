@@ -38,18 +38,15 @@ export default function MobileDrawer() {
         onClose={toggleDrawer}
         onOpen={toggleDrawer}
         swipeAreaWidth={drawerBleeding}
-        disableSwipeToOpen={false}>
+        disableSwipeToOpen={false}
+      >
         <StyledBox className={classes.contentContainer}>
           <div className={classes.openToggle}>
             <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>
           </div>
-          <div className={classes.content}>
-            <div>
-              {isCommentsOn?<CommentsPanel/>:null}
-            </div>
-            <div>
-              {isPropertiesOn?<PropertiesPanel/>:null }
-            </div>
+          <div className={classes.panelContainer}>
+            {isCommentsOn?<CommentsPanel/>:null}
+            {isPropertiesOn?<PropertiesPanel/>:null }
           </div>
         </StyledBox>
       </SwipeableDrawer>
@@ -97,16 +94,15 @@ const useStyles = makeStyles((props) => ({
     borderTop: 'solid 1px grey',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,
+    overflow: 'scroll',
   },
-  content: {
-    'overflow': 'auto',
+  panelContainer: {
+    'overflow': 'scroll',
     'height': '90%',
     'marginTop': '40px',
-    'display': 'flex',
-    'flexDirection': 'column',
-    'justifyContent': 'space-between',
+    'border': '1px solid red',
     '@media (max-width: MOBILE_WIDTH)': {
-      overflow: 'auto',
+      overflow: 'scroll',
     },
   },
 }))
