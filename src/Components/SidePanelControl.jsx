@@ -27,8 +27,6 @@ export default function SidePanelControl({icon, content, onClick}) {
       {isDrawerOpen &&
         (isMobile ? <MobileDrawer/> :
         <SideDrawer
-          content={content}
-          title={'title'}
           onClose={closeDrawer}/>)}
     </>
   )

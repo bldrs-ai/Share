@@ -100,7 +100,6 @@ const useStyles = makeStyles((props) => ({
     'overflow': 'scroll',
     'height': '90%',
     'marginTop': '40px',
-    'border': '1px solid red',
     '@media (max-width: MOBILE_WIDTH)': {
       overflow: 'scroll',
     },

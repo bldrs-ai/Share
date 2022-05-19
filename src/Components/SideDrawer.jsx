@@ -15,14 +15,9 @@ import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
  * @param {function} onClose Callback
  * @return {Object} ItemPropertiesDrawer react component
  */
-export default function SideDrawer({
-  title,
-  content,
-  onClose,
-}) {
+export default function SideDrawer() {
   const classes = useStyles()
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  // const openDrawer = useStore((state) => state.openDrawer)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)

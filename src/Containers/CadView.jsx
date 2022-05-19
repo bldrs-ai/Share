@@ -71,7 +71,8 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -185,6 +186,7 @@ export default function CadView({
       // always be 0.
       model.modelID = 0
       setModel(model)
+      setModelStore(model)
     }
   }
 
@@ -294,6 +296,7 @@ export default function CadView({
             navigate(pathPrefix + modelPath.filepath + path)
           }
           setSelectedElement(item)
+          setSelectedElementStore(item)
         }
       }
     }
@@ -303,6 +306,7 @@ export default function CadView({
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     setSelectedElement({})
+    setSelectedElementStore({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -337,6 +341,8 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
+    setSelectedElementStore(props)
+
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.

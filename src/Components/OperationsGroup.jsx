@@ -6,41 +6,11 @@ import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import {useIsMobile} from './Hooks'
 import SidePanelControl from '../Components/SidePanelControl'
 import useStore from '../utils/store'
-
-
-const CommentsPanel = ()=> {
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
-  return (
-    <>
-      {/* {toggleIsCommentsOn ? <div>comments</div>:null} */}
-      <div style = {{width: '100%', height: '300px', background: 'yellow'}}>comments</div>
-      <TooltipIconButton
-        title='toggle drawer'
-        onClick={toggleIsCommentsOn}
-        icon={<CloseIcon/>}/>
-    </>
-  )
-}
-
-const PropertiesPanel = ()=> {
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  return (
-    <>
-      {/* {toggleIsPropertiesOn ? <div>properties</div>:null} */}
-      <div style = {{width: '100%', height: '300px', background: 'lime'}}>properties</div>
-      <TooltipIconButton
-        title='toggle drawer'
-        onClick={toggleIsPropertiesOn}
-        icon={<CloseIcon/>}/>
-    </>
-  )
-}
 
 
 /**
@@ -63,7 +33,6 @@ export default function OperationsGroup({viewer, unSelectItem, sidePanelControl}
         <ShareControl viewer={viewer}/>
         <SidePanelControl
           icon ={<CommentIcon/>}
-          content = {<CommentsPanel/>}
           onClick = {()=>{
             openDrawer()
             toggleIsCommentsOn()
@@ -73,7 +42,6 @@ export default function OperationsGroup({viewer, unSelectItem, sidePanelControl}
       <div className={classes.lowerGroup}>
         <SidePanelControl
           icon ={<ListIcon/>}
-          content = {<PropertiesPanel/>}
           onClick = {()=>{
             console.log('side panel is triggered')
             openDrawer()
