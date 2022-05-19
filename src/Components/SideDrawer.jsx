@@ -38,11 +38,13 @@ export default function SideDrawer() {
       elevation={4}
       className={classes.drawer}>
       <div className={classes.content}>
-        <div className = {classes.container} style = { isCommentsOn ? {} : {display: 'none'} }>
+        <div className = {classes.container}
+          style = { isCommentsOn ? {} : {display: 'none'} }
+        >
           {isCommentsOn?<CommentsPanel/>:null}
         </div>
         <div style = {
-          isCommentsOn ?
+          isCommentsOn && isPropertiesOn ?
           {height: '5px',
             backgroundColor: 'cyan',
             width: '100%',
@@ -95,7 +97,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   },
   content: {
     'overflow': 'auto',
-    'height': '90%',
+    'height': '95%',
     'marginTop': '20px',
     'display': 'flex',
     'flexDirection': 'column',
@@ -105,7 +107,8 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     },
   },
   container: {
-    height: '500px',
+    // border: '1px solid gainsboro',
+    borderRadius: '5px',
     overflow: 'scroll',
   },
 })))

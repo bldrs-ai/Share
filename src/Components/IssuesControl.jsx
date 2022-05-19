@@ -154,9 +154,9 @@ export function CommentPanelAll({onClick, onAddComment}) {
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
-      <div className = {classes.title}>
-        {/* <div>{selected !== null ? issues[selected].title : 'Comments'}</div> */}
-        {/* <div>
+      {/* <div className = {classes.title}>
+        <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
+         <div>
           {selected !== null?
             <TooltipIconButton
               title='Back'
@@ -179,8 +179,8 @@ export function CommentPanelAll({onClick, onAddComment}) {
             placement = 'bottom'
             onClick={()=>onClick()}
             icon={<CloseIcon/>}/>
-        </div> */}
-      </div>
+        </div>
+      </div> */}
       <div className = {classes.searchContainer}>
         <SearchBar onClickMenuCb = {()=>{}}/>
       </div>
@@ -374,20 +374,17 @@ function setPanelText(title, body, setText, setNext) {
 
 const useStyles = makeStyles({
   commentsContainer: {
-    'width': '290px',
-    'height': '88%',
-    'minHeight': '330px',
-    // 'position': 'absolute',
-    // 'top': '20px',
-    // 'right': '86px',
-    '@media (max-width: 900px)': {
-      width: '290px',
-      height: '330px',
-      minHeight: '300px',
-      position: 'absolute',
-      top: '240px',
-      right: '80px',
-    },
+    // 'width': '290px',
+    // 'height': '88%',
+    minHeight: '330px',
+    // '@media (max-width: 900px)': {
+    //   width: '290px',
+    //   height: '330px',
+    //   minHeight: '300px',
+    //   position: 'absolute',
+    //   top: '240px',
+    //   right: '80px',
+    // },
   },
   addContainer: {
     'width': '290px',
@@ -428,7 +425,12 @@ const useStyles = makeStyles({
       display: 'none',
     },
     '@media (max-width: 900px)': {
-      height: '210px',
+      height: '410px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      border: '1px solid lightGrey',
     },
   },
   cardsContainerAdd: {

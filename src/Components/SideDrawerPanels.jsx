@@ -10,11 +10,11 @@ export const CommentsPanel = ()=> {
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   return (
     <>
-      <div style = {{display: 'flex', flexDirection: 'row', marginTop: '10px'}}>
+      <div style = {{display: 'flex', flexDirection: 'row', marginTop: '10px', paddingLeft: '10px', background: 'white'}}>
         <div style = {{
           width: '100%',
           height: '50px',
-          background: 'lightGrey',
+          background: 'white',
           display: 'flex',
           fontSize: '18px',
           fontWeight: 'bold',
@@ -33,7 +33,6 @@ export const CommentsPanel = ()=> {
       </div>
       <div>
         <CommentPanelAll/>
-        {/* <div style = {{width: '100%', height: '200px', background: 'yellow', marginTop: '10px'}}>...</div> */}
       </div>
     </>
   )
@@ -44,11 +43,11 @@ export const PropertiesPanel = ()=> {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   return (
     <>
-      <div style = {{display: 'flex', flexDirection: 'row', marginTop: '10px'}}>
+      <div style = {{display: 'flex', flexDirection: 'row', marginTop: '10px', background: 'white'}}>
         <div style = {{
           width: '100%',
           height: '50px',
-          background: 'lightGrey',
+          background: 'white',
           display: 'flex',
           fontSize: '18px',
           textDecoration: 'underline',
