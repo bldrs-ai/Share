@@ -19,7 +19,6 @@ export const CommentsPanel = ()=> {
           fontWeight: 'bold',
           marginRight: '10px',
           paddingLeft: '2px',
-          borderRadius: '5px',
           alignItems: 'center'}}>
             Comments
         </div>
@@ -52,7 +51,6 @@ export const PropertiesPanel = ()=> {
           fontWeight: 'bold',
           marginRight: '10px',
           paddingLeft: '2px',
-          borderRadius: '5px',
           alignItems: 'center'}}>
             Properties
         </div>
