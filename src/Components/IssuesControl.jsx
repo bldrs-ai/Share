@@ -11,7 +11,7 @@ import {
 import {makeStyles} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
-import AddCommentIcon from '../assets/2D_Icons/AddComment.svg'
+// import AddCommentIcon from '../assets/2D_Icons/AddComment.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import Back from '../assets/2D_Icons/Back.svg'
 import IssueCard from './IssueCard'
@@ -130,9 +130,13 @@ const issues = [
 ]
 const images = [
   `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
+  // eslint-disable-next-line
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  // eslint-disable-next-line
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
+  // eslint-disable-next-line
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  // eslint-disable-next-line
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
 ]
 
@@ -151,8 +155,8 @@ export function CommentPanelAll({onClick, onAddComment}) {
   return (
     <Paper className = {classes.commentsContainer}>
       <div className = {classes.title}>
-        <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
-        <div>
+        {/* <div>{selected !== null ? issues[selected].title : 'Comments'}</div> */}
+        {/* <div>
           {selected !== null?
             <TooltipIconButton
               title='Back'
@@ -175,7 +179,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             placement = 'bottom'
             onClick={()=>onClick()}
             icon={<CloseIcon/>}/>
-        </div>
+        </div> */}
       </div>
       <div className = {classes.searchContainer}>
         <SearchBar onClickMenuCb = {()=>{}}/>
@@ -373,9 +377,9 @@ const useStyles = makeStyles({
     'width': '290px',
     'height': '88%',
     'minHeight': '330px',
-    'position': 'absolute',
-    'top': '20px',
-    'right': '86px',
+    // 'position': 'absolute',
+    // 'top': '20px',
+    // 'right': '86px',
     '@media (max-width: 900px)': {
       width: '290px',
       height: '330px',

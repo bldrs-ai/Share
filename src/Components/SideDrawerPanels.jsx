@@ -3,6 +3,7 @@ import {TooltipIconButton} from './Buttons'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import useStore from '../utils/store'
 import ItemProperties from './ItemProperties'
+import {CommentPanelAll} from './IssuesControl'
 
 
 export const CommentsPanel = ()=> {
@@ -13,10 +14,11 @@ export const CommentsPanel = ()=> {
         <div style = {{
           width: '100%',
           height: '50px',
-          background: 'white',
+          background: 'lightGrey',
           display: 'flex',
           fontSize: '18px',
           fontWeight: 'bold',
+          textDecoration: 'underline',
           marginRight: '10px',
           paddingLeft: '2px',
           alignItems: 'center'}}>
@@ -30,7 +32,8 @@ export const CommentsPanel = ()=> {
         </div>
       </div>
       <div>
-        <div style = {{width: '100%', height: '200px', background: 'yellow', marginTop: '10px'}}>...</div>
+        <CommentPanelAll/>
+        {/* <div style = {{width: '100%', height: '200px', background: 'yellow', marginTop: '10px'}}>...</div> */}
       </div>
     </>
   )
@@ -45,9 +48,10 @@ export const PropertiesPanel = ()=> {
         <div style = {{
           width: '100%',
           height: '50px',
-          background: 'white',
+          background: 'lightGrey',
           display: 'flex',
           fontSize: '18px',
+          textDecoration: 'underline',
           fontWeight: 'bold',
           marginRight: '10px',
           paddingLeft: '2px',

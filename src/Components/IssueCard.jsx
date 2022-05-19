@@ -23,7 +23,13 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({expandedImage = false, title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
+export default function IssueCard({
+  expandedImage = false,
+  title = 'Title',
+  content = sampleText,
+  setSelected,
+  selected = false,
+  imageSrc = ''}) {
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
   const [select, setSelect] = useState(false)

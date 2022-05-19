@@ -8,8 +8,6 @@ import SearchIndex from './SearchIndex.js'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ItemPanelControl from '../Components/ItemPanelControl'
-// import CommentsDrawer from '../Components/CommentsDrawer'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -20,6 +18,7 @@ import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../utils/store'
+import SidePanelControl from '../Components/SidePanelControl'
 
 
 /**
@@ -392,7 +391,7 @@ export default function CadView({
           onClose = {()=>
             isCommentPanelOpen?setIsCommentPanelOpen(false):setIsCommentPanelOpen(true)}
         /> */}
-        <div className={isItemPanelOpen ?
+        <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
