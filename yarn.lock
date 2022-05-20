@@ -6225,7 +6225,7 @@ web-ifc-three@^0.0.116:
     three-mesh-bvh "^0.5.2"
     web-ifc "^0.0.33"
 
-web-ifc-viewer@^1.0.137:
+web-ifc-viewer@^1.0.184:
   version "1.0.184"
   resolved "https://registry.yarnpkg.com/web-ifc-viewer/-/web-ifc-viewer-1.0.184.tgz#c65064ac96cc933fc67c1caa5f139687071aa489"
   integrity sha512-8ifvYezrUuFDMfylAX5v3uQ621WPVXnxHqo+YSdb3qcvEHAbtxUyLKofv4E74aIkyRRXrfS9wAdyYzHP4NNDQA==
