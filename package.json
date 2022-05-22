@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r293",
+  "version": "1.0.0-r280",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -18,7 +18,7 @@
     "prepare": "husky install"
   },
   "dependencies": {
-    "@babel/core": "^7.15.5",
+    "@babel/core": "^7.17.9",
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",
     "@mui/icons-material": "^5.1.1",
@@ -49,7 +49,7 @@
     "canvas": "~2.8.0",
     "esbuild": "^0.14.22",
     "esbuild-plugin-svgr": "^1.0.0",
-    "eslint": "^8.8.0",
+    "eslint": "^8.14.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-jsx-a11y": "^6.5.1",

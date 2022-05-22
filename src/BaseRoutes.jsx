@@ -30,18 +30,8 @@ export default function BaseRoutes({testElt = null}) {
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
 
   useEffect(() => {
-    const referrer = document.referrer
-    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
-    if (referrer) {
-      const ref = new URL(referrer + window.location.hash)
-      if (ref.pathname.length > 1) {
-        navigate(ref)
-      } else {
-        console.log('fallthrough referrer')
-        navigate(installPrefix + '/share')
-      }
-    } else if (location.pathname === installPrefix ||
-               location.pathname === (installPrefix + '/')) {
+    if (location.pathname === installPrefix ||
+        location.pathname === (installPrefix + '/')) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
       navigate(installPrefix + '/share')
     }

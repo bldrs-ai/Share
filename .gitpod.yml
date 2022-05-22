@@ -1,0 +1,21 @@
+image: gitpod/workspace-full
+
+ports:
+  # Server
+  - port: 8080
+    onOpen: open-browser
+
+tasks:
+    - init: yarn install
+      command: yarn serve
+
+github:
+    prebuilds:
+        branches: true
+        pullRequests: true
+        addCheck: false
+
+vscode:
+    extensions:
+        - dbaeumer.vscode-eslint
+        - esbenp.prettier-vscode
