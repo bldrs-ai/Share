@@ -14,6 +14,11 @@ module.exports = {
   ],
   parser: '@babel/eslint-parser',
   parserOptions: {
+    babelOptions: {
+     plugins: [
+       '@babel/syntax-import-assertions'
+     ],
+    },
     ecmaFeatures: {
       jsx: true,
     },
@@ -26,10 +31,12 @@ module.exports = {
     },
   },
   plugins: [
+    'import',
     'react',
     'jsx-a11y',
   ],
   rules: {
+    'import/newline-after-import': ['error', { 'count': 2 }],
     'max-len': ['error', 140],
     'no-irregular-whitespace': ['error'],
     'no-trailing-spaces': ['error'],

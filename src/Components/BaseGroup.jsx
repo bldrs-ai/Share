@@ -2,6 +2,7 @@ import React from 'react'
 import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
 import OpenModelControl from './OpenModelControl'
+import SampleModelsControl from './SampleModelsControl'
 
 
 /**
@@ -16,6 +17,7 @@ export default function BaseGroup({installPrefix, fileOpen}) {
   return (
     <div className={classes.root}>
       <OpenModelControl installPrefix={installPrefix} fileOpen = {fileOpen}/>
+      <SampleModelsControl/>
       <AboutControl installPrefix={installPrefix}/>
     </div>
   )

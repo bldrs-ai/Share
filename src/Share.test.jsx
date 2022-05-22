@@ -2,8 +2,10 @@ import Canvas from 'canvas'
 // Needed for async test
 import 'regenerator-runtime/runtime'
 import * as THREE from 'three'
-const glContext = require('gl')(1, 1) // headless-gl
+import * as gl from 'gl'
 
+
+const glContext = gl(1, 1) // headless-gl
 
 beforeAll(() => {
   const window = {innerWidth: 800, innerHeight: 600}

@@ -38,7 +38,7 @@ export default function BaseRoutes({testElt = null}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = installPrefix + '/*'
+  const basePath = installPrefix + '/'
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>

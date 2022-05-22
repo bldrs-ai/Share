@@ -1,7 +1,9 @@
 import React, {useState} from 'react'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import OpenIcon from '../assets/2D_Icons/Open.svg'
+import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
+import OpenFolder from '../assets/2D_Icons/OpenFolder.svg'
+import ModelsIcon from '../assets/2D_Icons/Model.svg'
 import LocalFileOpen from '../assets/2D_Icons/LocalFileOpen.svg'
 import {ControlButton} from './Buttons'
 
@@ -14,10 +16,11 @@ export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
     <ControlButton
-      title='Shortcut keys'
+      title='Open IFC'
+      placement='top'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<OpenIcon/>}
+      icon={<OpenFolder/>}
       dialog={
         <OpenModelDialog
           fileOpen={fileOpen}
@@ -35,13 +38,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const classes = useStyles()
   return (
     <Dialog
-      icon={<OpenIcon/>}
+      icon={<ModelsIcon/>}
       headerText='Model Access'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <LocalFileOpen/>
+          <GitHubIcon style = {{width: '50px', height: '50px'}}/>
           <p className={classes.bullet}>
             To take advantage of all features of BLDRS, we recommend using GitHub for model hosting.
             <br/>
@@ -56,23 +59,23 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             <br/>
 
           </p>
-          <LocalFileOpen/>
+          <LocalFileOpen style = {{width: '50px', height: '50px'}}/>
           <p className={classes.bullet}>
             <b>Models accessed from local drive cannot be saved or shared.</b>
             <br/>
-            <span
-              className = {classes.link}
-              role = 'button'
-              tabIndex={0}
-              onKeyPress = {()=>{
-                fileOpen()
-                setIsDialogDisplayed(false)
-              }}
-              onClick = {()=>{
-                fileOpen()
-                setIsDialogDisplayed(false)
-              }}> open</span>
           </p>
+          <span
+            className = {classes.link}
+            role = 'button'
+            tabIndex={0}
+            onKeyPress = {()=>{
+              fileOpen()
+              setIsDialogDisplayed(false)
+            }}
+            onClick = {()=>{
+              fileOpen()
+              setIsDialogDisplayed(false)
+            }}>OPEN</span>
         </div>
       }/>
   )
@@ -83,10 +86,11 @@ const useStyles = makeStyles({
   content: {
     width: '270px',
   },
-  bullet: {
-    textAlign: 'left',
+  snippet: {
+    textAlign: 'center',
   },
   link: {
+    fontWeight: 'bold',
     color: 'blue',
     borderBottom: '1px solid blue',
     cursor: 'pointer',

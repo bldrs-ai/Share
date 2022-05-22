@@ -12,25 +12,27 @@ import {assertDefined} from '../utils/assert'
  * @param {Object} icon
  * @param {string} placement
  * @param {string} size
+ * @param {string} dataTestId Internal attribute for component testing
  * @return {Object} React component
  */
-export function TooltipIconButton({
+export const TooltipIconButton = ({
   title,
   onClick,
   icon,
-  placement='right',
-  size='medium',
-}) {
+  placement = 'right',
+  size = 'medium',
+  dataTestId = 'test-button',
+}) => {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
+
   return (
-    <span className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement}>
-        <IconButton onClick={onClick} size={size}>
-          {icon}
-        </IconButton>
-      </Tooltip>
-    </span>
+    <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
+      data-testid={dataTestId}>
+      <IconButton className = {classes.root} onClick={onClick} size={size}>
+        {icon}
+      </IconButton>
+    </Tooltip>
   )
 }
 
