@@ -4,7 +4,6 @@ import {BrowserRouter} from 'react-router-dom'
 import BaseRoutes from './BaseRoutes'
 
 
-console.log('index.jsx')
 render(
     <BrowserRouter>
       <BaseRoutes/>
