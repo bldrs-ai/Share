@@ -52,8 +52,6 @@
     json5 "^2.1.2"
     semver "^6.3.0"
 
-<<<<<<< HEAD
-=======
 "@babel/core@^7.17.9":
   version "7.17.9"
   resolved "https://registry.yarnpkg.com/@babel/core/-/core-7.17.9.tgz#6bae81a06d95f4d0dec5bb9d74bbc1f58babdcfe"
@@ -75,7 +73,6 @@
     json5 "^2.2.1"
     semver "^6.3.0"
 
->>>>>>> upstream/main
 "@babel/eslint-parser@^7.17.0":
   version "7.17.0"
   resolved "https://registry.yarnpkg.com/@babel/eslint-parser/-/eslint-parser-7.17.0.tgz#eabb24ad9f0afa80e5849f8240d0e5facc2d90d6"
