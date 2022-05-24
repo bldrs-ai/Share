@@ -22,7 +22,7 @@ import useStore from '../utils/store'
  * @param {function} itemPanelControl The ItemPanel component
  * @return {Object}
  */
-export default function OperationsGroup({viewer, unSelectItem, sidePanelControl}) {
+export default function OperationsGroup({viewer, unSelectItem}) {
   const classes = useStyles()
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)

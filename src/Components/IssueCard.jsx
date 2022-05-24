@@ -54,7 +54,6 @@ export default function IssueCard({
             role = 'button'
             onClick = {(e) => {
               select ? setSelect(false) : setSelect(true)
-              console.log('in the on click', select)
               setSelected()
             }}
             onKeyPress = {() => {
