@@ -2,10 +2,6 @@ Share is a web-based BIM & CAD integration environment.
 
 Join the [Bldrs Discord](https://discord.gg/apWHfDtkJs).
 
-# Design
-
-See [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design) on the [wiki](https://github.com/bldrs-ai/Share/wiki).
-
 # Setup
 
 ```
@@ -34,6 +30,10 @@ https://bldrs.ai/share/v/p/index.ifc
 or on localhost as:
 
 https://localhost:8080/share/v/p/index.ifc
+
+# Design
+
+See [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design) on the [wiki](https://github.com/bldrs-ai/Share/wiki).
 
 # Dev Guide
 
