@@ -26,13 +26,12 @@ export default function SideDrawer() {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
-    console.log('in the use effect')
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
 
   return (
     <Drawer
-      open={true}
+      open={isDrawerOpen}
       anchor={'right'}
       variant='persistent'
       elevation={4}

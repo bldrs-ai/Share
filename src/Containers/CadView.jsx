@@ -19,6 +19,7 @@ import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../utils/store'
 import SidePanelControl from '../Components/SidePanelControl'
+import SideDrawer from '../Components/SideDrawer'
 
 
 /**
@@ -386,11 +387,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
         <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
-        {/* <CommentsDrawer
-          isOpenState={isCommentPanelOpen}
-          onClose = {()=>
-            isCommentPanelOpen?setIsCommentPanelOpen(false):setIsCommentPanelOpen(true)}
-        /> */}
+        <SideDrawer/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
