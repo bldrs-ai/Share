@@ -37,4 +37,4 @@ https://localhost:8080/share/v/p/index.ifc
 
 # Dev Guide
 
-See https://github.com/bldrs-ai/Share/wiki/Developer-Guide
+See [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Developer-Guide)
