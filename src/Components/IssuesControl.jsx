@@ -11,13 +11,11 @@ import {
 import {makeStyles} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
-// import AddCommentIcon from '../assets/2D_Icons/AddComment.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import Back from '../assets/2D_Icons/Back.svg'
 import IssueCard from './IssueCard'
 import IssueCardInput from './IssueCardInput'
 import IssueCardReply from './IssueCardReply'
-// import SearchBar from './SearchComments'
 
 
 /**
@@ -30,7 +28,7 @@ import IssueCardReply from './IssueCardReply'
  * @param {Object} viewer The viewer object from IFCjs.
  * @return {Object} React component
  */
-export default function IssuesControl({viewer}) {
+export default function IssuesControl() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isDialogDisplayed, setIsDialogDisplayed] =
@@ -149,41 +147,11 @@ const images = [
  * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-export function CommentPanelAll({onClick, onAddComment}) {
+export function CommentPanelAll() {
   const [selected, setSelected] = useState(null)
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
-      {/* <div className = {classes.title}>
-        <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
-         <div>
-          {selected !== null?
-            <TooltipIconButton
-              title='Back'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>setSelected(null)}
-              icon={<Back/>}/>:
-            <TooltipIconButton
-              title='Add'
-              size = 'small'
-              placement = 'bottom'
-              onClick={()=>onAddComment()}
-              icon={<AddCommentIcon/>}
-            />
-
-          }
-          <TooltipIconButton
-            title='Close'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>onClick()}
-            icon={<CloseIcon/>}/>
-        </div>
-      </div> */}
-      {/* <div className = {classes.searchContainer}>
-        <SearchBar onClickMenuCb = {()=>{}}/>
-      </div> */}
       <div>
       </div>
       <div className = {classes.cardsContainer}>
@@ -192,7 +160,7 @@ export function CommentPanelAll({onClick, onAddComment}) {
             return (
               <IssueCard
                 key = {index}
-                expandedImage = {index === 0 || index === 2?true:false}
+                expandedImage = {index === 0 || index === 2? true:false}
                 title = {issue.title}
                 content = {issue.content}
                 imageSrc = {images[index]}
@@ -374,17 +342,7 @@ function setPanelText(title, body, setText, setNext) {
 
 const useStyles = makeStyles({
   commentsContainer: {
-    // 'width': '290px',
-    // 'height': '88%',
     minHeight: '330px',
-    // '@media (max-width: 900px)': {
-    //   width: '290px',
-    //   height: '330px',
-    //   minHeight: '300px',
-    //   position: 'absolute',
-    //   top: '240px',
-    //   right: '80px',
-    // },
   },
   addContainer: {
     'width': '290px',

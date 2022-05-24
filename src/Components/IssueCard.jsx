@@ -34,7 +34,6 @@ export default function IssueCard({
   const [expandImage, setExpandImage] = useState(expandedImage)
   const [select, setSelect] = useState(false)
   const [reply, setReply] = useState(false)
-  console.log('image path from card', imageSrc)
 
   const contentHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
