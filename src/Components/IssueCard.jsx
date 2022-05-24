@@ -1,12 +1,12 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import Delete from '../assets/2D_Icons/Close.svg'
-import Share from '../assets/2D_Icons/Share.svg'
-import Check from '../assets/2D_Icons/Check.svg'
-import Reply from '../assets/2D_Icons/Reply.svg'
 import {TooltipIconButton} from './Buttons'
 import IssueCardInput from './IssueCardInput'
+import Share from '../assets/2D_Icons/Share.svg'
+// import Delete from '../assets/2D_Icons/Close.svg'
+// import Check from '../assets/2D_Icons/Check.svg'
+// import Reply from '../assets/2D_Icons/Reply.svg'
 
 
 const sampleText = ` Lorem ipsum dolor sit amet, consectetur adipiscing elit,
@@ -16,6 +16,7 @@ aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit
 in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
 Excepteur sint occaecat cupidatat non proident,
 sunt in culpa qui officia deserunt mollit anim id est laborum.`
+
 
 /**
  * Issue card
@@ -27,14 +28,18 @@ export default function IssueCard({
   expandedImage = false,
   title = 'Title',
   content = sampleText,
-  setSelected,
+  // setSelected,
   selected = false,
-  imageSrc = ''}) {
+  // imageSrc = ''
+}) {
   const [expandText, setExpandText] = useState(false)
-  const [expandImage, setExpandImage] = useState(expandedImage)
-  const [select, setSelect] = useState(false)
+  const [expandImage,
+    // setExpandImage
+  ] = useState(expandedImage)
+  const [select,
+    // setSelect
+  ] = useState(false)
   const [reply, setReply] = useState(false)
-
   const contentHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
   const classes = useStyles({contentHeight: contentHeight, select: select, imageWidth: imageWidth})
@@ -49,7 +54,7 @@ export default function IssueCard({
           {title}
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.select}
+          {/* <div className = {classes.select}
             role = 'button'
             onClick = {(e) => {
               select ? setSelect(false) : setSelect(true)
@@ -58,11 +63,11 @@ export default function IssueCard({
             onKeyPress = {() => {
               select ? setSelect(false):setSelect(true)
             }}
-            tabIndex={0}>{selected?'un-select':'select'}</div>
+            tabIndex={0}>{selected?'un-select':'select'}</div> */}
           <div className = {classes.avatarIcon}/>
         </div>
       </div>
-      <div className = {classes.imageContainer}>
+      {/* <div className = {classes.imageContainer}>
         {imageSrc.length !=0 &&
         // eslint-disable-next-line
         <div onClick = {() => setExpandImage(!expandImage)}>
@@ -72,7 +77,7 @@ export default function IssueCard({
             src = {imageSrc}/>
         </div>
         }
-      </div>
+      </div> */}
       <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'}:null}>
         {content}
       </div>
@@ -105,13 +110,13 @@ export default function IssueCard({
           />
         </div>
         <div>
-          <TooltipIconButton
+          {/* <TooltipIconButton
             title='Reply'
             size = 'small'
             placement = 'bottom'
             onClick={()=>setReply(!reply)}
-            icon={<Reply/>}/>
-          <TooltipIconButton
+            icon={<Reply/>}/> */}
+          {/* <TooltipIconButton
             title='Resolve'
             size = 'small'
             placement = 'bottom'
@@ -122,7 +127,7 @@ export default function IssueCard({
             size = 'small'
             placement = 'bottom'
             onClick={() => {}}
-            icon={<Delete/>}/>
+            icon={<Delete/>}/> */}
           <TooltipIconButton
             title='Share'
             size = 'small'
