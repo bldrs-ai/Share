@@ -1,12 +1,6 @@
 import React, {useEffect, useState} from 'react'
-import {useLocation, useNavigate} from 'react-router'
-import DialogActions from '@mui/material/DialogActions'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import MuiDialog from '@mui/material/Dialog'
-import Typography from '@mui/material/Typography'
-import Slide from '@mui/material/Slide'
-import {makeStyles} from '@mui/styles'
+import {useLocation, useNavigate, useParams} from 'react-router'
+import Paper from '@mui/material/Paper'
 import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
 import {
@@ -14,10 +8,16 @@ import {
   getHashParams,
   removeHashParams,
 } from '../utils/location'
+import {makeStyles} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+// import AddCommentIcon from '../assets/2D_Icons/AddComment.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import NavPrevIcon from '../assets/2D_Icons/NavPrev.svg'
-import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
+import Back from '../assets/2D_Icons/Back.svg'
+import IssueCard from './IssueCard'
+import IssueCardInput from './IssueCardInput'
+import IssueCardReply from './IssueCardReply'
+// import SearchBar from './SearchComments'
 
 
 /**
@@ -37,6 +37,7 @@ export default function IssuesControl({viewer}) {
         useState(parseHashParams(location) ? true : false)
   const [text, setText] = useState('')
   const [next, setNext] = useState(null)
+  const [addComment, setAddComment] = useState(false)
 
 
   useEffect(() => {
@@ -83,20 +84,61 @@ export default function IssuesControl({viewer}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={showIssues}
       dialog={
-        text ?
-          <CommentPanel
+        addComment ?
+          <CommentPanelAdd
             body={body}
             title={title}
             next={next}
+            onClick = {showIssues}
+            onAddComment = {()=>setAddComment(!addComment)}
             navigate={navigate}/> :
-        <></>
+          <CommentPanelAll
+            body={body}
+            title={title}
+            next={next}
+            onClick = {showIssues}
+            onAddComment = {()=>setAddComment(!addComment)}
+            navigate={navigate}/>
       }/>)
 }
 
 
-const Transition = React.forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />
-})
+const issues = [
+  {
+    title: 'Welcome to BLDRS',
+    content: 'Welcome to Comments',
+  },
+  {
+    title: 'Future',
+    content: `The Architecture,
+    Engineering and Construction industries are trying to
+    face challenging problems of the future with tools anchored in the past.
+    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+    open development. We can't imagine a future where building the rest of the world
+    hasn't been transformed by these new ways of working. We are part of that transformation.`,
+    media: true,
+  },
+  {
+    title: 'Key Insight',
+    content: `The key insights from Tech:
+    Cross-functional online collaboration unlocks team flow, productivity and creativity.
+    Your team extends outside of your organization and software developers are essential
+    team members.An ecosystem of app Creators developing on a powerful operating system. /n
+    Platform is the most scalable architecture.Open workspaces, open standards and open
+    source code the most powerful way to work. Cooperation is the unfair advantage.`,
+  },
+]
+const images = [
+  `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
+  // eslint-disable-next-line
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  // eslint-disable-next-line
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
+  // eslint-disable-next-line
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+  // eslint-disable-next-line
+  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
+]
 
 
 /**
@@ -107,59 +149,133 @@ const Transition = React.forwardRef(function Transition(props, ref) {
  * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-function CommentPanel({body, title, next, navigate}) {
-  const [count, setCount] = useState(0)
-  const [isOpen, setIsOpen] = useState(true)
-  const [fullWidth] = useState(window.innerWidth <= 900)
+export function CommentPanelAll({onClick, onAddComment}) {
+  const [selected, setSelected] = useState(null)
   const classes = useStyles()
   return (
-    <MuiDialog
-      open={isOpen}
-      onClose={() => setIsOpen(false)}
-      fullWidth={fullWidth}
-      scroll='paper'
-      TransitionComponent={Transition}
-      BackdropProps={{style: {opacity: 0}}}
-      PaperProps={{
-        style: {
-          padding: 0,
-          margin: 0,
-          minHeight: '220px',
-          maxHeight: '250px',
-          width: fullWidth ? '100%' : 'default'}}}
-      className={classes.issueDialog}>
-      {title &&
-       <DialogTitle>
-         <h1>{title}</h1>
-       </DialogTitle>}
-      <DialogContent>
-        <Typography paragraph={true}>{body}</Typography>
-      </DialogContent>
-      <DialogActions sx={{justifyContent: 'center'}}>
-        <div>
-          {count > 0 &&
-           <TooltipIconButton
-             title='Back'
-             onClick={() => {
-               if (count > 0) {
-                 setCount(count - 1)
-                 navigate(-1)
-               }
-             }}
-             icon={<NavPrevIcon/>}
-             placement='left'/>}
-          {next &&
-           <TooltipIconButton
-             title='Next'
-             onClick={() => {
-               setCount(count + 1)
-               window.location = next
-             }}
-             icon={<NavNextIcon/>}
-             placement='right'/>}
+    <Paper className = {classes.commentsContainer}>
+      {/* <div className = {classes.title}>
+        <div>{selected !== null ? issues[selected].title : 'Comments'}</div>
+         <div>
+          {selected !== null?
+            <TooltipIconButton
+              title='Back'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>setSelected(null)}
+              icon={<Back/>}/>:
+            <TooltipIconButton
+              title='Add'
+              size = 'small'
+              placement = 'bottom'
+              onClick={()=>onAddComment()}
+              icon={<AddCommentIcon/>}
+            />
+
+          }
+          <TooltipIconButton
+            title='Close'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onClick()}
+            icon={<CloseIcon/>}/>
         </div>
-      </DialogActions>
-    </MuiDialog>
+      </div> */}
+      {/* <div className = {classes.searchContainer}>
+        <SearchBar onClickMenuCb = {()=>{}}/>
+      </div> */}
+      <div>
+      </div>
+      <div className = {classes.cardsContainer}>
+        {selected === null?
+          issues.map((issue, index)=>{
+            return (
+              <IssueCard
+                key = {index}
+                expandedImage = {index === 0 || index === 2?true:false}
+                title = {issue.title}
+                content = {issue.content}
+                imageSrc = {images[index]}
+                setSelected = {()=>{
+                  setSelected(index)
+                }}/>
+            )
+          }):
+          <div>
+            <IssueCard
+              title = {issues[selected].title}
+              imageSrc = {images[selected]}
+              content = {'Welcome to Comments'}
+              setSelected = {()=>setSelected(null)}
+              selected = {true}
+            />
+            <div style = {{
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-end',
+              alignItems: 'flex-end'}}>
+              <IssueCardReply
+                title = {'RE: First Reply'}
+                content = {issues[2].content}
+                setSelected = {()=>setSelected(null)}
+              />
+              <IssueCardReply
+                title = {'RE: Second Reply'}
+                content = {issues[2].content}
+                setSelected = {()=>setSelected(null)}
+                imageSrc = {images[2]}
+              />
+            </div>
+          </div>
+        }
+      </div>
+    </Paper>
+  )
+}
+
+
+/**
+ * Displays the comment panel
+ * @param {string} body The comment body
+ * @param {string|null} title The comment title, optional
+ * @param {string|null} next Full URL for next comment link href
+ * @param {function|null} navigate React router navigate for back button
+ * @return {Object} React component
+ */
+export function CommentPanelAdd({onClick, onAddComment}) {
+  const classes = useStyles()
+  const params = useParams()
+  const isElementSelected = params['*'].includes('.ifc/')
+  return (
+    <Paper className = {classes.addContainer}>
+      <div className = {classes.title}>
+        <div>Add a Comment</div>
+        <div>
+          <TooltipIconButton
+            title='Back'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onAddComment()}
+            icon={<Back/>}/>
+          <TooltipIconButton
+            title='Close'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>onClick()}
+            icon={<CloseIcon/>}/>
+        </div>
+      </div>
+      <div className = {classes.cardsContainerAdd}>
+        {
+          isElementSelected ?
+          null :
+          <div className = {classes.selectMessage}>
+            Please select an element to attach a comment.
+          </div>
+        }
+        <IssueCardInput onSubmit={()=>onAddComment()}/>
+      </div>
+    </Paper>
   )
 }
 
@@ -256,44 +372,85 @@ function setPanelText(title, body, setText, setNext) {
   }
 }
 
-
 const useStyles = makeStyles({
-  issueDialog: {
-    'fontFamily': 'Helvetica',
-    '& .MuiDialog-container': {
-      alignItems: 'flex-end',
+  commentsContainer: {
+    // 'width': '290px',
+    // 'height': '88%',
+    minHeight: '330px',
+    // '@media (max-width: 900px)': {
+    //   width: '290px',
+    //   height: '330px',
+    //   minHeight: '300px',
+    //   position: 'absolute',
+    //   top: '240px',
+    //   right: '80px',
+    // },
+  },
+  addContainer: {
+    'width': '290px',
+    'height': 'auto',
+    'position': 'absolute',
+    'top': '20px',
+    'right': '86px',
+    '@media (max-width: 900px)': {
+      width: '290px',
+      height: 'auto',
+      position: 'absolute',
+      top: '240px',
+      right: '80px',
     },
-    '& .MuiDialogTitle-root h1': {
-      fontSize: '1.1em',
-      margin: 0,
+  },
+  searchContainer: {
+    height: '60px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: '4px',
+  },
+  title: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: '40px',
+    width: '90%',
+    margin: '12px 12px 0px 12px',
+    paddingBottom: '10px',
+  },
+  cardsContainer: {
+    'overflowY': 'scroll',
+    'overflowX': 'hidden',
+    'height': '78%',
+    '&::-webkit-scrollbar': {
+      display: 'none',
     },
-    '& .MuiDialogActions-root': {
-      borderTop: 'solid 1px lightgrey',
-      margin: '0.5em 1em',
-      padding: '0em',
+    '@media (max-width: 900px)': {
+      height: '410px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      border: '1px solid lightGrey',
     },
-    '& .MuiPaper-root': {
-      padding: '1em',
+  },
+  cardsContainerAdd: {
+    'overflowY': 'scroll',
+    'overflowX': 'hidden',
+    'height': '78%',
+    '&::-webkit-scrollbar': {
+      display: 'none',
     },
-    '& .MuiButtonBase-root': {
-      padding: 0,
-      margin: '0.5em',
-      borderRadius: '50%',
-      border: 'none',
+    '@media (max-width: 900px)': {
+      height: 'auto',
     },
-    '& svg': {
-      padding: 0,
-      margin: 0,
-      width: '25px',
-      height: '25px',
-      border: 'solid 0.5px grey',
-      borderRadius: '50%',
-    },
-    '& h1, & p': {
-      fontWeight: 300,
-    },
-    '& h1': {
-      fontSize: '1.2em',
-    },
+  },
+  selectMessage: {
+    fontSize: '14px',
+    width: '100%',
+    paddingLeft: '15px',
+    paddingRight: '15px',
+    display: 'flex',
+    justifyContent: 'center',
+    color: 'red',
   },
 })
