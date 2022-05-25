@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react'
-import {useLocation, useNavigate, useParams} from 'react-router'
+import {useLocation, useNavigate} from 'react-router'
 import Paper from '@mui/material/Paper'
 import {ControlButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
@@ -14,8 +14,6 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import Back from '../assets/2D_Icons/Back.svg'
 import IssueCard from './IssueCard'
-import IssueCardInput from './IssueCardInput'
-import IssueCardReply from './IssueCardReply'
 
 
 /**
@@ -148,54 +146,22 @@ const images = [
  * @return {Object} React component
  */
 export function CommentPanelAll() {
-  const [selected, setSelected] = useState(null)
   const classes = useStyles()
   return (
     <Paper className = {classes.commentsContainer}>
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        {selected === null?
-          issues.map((issue, index)=>{
-            return (
-              <IssueCard
-                key = {index}
-                expandedImage = {index === 0 || index === 2? true:false}
-                title = {issue.title}
-                content = {issue.content}
-                imageSrc = {images[index]}
-                setSelected = {()=>{
-                  setSelected(index)
-                }}/>
-            )
-          }):
-          <div>
+        {issues.map((issue, index)=>{
+          return (
             <IssueCard
-              title = {issues[selected].title}
-              imageSrc = {images[selected]}
-              content = {'Welcome to Comments'}
-              setSelected = {()=>setSelected(null)}
-              selected = {true}
-            />
-            <div style = {{
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'flex-end',
-              alignItems: 'flex-end'}}>
-              <IssueCardReply
-                title = {'RE: First Reply'}
-                content = {issues[2].content}
-                setSelected = {()=>setSelected(null)}
-              />
-              <IssueCardReply
-                title = {'RE: Second Reply'}
-                content = {issues[2].content}
-                setSelected = {()=>setSelected(null)}
-                imageSrc = {images[2]}
-              />
-            </div>
-          </div>
-        }
+              key = {index}
+              expandedImage = {index === 0 || index === 2? true:false}
+              title = {issue.title}
+              content = {issue.content}
+              imageSrc = {images[index]}/>
+          )
+        })}
       </div>
     </Paper>
   )
@@ -212,8 +178,6 @@ export function CommentPanelAll() {
  */
 export function CommentPanelAdd({onClick, onAddComment}) {
   const classes = useStyles()
-  const params = useParams()
-  const isElementSelected = params['*'].includes('.ifc/')
   return (
     <Paper className = {classes.addContainer}>
       <div className = {classes.title}>
@@ -232,16 +196,6 @@ export function CommentPanelAdd({onClick, onAddComment}) {
             onClick={()=>onClick()}
             icon={<CloseIcon/>}/>
         </div>
-      </div>
-      <div className = {classes.cardsContainerAdd}>
-        {
-          isElementSelected ?
-          null :
-          <div className = {classes.selectMessage}>
-            Please select an element to attach a comment.
-          </div>
-        }
-        <IssueCardInput onSubmit={()=>onAddComment()}/>
       </div>
     </Paper>
   )

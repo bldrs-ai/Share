@@ -19,6 +19,9 @@ import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../utils/store'
 import SidePanelControl from '../Components/SidePanelControl'
+import SideDrawer from '../Components/SideDrawer'
+import MobileDrawer from '../Components/MobileDrawer'
+import {useIsMobile} from '../Components/Hooks'
 
 
 /**
@@ -70,8 +73,10 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const closeDrawer = useStore((state) => state.closeDrawer)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
+  const isMobile = useIsMobile()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -404,6 +409,10 @@ export default function CadView({
         </div>
         {alert}
       </div>
+      {isDrawerOpen &&
+        (isMobile ? <MobileDrawer/> :
+        <SideDrawer
+          onClose={closeDrawer}/>)}
     </div>
   )
 }

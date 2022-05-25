@@ -2,21 +2,10 @@ import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
-import IssueCardInput from './IssueCardInput'
 import Share from '../assets/2D_Icons/Share.svg'
-// import Delete from '../assets/2D_Icons/Close.svg'
-// import Check from '../assets/2D_Icons/Check.svg'
-// import Reply from '../assets/2D_Icons/Reply.svg'
 
 
-const sampleText = ` Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit
-in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
-Excepteur sint occaecat cupidatat non proident,
-sunt in culpa qui officia deserunt mollit anim id est laborum.`
-
+const placeholderText = '...'
 
 /**
  * Issue card
@@ -25,24 +14,13 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @return {Object} React component
  */
 export default function IssueCard({
-  expandedImage = false,
   title = 'Title',
-  content = sampleText,
-  // setSelected,
+  content = placeholderText,
   selected = false,
-  // imageSrc = ''
 }) {
   const [expandText, setExpandText] = useState(false)
-  const [expandImage,
-    // setExpandImage
-  ] = useState(expandedImage)
-  const [select,
-    // setSelect
-  ] = useState(false)
-  const [reply, setReply] = useState(false)
   const contentHeight = expandText ? 'auto' : '70px'
-  const imageWidth = expandImage ? '100%' : '100px'
-  const classes = useStyles({contentHeight: contentHeight, select: select, imageWidth: imageWidth})
+  const classes = useStyles({contentHeight: contentHeight})
   return (
     <Paper
       elevation = {0}
@@ -54,31 +32,10 @@ export default function IssueCard({
           {title}
         </div>
         <div className = {classes.titleRightContainer}>
-          {/* <div className = {classes.select}
-            role = 'button'
-            onClick = {(e) => {
-              select ? setSelect(false) : setSelect(true)
-              setSelected()
-            }}
-            onKeyPress = {() => {
-              select ? setSelect(false):setSelect(true)
-            }}
-            tabIndex={0}>{selected?'un-select':'select'}</div> */}
           <div className = {classes.avatarIcon}/>
         </div>
       </div>
-      {/* <div className = {classes.imageContainer}>
-        {imageSrc.length !=0 &&
-        // eslint-disable-next-line
-        <div onClick = {() => setExpandImage(!expandImage)}>
-          <img
-            className = {classes.image}
-            alt = 'cardImage'
-            src = {imageSrc}/>
-        </div>
-        }
-      </div> */}
-      <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'}:null}>
+      <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'} : null}>
         {content}
       </div>
       {content.length> 170 ?
@@ -110,24 +67,6 @@ export default function IssueCard({
           />
         </div>
         <div>
-          {/* <TooltipIconButton
-            title='Reply'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>setReply(!reply)}
-            icon={<Reply/>}/> */}
-          {/* <TooltipIconButton
-            title='Resolve'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Check/>}/>
-          <TooltipIconButton
-            title='Delete'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Delete/>}/> */}
           <TooltipIconButton
             title='Share'
             size = 'small'
@@ -136,7 +75,6 @@ export default function IssueCard({
             icon={<Share/>}/>
         </div>
       </div>
-      {reply ? <IssueCardInput onSubmit = {()=>setReply(false)}/> : null}
     </Paper>
   )
 }
@@ -144,7 +82,7 @@ export default function IssueCard({
 const useStyles = makeStyles({
   container: {
     padding: '10px',
-    border: (props) => props.select ? '2px solid green':'1px solid lightGrey',
+    border: '1px solid lightGrey',
     width: '270px',
     marginBottom: '20px',
     marginLeft: '10px',
@@ -243,7 +181,6 @@ const useStyles = makeStyles({
     cursor: 'pointer',
   },
   image: {
-    width: (props) => props.imageWidth,
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
     cursor: 'pointer',
