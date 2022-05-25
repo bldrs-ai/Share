@@ -1,7 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router'
 import Paper from '@mui/material/Paper'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import {ControlButton} from './Buttons'
 import debug from '../utils/debug'
 import {
   addHashParams,
@@ -10,9 +10,7 @@ import {
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import Back from '../assets/2D_Icons/Back.svg'
 import IssueCard from './IssueCard'
 
 
@@ -80,21 +78,13 @@ export default function IssuesControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={showIssues}
       dialog={
-        addComment ?
-          <CommentPanelAdd
-            body={body}
-            title={title}
-            next={next}
-            onClick = {showIssues}
-            onAddComment = {()=>setAddComment(!addComment)}
-            navigate={navigate}/> :
-          <CommentPanelAll
-            body={body}
-            title={title}
-            next={next}
-            onClick = {showIssues}
-            onAddComment = {()=>setAddComment(!addComment)}
-            navigate={navigate}/>
+        <CommentPanelAll
+          body={body}
+          title={title}
+          next={next}
+          onClick = {showIssues}
+          onAddComment = {()=>setAddComment(!addComment)}
+          navigate={navigate}/>
       }/>)
 }
 
@@ -162,40 +152,6 @@ export function CommentPanelAll() {
               imageSrc = {images[index]}/>
           )
         })}
-      </div>
-    </Paper>
-  )
-}
-
-
-/**
- * Displays the comment panel
- * @param {string} body The comment body
- * @param {string|null} title The comment title, optional
- * @param {string|null} next Full URL for next comment link href
- * @param {function|null} navigate React router navigate for back button
- * @return {Object} React component
- */
-export function CommentPanelAdd({onClick, onAddComment}) {
-  const classes = useStyles()
-  return (
-    <Paper className = {classes.addContainer}>
-      <div className = {classes.title}>
-        <div>Add a Comment</div>
-        <div>
-          <TooltipIconButton
-            title='Back'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>onAddComment()}
-            icon={<Back/>}/>
-          <TooltipIconButton
-            title='Close'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>onClick()}
-            icon={<CloseIcon/>}/>
-        </div>
       </div>
     </Paper>
   )

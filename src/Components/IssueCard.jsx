@@ -6,7 +6,6 @@ import Share from '../assets/2D_Icons/Share.svg'
 
 
 const placeholderText = '...'
-
 /**
  * Issue card
  * @param {string} title The comment body
@@ -25,7 +24,6 @@ export default function IssueCard({
     <Paper
       elevation = {0}
       className = {classes.container}
-      style={selected ? {border: '1px solid green'} : {}}
     >
       <div className = {classes.title}>
         <div>
