@@ -9,9 +9,52 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
-import {getIssue, getComment} from '../utils/GitHub'
+import {getIssue, getComment, getComments, getIssues} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
+
+
+/**
+ * Displays the comment panel
+ * @param {string} body The comment body
+ * @param {string|null} title The comment title, optional
+ * @param {string|null} next Full URL for next comment link href
+ * @param {function|null} navigate React router navigate for back button
+ * @return {Object} React component
+ */
+export function CommentPanelAll() {
+  const classes = useStyles()
+  useEffect(()=>{
+    const fetchComments = async (id) =>{
+      const comments = await getComments(id)
+      console.log('comments', comments)
+    }
+    const fetchIssues = async () => {
+      const issues = await getIssues()
+      console.log('issues from the control', issues)
+      issues.data.map((issue) => fetchComments(issue.id))
+    }
+    fetchIssues()
+  }, [])
+  return (
+    <Paper className = {classes.commentsContainer}>
+      <div>
+      </div>
+      <div className = {classes.cardsContainer}>
+        {issues.map((issue, index)=>{
+          return (
+            <IssueCard
+              key = {index}
+              expandedImage = {index === 0 || index === 2? true:false}
+              title = {issue.title}
+              content = {issue.content}
+              imageSrc = {images[index]}/>
+          )
+        })}
+      </div>
+    </Paper>
+  )
+}
 
 
 /**
@@ -125,37 +168,6 @@ const images = [
   // eslint-disable-next-line
   `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
 ]
-
-
-/**
- * Displays the comment panel
- * @param {string} body The comment body
- * @param {string|null} title The comment title, optional
- * @param {string|null} next Full URL for next comment link href
- * @param {function|null} navigate React router navigate for back button
- * @return {Object} React component
- */
-export function CommentPanelAll() {
-  const classes = useStyles()
-  return (
-    <Paper className = {classes.commentsContainer}>
-      <div>
-      </div>
-      <div className = {classes.cardsContainer}>
-        {issues.map((issue, index)=>{
-          return (
-            <IssueCard
-              key = {index}
-              expandedImage = {index === 0 || index === 2? true:false}
-              title = {issue.title}
-              content = {issue.content}
-              imageSrc = {images[index]}/>
-          )
-        })}
-      </div>
-    </Paper>
-  )
-}
 
 /** The prefix to use for issue id in the URL hash. */
 export const ISSUE_PREFIX = 'i'

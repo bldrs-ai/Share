@@ -106,7 +106,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     },
   },
   container: {
-    // border: '1px solid gainsboro',
     borderRadius: '5px',
     overflow: 'scroll',
   },

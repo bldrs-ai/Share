@@ -18,6 +18,41 @@ export async function getIssue(issueId) {
 
 
 /**
+ * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
+ * below for the expected structure.
+ * @param {Number} issueId
+ * @return {Object} The issue object.
+ */
+ export async function getIssues(issueId) {
+  const issues = await getGitHub('issues')
+  debug().log('GitHub: issue: ', issues)
+  return issues
+}
+
+
+/**
+ * The comments should have the following structure:
+ * @param {Number} issueId
+ * @param {Number} commentId
+ * @return {Object} The comment object.
+ */
+ export async function getComments(issueId) {
+   console.log('in the get comments', issueId)
+  const comments = await getGitHub(
+      'issues/{issue_number}/comments',
+      {
+        issue_number: issueId,
+      })
+  debug().log('GitHub: comments: ', comments)
+  if (comments && comments.data && comments.data.length > 0) {
+    return comments.data
+  } else {
+    console.warn('Empty comments!')
+  }
+}
+
+
+/**
  * The comments should have the following structure:
  * @param {Number} issueId
  * @param {Number} commentId
@@ -78,8 +113,12 @@ class MockOctokit {
    */
   request(path, account, args) {
     debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
+    console.log('from the request path', path)
+    console.log('from the request account', account)
+    console.log('from the request args', args)
     switch (true) {
       case /.*\/issues\/{.+}$/.test(path): return MOCK_ISSUE
+      case /.*\/issues\/{.+}$/.test(path): return MOCK_ISSUES
       case /.*\/issues\/{.+}\/comments$/.test(path): return MOCK_COMMENTS
       default: throw new Error('Mock does not support server path: ' + path)
     }
@@ -96,6 +135,42 @@ url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,
 \`\`\`\r
 `,
   },
+}
+const MOCK_ISSUES = {
+  data: [
+    {
+      title: 'Welcome to Bldrs: Share',
+      body: `Build Every Thing Together.\r
+  \`\`\`\r
+  url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+  \`\`\`\r
+  `,
+    },
+    {
+      title: 'Welcome to Bldrs: Share',
+      body: `Build Every Thing Together.\r
+  \`\`\`\r
+  url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+  \`\`\`\r
+  `,
+    },
+    {
+      title: 'Welcome to Bldrs: Share',
+      body: `Build Every Thing Together.\r
+  \`\`\`\r
+  url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+  \`\`\`\r
+  `,
+    },
+    {
+      title: 'Welcome to Bldrs: Share',
+      body: `Build Every Thing Together.\r
+  \`\`\`\r
+  url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+  \`\`\`\r
+  `,
+    },
+  ],
 }
 
 
@@ -132,8 +207,14 @@ url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-144.36,14.11,147.82,-4
 }
 
 
+// // All direct uses of octokit should be private to this file to
+// // ensure we setup mocks for local use and unit testing.
+// const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+//   userAgent: `bldrs/${PkgJson.version}`,
+// })
+
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
-const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+const octokit =  new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
