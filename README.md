@@ -11,8 +11,8 @@ Join the [Bldrs Discord](https://discord.gg/apWHfDtkJs).
 > yarn serve
 ```
 
-## Mac M1
-If you're on a shiny new M1, you need to install the `cairo` and `pango` libraries before running `yarn install`. You can do this with brew: `brew install cairo pango`. Otherwise, building `canvas` will cause an error. This should be fixed soon hopefully, see [this issue](https://github.com/Automattic/node-canvas/issues/2038) for more info.
+## Mac M1 (or other ARM CPUs)
+If you're on a shiny new M1, you need to install the `cairo` and `pango` libraries before running `yarn install`. You can do this with brew: `brew install cairo pango`. Otherwise, building `canvas` will cause an error. [See here](https://github.com/Automattic/node-canvas/wiki/Installation%3A-Mac-OS-X) for more info and troubleshooting with ARM CPUs and `canvas`.
 
 # Build & Include IFC files to publish
 
