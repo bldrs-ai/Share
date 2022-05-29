@@ -9,7 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
-import {getIssue, getComment, getComments, getIssues} from '../utils/GitHub'
+import {getIssue, getComment, getIssues} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
 
@@ -24,15 +24,21 @@ import IssueCard from './IssueCard'
  */
 export function CommentPanelAll() {
   const classes = useStyles()
+  const [issues, setIssues] = useState([])
   useEffect(()=>{
-    const fetchComments = async (id) =>{
-      const comments = await getComments(id)
-      console.log('comments', comments)
-    }
     const fetchIssues = async () => {
       const issues = await getIssues()
-      console.log('issues from the control', issues)
-      issues.data.map((issue) => fetchComments(issue.id))
+      const issuesArr = []
+      issues.data.map((issue)=>{
+        issuesArr.push(
+            {
+              title: issue.title,
+              body: issue.body,
+              date: issue.created_at,
+            },
+        )
+      })
+      setIssues(issuesArr)
     }
     fetchIssues()
   }, [])
@@ -47,7 +53,7 @@ export function CommentPanelAll() {
               key = {index}
               expandedImage = {index === 0 || index === 2? true:false}
               title = {issue.title}
-              content = {issue.content}
+              content = {issue.body}
               imageSrc = {images[index]}/>
           )
         })}
@@ -132,31 +138,31 @@ export default function IssuesControl() {
 }
 
 
-const issues = [
-  {
-    title: 'Welcome to BLDRS',
-    content: 'Welcome to Comments',
-  },
-  {
-    title: 'Future',
-    content: `The Architecture,
-    Engineering and Construction industries are trying to
-    face challenging problems of the future with tools anchored in the past.
-    Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-    open development. We can't imagine a future where building the rest of the world
-    hasn't been transformed by these new ways of working. We are part of that transformation.`,
-    media: true,
-  },
-  {
-    title: 'Key Insight',
-    content: `The key insights from Tech:
-    Cross-functional online collaboration unlocks team flow, productivity and creativity.
-    Your team extends outside of your organization and software developers are essential
-    team members.An ecosystem of app Creators developing on a powerful operating system. /n
-    Platform is the most scalable architecture.Open workspaces, open standards and open
-    source code the most powerful way to work. Cooperation is the unfair advantage.`,
-  },
-]
+// const issues = [
+//   {
+//     title: 'Welcome to BLDRS',
+//     content: 'Welcome to Comments',
+//   },
+//   {
+//     title: 'Future',
+//     content: `The Architecture,
+//     Engineering and Construction industries are trying to
+//     face challenging problems of the future with tools anchored in the past.
+//     Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
+//     open development. We can't imagine a future where building the rest of the world
+//     hasn't been transformed by these new ways of working. We are part of that transformation.`,
+//     media: true,
+//   },
+//   {
+//     title: 'Key Insight',
+//     content: `The key insights from Tech:
+//     Cross-functional online collaboration unlocks team flow, productivity and creativity.
+//     Your team extends outside of your organization and software developers are essential
+//     team members.An ecosystem of app Creators developing on a powerful operating system. /n
+//     Platform is the most scalable architecture.Open workspaces, open standards and open
+//     source code the most powerful way to work. Cooperation is the unfair advantage.`,
+//   },
+// ]
 const images = [
   `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
   // eslint-disable-next-line
