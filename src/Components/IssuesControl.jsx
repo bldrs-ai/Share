@@ -25,9 +25,10 @@ import useStore from '../utils/store'
  */
 export function CommentPanelAll() {
   const classes = useStyles()
-  // const selectedComment = useStore((state) => state.selectedComment)
+  const selectedComment = useStore((state) => state.selectedComment)
   const issuesStore = useStore((state) => state.issues)
   const setIssuesStore = useStore((state) => state.setIssues)
+  const filteredComment = selectedComment ? issuesStore.filter((issue) => issue.id ===selectedComment)[0] :null
 
   useEffect(()=>{
     const fetchIssues = async () => {
@@ -63,18 +64,28 @@ export function CommentPanelAll() {
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        {issuesStore.map((issue, index)=>{
-          return (
-            <IssueCard
-              id = {issue.id}
-              key = {index}
-              title = {issue.title}
-              body = {issue.body}
-              username = {issue.username}
-              avatarURL = {issue.avatarURL}
-              imageURL = {issue.imageURL}/>
-          )
-        })}
+        {selectedComment ?
+          <IssueCard
+            id = {filteredComment.id}
+            key = {filteredComment.id}
+            title = {filteredComment.title}
+            body = {filteredComment.body}
+            username = {filteredComment.username}
+            avatarURL = {filteredComment.avatarURL}
+            imageURL = {filteredComment.imageURL}/>:
+          issuesStore.map((issue, index)=>{
+            return (
+              <IssueCard
+                id = {issue.id}
+                key = {index}
+                title = {issue.title}
+                body = {issue.body}
+                username = {issue.username}
+                avatarURL = {issue.avatarURL}
+                imageURL = {issue.imageURL}/>
+            )
+          })
+        }
       </div>
     </Paper>
   )
