@@ -9,7 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {makeStyles} from '@mui/styles'
-import {getIssue, getComment, getIssues} from '../utils/GitHub'
+import {getIssue, getComment, getIssues, getComments} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
 import useStore from '../utils/store'
@@ -25,10 +25,12 @@ import useStore from '../utils/store'
  */
 export function CommentPanelAll() {
   const classes = useStyles()
-  const selectedComment = useStore((state) => state.selectedComment)
+  const selectedCommentId = useStore((state) => state.selectedCommentId)
   const issuesStore = useStore((state) => state.issues)
   const setIssuesStore = useStore((state) => state.setIssues)
-  const filteredComment = selectedComment ? issuesStore.filter((issue) => issue.id ===selectedComment)[0] :null
+  const replies = useStore((state) => state.replies)
+  const setReplies = useStore((state) => state.setReplies)
+  const filteredComment = selectedCommentId ? issuesStore.filter((issue) => issue.id ===selectedCommentId)[0] :null
 
   useEffect(()=>{
     const fetchIssues = async () => {
@@ -46,6 +48,7 @@ export function CommentPanelAll() {
         issuesArr.push(
             {
               id: issue.id,
+              number: issue.number,
               title: issue.title,
               body: issue.body,
               date: issue.created_at,
@@ -60,12 +63,26 @@ export function CommentPanelAll() {
     }
     fetchIssues()
   }, [setIssuesStore])
+
+
+  useEffect(()=>{
+    const fetchComments = async (selectedIssue) => {
+      const comments = await getComments(selectedIssue.number)
+      setReplies(comments)
+    }
+    const selectedIssue = issuesStore.filter((issue) => issue.id === selectedCommentId)[0]
+    selectedCommentId !== null ?
+    fetchComments(selectedIssue) : null
+  }, [selectedCommentId, issuesStore, setReplies])
+
+  console.log('replies', replies)
   return (
     <Paper className = {classes.commentsContainer}>
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        {selectedComment ?
+        {selectedCommentId ?
+        <>
           <IssueCard
             id = {filteredComment.id}
             key = {filteredComment.id}
@@ -74,20 +91,36 @@ export function CommentPanelAll() {
             username = {filteredComment.username}
             numberOfReplies = {filteredComment.numberOfReplies}
             avatarURL = {filteredComment.avatarURL}
-            imageURL = {filteredComment.imageURL}/>:
-          issuesStore.map((issue, index)=>{
-            return (
-              <IssueCard
-                id = {issue.id}
-                key = {index}
-                title = {issue.title}
-                body = {issue.body}
-                username = {issue.username}
-                numberOfReplies = {issue.numberOfReplies}
-                avatarURL = {issue.avatarURL}
-                imageURL = {issue.imageURL}/>
-            )
-          })
+            imageURL = {filteredComment.imageURL}/>
+          { replies &&
+              replies.map((reply)=>{
+                return (
+                  <IssueCard
+                    id = {reply.id}
+                    key = {reply.id}
+                    title = {filteredComment.title +':RE'}
+                    body = {reply.body}
+                    username = {reply.user.login}
+                    numberOfReplies = {0}
+                    avatarURL = {reply.user.avatar_url}
+                    imageURL = {''}/>
+                )
+              })
+          }
+        </> :
+        issuesStore.map((issue, index)=>{
+          return (
+            <IssueCard
+              id = {issue.id}
+              key = {index}
+              title = {issue.title}
+              body = {issue.body}
+              username = {issue.username}
+              numberOfReplies = {issue.numberOfReplies}
+              avatarURL = {issue.avatarURL}
+              imageURL = {issue.imageURL}/>
+          )
+        })
         }
       </div>
     </Paper>

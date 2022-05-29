@@ -4,8 +4,9 @@ const useStore = create(set => ({
   isDrawerOpen: false,
   isCommentsOn: false,
   isPropertiesOn: false,
-  selectedComment: null,
+  selectedCommentId: null,
   issues:[],
+  replies:[],
   modelStore:null,
   selectedElementStore:{},
   toggleDrawer: () => set(() => ({ isDrawerOpen: false })),
@@ -16,7 +17,8 @@ const useStore = create(set => ({
   setModelStore: (model) => set(state => ({modelStore: model})),
   setSelectedElementStore: (element) => set(state => ({selectedElementStore: element})),
   setIssues: (issues) => set(state => ({issues: issues})),
-  setSelectedComment: (commentID) => set(state => ({selectedComment: commentID})),
+  setReplies: (replies) => set(state => ({replies: replies})),
+  setSelectedComment: (issue) => set(state => ({selectedCommentId: issue})),
 }))
 
  export default useStore;

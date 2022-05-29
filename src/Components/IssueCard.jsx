@@ -28,9 +28,9 @@ export default function IssueCard({
 }) {
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
-  const selectedComment = useStore((state) => state.selectedComment)
+  const selectedCommentId = useStore((state) => state.selectedCommentId)
   const setSelectedComment = useStore((state) => state.setSelectedComment)
-  const selected = selectedComment === id
+  const selected = selectedCommentId === id
 
   const bodyHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
