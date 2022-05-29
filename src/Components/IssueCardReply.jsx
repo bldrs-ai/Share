@@ -227,8 +227,8 @@ const useStyles = makeStyles({
   },
   select: {
     border: '1px solid lightgrey',
-    padding: '2px 4px 2px 4px',
-    borderRadius: '6px',
-    marginRight: '10px',
+    // padding: '2px 4px 2px 4px',
+    // borderRadius: '6px',
+    // marginRight: '10px',
   },
 })

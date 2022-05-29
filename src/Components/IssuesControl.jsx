@@ -62,7 +62,6 @@ export function CommentPanelAll() {
           return (
             <IssueCard
               key = {index}
-              expandedImage = {index === 0 || index === 2? true:false}
               title = {issue.title}
               body = {issue.body}
               username = {issue.username}

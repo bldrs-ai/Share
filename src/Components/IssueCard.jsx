@@ -1,11 +1,14 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipIconButton} from './Buttons'
+import Select from '../assets/2D_Icons/Select.svg'
 import Share from '../assets/2D_Icons/Share.svg'
+// import Delete from '../assets/2D_Icons/Close.svg'
+// import Check from '../assets/2D_Icons/Check.svg'
+// import Reply from '../assets/2D_Icons/Reply.svg'
+import {TooltipIconButton} from './Buttons'
 
 
-const placeholderText = '...'
 /**
  * Issue card
  * @param {string} title The comment body
@@ -14,19 +17,26 @@ const placeholderText = '...'
  */
 export default function IssueCard({
   title = 'Title',
-  body = placeholderText,
-  selected = false,
+  body,
+  // selected = false,
   avatarURL,
   username,
   imageURL = '',
+  expandedImage = false,
 }) {
   const [expandText, setExpandText] = useState(false)
+  const [expandImage, setExpandImage] = useState(expandedImage)
+  const [select, setSelect] = useState(false)
+  // const [reply, setReply] = useState(false)
+
   const bodyHeight = expandText ? 'auto' : '70px'
-  const classes = useStyles({bodyHeight: bodyHeight})
+  const imageWidth = expandImage ? '100%' : '100px'
+  const classes = useStyles({bodyHeight: bodyHeight, select: select, imageWidth: imageWidth})
   return (
     <Paper
       elevation = {0}
       className = {classes.container}
+      style = {{borderRadius: '10px'}}
     >
       <div className = {classes.title}>
         <div>
@@ -34,13 +44,31 @@ export default function IssueCard({
           <div className = {classes.username}>{username}</div>
         </div>
         <div className = {classes.titleRightContainer}>
-          <img alt = 'avatar' className = {classes.avatarIcon} src = {avatarURL}/>
+          <div className = {classes.select}>
+            <TooltipIconButton
+              title={select ? 'Unselect Comment':'Select Comment'}
+              size = 'small'
+              placement = 'bottom'
+              onClick = {() => {
+                select ? setSelect(false) : setSelect(true)
+              }}
+              icon={<Select/>}/>
+          </div>
+          <img alt = {'avatarImage'} className = {classes.avatarIcon} src = {avatarURL}/>
         </div>
       </div>
-      {imageURL.length>0?
-        <img alt = 'issue' className = {classes.image} src = {imageURL}/>:null
-      }
-      <div className = {classes.body} style = {body.length < 170 ? {height: 'auto'} : null}>
+      <div className = {classes.imageContainer}>
+        {imageURL.length !=0 &&
+        // eslint-disable-next-line
+        <div onClick = {() => setExpandImage(!expandImage)}>
+          <img
+            className = {classes.image}
+            alt = 'cardImage'
+            src = {imageURL}/>
+        </div>
+        }
+      </div>
+      <div className = {classes.body} style = {body.length < 170 ? {height: 'auto'}:null}>
         {body}
       </div>
       {body.length> 170 ?
@@ -72,6 +100,24 @@ export default function IssueCard({
           />
         </div>
         <div>
+          {/* <TooltipIconButton
+            title='Reply'
+            size = 'small'
+            placement = 'bottom'
+            onClick={()=>setReply(!reply)}
+            icon={<Reply/>}/>
+          <TooltipIconButton
+            title='Resolve'
+            size = 'small'
+            placement = 'bottom'
+            onClick={() => {}}
+            icon={<Check/>}/>
+          <TooltipIconButton
+            title='Delete'
+            size = 'small'
+            placement = 'bottom'
+            onClick={() => {}}
+            icon={<Delete/>}/> */}
           <TooltipIconButton
             title='Share'
             size = 'small'
@@ -80,6 +126,7 @@ export default function IssueCard({
             icon={<Share/>}/>
         </div>
       </div>
+      {/* {reply ? <IssueCardInput onSubmit = {()=>setReply(false)}/> : null} */}
     </Paper>
   )
 }
@@ -87,7 +134,7 @@ export default function IssueCard({
 const useStyles = makeStyles({
   container: {
     padding: '10px',
-    border: '1px solid lightGrey',
+    border: (props) => props.select ? '1px solid green':'1px solid lightGrey',
     width: '270px',
     marginBottom: '20px',
     marginLeft: '10px',
@@ -107,9 +154,6 @@ const useStyles = makeStyles({
     overflow: 'fix',
     fontSize: '14px',
     fontFamily: 'Helvetica',
-  },
-  username: {
-    fontSize: '10px',
   },
   body: {
     height: (props) => props.bodyHeight,
@@ -182,21 +226,22 @@ const useStyles = makeStyles({
     alignItems: 'center',
   },
   select: {
-    border: '1px solid lightgrey',
-    padding: '2px 4px 2px 4px',
     borderRadius: '6px',
-    marginRight: '10px',
     cursor: 'pointer',
+    marginRight: '2px',
   },
   image: {
+    width: (props) => props.imageWidth,
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
     cursor: 'pointer',
-    width: '100%',
   },
   imageContainer: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  username: {
+    fontSize: '10px',
   },
 })
