@@ -3,6 +3,7 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Select from '../assets/2D_Icons/Select.svg'
 import Share from '../assets/2D_Icons/Share.svg'
+import Back from '../assets/2D_Icons/Back.svg'
 // import Delete from '../assets/2D_Icons/Close.svg'
 // import Check from '../assets/2D_Icons/Check.svg'
 // import Reply from '../assets/2D_Icons/Reply.svg'
@@ -56,7 +57,7 @@ export default function IssueCard({
               onClick = {() => {
                 selected ? setSelectedComment(null) : setSelectedComment(id)
               }}
-              icon={<Select/>}/>
+              icon={selected ? <Back/> : <Select/>}/>
           </div>
           <img alt = {'avatarImage'} className = {classes.avatarIcon} src = {avatarURL}/>
         </div>
