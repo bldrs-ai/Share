@@ -7,6 +7,7 @@ import Share from '../assets/2D_Icons/Share.svg'
 // import Check from '../assets/2D_Icons/Check.svg'
 // import Reply from '../assets/2D_Icons/Reply.svg'
 import {TooltipIconButton} from './Buttons'
+import useStore from '../utils/store'
 
 
 /**
@@ -16,9 +17,9 @@ import {TooltipIconButton} from './Buttons'
  * @return {Object} React component
  */
 export default function IssueCard({
+  id,
   title = 'Title',
   body,
-  // selected = false,
   avatarURL,
   username,
   imageURL = '',
@@ -26,12 +27,14 @@ export default function IssueCard({
 }) {
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
-  const [select, setSelect] = useState(false)
-  // const [reply, setReply] = useState(false)
+  const selectedComment = useStore((state) => state.selectedComment)
+  const setSelectedComment = useStore((state) => state.setSelectedComment)
+  const selected = selectedComment === id
 
   const bodyHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
-  const classes = useStyles({bodyHeight: bodyHeight, select: select, imageWidth: imageWidth})
+  const classes = useStyles({bodyHeight: bodyHeight, select: selected, imageWidth: imageWidth})
+
   return (
     <Paper
       elevation = {0}
@@ -46,11 +49,12 @@ export default function IssueCard({
         <div className = {classes.titleRightContainer}>
           <div className = {classes.select}>
             <TooltipIconButton
-              title={select ? 'Unselect Comment':'Select Comment'}
+              title={selected ? 'Unselect Comment':'Select Comment'}
               size = 'small'
               placement = 'bottom'
               onClick = {() => {
-                select ? setSelect(false) : setSelect(true)
+                selected ? setSelectedComment(null) : setSelectedComment(id)
+
               }}
               icon={<Select/>}/>
           </div>

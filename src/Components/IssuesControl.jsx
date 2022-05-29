@@ -40,6 +40,7 @@ export function CommentPanelAll() {
         }
         issuesArr.push(
             {
+              id: issue.id,
               title: issue.title,
               body: issue.body,
               date: issue.created_at,
@@ -61,6 +62,7 @@ export function CommentPanelAll() {
         {issues.map((issue, index)=>{
           return (
             <IssueCard
+              id = {issue.id}
               key = {index}
               title = {issue.title}
               body = {issue.body}
