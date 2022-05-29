@@ -73,7 +73,8 @@ export function CommentPanelAll() {
     const selectedIssue = issuesStore.filter((issue) => issue.id === selectedCommentId)[0]
     selectedCommentId !== null ?
     fetchComments(selectedIssue) : null
-  }, [selectedCommentId, issuesStore, setReplies])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCommentId])
 
   console.log('replies', replies)
   return (
