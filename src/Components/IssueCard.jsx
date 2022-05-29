@@ -216,7 +216,7 @@ const useStyles = makeStyles({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    fontWeight:'bold',
+    fontWeight: 'bold',
   },
   titleRightContainer: {
     display: 'flex',
