@@ -54,7 +54,6 @@ export default function IssueCard({
               placement = 'bottom'
               onClick = {() => {
                 selected ? setSelectedComment(null) : setSelectedComment(id)
-
               }}
               icon={<Select/>}/>
           </div>
