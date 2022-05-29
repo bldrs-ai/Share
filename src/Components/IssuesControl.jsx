@@ -51,6 +51,7 @@ export function CommentPanelAll() {
               date: issue.created_at,
               username: issue.user.login,
               avatarURL: issue.user.avatar_url,
+              numberOfReplies: issue.comments,
               imageURL: imageURL,
             },
         )
@@ -71,6 +72,7 @@ export function CommentPanelAll() {
             title = {filteredComment.title}
             body = {filteredComment.body}
             username = {filteredComment.username}
+            numberOfReplies = {filteredComment.numberOfReplies}
             avatarURL = {filteredComment.avatarURL}
             imageURL = {filteredComment.imageURL}/>:
           issuesStore.map((issue, index)=>{
@@ -81,6 +83,7 @@ export function CommentPanelAll() {
                 title = {issue.title}
                 body = {issue.body}
                 username = {issue.username}
+                numberOfReplies = {issue.numberOfReplies}
                 avatarURL = {issue.avatarURL}
                 imageURL = {issue.imageURL}/>
             )

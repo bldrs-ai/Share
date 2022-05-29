@@ -23,6 +23,7 @@ export default function IssueCard({
   avatarURL,
   username,
   imageURL = '',
+  numberOfReplies = null,
   expandedImage = false,
 }) {
   const [expandText, setExpandText] = useState(false)
@@ -91,16 +92,7 @@ export default function IssueCard({
       }
       <div className = {classes.actions}>
         <div className = {classes.avatarIconContainer}>
-          <div className = {classes.avatarIcon}
-            style = {{
-              backgroundColor: 'lime'}}
-          />
-          <div className = {classes.avatarIcon}
-            style = {{
-              backgroundColor: 'DimGray',
-              position: 'relative',
-              right: '14px'}}
-          />
+          <div className = {classes.avatarIcon}> {numberOfReplies} </div>
         </div>
         <div>
           {/* <TooltipIconButton
@@ -210,17 +202,21 @@ const useStyles = makeStyles({
     fontSize: '10px',
   },
   avatarIconContainer: {
-    width: '50px',
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: '',
     alignItems: 'center',
   },
   avatarIcon: {
     width: 18,
     height: 19,
     borderRadius: '50%',
-    backgroundColor: 'grey',
+    backgroundColor: 'lightGrey',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontWeight:'bold',
   },
   titleRightContainer: {
     display: 'flex',
