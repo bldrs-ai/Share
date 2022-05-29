@@ -59,15 +59,12 @@ const useStyles = makeStyles(() => ({
   titleContainer: {
     display: 'flex',
     flexDirection: 'row',
-    marginTop: '10px',
     paddingLeft: '10px',
-    background: 'white',
     borderRadius: '5px',
   },
   title: {
     width: '100%',
     height: '50px',
-    background: 'white',
     display: 'flex',
     fontSize: '18px',
     textDecoration: 'underline',

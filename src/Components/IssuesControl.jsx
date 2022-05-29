@@ -12,6 +12,7 @@ import {makeStyles} from '@mui/styles'
 import {getIssue, getComment, getIssues} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
+import useStore from '../utils/store'
 
 
 /**
@@ -24,7 +25,10 @@ import IssueCard from './IssueCard'
  */
 export function CommentPanelAll() {
   const classes = useStyles()
-  const [issues, setIssues] = useState([])
+  // const selectedComment = useStore((state) => state.selectedComment)
+  const issuesStore = useStore((state) => state.issues)
+  const setIssuesStore = useStore((state) => state.setIssues)
+
   useEffect(()=>{
     const fetchIssues = async () => {
       const issues = await getIssues()
@@ -50,16 +54,16 @@ export function CommentPanelAll() {
             },
         )
       })
-      setIssues(issuesArr)
+      setIssuesStore(issuesArr)
     }
     fetchIssues()
-  }, [])
+  }, [setIssuesStore])
   return (
     <Paper className = {classes.commentsContainer}>
       <div>
       </div>
       <div className = {classes.cardsContainer}>
-        {issues.map((issue, index)=>{
+        {issuesStore.map((issue, index)=>{
           return (
             <IssueCard
               id = {issue.id}
