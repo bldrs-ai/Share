@@ -29,12 +29,23 @@ export function CommentPanelAll() {
     const fetchIssues = async () => {
       const issues = await getIssues()
       const issuesArr = []
+      let imageURL = ''
       issues.data.map((issue)=>{
+        if (issue.body.includes('img')) {
+          const isolateImageSrc = issue.body.split('src')[1]
+          const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
+          imageURL = imageSrc[1]
+        } else {
+          imageURL = ''
+        }
         issuesArr.push(
             {
               title: issue.title,
               body: issue.body,
               date: issue.created_at,
+              username: issue.user.login,
+              avatarURL: issue.user.avatar_url,
+              imageURL: imageURL,
             },
         )
       })
@@ -53,8 +64,10 @@ export function CommentPanelAll() {
               key = {index}
               expandedImage = {index === 0 || index === 2? true:false}
               title = {issue.title}
-              content = {issue.body}
-              imageSrc = {images[index]}/>
+              body = {issue.body}
+              username = {issue.username}
+              avatarURL = {issue.avatarURL}
+              imageURL = {issue.imageURL}/>
           )
         })}
       </div>
@@ -137,43 +150,6 @@ export default function IssuesControl() {
       }/>)
 }
 
-
-// const issues = [
-//   {
-//     title: 'Welcome to BLDRS',
-//     content: 'Welcome to Comments',
-//   },
-//   {
-//     title: 'Future',
-//     content: `The Architecture,
-//     Engineering and Construction industries are trying to
-//     face challenging problems of the future with tools anchored in the past.
-//     Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative,
-//     open development. We can't imagine a future where building the rest of the world
-//     hasn't been transformed by these new ways of working. We are part of that transformation.`,
-//     media: true,
-//   },
-//   {
-//     title: 'Key Insight',
-//     content: `The key insights from Tech:
-//     Cross-functional online collaboration unlocks team flow, productivity and creativity.
-//     Your team extends outside of your organization and software developers are essential
-//     team members.An ecosystem of app Creators developing on a powerful operating system. /n
-//     Platform is the most scalable architecture.Open workspaces, open standards and open
-//     source code the most powerful way to work. Cooperation is the unfair advantage.`,
-//   },
-// ]
-const images = [
-  `https://images.adsttc.com/media/images/5983/68cf/b22e/3899/4f00/0134/medium_jpg/rp-whitney1.jpg?1501784269`,
-  // eslint-disable-next-line
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
-  // eslint-disable-next-line
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_07_338_0035_1_M_jXay0w_ggaOgx.jpg`,
-  // eslint-disable-next-line
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
-  // eslint-disable-next-line
-  `https://cdn.wallpaper.com/main/styles/responsive_920w_scale/s3/legacy/gallery/17050184/testuser5_nov2007_02_99_0144_1_M_8Way0w_9faOgx.jpg`,
-]
 
 /** The prefix to use for issue id in the URL hash. */
 export const ISSUE_PREFIX = 'i'

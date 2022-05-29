@@ -14,12 +14,15 @@ const placeholderText = '...'
  */
 export default function IssueCard({
   title = 'Title',
-  content = placeholderText,
+  body = placeholderText,
   selected = false,
+  avatarURL,
+  username,
+  imageURL = '',
 }) {
   const [expandText, setExpandText] = useState(false)
-  const contentHeight = expandText ? 'auto' : '70px'
-  const classes = useStyles({contentHeight: contentHeight})
+  const bodyHeight = expandText ? 'auto' : '70px'
+  const classes = useStyles({bodyHeight: bodyHeight})
   return (
     <Paper
       elevation = {0}
@@ -27,16 +30,20 @@ export default function IssueCard({
     >
       <div className = {classes.title}>
         <div>
-          {title}
+          <div>{title}</div>
+          <div className = {classes.username}>{username}</div>
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.avatarIcon}/>
+          <img alt = 'avatar' className = {classes.avatarIcon} src = {avatarURL}/>
         </div>
       </div>
-      <div className = {classes.content} style = {content.length < 170 ? {height: 'auto'} : null}>
-        {content}
+      {imageURL.length>0?
+        <img alt = 'issue' className = {classes.image} src = {imageURL}/>:null
+      }
+      <div className = {classes.body} style = {body.length < 170 ? {height: 'auto'} : null}>
+        {body}
       </div>
-      {content.length> 170 ?
+      {body.length> 170 ?
       <div className = {classes.showLess}
         onClick = {(event) => {
           event.preventDefault()
@@ -101,8 +108,11 @@ const useStyles = makeStyles({
     fontSize: '14px',
     fontFamily: 'Helvetica',
   },
-  content: {
-    height: (props) => props.contentHeight,
+  username: {
+    fontSize: '10px',
+  },
+  body: {
+    height: (props) => props.bodyHeight,
     marginTop: '5px',
     marginBottom: '5px',
     marginLeft: '5px',
@@ -182,6 +192,7 @@ const useStyles = makeStyles({
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
     cursor: 'pointer',
+    width: '100%',
   },
   imageContainer: {
     display: 'flex',
