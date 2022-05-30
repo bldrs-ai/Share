@@ -67,12 +67,12 @@ const StyledBox = styled(Box)(({theme}) => ({
 const useStyles = makeStyles((props) => ({
   swipeDrawer: {
     '& .MuiDrawer-root': {
-      height: '100%',
+      height: '400px',
     },
     '& .MuiDrawer-root > .MuiPaper-root': {
       // TODO(pablo): Workaround bug..
       // https://github.com/mui/material-ui/issues/16942
-      height: '100%',
+      height: '400px',
       overflow: (props) => props.isOpen ? 'scroll' : 'visible',
     },
   },

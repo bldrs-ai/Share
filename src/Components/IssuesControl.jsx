@@ -39,9 +39,12 @@ export function CommentPanelAll() {
       const issuesArr = []
       let imageURL = ''
       let cameraCoord = null
+      let body = null
       issues.data.map((issue, index)=>{
         const lines = issue.body.split('\r\n')
         const camera = lines.filter((line)=>line.includes('camera'))
+        body = lines[0]
+        console.log('body -- ', body)
         if (camera.length>0) {
           cameraCoord = camera[0].split('=')[1]
         } else {
@@ -61,7 +64,7 @@ export function CommentPanelAll() {
               id: issue.id,
               number: issue.number,
               title: issue.title,
-              body: issue.body,
+              body: body,
               date: issue.created_at,
               username: issue.user.login,
               avatarURL: issue.user.avatar_url,
