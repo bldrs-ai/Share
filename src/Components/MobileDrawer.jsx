@@ -73,7 +73,7 @@ const useStyles = makeStyles((props) => ({
       // TODO(pablo): Workaround bug..
       // https://github.com/mui/material-ui/issues/16942
       height: '100%',
-      overflow: (props) => props.isOpen ? 'scroll' : 'scroll',
+      overflow: (props) => props.isOpen ? 'scroll' : 'visible',
     },
   },
   openToggle: {
