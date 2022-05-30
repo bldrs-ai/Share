@@ -5,6 +5,7 @@ const useStore = create(set => ({
   isCommentsOn: false,
   isPropertiesOn: false,
   selectedCommentId: null,
+  selectedCommentIndex: null,
   issues:[],
   replies:[],
   modelStore:null,
@@ -18,7 +19,8 @@ const useStore = create(set => ({
   setSelectedElementStore: (element) => set(state => ({selectedElementStore: element})),
   setIssues: (issues) => set(state => ({issues: issues})),
   setReplies: (replies) => set(state => ({replies: replies})),
-  setSelectedComment: (issue) => set(state => ({selectedCommentId: issue})),
+  setSelectedComment: (issueId) => set(state => ({selectedCommentId: issueId})),
+  setSelectedCommentIndex: (issueIndex) => set(state => ({selectedCommentIndex: issueIndex})),
 }))
 
  export default useStore;

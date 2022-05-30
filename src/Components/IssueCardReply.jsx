@@ -1,24 +1,13 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
-import {grey} from '@mui/material/colors'
 import {makeStyles} from '@mui/styles'
-import Delete from '../assets/2D_Icons/Close.svg'
-// import Clear from '../assets/2D_Icons/Clear.svg'
 import Share from '../assets/2D_Icons/Share.svg'
-import Check from '../assets/2D_Icons/Check.svg'
-import Reply from '../assets/2D_Icons/Reply.svg'
-// import Navigate from '../assets/2D_Icons/Navigate.svg'
+// import Delete from '../assets/2D_Icons/Close.svg'
+// import Check from '../assets/2D_Icons/Check.svg'
+// import Reply from '../assets/2D_Icons/Reply.svg'
 import {TooltipIconButton} from './Buttons'
-import IssueCardInput from './IssueCardInput'
+import useStore from '../utils/store'
 
-
-const sampleText = ` Lorem ipsum dolor sit amet, consectetur adipiscing elit,
-sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
-Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut
-aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit
-in voluptate velit esse cillum dolore eu fugiat nulla pariatur.
-Excepteur sint occaecat cupidatat non proident,
-sunt in culpa qui officia deserunt mollit anim id est laborum.`
 
 /**
  * Issue card
@@ -26,97 +15,71 @@ sunt in culpa qui officia deserunt mollit anim id est laborum.`
  * @param {string} contetne The comment title, optional
  * @return {Object} React component
  */
-export default function IssueCard({title = 'Title', content = sampleText, setSelected, selected = false, imageSrc = ''}) {
-  const [expand, setExpand] = useState(false)
-  const [select, setSelect] = useState(false)
-  const [reply, setReply] = useState(false)
-  const contentHeight = expand ? 'auto' : '70px'
-  const cardHeight = expand || reply ? 'auto' : '180px'
-  const classes = useStyles({cardHeight: cardHeight, contentHeight: contentHeight, select: select})
+export default function IssueCard({
+  id,
+  title = 'Title',
+  body,
+  avatarURL,
+  username,
+  imageURL = '',
+  numberOfReplies = null,
+  expandedImage = false,
+}) {
+  const [expandText, setExpandText] = useState(false)
+  const [expandImage, setExpandImage] = useState(expandedImage)
+  const selectedCommentId = useStore((state) => state.selectedCommentId)
+  const selected = selectedCommentId === id
+
+  const bodyHeight = expandText ? 'auto' : '70px'
+  const imageWidth = expandImage ? '100%' : '100px'
+  const classes = useStyles({bodyHeight: bodyHeight, select: selected, imageWidth: imageWidth})
+
   return (
     <Paper
       elevation = {0}
       className = {classes.container}
-      style={selected ? {border: '1px solid green'}:{}}
+      style = {{borderRadius: '10px'}}
     >
-      <div className = {classes.title}
-        role = 'button'
-        onClick = {(e) => {
-          select ? setSelect(false) : setSelect(true)
-          console.log('in the on click', select)
-          setSelected()
-        }}
-        onKeyPress = {() => {
-          select ? setSelect(false):setSelect(true)
-        }}
-        tabIndex={0}
-      >
+      <div className = {classes.title}>
         <div>
-          {title}
+          <div>{title}</div>
+          <div className = {classes.username}>{username}</div>
         </div>
         <div className = {classes.titleRightContainer}>
-          <div className = {classes.avatarIcon} style = {{cursor: 'pointer'}}/>
+          <img alt = {'avatarImage'} className = {classes.avatarIcon} src = {avatarURL}/>
         </div>
       </div>
-      <div style = {{display: 'flex', justifyContent: 'center', alignItems: 'center'}}>
-        {imageSrc.length !=0 &&
-        <img
-          alt = 'cardImage'
-          style = {{width: '95%'}}
-          src = {imageSrc}/>
+      <div className = {classes.imageContainer}>
+        {imageURL.length !=0 &&
+        // eslint-disable-next-line
+        <div onClick = {() => setExpandImage(!expandImage)}>
+          <img
+            className = {classes.image}
+            alt = 'cardImage'
+            src = {imageURL}/>
+        </div>
         }
       </div>
-      <div className = {classes.content}>
-        {content}
+      <div className = {classes.body} style = {body.length < 170 ? {height: 'auto'}:null}>
+        {body}
       </div>
-      {content.length>170 ?
+      {body.length> 170 ?
       <div className = {classes.showLess}
         onClick = {(event) => {
           event.preventDefault()
-          expand ? setExpand(false) : setExpand(true)
+          expandText ? setExpandText(false) : setExpandText(true)
         }}
         role = 'button'
         tabIndex={0}
-        onKeyPress = {() => expand?setExpand(false):setExpand(true)}
+        onKeyPress = {() => expandText ? setExpandText(false) : setExpandText(true)}
       >
         show{' '}
-        {expand ? 'less' : 'more'}
-      </div>:
+        {expandText ? 'less' : 'more'}
+      </div> :
       <div className = {classes.showLessEmpty}/>
       }
       <div className = {classes.actions}>
-        <div className = {classes.avatarIconContainer}>
-          <div className = {classes.avatarIcon}
-            style = {{
-              backgroundColor: 'lightGrey',
-            }}
-          />
-          <div className = {classes.avatarIcon}
-            style = {{
-              backgroundColor: '#FF00F5',
-              position: 'relative',
-              right: '10px'}}
-          />
-        </div>
         <div>
-          <TooltipIconButton
-            title='Reply'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>setReply(!reply)}
-            icon={<Reply/>}/>
-          <TooltipIconButton
-            title='Resolve'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Check/>}/>
-          <TooltipIconButton
-            title='Delete'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Delete/>}/>
           <TooltipIconButton
             title='Share'
             size = 'small'
@@ -125,18 +88,17 @@ export default function IssueCard({title = 'Title', content = sampleText, setSel
             icon={<Share/>}/>
         </div>
       </div>
-      {reply ? <IssueCardInput onSubmit = {()=>setReply(false)}/> : null}
     </Paper>
   )
 }
 
 const useStyles = makeStyles({
   container: {
-    height: 'auto',
+    padding: '10px',
+    border: '1px solid green',
     width: '250px',
-    margin: '10px',
-    marginRight: '10px',
-    border: '1px solid grey',
+    marginBottom: '20px',
+    marginLeft: '10px',
   },
   title: {
     display: 'flex',
@@ -153,19 +115,18 @@ const useStyles = makeStyles({
     overflow: 'fix',
     fontSize: '14px',
     fontFamily: 'Helvetica',
-    cursor: 'pointer',
   },
-  content: {
-    height: (props) => props.contentHeight,
-    marginTop: '14px',
+  body: {
+    height: (props) => props.bodyHeight,
+    marginTop: '5px',
     marginBottom: '5px',
     marginLeft: '5px',
     marginRight: '5px',
     paddingLeft: '5px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    fontSize: '14px',
-    lineHeight: '18px',
+    fontSize: '12px',
+    lineHeight: '14px',
     fontFamily: 'Helvetica',
   },
   showLess: {
@@ -177,11 +138,11 @@ const useStyles = makeStyles({
     paddingLeft: '5px',
     overflow: 'fix',
     fontSize: '10px',
-    color: 'blue',
+    color: '#70AB32',
   },
   showLessEmpty: {
     marginTop: '5px',
-    border: `1px solid ${grey[100]}`,
+    border: `1px solid transparent`,
     height: '12px',
     widht: '10px',
     marginBottom: '5px',
@@ -195,29 +156,33 @@ const useStyles = makeStyles({
   actions: {
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     borderTop: '1px solid lightGrey',
     marginTop: '5px',
-    // marginBottom: '5px',
     marginLeft: '5px',
     marginRight: '5px',
     paddingLeft: '5px',
+    paddingTop: '5px',
     overflow: 'fix',
     fontSize: '10px',
   },
   avatarIconContainer: {
-    width: '50px',
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'flex-start',
+    justifyContent: '',
     alignItems: 'center',
   },
   avatarIcon: {
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 19,
     borderRadius: '50%',
-    backgroundColor: '#30F2E7',
+    backgroundColor: 'lightGrey',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontWeight: 'bold',
   },
   titleRightContainer: {
     display: 'flex',
@@ -226,9 +191,22 @@ const useStyles = makeStyles({
     alignItems: 'center',
   },
   select: {
-    border: '1px solid lightgrey',
-    // padding: '2px 4px 2px 4px',
-    // borderRadius: '6px',
-    // marginRight: '10px',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    marginRight: '2px',
+  },
+  image: {
+    width: (props) => props.imageWidth,
+    borderRadius: '10px',
+    border: '1px solid #DCDCDC',
+    cursor: 'pointer',
+  },
+  imageContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  username: {
+    fontSize: '10px',
   },
 })

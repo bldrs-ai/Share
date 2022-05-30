@@ -12,6 +12,7 @@ import {makeStyles} from '@mui/styles'
 import {getIssue, getComment, getIssues, getComments} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
 import IssueCard from './IssueCard'
+import IssueCardReply from './IssueCardReply'
 import useStore from '../utils/store'
 
 
@@ -37,7 +38,7 @@ export function CommentPanelAll() {
       const issues = await getIssues()
       const issuesArr = []
       let imageURL = ''
-      issues.data.map((issue)=>{
+      issues.data.map((issue, index)=>{
         if (issue.body.includes('img')) {
           const isolateImageSrc = issue.body.split('src')[1]
           const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
@@ -47,6 +48,7 @@ export function CommentPanelAll() {
         }
         issuesArr.push(
             {
+              index: index,
               id: issue.id,
               number: issue.number,
               title: issue.title,
@@ -76,7 +78,6 @@ export function CommentPanelAll() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCommentId])
 
-  console.log('replies', replies)
   return (
     <Paper className = {classes.commentsContainer}>
       <div>
@@ -85,6 +86,7 @@ export function CommentPanelAll() {
         {selectedCommentId ?
         <>
           <IssueCard
+            index = {filteredComment.index}
             id = {filteredComment.id}
             key = {filteredComment.id}
             title = {filteredComment.title}
@@ -96,7 +98,7 @@ export function CommentPanelAll() {
           { replies &&
               replies.map((reply)=>{
                 return (
-                  <IssueCard
+                  <IssueCardReply
                     id = {reply.id}
                     key = {reply.id}
                     title = {filteredComment.title +':RE'}
@@ -112,6 +114,7 @@ export function CommentPanelAll() {
         issuesStore.map((issue, index)=>{
           return (
             <IssueCard
+              index = {issue.index}
               id = {issue.id}
               key = {index}
               title = {issue.title}
@@ -336,6 +339,10 @@ const useStyles = makeStyles({
     'overflowY': 'scroll',
     'overflowX': 'hidden',
     'height': '78%',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'flex-start',
+    'alignItems': 'center',
     '&::-webkit-scrollbar': {
       display: 'none',
     },
@@ -345,27 +352,7 @@ const useStyles = makeStyles({
       flexDirection: 'column',
       justifyContent: 'flex-start',
       alignItems: 'center',
-      border: '1px solid lightGrey',
+      // border: '1px solid lightGrey',
     },
-  },
-  cardsContainerAdd: {
-    'overflowY': 'scroll',
-    'overflowX': 'hidden',
-    'height': '78%',
-    '&::-webkit-scrollbar': {
-      display: 'none',
-    },
-    '@media (max-width: 900px)': {
-      height: 'auto',
-    },
-  },
-  selectMessage: {
-    fontSize: '14px',
-    width: '100%',
-    paddingLeft: '15px',
-    paddingRight: '15px',
-    display: 'flex',
-    justifyContent: 'center',
-    color: 'red',
   },
 })

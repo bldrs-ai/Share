@@ -26,35 +26,37 @@ export default function IssueCard({
   imageURL = '',
   numberOfReplies = null,
   expandedImage = false,
+  index = null,
 }) {
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedCommentId = useStore((state) => state.selectedCommentId)
+  const setSelectedCommentIndex = useStore((state) => state.setSelectedCommentIndex)
   const setSelectedComment = useStore((state) => state.setSelectedComment)
   const selected = selectedCommentId === id
 
   const bodyHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
   const classes = useStyles({bodyHeight: bodyHeight, select: selected, imageWidth: imageWidth})
-
   return (
     <Paper
       elevation = {0}
       className = {classes.container}
       style = {{borderRadius: '10px'}}
     >
-      <div className = {classes.title}>
-        <div>
+      <div className = {classes.titleContainer}>
+        <div className = {classes.title}>
           <div>{title}</div>
           <div className = {classes.username}>{username}</div>
         </div>
         <div className = {classes.titleRightContainer}>
           <div className = {classes.select}>
             <TooltipIconButton
-              title={selected ? 'Unselect Comment':'Select Comment'}
+              title={selected ? 'Back to the list':'Select Comment'}
               size = 'small'
               placement = 'bottom'
               onClick = {() => {
+                selected ? setSelectedCommentIndex(null) : setSelectedCommentIndex(index)
                 selected ? setSelectedComment(null) : setSelectedComment(id)
               }}
               icon={selected ? <Back/> : <Select/>}/>
@@ -92,7 +94,7 @@ export default function IssueCard({
       <div className = {classes.showLessEmpty}/>
       }
       <div className = {classes.actions}>
-        <div className = {classes.avatarIconContainer}>
+        <div className = {classes.repliesIconContainer}>
           <div className = {classes.avatarIcon}> {numberOfReplies} </div>
         </div>
         <div>
@@ -129,27 +131,31 @@ export default function IssueCard({
 
 const useStyles = makeStyles({
   container: {
-    padding: '10px',
+    padding: '4px',
     border: (props) => props.select ? '1px solid green':'1px solid lightGrey',
     width: '270px',
     marginBottom: '20px',
     marginLeft: '10px',
   },
-  title: {
+  titleContainer: {
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     borderBottom: '1px solid lightGrey',
-    marginTop: '10px',
+    marginTop: '6px',
     marginBottom: '5px',
     paddingBottom: '5px',
     marginLeft: '5px',
     marginRight: '5px',
     paddingLeft: '5px',
     overflow: 'fix',
-    fontSize: '14px',
+    fontSize: '1em',
+    lineHeight: '1.1em',
     fontFamily: 'Helvetica',
+  },
+  title: {
+    marginTop: '5px',
   },
   body: {
     height: (props) => props.bodyHeight,
@@ -160,8 +166,8 @@ const useStyles = makeStyles({
     paddingLeft: '5px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    fontSize: '12px',
-    lineHeight: '14px',
+    fontSize: '.9em',
+    lineHeight: '1.2em',
     fontFamily: 'Helvetica',
   },
   showLess: {
@@ -202,15 +208,15 @@ const useStyles = makeStyles({
     overflow: 'fix',
     fontSize: '10px',
   },
-  avatarIconContainer: {
+  repliesIconContainer: {
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: '',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   avatarIcon: {
-    width: 18,
-    height: 19,
+    width: 24,
+    height: 24,
     borderRadius: '50%',
     backgroundColor: 'lightGrey',
     display: 'flex',
