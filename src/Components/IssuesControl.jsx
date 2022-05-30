@@ -79,7 +79,7 @@ export function CommentPanelAll() {
   }, [selectedCommentId])
 
   return (
-    <Paper className = {classes.commentsContainer}>
+    <Paper className = {classes.commentsContainer} elevation = {0}>
       <div>
       </div>
       <div className = {classes.cardsContainer}>
@@ -303,6 +303,7 @@ function setPanelText(title, body, setText, setNext) {
 const useStyles = makeStyles({
   commentsContainer: {
     minHeight: '330px',
+    border: 'none',
   },
   addContainer: {
     'width': '290px',
@@ -347,7 +348,7 @@ const useStyles = makeStyles({
       display: 'none',
     },
     '@media (max-width: 900px)': {
-      height: '410px',
+      // height: '410px',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'flex-start',

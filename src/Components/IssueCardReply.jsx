@@ -118,7 +118,8 @@ const useStyles = makeStyles({
     marginRight: '5px',
     paddingLeft: '5px',
     overflow: 'fix',
-    fontSize: '14px',
+    fontSize: '1em',
+    lineHeight: '1.1em',
     fontFamily: 'Helvetica',
   },
   body: {
@@ -130,8 +131,8 @@ const useStyles = makeStyles({
     paddingLeft: '5px',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
-    fontSize: '12px',
-    lineHeight: '14px',
+    fontSize: '.9em',
+    lineHeight: '1.2em',
     fontFamily: 'Helvetica',
   },
   showLess: {

@@ -98,6 +98,7 @@ const useStyles = makeStyles((props) => ({
   },
   panelContainer: {
     'overflow': 'scroll',
+    'border': 'none',
     'height': '90%',
     'marginTop': '40px',
     '@media (max-width: MOBILE_WIDTH)': {
