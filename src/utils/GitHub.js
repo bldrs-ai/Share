@@ -37,7 +37,6 @@ export async function getIssue(issueId) {
  * @return {Object} The comment object.
  */
  export async function getComments(issueId) {
-   console.log('in the get comments', issueId)
   const comments = await getGitHub(
       'issues/{issue_number}/comments',
       {

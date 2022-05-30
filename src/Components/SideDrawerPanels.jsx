@@ -13,6 +13,28 @@ export const CommentsPanel = ()=> {
   const classes = useStyles(useTheme())
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const selectedCommentId = useStore((state) => state.selectedCommentId)
+  const setSelectedComment = useStore((state) => state.setSelectedComment)
+  const setSelectedCommentIndex = useStore((state) => state.setSelectedCommentIndex)
+  const selectedCommentIndex = useStore((state) => state.selectedCommentIndex)
+  const issues = useStore((state) => state.issues)
+
+  const selectPreviousIssue = () => {
+    const previousCommentIndex = selectedCommentIndex-1
+    if (previousCommentIndex >= 0) {
+      const previousIssue = issues.filter((issue)=>issue.index === previousCommentIndex)[0]
+      setSelectedComment(previousIssue.id)
+      setSelectedCommentIndex(previousIssue.index)
+    }
+  }
+  const selectNextIssue = () => {
+    const nextCommentIndex = selectedCommentIndex+1
+    if (nextCommentIndex < issues.length) {
+      const nextIssue = issues.filter((issue)=>issue.index === nextCommentIndex)[0]
+      setSelectedComment(nextIssue.id)
+      setSelectedCommentIndex(nextIssue.index)
+    }
+  }
+
   return (
     <>
       <div className = {classes.titleContainer}>
@@ -27,13 +49,13 @@ export const CommentsPanel = ()=> {
                   title='Previous Comment'
                   placement = 'bottom'
                   size = 'small'
-                  onClick={()=>{}}
+                  onClick={selectPreviousIssue}
                   icon={<Previous style = {{width: '20px', height: '20px'}}/>}/>
                 <TooltipIconButton
                   title='Next Comment'
                   size = 'small'
                   placement = 'bottom'
-                  onClick={()=>{}}
+                  onClick={selectNextIssue}
                   icon={<Next style = {{width: '20px', height: '20px'}}/>}/>
               </>
             }
