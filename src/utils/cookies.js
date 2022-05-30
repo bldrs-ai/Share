@@ -11,10 +11,8 @@ import gtag from '../utils/gtag'
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name)
-  if (cookie && (typeof cookie == 'string')) {
-    return true
-  }
-  return false
+
+  return !!(cookie && (typeof cookie == 'string'))
 }
 
 
@@ -29,7 +27,7 @@ export function isCookieSet(name) {
  * @param {object} additionalConfigInfo
  */
 export function setGtagCookie(command, commandParameters, additionalConfigInfo) {
-  if (command != 'config') {
+  if (command !== 'config') {
     // TODO: not sure all gtags should be passed through, so err for now.
     throw new Error('gtags cookie with non-config command being used: ' + command)
   }
