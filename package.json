@@ -72,7 +72,7 @@
       "^.+\\.svg$": "<rootDir>/svgTransform.js"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(web-ifc|web-ifc-three|web-ifc-viewer|three)/)"
+      "/node_modules/(?!(@pablo-mayrgundter\/cookies.js|web-ifc|web-ifc-three|web-ifc-viewer|three)/)"
     ],
     "moduleNameMapper": {
       "^.+\\.css$": "identity-obj-proxy"
