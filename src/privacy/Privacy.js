@@ -1,7 +1,8 @@
 import {
   getCookie as getCookiePrivate,
-  getCookieBoolean as getCookieBooleanPrivate,
-  setCookie as setCookiePrivate} from './functional'
+  setCookie as setCookiePrivate,
+} from '@pablo-mayrgundter/cookies.js'
+import {getCookieBoolean as getCookieBooleanPrivate} from './functional'
 import {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed} from './analytics'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
@@ -14,7 +15,7 @@ export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
  * @param {string} component
  * @param {string} name
  * @param {string} defaultValue
- * @return {boolean} value of the setting
+ * @return {string} value of the setting
  */
 export function getCookie({component, name, defaultValue}) {
   return getCookiePrivate(name, defaultValue)
@@ -79,7 +80,8 @@ export function isPrivacySocialEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'social',
-      defaultValue: true})
+      defaultValue: true,
+    })
   )
 }
 
@@ -92,6 +94,7 @@ export function isPrivacyUsageEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'usage',
-      defaultValue: true})
+      defaultValue: true,
+    })
   )
 }
