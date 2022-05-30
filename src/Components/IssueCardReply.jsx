@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Share from '../assets/2D_Icons/Share.svg'
+import Navigate from '../assets/2D_Icons/Navigate.svg'
 // import Delete from '../assets/2D_Icons/Close.svg'
 // import Check from '../assets/2D_Icons/Check.svg'
 // import Reply from '../assets/2D_Icons/Reply.svg'
@@ -79,14 +80,18 @@ export default function IssueCard({
       <div className = {classes.showLessEmpty}/>
       }
       <div className = {classes.actions}>
-        <div>
-          <TooltipIconButton
-            title='Share'
-            size = 'small'
-            placement = 'bottom'
-            onClick={() => {}}
-            icon={<Share/>}/>
-        </div>
+        <TooltipIconButton
+          title='Show the camera view'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<Navigate/>}/>
+        <TooltipIconButton
+          title='Share'
+          size = 'small'
+          placement = 'bottom'
+          onClick={() => {}}
+          icon={<Share/>}/>
       </div>
     </Paper>
   )
@@ -156,7 +161,7 @@ const useStyles = makeStyles({
   actions: {
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'space-between',
     alignItems: 'center',
     borderTop: '1px solid lightGrey',
     marginTop: '5px',
@@ -177,7 +182,6 @@ const useStyles = makeStyles({
     width: 18,
     height: 19,
     borderRadius: '50%',
-    backgroundColor: 'lightGrey',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
