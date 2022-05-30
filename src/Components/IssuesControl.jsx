@@ -38,7 +38,15 @@ export function CommentPanelAll() {
       const issues = await getIssues()
       const issuesArr = []
       let imageURL = ''
+      let cameraCoord = null
       issues.data.map((issue, index)=>{
+        const lines = issue.body.split('\r\n')
+        const camera = lines.filter((line)=>line.includes('camera'))
+        if (camera.length>0) {
+          cameraCoord = camera[0].split('=')[1]
+        } else {
+          cameraCoord = null
+        }
         if (issue.body.includes('img')) {
           const isolateImageSrc = issue.body.split('src')[1]
           const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
@@ -48,6 +56,7 @@ export function CommentPanelAll() {
         }
         issuesArr.push(
             {
+              cameraPosition: cameraCoord,
               index: index,
               id: issue.id,
               number: issue.number,
@@ -86,6 +95,7 @@ export function CommentPanelAll() {
         {selectedCommentId ?
         <>
           <IssueCard
+            cameraPosition = {filteredComment.cameraPosition}
             index = {filteredComment.index}
             id = {filteredComment.id}
             key = {filteredComment.id}
@@ -114,6 +124,7 @@ export function CommentPanelAll() {
         issuesStore.map((issue, index)=>{
           return (
             <IssueCard
+              cameraPosition = {issue.cameraPosition}
               index = {issue.index}
               id = {issue.id}
               key = {index}

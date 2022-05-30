@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import Select from '../assets/2D_Icons/Select.svg'
@@ -18,6 +18,7 @@ import useStore from '../utils/store'
  * @return {Object} React component
  */
 export default function IssueCard({
+  cameraPosition=null,
   id,
   title = 'Title',
   body,
@@ -27,6 +28,7 @@ export default function IssueCard({
   numberOfReplies = null,
   expandedImage = false,
   index = null,
+  camera = null,
 }) {
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
@@ -38,6 +40,12 @@ export default function IssueCard({
   const bodyHeight = expandText ? 'auto' : '70px'
   const imageWidth = expandImage ? '100%' : '100px'
   const classes = useStyles({bodyHeight: bodyHeight, select: selected, imageWidth: imageWidth})
+  useEffect(()=>{
+    if (selected && cameraPosition) {
+      console.log('selected use effect is runnig - camera position', cameraPosition)
+      window.location.hash = cameraPosition
+    }
+  }, [selected, cameraPosition])
   return (
     <Paper
       elevation = {0}
