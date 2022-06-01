@@ -12,6 +12,11 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
   ],
+  overrides: [
+    {
+      files: ['*.js', '*.mjs', '*.jsx'],
+    },
+  ],
   parser: '@babel/eslint-parser',
   parserOptions: {
     babelOptions: {
