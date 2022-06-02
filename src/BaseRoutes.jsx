@@ -17,9 +17,13 @@ import debug from './utils/debug'
 // Localhost app:
 // const REACT_APP_AUTH0_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
 
-const REACT_APP_AUTH0_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+// Auth0: Main Bldrs.ai GHP app
+// const REACT_APP_AUTH0_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
 
-// GHP app
+// Auth0: pablo-mayrgundter/Share
+const REACT_APP_AUTH0_CLIENT_ID = 'xIGABT7wbAA4cbW0ZvTXm4jd5tOHugTe'
+
+// GitHub: OAuth app
 // const REACT_APP_AUTH0_CLIENT_ID = 'c9521c42ff708172ca45'
 
 const REACT_APP_AUTH0_DOMAIN = 'bldrs.us.auth0.com'
