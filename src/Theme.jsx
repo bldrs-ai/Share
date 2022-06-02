@@ -12,7 +12,8 @@ export default function useTheme() {
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
     name: 'mode',
-    defaultValue: Themes.Day}))
+    defaultValue: getSystemCurrentLightDark(),
+  }))
 
 
   const theme = useMemo(() => {
@@ -48,7 +49,7 @@ export default function useTheme() {
 }
 
 
-const Themes = {
+export const Themes = {
   Day: 'Day',
   Night: 'Night',
 }
@@ -102,4 +103,18 @@ function loadTheme(mode) {
     palette: activePalette,
   }
   return createTheme(theme)
+}
+
+
+/**
+ * Look for explicit night, otherwise day
+ * See https://drafts.csswg.org/mediaqueries-5/#prefers-color-scheme
+ * @return {string}
+ * @private
+ */
+export function getSystemCurrentLightDark() {
+  if (window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
+  }
+  return Themes.Day
 }
