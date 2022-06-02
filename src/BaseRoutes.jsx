@@ -10,9 +10,6 @@ import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
 
-export const INSTALL_PATH = '/private'
-
-
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
@@ -30,7 +27,7 @@ export const INSTALL_PATH = '/private'
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const installPrefix = window.location.pathname.startsWith(INSTALL_PATH) ? INSTALL_PATH : ''
+  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
