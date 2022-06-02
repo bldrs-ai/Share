@@ -163,6 +163,7 @@ export default function CadView({
           console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken ? true : false)
           // viewer.IFC.loader.withCredentials = true
           viewer.IFC.loader.requestHeader = {
+            // https://stackoverflow.com/questions/43871637/no-access-control-allow-origin-header-is-present-on-the-requested-resource-whe
             // 'Access-Control-Allow-Credentials': 'true',
             // 'Access-Control-Request-Method': 'GET',
             // 'Access-Control-Request-Headers': 'Accept, Content-Type, Origin',
