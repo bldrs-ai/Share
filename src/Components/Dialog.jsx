@@ -39,7 +39,9 @@ export default function Dialog({
         {headerText}
       </DialogTitle>
       <DialogContent>{content}</DialogContent>
-      <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
+      <div>
+        <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
+      </div>
     </MuiDialog>)
 }
 
@@ -59,7 +61,6 @@ const useStyles = makeStyles((theme) => ({
       margin: 0,
       width: '30px',
       height: '30px',
-      border: 'solid 0.5px grey',
       borderRadius: '50%',
       fill: theme.palette.primary.contrastText,
     },

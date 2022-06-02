@@ -41,22 +41,15 @@ export default function BaseRoutes({testElt = null}) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const referrer = document.referrer
-    debug().log('BaseRoutes#useEffect[]: document.referrer: ', referrer, window.location.hash)
-    if (referrer) {
-      const ref = new URL(referrer + window.location.hash)
-      if (ref.pathname.length > 1) {
-        navigate(ref)
-      }
-    } else if (location.pathname === installPrefix ||
-               location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installedAppPrefix)
-      navigate(installedAppPrefix)
+    if (location.pathname === installPrefix ||
+        location.pathname === (installPrefix + '/')) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
+      navigate(installPrefix + '/share')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = installPrefix + '/*'
+  const basePath = installPrefix + '/'
   return (
     <Auth0Provider
       domain={REACT_APP_AUTH0_DOMAIN}

@@ -61,7 +61,7 @@ esbuild.serve({
 
     // Forward the body of the request to esbuild
     req.pipe(proxyReq, {end: true})
-  }).listen(port)
+  }).listen()
   console.log(`serving on http://localhost:${port} and watching...`)
 }).catch((error) => {
   console.error(`could not start serving: `, error)

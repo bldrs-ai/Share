@@ -163,12 +163,12 @@ export default function CadView({
           console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken ? true : false)
           // viewer.IFC.loader.withCredentials = true
           viewer.IFC.loader.requestHeader = {
-            'Access-Control-Allow-Credentials': 'true',
-            'Access-Control-Request-Method': 'GET',
+            // 'Access-Control-Allow-Credentials': 'true',
+            // 'Access-Control-Request-Method': 'GET',
             // 'Access-Control-Request-Headers': 'Accept, Content-Type, Origin',
-            'Access-Control-Allow-Origin': 'http://localhost:8080',
-            'Origin': 'http://localhost:8080',
-            'Authorization': `Bearer ${accessToken}`,
+            // 'Access-Control-Allow-Origin': 'http://localhost:8080',
+            // Origin: 'http://localhost:8080',
+            Authorization: `Bearer ${accessToken}`,
           }
 
           const model = await viewer.IFC.loadIfcUrl(

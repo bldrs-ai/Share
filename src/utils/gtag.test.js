@@ -1,5 +1,6 @@
 import gtag from './gtag'
 
+
 test('gtag', () => {
   let args = null
   window.dataLayer = {
