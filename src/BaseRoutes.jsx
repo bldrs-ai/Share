@@ -12,21 +12,21 @@ import debug from './utils/debug'
 
 
 // Enable when we build app in GitHub actions.
-// import {REACT_APP_AUTH0_DOMAIN, REACT_APP_AUTH0_CLIENT_ID} from 'env'
+// import {OAUTH_DOMAIN, OAUTH_CLIENT_ID} from 'env'
 
 // Localhost app:
-// const REACT_APP_AUTH0_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
+// const OAUTH_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
 
 // Auth0: Main Bldrs.ai GHP app
-// const REACT_APP_AUTH0_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+// const OAUTH_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
 
 // Auth0: pablo-mayrgundter/Share
-const REACT_APP_AUTH0_CLIENT_ID = 'xIGABT7wbAA4cbW0ZvTXm4jd5tOHugTe'
+export const OAUTH_CLIENT_ID = 'xIGABT7wbAA4cbW0ZvTXm4jd5tOHugTe'
 
 // GitHub: OAuth app
-// const REACT_APP_AUTH0_CLIENT_ID = 'c9521c42ff708172ca45'
+// const OAUTH_CLIENT_ID = 'c9521c42ff708172ca45'
 
-const REACT_APP_AUTH0_DOMAIN = 'bldrs.us.auth0.com'
+export const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
 
 
 /**
@@ -62,8 +62,8 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = installPrefix + '/'
   return (
     <Auth0Provider
-      domain={REACT_APP_AUTH0_DOMAIN}
-      clientId={REACT_APP_AUTH0_CLIENT_ID}
+      domain={OAUTH_DOMAIN}
+      clientId={OAUTH_CLIENT_ID}
       redirectUri={window.location.origin + '/Share'}>
       <Routes>
         <Route path={basePath} element={<Outlet/>}>

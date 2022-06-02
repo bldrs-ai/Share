@@ -3,8 +3,9 @@ import {useNavigate, useSearchParams} from 'react-router-dom'
 import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import createAuth0Client from '@auth0/auth0-spa-js'
+import {OAUTH_DOMAIN, OAUTH_CLIENT_ID} from '../BaseRoutes'
 import {ColorModeContext, navToDefault} from '../Share'
-import SearchIndex from './SearchIndex.js'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -18,8 +19,7 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-
-import createAuth0Client from '@auth0/auth0-spa-js'
+import SearchIndex from './SearchIndex.js'
 
 
 /**
@@ -152,9 +152,8 @@ export default function CadView({
     setIsLoading(true)
 
     const auth0 = await createAuth0Client({
-      domain: 'bldrs.us.auth0.com',
-      // client_id: 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp',
-      client_id: 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv',
+      domain: OAUTH_DOMAIN,
+      client_id: OAUTH_CLIENT_ID,
       redirect_uri: window.location.origin,
     })
     auth0
