@@ -1,6 +1,6 @@
 Share is a web-based BIM & CAD integration environment.
 
-<img width="986" alt="image" src="https://user-images.githubusercontent.com/2480879/171907314-70ad7240-1741-4b44-a12d-f4d98d892d20.png">
+<img width="989" alt="image" src="https://user-images.githubusercontent.com/2480879/171907835-b84c7ff0-af1d-4757-b153-9bad81d503df.png">
 <img width="195" alt="image" src="https://user-images.githubusercontent.com/2480879/171907503-5426cb1e-03e8-400c-883a-3d8b45c9f66e.png">
 
 Join the [Bldrs Discord](https://discord.gg/apWHfDtkJs).
