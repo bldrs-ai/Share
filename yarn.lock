@@ -1703,9 +1703,9 @@
     "@octokit/openapi-types" "^11.2.0"
 
 "@pablo-mayrgundter/cookies.js@^1.0.0":
-  version "1.0.0"
-  resolved "https://registry.npmjs.org/@pablo-mayrgundter/cookies.js/-/cookies.js-1.0.0.tgz"
-  integrity sha512-1Fumemx3JDCu93GSLL+nncpDTNaRaRh4pR0MszDyPfbWp99sAauFaQGzLXRWlLsa5ZWa95ACgku98+fNmVPNJg==
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/@pablo-mayrgundter/cookies.js/-/cookies.js-1.1.0.tgz#1849f29171a6e8ef8b8d0d95480c7b0a1bc3c526"
+  integrity sha512-onxalm1b0Dq/OxS/MkVa7l/CUpe60Cqvyqk2LXHf9nx2AR8JBuZVRqkgusSSioKepCDrcbCaTQCnwxz1nRB0hA==
 
 "@popperjs/core@^2.4.4":
   version "2.11.2"
