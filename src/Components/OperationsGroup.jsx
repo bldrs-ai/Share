@@ -1,13 +1,15 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
-import IssuesControl from './IssuesControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import MarkupIcon from '../assets/2D_Icons/Markup.svg'
+import ListIcon from '../assets/2D_Icons/List.svg'
 import {useIsMobile} from './Hooks'
+import useStore from '../utils/store'
 
 
 /**
@@ -19,22 +21,39 @@ import {useIsMobile} from './Hooks'
  * @param {function} itemPanelControl The ItemPanel component
  * @return {Object}
  */
-export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
+export default function OperationsGroup({viewer, unSelectItem}) {
   const classes = useStyles()
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+
   return (
     <div className={classes.container}>
-      <div className={classes.shareAndIssues}>
+      <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
-        <IssuesControl viewer={viewer}/>
+        <TooltipIconButton
+          title='Notes'
+          icon ={<MarkupIcon/>}
+          onClick = {()=>{
+            openDrawer()
+            toggleIsCommentsOn()
+          }}/>
       </div>
       <div className={classes.lowerGroup}>
-        {itemPanelControl}
+        <TooltipIconButton
+          title = 'Conversation'
+          icon = {<ListIcon/>}
+          onClick = {()=>{
+            openDrawer()
+            toggleIsPropertiesOn()
+          }}
+        />
         {useIsMobile() ?
-         <TooltipIconButton
-           title="Section plane"
-           onClick={() => viewer.clipper.createPlane()}
-           icon={<CutPlaneIcon/>}/>:
-          ''
+          <TooltipIconButton
+            title="Section plane"
+            onClick={() => viewer.clipper.createPlane()}
+            icon={<CutPlaneIcon/>}/>:
+          null
         }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
@@ -52,11 +71,17 @@ const useStyles = makeStyles({
     height: 'calc(100vh - 40px)',
     margin: '20px 20px 0 0',
   },
+  topGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    height: '110px',
+    width: '50px',
+  },
   lowerGroup: {
     position: 'fixed',
     bottom: 0,
     paddingBottom: '70px',
-    // 3x the size of a button
     minHeight: '150px',
   },
 })
