@@ -1,15 +1,15 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r302",
+  "version": "1.0.0-r301",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "clean": "rm -rf docs ; cp -r public docs",
-    "new-version": "node src/utils/version.mjs > package.json.new && mv package.json.new package.json",
-    "copy-web-asm": "cp node_modules/web-ifc/*.wasm public/static/js",
+    "clean": "shx rm -rf docs ; shx cp -r public docs",
+    "new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json",
+    "copy-web-asm": "shx cp node_modules/web-ifc/*.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
     "lint": "yarn eslint src",
@@ -57,7 +57,8 @@
     "husky": "^7.0.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
-    "jsdom": "^19.0.0"
+    "jsdom": "^19.0.0",
+    "shx": "^0.3.4"
   },
   "jest": {
     "verbose": false,
