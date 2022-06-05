@@ -8,12 +8,10 @@ import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
 
 
 /**
- * ItemPropertiesDrawer contains the ItemPanel and allows for
+ * SideDrawer contains the ItemPanel and CommentPanel and allows for
  * show/hide from the right of the screen.
- * @param {string} title Title for the drawer
- * @param {Object} content The contained ItemPanel
- * @param {function} onClose Callback
- * @return {Object} ItemPropertiesDrawer react component
+ * it is connected to the global store and controlled by isDrawerOpen property.
+ * @return {Object} SideDrawer react component
  */
 export default function SideDrawer() {
   const classes = useStyles()
