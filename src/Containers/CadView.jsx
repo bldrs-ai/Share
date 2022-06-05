@@ -8,7 +8,6 @@ import SearchIndex from './SearchIndex.js'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ItemPanelControl from '../Components/ItemPanelControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -18,6 +17,11 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import useStore from '../utils/store'
+import SidePanelControl from '../Components/SidePanelControl'
+import SideDrawer from '../Components/SideDrawer'
+import MobileDrawer from '../Components/MobileDrawer'
+import {useIsMobile} from '../Components/Hooks'
 
 
 /**
@@ -63,11 +67,16 @@ export default function CadView({
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  // const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true)
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
-
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const closeDrawer = useStore((state) => state.closeDrawer)
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
+  const isMobile = useIsMobile()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -181,6 +190,7 @@ export default function CadView({
       // always be 0.
       model.modelID = 0
       setModel(model)
+      setModelStore(model)
     }
   }
 
@@ -290,6 +300,7 @@ export default function CadView({
             navigate(pathPrefix + modelPath.filepath + path)
           }
           setSelectedElement(item)
+          setSelectedElementStore(item)
         }
       }
     }
@@ -299,6 +310,7 @@ export default function CadView({
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     setSelectedElement({})
+    setSelectedElementStore({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -333,6 +345,8 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
+    setSelectedElementStore(props)
+
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
@@ -377,24 +391,28 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
         <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
-        <div className={isItemPanelOpen ?
+        <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
            <OperationsGroup
              viewer={viewer}
              unSelectItem={unSelectItems}
-             itemPanelControl={
-               <ItemPanelControl
+             sidePanelControl={
+               <SidePanelControl
                  model={model}
                  element={selectedElement}
                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
+      {isDrawerOpen &&
+        (isMobile ? <MobileDrawer/> :
+        <SideDrawer
+          onClose={closeDrawer}/>)}
     </div>
   )
 }

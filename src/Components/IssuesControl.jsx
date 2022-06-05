@@ -1,23 +1,274 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation, useNavigate} from 'react-router'
-import DialogActions from '@mui/material/DialogActions'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import MuiDialog from '@mui/material/Dialog'
-import Typography from '@mui/material/Typography'
-import Slide from '@mui/material/Slide'
-import {makeStyles} from '@mui/styles'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import Paper from '@mui/material/Paper'
+import {ControlButton} from './Buttons'
 import debug from '../utils/debug'
 import {
   addHashParams,
   getHashParams,
   removeHashParams,
 } from '../utils/location'
-import {getIssue, getComment} from '../utils/GitHub'
+import {makeStyles} from '@mui/styles'
+import {getIssue, getComment, getIssues, getComments} from '../utils/GitHub'
 import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import NavPrevIcon from '../assets/2D_Icons/NavPrev.svg'
-import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
+import IssueCard from './IssueCard'
+import IssueCardReply from './IssueCardReply'
+import useStore from '../utils/store'
+
+
+/**
+ * Displays the comment panel
+ * @param {string} body The comment body
+ * @param {string|null} title The comment title, optional
+ * @param {string|null} next Full URL for next comment link href
+ * @param {function|null} navigate React router navigate for back button
+ * @return {Object} React component
+ */
+export function CommentPanelAll() {
+  const classes = useStyles()
+  const selectedCommentId = useStore((state) => state.selectedCommentId)
+  const issuesStore = useStore((state) => state.issues)
+  const setIssuesStore = useStore((state) => state.setIssues)
+  const replies = useStore((state) => state.replies)
+  const setReplies = useStore((state) => state.setReplies)
+  const filteredComment = selectedCommentId ? issuesStore.filter((issue) => issue.id ===selectedCommentId)[0] :null
+
+  useEffect(()=>{
+    const fetchIssues = async () => {
+      const issues = await getIssues()
+      const issuesArr = []
+      let imageURL = ''
+      let cameraCoord = null
+      let body = null
+      issues.data.map((issue, index)=>{
+        const lines = issue.body.split('\r\n')
+        const camera = lines.filter((line)=>line.includes('camera'))
+        body = lines[0]
+        if (camera.length>0) {
+          cameraCoord = camera[0].split('=')[1]
+        } else {
+          cameraCoord = null
+        }
+        if (issue.body.includes('img')) {
+          const isolateImageSrc = issue.body.split('src')[1]
+          const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
+          imageURL = imageSrc[1]
+        } else {
+          imageURL = ''
+        }
+        issuesArr.push(
+            {
+              cameraPosition: cameraCoord,
+              index: index,
+              id: issue.id,
+              number: issue.number,
+              title: issue.title,
+              body: body,
+              date: issue.created_at,
+              username: issue.user.login,
+              avatarURL: issue.user.avatar_url,
+              numberOfReplies: issue.comments,
+              imageURL: imageURL,
+            },
+        )
+      })
+      setIssuesStore(issuesArr)
+    }
+    fetchIssues()
+  }, [setIssuesStore])
+
+
+  useEffect(()=>{
+    const fetchComments = async (selectedIssue) => {
+      const comments = await getComments(selectedIssue.number)
+      const commentsArr = []
+      let cameraCoord = null
+      let commentImageURL
+
+      comments.map((comment) => {
+        const lines = comment.body.split('\r\n')
+        const camera = lines.filter((line)=>line.includes('camera'))
+        if (camera.length>0) {
+          cameraCoord = camera[0].split('=')[1]
+        } else {
+          cameraCoord = null
+        }
+        commentImageURL = comment.body.split('ImageURL')[1]
+        commentsArr.push(
+            {
+              cameraPosition: cameraCoord,
+              id: comment.id,
+              number: comment.number,
+              title: comment.title,
+              body: comment.body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarURL: comment.user.avatar_url,
+              imageURL: commentImageURL,
+            },
+        )
+      })
+      setReplies(commentsArr)
+    }
+    const selectedIssue = issuesStore.filter((issue) => issue.id === selectedCommentId)[0]
+    selectedCommentId !== null ?
+    fetchComments(selectedIssue) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCommentId])
+
+  return (
+    <Paper className = {classes.commentsContainer} elevation = {0}>
+      <div>
+      </div>
+      <div className = {classes.cardsContainer}>
+        {selectedCommentId ?
+        <>
+          <IssueCard
+            cameraPosition = {filteredComment.cameraPosition}
+            index = {filteredComment.index}
+            id = {filteredComment.id}
+            key = {filteredComment.id}
+            title = {filteredComment.title}
+            date = {filteredComment.date}
+            body = {filteredComment.body}
+            username = {filteredComment.username}
+            numberOfReplies = {filteredComment.numberOfReplies}
+            avatarURL = {filteredComment.avatarURL}
+            imageURL = {filteredComment.imageURL}/>
+          { replies &&
+              replies.map((reply)=>{
+                return (
+                  <IssueCardReply
+                    id = {reply.id}
+                    key = {reply.id}
+                    title = {filteredComment.title +':RE'}
+                    body = {reply.body}
+                    username = {reply.username}
+                    numberOfReplies = {0}
+                    avatarURL = {reply.avatarURL}
+                    cameraPosition = {reply.cameraPosition}
+                    imageURL = {reply.imageURL}/>
+                )
+              })
+          }
+        </> :
+        issuesStore.map((issue, index)=>{
+          return (
+            <IssueCard
+              cameraPosition = {issue.cameraPosition}
+              index = {issue.index}
+              id = {issue.id}
+              key = {index}
+              title = {issue.title}
+              date = {issue.date}
+              body = {issue.body}
+              username = {issue.username}
+              numberOfReplies = {issue.numberOfReplies}
+              avatarURL = {issue.avatarURL}
+              imageURL = {issue.imageURL}/>
+          )
+        })
+        }
+        {/* <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'title'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'title'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'title'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'title'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'title'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'three'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'two'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/>
+        <IssueCard
+          cameraPosition = {'eiuyoiu'}
+          index = {0}
+          id = {89}
+          key = {67}
+          title = {'last one'}
+          date = {'2022-20-20T897'}
+          body = {'body hello'}
+          username = {'oleg'}
+          numberOfReplies = {3}
+          avatarURL = {''}
+          imageURL = {''}/> */}
+      </div>
+    </Paper>
+  )
+}
 
 
 /**
@@ -30,13 +281,14 @@ import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
  * @param {Object} viewer The viewer object from IFCjs.
  * @return {Object} React component
  */
-export default function IssuesControl({viewer}) {
+export default function IssuesControl() {
   const location = useLocation()
   const navigate = useNavigate()
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(parseHashParams(location) ? true : false)
   const [text, setText] = useState('')
   const [next, setNext] = useState(null)
+  const [addComment, setAddComment] = useState(false)
 
 
   useEffect(() => {
@@ -83,85 +335,16 @@ export default function IssuesControl({viewer}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={showIssues}
       dialog={
-        text ?
-          <CommentPanel
-            body={body}
-            title={title}
-            next={next}
-            navigate={navigate}/> :
-        <></>
+        <CommentPanelAll
+          body={body}
+          title={title}
+          next={next}
+          onClick = {showIssues}
+          onAddComment = {()=>setAddComment(!addComment)}
+          navigate={navigate}/>
       }/>)
 }
 
-
-const Transition = React.forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />
-})
-
-
-/**
- * Displays the comment panel
- * @param {string} body The comment body
- * @param {string|null} title The comment title, optional
- * @param {string|null} next Full URL for next comment link href
- * @param {function|null} navigate React router navigate for back button
- * @return {Object} React component
- */
-function CommentPanel({body, title, next, navigate}) {
-  const [count, setCount] = useState(0)
-  const [isOpen, setIsOpen] = useState(true)
-  const [fullWidth] = useState(window.innerWidth <= 900)
-  const classes = useStyles()
-  return (
-    <MuiDialog
-      open={isOpen}
-      onClose={() => setIsOpen(false)}
-      fullWidth={fullWidth}
-      scroll='paper'
-      TransitionComponent={Transition}
-      BackdropProps={{style: {opacity: 0}}}
-      PaperProps={{
-        style: {
-          padding: 0,
-          margin: 0,
-          minHeight: '220px',
-          maxHeight: '250px',
-          width: fullWidth ? '100%' : 'default'}}}
-      className={classes.issueDialog}>
-      {title &&
-       <DialogTitle>
-         <h1>{title}</h1>
-       </DialogTitle>}
-      <DialogContent>
-        <Typography paragraph={true}>{body}</Typography>
-      </DialogContent>
-      <DialogActions sx={{justifyContent: 'center'}}>
-        <div>
-          {count > 0 &&
-           <TooltipIconButton
-             title='Back'
-             onClick={() => {
-               if (count > 0) {
-                 setCount(count - 1)
-                 navigate(-1)
-               }
-             }}
-             icon={<NavPrevIcon/>}
-             placement='left'/>}
-          {next &&
-           <TooltipIconButton
-             title='Next'
-             onClick={() => {
-               setCount(count + 1)
-               window.location = next
-             }}
-             icon={<NavNextIcon/>}
-             placement='right'/>}
-        </div>
-      </DialogActions>
-    </MuiDialog>
-  )
-}
 
 /** The prefix to use for issue id in the URL hash. */
 export const ISSUE_PREFIX = 'i'
@@ -256,44 +439,60 @@ function setPanelText(title, body, setText, setNext) {
   }
 }
 
-
 const useStyles = makeStyles({
-  issueDialog: {
-    'fontFamily': 'Helvetica',
-    '& .MuiDialog-container': {
-      alignItems: 'flex-end',
+  commentsContainer: {
+    minHeight: '330px',
+    border: 'none',
+  },
+  addContainer: {
+    'width': '290px',
+    'height': 'auto',
+    'position': 'absolute',
+    'top': '20px',
+    'right': '86px',
+    '@media (max-width: 900px)': {
+      width: '290px',
+      height: 'auto',
+      position: 'absolute',
+      top: '240px',
+      right: '80px',
     },
-    '& .MuiDialogTitle-root h1': {
-      fontSize: '1.1em',
-      margin: 0,
+  },
+  searchContainer: {
+    height: '60px',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingBottom: '4px',
+  },
+  title: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    height: '40px',
+    width: '90%',
+    margin: '12px 12px 0px 12px',
+    paddingBottom: '10px',
+  },
+  cardsContainer: {
+    'overflowY': 'scroll',
+    'overflowX': 'hidden',
+    'height': '78%',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    '&::-webkit-scrollbar': {
+      display: 'none',
     },
-    '& .MuiDialogActions-root': {
-      borderTop: 'solid 1px lightgrey',
-      margin: '0.5em 1em',
-      padding: '0em',
-    },
-    '& .MuiPaper-root': {
-      padding: '1em',
-    },
-    '& .MuiButtonBase-root': {
-      padding: 0,
-      margin: '0.5em',
-      borderRadius: '50%',
-      border: 'none',
-    },
-    '& svg': {
-      padding: 0,
-      margin: 0,
-      width: '25px',
-      height: '25px',
-      border: 'solid 0.5px grey',
-      borderRadius: '50%',
-    },
-    '& h1, & p': {
-      fontWeight: 300,
-    },
-    '& h1': {
-      fontSize: '1.2em',
+    '@media (max-width: 900px)': {
+      // height: '410px',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'flex-start',
+      alignItems: 'center',
+      // border: '1px solid lightGrey',
     },
   },
 })

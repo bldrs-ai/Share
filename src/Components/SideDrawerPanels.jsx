@@ -5,6 +5,7 @@ import ItemProperties from './ItemProperties'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import Next from '../assets/2D_Icons/NavNext.svg'
 import Previous from '../assets/2D_Icons/NavPrev.svg'
+import Back from '../assets/2D_Icons/Back.svg'
 import {TooltipIconButton} from './Buttons'
 import {CommentPanelAll} from './IssuesControl'
 
@@ -38,12 +39,25 @@ export const CommentsPanel = ()=> {
   return (
     <>
       <div className = {classes.titleContainer}>
-        <div className = {classes.title}>
-          Comments
+        <div className = {classes.leftGroup}>
+          <div className = {classes.title}>
+            {!selectedCommentId ? 'Notes': 'Topic' }
+          </div>
+          {!selectedCommentId ?
+          <div className = {classes.notifications}>
+            1
+          </div>:null}
         </div>
-        <div style = {{width: '160px', display: 'flex', flexDirection: 'row', justifyContent: 'space-between'}}>
+        <div className = {classes.rightGroup}>
           <div className = {classes.controls} >
             {selectedCommentId &&
+            <>
+              <TooltipIconButton
+                title='Back to the list'
+                placement = 'bottom'
+                size = 'small'
+                onClick={()=>setSelectedComment(null)}
+                icon={<Back style = {{width: '30px', height: '30px'}}/>}/>
               <>
                 <TooltipIconButton
                   title='Previous Comment'
@@ -58,13 +72,14 @@ export const CommentsPanel = ()=> {
                   onClick={selectNextIssue}
                   icon={<Next style = {{width: '20px', height: '20px'}}/>}/>
               </>
+            </>
             }
           </div>
           <TooltipIconButton
             title='Close Comments'
             placement = 'bottom'
             onClick={toggleIsCommentsOn}
-            icon={<CloseIcon/>}/>
+            icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
         </div>
       </div>
       <div className = {classes.contentContainer}>
@@ -73,7 +88,6 @@ export const CommentsPanel = ()=> {
     </>
   )
 }
-
 
 export const PropertiesPanel = ()=> {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
@@ -88,7 +102,7 @@ export const PropertiesPanel = ()=> {
           <TooltipIconButton
             title='toggle drawer'
             onClick={toggleIsPropertiesOn}
-            icon={<CloseIcon/>}/>
+            icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
         </div>
       </div>
       <div className = {classes.contentContainer}>
@@ -103,13 +117,15 @@ const useStyles = makeStyles(() => ({
   titleContainer: {
     display: 'flex',
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingLeft: '10px',
     borderRadius: '5px',
-    background: 'Gainsboro',
+    background: '#7EC43B',
   },
   title: {
-    width: '100%',
-    height: '50px',
+    // width: '100%',
+    height: '30px',
     display: 'flex',
     fontSize: '18px',
     textDecoration: 'underline',
@@ -120,6 +136,9 @@ const useStyles = makeStyles(() => ({
   },
   contentContainer: {
     marginTop: '10px',
+    height: '100%',
+    overflow: 'scroll',
+    paddingBottom: '30px',
   },
   controls: {
     height: '100%',
@@ -127,5 +146,38 @@ const useStyles = makeStyles(() => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+  },
+  rightGroup: {
+    width: '160px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  leftGroup: {
+    width: '100px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  container: {
+    background: '#7EC43B',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notifications: {
+    width: '19px',
+    height: '20px',
+    border: '1px solid lime',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '10px',
+    color: 'black',
+    borderRadius: '20px',
   },
 }))
