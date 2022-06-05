@@ -18,7 +18,6 @@ import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../utils/store'
-import SidePanelControl from '../Components/SidePanelControl'
 import SideDrawer from '../Components/SideDrawer'
 import MobileDrawer from '../Components/MobileDrawer'
 import {useIsMobile} from '../Components/Hooks'
@@ -56,7 +55,7 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElement, setSelectedElement] = useState({})
+  // const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -66,9 +65,8 @@ export default function CadView({
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
-  // const [isCommentPanelOpen, setIsCommentPanelOpen] = useState(true)
-  const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
+  // const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  // const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
@@ -115,7 +113,7 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    setIsItemPanelOpen(false)
+    // setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
     setViewer(initViewer(
         pathPrefix,
@@ -299,7 +297,7 @@ export default function CadView({
           } else {
             navigate(pathPrefix + modelPath.filepath + path)
           }
-          setSelectedElement(item)
+          // setSelectedElement(item)
           setSelectedElementStore(item)
         }
       }
@@ -309,7 +307,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement({})
+    // setSelectedElement({})
     setSelectedElementStore({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
@@ -344,7 +342,7 @@ export default function CadView({
     }
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
-    setSelectedElement(props)
+    // setSelectedElement(props)
     setSelectedElementStore(props)
 
     // TODO(pablo): just found out this method is getting called a lot
@@ -395,14 +393,10 @@ export default function CadView({
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
-           <OperationsGroup
-             viewer={viewer}
-             unSelectItem={unSelectItems}
-             sidePanelControl={
-               <SidePanelControl
-                 model={model}
-                 element={selectedElement}
-                 isOpenState={isItemPanelOpenState}/>}/>}
+            <OperationsGroup
+              viewer={viewer}
+              unSelectItem={unSelectItems}
+            />}
         </div>
         <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>

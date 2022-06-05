@@ -43,10 +43,10 @@ export const CommentsPanel = ()=> {
           <div className = {classes.title}>
             {!selectedCommentId ? 'Notes': 'Topic' }
           </div>
-          {!selectedCommentId ?
+          {/* {!selectedCommentId ?
           <div className = {classes.notifications}>
             1
-          </div>:null}
+          </div>:null} */}
         </div>
         <div className = {classes.rightGroup}>
           <div className = {classes.controls} >

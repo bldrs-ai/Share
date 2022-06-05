@@ -18,12 +18,10 @@ export async function getIssue(issueId) {
 
 
 /**
- * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
- * below for the expected structure.
- * @param {Number} issueId
- * @return {Object} The issue object.
+ * Fetch all of the issues from GitHub.
+ * @return {Array} The issue array of issue objects.
  */
-export async function getIssues(issueId) {
+export async function getIssues() {
   const issues = await getGitHub('issues')
   debug().log('GitHub: issue: ', issues)
   return issues
@@ -33,8 +31,7 @@ export async function getIssues(issueId) {
 /**
  * The comments should have the following structure:
  * @param {Number} issueId
- * @param {Number} commentId
- * @return {Object} The comment object.
+ * @return {Array} The comments array.
  */
 export async function getComments(issueId) {
   const comments = await getGitHub(

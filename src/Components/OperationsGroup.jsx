@@ -41,7 +41,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
       </div>
       <div className={classes.lowerGroup}>
         <TooltipIconButton
-          title = 'Conversation'
+          title = 'Properties'
           icon = {<ListIcon/>}
           onClick = {()=>{
             openDrawer()
