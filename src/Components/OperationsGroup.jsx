@@ -9,6 +9,7 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import {useIsMobile} from './Hooks'
+import {removeCameraUrlParams} from './CameraControl'
 import useStore from '../utils/store'
 
 
@@ -37,6 +38,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
           onClick = {()=>{
             openDrawer()
             toggleIsCommentsOn()
+            removeCameraUrlParams()
           }}/>
       </div>
       <div className={classes.lowerGroup}>

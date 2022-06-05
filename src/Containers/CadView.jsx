@@ -21,6 +21,7 @@ import useStore from '../utils/store'
 import SideDrawer from '../Components/SideDrawer'
 import MobileDrawer from '../Components/MobileDrawer'
 import {useIsMobile} from '../Components/Hooks'
+import {getHashParams} from '../utils/location'
 
 
 /**
@@ -71,9 +72,14 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setViewerStore = useStore((state) => state.setViewerStore)
+  const snackMessage = useStore((state) => state.snackMessage)
   const isMobile = useIsMobile()
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -105,6 +111,16 @@ export default function CadView({
   }, [searchParams])
   /* eslint-enable */
 
+  useEffect(()=>{
+    const issueHash = getHashParams(window.location, 'i')
+    if (issueHash !== undefined) {
+      const extractedCommentId = issueHash.split(':')[1]
+      setSelectedIssueId(Number(extractedCommentId))
+      openDrawer()
+      toggleIsCommentsOn()
+    }
+  }, [])
+
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
@@ -115,12 +131,14 @@ export default function CadView({
     setShowSearchBar(false)
     // setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
-    setViewer(initViewer(
+    const intializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef'))
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
+    setViewer(intializedViewer)
+    setViewerStore(intializedViewer)
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -348,14 +366,15 @@ export default function CadView({
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
-    // console.log('CadView#onElementSelect: in...')
   }
 
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
+        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(intializedViewer)
+        setViewerStore(intializedViewer)
       }
     })
   }
@@ -365,9 +384,9 @@ export default function CadView({
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
-          message={loadingMessage}
+          message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
-          open={isLoading}/>
+          open={isLoading || snackMessage !== null}/>
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar

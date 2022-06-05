@@ -1,7 +1,8 @@
-import React from 'react'
+import React, {useEffect} from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
 import {makeStyles} from '@mui/styles'
+import useStore from '../utils/store'
 
 
 /**
@@ -12,6 +13,17 @@ import {makeStyles} from '@mui/styles'
  */
 export default function SnackBarMessage({message, type, open}) {
   const classes = useStyles()
+  const snackMessage = useStore((state) => state.snackMessage)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+
+  useEffect(()=>{
+    if (snackMessage) {
+      setTimeout(()=>{
+        setSnackMessage(null)
+      }, 2000)
+    }
+  }, [snackMessage, setSnackMessage])
+
   return (
     <Snackbar
       open={open}

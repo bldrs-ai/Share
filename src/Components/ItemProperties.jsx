@@ -426,11 +426,11 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: '400px',
   },
   noElement: {
-    maxWidth: '320px',
+    maxWidth: '240px',
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: 200,
-    width: '300px',
+    width: '240px',
   },
   icons: {
     width: '20px',

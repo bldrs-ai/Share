@@ -4,7 +4,7 @@ import {makeStyles} from '@mui/styles'
 import {MOBILE_WIDTH} from './Hooks'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
 import useStore from '../utils/store'
-import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
+import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 
 
 /**
@@ -14,18 +14,17 @@ import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
  * @return {Object} SideDrawer react component
  */
 export default function SideDrawer() {
-  const classes = useStyles()
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
 
   useEffect(()=>{
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
-
 
   return (
     <Drawer
@@ -35,21 +34,12 @@ export default function SideDrawer() {
       elevation={4}
       className={classes.drawer}>
       <div className={classes.content}>
-        <div className = {classes.container}
-          style = { isCommentsOn ? {} : {display: 'none'} }
-        >
-          {isCommentsOn?<CommentsPanel/>:null}
+        <div className = {classes.containerNotes}>
+          {isCommentsOn ? <NotesPanel/> : null}
         </div>
-        <div style = {
-          isCommentsOn && isPropertiesOn ?
-          {height: '5px',
-            backgroundColor: 'cyan',
-            width: '100%',
-            marginTop: '15px',
-            marginBottom: '5px'} :
-          {display: 'none'} }/>
-        <div className = {classes.container}>
-          {isPropertiesOn?<PropertiesPanel/>:null }
+        <div className = {classes.divider}/>
+        <div className = {classes.containerProperties}>
+          {isPropertiesOn ? <PropertiesPanel/> : null }
         </div>
       </div>
     </Drawer>
@@ -93,7 +83,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     },
   },
   content: {
-    'overflow': 'auto',
+    'overflow': 'hidden',
     'height': '95%',
     'marginTop': '20px',
     'display': 'flex',
@@ -105,6 +95,25 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   },
   container: {
     borderRadius: '5px',
-    overflow: 'scroll',
+    overflow: 'hidden',
+  },
+  containerNotes: {
+    overflow: 'hidden ',
+    height: (props) => props.isPropertiesOn ? '50%' : '1200px',
+    display: (props) => props.isCommentsOn ? '' : 'none',
+    borderRadius: '0px',
+    borderBottom: '1px solid lightGrey',
+  },
+  containerProperties: {
+    borderRadius: '5px',
+    overflow: 'hidden',
+    height: (props) => props.isPropertiesOn ? '50%' : 'auto',
+  },
+  divider: {
+    height: '1px',
+    width: '100%',
+    marginTop: '2px',
+    marginBottom: '2px',
+    display: (props)=>props.divider ? 'block' : 'none',
   },
 })))

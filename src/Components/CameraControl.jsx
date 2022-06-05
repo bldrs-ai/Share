@@ -10,6 +10,10 @@ import {
 import {roundCoord} from '../utils/math'
 
 
+// TODO(pablo): this is temporary global state solution for the camera logic
+let camera
+
+
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
 // handlers below to function, but we also decided not to display it
 // as its own button.  So for now it's hidden.
@@ -19,16 +23,17 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @param {Object} viewer The IFC viewer, which contains the
+ * @param {Object} v The IFC viewer, which contains the
  *   cameraControls
  * @return {Object} React component
  */
 export default function CameraControl({viewer}) {
-  const camera = viewer.IFC.context.ifcCamera.cameraControls
+  camera = viewer.IFC.context.ifcCamera
   const location = useLocation()
   useEffect(() => {
-    onLoad(camera, location)
-  }, [camera, location])
+    onHash(location)
+    onLoad(location)
+  }, [location])
   // NOTE: NOT DISPLAYED
   return (
     <div style={{display: 'none'}}>Camera</div>
@@ -43,13 +48,11 @@ export const CAMERA_PREFIX = 'c'
 /**
  * Set camera position from window location hash and add listener for
  * hash change.
- * @param {Object} camera The IFCjs camera
  * @param {Object} location Either window.location or react-router location
  */
-function onLoad(camera, location) {
+function onLoad(location) {
   debug().log('CameraControl#onLoad')
-  onHash(camera, location)
-  addHashListener('camera', () => onHash(camera, location))
+  addHashListener('camera', () => onHash(location))
 }
 
 
@@ -57,24 +60,46 @@ function onLoad(camera, location) {
 /**
  * Sets the camera position to the coordinate encoded in the URL
  * hash if it is present
- * @param {Object} camera The IFCjs camera
  * @param {Object} location window.location
  */
-export function onHash(camera, location) {
+export function onHash(location) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
   if (encodedParams == undefined) {
     return
   }
-  const coords = parseHashParams(encodedParams)
-  if (coords == undefined) {
-    return
+  setCameraFromEncodedPosition(encodedParams)
+}
+
+
+/**
+ * Get url
+ * @param {String} urlStr url string that is pulled from the issue
+ */
+export function readUrlForEncodedPosition(urlStr) {
+  const parts = urlStr.split('#')
+  if (parts.length !== 2) {
+    throw Error('Expected hash in URL')
   }
+  const loc = {
+    hash: parts[1],
+  }
+  const encodedParams = getHashParams(loc, CAMERA_PREFIX)
+  setCameraFromEncodedPosition(encodedParams)
+}
+
+/**
+ * Set the camera position
+ * @param {String} encodedPosition camera position
+ */
+export function setCameraFromEncodedPosition(encodedPosition) {
+  const coords = parseHashParams(encodedPosition)
   if (coords) {
-    camera.setPosition(coords[0], coords[1], coords[2], true)
+    camera.cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     if (coords.length == 6) {
-      camera.setTarget(coords[3], coords[4], coords[5], true)
+      camera.cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
+  addCameraUrlParams()
 }
 
 
@@ -116,7 +141,7 @@ export function parseHashParams(encodedParams) {
 }
 
 
-/** @return {boolean} True iff the camera hash params are present. */
+/** @return {boolean} True if the camera hash params are present. */
 export function hasValidUrlParams() {
   const encoded = getHashParams(window.location, CAMERA_PREFIX)
   if (encoded && parseHashParams(encoded)) {
@@ -130,8 +155,10 @@ export function hasValidUrlParams() {
  * Adds camera coords to url.
  * @param {Object} viewer IFCjs viewer that contains a camera.
  */
-export function addCameraUrlParams(viewer) {
-  const camera = viewer.IFC.context.ifcCamera
+export function addCameraUrlParams() {
+  if (!camera || !camera.cameraControls) {
+    return
+  }
   const position = camera.cameraControls.getPosition()
   let camArr = roundCoord(...position, 2)
   const target = camera.cameraControls.getTarget()

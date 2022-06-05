@@ -5,7 +5,7 @@ import {styled} from '@mui/material/styles'
 import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
-import {PropertiesPanel, CommentsPanel} from './SideDrawerPanels'
+import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import useStore from '../utils/store'
 
 
@@ -21,7 +21,7 @@ export default function MobileDrawer() {
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const selectedCommentId = useStore((state) => state.selectedCommentId)
+  const selectedIssueId = useStore((state) => state.selectedIssueId)
   const isConversationOn = useStore((state) => state.isConversationOn)
 
   useEffect(()=>{
@@ -31,10 +31,10 @@ export default function MobileDrawer() {
   }, [isCommentsOn, isPropertiesOn, closeDrawer, isDrawerOpen, isConversationOn])
 
   useEffect(()=>{
-    if (selectedCommentId && !open && isCommentsOn ) {
+    if (selectedIssueId && !open && isCommentsOn ) {
       setOpen(true)
     }
-  }, [selectedCommentId, isCommentsOn, open])
+  }, [selectedIssueId, isCommentsOn, open])
   return (
     <div className={classes.swipeDrawer}>
       <SwipeableDrawer
@@ -50,8 +50,8 @@ export default function MobileDrawer() {
           <div className={classes.openToggle}>
             <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>
           </div>
-          <div className={classes.panelContainer}>
-            {isCommentsOn?<CommentsPanel/>:null}
+          <div className={classes.panelContainer}>s
+            {isCommentsOn?<NotesPanel/>:null}
             {isPropertiesOn?<PropertiesPanel/>:null }
           </div>
         </StyledBox>
