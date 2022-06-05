@@ -24,7 +24,7 @@ import useStore from '../utils/store'
  * @param {function|null} navigate React router navigate for back button
  * @return {Object} React component
  */
-export function CommentPanelAll() {
+export function CommentPanel() {
   const classes = useStyles()
   const selectedCommentId = useStore((state) => state.selectedCommentId)
   const issuesStore = useStore((state) => state.issues)
@@ -335,7 +335,7 @@ export default function IssuesControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={showIssues}
       dialog={
-        <CommentPanelAll
+        <CommentPanel
           body={body}
           title={title}
           next={next}

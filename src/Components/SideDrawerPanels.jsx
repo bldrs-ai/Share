@@ -7,7 +7,7 @@ import Next from '../assets/2D_Icons/NavNext.svg'
 import Previous from '../assets/2D_Icons/NavPrev.svg'
 import Back from '../assets/2D_Icons/Back.svg'
 import {TooltipIconButton} from './Buttons'
-import {CommentPanelAll} from './IssuesControl'
+import {CommentPanel} from './IssuesControl'
 
 
 export const CommentsPanel = ()=> {
@@ -83,7 +83,7 @@ export const CommentsPanel = ()=> {
         </div>
       </div>
       <div className = {classes.contentContainer}>
-        <CommentPanelAll/>
+        <CommentPanel/>
       </div>
     </>
   )
