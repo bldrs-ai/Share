@@ -67,6 +67,7 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const [scene, setScene] = useState(null)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -91,6 +92,13 @@ export default function CadView({
     })()
   }, [model])
 
+  useEffect(() => {
+    (async () => {
+      await onScene()
+    })()
+  }, [scene])
+
+
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
@@ -107,13 +115,7 @@ export default function CadView({
     setShowNavPanel(false)
     setShowSearchBar(false)
     setIsItemPanelOpen(false)
-    const theme = colorModeContext.getTheme()
-    setViewer(initViewer(
-        pathPrefix,
-        (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef'))
+    setViewer(initViewer(pathPrefix, colorModeContext.getTheme(), setScene))
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -220,6 +222,12 @@ export default function CadView({
     initSearch(model, rootElt)
     setRootElement(rootElt)
     setShowNavPanel(true)
+  }
+
+
+  /** Handler when three.js scene changes. */
+  async function onScene() {
+    console.log('onScene: ', scene)
   }
 
 
@@ -342,9 +350,7 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
-      }
+      setViewer(initViewer(pathPrefix, theme, setScene))
     })
   }
 
@@ -402,22 +408,31 @@ export default function CadView({
 
 /**
  * @param {string} pathPrefix e.g. /share/v/p
- * @param {string} backgroundColorStr CSS str like '#abcdef'
+ * @param {Object} theme The current theme from the colorModeContext
+ * @param {function} setScene React setter for three.js scene extracted from IFCjs
  * @return {Object} IfcViewerAPI viewer
  */
-function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
-  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
+function initViewer(pathPrefix, theme, setScene) {
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
+  const backgroundColorStr =
+        (theme &&
+         theme.palette &&
+         theme.palette.background &&
+         theme.palette.background.paper) || '#abcdef'
+  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const v = new IfcViewerAPI({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created: ', v)
+  console.log('CadView#initViewer: viewer created: ', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
+  const s = v.IFC.context.scene.scene
+  setScene(s)
+  console.log('three scene: ', s)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
