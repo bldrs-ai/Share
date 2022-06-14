@@ -20,6 +20,10 @@ import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
+import * as THREE from 'three'
+import SpriteSheet from '../utils/SpriteSheet'
+
+
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
@@ -430,9 +434,40 @@ function initViewer(pathPrefix, theme, setScene) {
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
-  const s = v.IFC.context.scene.scene
-  setScene(s)
-  console.log('three scene: ', s)
+  const ctx = v.IFC.context
+  const renderer = ctx.getRenderer()
+  const scene = ctx.getScene()
+  const camera = ctx.getCamera()
+  console.log('ctx parts: ', ctx, renderer, scene, camera)
+  setScene(scene)
+
+  const sceneLayer = new THREE.Scene()
+  const labels = new SpriteSheet(1000, 20, 'medium arial')
+  const SCALE = 20
+  for (let x = -5; x < 5; x++) {
+    for (let y = -5; y < 5; y++) {
+      for (let z = -5; z < 5; z++) {
+        labels.add(x * SCALE, y * SCALE, z * SCALE, '🤘')
+      }
+    }
+  }
+  sceneLayer.add(labels.compile())
+
+  const renderPatch = () => {
+    if (ctx.isThisBeingDisposed) return
+    if (ctx.stats) ctx.stats.begin()
+    // https://stackoverflow.com/questions/30272190/threejs-rendering-multiple-scenes-in-a-single-webgl-renderer
+    renderer.autoClear = true
+    ctx.updateAllComponents()
+    renderer.autoClear = false
+    // https://discourse.threejs.org/t/rendering-multiple-scenes-with-renderpass/24648/2
+    // Maybe also? renderer.clearDepth();
+    renderer.render(sceneLayer, camera)
+    if (ctx.stats) ctx.stats.end()
+    requestAnimationFrame(ctx.render)
+  }
+
+  ctx.render = renderPatch
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

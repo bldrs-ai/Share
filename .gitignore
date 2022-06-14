@@ -1,6 +1,9 @@
 # dependencies
 /node_modules
 
+# Usually don't want to check in
+config/common.js
+
 # misc
 .DS_Store
 .vscode
