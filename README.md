@@ -19,4 +19,3 @@ Bldrs is open source and we'd appreciate your help.
 - [Projects](https://github.com/orgs/bldrs-ai/projects?type=beta)
 - [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design)
 - [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Developer-Guide)
-- 
