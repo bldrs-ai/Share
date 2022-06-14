@@ -36,6 +36,10 @@ or on localhost as:
 
 https://localhost:8080/share/v/p/index.ifc
 
+# Contribution
+
+If you use Bldrs for private hosting, please contribute to the [Bldrs Open Collective project](https://opencollective.com/bldrs).
+
 # Design
 
 See [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design) on the [wiki](https://github.com/bldrs-ai/Share/wiki).
