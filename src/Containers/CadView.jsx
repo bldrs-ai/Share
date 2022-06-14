@@ -21,7 +21,6 @@ import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
 import * as THREE from 'three'
-import SpriteSheet from '../utils/SpriteSheet'
 
 
 /**
@@ -442,16 +441,17 @@ function initViewer(pathPrefix, theme, setScene) {
   setScene(scene)
 
   const sceneLayer = new THREE.Scene()
-  const labels = new SpriteSheet(1000, 20, 'medium arial')
   const SCALE = 20
   for (let x = -5; x < 5; x++) {
     for (let y = -5; y < 5; y++) {
       for (let z = -5; z < 5; z++) {
-        labels.add(x * SCALE, y * SCALE, z * SCALE, '🤘')
+        const marker = new THREE.AxesHelper()
+        marker.position.set(x * SCALE, y * SCALE, z * SCALE)
+        sceneLayer.add(marker)
       }
     }
   }
-  sceneLayer.add(labels.compile())
+
 
   const renderPatch = () => {
     if (ctx.isThisBeingDisposed) return
