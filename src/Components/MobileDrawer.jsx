@@ -4,7 +4,10 @@ import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {styled} from '@mui/material/styles'
 import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
+import useStore from '../store/useStore'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
+import ListIcon from '../assets/2D_Icons/List.svg'
+import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 
 
 /**
@@ -15,6 +18,12 @@ export default function MobileDrawer({content}) {
   const [open, setOpen] = useState(false)
   const toggleDrawer = () => setOpen(!open)
   const classes = useStyles({isOpen: open})
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const selectedElement = useStore((state) => state.selectedElement)
+
   return (
     <div className={classes.swipeDrawer}>
       <SwipeableDrawer
@@ -29,6 +38,17 @@ export default function MobileDrawer({content}) {
           <div className={classes.openToggle}>
             <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>
           </div>
+          <div className={classes.iconContainer}>
+            {
+              !isCommentsOn &&
+              <TooltipIconButton title='Expand' onClick={toggleIsCommentsOn} icon={<MarkupIcon/>}/>
+            }
+            {
+              selectedElement && !isPropertiesOn &&
+              <TooltipIconButton title='Expand' onClick={toggleIsPropertiesOn} icon={<ListIcon/>}/>
+            }
+          </div>
+
           {content}
         </StyledBox>
       </SwipeableDrawer>
@@ -37,7 +57,7 @@ export default function MobileDrawer({content}) {
 }
 
 
-const drawerBleeding = 270
+const drawerBleeding = 300
 
 
 const StyledBox = styled(Box)(({theme}) => ({
@@ -60,11 +80,19 @@ const useStyles = makeStyles((props) => ({
   },
   openToggle: {
     'position': 'absolute',
-    'right': '3.0em',
-    'top': '0.8em',
+    'right': '0.8em',
+    'top': '.2em',
     '& svg': {
       transform: (props) => props.isOpen ? 'none' : 'rotate(180deg)',
     },
+  },
+  iconContainer: {
+    position: 'absolute',
+    left: '0.8em',
+    top: '.2em',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-around',
   },
   contentContainer: {
     position: 'absolute',
@@ -73,7 +101,7 @@ const useStyles = makeStyles((props) => ({
     right: 0,
     left: 0,
     padding: '1em',
-    paddingTop: '1em',
+    paddingTop: '1.6em',
     borderTop: 'solid 1px grey',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,

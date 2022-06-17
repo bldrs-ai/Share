@@ -1,169 +1,25 @@
-import React, {useEffect, useState} from 'react'
-import {useLocation, useNavigate} from 'react-router'
-import DialogActions from '@mui/material/DialogActions'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import MuiDialog from '@mui/material/Dialog'
-import Typography from '@mui/material/Typography'
-import Slide from '@mui/material/Slide'
-import {makeStyles} from '@mui/styles'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import React, {useEffect} from 'react'
 import debug from '../utils/debug'
 import {
-  addHashParams,
   getHashParams,
-  removeHashParams,
 } from '../utils/location'
+import {makeStyles, useTheme} from '@mui/styles'
 import {getIssue, getComment} from '../utils/GitHub'
-import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import NavPrevIcon from '../assets/2D_Icons/NavPrev.svg'
-import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
+import Paper from '@mui/material/Paper'
+import {getIssues, getComments} from '../utils/GitHub'
+import IssueCard from './IssueCard'
+import Next from '../assets/2D_Icons/NavNext.svg'
+import Previous from '../assets/2D_Icons/NavPrev.svg'
+import Back from '../assets/2D_Icons/Back.svg'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+import useStore from '../store/useStore'
+import {TooltipIconButton} from './Buttons'
+import {removeHashParams} from '../utils/location'
+import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {addHashParams} from '../utils/location'
 
 
-/**
- * The IssuesControl is a button that toggles display of issues for
- * the currently selected element.  On load, this component also reads
- * the current URL hash and fetches a related issue from GitHub, as
- * well as adds a hash listener to do the same whenever the hash
- * changes.
- *
- * @param {Object} viewer The viewer object from IFCjs.
- * @return {Object} React component
- */
-export default function IssuesControl({viewer}) {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [isDialogDisplayed, setIsDialogDisplayed] =
-        useState(parseHashParams(location) ? true : false)
-  const [text, setText] = useState('')
-  const [next, setNext] = useState(null)
-
-
-  useEffect(() => {
-    if (location) {
-      const p = parseHashParams(location)
-      if (p && p.issueId) {
-        if (Number.isInteger(p.commentId)) {
-          (async () => {
-            await showComment(p.issueId, p.commentId, setText, setNext)
-          })()
-        } else {
-          (async () => {
-            await showIssue(p.issueId, setText, setNext)
-          })()
-        }
-      }
-    }
-  }, [location])
-
-
-  // TODO: do a fetch to validate content before displaying panel
-  const showIssues = (doShow) => {
-    if (doShow) {
-      addHashParams(window.location, ISSUE_PREFIX, {id: 8})
-      setIsDialogDisplayed(true)
-    } else {
-      removeHashParams(window.location, ISSUE_PREFIX)
-      setText('')
-      setIsDialogDisplayed(false)
-    }
-  }
-
-  let title = null
-  let body = text
-  const titleSplitNdx = text.indexOf('::title::')
-  if (titleSplitNdx >= 0) {
-    title = text.substring(0, titleSplitNdx)
-    body = text.substring(titleSplitNdx + 9)
-  }
-  return (
-    <ControlButton
-      title='Show issues'
-      icon={<CommentIcon/>}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={showIssues}
-      dialog={
-        text ?
-          <CommentPanel
-            body={body}
-            title={title}
-            next={next}
-            navigate={navigate}/> :
-        <></>
-      }/>)
-}
-
-
-const Transition = React.forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />
-})
-
-
-/**
- * Displays the comment panel
- * @param {string} body The comment body
- * @param {string|null} title The comment title, optional
- * @param {string|null} next Full URL for next comment link href
- * @param {function|null} navigate React router navigate for back button
- * @return {Object} React component
- */
-function CommentPanel({body, title, next, navigate}) {
-  const [count, setCount] = useState(0)
-  const [isOpen, setIsOpen] = useState(true)
-  const [fullWidth] = useState(window.innerWidth <= 900)
-  const classes = useStyles()
-  return (
-    <MuiDialog
-      open={isOpen}
-      onClose={() => setIsOpen(false)}
-      fullWidth={fullWidth}
-      scroll='paper'
-      TransitionComponent={Transition}
-      BackdropProps={{style: {opacity: 0}}}
-      PaperProps={{
-        style: {
-          padding: 0,
-          margin: 0,
-          minHeight: '220px',
-          maxHeight: '250px',
-          width: fullWidth ? '100%' : 'default'}}}
-      className={classes.issueDialog}>
-      {title &&
-       <DialogTitle>
-         <h1>{title}</h1>
-       </DialogTitle>}
-      <DialogContent>
-        <Typography paragraph={true}>{body}</Typography>
-      </DialogContent>
-      <DialogActions sx={{justifyContent: 'center'}}>
-        <div>
-          {count > 0 &&
-           <TooltipIconButton
-             title='Back'
-             onClick={() => {
-               if (count > 0) {
-                 setCount(count - 1)
-                 navigate(-1)
-               }
-             }}
-             icon={<NavPrevIcon/>}
-             placement='left'/>}
-          {next &&
-           <TooltipIconButton
-             title='Next'
-             onClick={() => {
-               setCount(count + 1)
-               window.location = next
-             }}
-             icon={<NavNextIcon/>}
-             placement='right'/>}
-        </div>
-      </DialogActions>
-    </MuiDialog>
-  )
-}
-
-/** The prefix to use for issue id in the URL hash. */
+/** The prefix to use for issue id in the Url hash. */
 export const ISSUE_PREFIX = 'i'
 
 
@@ -172,10 +28,242 @@ const regex = new RegExp(`${ISSUE_PREFIX}:(\\d+)(?::(\\d+))?`)
 
 
 /**
+ * @return {Object} Issues NavBar
+ */
+export function IssuesNavBar() {
+  const classes = useStyles(useTheme())
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setSelectedCommentIndex = useStore((state) => state.setSelectedCommentIndex)
+  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const selectedCommentIndex = useStore((state) => state.selectedCommentIndex)
+  const issues = useStore((state) => state.issues)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+
+
+  useEffect(()=>{
+    if (!selectedIssueId) {
+      removeCameraUrlParams()
+    }
+  }, [selectedIssueId])
+
+  const selectIssue = (direction) => {
+    let index
+    direction === 'next' ? index = selectedCommentIndex + 1 : index = selectedCommentIndex - 1
+
+    if (index >= 0 && index < issues.length) {
+      const issue = issues.filter((issue)=>issue.index === index)[0]
+      setSelectedIssueId(issue.id)
+      setSelectedCommentIndex(issue.index)
+      addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
+      if (issue.url) {
+        setCameraFromEncodedPosition(issue.url)
+        addCameraUrlParams()
+      } else {
+        removeCameraUrlParams()
+      }
+    }
+  }
+
+  return (
+    <div className = {classes.titleContainer}>
+      <div className = {classes.leftGroup}>
+        <div className = {classes.title}>
+          {!selectedIssueId ? 'Notes': 'Note' }
+        </div>
+      </div>
+      <div className = {classes.rightGroup}>
+        <div className = {classes.controls} >
+          {selectedIssueId &&
+          <>
+            <TooltipIconButton
+              title='Back to the list'
+              placement = 'bottom'
+              size = 'small'
+              onClick={()=>{
+                removeHashParams(window.location, ISSUE_PREFIX)
+                setSelectedIssueId(null)
+              }}
+              icon={<Back style = {{width: '30px', height: '30px'}}/>}/>
+            <>
+              <TooltipIconButton
+                title='Previous Comment'
+                placement = 'bottom'
+                size = 'small'
+                onClick={() => selectIssue('previous')}
+                icon={<Previous style = {{width: '20px', height: '20px'}}/>}/>
+              <TooltipIconButton
+                title='Next Comment'
+                size = 'small'
+                placement = 'bottom'
+                onClick={() => selectIssue('next')}
+                icon={<Next style = {{width: '20px', height: '20px'}}/>}/>
+            </>
+          </>
+          }
+        </div>
+        <TooltipIconButton
+          title='Close Comments'
+          placement = 'bottom'
+          onClick={toggleIsCommentsOn}
+          icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
+      </div>
+    </div>
+  )
+}
+
+
+/**
+ * @return {Object} list of issues and comments
+ */
+export function Issues() {
+  const classes = useStyles()
+  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const issuesStore = useStore((state) => state.issues)
+  const setIssuesStore = useStore((state) => state.setIssues)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
+  const filteredIssue = selectedIssueId ? issuesStore.filter((issue) => issue.id ===selectedIssueId)[0] :null
+
+  useEffect(()=>{
+    const fetchIssues = async () => {
+      const issues = await getIssues()
+      const issuesArr = []
+      let imageUrl = ''
+      let body = null
+
+      issues.data.map((issue, index)=>{
+        const lines = issue.body.split('\r\n')
+        const embeddedUrl = lines.filter((line)=>line.includes('url'))[0]
+        body = lines[0]
+
+        if (issue.body.includes('img')) {
+          const isolateImageSrc = issue.body.split('src')[1]
+          const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
+          imageUrl = imageSrc[1]
+        } else {
+          imageUrl = ''
+        }
+
+        issuesArr.push(
+            {
+              embeddedUrl: embeddedUrl,
+              index: index,
+              id: issue.id,
+              number: issue.number,
+              title: issue.title,
+              body: body,
+              date: issue.created_at,
+              username: issue.user.login,
+              avatarUrl: issue.user.avatar_url,
+              numberOfComments: issue.comments,
+              imageUrl: imageUrl,
+            },
+        )
+      })
+      setIssuesStore(issuesArr)
+    }
+    fetchIssues()
+  }, [setIssuesStore])
+
+
+  useEffect(()=>{
+    const fetchComments = async (selectedIssue) => {
+      const comments = await getComments(selectedIssue.number)
+      const commentsArr = []
+      let commentImageUrl
+
+      comments.map((comment) => {
+        const lines = comment.body.split('\r\n')
+        const embeddedUrl = lines.filter((line)=>line.includes('url'))[0]
+        commentImageUrl = comment.body.split('ImageUrl')[1]
+        commentsArr.push(
+            {
+              embeddedUrl: embeddedUrl,
+              id: comment.id,
+              number: comment.number,
+              title: comment.title,
+              body: comment.body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarUrl: comment.user.avatar_url,
+              imageUrl: commentImageUrl,
+            },
+        )
+      })
+      setComments(commentsArr)
+    }
+    selectedIssueId !== null ?
+    fetchComments(filteredIssue) : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIssueId, issuesStore])
+
+  return (
+    <Paper className = {classes.commentsContainer} elevation = {0}>
+      <div className = {classes.cardsContainer}>
+        {!selectedIssueId ?
+          issuesStore.map((issue, index)=>{
+            return (
+              <IssueCard
+                embeddedUrl = {issue.embeddedUrl}
+                index = {issue.index}
+                id = {issue.id}
+                key = {index}
+                title = {issue.title}
+                date = {issue.date}
+                body = {issue.body}
+                username = {issue.username}
+                numberOfComments = {issue.numberOfComments}
+                avatarUrl = {issue.avatarUrl}
+                imageUrl = {issue.imageUrl}/>
+            )
+          }):
+        <>
+          { filteredIssue ?
+            <IssueCard
+              embeddedUrl = {filteredIssue.embeddedUrl}
+              index = {filteredIssue.index}
+              id = {filteredIssue.id}
+              key = {filteredIssue.id}
+              title = {filteredIssue.title}
+              date = {filteredIssue.date}
+              body = {filteredIssue.body}
+              username = {filteredIssue.username}
+              numberOfComments = {filteredIssue.numberOfComments}
+              avatarUrl = {filteredIssue.avatarUrl}
+              imageUrl = {filteredIssue.imageUrl}/>:
+              <div>loading</div>
+          }
+          { comments &&
+              comments.map((comment, index)=>{
+                return (
+                  <IssueCard
+                    embeddedUrl = {comment.embeddedUrl}
+                    isReply = {true}
+                    index = ''
+                    id = {comment.id}
+                    key = {comment.id}
+                    title = {index + 1}
+                    date = {comment.date}
+                    body = {comment.body}
+                    username = {comment.username}
+                    numberOfReplies = ''
+                    avatarUrl = {comment.avatarUrl}
+                    imageUrl = {comment.imageUrl}/>
+                )
+              })
+          }
+        </>
+        }
+      </div>
+    </Paper>
+  )
+}
+
+/**
  * @param {Object} location
  * @return {Object|undefined}
  */
-function parseHashParams(location) {
+export function parseHashParams(location) {
   const encodedParams = getHashParams(location, ISSUE_PREFIX)
   if (encodedParams == undefined) {
     return
@@ -203,7 +291,7 @@ function parseHashParams(location) {
  * @param {function} setText React state setter for comment text
  * @param {function} setNext React state setter for next Link
  */
-async function showIssue(issueId, setText, setNext) {
+export async function showIssue(issueId, setText, setNext) {
   const issue = await getIssue(issueId)
   debug().log(`IssuesControl#showIssue: id:(${issueId}), getIssue result: `, issue)
   if (issue && issue.data && issue.data.body) {
@@ -224,7 +312,7 @@ async function showIssue(issueId, setText, setNext) {
  * @param {function} setText React state setter for the CommentPanel
  * @param {function} setNext React state setter for next Link
  */
-async function showComment(issueId, commentId, setText, setNext) {
+export async function showComment(issueId, commentId, setText, setNext) {
   const comment = await getComment(issueId, commentId)
   debug().log(`IssuesControl#showComment: id:(${commentId}), getComment result: `, comment)
   if (comment && comment.body) {
@@ -241,7 +329,7 @@ async function showComment(issueId, commentId, setText, setNext) {
  * @param {function} setText React state setter for comment text
  * @param {function} setNext React state setter for next Link
  */
-function setPanelText(title, body, setText, setNext) {
+export function setPanelText(title, body, setText, setNext) {
   const bodyParts = body.split('```')
   const text = bodyParts[0]
   setText(title + '::title::' + text)
@@ -257,43 +345,81 @@ function setPanelText(title, body, setText, setNext) {
 }
 
 
-const useStyles = makeStyles({
-  issueDialog: {
-    'fontFamily': 'Helvetica',
-    '& .MuiDialog-container': {
-      alignItems: 'flex-end',
-    },
-    '& .MuiDialogTitle-root h1': {
-      fontSize: '1.1em',
-      margin: 0,
-    },
-    '& .MuiDialogActions-root': {
-      borderTop: 'solid 1px lightgrey',
-      margin: '0.5em 1em',
-      padding: '0em',
-    },
-    '& .MuiPaper-root': {
-      padding: '1em',
-    },
-    '& .MuiButtonBase-root': {
-      padding: 0,
-      margin: '0.5em',
-      borderRadius: '50%',
-      border: 'none',
-    },
-    '& svg': {
-      padding: 0,
-      margin: 0,
-      width: '25px',
-      height: '25px',
-      border: 'solid 0.5px grey',
-      borderRadius: '50%',
-    },
-    '& h1, & p': {
-      fontWeight: 300,
-    },
-    '& h1': {
-      fontSize: '1.2em',
+const useStyles = makeStyles((theme) => ({
+  titleContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: '10px',
+    borderRadius: '5px',
+    background: theme.palette.custom.highLight,
+  },
+  title: {
+    height: '30px',
+    display: 'flex',
+    fontSize: '18px',
+    textDecoration: 'underline',
+    fontWeight: 'bold',
+    marginRight: '10px',
+    paddingLeft: '2px',
+    alignItems: 'center',
+  },
+  contentContainer: {
+    marginTop: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    overflow: 'scroll',
+    paddingBottom: '30px',
+  },
+  controls: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rightGroup: {
+    width: '160px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  leftGroup: {
+    width: '100px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  container: {
+    background: '#7EC43B',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notifications: {
+    width: '19px',
+    height: '20px',
+    border: '1px solid lime',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '10px',
+    color: 'black',
+    borderRadius: '20px',
+  },
+  cardsContainer: {
+    'width': '100%',
+    'paddingTop': '10px',
+    'paddingBottom': '30px',
+    '@media (max-width: 900px)': {
+      paddingTop: '0px',
     },
   },
-})
+}))

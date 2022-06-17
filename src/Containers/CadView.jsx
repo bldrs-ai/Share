@@ -71,9 +71,12 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const setIssues = useStore((state) => state.setIssues)
+  const setComments = useStore((state) => state.setComments)
   const selectedElement = useStore((state) => state.selectedElement)
   const snackMessage = useStore((state) => state.snackMessage)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const closeDrawer = useStore((state) => state.closeDrawer)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -96,6 +99,10 @@ export default function CadView({
     (async () => {
       await onModel()
     })()
+    closeDrawer()
+    setSelectedElement(null)
+    setIssues([])
+    setComments([])
   }, [model])
 
   // searchParams changes in parent (ShareRoutes) from user and

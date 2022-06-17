@@ -4,35 +4,46 @@ import {makeStyles} from '@mui/styles'
 import {MOBILE_WIDTH} from './Hooks'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
 import useStore from '../store/useStore'
-import {PropertiesPanel} from './SideDrawerPanels'
 import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
-
+import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 
 /**
- * SideDrawer contains the ItemPanel and CommentPanel.
- * It is connected to the global store and controlled by isDrawerOpen property.
+ * SideDrawer contains the ItemPanel and CommentPanel and allows for
+ * show/hide from the right of the screen.
+ * it is connected to the global store and controlled by isDrawerOpen property.
  * @return {Object} SideDrawer react component
  */
 export default function SideDrawer() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const classes = useStyles({divider: (isPropertiesOn), isPropertiesOn: isPropertiesOn})
+  const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
   const isMobile = useIsMobile()
 
   useEffect(()=>{
-    if (!isPropertiesOn && isDrawerOpen) {
+    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
-  }, [isPropertiesOn, isDrawerOpen, closeDrawer])
+  }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
   return (
     <>
-      {
-        isMobile && isDrawerOpen ?
+      {isMobile && isDrawerOpen ?
         <MobileDrawer
-          content={<PropertiesPanel/>}/>:
+          content = {
+            <div className={classes.content}>
+              <div className = {classes.containerNotes}>
+                {isCommentsOn ? <NotesPanel/> : null}
+              </div>
+              <div className = {classes.divider}/>
+              <div className = {classes.containerProperties}>
+                {isPropertiesOn ? <PropertiesPanel/> : null }
+              </div>
+            </div>
+          }
+        /> :
         <Drawer
           open={isDrawerOpen}
           anchor={'right'}
@@ -40,6 +51,10 @@ export default function SideDrawer() {
           elevation={4}
           className={classes.drawer}>
           <div className={classes.content}>
+            <div className = {classes.containerNotes}>
+              {isCommentsOn ? <NotesPanel/> : null}
+            </div>
+            <div className = {classes.divider}/>
             <div className = {classes.containerProperties}>
               {isPropertiesOn ? <PropertiesPanel/> : null }
             </div>
@@ -47,7 +62,6 @@ export default function SideDrawer() {
         </Drawer>
       }
     </>
-
   )
 }
 
@@ -60,8 +74,8 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
       // its mid-line align with the text in SearchBar
       'padding': '4px 1em',
       '@media (max-width: MOBILE_WIDTH)': {
-        width: 'auto',
-        height: '250px',
+        width: '100%',
+        height: '400px',
       },
     },
     '& .MuiPaper-root': {
@@ -104,13 +118,16 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   },
   containerNotes: {
     overflow: 'hidden ',
+    height: (props) => props.isPropertiesOn ? '50%' : '1200px',
+    display: (props) => props.isCommentsOn ? '' : 'none',
     borderRadius: '0px',
     borderBottom: '1px solid lightGrey',
   },
   containerProperties: {
     borderRadius: '5px',
     overflow: 'hidden',
-    height: (props) => props.isPropertiesOn ? 'auto' : '50%',
+    display: (props) => props.isPropertiesOn ? '' : 'none',
+    height: (props) => props.isCommentsOn ? '50%' : '1200px',
   },
   divider: {
     height: '1px',

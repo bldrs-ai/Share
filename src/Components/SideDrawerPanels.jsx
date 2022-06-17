@@ -4,6 +4,7 @@ import ItemProperties from './ItemProperties'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
+import {IssuesNavBar, Issues} from './IssuesControl'
 
 /**
  * Panel Title
@@ -47,6 +48,19 @@ export function PropertiesPanel() {
       />
       <div className = {classes.contentContainer}>
         {selectedElement ? <ItemProperties/> : null}
+      </div>
+    </>
+  )
+}
+
+
+export const NotesPanel = ()=> {
+  const classes = useStyles(useTheme())
+  return (
+    <>
+      <IssuesNavBar/>
+      <div className = {classes.contentContainer}>
+        <Issues/>
       </div>
     </>
   )
