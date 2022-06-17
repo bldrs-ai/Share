@@ -14,8 +14,8 @@ import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
+import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import useStore from '../utils/store'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -53,7 +53,6 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -67,8 +66,19 @@ export default function CadView({
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [model, setModel] = useState(null)
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const modelStore = useStore((state) => state.modelStore)
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElement = useStore((state) => state.setSelectedElement)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const viewerStore = useStore((state) => state.viewerStore)
+  const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+
+  console.log('selected element', selectedElement)
+  console.log('modelStore', modelStore)
+  console.log('viewerStore', viewerStore)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -110,12 +120,14 @@ export default function CadView({
     setShowSearchBar(false)
     setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
-    setViewer(initViewer(
+    const intializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef'))
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
+    setViewer(intializedViewer)
+    setViewerStore(intializedViewer)
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -183,6 +195,7 @@ export default function CadView({
       // always be 0.
       model.modelID = 0
       setModel(model)
+      setModelStore(model)
     }
   }
 
@@ -335,17 +348,19 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
+
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
-    // console.log('CadView#onElementSelect: in...')
   }
 
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
+        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(intializedViewer)
+        setViewerStore(intializedViewer)
       }
     })
   }
@@ -383,20 +398,21 @@ export default function CadView({
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
-           <OperationsGroup
-             viewer={viewer}
-             unSelectItem={unSelectItems}
-             itemPanelControl={
-               <ItemPanelControl
-                 model={model}
-                 element={selectedElement}
-                 isOpenState={isItemPanelOpenState}/>}/>}
+            <OperationsGroup
+              viewer={viewer}
+              unSelectItem={unSelectItems}
+              itemPanelControl={
+                <ItemPanelControl
+                  model={model}
+                  element={selectedElement}
+                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
+
     </div>
   )
 }
