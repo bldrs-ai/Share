@@ -11,3 +11,13 @@ describe('useStore', () => {
     expect(result.current.snackMessage).toEqual(['loading'])
   })
 })
+
+describe('useStore', () => {
+    it('Set Drawer State', () => {
+      const {result} = renderHook(() => useStore((state) => state))
+      act(() => {
+        result.current.openDrawer()
+      })
+      expect(result.current.isDrawerOpen).toEqual(true)
+    })
+  })
