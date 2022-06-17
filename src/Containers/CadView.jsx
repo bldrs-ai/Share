@@ -67,8 +67,8 @@ export default function CadView({
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [model, setModel] = useState(null)
-  const snackMessage = useStore((state)=>state.snackMessage)
-  const setSnackMessage = useStore((state)=>state.setSnackMessage)
+  const snackMessage = useStore((state) => state.snackMessage)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
