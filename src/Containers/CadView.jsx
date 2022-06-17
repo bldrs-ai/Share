@@ -15,9 +15,11 @@ import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import debug from '../utils/debug'
+import useStore from '../utils/store'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+
 
 
 /**
@@ -65,8 +67,9 @@ export default function CadView({
   const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const snackMessage = useStore((state)=>state.snackMessage)
+  const setSnackMessage = useStore((state)=>state.setSnackMessage)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -146,7 +149,7 @@ export default function CadView({
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
-    setLoadingMessage(loadingMessageBase)
+    setSnackMessage(loadingMessageBase)
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
@@ -155,7 +158,7 @@ export default function CadView({
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
             const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
             debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
         },
@@ -353,7 +356,7 @@ export default function CadView({
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
-          message={loadingMessage}
+          message={snackMessage}
           type={'info'}
           open={isLoading}/>
         <div className={classes.search}>
