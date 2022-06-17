@@ -7,6 +7,7 @@ import {decodeIFCString, deref} from '../utils/Ifc'
 import debug from '../utils/debug'
 import {stoi} from '../utils/strings'
 import ExpansionPanel from './ExpansionPanel'
+import useStore from '../store/useStore'
 
 
 /**
@@ -15,11 +16,14 @@ import ExpansionPanel from './ExpansionPanel'
  * @param {Object} element The currently selected IFC element
  * @return {Object} The ItemProperties react component
  */
-export default function ItemProperties({model, element}) {
+export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
   const classes = useStyles(useTheme())
+  const model = useStore((state) => state.modelStore)
+  const element = useStore((state) => state.selectedElement)
+
 
   useEffect(() => {
     (async () => {
@@ -422,11 +426,11 @@ const useStyles = makeStyles((theme) => ({
     maxWidth: '400px',
   },
   noElement: {
-    maxWidth: '320px',
+    maxWidth: '240px',
     fontFamily: 'Helvetica',
     fontSize: '20px',
     fontWeight: 200,
-    width: '300px',
+    width: '240px',
   },
   icons: {
     width: '20px',

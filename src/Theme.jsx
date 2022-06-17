@@ -68,6 +68,11 @@ function loadTheme(mode) {
     secondary: {
       main: blueGrey[100],
     },
+    custom: {
+      highLight: '#70AB32',
+      disable: 'lightGrey',
+      neutral: 'white',
+    },
   }
   const night = {
     primary: {
@@ -75,6 +80,12 @@ function loadTheme(mode) {
     },
     secondary: {
       main: blueGrey[600],
+    },
+    custom: {
+      highLight: '#70AB32',
+      disable: 'lightGrey',
+      neutral: 'white',
+
     },
   }
   const typography = {
