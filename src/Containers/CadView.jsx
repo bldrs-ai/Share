@@ -21,7 +21,6 @@ import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
-
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
