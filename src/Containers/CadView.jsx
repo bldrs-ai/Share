@@ -66,19 +66,12 @@ export default function CadView({
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [model, setModel] = useState(null)
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const modelStore = useStore((state) => state.modelStore)
+  const setViewerStore = useStore((state) => state.setViewerStore)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
-  const selectedElement = useStore((state) => state.selectedElement)
-  const viewerStore = useStore((state) => state.viewerStore)
-  const setViewerStore = useStore((state) => state.setViewerStore)
-  const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-
-  console.log('selected element', selectedElement)
-  console.log('modelStore', modelStore)
-  console.log('viewerStore', viewerStore)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const snackMessage = useStore((state) => state.snackMessage)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -407,7 +400,7 @@ export default function CadView({
                   element={selectedElement}
                   isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
