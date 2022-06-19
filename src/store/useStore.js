@@ -1,6 +1,6 @@
 import create from 'zustand'
 import createUISlice from './UISlice'
-import craeateIFCSlice from './IFCSlice'
+import craeateIFCSlice from './IFCSlice_'
 
 
 const useStore = create((set, get) => ({
