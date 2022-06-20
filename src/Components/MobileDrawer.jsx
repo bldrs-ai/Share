@@ -37,7 +37,7 @@ export default function MobileDrawer({content}) {
 }
 
 
-const drawerBleeding = 220
+const drawerBleeding = 270
 
 
 const StyledBox = styled(Box)(({theme}) => ({
@@ -60,8 +60,8 @@ const useStyles = makeStyles((props) => ({
   },
   openToggle: {
     'position': 'absolute',
-    'right': '1.25em',
-    'top': '0.5em',
+    'right': '3.0em',
+    'top': '0.8em',
     '& svg': {
       transform: (props) => props.isOpen ? 'none' : 'rotate(180deg)',
     },
@@ -73,6 +73,7 @@ const useStyles = makeStyles((props) => ({
     right: 0,
     left: 0,
     padding: '1em',
+    paddingTop: '1em',
     borderTop: 'solid 1px grey',
     borderTopLeftRadius: 8,
     borderTopRightRadius: 8,

@@ -1,37 +1,29 @@
 import React from 'react'
 import {render, screen, waitFor} from '@testing-library/react'
 import ItemProperties from './ItemProperties'
-// eslint-disable-next-line no-unused-vars
-import testObj from './ItemProperties.testobj.json'
-import {MockModel, newMockStringValueElt} from '../utils/IfcMock.test'
+import {MockModel} from '../utils/IfcMock.test'
 import {MockRoutes} from '../BaseRoutesMock.test'
+import {act, renderHook} from '@testing-library/react-hooks'
+import useStore from '../store/useStore'
 
 
 test('ItemProperties for single element', async () => {
-  const testLabel = 'Test node label'
+  const testLabel = 10
+  const {result} = renderHook(() => useStore((state) => state))
+  act(() => {
+    result.current.setSelectedElement({expressID: 10})
+  })
+  act(() => {
+    result.current.setModelStore(new MockModel)
+  })
+
   const {getByText} = render(
       <MockRoutes
         contentElt={
-          <ItemProperties
-            model={new MockModel}
-            element={newMockStringValueElt(testLabel)}/>}/>)
+          <ItemProperties/>}/>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })
-
-
-test('ItemProperties for single element', async () => {
-  const testLabel = 'Test node label'
-  const {getByText} = render(
-      <MockRoutes
-        contentElt={
-          <ItemProperties
-            model={new MockModel}
-            element={newMockStringValueElt(testLabel)}/>}/>)
-  await waitFor(() => screen.getByText(testLabel))
-  expect(getByText(testLabel)).toBeInTheDocument()
-})
-
 
 // TODO(pablo):
 /*

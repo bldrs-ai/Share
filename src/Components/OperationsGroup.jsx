@@ -45,7 +45,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
         {
           selectedElement ?
           <TooltipIconButton
-            title="Open Side Drawer"
+            title="Properties"
             onClick={toggle}
             icon={<ListIcon/>}/>:null
         }

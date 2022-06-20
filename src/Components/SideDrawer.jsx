@@ -5,12 +5,13 @@ import {MOBILE_WIDTH} from './Hooks'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
 import useStore from '../store/useStore'
 import {PropertiesPanel} from './SideDrawerPanels'
+import {useIsMobile} from './Hooks'
+import MobileDrawer from './MobileDrawer'
 
 
 /**
- * SideDrawer contains the ItemPanel and CommentPanel and allows for
- * show/hide from the right of the screen.
- * it is connected to the global store and controlled by isDrawerOpen property.
+ * SideDrawer contains the ItemPanel and CommentPanel.
+ * It is connected to the global store and controlled by isDrawerOpen property.
  * @return {Object} SideDrawer react component
  */
 export default function SideDrawer() {
@@ -18,6 +19,7 @@ export default function SideDrawer() {
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const classes = useStyles({divider: (isPropertiesOn), isPropertiesOn: isPropertiesOn})
+  const isMobile = useIsMobile()
 
   useEffect(()=>{
     if (!isPropertiesOn && isDrawerOpen) {
@@ -26,18 +28,26 @@ export default function SideDrawer() {
   }, [isPropertiesOn, isDrawerOpen, closeDrawer])
 
   return (
-    <Drawer
-      open={isDrawerOpen}
-      anchor={'right'}
-      variant='persistent'
-      elevation={4}
-      className={classes.drawer}>
-      <div className={classes.content}>
-        <div className = {classes.containerProperties}>
-          {isPropertiesOn ? <PropertiesPanel/> : null }
-        </div>
-      </div>
-    </Drawer>
+    <>
+      {
+        isMobile && isDrawerOpen ?
+        <MobileDrawer
+          content={<PropertiesPanel/>}/>:
+        <Drawer
+          open={isDrawerOpen}
+          anchor={'right'}
+          variant='persistent'
+          elevation={4}
+          className={classes.drawer}>
+          <div className={classes.content}>
+            <div className = {classes.containerProperties}>
+              {isPropertiesOn ? <PropertiesPanel/> : null }
+            </div>
+          </div>
+        </Drawer>
+      }
+    </>
+
   )
 }
 
@@ -100,7 +110,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   containerProperties: {
     borderRadius: '5px',
     overflow: 'hidden',
-    height: (props) => props.isPropertiesOn ? '50%' : 'auto',
+    height: (props) => props.isPropertiesOn ? 'auto' : '50%',
   },
   divider: {
     height: '1px',

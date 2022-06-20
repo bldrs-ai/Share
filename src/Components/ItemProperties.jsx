@@ -386,6 +386,7 @@ const useStyles = makeStyles((theme) => ({
       width: '100%',
       overflow: 'hidden',
       borderSpacing: 0,
+      paddingLeft: '14px',
     },
     '& .MuiAccordionSummary-root': {
       width: '100%',
