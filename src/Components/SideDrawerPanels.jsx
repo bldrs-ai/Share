@@ -5,24 +5,46 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 
+/**
+ * Panel Title
+ * @return {String} Panel title
+ * @return {Object} Controls Group is placed on the right of the title
+ * @return {Object} Properties Panel react component
+ */
+function PanelTitle({title, controlsGroup}) {
+  const classes = useStyles(useTheme())
+  return (
+    <div className = {classes.titleContainer}>
+      <div className = {classes.title}>
+        {title}
+      </div>
+      {controlsGroup}
+    </div>
+  )
+}
 
-export const PropertiesPanel = ()=> {
+/**
+ * PropertiesPanel is a wrapper for the item properties component.
+ * It containe the title with additional controls, and the item properties styled container.
+ * @return {Object} Properties Panel react component
+ */
+export function PropertiesPanel() {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const selectedElement = useStore((state) => state.selectedElement)
   const classes = useStyles(useTheme())
   return (
     <>
-      <div className = {classes.titleContainer}>
-        <div className = {classes.title}>
-          Properties
-        </div>
-        <div>
-          <TooltipIconButton
-            title='toggle drawer'
-            onClick={toggleIsPropertiesOn}
-            icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
-        </div>
-      </div>
+      <PanelTitle
+        title = 'Properties'
+        controlsGroup = {
+          <div>
+            <TooltipIconButton
+              title='toggle drawer'
+              onClick={toggleIsPropertiesOn}
+              icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
+          </div>
+        }
+      />
       <div className = {classes.contentContainer}>
         {selectedElement ? <ItemProperties/> : null}
       </div>
