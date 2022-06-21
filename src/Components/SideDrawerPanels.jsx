@@ -7,8 +7,8 @@ import useStore from '../store/useStore'
 
 /**
  * Panel Title
- * @return {String} Panel title
- * @return {Object} Controls Group is placed on the right of the title
+ * @param {String} Panel title
+ * @param {Object} Controls Group is placed on the right of the title
  * @return {Object} Properties Panel react component
  */
 function PanelTitle({title, controlsGroup}) {

@@ -136,6 +136,7 @@ const useStyles = makeStyles({
     '& .MuiOutlinedInput-input': {
       color: 'blue',
     },
+    // TODO(oleg): Find suited colors
     // '& .MuiInputLabel-root': {
     //   color: 'blue',
     // },
@@ -154,6 +155,7 @@ const useStyles = makeStyles({
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
       color: 'blue',
     },
+    // TODO(oleg): Find suited colors
     // '& .MuiInputLabel-root.Mui-focused': {
     //   color: 'blue',
     // },
