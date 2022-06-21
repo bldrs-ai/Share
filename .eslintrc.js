@@ -5,30 +5,30 @@ module.exports = {
     node: true,
     jest: true,
   },
-  'extends': [
+  extends: [
     'google',
     'eslint:recommended',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
   ],
+  overrides: [
+    {
+      files: ['*.js', '*.mjs', '*.jsx'],
+    },
+  ],
   parser: '@babel/eslint-parser',
   parserOptions: {
     babelOptions: {
-     plugins: [
-       '@babel/syntax-import-assertions'
-     ],
+      plugins: [
+        '@babel/syntax-import-assertions',
+      ],
     },
     ecmaFeatures: {
       jsx: true,
     },
     ecmaVersion: 'latest',
     sourceType: 'module',
-    babelOptions: {
-      plugins: [
-        '@babel/syntax-import-assertions'
-      ],
-    },
   },
   plugins: [
     'import',
@@ -36,7 +36,7 @@ module.exports = {
     'jsx-a11y',
   ],
   rules: {
-    'import/newline-after-import': ['error', { 'count': 2 }],
+    'import/newline-after-import': ['error', {count: 2}],
     'max-len': ['error', 140],
     'no-irregular-whitespace': ['error'],
     'no-trailing-spaces': ['error'],

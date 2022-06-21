@@ -14,6 +14,7 @@ import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
+import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
@@ -52,7 +53,6 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -65,8 +65,13 @@ export default function CadView({
   const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
   const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const setViewerStore = useStore((state) => state.setViewerStore)
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElement = useStore((state) => state.setSelectedElement)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const snackMessage = useStore((state) => state.snackMessage)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -108,12 +113,14 @@ export default function CadView({
     setShowSearchBar(false)
     setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
-    setViewer(initViewer(
+    const intializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef'))
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
+    setViewer(intializedViewer)
+    setViewerStore(intializedViewer)
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -146,7 +153,7 @@ export default function CadView({
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
-    setLoadingMessage(loadingMessageBase)
+    setSnackMessage(loadingMessageBase)
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
@@ -155,7 +162,7 @@ export default function CadView({
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
             const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
             debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
         },
@@ -181,6 +188,7 @@ export default function CadView({
       // always be 0.
       model.modelID = 0
       setModel(model)
+      setModelStore(model)
     }
   }
 
@@ -333,17 +341,19 @@ export default function CadView({
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
+
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
     // IPC.
-    // console.log('CadView#onElementSelect: in...')
   }
 
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
+        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(intializedViewer)
+        setViewerStore(intializedViewer)
       }
     })
   }
@@ -353,7 +363,7 @@ export default function CadView({
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
-          message={loadingMessage}
+          message={snackMessage}
           type={'info'}
           open={isLoading}/>
         <div className={classes.search}>
@@ -381,20 +391,21 @@ export default function CadView({
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
-           <OperationsGroup
-             viewer={viewer}
-             unSelectItem={unSelectItems}
-             itemPanelControl={
-               <ItemPanelControl
-                 model={model}
-                 element={selectedElement}
-                 isOpenState={isItemPanelOpenState}/>}/>}
+            <OperationsGroup
+              viewer={viewer}
+              unSelectItem={unSelectItems}
+              itemPanelControl={
+                <ItemPanelControl
+                  model={model}
+                  element={selectedElement}
+                  isOpenState={isItemPanelOpenState}/>}/>}
         </div>
         <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
+
     </div>
   )
 }

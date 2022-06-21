@@ -1,18 +1,18 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r298",
+  "version": "1.0.0-r320",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "clean": "rm -rf docs ; cp -r public docs",
-    "new-version": "node src/utils/version.mjs > package.json.new && mv package.json.new package.json",
-    "copy-web-asm": "cp node_modules/web-ifc/*.wasm public/static/js",
+    "clean": "shx rm -rf docs ; shx cp -r public docs",
+    "new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json",
+    "copy-web-asm": "shx cp node_modules/web-ifc/*.wasm public/static/js",
     "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
     "serve": "yarn build && node config/serve.js",
-    "lint": "yarn eslint `find src -name '*.jsx'` `find src -name '*.[m]js'`",
+    "lint": "yarn eslint src",
     "test": "jest",
     "precommit": "yarn lint && yarn test",
     "prepare": "husky install"
@@ -33,7 +33,8 @@
     "react-router-dom": "^6.0.2",
     "three": "^0.135",
     "web-ifc-viewer": "^1.0.184",
-    "web-vitals": "^2.1.0"
+    "web-vitals": "^2.1.0",
+    "zustand": "^4.0.0-rc.1"
   },
   "devDependencies": {
     "@alex_neo/jest-expect-message": "^1.0.5",
@@ -45,8 +46,8 @@
     "@testing-library/dom": "^8.11.1",
     "@testing-library/jest-dom": "^5.15.0",
     "@testing-library/react": "^12.1.2",
+    "@testing-library/react-hooks": "^8.0.0",
     "babel-jest": "^27.4.4",
-    "canvas": "~2.8.0",
     "esbuild": "^0.14.22",
     "esbuild-plugin-svgr": "^1.0.0",
     "eslint": "^8.14.0",
@@ -55,11 +56,11 @@
     "eslint-plugin-jsx-a11y": "^6.5.1",
     "eslint-plugin-react": "^7.28.0",
     "eslint-plugin-react-hooks": "^4.3.0",
-    "gl": "^5.0.0",
     "husky": "^7.0.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^27.4.3",
-    "jsdom": "^19.0.0"
+    "jsdom": "^19.0.0",
+    "shx": "^0.3.4"
   },
   "jest": {
     "verbose": false,
