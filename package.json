@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r320",
+  "version": "1.0.0-r321",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -58,8 +58,10 @@
     "eslint-plugin-react-hooks": "^4.3.0",
     "husky": "^7.0.0",
     "identity-obj-proxy": "^3.0.0",
+    "isomorphic-fetch": "^3.0.0",
     "jest": "^27.4.3",
     "jsdom": "^19.0.0",
+    "msw": "^0.42.1",
     "shx": "^0.3.4"
   },
   "jest": {
