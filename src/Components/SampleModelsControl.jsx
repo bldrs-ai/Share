@@ -134,13 +134,14 @@ const useStyles = makeStyles({
   root: {
     'width': '260px',
     '& .MuiOutlinedInput-input': {
-      color: 'green',
+      color: 'blue',
     },
-    '& .MuiInputLabel-root': {
-      color: 'green',
-    },
+    // TODO(oleg): Find suited colors
+    // '& .MuiInputLabel-root': {
+    //   color: 'blue',
+    // },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: 'green',
+      borderColor: 'blue',
     },
     '&:hover .MuiOutlinedInput-input': {
       color: 'gray',
@@ -152,13 +153,14 @@ const useStyles = makeStyles({
       borderColor: 'gray',
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: 'green',
+      color: 'blue',
     },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: 'green',
-    },
+    // TODO(oleg): Find suited colors
+    // '& .MuiInputLabel-root.Mui-focused': {
+    //   color: 'blue',
+    // },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: 'green',
+      borderColor: 'blue',
     },
   },
 })

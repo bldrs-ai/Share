@@ -9,6 +9,7 @@ import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ItemPanelControl from '../Components/ItemPanelControl'
+import SideDrawer from '../Components/SideDrawer'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -72,6 +73,7 @@ export default function CadView({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selectedElement = useStore((state) => state.selectedElement)
   const snackMessage = useStore((state) => state.snackMessage)
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -306,7 +308,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement({})
+    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -366,6 +368,7 @@ export default function CadView({
           message={snackMessage}
           type={'info'}
           open={isLoading}/>
+        <SideDrawer/>
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
@@ -387,7 +390,7 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
         <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
-        <div className={isItemPanelOpen ?
+        <div className={isItemPanelOpen || isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
@@ -400,7 +403,7 @@ export default function CadView({
                   element={selectedElement}
                   isOpenState={isItemPanelOpenState}/>}/>}
         </div>
-        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isItemPanelOpen || isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
