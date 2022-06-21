@@ -19,7 +19,7 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import resolveModelURL from '../utils/urls'
+import {resolveModelURL} from '../utils/urls'
 
 
 /**
