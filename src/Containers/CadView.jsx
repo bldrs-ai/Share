@@ -19,6 +19,7 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import resolveModelURL from '../utils/urls'
 
 
 /**
@@ -144,17 +145,24 @@ export default function CadView({
    */
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath, viewer)
+
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
+
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug(3).log('CadView#loadIfc: parsed blob: ', filepath)
+
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
+    } else {
+      filepath = await resolveModelURL(filepath)
     }
+
     const loadingMessageBase = `Loading ${filepath}`
     setSnackMessage(loadingMessageBase)
     setIsLoading(true)
+
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
         urlHasCameraParams() ? false : true, // fitToFrame
