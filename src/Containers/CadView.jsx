@@ -71,7 +71,7 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
-  const [scene, setScene] = useState(null)
+  const [sceneContext, setSceneContext] = useState(null)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -98,9 +98,9 @@ export default function CadView({
 
   useEffect(() => {
     (async () => {
-      await onScene()
+      await onSceneContext()
     })()
-  }, [scene])
+  }, [sceneContext])
 
 
   // searchParams changes in parent (ShareRoutes) from user and
@@ -119,7 +119,7 @@ export default function CadView({
     setShowNavPanel(false)
     setShowSearchBar(false)
     setIsItemPanelOpen(false)
-    setViewer(initViewer(pathPrefix, colorModeContext.getTheme(), setScene))
+    setViewer(initViewer(pathPrefix, colorModeContext.getTheme(), setSceneContext))
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -230,8 +230,67 @@ export default function CadView({
 
 
   /** Handler when three.js scene changes. */
-  async function onScene() {
-    console.log('onScene: ', scene)
+  async function onSceneContext() {
+    if (sceneContext == null) {
+      return
+    }
+    console.log('onSceneContext: ', sceneContext)
+    const renderer = sceneContext.getRenderer()
+    const scene = sceneContext.getScene()
+    const camera = sceneContext.getCamera()
+    console.log('sceneContext parts: ', sceneContext, renderer, scene, camera)
+    const sceneLayer = new THREE.Scene()
+    const xFrom = -120
+    const xTo = -80
+    let xPos = xFrom
+    const carProps = [
+      [0x0000ff, xPos, 0, -10],
+      [0xff0000, xPos, 0, 0],
+      [0x00ff00, xPos, 0, 10]]
+    let id = 0
+    const cars = []
+    carProps.forEach((props) => {
+      const car = new Car(props[0])
+      car.position.set(props[1], props[2], props[3])
+      sceneLayer.add(car)
+      cars[id++] = car
+    })
+    sceneLayer.add(new THREE.AmbientLight())
+
+    let doAnim = true
+    const speed = 0.1
+    console.log('CAR 0', cars[0])
+    sceneContext.ifcCamera.targetItem(cars[0].children[0])
+    const anim = () => {
+      if (xPos <= xTo) {
+        cars.forEach((car) => {
+          car.position.x = xPos
+        })
+        camera.lookAt(cars[0].position)
+        xPos += speed
+      } else {
+        doAnim = false
+      }
+    }
+
+    const renderPatch = () => {
+      if (sceneContext.isThisBeingDisposed) return
+      if (sceneContext.stats) sceneContext.stats.begin()
+      // https://stackoverflow.com/questions/30272190/threejs-rendering-multiple-scenes-in-a-single-webgl-renderer
+      renderer.autoClear = true
+      sceneContext.updateAllComponents()
+      renderer.autoClear = false
+      // https://discourse.threejs.org/t/rendering-multiple-scenes-with-renderpass/24648/2
+      // Maybe also? renderer.clearDepth();
+      if (doAnim) {
+        anim()
+      }
+      renderer.render(sceneLayer, camera)
+      if (sceneContext.stats) sceneContext.stats.end()
+      requestAnimationFrame(sceneContext.render)
+    }
+
+    sceneContext.render = renderPatch
   }
 
 
@@ -354,7 +413,7 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
-      setViewer(initViewer(pathPrefix, theme, setScene))
+      setViewer(initViewer(pathPrefix, theme, setSceneContext))
     })
   }
 
@@ -413,10 +472,10 @@ export default function CadView({
 /**
  * @param {string} pathPrefix e.g. /share/v/p
  * @param {Object} theme The current theme from the colorModeContext
- * @param {function} setScene React setter for three.js scene extracted from IFCjs
+ * @param {function} setSceneContext React setter for three.js scene extracted from IFCjs
  * @return {Object} IfcViewerAPI viewer
  */
-function initViewer(pathPrefix, theme, setScene) {
+function initViewer(pathPrefix, theme, setSceneContext) {
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
@@ -434,44 +493,8 @@ function initViewer(pathPrefix, theme, setScene) {
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
-  const ctx = v.IFC.context
-  const renderer = ctx.getRenderer()
-  const scene = ctx.getScene()
-  const camera = ctx.getCamera()
-  console.log('ctx parts: ', ctx, renderer, scene, camera)
-  setScene(scene)
+  setSceneContext(v.IFC.context)
 
-
-  const sceneLayer = new THREE.Scene()
-  const SCALE = 20
-  for (let x = -5; x < 5; x++) {
-    for (let y = -5; y < 5; y++) {
-      for (let z = -5; z < 5; z++) {
-        const marker = new Car()
-        // marker.scale.setScalar(0.1)
-        marker.position.set(x * SCALE, y * SCALE, z * SCALE)
-        sceneLayer.add(marker)
-      }
-    }
-  }
-  sceneLayer.add(new THREE.AmbientLight())
-
-
-  const renderPatch = () => {
-    if (ctx.isThisBeingDisposed) return
-    if (ctx.stats) ctx.stats.begin()
-    // https://stackoverflow.com/questions/30272190/threejs-rendering-multiple-scenes-in-a-single-webgl-renderer
-    renderer.autoClear = true
-    ctx.updateAllComponents()
-    renderer.autoClear = false
-    // https://discourse.threejs.org/t/rendering-multiple-scenes-with-renderpass/24648/2
-    // Maybe also? renderer.clearDepth();
-    renderer.render(sceneLayer, camera)
-    if (ctx.stats) ctx.stats.end()
-    requestAnimationFrame(ctx.render)
-  }
-
-  ctx.render = renderPatch
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

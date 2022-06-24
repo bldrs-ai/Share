@@ -10,8 +10,8 @@ import {
 
 /** A car for Markus */
 export default class Car extends Group {
-  /** ctor */
-  constructor() {
+  /** @param {number} color */
+  constructor(color=0x00ff00) {
     super()
 
     /** @return {object} wheel */
@@ -19,7 +19,7 @@ export default class Car extends Group {
       const radius = 0.8
       const width = 0.5
       const geometry = new CylinderBufferGeometry(radius, radius, width, 32 /* sections*/ )
-      const material = new MeshLambertMaterial({color: 0x333333})
+      const material = new MeshLambertMaterial({color: 0x000000})
       const wheel = new Mesh(geometry, material)
       wheel.position.x = radius / 2
       wheel.rotateX(Math.PI / 2)
@@ -49,7 +49,7 @@ export default class Car extends Group {
 
     const main = new Mesh(
         new BoxBufferGeometry(6, 1.5, 3.0),
-        new MeshLambertMaterial({color: 0x78b14b}))
+        new MeshLambertMaterial({color: color}))
     main.position.y = 1.2
     this.add(main)
 
