@@ -352,7 +352,6 @@ export default function CadView({
     }
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
-    console.log('props: ', props)
     setSelectedElement(props)
 
     // TODO(pablo): just found out this method is getting called a lot
