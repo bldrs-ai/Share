@@ -4,6 +4,7 @@ import {
   deref,
   getType,
   isTypeValue,
+  reifyName,
 } from './Ifc'
 
 
@@ -70,4 +71,19 @@ test('deref reference typeVal', async () => {
       value: label,
     },
   }), 0, (e) => e.value)).toEqual(label)
+})
+
+
+test('reifyName with custom name', async () => {
+  const name = 'Custom Element Name'
+  const model = new MockModel({})
+  const elt = {
+    children: [],
+    expressID: 1,
+    Name: {
+      type: 1,
+      value: name,
+    },
+  }
+  expect(await reifyName(model, elt)).toBe(name)
 })
