@@ -87,21 +87,3 @@ test('reifyName with custom name', async () => {
   }
   expect(await reifyName(model, elt)).toBe(name)
 })
-
-// TODO(pablo): unclear how
-/*
-test('reifyName with missing name', async () => {
-  const elt = {
-    children: [],
-    expressID: 1,
-    Name: {
-      type: 103090709,
-      value: null,
-    },
-  }
-  const model = new MockModel({
-    1: elt,
-  })
-  expect(await reifyName(model, elt)).toBe('IFCPROJECT')
-})
-*/
