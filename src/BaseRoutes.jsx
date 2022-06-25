@@ -28,13 +28,13 @@ import {usePaths} from './Paths'
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const {installPrefix} = usePaths()
+  const {installPrefix, appPrefix} = usePaths()
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
         location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', appPrefix)
+      navigate(appPrefix)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
