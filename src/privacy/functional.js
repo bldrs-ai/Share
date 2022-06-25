@@ -58,7 +58,7 @@ export function getCookie(name, defaultValue) {
  * @param {string} value Value of the cookie
  * @param {Number} exdays Number of days cookie should last
  */
-export function setCookie(name, value, exdays=7) {
+export function setCookie(name, value, exdays = 7) {
   const d = new Date()
   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
   const expires = 'expires=' + d.toUTCString()

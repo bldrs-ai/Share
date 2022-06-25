@@ -134,6 +134,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     width: '100%',
     marginTop: '2px',
     marginBottom: '2px',
-    display: (props)=>props.divider ? 'block' : 'none',
+    display: (props) => props.divider ? 'block' : 'none',
   },
 })))

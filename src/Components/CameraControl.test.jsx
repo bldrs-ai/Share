@@ -55,7 +55,7 @@ class MockCamera {
    * @param {Number} tz
    * @param {boolean} doTween
    */
-  constructor(x=0, y=0, z=0, tx=0, ty=0, tz=0, doTween=false) {
+  constructor(x = 0, y = 0, z = 0, tx = 0, ty = 0, tz = 0, doTween = false) {
     this.x = x
     this.y = y
     this.z = z

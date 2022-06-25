@@ -38,7 +38,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [selected, setSelected] = React.useState('')
   const classes = useStyles()
   const navigate = useNavigate()
-  const handleSelect = (e) =>{
+  const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
       1: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc',

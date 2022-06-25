@@ -44,6 +44,8 @@ module.exports = {
     'quote-props': ['error', 'consistent-as-needed'],
     'react/prop-types': 'off',
     'semi': ['error', 'never'],
+    'arrow-spacing': ['error', {before: true, after: true}],
+    'space-infix-ops': ['error'],
   },
   settings: {
     react: {

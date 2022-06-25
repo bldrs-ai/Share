@@ -99,16 +99,16 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           onChange={onInputChange}
           error = {true}
           placeholder={'Search model'}/>
-        {inputText.length> 0 ?
+        {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'
             size = 'small'
             placement = 'bottom'
-            onClick={()=>{
+            onClick={() => {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon/>}/>:null
+            icon={<ClearIcon/>}/> : null
         }
         <FormButton
           title='search'
@@ -120,13 +120,13 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
                   Click on the link icon to learn more.`}
           size = 'small'
           placement = 'right'
-          onClick={()=>{
+          onClick={() => {
             window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
           }}
           icon={<LinkIcon/>}/>
       </Paper>
-      { inputText.length>0 &&
-        error.length>0 &&
+      { inputText.length > 0 &&
+        error.length > 0 &&
         <div className = {classes.error}>{error}</div>
       }
     </div>
