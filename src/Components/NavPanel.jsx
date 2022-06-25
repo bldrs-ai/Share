@@ -144,7 +144,7 @@ const useStyles = makeStyles({
   },
   toggleButton: {
     'position': 'absolute',
-    'top': (props) =>`${props.topOffset}px`,
+    'top': (props) => `${props.topOffset}px`,
     'left': '30px',
     '@media (max-width: 900px)': {
       left: '20px',

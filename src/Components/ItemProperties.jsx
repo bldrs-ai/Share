@@ -59,7 +59,7 @@ export default function ItemProperties() {
  * @param {Number} maxWidth (default 20)
  * @return {Object} React component
  */
-function paragraphMaybeWithTooltip(str, maxWidth=15) {
+function paragraphMaybeWithTooltip(str, maxWidth = 15) {
   const inner = (<Typography variant='body1'>{str}</Typography>)
   return (
     str.length > maxWidth ?

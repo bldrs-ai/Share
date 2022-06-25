@@ -70,7 +70,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
 function AboutContent({installPrefix}) {
   const classes = useStyles()
   const [privacySlider, setPrivacySlider] = useState(0)
-  useEffect(()=>{
+  useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(20)
     } else if (Privacy.isPrivacyUsageEnabled()) {

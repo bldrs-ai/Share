@@ -23,7 +23,7 @@ export default function Dialog({
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  clazzes={},
+  clazzes = {},
   content,
 }) {
   assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)

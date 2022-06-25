@@ -21,7 +21,7 @@ export default function SideDrawer() {
   const classes = useStyles({divider: (isPropertiesOn), isPropertiesOn: isPropertiesOn})
   const isMobile = useIsMobile()
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
@@ -32,7 +32,7 @@ export default function SideDrawer() {
       {
         isMobile && isDrawerOpen ?
         <MobileDrawer
-          content={<PropertiesPanel/>}/>:
+          content={<PropertiesPanel/>}/> :
         <Drawer
           open={isDrawerOpen}
           anchor={'right'}
@@ -117,6 +117,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     width: '100%',
     marginTop: '2px',
     marginBottom: '2px',
-    display: (props)=>props.divider ? 'block' : 'none',
+    display: (props) => props.divider ? 'block' : 'none',
   },
 })))

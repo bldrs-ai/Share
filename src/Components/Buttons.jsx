@@ -49,7 +49,7 @@ export function TooltipToggleButton({
   title,
   icon,
   size = 'medium',
-  placement='left',
+  placement = 'left',
 }) {
   assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
@@ -91,7 +91,7 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   icon,
-  placement='left',
+  placement = 'left',
   size = 'medium',
   dialog,
 }) {
@@ -122,7 +122,7 @@ export function ControlButton({
  * @param {Object} icon
  * @return {Object} React component
  */
-export function FormButton({title, icon, type='submit', placement='left', size='medium'}) {
+export function FormButton({title, icon, type = 'submit', placement = 'left', size = 'medium'}) {
   assertDefined(title, icon)
   const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
   return (

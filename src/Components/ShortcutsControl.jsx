@@ -57,7 +57,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               <li>Attach multiple planes</li>
               <li>X is used to clear the planes</li>
             </ul>
-          </div>):
+          </div>) :
           (<ul className={classes.content}>
             <p>To attach a section plane:</p>
             <li>Hover over an element</li>
