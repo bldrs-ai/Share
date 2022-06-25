@@ -19,6 +19,7 @@ import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {usePaths} from '../Paths'
 
 
 /**
@@ -35,13 +36,14 @@ let count = 0
  * @return {Object}
  */
 export default function CadView({
-  installPrefix,
-  appPrefix,
   pathPrefix,
   modelPath,
 }) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
+
+  const {installPrefix, appPrefix} = usePaths()
+
   // React router
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow

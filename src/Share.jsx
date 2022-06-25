@@ -5,6 +5,7 @@ import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
 import useTheme from './Theme'
 import debug from './utils/debug'
+import {usePaths} from './Paths'
 import './index.css'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -20,10 +21,11 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
  * @return {Object} The Share react component.
  */
-export default function Share({installPrefix, appPrefix, pathPrefix}) {
+export default function Share({pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
+  const {installPrefix, appPrefix} = usePaths()
 
 
   /**
@@ -64,8 +66,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         <ColorModeContext.Provider value={colorMode}>
           <ThemeProvider theme={theme}>
             <CadView
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
               pathPrefix={pathPrefix}
               modelPath={modelPath}
             />

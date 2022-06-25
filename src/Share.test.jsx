@@ -11,7 +11,8 @@ beforeAll(() => {
   const window = {innerWidth: 800, innerHeight: 600}
   const canvasGL = new Canvas.Canvas(window.innerWidth, window.innerHeight)
   // mock function to avoid errors inside THREE.WebGlRenderer()
-  canvasGL.addEventListener = function(event, func, bind_) {}
+  canvasGL.addEventListener = function(event, func, bind_) {
+  }
   const mockRenderer = new THREE.WebGLRenderer({
     context: glContext,
     antialias: true,
@@ -36,10 +37,8 @@ import Share from './Share'
 test('Share', () => {
   const {getByText} = render(
       <MockRoutes
-        contentElt={
-          <Share
-            installPrefix={'/'}
-            appPrefix={'share'}
-            pathPrefix={'v/p'} />}/>)
+        contentElt={<Share pathPrefix={'v/p'}/>}
+      />,
+  )
   expect(getByText(/BLDRS/i)).toBeInTheDocument()
 })

@@ -3,6 +3,7 @@ import {ThemeProvider} from '@mui/material/styles'
 import useTheme from './Theme'
 import {render} from '@testing-library/react'
 import {MemoryRouter, Routes, Route} from 'react-router-dom'
+import {PathsProvider} from './Paths'
 
 
 test('mockRoutes', () => {
@@ -12,7 +13,10 @@ test('mockRoutes', () => {
 })
 
 
-const ColorModeContext = createContext({toggleColorMode: () => {}})
+const ColorModeContext = createContext({
+  toggleColorMode: () => {
+  },
+})
 
 /**
  * @param {Object} contentElt React component
@@ -23,11 +27,13 @@ export function MockRoutes({contentElt}) {
   return (
     <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
-        <MemoryRouter>
-          <Routes>
-            <Route path="/*" element={contentElt} />
-          </Routes>
-        </MemoryRouter>
+        <PathsProvider installPrefix={'/'} appPrefix={'share'}>
+          <MemoryRouter>
+            <Routes>
+              <Route path="/*" element={contentElt}/>
+            </Routes>
+          </MemoryRouter>
+        </PathsProvider>
       </ThemeProvider>
     </ColorModeContext.Provider>
   )

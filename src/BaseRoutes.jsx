@@ -8,6 +8,7 @@ import {
 } from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import {usePaths} from './Paths'
 
 
 /**
@@ -27,7 +28,7 @@ import debug from './utils/debug'
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const {installPrefix} = usePaths()
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
@@ -46,9 +47,7 @@ export default function BaseRoutes({testElt = null}) {
           path="share/*"
           element={
             testElt ||
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={installPrefix + '/share'} />
+              <ShareRoutes />
           }/>
       </Route>
     </Routes>

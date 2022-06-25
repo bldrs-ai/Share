@@ -9,6 +9,7 @@ import {
 import {assertDefined} from './utils/assert'
 import Share from './Share'
 import debug from './utils/debug'
+import {usePaths} from './Paths'
 
 
 /**
@@ -35,16 +36,16 @@ import debug from './utils/debug'
  *              ^... path to the component in BaseRoutes.jsx.
  * @return {Object}
  */
-export default function ShareRoutes({installPrefix, appPrefix}) {
+export default function ShareRoutes() {
+  const {appPrefix} = usePaths()
+
   return (
     <Routes>
-      <Route path='/' element={<Forward appPrefix={appPrefix} />}>
+      <Route path='/' element={<Forward />}>
         <Route
           path='v/new/*'
           element={
             <Share
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
               pathPrefix={appPrefix + '/v/new'}
             />
           }
@@ -53,8 +54,6 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
           path='v/p/*'
           element={
             <Share
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
               pathPrefix={appPrefix + '/v/p'}
             />
           }
@@ -63,8 +62,6 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
           path='v/gh/:org/:repo/:branch/*'
           element={
             <Share
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
               pathPrefix={appPrefix + '/v/gh'}
             />
           }
@@ -81,9 +78,10 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
  * @param {string} appPrefix The install prefix, e.g. /share.
  * @return {Object}
  */
-function Forward({appPrefix}) {
+function Forward() {
   const location = useLocation()
   const navigate = useNavigate()
+  const {appPrefix} = usePaths()
 
   useEffect(() => {
     if (location.pathname == appPrefix) {
