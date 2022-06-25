@@ -84,7 +84,7 @@ function Forward() {
   const {appPrefix} = usePaths()
 
   useEffect(() => {
-    if (location.pathname == appPrefix) {
+    if (location.pathname === appPrefix) {
       const dest = appPrefix + '/v/p'
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
