@@ -54,15 +54,15 @@ export default function IssueCard({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
   const textOverflow = body.length > 80
-  const isImage = imageUrl.length !=0
+  const isImage = imageUrl.length != 0
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
-  useEffect(()=>{
+  useEffect(() => {
     if (isMobile) {
       setExpandImage(false)
     }
   }, [isMobile])
-  useEffect(()=>{
+  useEffect(() => {
     if (selected && embeddedUrl) {
       setCameraFromEncodedPosition(embeddedUrl, cameraControls)
     }
@@ -146,7 +146,7 @@ export default function IssueCard({
   )
 }
 
-const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClickSelect}) =>{
+const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClickSelect}) => {
   const classes = useStyles()
   return (
     <div className = {classes.titleContainer}>
@@ -172,7 +172,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
   )
 }
 
-const CardImage = ({imageUrl, onClickImage, expandImage}) =>{
+const CardImage = ({imageUrl, onClickImage, expandImage}) => {
   const classes = useStyles({expandImage: expandImage})
   return (
     <div className = {classes.imageContainer}
@@ -188,7 +188,7 @@ const CardImage = ({imageUrl, onClickImage, expandImage}) =>{
   )
 }
 
-const ShowMore = ({onClick, expandText}) =>{
+const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
     <>
@@ -237,7 +237,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
         onClick = {selectCard}
         onKeyPress = {selectCard}
       >
-        {numberOfComments>0 &&
+        {numberOfComments > 0 &&
           <div className = {classes.commentsQuantity} > {numberOfComments} </div>
         }
       </div>
@@ -248,7 +248,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
 const useStyles = makeStyles((theme) => ({
   container: {
     padding: '4px',
-    border: (props) => props.select ? '1px solid green':'1px solid lightGrey',
+    border: (props) => props.select ? '1px solid green' : '1px solid lightGrey',
     width: '270px',
     marginBottom: '20px',
   },

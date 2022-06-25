@@ -22,7 +22,7 @@ export default function SideDrawer() {
   const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
   const isMobile = useIsMobile()
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }

@@ -40,7 +40,7 @@ export function IssuesNavBar() {
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
 
 
-  useEffect(()=>{
+  useEffect(() => {
     if (!selectedIssueId) {
       removeCameraUrlParams()
     }
@@ -51,7 +51,7 @@ export function IssuesNavBar() {
     direction === 'next' ? index = selectedCommentIndex + 1 : index = selectedCommentIndex - 1
 
     if (index >= 0 && index < issues.length) {
-      const issue = issues.filter((issue)=>issue.index === index)[0]
+      const issue = issues.filter((issue) => issue.index === index)[0]
       setSelectedIssueId(issue.id)
       setSelectedCommentIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
@@ -68,7 +68,7 @@ export function IssuesNavBar() {
     <div className = {classes.titleContainer}>
       <div className = {classes.leftGroup}>
         <div className = {classes.title}>
-          {!selectedIssueId ? 'Notes': 'Note' }
+          {!selectedIssueId ? 'Notes' : 'Note' }
         </div>
       </div>
       <div className = {classes.rightGroup}>
@@ -79,7 +79,7 @@ export function IssuesNavBar() {
               title='Back to the list'
               placement = 'bottom'
               size = 'small'
-              onClick={()=>{
+              onClick={() => {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
@@ -122,18 +122,18 @@ export function Issues() {
   const setIssuesStore = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = selectedIssueId ? issuesStore.filter((issue) => issue.id ===selectedIssueId)[0] :null
+  const filteredIssue = selectedIssueId ? issuesStore.filter((issue) => issue.id === selectedIssueId)[0] : null
 
-  useEffect(()=>{
+  useEffect(() => {
     const fetchIssues = async () => {
       const issues = await getIssues()
       const issuesArr = []
       let imageUrl = ''
       let body = null
 
-      issues.data.map((issue, index)=>{
+      issues.data.map((issue, index) => {
         const lines = issue.body.split('\r\n')
-        const embeddedUrl = lines.filter((line)=>line.includes('url'))[0]
+        const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
         body = lines[0]
 
         if (issue.body.includes('img')) {
@@ -166,7 +166,7 @@ export function Issues() {
   }, [setIssuesStore])
 
 
-  useEffect(()=>{
+  useEffect(() => {
     const fetchComments = async (selectedIssue) => {
       const comments = await getComments(selectedIssue.number)
       const commentsArr = []
@@ -174,7 +174,7 @@ export function Issues() {
 
       comments.map((comment) => {
         const lines = comment.body.split('\r\n')
-        const embeddedUrl = lines.filter((line)=>line.includes('url'))[0]
+        const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
         commentImageUrl = comment.body.split('ImageUrl')[1]
         commentsArr.push(
             {
@@ -201,7 +201,7 @@ export function Issues() {
     <Paper className = {classes.commentsContainer} elevation = {0}>
       <div className = {classes.cardsContainer}>
         {!selectedIssueId ?
-          issuesStore.map((issue, index)=>{
+          issuesStore.map((issue, index) => {
             return (
               <IssueCard
                 embeddedUrl = {issue.embeddedUrl}
@@ -216,7 +216,7 @@ export function Issues() {
                 avatarUrl = {issue.avatarUrl}
                 imageUrl = {issue.imageUrl}/>
             )
-          }):
+          }) :
         <>
           { filteredIssue ?
             <IssueCard
@@ -230,11 +230,11 @@ export function Issues() {
               username = {filteredIssue.username}
               numberOfComments = {filteredIssue.numberOfComments}
               avatarUrl = {filteredIssue.avatarUrl}
-              imageUrl = {filteredIssue.imageUrl}/>:
+              imageUrl = {filteredIssue.imageUrl}/> :
               <div>loading</div>
           }
           { comments &&
-              comments.map((comment, index)=>{
+              comments.map((comment, index) => {
                 return (
                   <IssueCard
                     embeddedUrl = {comment.embeddedUrl}

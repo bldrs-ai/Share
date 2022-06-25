@@ -54,7 +54,7 @@ export function PropertiesPanel() {
 }
 
 
-export const NotesPanel = ()=> {
+export const NotesPanel = () => {
   const classes = useStyles(useTheme())
   return (
     <>
