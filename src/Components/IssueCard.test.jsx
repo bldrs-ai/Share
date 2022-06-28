@@ -12,7 +12,7 @@ test('IssueCard', () => {
 })
 
 
-test('IssueCardComments', () => {
+test('Number of replies', () => {
   const id = 123
   const index = 123
   render(<MockRoutes contentElt={<IssueCard id={id} index = {index} numberOfComments = {10} />}/>)
@@ -30,7 +30,7 @@ test('Select the issue card', () => {
 })
 
 
-test('Camera Position', () => {
+test('Camera Position control', () => {
   const id = 123
   const index = 123
   const rendered = render(<MockRoutes contentElt={<IssueCard id={id} index = {index}
