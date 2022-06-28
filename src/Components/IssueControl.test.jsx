@@ -16,6 +16,9 @@ test('Issues Control select issue', () => {
   act(() => {
     result.current.setSelectedIssueId(10)
   })
+  act(() => {
+    result.current.setSelectedCommentIndex(10)
+  })
   render(<MockRoutes contentElt={<IssuesNavBar/>}/>)
   expect(screen.getByText('Note')).toBeInTheDocument()
 })
