@@ -40,7 +40,7 @@ export default function SideDrawer() {
           elevation={4}
           className={classes.drawer}>
           <div className={classes.content}>
-            <div className = {classes.containerProperties}>
+            <div className={classes.containerProperties}>
               {isPropertiesOn ? <PropertiesPanel/> : null }
             </div>
           </div>
