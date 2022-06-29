@@ -11,12 +11,11 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
+    'plugin:storybook/recommended',
   ],
-  overrides: [
-    {
-      files: ['*.js', '*.mjs', '*.jsx'],
-    },
-  ],
+  overrides: [{
+    files: ['*.js', '*.mjs', '*.jsx'],
+  }],
   parser: '@babel/eslint-parser',
   parserOptions: {
     babelOptions: {
@@ -53,4 +52,4 @@ module.exports = {
     },
   },
   reportUnusedDisableDirectives: true,
-}
+};
