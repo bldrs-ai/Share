@@ -1,7 +1,7 @@
 import {Octokit} from '@octokit/rest'
 import PkgJson from '../../package.json'
 import debug from './debug'
-
+// import {isRunningLocally} from './network'
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
@@ -92,8 +92,81 @@ async function getGitHub(path, args) {
 }
 
 
+/**
+ * Mock of Octokit for locally and unit testing.
+ */
+export class MockOctokit {
+  /** No-op ctor. */
+  constructor() {}
+
+  /**
+   * @param {string} path
+   * @param {Object} account
+   * @param {Object} args
+   * @return {Object} Mock response
+   */
+  request(path, account, args) {
+    debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
+    switch (true) {
+      case /.*\/issues$/.test(path): return [MOCK_ISSUE]
+      case /.*\/issues\/{.+}$/.test(path): return MOCK_ISSUE
+      case /.*\/issues\/{.+}\/comments$/.test(path): return MOCK_COMMENTS
+      default: throw new Error('Mock does not support server path: ' + path)
+    }
+  }
+}
+
+
+const MOCK_ISSUE = {
+  data: {
+    title: 'Welcome to Bldrs: Share',
+    body: `Build Every Thing Together.\r
+\`\`\`\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:0::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+\`\`\`\r
+`,
+  },
+}
+
+
+const MOCK_COMMENTS = {
+  data: [
+    {
+      body: `The Architecture, Engineering and Construction industries are trying
+to face challenging problems of the future with tools anchored in the
+past. Meanwhile, a new dynamic has propelled the Tech industry:
+online, collaborative, open development.
+
+We can't imagine a future where building the rest of the world hasn't
+been transformed by these new ways of working. We are part of that
+transformation.\r
+
+\`\`\`\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8:1::c:-45.81,18.08,112.36,-43.48,15.73,-4.34\r
+\`\`\`\r
+`,
+    },
+    {
+      body: `The key insights from Tech: Cross-functional online collaboration
+unlocks team flow, productivity and creativity. Your team extends
+outside of your organization and software developers are essential
+team members. An ecosystem of app Creators developing on a powerful
+operating system Platform is the most scalable architecture. Open
+workspaces, open standards and open source code the most powerful way
+to work. Cooperation is the unfair advantage.\r \`\`\`\r
+url=//${window.location.host}/share/v/p/index.ifc#i:8::c:-144.36,14.11,147.82,-40.42,17.84,-2.28\r
+\`\`\`\r
+`,
+    },
+  ],
+}
+
+
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
+// const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+//   userAgent: `bldrs/${PkgJson.version}`,
+// })
 const octokit = new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })

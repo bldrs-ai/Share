@@ -118,90 +118,98 @@ export function IssuesNavBar() {
 export function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const issuesStore = useStore((state) => state.issues)
-  const setIssuesStore = useStore((state) => state.setIssues)
+  const issues = useStore((state) => state.issues)
+  const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = selectedIssueId ? issuesStore.filter((issue) => issue.id === selectedIssueId)[0] : null
+  const filteredIssue = selectedIssueId ? issues.filter((issue) => issue.id === selectedIssueId)[0] : null
 
   useEffect(() => {
     const fetchIssues = async () => {
-      const issues = await getIssues()
-      const issuesArr = []
-      let imageUrl = ''
-      let body = null
+      try {
+        const issues = await getIssues()
+        const issuesArr = []
+        let imageUrl = ''
+        let body = null
 
-      issues.data.map((issue, index) => {
-        const lines = issue.body.split('\r\n')
-        const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-        body = lines[0]
+        issues.data.map((issue, index) => {
+          const lines = issue.body.split('\r\n')
+          const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
+          body = lines[0]
 
-        if (issue.body.includes('img')) {
-          const isolateImageSrc = issue.body.split('src')[1]
-          const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
-          imageUrl = imageSrc[1]
-        } else {
-          imageUrl = ''
-        }
+          if (issue.body.includes('img')) {
+            const isolateImageSrc = issue.body.split('src')[1]
+            const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
+            imageUrl = imageSrc[1]
+          } else {
+            imageUrl = ''
+          }
 
-        issuesArr.push(
-            {
-              embeddedUrl: embeddedUrl,
-              index: index,
-              id: issue.id,
-              number: issue.number,
-              title: issue.title,
-              body: body,
-              date: issue.created_at,
-              username: issue.user.login,
-              avatarUrl: issue.user.avatar_url,
-              numberOfComments: issue.comments,
-              imageUrl: imageUrl,
-            },
-        )
-      })
-      setIssuesStore(issuesArr)
+          issuesArr.push(
+              {
+                embeddedUrl: embeddedUrl,
+                index: index,
+                id: issue.id,
+                number: issue.number,
+                title: issue.title,
+                body: body,
+                date: issue.created_at,
+                username: issue.user.login,
+                avatarUrl: issue.user.avatar_url,
+                numberOfComments: issue.comments,
+                imageUrl: imageUrl,
+              },
+          )
+        })
+        setIssues(issuesArr)
+      } catch {
+        debug().log('failed to fetch issues')
+      }
     }
     fetchIssues()
-  }, [setIssuesStore])
+  }, [setIssues])
 
 
   useEffect(() => {
     const fetchComments = async (selectedIssue) => {
-      const comments = await getComments(selectedIssue.number)
-      const commentsArr = []
-      let commentImageUrl
+      try {
+        const comments = await getComments(selectedIssue.number)
+        const commentsArr = []
+        let commentImageUrl
 
-      comments.map((comment) => {
-        const lines = comment.body.split('\r\n')
-        const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-        commentImageUrl = comment.body.split('ImageUrl')[1]
-        commentsArr.push(
-            {
-              embeddedUrl: embeddedUrl,
-              id: comment.id,
-              number: comment.number,
-              title: comment.title,
-              body: comment.body,
-              date: comment.created_at,
-              username: comment.user.login,
-              avatarUrl: comment.user.avatar_url,
-              imageUrl: commentImageUrl,
-            },
-        )
-      })
-      setComments(commentsArr)
+        comments.map((comment) => {
+          const lines = comment.body.split('\r\n')
+          const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
+          commentImageUrl = comment.body.split('ImageUrl')[1]
+          commentsArr.push(
+              {
+                embeddedUrl: embeddedUrl,
+                id: comment.id,
+                number: comment.number,
+                title: comment.title,
+                body: comment.body,
+                date: comment.created_at,
+                username: comment.user.login,
+                avatarUrl: comment.user.avatar_url,
+                imageUrl: commentImageUrl,
+              },
+          )
+        })
+        setComments(commentsArr)
+      } catch {
+        debug().log('failed to fetch comments')
+      }
     }
     selectedIssueId !== null ?
     fetchComments(filteredIssue) : null
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedIssueId, issuesStore])
+  }, [selectedIssueId, issues])
 
   return (
     <Paper className = {classes.commentsContainer} elevation = {0}>
       <div className = {classes.cardsContainer}>
         {!selectedIssueId ?
-          issuesStore.map((issue, index) => {
+          issues.map((issue, index) => {
             return (
               <IssueCard
                 embeddedUrl = {issue.embeddedUrl}
