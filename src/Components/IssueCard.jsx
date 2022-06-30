@@ -49,7 +49,7 @@ export default function IssueCard({
   const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedIssueId = useStore((state) => state.selectedIssueId)
   const cameraControls = useStore((state) => state.cameraControls)
-  const setSelectedCommentIndex = useStore((state) => state.setSelectedCommentIndex)
+  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
@@ -73,7 +73,7 @@ export default function IssueCard({
    * selecting a card move the notes to the replies/comments thread
    */
   function selectCard() {
-    selected ? setSelectedCommentIndex(null) : setSelectedCommentIndex(index)
+    selected ? setSelectedIssueIndex(null) : setSelectedIssueIndex(index)
     selected ? setSelectedIssueId(null) : setSelectedIssueId(id)
     if (embeddedUrl) {
       setCameraFromEncodedPosition(embeddedUrl)

@@ -33,9 +33,9 @@ const regex = new RegExp(`${ISSUE_PREFIX}:(\\d+)(?::(\\d+))?`)
 export function IssuesNavBar() {
   const classes = useStyles(useTheme())
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
-  const setSelectedCommentIndex = useStore((state) => state.setSelectedCommentIndex)
+  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
   const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const selectedCommentIndex = useStore((state) => state.selectedCommentIndex)
+  const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
   const issues = useStore((state) => state.issues)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
 
@@ -48,12 +48,12 @@ export function IssuesNavBar() {
 
   const selectIssue = (direction) => {
     let index
-    direction === 'next' ? index = selectedCommentIndex + 1 : index = selectedCommentIndex - 1
+    direction === 'next' ? index = selectedIssueIndex + 1 : index = selectedIssueIndex - 1
 
     if (index >= 0 && index < issues.length) {
       const issue = issues.filter((issue) => issue.index === index)[0]
       setSelectedIssueId(issue.id)
-      setSelectedCommentIndex(issue.index)
+      setSelectedIssueIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
       if (issue.url) {
         setCameraFromEncodedPosition(issue.url)
