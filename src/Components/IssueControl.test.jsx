@@ -6,6 +6,63 @@ import {act, renderHook} from '@testing-library/react-hooks'
 import useStore from '../store/useStore'
 
 
+const MOCK_ISSUES = [
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 10,
+    number: 1,
+    title: 'TEST_ISSUE_TITLE_1',
+    body: 'TEST_ISSUE_BODY_1',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 11,
+    number: 2,
+    title: 'TEST_ISSUE_TITLE_2',
+    body: 'TEST_ISSUE_BODY_2',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+]
+
+const MOCK_COMMENTS = [
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 10,
+    number: 1,
+    body: 'TEST_COMMENT_BODY_1',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 11,
+    number: 2,
+    body: 'TEST_COMMENT_BODY_2',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+]
+
+
 test('Issues NavBar Issues', () => {
   render(<MockRoutes contentElt={<IssuesNavBar/>}/>)
   expect(screen.getByText('Notes')).toBeInTheDocument()
@@ -25,34 +82,6 @@ test('Issues NavBar Comments', () => {
 
 test('Issues ', () => {
   const {result} = renderHook(() => useStore((state) => state))
-  const issueArr = [
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 10,
-      number: 1,
-      title: 'TEST_ISSUE_TITLE_1',
-      body: 'TEST_ISSUE_BODY_1',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 11,
-      number: 2,
-      title: 'TEST_ISSUE_TITLE_2',
-      body: 'TEST_ISSUE_BODY_2',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-  ]
   act(() => {
     result.current.setSelectedIssueId(null)
   })
@@ -60,7 +89,7 @@ test('Issues ', () => {
     result.current.setSelectedCommentIndex(null)
   })
   act(() => {
-    result.current.setIssues(issueArr)
+    result.current.setIssues(MOCK_ISSUES)
   })
   render(<MockRoutes contentElt={<Issues/>}/>)
   expect(screen.getByText('TEST_ISSUE_TITLE_1')).toBeInTheDocument()
@@ -69,60 +98,6 @@ test('Issues ', () => {
 
 test('Issues ', () => {
   const {result} = renderHook(() => useStore((state) => state))
-  const issueArr = [
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 10,
-      number: 1,
-      title: 'TEST_ISSUE_TITLE_1',
-      body: 'TEST_ISSUE_BODY_1',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 11,
-      number: 2,
-      title: 'TEST_ISSUE_TITLE_2',
-      body: 'TEST_ISSUE_BODY_2',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-  ]
-  const CommentsArr = [
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 10,
-      number: 1,
-      body: 'TEST_COMMENT_BODY_1',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-    {
-      embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
-      index: 0,
-      id: 11,
-      number: 2,
-      body: 'TEST_COMMENT_BODY_2',
-      date: '2022-06-01T22:10:49Z',
-      username: 'TEST_ISSUE_USERNAME',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-      numberOfComments: 2,
-      imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
-    },
-  ]
   act(() => {
     result.current.setSelectedIssueId(10)
   })
@@ -130,10 +105,10 @@ test('Issues ', () => {
     result.current.setSelectedCommentIndex(null)
   })
   act(() => {
-    result.current.setIssues(issueArr)
+    result.current.setIssues(MOCK_ISSUES)
   })
   act(() => {
-    result.current.setComments(CommentsArr)
+    result.current.setComments(MOCK_COMMENTS)
   })
   render(<MockRoutes contentElt={<Issues/>}/>)
   expect(screen.getByText('TEST_ISSUE_TITLE_1')).toBeInTheDocument()
