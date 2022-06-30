@@ -73,9 +73,6 @@ test('Issues NavBar Comments', () => {
   act(() => {
     result.current.setSelectedIssueId(10)
   })
-  act(() => {
-    result.current.setSelectedCommentIndex(10)
-  })
   render(<MockRoutes contentElt={<IssuesNavBar/>}/>)
   expect(screen.getByText('Note')).toBeInTheDocument()
 })
@@ -84,9 +81,6 @@ test('Issues ', () => {
   const {result} = renderHook(() => useStore((state) => state))
   act(() => {
     result.current.setSelectedIssueId(null)
-  })
-  act(() => {
-    result.current.setSelectedCommentIndex(null)
   })
   act(() => {
     result.current.setIssues(MOCK_ISSUES)
@@ -100,9 +94,6 @@ test('Issues ', () => {
   const {result} = renderHook(() => useStore((state) => state))
   act(() => {
     result.current.setSelectedIssueId(10)
-  })
-  act(() => {
-    result.current.setSelectedCommentIndex(null)
   })
   act(() => {
     result.current.setIssues(MOCK_ISSUES)
