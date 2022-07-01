@@ -23,7 +23,7 @@ import Share from '../assets/2D_Icons/Share.svg'
  * @param {string} body issue body
  * @param {string} imageUrl issue image
  * @param {string} date issue date
- * @param {string} url full url attached to GH issue with camera position
+ * @param {string} embeddedUrl full url attached to GH issue with camera position
  * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
  * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
  * @param {boolean} isReply Comments/replies are formated differently
