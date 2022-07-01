@@ -86,7 +86,6 @@ async function getGitHub(path, args) {
     owner: 'pablo-mayrgundter',
     repo: 'Share',
   }
-  console.log('github path', path)
   return await octokit.request(`GET /repos/{owner}/{repo}/${path}`, {
     ...account,
     ...args,
@@ -255,7 +254,3 @@ export class MockOctokit {
 const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
-
-// const octokit = new Octokit({
-//   userAgent: `bldrs/${PkgJson.version}`,
-// })

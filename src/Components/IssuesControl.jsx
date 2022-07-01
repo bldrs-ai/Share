@@ -130,11 +130,12 @@ export function Issues() {
         const issues = await getIssues()
         const issuesArr = []
         let imageUrl = ''
-        let body = null
+
         issues.data.map((issue, index) => {
           const lines = issue.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-          body = lines[0]
+          const body = lines[0]
+          console.log('body', body)
 
           if (issue.body.includes('img')) {
             const isolateImageSrc = issue.body.split('src')[1]
@@ -182,13 +183,15 @@ export function Issues() {
           const lines = comment.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
           commentImageUrl = comment.body.split('ImageUrl')[1]
+          console.log('lines from comments', lines)
+          const body = lines[0]
           commentsArr.push(
               {
                 embeddedUrl: embeddedUrl,
                 id: comment.id,
                 number: comment.number,
                 title: comment.title,
-                body: comment.body,
+                body: body,
                 date: comment.created_at,
                 username: comment.user.login,
                 avatarUrl: comment.user.avatar_url,
