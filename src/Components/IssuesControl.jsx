@@ -65,47 +65,47 @@ export function IssuesNavBar() {
   }
 
   return (
-    <div className = {classes.titleContainer}>
-      <div className = {classes.leftGroup}>
-        <div className = {classes.title}>
+    <div className={classes.titleContainer}>
+      <div className={classes.leftGroup}>
+        <div className={classes.title}>
           {!selectedIssueId ? 'Notes' : 'Note' }
         </div>
       </div>
-      <div className = {classes.rightGroup}>
-        <div className = {classes.controls} >
+      <div className={classes.rightGroup}>
+        <div className={classes.controls} >
           {selectedIssueId &&
           <>
             <TooltipIconButton
               title='Back to the list'
-              placement = 'bottom'
-              size = 'small'
+              placement='bottom'
+              size='small'
               onClick={() => {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
-              icon={<Back style = {{width: '30px', height: '30px'}}/>}/>
+              icon={<Back style={{width: '30px', height: '30px'}}/>}/>
             <>
               <TooltipIconButton
                 title='Previous Comment'
-                placement = 'bottom'
-                size = 'small'
+                placement='bottom'
+                size='small'
                 onClick={() => selectIssue('previous')}
-                icon={<Previous style = {{width: '20px', height: '20px'}}/>}/>
+                icon={<Previous style={{width: '20px', height: '20px'}}/>}/>
               <TooltipIconButton
                 title='Next Comment'
-                size = 'small'
-                placement = 'bottom'
+                size='small'
+                placement='bottom'
                 onClick={() => selectIssue('next')}
-                icon={<Next style = {{width: '20px', height: '20px'}}/>}/>
+                icon={<Next style={{width: '20px', height: '20px'}}/>}/>
             </>
           </>
           }
         </div>
         <TooltipIconButton
           title='Close Comments'
-          placement = 'bottom'
+          placement='bottom'
           onClick={toggleIsCommentsOn}
-          icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
+          icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}/>
       </div>
     </div>
   )
@@ -207,57 +207,57 @@ export function Issues() {
   }, [selectedIssueId, issues])
 
   return (
-    <Paper className = {classes.commentsContainer} elevation = {0}>
-      <div className = {classes.cardsContainer}>
+    <Paper className={classes.commentsContainer} elevation={0}>
+      <div className={classes.cardsContainer}>
         {!selectedIssueId ?
           issues.map((issue, index) => {
             return (
               <IssueCard
-                embeddedUrl = {issue.embeddedUrl}
-                index = {issue.index}
-                id = {issue.id}
-                key = {index}
-                title = {issue.title}
-                date = {issue.date}
-                body = {issue.body}
-                username = {issue.username}
-                numberOfComments = {issue.numberOfComments}
-                avatarUrl = {issue.avatarUrl}
-                imageUrl = {issue.imageUrl}/>
+                embeddedUrl={issue.embeddedUrl}
+                index={issue.index}
+                id={issue.id}
+                key={index}
+                title={issue.title}
+                date={issue.date}
+                body={issue.body}
+                username={issue.username}
+                numberOfComments={issue.numberOfComments}
+                avatarUrl={issue.avatarUrl}
+                imageUrl={issue.imageUrl}/>
             )
           }) :
         <>
           { filteredIssue ?
             <IssueCard
-              embeddedUrl = {filteredIssue.embeddedUrl}
-              index = {filteredIssue.index}
-              id = {filteredIssue.id}
-              key = {filteredIssue.id}
-              title = {filteredIssue.title}
-              date = {filteredIssue.date}
-              body = {filteredIssue.body}
-              username = {filteredIssue.username}
-              numberOfComments = {filteredIssue.numberOfComments}
-              avatarUrl = {filteredIssue.avatarUrl}
-              imageUrl = {filteredIssue.imageUrl}/> :
+              embeddedUrl={filteredIssue.embeddedUrl}
+              index={filteredIssue.index}
+              id={filteredIssue.id}
+              key={filteredIssue.id}
+              title={filteredIssue.title}
+              date={filteredIssue.date}
+              body={filteredIssue.body}
+              username={filteredIssue.username}
+              numberOfComments={filteredIssue.numberOfComments}
+              avatarUrl={filteredIssue.avatarUrl}
+              imageUrl={filteredIssue.imageUrl}/> :
               <div>loading</div>
           }
           { comments &&
               comments.map((comment, index) => {
                 return (
                   <IssueCard
-                    embeddedUrl = {comment.embeddedUrl}
-                    isReply = {true}
-                    index = ''
-                    id = {comment.id}
-                    key = {comment.id}
-                    title = {index + 1}
-                    date = {comment.date}
-                    body = {comment.body}
-                    username = {comment.username}
-                    numberOfReplies = ''
-                    avatarUrl = {comment.avatarUrl}
-                    imageUrl = {comment.imageUrl}/>
+                    embeddedUrl={comment.embeddedUrl}
+                    isReply={true}
+                    index=''
+                    id={comment.id}
+                    key={comment.id}
+                    title={index + 1}
+                    date={comment.date}
+                    body={comment.body}
+                    username={comment.username}
+                    numberOfReplies=''
+                    avatarUrl={comment.avatarUrl}
+                    imageUrl={comment.imageUrl}/>
                 )
               })
           }

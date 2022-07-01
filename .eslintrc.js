@@ -46,6 +46,7 @@ module.exports = {
     'semi': ['error', 'never'],
     'arrow-spacing': ['error', {before: true, after: true}],
     'space-infix-ops': ['error'],
+    'react/jsx-equals-spacing': [2, 'never'],
   },
   settings: {
     react: {

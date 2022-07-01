@@ -38,32 +38,32 @@ export default function OperationsGroup({viewer, unSelectItem}) {
       <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
         <TooltipIconButton
-          title = 'Notes'
-          icon ={<MarkupIcon/>}
-          onClick = {() => toggle('Notes')}
+          title='Notes'
+          icon={<MarkupIcon/>}
+          onClick={() => toggle('Notes')}
         />
       </div>
       <div className={classes.lowerGroup}>
         {
           selectedElement ?
           <TooltipIconButton
-            title = "Properties"
-            onClick = {() => toggle('Properties')}
+            title="Properties"
+            onClick={() => toggle('Properties')}
             icon={<ListIcon/>}/> :
           null
         }
         {useIsMobile() ?
           <TooltipIconButton
-            title = "Section plane"
-            onClick = {() => viewer.clipper.createPlane()}
-            icon = {<CutPlaneIcon/>}/> :
+            title="Section plane"
+            onClick={() => viewer.clipper.createPlane()}
+            icon={<CutPlaneIcon/>}/> :
           null
         }
-        <TooltipIconButton title="Clear selection" onClick = {unSelectItem} icon = {<ClearIcon/>}/>
+        <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>
       {/* Invisible */}
-      <CameraControl viewer = {viewer}/>
+      <CameraControl viewer={viewer}/>
     </div>
   )
 }

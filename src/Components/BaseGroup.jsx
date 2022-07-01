@@ -16,7 +16,7 @@ export default function BaseGroup({installPrefix, fileOpen}) {
   const classes = useStyles()
   return (
     <div className={classes.root}>
-      <OpenModelControl installPrefix={installPrefix} fileOpen = {fileOpen}/>
+      <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen}/>
       <SampleModelsControl/>
       <AboutControl installPrefix={installPrefix}/>
     </div>

@@ -32,13 +32,13 @@ export default function SideDrawer() {
     <>
       {isMobile && isDrawerOpen ?
         <MobileDrawer
-          content = {
+          content={
             <div className={classes.content}>
-              <div className = {classes.containerNotes}>
+              <div className={classes.containerNotes}>
                 {isCommentsOn ? <NotesPanel/> : null}
               </div>
-              <div className = {classes.divider}/>
-              <div className = {classes.containerProperties}>
+              <div className={classes.divider}/>
+              <div className={classes.containerProperties}>
                 {isPropertiesOn ? <PropertiesPanel/> : null }
               </div>
             </div>
@@ -51,11 +51,11 @@ export default function SideDrawer() {
           elevation={4}
           className={classes.drawer}>
           <div className={classes.content}>
-            <div className = {classes.containerNotes}>
+            <div className={classes.containerNotes}>
               {isCommentsOn ? <NotesPanel/> : null}
             </div>
-            <div className = {classes.divider}/>
-            <div className = {classes.containerProperties}>
+            <div className={classes.divider}/>
+            <div className={classes.containerProperties}>
               {isPropertiesOn ? <PropertiesPanel/> : null }
             </div>
           </div>

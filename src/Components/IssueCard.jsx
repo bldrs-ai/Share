@@ -102,44 +102,44 @@ export default function IssueCard({
 
   return (
     <Paper
-      elevation = {0}
-      className = {classes.container}
-      style = {{borderRadius: '10px'}}
+      elevation={0}
+      className={classes.container}
+      style={{borderRadius: '10px'}}
     >
       <CardTitle
-        title = {title}
-        userName = {username}
-        date = {date}
-        avatarUrl = {avatarUrl}
+        title={title}
+        userName={username}
+        date={date}
+        avatarUrl={avatarUrl}
         isReply={isReply}
-        selected = {selected}
-        onClickSelect = {selectCard}
+        selected={selected}
+        onClickSelect={selectCard}
       />
       {isImage &&
         <CardImage
           expandImage={expandImage}
           imageUrl={imageUrl}
-          onClickImage = {() => setExpandImage(!expandImage)}/>
+          onClickImage={() => setExpandImage(!expandImage)}/>
       }
-      <div className = {classes.body}>
+      <div className={classes.body}>
         {body}
       </div>
       {textOverflow &&
         <ShowMore
-          expandText = {expandText}
-          onClick = {(event) => {
+          expandText={expandText}
+          onClick={(event) => {
             event.preventDefault()
             expandText ? setExpandText(false) : setExpandText(true)
           }}/>
       }
       {embeddedUrl || numberOfComments > 0 ?
         <CardActions
-          selectCard = {selectCard}
-          numberOfComments = {numberOfComments}
-          embeddedUrl = {embeddedUrl}
-          selected = {selected}
-          onClickNavigate = {showCameraView}
-          onClickShare = {shareIssue}
+          selectCard={selectCard}
+          numberOfComments={numberOfComments}
+          embeddedUrl={embeddedUrl}
+          selected={selected}
+          onClickNavigate={showCameraView}
+          onClickShare={shareIssue}
         /> : null
       }
     </Paper>
@@ -149,24 +149,24 @@ export default function IssueCard({
 const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClickSelect}) => {
   const classes = useStyles()
   return (
-    <div className = {classes.titleContainer}>
-      <div className = {classes.title}>
-        <div className = {classes.titleString}>{title}</div>
-        <div className = {classes.username}>{username}</div>
-        <div className = {classes.username}>{date.split('T')[0]}</div>
+    <div className={classes.titleContainer}>
+      <div className={classes.title}>
+        <div className={classes.titleString}>{title}</div>
+        <div className={classes.username}>{username}</div>
+        <div className={classes.username}>{date.split('T')[0]}</div>
       </div>
-      <div className = {classes.titleRightContainer}>
+      <div className={classes.titleRightContainer}>
         {!selected && !isReply &&
-        <div className = {classes.select}>
+        <div className={classes.select}>
           <TooltipIconButton
             title={'Select Comment'}
-            size = 'small'
-            placement = 'bottom'
-            onClick = {onClickSelect}
+            size='small'
+            placement='bottom'
+            onClick={onClickSelect}
             icon={ <Select />} />
         </div>
         }
-        <img alt = {'avatarImage'} className = {classes.avatarIcon} src = {avatarUrl}/>
+        <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
       </div>
     </div>
   )
@@ -175,15 +175,15 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
 const CardImage = ({imageUrl, onClickImage, expandImage}) => {
   const classes = useStyles({expandImage: expandImage})
   return (
-    <div className = {classes.imageContainer}
-      onClick = {onClickImage}
-      role = 'button'
+    <div className={classes.imageContainer}
+      onClick={onClickImage}
+      role='button'
       tabIndex={0}
-      onKeyPress = {onClickImage}>
+      onKeyPress={onClickImage}>
       <img
-        className = {classes.image}
-        alt = 'cardImage'
-        src = {imageUrl}/>
+        className={classes.image}
+        alt='cardImage'
+        src={imageUrl}/>
     </div>
   )
 }
@@ -192,11 +192,11 @@ const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
     <>
-      <div className = {classes.showMore}
-        onClick = {onClick}
-        role = 'button'
+      <div className={classes.showMore}
+        onClick={onClick}
+        role='button'
         tabIndex={0}
-        onKeyPress = {onClick}
+        onKeyPress={onClick}
       >
         {expandText ? 'show less' : 'show more'}
       </div>
@@ -208,37 +208,37 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
   const [shareIssue, setShareIssue] = useState(false)
   const classes = useStyles({embeddedUrl: embeddedUrl, shareIssue: shareIssue})
   return (
-    <div className = {classes.actions}>
-      <div className = {classes.rightGroup}>
+    <div className={classes.actions}>
+      <div className={classes.rightGroup}>
         {embeddedUrl ?
         <TooltipIconButton
-          disable = {true}
+          disable={true}
           title='Show the camera view'
-          size = 'small'
-          placement = 'bottom'
+          size='small'
+          placement='bottom'
           onClick={onClickNavigate}
-          icon={<Camera className = {classes.buttonNavigate} style = {{width: '24px', height: '24px'}} />}/> : null}
+          icon={<Camera className={classes.buttonNavigate} style={{width: '24px', height: '24px'}} />}/> : null}
         {selected &&
           <TooltipIconButton
-            disable = {true}
+            disable={true}
             title='Share'
-            size = 'small'
-            placement = 'bottom'
+            size='small'
+            placement='bottom'
             onClick={() => {
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={<Share className = {classes.buttonShare} style = {{width: '24px', height: '24px'}} />}/>
+            icon={<Share className={classes.buttonShare} style={{width: '24px', height: '24px'}} />}/>
         }
       </div>
-      <div className = {classes.commentsIconContainer}
-        role = 'button'
+      <div className={classes.commentsIconContainer}
+        role='button'
         tabIndex={0}
-        onClick = {selectCard}
-        onKeyPress = {selectCard}
+        onClick={selectCard}
+        onKeyPress={selectCard}
       >
         {numberOfComments > 0 &&
-          <div className = {classes.commentsQuantity} > {numberOfComments} </div>
+          <div className={classes.commentsQuantity} > {numberOfComments} </div>
         }
       </div>
     </div>
