@@ -8,18 +8,20 @@ import SearchIndex from './SearchIndex.js'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ItemPanelControl from '../Components/ItemPanelControl'
-import SideDrawer from '../Components/SideDrawer'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import useStore from '../store/useStore'
+import SideDrawer from '../Components/SideDrawer'
+import MobileDrawer from '../Components/MobileDrawer'
+import {useIsMobile} from '../Components/Hooks'
+import {getHashParams} from '../utils/location'
 
 
 /**
@@ -54,6 +56,7 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
+  // const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -63,20 +66,21 @@ export default function CadView({
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
-  const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
+  // const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
+  // const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
+  const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
-  const setViewerStore = useStore((state) => state.setViewerStore)
-  const setModelStore = useStore((state) => state.setModelStore)
-  const setSelectedElement = useStore((state) => state.setSelectedElement)
-  const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const setIssues = useStore((state) => state.setIssues)
-  const setComments = useStore((state) => state.setComments)
-  const selectedElement = useStore((state) => state.selectedElement)
-  const snackMessage = useStore((state) => state.snackMessage)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const closeDrawer = useStore((state) => state.closeDrawer)
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setViewerStore = useStore((state) => state.setViewerStore)
+  const snackMessage = useStore((state) => state.snackMessage)
+  const isMobile = useIsMobile()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -99,10 +103,6 @@ export default function CadView({
     (async () => {
       await onModel()
     })()
-    closeDrawer()
-    setSelectedElement(null)
-    setIssues([])
-    setComments([])
   }, [model])
 
   // searchParams changes in parent (ShareRoutes) from user and
@@ -112,6 +112,16 @@ export default function CadView({
   }, [searchParams])
   /* eslint-enable */
 
+  useEffect(() => {
+    const issueHash = getHashParams(window.location, 'i')
+    if (issueHash !== undefined) {
+      const extractedCommentId = issueHash.split(':')[1]
+      setSelectedIssueId(Number(extractedCommentId))
+      openDrawer()
+      toggleIsCommentsOn()
+    }
+  }, [])
+
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
@@ -120,7 +130,7 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    setIsItemPanelOpen(false)
+    // setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
     const intializedViewer = initViewer(
         pathPrefix,
@@ -162,7 +172,7 @@ export default function CadView({
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
-    setSnackMessage(loadingMessageBase)
+    setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
@@ -171,7 +181,7 @@ export default function CadView({
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
             const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
             debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
         },
@@ -235,16 +245,6 @@ export default function CadView({
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
     initSearch(model, rootElt)
-    // The spatial structure doesn't contain properties.  NavTree uses
-    // the callback for onElementSelect in this class to fill out
-    // details for the rest of the tree items, so just root needs
-    // special handling.
-    // TODO(pablo): not sure if this is expected or a problem with the
-    // IFC API.  Could also try to get the initial root elt load to
-    // use shared logic with setSelectedElement.
-    const rootProps = await viewer.getProperties(0, rootElt.expressID)
-    rootElt.Name = rootProps.Name
-    rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setShowNavPanel(true)
   }
@@ -316,7 +316,8 @@ export default function CadView({
           } else {
             navigate(pathPrefix + modelPath.filepath + path)
           }
-          setSelectedElement(item)
+          // setSelectedElement(item)
+          setSelectedElementStore(item)
         }
       }
     }
@@ -325,7 +326,8 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement(null)
+    // setSelectedElement({})
+    setSelectedElementStore({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -359,7 +361,8 @@ export default function CadView({
     }
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
-    setSelectedElement(props)
+    // setSelectedElement(props)
+    setSelectedElementStore(props)
 
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
@@ -382,10 +385,9 @@ export default function CadView({
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
-          message={snackMessage}
+          message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
-          open={isLoading}/>
-        <SideDrawer/>
+          open={isLoading || snackMessage !== null}/>
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
@@ -407,25 +409,24 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }/>}
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
-        <div className={isItemPanelOpen || isDrawerOpen ?
+        <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}>
           {viewer &&
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
-              itemPanelControl={
-                <ItemPanelControl
-                  model={model}
-                  element={selectedElement}
-                  isOpenState={isItemPanelOpenState}/>}/>}
+            />}
         </div>
-        <div className={isItemPanelOpen || isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
-
+      {isDrawerOpen &&
+        (isMobile ? <MobileDrawer/> :
+        <SideDrawer
+          onClose={closeDrawer}/>)}
     </div>
   )
 }
