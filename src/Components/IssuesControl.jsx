@@ -131,7 +131,6 @@ export function Issues() {
         const issuesArr = []
         let imageUrl = ''
         let body = null
-
         issues.data.map((issue, index) => {
           const lines = issue.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
@@ -142,23 +141,25 @@ export function Issues() {
             const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
             imageUrl = imageSrc[1]
           } else {
+            console.log('else')
             imageUrl = ''
           }
-
+          const constructedIssueObj = {
+            embeddedUrl: embeddedUrl,
+            index: index,
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            body: body,
+            date: issue.created_at,
+            username: issue.user.login,
+            avatarUrl: issue.user.avatar_url,
+            numberOfComments: issue.comments,
+            imageUrl: imageUrl,
+          }
+          debug().log('constructed issue object', constructedIssueObj)
           issuesArr.push(
-              {
-                embeddedUrl: embeddedUrl,
-                index: index,
-                id: issue.id,
-                number: issue.number,
-                title: issue.title,
-                body: body,
-                date: issue.created_at,
-                username: issue.user.login,
-                avatarUrl: issue.user.avatar_url,
-                numberOfComments: issue.comments,
-                imageUrl: imageUrl,
-              },
+              constructedIssueObj,
           )
         })
         setIssues(issuesArr)
