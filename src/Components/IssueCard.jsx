@@ -167,7 +167,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
             icon={ <Select />} />
         </div>
         }
-        {!isRunningLocally &&
+        {!isRunningLocally() &&
           <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
         }
       </div>
