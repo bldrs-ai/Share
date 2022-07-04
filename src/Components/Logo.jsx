@@ -5,7 +5,7 @@ import Tooltip from '@mui/material/Tooltip'
 import {ColorModeContext} from '../Share'
 import PkgJson from '../../package.json'
 import {TooltipIconButton} from './Buttons'
-import LogoIcon from '../assets/2D_Icons/Logo.svg'
+import LogoIcon from '../assets/2D_Icons/Logo_abstract.svg'
 
 
 /**
