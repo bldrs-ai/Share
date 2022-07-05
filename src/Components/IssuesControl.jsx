@@ -364,7 +364,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingLeft: '10px',
-    borderRadius: '5px',
+    borderRadius: '3px',
     background: theme.palette.custom.highLight,
   },
   title: {

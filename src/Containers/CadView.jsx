@@ -114,8 +114,11 @@ export default function CadView({
 
   useEffect(() => {
     const issueHash = getHashParams(window.location, 'i')
+    console.log('issueHash', issueHash)
     if (issueHash !== undefined) {
+      console.log('in the loop', issueHash)
       const extractedCommentId = issueHash.split(':')[1]
+      console.log('extracted comment ID', extractedCommentId)
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       toggleIsCommentsOn()
