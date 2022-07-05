@@ -11,6 +11,7 @@ import {useIsMobile} from './Hooks'
 import Select from '../assets/2D_Icons/Select.svg'
 import Camera from '../assets/2D_Icons/Camera.svg'
 import Share from '../assets/2D_Icons/Share.svg'
+import {isRunningLocally} from '../utils/network'
 
 
 /**
@@ -166,7 +167,9 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
             icon={ <Select />} />
         </div>
         }
-        <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
+        {!isRunningLocally() &&
+          <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
+        }
       </div>
     </div>
   )
