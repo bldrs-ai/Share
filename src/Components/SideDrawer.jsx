@@ -7,6 +7,7 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
+import {getHashParams} from '../utils/location'
 
 /**
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
@@ -21,12 +22,26 @@ export default function SideDrawer() {
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
   const isMobile = useIsMobile()
+  const openDrawer = useStore((state) => state.openDrawer)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
 
   useEffect(() => {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
+
+  useEffect(() => {
+    const issueHash = getHashParams(window.location, 'i')
+    if (issueHash !== undefined) {
+      const extractedCommentId = issueHash.split(':')[1]
+      setSelectedIssueId(Number(extractedCommentId))
+      openDrawer()
+      toggleIsCommentsOn()
+    }
+  }, [])
+
 
   return (
     <>

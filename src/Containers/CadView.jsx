@@ -21,7 +21,6 @@ import useStore from '../store/useStore'
 import SideDrawer from '../Components/SideDrawer'
 import MobileDrawer from '../Components/MobileDrawer'
 import {useIsMobile} from '../Components/Hooks'
-import {getHashParams} from '../utils/location'
 
 
 /**
@@ -69,12 +68,11 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const openDrawer = useStore((state) => state.openDrawer)
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+
   const closeDrawer = useStore((state) => state.closeDrawer)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const isMobile = useIsMobile()
@@ -108,16 +106,6 @@ export default function CadView({
     onSearchParams()
   }, [searchParams])
   /* eslint-enable */
-
-  useEffect(() => {
-    const issueHash = getHashParams(window.location, 'i')
-    if (issueHash !== undefined) {
-      const extractedCommentId = issueHash.split(':')[1]
-      setSelectedIssueId(Number(extractedCommentId))
-      openDrawer()
-      toggleIsCommentsOn()
-    }
-  }, [])
 
 
   /**
