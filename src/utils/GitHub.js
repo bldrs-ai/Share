@@ -1,7 +1,7 @@
 import {Octokit} from '@octokit/rest'
 import PkgJson from '../../package.json'
 import debug from './debug'
-// import {isRunningLocally} from './network'
+import {isRunningLocally} from './network'
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
@@ -355,17 +355,7 @@ export class MockOctokit {
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
-// const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
-//   userAgent: `bldrs/${PkgJson.version}`,
-// })
-
-const octokit = new Octokit({
+const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
-
-// // All direct uses of octokit should be private to this file to
-// // ensure we setup mocks for local use and unit testing.
-// const octokit = new Octokit({
-//   userAgent: `bldrs/${PkgJson.version}`,
-// })
 

@@ -56,7 +56,6 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const elementsById = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  // const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -66,8 +65,6 @@ export default function CadView({
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  // const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
-  // const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
@@ -130,7 +127,6 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    // setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
     const intializedViewer = initViewer(
         pathPrefix,

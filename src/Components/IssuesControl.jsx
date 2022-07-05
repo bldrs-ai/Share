@@ -17,6 +17,7 @@ import {TooltipIconButton} from './Buttons'
 import {removeHashParams} from '../utils/location'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {addHashParams} from '../utils/location'
+import {isRunningLocally} from '../utils/network'
 
 
 /** The prefix to use for issue id in the Url hash. */
@@ -139,7 +140,8 @@ export function Issues() {
           if (issue.body.includes('img')) {
             const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
             const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
-            imageUrl = imageSrc[1]
+            imageUrl = isRunningLocally() ? imageUrl = isolateImageSrc : imageSrc[1]
+            console.log('imageUrl', imageUrl)
           } else {
             imageUrl = ''
           }
