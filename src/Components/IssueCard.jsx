@@ -104,7 +104,7 @@ export default function IssueCard({
     <Paper
       elevation={0}
       className={classes.container}
-      style={{borderRadius: '10px'}}
+      style={{borderRadius: '5px'}}
     >
       <CardTitle
         title={title}

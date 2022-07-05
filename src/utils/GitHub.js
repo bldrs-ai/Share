@@ -251,6 +251,10 @@ export class MockOctokit {
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
-const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+// const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+//   userAgent: `bldrs/${PkgJson.version}`,
+// })
+
+const octokit = new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
