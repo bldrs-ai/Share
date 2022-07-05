@@ -99,6 +99,7 @@ export default function IssueCard({
   function shareIssue() {
     navigator.clipboard.writeText(window.location)
     setSnackMessage('The url path is copied to the clipboard')
+    setTimeout(() => setSnackMessage(null), 5000)
   }
 
   return (
