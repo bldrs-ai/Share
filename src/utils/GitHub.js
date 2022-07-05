@@ -1,7 +1,7 @@
 import {Octokit} from '@octokit/rest'
 import PkgJson from '../../package.json'
 import debug from './debug'
-import {isRunningLocally} from './network'
+// import {isRunningLocally} from './network'
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
