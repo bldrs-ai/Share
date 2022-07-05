@@ -39,7 +39,6 @@ export async function getComments(issueId) {
         issue_number: issueId,
       })
   debug().log('GitHub: comments: ', comments)
-  console.log('comments', comments)
   if (comments && comments.data && comments.data.length > 0) {
     return comments.data
   } else {
@@ -346,11 +345,9 @@ export class MockOctokit {
   request(path, account, args) {
     debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
     if (path.includes('/repos/{owner}/{repo}/issues/{issue_number}/comments')) {
-      console.log('in the comments')
       return MOCK_COMMENTS
     }
     if (path.includes('/repos/{owner}/{repo}/issues')) {
-      console.log('in the issues')
       return MOCK_ISSUES
     }
   }

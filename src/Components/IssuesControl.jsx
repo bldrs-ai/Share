@@ -130,7 +130,6 @@ export function Issues() {
         const issues = await getIssues()
         const issuesArr = []
         let imageUrl = ''
-        console.log('in the issue control', issues)
 
         issues.data.map((issue, index) => {
           const lines = issue.body.split('\r\n')
@@ -139,10 +138,8 @@ export function Issues() {
 
           if (issue.body.includes('img')) {
             const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
-            console.log('isolateImageSrc', isolateImageSrc)
-            // const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
-            // imageUrl = imageSrc[1]
-            // console.log('imageUrl --- ', imageUrl)
+            const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
+            imageUrl = imageSrc[1]
           } else {
             imageUrl = ''
           }
@@ -164,7 +161,6 @@ export function Issues() {
               constructedIssueObj,
           )
         })
-        console.log('issuesArr -- ', issuesArr)
         setIssues(issuesArr)
       } catch {
         debug().log('failed to fetch issues')
@@ -185,7 +181,6 @@ export function Issues() {
           const lines = comment.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
           commentImageUrl = comment.body.split('ImageUrl')[1]
-          console.log('lines from comments', lines)
           const body = lines[0]
           commentsArr.push(
               {
@@ -216,7 +211,6 @@ export function Issues() {
       <div className={classes.cardsContainer}>
         {!selectedIssueId ?
           issues.map((issue, index) => {
-            console.log('in the issues loop compoent')
             return (
               <IssueCard
                 embeddedUrl={issue.embeddedUrl}
