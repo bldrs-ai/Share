@@ -141,7 +141,6 @@ export function Issues() {
             const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
             const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
             imageUrl = isRunningLocally() ? imageUrl = isolateImageSrc : imageSrc[1]
-            console.log('imageUrl', imageUrl)
           } else {
             imageUrl = ''
           }
@@ -158,7 +157,6 @@ export function Issues() {
             numberOfComments: issue.comments,
             imageUrl: imageUrl,
           }
-          debug().log('constructed issue object', constructedIssueObj)
           issuesArr.push(
               constructedIssueObj,
           )
