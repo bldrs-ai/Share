@@ -14,6 +14,10 @@ test('side drawer notes', () => {
   })
   render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
   expect(screen.getByText('Notes')).toBeInTheDocument()
+  // reset the store
+  act(() => {
+    result.current.toggleIsCommentsOn()
+  })
 })
 
 
@@ -28,4 +32,17 @@ test('side drawer properties', () => {
   expect(screen.getByText('Properties')).toBeInTheDocument()
 })
 
+
+test('side drawer - issues id in url', () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  const extractedCommentId = '1257156364'
+  act(() => {
+    result.current.setSelectedIssueId(Number(extractedCommentId))
+    result.current.toggleIsCommentsOn()
+    result.current.openDrawer()
+  })
+  render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
+  expect(screen.getByText('Note')).toBeInTheDocument()
+  expect(screen.getByText('BLDRS: OPEN WORKSPACE - LOCAL MODE')).toBeInTheDocument()
+})
 
