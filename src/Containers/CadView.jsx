@@ -18,7 +18,7 @@ import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../store/useStore'
-import {SideDrawerWrapper} from '../Components/SideDrawer'
+import SideDrawerWrapper from '../Components/SideDrawer'
 import MobileDrawer from '../Components/MobileDrawer'
 import {useIsMobile} from '../Components/Hooks'
 

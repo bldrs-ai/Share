@@ -88,7 +88,7 @@ export function SideDrawer({
  * It makes it is possible to test Side Drawer outside of the cad view.
  * @return {Object} SideDrawer react component
  */
-export function SideDrawerWrapper() {
+export default function SideDrawerWrapper() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
