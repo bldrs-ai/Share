@@ -85,30 +85,30 @@ export default function SideDrawerWrapper() {
   const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const isMobile = useIsMobile()
 
   useEffect(() => {
     const issueHash = getHashParams(window.location, 'i')
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
-      console.log('in the drawer wrapper', extractedCommentId)
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       toggleIsCommentsOn()
-      console.log('is drawer open', isDrawerOpen)
     }
   }, [])
 
   return (
     <>
-      <SideDrawer
-        isDrawerOpen={isDrawerOpen}
-        closeDrawer={closeDrawer}
-        isCommentsOn={isCommentsOn}
-        isPropertiesOn={isPropertiesOn}
-        openDrawer={openDrawer}
-        toggleIsCommentsOn={toggleIsCommentsOn}
-        setSelectedIssueId={setSelectedIssueId}
-      />
+      {isDrawerOpen &&
+        (isMobile ? <MobileDrawer/> :
+        <SideDrawer
+          isDrawerOpen={isDrawerOpen}
+          closeDrawer={closeDrawer}
+          isCommentsOn={isCommentsOn}
+          isPropertiesOn={isPropertiesOn}
+          openDrawer={openDrawer}
+          toggleIsCommentsOn={toggleIsCommentsOn}
+          setSelectedIssueId={setSelectedIssueId}/>)}
     </>
   )
 }

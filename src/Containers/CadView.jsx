@@ -19,8 +19,6 @@ import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../store/useStore'
 import SideDrawerWrapper from '../Components/SideDrawer'
-import MobileDrawer from '../Components/MobileDrawer'
-import {useIsMobile} from '../Components/Hooks'
 
 
 /**
@@ -71,11 +69,10 @@ export default function CadView({
 
   // const closeDrawer = useStore((state) => state.closeDrawer)
   const setModelStore = useStore((state) => state.setModelStore)
-  const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
+  const setSelectedElement = useStore((state) => state.setSelectedElement)
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const isMobile = useIsMobile()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -300,8 +297,7 @@ export default function CadView({
           } else {
             navigate(pathPrefix + modelPath.filepath + path)
           }
-          // setSelectedElement(item)
-          setSelectedElementStore(item)
+          setSelectedElement(item)
         }
       }
     }
@@ -310,8 +306,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    // setSelectedElement({})
-    setSelectedElementStore({})
+    setSelectedElement({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -345,8 +340,7 @@ export default function CadView({
     }
     selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
-    // setSelectedElement(props)
-    setSelectedElementStore(props)
+    setSelectedElement(props)
 
     // TODO(pablo): just found out this method is getting called a lot
     // when i added navigation on select, which flooded the browser
@@ -407,9 +401,6 @@ export default function CadView({
         </div>
         {alert}
       </div>
-      {isDrawerOpen &&
-        (isMobile ? <MobileDrawer/> :
-        null)}
       <SideDrawerWrapper />
     </div>
   )
