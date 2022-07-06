@@ -18,6 +18,8 @@ export default function MobileDrawer({content}) {
   const [open, setOpen] = useState(false)
   const toggleDrawer = () => setOpen(!open)
   const classes = useStyles({isOpen: open})
+  const closeDrawer = useStore((state) => state.closeDrawer)
+  const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
@@ -30,8 +32,8 @@ export default function MobileDrawer({content}) {
         anchor='bottom'
         variant='persistent'
         open={open}
-        onClose={toggleDrawer}
-        onOpen={toggleDrawer}
+        onClose={closeDrawer}
+        onOpen={openDrawer}
         swipeAreaWidth={drawerBleeding}
         disableSwipeToOpen={false}>
         <StyledBox className={classes.contentContainer}>

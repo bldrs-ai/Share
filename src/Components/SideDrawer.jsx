@@ -85,7 +85,6 @@ export default function SideDrawerWrapper() {
   const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
-  const isMobile = useIsMobile()
 
   useEffect(() => {
     const issueHash = getHashParams(window.location, 'i')
@@ -100,7 +99,6 @@ export default function SideDrawerWrapper() {
   return (
     <>
       {isDrawerOpen &&
-        (isMobile ? <MobileDrawer/> :
         <SideDrawer
           isDrawerOpen={isDrawerOpen}
           closeDrawer={closeDrawer}
@@ -108,7 +106,7 @@ export default function SideDrawerWrapper() {
           isPropertiesOn={isPropertiesOn}
           openDrawer={openDrawer}
           toggleIsCommentsOn={toggleIsCommentsOn}
-          setSelectedIssueId={setSelectedIssueId}/>)}
+          setSelectedIssueId={setSelectedIssueId}/>}
     </>
   )
 }
