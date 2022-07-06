@@ -15,16 +15,17 @@ import {getHashParams} from '../utils/location'
  * it is connected to the global store and controlled by isDrawerOpen property.
  * @return {Object} SideDrawer react component
  */
-export default function SideDrawer() {
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const closeDrawer = useStore((state) => state.closeDrawer)
-  const isCommentsOn = useStore((state) => state.isCommentsOn)
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+export function SideDrawer({
+  isDrawerOpen,
+  closeDrawer,
+  isCommentsOn,
+  isPropertiesOn,
+  openDrawer,
+  toggleIsCommentsOn,
+  setSelectedIssueId}) {
   const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
   const isMobile = useIsMobile()
-  const openDrawer = useStore((state) => state.openDrawer)
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+
 
   useEffect(() => {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
@@ -76,6 +77,36 @@ export default function SideDrawer() {
           </div>
         </Drawer>
       }
+    </>
+  )
+}
+
+
+/**
+ * SideDrawerWrapper is the container for the SideDrawer component.
+ * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
+ * It makes it is possible to test Side Drawer outside of the cad view.
+ * @return {Object} SideDrawer react component
+ */
+export function SideDrawerWrapper() {
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const closeDrawer = useStore((state) => state.closeDrawer)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  return (
+    <>
+      <SideDrawer
+        isDrawerOpen={isDrawerOpen}
+        closeDrawer={closeDrawer}
+        isCommentsOn={isCommentsOn}
+        isPropertiesOn={isPropertiesOn}
+        openDrawer={openDrawer}
+        toggleIsCommentsOn={toggleIsCommentsOn}
+        setSelectedIssueId={setSelectedIssueId}
+      />
     </>
   )
 }

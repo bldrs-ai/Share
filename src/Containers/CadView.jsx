@@ -18,7 +18,7 @@ import * as Privacy from '../privacy/Privacy'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import useStore from '../store/useStore'
-import SideDrawer from '../Components/SideDrawer'
+import {SideDrawerWrapper} from '../Components/SideDrawer'
 import MobileDrawer from '../Components/MobileDrawer'
 import {useIsMobile} from '../Components/Hooks'
 
@@ -69,7 +69,7 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
 
-  const closeDrawer = useStore((state) => state.closeDrawer)
+  // const closeDrawer = useStore((state) => state.closeDrawer)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElementStore = useStore((state) => state.setSelectedElementStore)
 
@@ -409,8 +409,7 @@ export default function CadView({
       </div>
       {isDrawerOpen &&
         (isMobile ? <MobileDrawer/> :
-        <SideDrawer
-          onClose={closeDrawer}/>)}
+        <SideDrawerWrapper />)}
     </div>
   )
 }
