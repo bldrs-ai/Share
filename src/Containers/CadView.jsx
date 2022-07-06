@@ -409,7 +409,8 @@ export default function CadView({
       </div>
       {isDrawerOpen &&
         (isMobile ? <MobileDrawer/> :
-        <SideDrawerWrapper />)}
+        null)}
+      <SideDrawerWrapper />
     </div>
   )
 }

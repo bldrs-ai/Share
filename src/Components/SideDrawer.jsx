@@ -90,9 +90,11 @@ export default function SideDrawerWrapper() {
     const issueHash = getHashParams(window.location, 'i')
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
+      console.log('in the drawer wrapper', extractedCommentId)
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       toggleIsCommentsOn()
+      console.log('is drawer open', isDrawerOpen)
     }
   }, [])
 
