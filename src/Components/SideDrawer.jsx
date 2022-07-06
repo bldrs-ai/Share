@@ -33,17 +33,6 @@ export function SideDrawer({
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
-  useEffect(() => {
-    const issueHash = getHashParams(window.location, 'i')
-    if (issueHash !== undefined) {
-      const extractedCommentId = issueHash.split(':')[1]
-      setSelectedIssueId(Number(extractedCommentId))
-      openDrawer()
-      toggleIsCommentsOn()
-    }
-  }, [])
-
-
   return (
     <>
       {isMobile && isDrawerOpen ?
@@ -96,6 +85,17 @@ export default function SideDrawerWrapper() {
   const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+
+  useEffect(() => {
+    const issueHash = getHashParams(window.location, 'i')
+    if (issueHash !== undefined) {
+      const extractedCommentId = issueHash.split(':')[1]
+      setSelectedIssueId(Number(extractedCommentId))
+      openDrawer()
+      toggleIsCommentsOn()
+    }
+  }, [])
+
   return (
     <>
       <SideDrawer
