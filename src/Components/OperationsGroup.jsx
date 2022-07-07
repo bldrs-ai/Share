@@ -26,14 +26,12 @@ export default function OperationsGroup({viewer, unSelectItem}) {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const selectedElement = useStore((state) => state.selectedElement)
-  console.log('selected element from the operations group', selectedElement)
 
   const toggle = (panel) => {
     openDrawer()
     panel === 'Properties' ? toggleIsPropertiesOn() : null
     panel === 'Notes' ? toggleIsCommentsOn() : null
   }
-  console.log('selected element', selectedElement)
 
   return (
     <div className={classes.container}>

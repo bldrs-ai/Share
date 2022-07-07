@@ -22,9 +22,6 @@ import {isRunningLocally} from '../utils/network'
 
 /** The prefix to use for issue id in the Url hash. */
 export const ISSUE_PREFIX = 'i'
-
-
-// exported for testing only
 const regex = new RegExp(`${ISSUE_PREFIX}:(\\d+)(?::(\\d+))?`)
 
 
