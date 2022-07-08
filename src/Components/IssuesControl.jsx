@@ -126,12 +126,12 @@ export function Issues() {
       try {
         const issues = await getIssues()
         const issuesArr = []
-        let imageUrl = ''
 
         issues.data.map((issue, index) => {
           const lines = issue.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
           const body = lines[0]
+          let imageUrl = ''
 
           if (issue.body.includes('img')) {
             const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
@@ -142,9 +142,8 @@ export function Issues() {
 
             // Then filter out the non-matched capture group (as that value will be undefined)
             imageUrl = imageSrc.slice(1).filter((u) => u !== undefined)[0]
-          } else {
-            imageUrl = ''
           }
+
           const constructedIssueObj = {
             embeddedUrl: embeddedUrl,
             index: index,
