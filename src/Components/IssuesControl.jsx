@@ -17,7 +17,6 @@ import {TooltipIconButton} from './Buttons'
 import {removeHashParams} from '../utils/location'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {addHashParams} from '../utils/location'
-import {isRunningLocally} from '../utils/network'
 
 
 /** The prefix to use for issue id in the Url hash. */
@@ -109,6 +108,25 @@ export function IssuesNavBar() {
   )
 }
 
+/**
+ * Extracts the image URL from the issue body, if present
+ * @param {Object} issue
+ * @return {string} Issue image URL
+ */
+export const extractImageFromIssue = (issue) => {
+  if (issue === null || issue.body === null || !issue.body.includes('img')) {
+    return ''
+  }
+
+  const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
+
+  // Match either single or double quote-wrapped attribute
+  //   <img src = "..." /> OR <img src = '...' />
+  const imageSrc = isolateImageSrc.match(/"([^"]*)"|'([^']*)'/)
+
+  // Then filter out the non-matched capture group (as that value will be undefined)
+  return imageSrc.slice(1).filter((u) => u !== undefined)[0]
+}
 
 /**
  * @return {Object} list of issues and comments
@@ -127,20 +145,13 @@ export function Issues() {
       try {
         const issues = await getIssues()
         const issuesArr = []
-        let imageUrl = ''
 
         issues.data.map((issue, index) => {
           const lines = issue.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
           const body = lines[0]
+          const imageUrl = extractImageFromIssue(issue)
 
-          if (issue.body.includes('img')) {
-            const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
-            const imageSrc = isolateImageSrc.match(/"([^"]*)"/)
-            imageUrl = isRunningLocally() ? imageUrl = isolateImageSrc : imageSrc[1]
-          } else {
-            imageUrl = ''
-          }
           const constructedIssueObj = {
             embeddedUrl: embeddedUrl,
             index: index,
