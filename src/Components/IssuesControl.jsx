@@ -108,6 +108,25 @@ export function IssuesNavBar() {
   )
 }
 
+/**
+ * Extracts the image URL from the issue body, if present
+ * @param {Object} issue
+ * @return {string} Issue image URL
+ */
+function extractImageFromIssue(issue) {
+  if (issue === null || issue.body === null || !issue.body.includes('img')) {
+    return ''
+  }
+
+  const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
+
+  // Match either single or double quote-wrapped attribute
+  //   <img src = "..." /> OR <img src = '...' />
+  const imageSrc = isolateImageSrc.match(/"([^"]*)"|'([^']*)'/)
+
+  // Then filter out the non-matched capture group (as that value will be undefined)
+  return imageSrc.slice(1).filter((u) => u !== undefined)[0]
+}
 
 /**
  * @return {Object} list of issues and comments
@@ -131,18 +150,7 @@ export function Issues() {
           const lines = issue.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
           const body = lines[0]
-          let imageUrl = ''
-
-          if (issue.body.includes('img')) {
-            const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
-
-            // Match either single or double quote-wrapped attribute
-            //   <img src = "..." /> OR <img src = '...' />
-            const imageSrc = isolateImageSrc.match(/"([^"]*)"|'([^']*)'/)
-
-            // Then filter out the non-matched capture group (as that value will be undefined)
-            imageUrl = imageSrc.slice(1).filter((u) => u !== undefined)[0]
-          }
+          const imageUrl = extractImageFromIssue(issue)
 
           const constructedIssueObj = {
             embeddedUrl: embeddedUrl,
