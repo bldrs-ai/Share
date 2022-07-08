@@ -5,7 +5,7 @@ import {MockRoutes} from '../BaseRoutesMock.test'
 
 
 test('renders sample models control', async () => {
-  const rendered = render( <MockRoutes contentElt = {<SampleModelsControl/>} />)
+  const rendered = render( <MockRoutes contentElt={<SampleModelsControl/>} />)
   const sampleModelsButton = screen.getByTitle('Sample Models')
   fireEvent.mouseOver(sampleModelsButton)
   fireEvent.click(sampleModelsButton)

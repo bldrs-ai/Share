@@ -68,7 +68,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <div style = {{textAlign: 'left'}}>
+          <div style={{textAlign: 'left'}}>
             <p>
               We believe GitHub provides an excellent foundation for the new BIM ecosystem.
             </p>
@@ -79,9 +79,9 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               Please visit our
               &nbsp;
               <a
-                className = {classes.link}
+                className={classes.link}
                 target="_blank"
-                href = 'https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+                href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
                 rel="noreferrer">wiki</a>
               &nbsp; to learn more.
             </p>
@@ -97,7 +97,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               variant='outlined'
               label='Highlighted IFCs'
               select
-              size = 'small'
+              size='small'
             >
               <MenuItem value=''>
                 <em>None</em>

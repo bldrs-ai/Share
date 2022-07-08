@@ -44,7 +44,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <GitHubIcon style = {{width: '50px', height: '50px'}}/>
+          <GitHubIcon style={{width: '50px', height: '50px'}}/>
           <p className={classes.bullet}>
             To take advantage of all features of BLDRS, we recommend using GitHub for model hosting.
             <br/>
@@ -52,27 +52,27 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             <br/>
             For more info visit our &nbsp;
             <a
-              className = {classes.link}
+              className={classes.link}
               target="_blank"
-              href = 'https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+              href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
               rel="noreferrer">wiki</a>
             <br/>
 
           </p>
-          <LocalFileOpen style = {{width: '50px', height: '50px'}}/>
+          <LocalFileOpen style={{width: '50px', height: '50px'}}/>
           <p className={classes.bullet}>
             <b>Models accessed from local drive cannot be saved or shared.</b>
             <br/>
           </p>
           <span
-            className = {classes.link}
-            role = 'button'
+            className={classes.link}
+            role='button'
             tabIndex={0}
-            onKeyPress = {() => {
+            onKeyPress={() => {
               fileOpen()
               setIsDialogDisplayed(false)
             }}
-            onClick = {() => {
+            onClick={() => {
               fileOpen()
               setIsDialogDisplayed(false)
             }}>OPEN</span>

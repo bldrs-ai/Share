@@ -5,6 +5,7 @@ import FormGroup from '@mui/material/FormGroup'
 import TextField from '@mui/material/TextField'
 import ToggleButton from '@mui/material/ToggleButton'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
 import {ControlButton} from './Buttons'
 import Dialog from './Dialog'
 import {
@@ -55,18 +56,19 @@ export default function ShareControl({viewer}) {
 function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(assertDefinedBoolean(urlHasCameraCoords()))
+  const cameraControls = useStore((state) => state.cameraControls)
   const urlTextFieldRef = createRef()
   const classes = useStyles()
 
   useEffect(() => {
     if (viewer) {
       if (isCameraInUrl) {
-        addCameraUrlParams(viewer)
+        addCameraUrlParams(cameraControls)
       } else {
         removeCameraUrlParams()
       }
     }
-  }, [viewer, isCameraInUrl])
+  }, [viewer, isCameraInUrl, cameraControls])
 
   const closeDialog = () => {
     setIsDialogDisplayed(false)

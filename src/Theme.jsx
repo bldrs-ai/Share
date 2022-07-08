@@ -110,7 +110,7 @@ function loadTheme(mode) {
   }}
   const theme = {
     typography: typography,
-    shape: {borderRadius: 10},
+    shape: {borderRadius: 5},
     palette: activePalette,
   }
   return createTheme(theme)

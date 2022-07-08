@@ -27,7 +27,7 @@ test('CameraControl', () => {
 test('onHash, position', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3'}
-  onHash(cam, location)
+  onHash(location, cam)
   const expectCam = new MockCamera(1, 2, 3)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)
@@ -37,7 +37,7 @@ test('onHash, position', () => {
 test('onHash, target', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3,4,5,6'}
-  onHash(cam, location)
+  onHash(location, cam)
   const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)
@@ -77,6 +77,22 @@ class MockCamera {
     this.y = y
     this.z = z
     this.doTween = doTween
+  }
+
+
+  /**
+   * @return {Array} camera position
+   */
+  getPosition() {
+    return [this.x, this.y, this.z]
+  }
+
+
+  /**
+   * @return {Array} camera target
+   */
+  getTarget() {
+    return [this.x, this.y, this.z]
   }
 
 

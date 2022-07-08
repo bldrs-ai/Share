@@ -4,6 +4,7 @@ import ItemProperties from './ItemProperties'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
+import {IssuesNavBar, Issues} from './IssuesControl'
 
 /**
  * Panel Title
@@ -14,8 +15,8 @@ import useStore from '../store/useStore'
 function PanelTitle({title, controlsGroup}) {
   const classes = useStyles(useTheme())
   return (
-    <div className = {classes.titleContainer}>
-      <div className = {classes.title}>
+    <div className={classes.titleContainer}>
+      <div className={classes.title}>
         {title}
       </div>
       {controlsGroup}
@@ -35,18 +36,31 @@ export function PropertiesPanel() {
   return (
     <>
       <PanelTitle
-        title = 'Properties'
-        controlsGroup = {
+        title='Properties'
+        controlsGroup={
           <div>
             <TooltipIconButton
               title='toggle drawer'
               onClick={toggleIsPropertiesOn}
-              icon={<CloseIcon style = {{width: '24px', height: '24px'}}/>}/>
+              icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}/>
           </div>
         }
       />
-      <div className = {classes.contentContainer}>
+      <div className={classes.contentContainer}>
         {selectedElement ? <ItemProperties/> : null}
+      </div>
+    </>
+  )
+}
+
+
+export const NotesPanel = () => {
+  const classes = useStyles(useTheme())
+  return (
+    <>
+      <IssuesNavBar/>
+      <div className={classes.contentContainer}>
+        <Issues/>
       </div>
     </>
   )
