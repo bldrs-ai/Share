@@ -8,6 +8,7 @@ import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import {getHashParams} from '../utils/location'
+import {useLocation} from 'react-router-dom'
 
 /**
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
@@ -85,16 +86,17 @@ export default function SideDrawerWrapper() {
   const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const location = useLocation()
 
   useEffect(() => {
-    const issueHash = getHashParams(window.location, 'i')
+    const issueHash = getHashParams(location, 'i')
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       toggleIsCommentsOn()
     }
-  }, [])
+  }, [location])
 
   return (
     <>

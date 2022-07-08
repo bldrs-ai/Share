@@ -1,10 +1,10 @@
 import React from 'react'
-import {render, screen} from '@testing-library/react'
-import {MockRoutes, MOCK_SELECTED_ELEMENT} from '../BaseRoutesMock.test'
+import {render, screen, waitFor} from '@testing-library/react'
+import {MockRoutes, MOCK_SELECTED_ELEMENT, MockElement} from '../BaseRoutesMock.test'
 import SideDrawerWrapper from './SideDrawer'
 import {act, renderHook} from '@testing-library/react-hooks'
 import useStore from '../store/useStore'
-// import {addHashParams, getHashParams, ISSUE_PREFIX} from '../utils/location'
+import {MemoryRouter} from 'react-router-dom'
 
 
 test('side drawer notes', () => {
@@ -58,24 +58,25 @@ test('side drawer - issues id in url', () => {
 })
 
 
-// test('side drawer - issues id in url', () => {
-//   const {result} = renderHook(() => useStore((state) => state))
+test('side drawer - opened via URL', async () => {
+  const {result} = renderHook(() => useStore((state) => state))
 
-//   // rying to set the url -- but don't think it is working
-//   addHashParams(window.location, ISSUE_PREFIX, {id: '1257156364'})
-//   // I am not sure if getHashParams is working
-//   const issueHash = getHashParams(window.location, 'i')
+  const {getByText} = render(
+      <MemoryRouter initialEntries={['/v/p/index.ifc#i:1257156364::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
+        <MockElement>
+          <SideDrawerWrapper />
+        </MockElement>
+      </MemoryRouter>,
+  )
 
-//   // the previous test is testing the rest of the process
-//   const extractedCommentId = issueHash.split(':')[1]
-//   act(() => {
-//     result.current.setSelectedIssueId(Number(extractedCommentId))
-//     result.current.toggleIsCommentsOn()
-//     result.current.openDrawer()
-//   })
-//   render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
-//   expect(screen.getByText('Note')).toBeInTheDocument()
-//   expect(screen.getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
-// })
+  await waitFor(() => {
+    expect(getByText('Note')).toBeInTheDocument()
+    expect(getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
+  })
 
-
+  // reset the store
+  act(() => {
+    result.current.setSelectedElement({})
+    result.current.toggleIsCommentsOn()
+  })
+})
