@@ -226,6 +226,16 @@ export default function CadView({
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
     initSearch(model, rootElt)
+    // The spatial structure doesn't contain properties.  NavTree uses
+    // the callback for onElementSelect in this class to fill out
+    // details for the rest of the tree items, so just root needs
+    // special handling.
+    // TODO(pablo): not sure if this is expected or a problem with the
+    // IFC API.  Could also try to get the initial root elt load to
+    // use shared logic with setSelectedElement.
+    const rootProps = await viewer.getProperties(0, rootElt.expressID)
+    rootElt.Name = rootProps.Name
+    rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setShowNavPanel(true)
   }
