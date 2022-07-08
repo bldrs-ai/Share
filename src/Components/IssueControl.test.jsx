@@ -107,12 +107,33 @@ test('Issues ', () => {
 })
 
 
-test('extractImageFromIssue', () => {
-  const issue = {
-    // eslint-disable-next-line max-len
-    body: 'Test Issue body\r\n\r\n<img width=\'475\' alt=\'image\' src=\'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\'>\r\n\r\nimageURL\r\nhttps://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\r\nimageURL\r\n\r\ncamera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06\r\n\r\n\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
-  }
+describe('extractImageFromIssue', () => {
+  test('null issue', () => {
+    const issue = null
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
 
-  const expectedImageURL = 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png'
-  expect(extractImageFromIssue(issue)).toEqual(expectedImageURL)
+  test('null issue body', () => {
+    const issue = {
+      body: null,
+    }
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
+
+  test('issue body without image URL header + trailer', () => {
+    const issue = {
+      body: 'http://testing.dev/an/image.png',
+    }
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
+
+  test('issue body with valid image URL', () => {
+    const issue = {
+      // eslint-disable-next-line max-len
+      body: 'Test Issue body\r\n\r\n<img width=\'475\' alt=\'image\' src=\'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\'>\r\n\r\nimageURL\r\nhttps://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\r\nimageURL\r\n\r\ncamera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06\r\n\r\n\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
+    }
+
+    const expectedImageURL = 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png'
+    expect(extractImageFromIssue(issue)).toEqual(expectedImageURL)
+  })
 })
