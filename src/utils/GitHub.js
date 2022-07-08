@@ -117,7 +117,7 @@ export const MOCK_ISSUES = {
       id: 1257156364,
       node_id: 'I_kwDOFwgxOc5K7q8M',
       number: 17,
-      title: 'BLDRS: OPEN WORKSPACE - LOCAL MODE',
+      title: 'BLDRS-LOCAL_MODE-ID:1257156364',
       user: {
         login: 'OlegMoshkovich',
         id: 3433606,
