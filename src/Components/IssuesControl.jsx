@@ -113,7 +113,7 @@ export function IssuesNavBar() {
  * @param {Object} issue
  * @return {string} Issue image URL
  */
-function extractImageFromIssue(issue) {
+export function extractImageFromIssue(issue) {
   if (issue === null || issue.body === null || !issue.body.includes('img')) {
     return ''
   }
