@@ -135,8 +135,13 @@ export function Issues() {
 
           if (issue.body.includes('img')) {
             const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
-            const imageSrc = isolateImageSrc.match(/["']([^"']*)["']/)
-            imageUrl = imageSrc[1]
+
+            // Match either single or double quote-wrapped attribute
+            //   <img src = "..." /> OR <img src = '...' />
+            const imageSrc = isolateImageSrc.match(/"([^"]*)"|'([^']*)'/)
+
+            // Then filter out the non-matched capture group (as that value will be undefined)
+            imageUrl = imageSrc.slice(1).filter((u) => u !== undefined)[0]
           } else {
             imageUrl = ''
           }
