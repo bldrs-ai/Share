@@ -19,15 +19,24 @@ const ColorModeContext = createContext({toggleColorMode: () => {}})
  * @return {Object} React component
  */
 export function MockRoutes({contentElt}) {
+  return (
+    <MockElement>
+      <MemoryRouter>
+        <Routes>
+          <Route path="/*" element={contentElt}/>
+        </Routes>
+      </MemoryRouter>
+    </MockElement>
+  )
+}
+
+export const MockElement = ({children}) => {
   const {theme, colorMode} = useTheme()
+
   return (
     <ColorModeContext.Provider value={colorMode}>
       <ThemeProvider theme={theme}>
-        <MemoryRouter>
-          <Routes>
-            <Route path="/*" element={contentElt} />
-          </Routes>
-        </MemoryRouter>
+        {children}
       </ThemeProvider>
     </ColorModeContext.Provider>
   )
