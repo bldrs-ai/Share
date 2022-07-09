@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r328",
+  "version": "1.0.0-r341",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@babel/core": "^7.17.9",
+    "@bldrs-ai/ifclib": "^5.2.3",
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",
     "@mui/icons-material": "^5.1.1",
@@ -88,7 +89,7 @@
       "^.+\\.svg$": "<rootDir>/svgTransform.js"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(web-ifc|web-ifc-three|web-ifc-viewer|three)/)"
+      "/node_modules/(?!(web-ifc|web-ifc-three|web-ifc-viewer|three|@bldrs-ai)/)"
     ],
     "moduleNameMapper": {
       "^.+\\.css$": "identity-obj-proxy"
