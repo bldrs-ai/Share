@@ -4,7 +4,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Switch from '@mui/material/Switch'
 import {makeStyles, useTheme} from '@mui/styles'
 import {TooltipToggleButton} from './Buttons'
-import {ColorModeContext} from '../Share'
+import {ColorModeContext} from '../Context/ColorMode'
 import PkgJson from '../../package.json'
 import SettingsIcon from '../assets/2D_Icons/Settings.svg'
 
