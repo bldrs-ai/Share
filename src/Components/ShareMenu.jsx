@@ -4,7 +4,7 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import {makeStyles, useTheme} from '@mui/styles'
 import Toggle from './Toggle'
-import {ColorModeContext} from '../Share'
+import {ColorModeContext} from '../Context/ColorMode'
 import PkgJson from '../../package.json'
 import Share from '../assets/3D/Share.svg'
 

@@ -3,7 +3,8 @@ import {useNavigate, useSearchParams} from 'react-router-dom'
 import {makeStyles} from '@mui/styles'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {ColorModeContext, navToDefault} from '../Share'
+import {ColorModeContext} from '../Context/ColorMode'
+import {navToDefault} from '../Share'
 import SearchIndex from './SearchIndex.js'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
@@ -261,7 +262,6 @@ export default function CadView({
 
   /**
    * Search for the query in the index and select matching items in UI elts.
-   * @param {string} query The search query.
    */
   function onSearchParams() {
     const sp = new URLSearchParams(window.location.search)
@@ -294,7 +294,6 @@ export default function CadView({
 
   /**
    * Select items in model when they are double-clicked.
-   * @param {string} filepath
    */
   async function setDoubleClickListener() {
     window.ondblclick = async (event) => {

@@ -1,8 +1,9 @@
-import React, {createContext} from 'react'
+import React from 'react'
 import {ThemeProvider} from '@mui/material/styles'
 import useTheme from './Theme'
 import {render} from '@testing-library/react'
 import {MemoryRouter, Routes, Route} from 'react-router-dom'
+import {ColorModeContext} from './Context/ColorMode'
 
 
 test('mockRoutes', () => {
@@ -10,9 +11,6 @@ test('mockRoutes', () => {
   const {getByText} = render(<MockRoutes contentElt={testLabel}/>)
   expect(getByText(testLabel)).toBeInTheDocument()
 })
-
-
-const ColorModeContext = createContext({toggleColorMode: () => {}})
 
 /**
  * @param {Object} contentElt React component

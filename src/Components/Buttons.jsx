@@ -11,7 +11,7 @@ import {assertDefined} from '../utils/assert'
  * @param {function} onClick
  * @param {Object} icon
  * @param {string} placement
- * @param {string} size
+ * @param {string} size Size of button component
  * @param {string} dataTestId Internal attribute for component testing
  * @return {Object} React component
  */
@@ -41,6 +41,7 @@ export const TooltipIconButton = ({
  * @param {function} onClick
  * @param {string} title Tooltip text
  * @param {Object} icon
+ * @param {string} size Size of button component
  * @param {string} placement Default: left
  * @return {Object} React component
  */
@@ -83,6 +84,7 @@ export function TooltipToggleButton({
  * @param {function} setIsDialogDisplayed
  * @param {Object} icon The header icon
  * @param {string} placement Default: left
+ * @param {string} size Size of button component
  * @param {Object} dialog The controlled dialog
  * @return {Object} React component
  */
@@ -120,6 +122,9 @@ export function ControlButton({
  * form actions.
  * @param {string} title
  * @param {Object} icon
+ * @param {string} type Type of button (and icon to render)
+ * @param {string} placement Placement of tooltip
+ * @param {string} size Size of button component
  * @return {Object} React component
  */
 export function FormButton({title, icon, type = 'submit', placement = 'left', size = 'medium'}) {
