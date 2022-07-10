@@ -8,8 +8,8 @@ import {IssuesNavBar, Issues} from './IssuesControl'
 
 /**
  * Panel Title
- * @param {String} Panel title
- * @param {Object} Controls Group is placed on the right of the title
+ * @param {String} title Panel title
+ * @param {Object} controlsGroup Controls Group is placed on the right of the title
  * @return {Object} Properties Panel react component
  */
 function PanelTitle({title, controlsGroup}) {
