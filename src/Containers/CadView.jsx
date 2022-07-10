@@ -261,7 +261,6 @@ export default function CadView({
 
   /**
    * Search for the query in the index and select matching items in UI elts.
-   * @param {string} query The search query.
    */
   function onSearchParams() {
     const sp = new URLSearchParams(window.location.search)
@@ -294,7 +293,6 @@ export default function CadView({
 
   /**
    * Select items in model when they are double-clicked.
-   * @param {string} filepath
    */
   async function setDoubleClickListener() {
     window.ondblclick = async (event) => {

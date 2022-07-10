@@ -12,8 +12,6 @@ import useStore from '../store/useStore'
 
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
- * @param {Object} model IFC model
- * @param {Object} element The currently selected IFC element
  * @return {Object} The ItemProperties react component
  */
 export default function ItemProperties() {
