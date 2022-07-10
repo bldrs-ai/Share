@@ -4,5 +4,7 @@
 # misc
 .DS_Store
 .vscode
+*.sw[a-p]
 
+coverage
 *.log
