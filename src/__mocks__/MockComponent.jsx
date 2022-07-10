@@ -1,7 +1,7 @@
 import useTheme from '../Theme'
 import {ThemeProvider} from '@mui/material/styles'
-import React, {createContext} from 'react'
-
+import React from 'react'
+import {ColorModeContext} from '../Context/ColorMode'
 
 /**
  * @param {Object} children React component(s)
@@ -18,11 +18,6 @@ export const MockComponent = ({children}) => {
     </ColorModeContext.Provider>
   )
 }
-
-const ColorModeContext = createContext({
-  toggleColorMode: () => {},
-})
-
 
 export const MOCK_SELECTED_ELEMENT = {
   expressID: 396,

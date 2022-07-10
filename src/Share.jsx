@@ -1,10 +1,11 @@
-import React, {createContext, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
 import useTheme from './Theme'
 import debug from './utils/debug'
+import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -139,6 +140,3 @@ function getModelPath(installPrefix, pathPrefix, urlParams) {
   }
   return m
 }
-
-
-export const ColorModeContext = createContext({toggleColorMode: () => {}})
