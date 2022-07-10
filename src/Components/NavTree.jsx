@@ -4,7 +4,7 @@ import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import PropTypes from 'prop-types'
 import clsx from 'clsx'
 import Typography from '@mui/material/Typography'
-import {reifyName} from '@bldrs-ai/ifclib/src/Ifc.js'
+import {reifyName} from '@bldrs-ai/ifclib'
 import {computeElementPath} from '../utils/TreeUtils'
 
 

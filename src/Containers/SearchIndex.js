@@ -1,4 +1,4 @@
-import * as Ifc from '@bldrs-ai/ifclib/src/Ifc.js'
+import * as Ifc from '@bldrs-ai/ifclib'
 import debug from '../utils/debug'
 import {deleteProperties} from '../utils/objects'
 
@@ -19,7 +19,6 @@ export default class SearchIndex {
    * @param {Object} elt async callback for rendering sub-object
    */
   indexElement(model, elt) {
-    console.log('model, elt:', model, elt)
     const type = Ifc.getType(model, elt)
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt)
