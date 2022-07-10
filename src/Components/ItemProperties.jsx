@@ -321,9 +321,10 @@ function row(d1, d2, serial) {
  */
 function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
-    d1 === null || d1 === undefined) {
+    d2 === null || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
+
   return (
     <tr>
       <td colSpan={2}>
