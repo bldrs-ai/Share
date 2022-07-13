@@ -45,7 +45,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/new'}
+              pathPrefix={`${appPrefix}/v/new`}
             />
           }
         />
@@ -55,7 +55,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/p'}
+              pathPrefix={`${appPrefix}/v/p`}
             />
           }
         />
@@ -65,7 +65,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/gh'}
+              pathPrefix={`${appPrefix}/v/gh`}
             />
           }
         />
@@ -87,7 +87,7 @@ function Forward({appPrefix}) {
 
   useEffect(() => {
     if (location.pathname == appPrefix) {
-      const dest = appPrefix + '/v/p'
+      const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
     }
@@ -119,7 +119,8 @@ export function looksLikeLink(input) {
  * @throws Error if the argument doesn't match the path pattern.
  */
 export function githubUrlOrPathToSharePath(urlWithPath) {
-  return '/share/v/gh' + extractOrgPrefixedPath(trimToPath(urlWithPath))
+  const orgRepoPath = extractOrgPrefixedPath(trimToPath(urlWithPath))
+  return `/share/v/gh${orgRepoPath}`
 }
 
 
@@ -147,7 +148,7 @@ export function trimToPath(urlStr) {
   }
   const firstSlashNdx = s.indexOf('/')
   if (firstSlashNdx == -1) {
-    throw new Error('Expected at least one slash for file path: ' + urlStr)
+    throw new Error(`Expected at least one slash for file path: ${urlStr}`)
   }
   return s.substring(firstSlashNdx)
 }
@@ -183,5 +184,5 @@ export function extractOrgPrefixedPath(urlWithPath) {
     const {groups: {org, repo, branch, file}} = match
     return `/${org}/${repo}/${branch}/${file}`
   }
-  throw new Error('Expected a multi-part file path: ' + urlWithPath)
+  throw new Error(`Expected a multi-part file path: ${urlWithPath}`)
 }

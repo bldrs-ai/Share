@@ -4,6 +4,7 @@ import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
 import useTheme from './Theme'
+import useStore from './store/useStore'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
@@ -25,6 +26,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
+  const setRepository = useStore((state) => state.setRepository)
 
 
   /**
@@ -37,6 +39,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    */
   useEffect(() => {
     onChangeUrlParams()
+    // TODO(pablo): currently expect these to both be defined.
+    const {org, repo} = urlParams
+    if (org && repo) {
+      console.log('Setting GH repo ${org}/${repo}')
+      setRepository(org, repo)
+    } else if (pathPrefix.startsWith('/share/v/p')) {
+      console.log('Setting default repo pablo-mayrgundter/Share')
+      setRepository('pablo-mayrgundter', 'Share')
+    } else {
+      console.warn('No repository set for project!', pathPrefix)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParams])
 
@@ -49,8 +62,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     if (modelPath === null ||
-        modelPath.filepath && modelPath.filepath != mp.filepath ||
-        modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
+        (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
+        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
       setModelPath(mp)
       debug().log('Share#onChangeUrlParams: new model path: ', mp)
     }
@@ -83,10 +96,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
-  if (window.innerWidth <= 900) {
-    navigate(appPrefix + '/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28')
+  const mediaSizeTabletWith = 900
+  if (window.innerWidth <= mediaSizeTabletWith) {
+    navigate(`${appPrefix}/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28`)
   } else {
-    navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+    navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
   }
 }
 

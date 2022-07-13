@@ -1,9 +1,89 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {MockRoutes} from '../BaseRoutesMock.test'
-import {IssuesNavBar, Issues, extractImageFromIssue} from './IssuesControl'
 import {act, renderHook} from '@testing-library/react-hooks'
+import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
+import {IssuesNavBar, Issues, extractImageFromIssue} from './IssuesControl'
+
+
+test('Issues NavBar Issues', () => {
+  render(<ShareMock><IssuesNavBar/></ShareMock>)
+  expect(screen.getByText('Notes')).toBeInTheDocument()
+})
+
+
+test('Issues NavBar Comments', () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  act(() => {
+    result.current.setSelectedIssueId(10)
+  })
+  render(<ShareMock><IssuesNavBar/></ShareMock>)
+  expect(screen.getByText('Note')).toBeInTheDocument()
+})
+
+
+test('Issues ', () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  act(() => {
+    result.current.setSelectedIssueId(null)
+  })
+  act(() => {
+    result.current.setIssues(MOCK_ISSUES)
+  })
+  render(<ShareMock><Issues/></ShareMock>)
+  expect(screen.getByText('open_workspace')).toBeInTheDocument()
+  expect(screen.getByText('closed_system')).toBeInTheDocument()
+})
+
+
+test('Issues ', () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  act(() => {
+    result.current.setSelectedIssueId(10)
+  })
+  act(() => {
+    result.current.setIssues(MOCK_ISSUES)
+  })
+  act(() => {
+    result.current.setComments(MOCK_COMMENTS)
+  })
+  render(<ShareMock><Issues/></ShareMock>)
+  expect(screen.getByText('open_workspace')).toBeInTheDocument()
+  expect(screen.getByText('The Architecture, Engineering and Construction')).toBeInTheDocument()
+  expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
+})
+
+
+describe('extractImageFromIssue', () => {
+  test('null issue', () => {
+    const issue = null
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
+
+  test('null issue body', () => {
+    const issue = {
+      body: null,
+    }
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
+
+  test('issue body without image URL header + trailer', () => {
+    const issue = {
+      body: 'http://testing.dev/an/image.png',
+    }
+    expect(extractImageFromIssue(issue)).toEqual('')
+  })
+
+  test('issue body with valid image URL', () => {
+    const issue = {
+      // eslint-disable-next-line max-len
+      body: 'Test Issue body\r\n\r\n<img width=\'475\' alt=\'image\' src=\'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\'>\r\n\r\nimageURL\r\nhttps://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\r\nimageURL\r\n\r\ncamera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06\r\n\r\n\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
+    }
+
+    const expectedImageURL = 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png'
+    expect(extractImageFromIssue(issue)).toEqual(expectedImageURL)
+  })
+})
 
 
 const MOCK_ISSUES = [
@@ -61,79 +141,3 @@ const MOCK_COMMENTS = [
     imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
 ]
-
-test('Issues NavBar Issues', () => {
-  render(<MockRoutes contentElt={<IssuesNavBar/>}/>)
-  expect(screen.getByText('Notes')).toBeInTheDocument()
-})
-
-test('Issues NavBar Comments', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
-    result.current.setSelectedIssueId(10)
-  })
-  render(<MockRoutes contentElt={<IssuesNavBar/>}/>)
-  expect(screen.getByText('Note')).toBeInTheDocument()
-})
-
-test('Issues ', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
-    result.current.setSelectedIssueId(null)
-  })
-  act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  render(<MockRoutes contentElt={<Issues/>}/>)
-  expect(screen.getByText('open_workspace')).toBeInTheDocument()
-  expect(screen.getByText('closed_system')).toBeInTheDocument()
-})
-
-test('Issues ', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
-    result.current.setSelectedIssueId(10)
-  })
-  act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  act(() => {
-    result.current.setComments(MOCK_COMMENTS)
-  })
-  render(<MockRoutes contentElt={<Issues/>}/>)
-  expect(screen.getByText('open_workspace')).toBeInTheDocument()
-  expect(screen.getByText('The Architecture, Engineering and Construction')).toBeInTheDocument()
-  expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
-})
-
-
-describe('extractImageFromIssue', () => {
-  test('null issue', () => {
-    const issue = null
-    expect(extractImageFromIssue(issue)).toEqual('')
-  })
-
-  test('null issue body', () => {
-    const issue = {
-      body: null,
-    }
-    expect(extractImageFromIssue(issue)).toEqual('')
-  })
-
-  test('issue body without image URL header + trailer', () => {
-    const issue = {
-      body: 'http://testing.dev/an/image.png',
-    }
-    expect(extractImageFromIssue(issue)).toEqual('')
-  })
-
-  test('issue body with valid image URL', () => {
-    const issue = {
-      // eslint-disable-next-line max-len
-      body: 'Test Issue body\r\n\r\n<img width=\'475\' alt=\'image\' src=\'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\'>\r\n\r\nimageURL\r\nhttps://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\r\nimageURL\r\n\r\ncamera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06\r\n\r\n\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
-    }
-
-    const expectedImageURL = 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png'
-    expect(extractImageFromIssue(issue)).toEqual(expectedImageURL)
-  })
-})
