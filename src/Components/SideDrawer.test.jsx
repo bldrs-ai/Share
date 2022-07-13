@@ -1,20 +1,21 @@
 import React from 'react'
 import {render, screen, waitFor} from '@testing-library/react'
-import {MockRoutes, MOCK_SELECTED_ELEMENT, MockElement} from '../BaseRoutesMock.test'
-import SideDrawerWrapper from './SideDrawer'
 import {act, renderHook} from '@testing-library/react-hooks'
 import useStore from '../store/useStore'
-import {MemoryRouter} from 'react-router-dom'
+import ShareMock from '../ShareMock'
+import SideDrawerWrapper from './SideDrawer'
 
 
-test('side drawer notes', () => {
+test('side drawer notes', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   act(() => {
     result.current.toggleIsCommentsOn()
     result.current.openDrawer()
   })
-  render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
-  expect(screen.getByText('Notes')).toBeInTheDocument()
+  render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+  await waitFor(() => {
+    expect(screen.getByText('Notes')).toBeInTheDocument()
+  })
   // reset the store
   act(() => {
     result.current.toggleIsCommentsOn()
@@ -22,15 +23,16 @@ test('side drawer notes', () => {
 })
 
 
-test('side drawer properties', () => {
+test('side drawer properties', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   act(() => {
-    result.current.setSelectedElement(MOCK_SELECTED_ELEMENT)
     result.current.toggleIsPropertiesOn()
     result.current.openDrawer()
   })
-  render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
-  expect(screen.getByText('Properties')).toBeInTheDocument()
+  render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+  await waitFor(() => {
+    expect(screen.getByText('Properties')).toBeInTheDocument()
+  })
   // reset the store
   act(() => {
     result.current.setSelectedElement({})
@@ -39,7 +41,7 @@ test('side drawer properties', () => {
 })
 
 
-test('side drawer - issues id in url', () => {
+test('side drawer - issues id in url', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   const extractedCommentId = '1257156364'
   act(() => {
@@ -47,9 +49,11 @@ test('side drawer - issues id in url', () => {
     result.current.toggleIsCommentsOn()
     result.current.openDrawer()
   })
-  render(<MockRoutes contentElt={<SideDrawerWrapper/>}/>)
-  expect(screen.getByText('Note')).toBeInTheDocument()
-  expect(screen.getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
+  render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+  await waitFor(() => {
+    expect(screen.getByText('Note')).toBeInTheDocument()
+    expect(screen.getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
+  })
   // reset the store
   act(() => {
     result.current.setSelectedElement({})
@@ -60,14 +64,12 @@ test('side drawer - issues id in url', () => {
 
 test('side drawer - opened via URL', async () => {
   const {result} = renderHook(() => useStore((state) => state))
-
   const {getByText} = render(
-      <MemoryRouter initialEntries={['/v/p/index.ifc#i:1257156364::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
-        <MockElement>
-          <SideDrawerWrapper />
-        </MockElement>
-      </MemoryRouter>,
-  )
+      <ShareMock
+        initialEntries={['/v/p/index.ifc#i:1257156364::c:-26.91,28.84,112.47,-22,16.21,-3.48']}
+      >
+        <SideDrawerWrapper/>
+      </ShareMock>)
 
   await waitFor(() => {
     expect(getByText('Note')).toBeInTheDocument()
@@ -80,3 +82,4 @@ test('side drawer - opened via URL', async () => {
     result.current.toggleIsCommentsOn()
   })
 })
+

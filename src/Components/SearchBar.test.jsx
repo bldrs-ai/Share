@@ -1,6 +1,6 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {MockRoutes} from '../BaseRoutesMock.test'
+import ShareMock from '../ShareMock'
 import SearchBar, {
   containsIfcPath,
   stripIfcPathFromLocation,
@@ -63,14 +63,6 @@ test('stripIfcPathFromLocation', () => {
 
 
 test('SeachBar', () => {
-  render(<MockRoutes contentElt={<MockComponent/>}/>)
+  render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
   expect(screen.getByPlaceholderText('Search model')).toBeInTheDocument()
 })
-
-
-/**
- * @return {Object} React component
- */
-function MockComponent() {
-  return <SearchBar onClickMenuCb={() => {}} isOpen={true}/>
-}

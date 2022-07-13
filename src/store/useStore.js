@@ -1,15 +1,15 @@
 import create from 'zustand'
+import createIFCSlice from './IFCSlice'
+import createIssuesSlice from './IssuesSlice'
 import createUISlice from './UISlice'
-import craeateIFCSlice from './IFCSlice'
-import craeateIssuesSlice from './IssuesSlice'
+import createRepositorySlice from './RepositorySlice'
 
 
 const useStore = create((set, get) => ({
+  ...createIFCSlice(set, get),
+  ...createIssuesSlice(set, get),
+  ...createRepositorySlice(set, get),
   ...createUISlice(set, get),
-  ...craeateIFCSlice(set, get),
-  ...craeateIssuesSlice(set, get),
 }))
 
 export default useStore
-
-

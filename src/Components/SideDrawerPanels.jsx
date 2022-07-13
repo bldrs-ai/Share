@@ -1,10 +1,11 @@
 import React from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
-import ItemProperties from './ItemProperties'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
-import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
+import ItemProperties from './ItemProperties'
+import {TooltipIconButton} from './Buttons'
 import {IssuesNavBar, Issues} from './IssuesControl'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+
 
 /**
  * Panel Title
@@ -24,6 +25,7 @@ function PanelTitle({title, controlsGroup}) {
   )
 }
 
+
 /**
  * PropertiesPanel is a wrapper for the item properties component.
  * It containe the title with additional controls, and the item properties styled container.
@@ -42,7 +44,8 @@ export function PropertiesPanel() {
             <TooltipIconButton
               title='toggle drawer'
               onClick={toggleIsPropertiesOn}
-              icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}/>
+              icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
+            />
           </div>
         }
       />
@@ -65,6 +68,7 @@ export const NotesPanel = () => {
     </>
   )
 }
+
 
 const useStyles = makeStyles((theme) => ({
   titleContainer: {

@@ -1,39 +1,45 @@
 import {Octokit} from '@octokit/rest'
 import PkgJson from '../../package.json'
 import debug from './debug'
+import {assertDefined} from './assert'
 import {isRunningLocally} from './network'
+
+
+/**
+ * Fetch all of the issues from GitHub.
+ * @param {Object} repository
+ * @return {Array} The issue array of issue objects.
+ */
+export async function getIssues(repository) {
+  const issues = await getGitHub(repository, 'issues')
+  debug().log('GitHub: issue: ', repository, issues)
+  return issues
+}
+
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
+ * @param {Object} repository
  * @param {Number} issueId
  * @return {Object} The issue object.
  */
-export async function getIssue(issueId) {
-  const issue = await getGitHub('issues/{issue_number}', {issue_number: issueId})
+export async function getIssue(repository, issueId) {
+  const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
   debug().log('GitHub: issue: ', issue)
   return issue
 }
 
 
 /**
- * Fetch all of the issues from GitHub.
- * @return {Array} The issue array of issue objects.
- */
-export async function getIssues() {
-  const issues = await getGitHub('issues')
-  debug().log('GitHub: issue: ', issues)
-  return issues
-}
-
-
-/**
  * The comments should have the following structure:
+ * @param {Object} repository
  * @param {Number} issueId
  * @return {Array} The comments array.
  */
-export async function getComments(issueId) {
+export async function getComments(repository, issueId) {
   const comments = await getGitHub(
+      repository,
       'issues/{issue_number}/comments',
       {
         issue_number: issueId,
@@ -49,12 +55,14 @@ export async function getComments(issueId) {
 
 /**
  * The comments should have the following structure:
+ * @param {Object} repository
  * @param {Number} issueId
  * @param {Number} commentId
  * @return {Object} The comment object.
  */
-export async function getComment(issueId, commentId) {
+export async function getComment(repository, issueId, commentId) {
   const comments = await getGitHub(
+      repository,
       'issues/{issue_number}/comments',
       {
         issue_number: issueId,
@@ -76,17 +84,20 @@ export async function getComment(issueId, commentId) {
 /**
  * Fetch the resource at the given path from GitHub, substituting in
  * the given args.
+ * @param {Object} repository
  * @param {Object} path The resource path with arg substitution markers
  * @param {Object} args The args to substitute
  * @return {Object} The object at the resource
  */
-async function getGitHub(path, args) {
-  const account = {
-    owner: 'pablo-mayrgundter',
-    repo: 'Share',
-  }
-  return await octokit.request(`GET /repos/{owner}/{repo}/${path}`, {
-    ...account,
+async function getGitHub(repository, path, args) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('Dispatching GitHub request for repo:', repository)
+  return await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+    ...{
+      org: repository.orgName,
+      repo: repository.name,
+    },
     ...args,
   })
 }
@@ -332,10 +343,6 @@ export const MOCK_COMMENTS = [
  * Mock of Octokit for locally and unit testing.
  */
 export class MockOctokit {
-  /** No-op ctor. */
-  constructor() {}
-
-
   /**
    * @param {string} path
    * @param {Object} account
@@ -344,10 +351,10 @@ export class MockOctokit {
    */
   request(path, account, args) {
     debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
-    if (path.includes('/repos/{owner}/{repo}/issues/{issue_number}/comments')) {
+    if (path.includes('/repos/{org}/{repo}/issues/{issue_number}/comments')) {
       return MOCK_COMMENTS
     }
-    if (path.includes('/repos/{owner}/{repo}/issues')) {
+    if (path.includes('/repos/{org}/{repo}/issues')) {
       return MOCK_ISSUES
     }
   }

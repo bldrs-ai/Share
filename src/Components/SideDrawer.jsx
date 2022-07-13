@@ -1,14 +1,14 @@
 import React, {useEffect} from 'react'
+import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import {MOBILE_WIDTH} from './Hooks'
+import {getHashParams} from '../utils/location'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
 import useStore from '../store/useStore'
-import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
+import {MOBILE_WIDTH, useIsMobile} from './Hooks'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import {getHashParams} from '../utils/location'
-import {useLocation} from 'react-router-dom'
+
 
 /**
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
@@ -24,7 +24,11 @@ export function SideDrawer({
   openDrawer,
   toggleIsCommentsOn,
   setSelectedIssueId}) {
-  const classes = useStyles({divider: (isCommentsOn && isPropertiesOn), isCommentsOn: isCommentsOn, isPropertiesOn: isPropertiesOn})
+  const classes = useStyles({
+    divider: (isCommentsOn && isPropertiesOn),
+    isCommentsOn: isCommentsOn,
+    isPropertiesOn: isPropertiesOn,
+  })
   const isMobile = useIsMobile()
 
 
@@ -33,6 +37,7 @@ export function SideDrawer({
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
+
 
   return (
     <>
@@ -45,7 +50,7 @@ export function SideDrawer({
               </div>
               <div className={classes.divider}/>
               <div className={classes.containerProperties}>
-                {isPropertiesOn ? <PropertiesPanel/> : null }
+                {isPropertiesOn ? <PropertiesPanel/> : null}
               </div>
             </div>
           }
@@ -55,7 +60,8 @@ export function SideDrawer({
           anchor={'right'}
           variant='persistent'
           elevation={4}
-          className={classes.drawer}>
+          className={classes.drawer}
+        >
           <div className={classes.content}>
             <div className={classes.containerNotes}>
               {isCommentsOn ? <NotesPanel/> : null}
@@ -88,6 +94,7 @@ export default function SideDrawerWrapper() {
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const location = useLocation()
 
+
   useEffect(() => {
     const issueHash = getHashParams(location, 'i')
     if (issueHash !== undefined) {
@@ -97,6 +104,7 @@ export default function SideDrawerWrapper() {
       toggleIsCommentsOn()
     }
   }, [location])
+
 
   return (
     <>
