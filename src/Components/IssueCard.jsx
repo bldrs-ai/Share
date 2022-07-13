@@ -169,7 +169,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
         {!selected && !isReply &&
         <div className={classes.select}>
           <TooltipIconButton
-            title={'Select Comment'}
+            title={'Select Note'}
             size='small'
             placement='bottom'
             onClick={onClickSelect}
@@ -288,7 +288,7 @@ const useStyles = makeStyles((theme) => ({
     width: '150px',
   },
   selectionContainer: {
-    pointer: 'cursor',
+    cursor: 'pointer',
   },
   body: {
     height: (props) => props.expandText ? 'auto' : '62px',
