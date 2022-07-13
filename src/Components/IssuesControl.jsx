@@ -172,6 +172,7 @@ export function Issues() {
           })
         })
         if (issuesArr.length > 0) {
+          console.log('issuesArr array', issuesArr)
           setIssues(issuesArr)
         }
       } catch (e) {
@@ -208,7 +209,13 @@ export function Issues() {
             imageUrl: commentImageUrl,
           })
         })
-        setComments(commentsArr)
+        console.log('comments array', commentsArr)
+        if (commentsArr.length > 0) {
+          console.log('comments array in the length loop', commentsArr)
+          setComments(commentsArr)
+        } else {
+          setComments(null)
+        }
       } catch {
         debug().log('failed to fetch comments')
       }
