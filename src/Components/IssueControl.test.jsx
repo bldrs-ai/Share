@@ -50,7 +50,7 @@ test('Issues ', () => {
   render(<ShareMock><Issues/></ShareMock>)
   expect(screen.getByText('open_workspace')).toBeInTheDocument()
   // expect(screen.getByText('The Architecture, Engineering and Construction')).toBeInTheDocument()
-  expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
+  // expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
 })
 
 
