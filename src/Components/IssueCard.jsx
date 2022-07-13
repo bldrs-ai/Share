@@ -54,8 +54,9 @@ export default function IssueCard({
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
-  const textOverflow = body.length > 80
-  const isImage = imageUrl.length != 0
+  const bodyWidthChars = 80
+  const textOverflow = body.length > bodyWidthChars
+  const isImage = imageUrl !== ''
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
   useEffect(() => {
@@ -101,7 +102,8 @@ export default function IssueCard({
   function shareIssue() {
     navigator.clipboard.writeText(window.location)
     setSnackMessage('The url path is copied to the clipboard')
-    setTimeout(() => setSnackMessage(null), 5000)
+    const pauseTimeMs = 5000
+    setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
 
