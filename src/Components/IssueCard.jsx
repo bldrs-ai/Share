@@ -72,13 +72,8 @@ export default function IssueCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
-    if (selected) {
-      setSelectedIssueIndex(null)
-      setSelectedIssueId(null)
-    } else {
-      setSelectedIssueIndex(index)
-      setSelectedIssueId(id)
-    }
+    setSelectedIssueIndex(index)
+    setSelectedIssueId(id)
     if (embeddedUrl) {
       setCameraFromEncodedPosition(embeddedUrl)
     }
@@ -116,34 +111,41 @@ export default function IssueCard({
       className={classes.container}
       style={{borderRadius: '5px'}}
     >
-      <CardTitle
-        title={title}
-        userName={username}
-        date={date}
-        avatarUrl={avatarUrl}
-        isReply={isReply}
-        selected={selected}
-        onClickSelect={selectCard}
-      />
-      {isImage &&
-        <CardImage
-          expandImage={expandImage}
-          imageUrl={imageUrl}
-          onClickImage={() => setExpandImage(!expandImage)}
+      <div
+        className={classes.selectionContainer}
+        role='button'
+        tabIndex={0}
+        onClick={selectCard}
+        onKeyPress={selectCard}
+      >
+        <CardTitle
+          title={title}
+          userName={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isReply={isReply}
+          selected={selected}
+          onClickSelect={selectCard}
         />
-      }
+        {isImage &&
+          <CardImage
+            expandImage={expandImage}
+            imageUrl={imageUrl}
+          />
+        }
+      </div>
       <div className={classes.body}>
         {body}
+        {textOverflow &&
+         <ShowMore
+           expandText={expandText}
+           onClick={(event) => {
+             event.preventDefault()
+             setExpandText(!expandText)
+           }}
+         />
+        }
       </div>
-      {textOverflow &&
-        <ShowMore
-          expandText={expandText}
-          onClick={(event) => {
-            event.preventDefault()
-            setExpandText(!expandText)
-          }}
-        />
-      }
       {embeddedUrl || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
@@ -172,7 +174,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
         {!selected && !isReply &&
         <div className={classes.select}>
           <TooltipIconButton
-            title={'Select Comment'}
+            title={'Select Note'}
             size='small'
             placement='bottom'
             onClick={onClickSelect}
@@ -189,14 +191,10 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
 }
 
 
-const CardImage = ({imageUrl, onClickImage, expandImage}) => {
-  const classes = useStyles({expandImage: expandImage})
+const CardImage = ({imageUrl}) => {
+  const classes = useStyles()
   return (
-    <div className={classes.imageContainer}
-      onClick={onClickImage}
-      role='button'
-      tabIndex={0}
-      onKeyPress={onClickImage}>
+    <div className={classes.imageContainer} role='button' tabIndex={0}>
       <img
         className={classes.image}
         alt='cardImage'
@@ -307,6 +305,9 @@ const useStyles = makeStyles((theme) => ({
   titleString: {
     width: '150px',
   },
+  selectionContainer: {
+    cursor: 'pointer',
+  },
   body: {
     height: (props) => props.expandText ? 'auto' : '62px',
     margin: '5px',
@@ -383,7 +384,7 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '2px',
   },
   image: {
-    width: (props) => props.expandImage ? '96%' : '100px',
+    width: '96%',
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
     cursor: 'pointer',
