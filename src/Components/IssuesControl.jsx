@@ -191,6 +191,7 @@ export function Issues() {
       try {
         const commentsArr = []
         const commentsData = await getComments(repository, selectedIssue.number)
+        console.log('comments data', commentsData)
         commentsData.map((comment) => {
           const lines = comment.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
