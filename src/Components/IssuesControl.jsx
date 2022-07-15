@@ -190,12 +190,11 @@ export function Issues() {
     const fetchComments = async (selectedIssue) => {
       try {
         const commentsArr = []
-        setComments([])
         const commentsData = await getComments(repository, selectedIssue.number)
         commentsData.map((comment) => {
           const lines = comment.body.split('\r\n')
           const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-          const commentImageUrl = comment.body.split('ImageUrl')[1]
+          const commentImageUrl = comment.body.split('imageURL')[1]
           const body = lines[0]
           commentsArr.push({
             embeddedUrl: embeddedUrl,
@@ -209,11 +208,11 @@ export function Issues() {
             imageUrl: commentImageUrl,
           })
         })
-        console.log('comments array', commentsArr)
+        console.log('comments arr', commentsArr)
         if (commentsArr.length > 0) {
           setComments(commentsArr)
         } else {
-          setComments(null)
+          setComments([])
         }
       } catch {
         debug().log('failed to fetch comments')
