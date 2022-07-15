@@ -180,8 +180,6 @@ export function Issues() {
     }
     fetchIssues()
   }, [setIssues, repository])
-
-
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
@@ -191,30 +189,26 @@ export function Issues() {
       try {
         const commentsArr = []
         const commentsData = await getComments(repository, selectedIssue.number)
-        console.log('comments data', commentsData)
-        commentsData.map((comment) => {
-          const lines = comment.body.split('\r\n')
-          const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-          const commentImageUrl = comment.body.split('imageURL')[1]
-          const body = lines[0]
-          commentsArr.push({
-            embeddedUrl: embeddedUrl,
-            id: comment.id,
-            number: comment.number,
-            title: comment.title,
-            body: body,
-            date: comment.created_at,
-            username: comment.user.login,
-            avatarUrl: comment.user.avatar_url,
-            imageUrl: commentImageUrl,
+        if (commentsData) {
+          commentsData.map((comment) => {
+            const lines = comment.body.split('\r\n')
+            const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
+            const commentImageUrl = comment.body.split('imageURL')[1]
+            const body = lines[0]
+            commentsArr.push({
+              embeddedUrl: embeddedUrl,
+              id: comment.id,
+              number: comment.number,
+              title: comment.title,
+              body: body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarUrl: comment.user.avatar_url,
+              imageUrl: commentImageUrl,
+            })
           })
-        })
-        console.log('comments arr', commentsArr)
-        if (commentsArr.length > 0) {
-          setComments(commentsArr)
-        } else {
-          setComments([])
         }
+        setComments(commentsArr)
       } catch {
         debug().log('failed to fetch comments')
       }
@@ -222,6 +216,8 @@ export function Issues() {
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
     }
+    // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
+    // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIssueId, issues, repository])
 
