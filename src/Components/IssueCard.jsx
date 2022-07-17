@@ -54,8 +54,9 @@ export default function IssueCard({
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
-  const textOverflow = body.length > 80
-  const isImage = imageUrl.length != 0
+  const bodyWidthChars = 80
+  const textOverflow = body.length > bodyWidthChars
+  const isImage = imageUrl !== ''
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
   useEffect(() => {
@@ -70,20 +71,20 @@ export default function IssueCard({
   }, [selected, embeddedUrl, cameraControls])
 
 
-  /**
-   * selecting a card move the notes to the replies/comments thread
-   */
+  /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
-    selected ? setSelectedIssueIndex(null) : setSelectedIssueIndex(index)
-    selected ? setSelectedIssueId(null) : setSelectedIssueId(id)
+    setSelectedIssueIndex(index)
+    setSelectedIssueId(id)
     if (embeddedUrl) {
       setCameraFromEncodedPosition(embeddedUrl)
     }
     addHashParams(window.location, ISSUE_PREFIX, {id: id})
   }
 
+
   /**
-   * moves the camera to the position specified in the url attached to the issue/comment
+   * Moves the camera to the position specified in the url attached to
+   * the issue/comment.
    */
   function showCameraView() {
     setCameraFromEncodedPosition(embeddedUrl, cameraControls)
@@ -93,14 +94,18 @@ export default function IssueCard({
     }
   }
 
+
   /**
-   * copies the issue url which contains the issue id, camera position and selected element path
+   * Copies the issue url which contains the issue id, camera position
+   * and selected element path.
    */
   function shareIssue() {
     navigator.clipboard.writeText(window.location)
     setSnackMessage('The url path is copied to the clipboard')
-    setTimeout(() => setSnackMessage(null), 5000)
+    const pauseTimeMs = 5000
+    setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+
 
   return (
     <Paper
@@ -108,32 +113,41 @@ export default function IssueCard({
       className={classes.container}
       style={{borderRadius: '5px'}}
     >
-      <CardTitle
-        title={title}
-        userName={username}
-        date={date}
-        avatarUrl={avatarUrl}
-        isReply={isReply}
-        selected={selected}
-        onClickSelect={selectCard}
-      />
-      {isImage &&
-        <CardImage
-          expandImage={expandImage}
-          imageUrl={imageUrl}
-          onClickImage={() => setExpandImage(!expandImage)}/>
-      }
+      <div
+        className={classes.selectionContainer}
+        role='button'
+        tabIndex={0}
+        onClick={selectCard}
+        onKeyPress={selectCard}
+      >
+        <CardTitle
+          title={title}
+          userName={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isReply={isReply}
+          selected={selected}
+          onClickSelect={selectCard}
+        />
+        {isImage &&
+          <CardImage
+            expandImage={expandImage}
+            imageUrl={imageUrl}
+          />
+        }
+      </div>
       <div className={classes.body}>
         {body}
+        {textOverflow &&
+         <ShowMore
+           expandText={expandText}
+           onClick={(event) => {
+             event.preventDefault()
+             setExpandText(!expandText)
+           }}
+         />
+        }
       </div>
-      {textOverflow &&
-        <ShowMore
-          expandText={expandText}
-          onClick={(event) => {
-            event.preventDefault()
-            expandText ? setExpandText(false) : setExpandText(true)
-          }}/>
-      }
       {embeddedUrl || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
@@ -148,6 +162,7 @@ export default function IssueCard({
   )
 }
 
+
 const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClickSelect}) => {
   const classes = useStyles()
   return (
@@ -161,11 +176,12 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
         {!selected && !isReply &&
         <div className={classes.select}>
           <TooltipIconButton
-            title={'Select Comment'}
+            title={'Select Note'}
             size='small'
             placement='bottom'
             onClick={onClickSelect}
-            icon={ <Select />} />
+            icon={<Select/>}
+          />
         </div>
         }
         {!isRunningLocally() &&
@@ -176,21 +192,20 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
   )
 }
 
-const CardImage = ({imageUrl, onClickImage, expandImage}) => {
-  const classes = useStyles({expandImage: expandImage})
+
+const CardImage = ({imageUrl}) => {
+  const classes = useStyles()
   return (
-    <div className={classes.imageContainer}
-      onClick={onClickImage}
-      role='button'
-      tabIndex={0}
-      onKeyPress={onClickImage}>
+    <div className={classes.imageContainer} role='button' tabIndex={0}>
       <img
         className={classes.image}
         alt='cardImage'
-        src={imageUrl}/>
+        src={imageUrl}
+      />
     </div>
   )
 }
+
 
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
@@ -208,6 +223,7 @@ const ShowMore = ({onClick, expandText}) => {
   )
 }
 
+
 const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCard, embeddedUrl, selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const classes = useStyles({embeddedUrl: embeddedUrl, shareIssue: shareIssue})
@@ -215,24 +231,33 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
     <div className={classes.actions}>
       <div className={classes.rightGroup}>
         {embeddedUrl ?
-        <TooltipIconButton
-          disable={true}
-          title='Show the camera view'
-          size='small'
-          placement='bottom'
-          onClick={onClickNavigate}
-          icon={<Camera className={classes.buttonNavigate} style={{width: '24px', height: '24px'}} />}/> : null}
+         <TooltipIconButton
+           disable={true}
+           title='Show the camera view'
+           size='small'
+           placement='bottom'
+           onClick={onClickNavigate}
+           icon={
+             <Camera
+               className={classes.buttonNavigate}
+               style={{width: '24px', height: '24px'}}
+             />}
+         /> : null}
         {selected &&
-          <TooltipIconButton
-            disable={true}
-            title='Share'
-            size='small'
-            placement='bottom'
-            onClick={() => {
-              onClickShare()
-              setShareIssue(!shareIssue)
-            }}
-            icon={<Share className={classes.buttonShare} style={{width: '24px', height: '24px'}} />}/>
+         <TooltipIconButton
+           disable={true}
+           title='Share'
+           size='small'
+           placement='bottom'
+           onClick={() => {
+             onClickShare()
+             setShareIssue(!shareIssue)
+           }}
+           icon={
+             <Share
+               className={classes.buttonShare} style={{width: '24px', height: '24px'}}
+             />}
+         />
         }
       </div>
       <div className={classes.commentsIconContainer}
@@ -242,12 +267,13 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
         onKeyPress={selectCard}
       >
         {numberOfComments > 0 &&
-          <div className={classes.commentsQuantity} > {numberOfComments} </div>
+          <div className={classes.commentsQuantity}>{numberOfComments}</div>
         }
       </div>
     </div>
   )
 }
+
 
 const useStyles = makeStyles((theme) => ({
   container: {
@@ -280,6 +306,9 @@ const useStyles = makeStyles((theme) => ({
   },
   titleString: {
     width: '150px',
+  },
+  selectionContainer: {
+    cursor: 'pointer',
   },
   body: {
     height: (props) => props.expandText ? 'auto' : '62px',
@@ -357,7 +386,7 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '2px',
   },
   image: {
-    width: (props) => props.expandImage ? '96%' : '100px',
+    width: '96%',
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
     cursor: 'pointer',
@@ -376,7 +405,8 @@ const useStyles = makeStyles((theme) => ({
     backgroundColor: theme.palette.custom.highLight,
   },
   buttonNavigate: {
-    backgroundColor: (props) => props.embeddedUrl ? theme.palette.custom.highLight : theme.palette.custom.disable,
+    backgroundColor: (props) => props.embeddedUrl ?
+      theme.palette.custom.highLight : theme.palette.custom.disable,
     color: 'black',
   },
   buttonShare: {

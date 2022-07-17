@@ -1,15 +1,16 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {MockRoutes} from '../BaseRoutesMock.test'
+import ShareMock from '../ShareMock'
 import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
 
 
 test('Notes panel', () => {
-  render(<MockRoutes contentElt={<NotesPanel/>}/>)
+  render(<ShareMock><NotesPanel/></ShareMock>)
   expect(screen.getByText('Notes')).toBeInTheDocument()
 })
 
+
 test('Properties panel', () => {
-  render(<MockRoutes contentElt={<PropertiesPanel/>}/>)
+  render(<ShareMock><PropertiesPanel/></ShareMock>)
   expect(screen.getByText('Properties')).toBeInTheDocument()
 })

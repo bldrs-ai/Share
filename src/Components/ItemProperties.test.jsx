@@ -1,10 +1,10 @@
 import React from 'react'
 import {render, screen, waitFor} from '@testing-library/react'
-import ItemProperties from './ItemProperties'
-import {MockModel} from '../utils/IfcMock.test'
-import {MockRoutes} from '../BaseRoutesMock.test'
 import {act, renderHook} from '@testing-library/react-hooks'
+import ShareMock from '../ShareMock'
+import {MockModel} from '../utils/IfcMock.test'
 import useStore from '../store/useStore'
+import ItemProperties from './ItemProperties'
 
 
 test('ItemProperties for single element', async () => {
@@ -18,12 +18,13 @@ test('ItemProperties for single element', async () => {
   })
 
   const {getByText} = render(
-      <MockRoutes
-        contentElt={
-          <ItemProperties/>}/>)
+      <ShareMock>
+        <ItemProperties/>
+      </ShareMock>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })
+
 
 // TODO(pablo):
 /*
