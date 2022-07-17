@@ -64,7 +64,7 @@ export default function BaseRoutes({testElt = null}) {
     <Auth0Provider
       domain={OAUTH_DOMAIN}
       clientId={OAUTH_CLIENT_ID}
-      redirectUri={window.location.origin + '/Share'}>
+      redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
