@@ -18,10 +18,10 @@ import debug from './utils/debug'
 // const OAUTH_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
 
 // Auth0: Main Bldrs.ai GHP app
-// const OAUTH_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+export const OAUTH_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
 
 // Auth0: pablo-mayrgundter/Share
-export const OAUTH_CLIENT_ID = 'xIGABT7wbAA4cbW0ZvTXm4jd5tOHugTe'
+// export const OAUTH_CLIENT_ID = 'xIGABT7wbAA4cbW0ZvTXm4jd5tOHugTe'
 
 // GitHub: OAuth app
 // const OAUTH_CLIENT_ID = 'c9521c42ff708172ca45'
