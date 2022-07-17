@@ -7,7 +7,7 @@ const buildDir = 'docs'
 const build = {
   entryPoints: [entry],
   bundle: true,
-  minify: false,
+  minify: true,
   // https://esbuild.github.io/api/#keep-names
   // We use code identifiers e.g. in ItemProperties for their names
   keepNames: true,
