@@ -61,11 +61,13 @@ export default function BaseRoutes({testElt = null}) {
 
   const basePath = installPrefix + '/'
   console.log('basePath: ', basePath)
+  //       redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
+
   return (
     <Auth0Provider
       domain={OAUTH_DOMAIN}
       clientId={OAUTH_CLIENT_ID}
-      redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
+      redirectUri={'asdf'}>{/* Can add + '/Share' for local. */}
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
