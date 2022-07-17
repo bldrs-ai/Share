@@ -60,6 +60,7 @@ export default function BaseRoutes({testElt = null}) {
   }, [])
 
   const basePath = installPrefix + '/'
+  console.log('basePath: ', basePath)
   return (
     <Auth0Provider
       domain={OAUTH_DOMAIN}
