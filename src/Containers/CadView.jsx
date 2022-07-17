@@ -154,7 +154,7 @@ export default function CadView({
     const auth0 = await createAuth0Client({
       domain: OAUTH_DOMAIN,
       client_id: OAUTH_CLIENT_ID,
-      redirect_uri: window.location.origin + '/Share',
+      redirect_uri: window.location.origin,
     })
     auth0
         .getTokenSilently()
