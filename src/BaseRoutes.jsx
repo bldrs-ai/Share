@@ -45,7 +45,7 @@ export const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
  */
 export default function BaseRoutes({testElt = null}) {
   const appPrefix = '/share'
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const installPrefix = '' // window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const installedAppPrefix = installPrefix + appPrefix
   const location = useLocation()
   const navigate = useNavigate()
@@ -67,7 +67,7 @@ export default function BaseRoutes({testElt = null}) {
     <Auth0Provider
       domain={OAUTH_DOMAIN}
       clientId={OAUTH_CLIENT_ID}
-      redirectUri={'asdf'}>{/* Can add + '/Share' for local. */}
+      redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
