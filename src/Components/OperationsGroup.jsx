@@ -37,7 +37,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
     <div className={classes.container}>
       <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
-        <div className={classes.notesButtonContainer} style={{border: '4px solid lime', borderRadius: '200px'}}>
+        <div className={classes.notesButtonContainer} style={{border: '1px solid lime', borderRadius: '200px'}}>
           <TooltipIconButton
             title='Notes'
             icon={<MarkupIcon/>}
