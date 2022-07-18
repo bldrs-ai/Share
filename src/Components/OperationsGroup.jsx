@@ -21,11 +21,12 @@ import useStore from '../store/useStore'
  * @return {Object}
  */
 export default function OperationsGroup({viewer, unSelectItem}) {
-  const classes = useStyles()
   const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const selectedElement = useStore((state) => state.selectedElement)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const classes = useStyles({isCommentsOn: isCommentsOn})
 
   const toggle = (panel) => {
     openDrawer()
@@ -37,7 +38,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
     <div className={classes.container}>
       <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
-        <div className={classes.notesButtonContainer} style={{border: '1px solid lime', borderRadius: '200px'}}>
+        <div className={classes.notesButtonContainer} >
           <TooltipIconButton
             title='Notes'
             icon={<MarkupIcon/>}
@@ -89,6 +90,10 @@ const useStyles = makeStyles({
     bottom: 0,
     paddingBottom: '70px',
     minHeight: '150px',
+  },
+  notesButtonContainer: {
+    border: (props) => props.isCommentsOn ? 'none' : '1px solid lime',
+    borderRadius: '200px',
   },
 })
 
