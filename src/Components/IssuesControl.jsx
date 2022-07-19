@@ -180,15 +180,20 @@ export function Issues() {
     }
     fetchIssues()
   }, [setIssues, repository])
+
   useEffect(() => {
+    console.log('comments useEffect: repository', repository)
     if (!repository) {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
+      console.log('comments useEffect: in the no repository loop')
       return
     }
     const fetchComments = async (selectedIssue) => {
+      console.log('comments useEffect: in the fetch repository')
       try {
         const commentsArr = []
         const commentsData = await getComments(repository, selectedIssue.number)
+        console.log('comments useEffect: commentsData', commentsData)
         if (commentsData) {
           commentsData.map((comment) => {
             const lines = comment.body.split('\r\n')
