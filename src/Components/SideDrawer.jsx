@@ -34,6 +34,10 @@ export function SideDrawer({
 
   useEffect(() => {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
+      console.log('in the sidedrawer useEffect close drawer')
+      console.log('isCommentsOn', isCommentsOn)
+      console.log('isPropertiesOn', isPropertiesOn)
+      console.log('isDrawerOpen', isDrawerOpen)
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
