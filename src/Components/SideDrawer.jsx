@@ -106,6 +106,8 @@ export default function SideDrawerWrapper() {
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       toggleIsCommentsOn()
+      console.log('SIDE DRAWER wrapper :: in the location useEffect - toggle comments on triggered')
+      console.log('location', location)
     }
   }, [location])
 
