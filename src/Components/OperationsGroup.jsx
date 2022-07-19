@@ -38,13 +38,11 @@ export default function OperationsGroup({viewer, unSelectItem}) {
     <div className={classes.container}>
       <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
-        <div className={classes.notesButtonContainer} >
-          <TooltipIconButton
-            title='Notes'
-            icon={<MarkupIcon/>}
-            onClick={() => toggle('Notes')}
-          />
-        </div>
+        <TooltipIconButton
+          title='Notes'
+          icon={<MarkupIcon/>}
+          onClick={() => toggle('Notes')}
+        />
       </div>
       <div className={classes.lowerGroup}>
         {
