@@ -105,7 +105,7 @@ export default function SideDrawerWrapper() {
       const extractedCommentId = issueHash.split(':')[1]
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
-      toggleIsCommentsOn()
+      // toggleIsCommentsOn()
       console.log('SIDE DRAWER wrapper :: in the location useEffect - toggle comments on triggered')
       console.log('location', location)
     }
