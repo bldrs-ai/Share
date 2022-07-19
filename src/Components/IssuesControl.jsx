@@ -213,6 +213,7 @@ export function Issues() {
             })
           })
         }
+        console.log('comments useEffect: commentsArr', commentsArr)
         setComments(commentsArr)
       } catch {
         debug().log('failed to fetch comments')
