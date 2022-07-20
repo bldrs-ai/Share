@@ -92,7 +92,7 @@ export default function SideDrawerWrapper() {
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const turnCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const location = useLocation()
 
@@ -105,7 +105,6 @@ export default function SideDrawerWrapper() {
       openDrawer()
       turnCommentsOn()
       console.log('SIDE DRAWER wrapper :: in the location useEffect - toggle comments on triggered')
-      console.log('location', location)
     }
   }, [location])
 
