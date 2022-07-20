@@ -46,7 +46,7 @@ test('side drawer - issues id in url', async () => {
   const extractedCommentId = '1257156364'
   act(() => {
     result.current.setSelectedIssueId(Number(extractedCommentId))
-    result.current.turnCommentOn()
+    result.current.turnCommentsOn()
     result.current.openDrawer()
   })
   render(<ShareMock><SideDrawerWrapper/></ShareMock>)

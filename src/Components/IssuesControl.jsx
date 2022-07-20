@@ -26,7 +26,6 @@ export function IssuesNavBar() {
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
   const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
-  // const turnCommentOn = useStore((state) => state.turnCommentOn)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
 
 
@@ -97,7 +96,7 @@ export function IssuesNavBar() {
         <TooltipIconButton
           title='Close Comments'
           placement='bottom'
-          onClick={() => turnCommentsOff()}
+          onClick={turnCommentsOff}
           icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
         />
       </div>

@@ -82,8 +82,7 @@
     "verbose": false,
     "testEnvironment": "jsdom",
     "testPathIgnorePatterns": [
-      "src/Share.test.js",
-      "src/Components/SideDrawer.test.jsx"
+      "src/Share.test.js"
     ],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",
