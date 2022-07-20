@@ -38,12 +38,10 @@ export function IssuesNavBar() {
 
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
-    console.log('1 selectedIssueIndex', selectedIssueIndex)
-    console.log('2 Issue index - ', index)
     if (index >= 0 && index < issues.length) {
-      console.log('3 Issues', issues)
       const issueFiltered = issues.filter((issue) => {
-        console.log('4 issue from the filter loop', issue)
+        console.log('1 Issue index - ', index)
+        console.log('2 Issue id', issue.index)
         console.log('filtered condition', issue.index === index )
         return (
           issue.index === index
