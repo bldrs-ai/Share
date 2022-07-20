@@ -21,7 +21,7 @@ export default function MobileDrawer({content}) {
   const closeDrawer = useStore((state) => state.closeDrawer)
   const openDrawer = useStore((state) => state.openDrawer)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const selectedElement = useStore((state) => state.selectedElement)
@@ -43,7 +43,7 @@ export default function MobileDrawer({content}) {
           <div className={classes.iconContainer}>
             {
               !isCommentsOn &&
-              <TooltipIconButton title='Expand' onClick={toggleIsCommentsOn} icon={<MarkupIcon/>}/>
+              <TooltipIconButton title='Expand' onClick={() => turnCommentsOn()} icon={<MarkupIcon/>}/>
             }
             {
               selectedElement && !isPropertiesOn &&

@@ -21,8 +21,6 @@ export function SideDrawer({
   closeDrawer,
   isCommentsOn,
   isPropertiesOn,
-  openDrawer,
-  toggleIsCommentsOn,
   setSelectedIssueId}) {
   const classes = useStyles({
     divider: (isCommentsOn && isPropertiesOn),
@@ -94,7 +92,7 @@ export default function SideDrawerWrapper() {
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const turnCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const location = useLocation()
 
@@ -105,7 +103,7 @@ export default function SideDrawerWrapper() {
       const extractedCommentId = issueHash.split(':')[1]
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
-      // toggleIsCommentsOn()
+      turnCommentsOn()
       console.log('SIDE DRAWER wrapper :: in the location useEffect - toggle comments on triggered')
       console.log('location', location)
     }
@@ -121,8 +119,8 @@ export default function SideDrawerWrapper() {
           isCommentsOn={isCommentsOn}
           isPropertiesOn={isPropertiesOn}
           openDrawer={openDrawer}
-          toggleIsCommentsOn={toggleIsCommentsOn}
-          setSelectedIssueId={setSelectedIssueId}/>}
+          setSelectedIssueId={setSelectedIssueId}
+        />}
     </>
   )
 }

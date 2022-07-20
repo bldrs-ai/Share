@@ -9,7 +9,7 @@ import SideDrawerWrapper from './SideDrawer'
 test('side drawer notes', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   act(() => {
-    result.current.toggleIsCommentsOn()
+    result.current.turnCommentsOn()
     result.current.openDrawer()
   })
   render(<ShareMock><SideDrawerWrapper/></ShareMock>)
@@ -18,7 +18,7 @@ test('side drawer notes', async () => {
   })
   // reset the store
   act(() => {
-    result.current.toggleIsCommentsOn()
+    result.current.turnCommentsOff()
   })
 })
 
@@ -46,7 +46,7 @@ test('side drawer - issues id in url', async () => {
   const extractedCommentId = '1257156364'
   act(() => {
     result.current.setSelectedIssueId(Number(extractedCommentId))
-    result.current.toggleIsCommentsOn()
+    result.current.turnCommentOn()
     result.current.openDrawer()
   })
   render(<ShareMock><SideDrawerWrapper/></ShareMock>)
@@ -57,7 +57,7 @@ test('side drawer - issues id in url', async () => {
   // reset the store
   act(() => {
     result.current.setSelectedElement({})
-    result.current.toggleIsCommentsOn()
+    result.current.turnCommentsOff()
   })
 })
 
@@ -79,7 +79,7 @@ test('side drawer - opened via URL', async () => {
   // reset the store
   act(() => {
     result.current.setSelectedElement({})
-    result.current.toggleIsCommentsOn()
+    result.current.turnCommentsOff()
   })
 })
 
