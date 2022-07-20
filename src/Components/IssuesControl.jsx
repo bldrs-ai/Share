@@ -41,8 +41,9 @@ export function IssuesNavBar() {
     console.log('selectedIssueIndex', selectedIssueIndex)
     console.log('Issue index - ', index)
     if (index >= 0 && index < issues.length) {
-      console.log('Issues', issues)
-      const issue = issues.filter((issue) => issue.index === index)[0]
+      const issueFiltered = issues.filter((issue) => issue.index === index)
+      console.log('issueFiltered', issueFiltered)
+      const issue = issues.filter((i) => i.index === index)[0]
       console.log('Issue - ', issue)
       setSelectedIssueId(issue.id)
       setSelectedIssueIndex(issue.index)
