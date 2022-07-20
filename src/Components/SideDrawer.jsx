@@ -32,10 +32,6 @@ export function SideDrawer({
 
   useEffect(() => {
     if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
-      console.log('in the sidedrawer useEffect close drawer')
-      console.log('isCommentsOn', isCommentsOn)
-      console.log('isPropertiesOn', isPropertiesOn)
-      console.log('isDrawerOpen', isDrawerOpen)
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
@@ -104,7 +100,6 @@ export default function SideDrawerWrapper() {
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       turnCommentsOn()
-      console.log('SIDE DRAWER wrapper :: in the location useEffect - toggle comments on triggered')
     }
   }, [location])
 
