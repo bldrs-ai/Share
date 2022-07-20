@@ -37,12 +37,13 @@ export function IssuesNavBar() {
 
 
   const selectIssue = (direction) => {
-    console.log('in the select issue')
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
-    console.log('in the select issue index - ', index)
+    console.log('selectedIssueIndex', selectedIssueIndex)
+    console.log('Issue index - ', index)
     if (index >= 0 && index < issues.length) {
-      const issue = issues.filter((i) => i.index === index)[0]
-      console.log('in the select issue issue - ', issue)
+      console.log('Issues', issues)
+      const issue = issues.filter((issue) => issue.index === index)[0]
+      console.log('Issue - ', issue)
       setSelectedIssueId(issue.id)
       setSelectedIssueIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
