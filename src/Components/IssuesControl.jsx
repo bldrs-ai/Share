@@ -44,6 +44,7 @@ export function IssuesNavBar() {
       console.log('3 Issues', issues)
       const issueFiltered = issues.filter((issue) => {
         console.log('4 issue from the filter loop', issue)
+        console.log('filtered condition', issue.index === index )
         return (
           issue.index === index
         )
