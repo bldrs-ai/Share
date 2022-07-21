@@ -39,22 +39,11 @@ export function IssuesNavBar() {
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
     if (index >= 0 && index < issues.length) {
-      const issueFiltered = issues.filter((issue) => {
-        console.log('1 Issue index - ', index)
-        console.log('2 Issue id', issue.index)
-        console.log('filtered condition', issue.index === index )
-        return (
-          issue.index === index
-        )
-      })
-      console.log('5 issueFiltered', issueFiltered)
       const issue = issues.filter((i) => i.index === index)[0]
-      console.log('6 Issue filtered and passed to the store ', issue)
       setSelectedIssueId(issue.id)
       setSelectedIssueIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
       if (issue.url) {
-        console.log('7 in the if issue url')
         setCameraFromEncodedPosition(issue.url)
         addCameraUrlParams()
       } else {

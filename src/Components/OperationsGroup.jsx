@@ -89,9 +89,5 @@ const useStyles = makeStyles({
     paddingBottom: '70px',
     minHeight: '150px',
   },
-  notesButtonContainer: {
-    border: (props) => props.isCommentsOn ? 'none' : '1px solid lime',
-    borderRadius: '200px',
-  },
 })
 
