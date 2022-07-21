@@ -41,17 +41,17 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
-      1: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc',
-      2: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
-      3: '/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc',
-      4: '/share/v/gh/Swiss-Property-AG/Portfolio/main/MOMENTUM%20TINYHOUSE.ifc',
-      5: '/share/v/gh/Swiss-Property-AG/Portfolio/main/NIEDERSCHERLI.ifc',
+      1: '/share/v/gh/OlegMoshkovich/BLDRS_models/main/haus.ifc',
+      2: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc',
+      3: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc',
+      4: '/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc',
+      5: '/share/v/gh/Swiss-Property-AG/Portfolio/main/MOMENTUM%20TINYHOUSE.ifc',
+      6: '/share/v/gh/Swiss-Property-AG/Portfolio/main/NIEDERSCHERLI.ifc',
       // eslint-disable-next-line max-len
-      6: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/5007/2907#c:-115.5,-36.4,109.55,0,-41.93,13.88',
+      7: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/5007/2907#c:-115.5,-36.4,109.55,0,-41.93,13.88',
       // eslint-disable-next-line max-len
-      7: '/share/v/gh/Alhakam/BIMsage/master/BIMsage-Source/BIMsage/src/test/resources/ontology/20200121_Promnitz_Stones.ifc/70/91/116/131/80830#c:-7.58,-3.45,0,0.11,-1.73,-0.32',
+      8: '/share/v/gh/Alhakam/BIMsage/master/BIMsage-Source/BIMsage/src/test/resources/ontology/20200121_Promnitz_Stones.ifc/70/91/116/131/80830#c:-7.58,-3.45,0,0.11,-1.73,-0.32',
       // eslint-disable-next-line max-len
-      8: '/share/v/gh/wikihouseproject/Skylark/main/SKYLARK250/Design%20kit/SKYLARK250_design-kit_simple/SKYLARK250_design-kit_chassis_simple.ifc/1/24/30/37/122447#c:-13.26,5.63,9.29,-3.39,3.81,0.72',
     }
     navigate({
       pathname: modelPath[e.target.value],
@@ -102,12 +102,12 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               <MenuItem value=''>
                 <em>None</em>
               </MenuItem>
-              <MenuItem value={6}>STRUCTURAL DETAIL</MenuItem>
-              <MenuItem value={1}>RESIDENTIAL BUILDING - ASTRA</MenuItem>
-              <MenuItem value={4}>TINY HOUSE</MenuItem>
-              <MenuItem value={2}>RESIDENTIAL BUILDING - EISVOGEL</MenuItem>
-              <MenuItem value={7}>HIGH RESOLUTION SCAN</MenuItem>
-              <MenuItem value={8}>MODULAR CONSTRUCTION</MenuItem>
+              <MenuItem value={1}>Sample Project</MenuItem>
+              <MenuItem value={2}>Astra</MenuItem>
+              <MenuItem value={4}>Open Source House</MenuItem>
+              <MenuItem value={3}>Eisvogel</MenuItem>
+              <MenuItem value={7}>Scan</MenuItem>
+              <MenuItem value={8}>Modular</MenuItem>
             </TextField>
           </div>
         </div>
