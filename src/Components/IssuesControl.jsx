@@ -158,7 +158,7 @@ export function Issues() {
       try {
         const issuesArr = []
         const issuesData = await getIssues(repository)
-        issuesData.data.map((issue, index) => {
+        issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
