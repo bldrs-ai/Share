@@ -116,8 +116,7 @@ export default function IssueCard({
         className={classes.selectionContainer}
         role='button'
         tabIndex={0}
-        // onClick={() => isComment ? null : selectCard()}
-        onClick={selectCard}
+        onClick={() => isComment ? null : selectCard()}
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
@@ -139,7 +138,8 @@ export default function IssueCard({
       </div>
       <div className={classes.body}>
         {body}
-        {textOverflow &&
+      </div>
+      {textOverflow &&
          <ShowMore
            expandText={expandText}
            onClick={(event) => {
@@ -147,8 +147,7 @@ export default function IssueCard({
              setExpandText(!expandText)
            }}
          />
-        }
-      </div>
+      }
       {embeddedUrl || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
