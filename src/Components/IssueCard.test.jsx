@@ -12,7 +12,7 @@ test('IssueCard', () => {
 })
 
 
-test('Number of replies', () => {
+test('Number of comments', () => {
   const id = 123
   const index = 123
   render(<ShareMock><IssueCard id={id} index={index} numberOfComments={10}/></ShareMock>)
@@ -23,12 +23,21 @@ test('Number of replies', () => {
 test('Select the issue card', () => {
   const id = 123
   const index = 123
-  const rendered = render(<ShareMock><IssueCard id={id} index={index} title="new_title"/></ShareMock>)
+  const rendered = render(<ShareMock><IssueCard id={id} index={index} title="Select the issue card - title"/></ShareMock>)
   const selectIssueButton = rendered.getByTestId('test-button')
   fireEvent.click(selectIssueButton)
   expect(selectIssueButton).not.toBeInTheDocument()
 })
 
+
+test('Click on the card to select', () => {
+  const id = 123
+  const index = 123
+  const rendered = render(<ShareMock><IssueCard id={id} index={index} title="Click on the card to select"/></ShareMock>)
+  const selectionContainer = rendered.getByTestId('selectionContainer')
+  fireEvent.click(selectionContainer)
+  expect(screen.getByText('Click on the card to select')).toBeInTheDocument()
+})
 
 test('Camera Position control', () => {
   const id = 123

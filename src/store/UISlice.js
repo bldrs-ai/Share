@@ -14,6 +14,8 @@ export default function createUISlice(set, get) {
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
+    turnCommentsOn: () => set(() => ({isCommentsOn: true})),
+    turnCommentsOff: () => set(() => ({isCommentsOn: false})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
   }
 }
