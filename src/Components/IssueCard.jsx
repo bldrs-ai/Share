@@ -27,7 +27,7 @@ import {isRunningLocally} from '../utils/network'
  * @param {string} embeddedUrl full url attached to GH issue with camera position
  * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
  * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
- * @param {boolean} isReply Comments/replies are formated differently
+ * @param {boolean} isComment Comments/replies are formated differently
  * @return {Object} React component
  */
 export default function IssueCard({
@@ -42,7 +42,7 @@ export default function IssueCard({
   embeddedUrl = '',
   numberOfComments = null,
   expandedImage = true,
-  isReply = false,
+  isComment = false,
 }) {
   assertDefined(id)
   assertDefined(index)
@@ -106,7 +106,6 @@ export default function IssueCard({
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
-
   return (
     <Paper
       elevation={0}
@@ -117,15 +116,17 @@ export default function IssueCard({
         className={classes.selectionContainer}
         role='button'
         tabIndex={0}
+        // onClick={() => isComment ? null : selectCard()}
         onClick={selectCard}
-        onKeyPress={selectCard}
+        onKeyPress={() => isComment ? null : selectCard()}
+        data-testid="selectionContainer"
       >
         <CardTitle
           title={title}
           userName={username}
           date={date}
           avatarUrl={avatarUrl}
-          isReply={isReply}
+          isComment={isComment}
           selected={selected}
           onClickSelect={selectCard}
         />
@@ -163,7 +164,7 @@ export default function IssueCard({
 }
 
 
-const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClickSelect}) => {
+const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles()
   return (
     <div className={classes.titleContainer}>
@@ -173,7 +174,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isReply, date, onClick
         <div className={classes.username}>{date.split('T')[0]}</div>
       </div>
       <div className={classes.titleRightContainer}>
-        {!selected && !isReply &&
+        {!selected && !isComment &&
         <div className={classes.select}>
           <TooltipIconButton
             title={'Select Note'}

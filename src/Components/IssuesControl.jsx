@@ -265,7 +265,7 @@ export function Issues() {
              return (
                <IssueCard
                  embeddedUrl={comment.embeddedUrl}
-                 isReply={true}
+                 isComment={true}
                  index=''
                  id={comment.id}
                  key={comment.id}
@@ -273,7 +273,6 @@ export function Issues() {
                  date={comment.date}
                  body={comment.body}
                  username={comment.username}
-                 numberOfReplies=''
                  avatarUrl={comment.avatarUrl}
                  imageUrl={comment.imageUrl}
                />
