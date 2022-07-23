@@ -3,7 +3,7 @@ import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
 import {useIsMobile} from './Hooks'
-import QuestionIcon from '../assets/2D_Icons/Question.svg'
+import QuestionIcon from '../assets/2D_Icons/Knowledge.svg'
 import {ControlButton} from './Buttons'
 
 
