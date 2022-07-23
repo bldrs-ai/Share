@@ -238,7 +238,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(true)
+    setShowNavPanel(false)
   }
 
 
@@ -403,6 +403,7 @@ export default function CadView({
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
+              installPrefix={installPrefix}
             />}
         </div>
         <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
@@ -480,7 +481,7 @@ const useStyles = makeStyles({
     // to hardcode for now and look into passing via the theme later.
     top: `20px`,
     left: '20px',
-    display: 'flex',
+    display: 'none',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
@@ -496,9 +497,11 @@ const useStyles = makeStyles({
   },
   operationsGroup: {
     'position': 'fixed',
-    'top': 0,
+    'top': 30,
     'right': 0,
-    'border': 'none',
+    'borderLeft': '1px solid lightGrey',
+    'borderTop': '1px solid lightGrey',
+    'borderBottom': '1px solid lightGrey',
     'zIndex': 0,
     '@media (max-width: 900px)': {
       right: 0,
@@ -511,8 +514,8 @@ const useStyles = makeStyles({
   },
   operationsGroupOpen: {
     'position': 'fixed',
-    'top': 0,
-    'right': '308px',
+    'top': 30,
+    'right': '320px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
