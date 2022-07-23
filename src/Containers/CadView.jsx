@@ -238,7 +238,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(false)
+    setShowNavPanel(true)
   }
 
 
@@ -403,7 +403,6 @@ export default function CadView({
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
-              installPrefix={installPrefix}
             />}
         </div>
         <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
@@ -481,7 +480,7 @@ const useStyles = makeStyles({
     // to hardcode for now and look into passing via the theme later.
     top: `20px`,
     left: '20px',
-    display: 'none',
+    display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
@@ -497,37 +496,32 @@ const useStyles = makeStyles({
   },
   operationsGroup: {
     'position': 'fixed',
-    'top': 30,
+    'top': 0,
     'right': 0,
-    'borderLeft': '1px solid lightGrey',
-    'borderTop': '1px solid lightGrey',
-    'borderBottom': '1px solid lightGrey',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      right: 0,
-      // height: '50%',
-    },
-    '@media (max-width: 350px)': {
-      top: '75px',
-      // height: '50%',
-    },
-  },
-  operationsGroupOpen: {
-    'position': 'fixed',
-    'top': 30,
-    'right': '320px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
       right: 0,
-      // height: '50%',
-      borderLeft: '1px solid lightGrey',
-      borderTop: '1px solid lightGrey',
-      borderBottom: '1px solid lightGrey',
+      height: '50%',
+    },
+    '@media (max-width: 350px)': {
+      top: '75px',
+      height: '50%',
+    },
+  },
+  operationsGroupOpen: {
+    'position': 'fixed',
+    'top': 0,
+    'right': '308px',
+    'border': 'none',
+    'zIndex': 0,
+    '@media (max-width: 900px)': {
+      right: 0,
+      height: '50%',
     },
     '@media (max-width: 350px)': {
       top: '120px',
-      // height: '50%',
+      height: '50%',
     },
   },
   baseGroup: {
