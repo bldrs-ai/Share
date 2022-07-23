@@ -51,15 +51,13 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix}) {
         title="Section plane"
         onClick={() => viewer.clipper.createPlane()}
         icon={<CutPlaneIcon/>}/> */}
-
-
+      <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
+      <ShortcutsControl/>
       <TooltipIconButton
         title="Properties"
         onClick={() => toggle('Properties')}
         icon={<ListIcon/>}/>
-      <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
       {/* <SampleModelsControl/> */}
-      <ShortcutsControl/>
       <AboutControl installPrefix={installPrefix}/>
       <TooltipIconButton
         title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
