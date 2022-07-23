@@ -505,11 +505,11 @@ const useStyles = makeStyles({
     'zIndex': 0,
     '@media (max-width: 900px)': {
       right: 0,
-      height: '50%',
+      // height: '50%',
     },
     '@media (max-width: 350px)': {
       top: '75px',
-      height: '50%',
+      // height: '50%',
     },
   },
   operationsGroupOpen: {
@@ -520,11 +520,14 @@ const useStyles = makeStyles({
     'zIndex': 0,
     '@media (max-width: 900px)': {
       right: 0,
-      height: '50%',
+      // height: '50%',
+      borderLeft: '1px solid lightGrey',
+      borderTop: '1px solid lightGrey',
+      borderBottom: '1px solid lightGrey',
     },
     '@media (max-width: 350px)': {
       top: '120px',
-      height: '50%',
+      // height: '50%',
     },
   },
   baseGroup: {
