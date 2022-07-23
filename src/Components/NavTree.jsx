@@ -1,10 +1,10 @@
 import React from 'react'
-import {Link as RouterLink} from 'react-router-dom'
-import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import PropTypes from 'prop-types'
 import clsx from 'clsx'
+import {Link as RouterLink} from 'react-router-dom'
+import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Typography from '@mui/material/Typography'
-import {reifyName} from '../utils/Ifc'
+import {reifyName} from '@bldrs-ai/ifclib'
 import {computeElementPath} from '../utils/TreeUtils'
 
 
@@ -102,13 +102,14 @@ export default function NavTree({
           [classes.disabled]: disabled,
         })}
         onMouseDown={handleMouseDown}
-        ref={ref}>
+        ref={ref}
+      >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
             jsx-a11y/no-static-element-interactions */}
         <div onClick={handleExpansionClick} style={{marginLeft: 10}}>
           {icon}
         </div>
-        <Typography onClick={handleSelectionClick} >
+        <Typography onClick={handleSelectionClick}>
           <RouterLink
             to={
               pathPrefix +
@@ -140,8 +141,9 @@ export default function NavTree({
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
-      label={reifyName(model, element)}
-      onClick={() => onElementSelect(element)}>
+      label={reifyName({properties: model}, element)}
+      onClick={() => onElementSelect(element)}
+    >
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {
           const childKey = `${pathPrefix}-${i++}`

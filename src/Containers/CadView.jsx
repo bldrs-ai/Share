@@ -253,7 +253,7 @@ export default function CadView({
     searchIndex.clearIndex()
     debug().log('CadView#initSearch: ', m, rootElt)
     debug().time('build searchIndex')
-    searchIndex.indexElement(m, rootElt)
+    searchIndex.indexElement({properties: m}, rootElt)
     debug().timeEnd('build searchIndex')
     onSearchParams()
     setShowSearchBar(true)
