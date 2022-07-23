@@ -29,7 +29,7 @@ export const TooltipIconButton = ({
   return (
     <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
       data-testid={dataTestId}>
-      <IconButton className={classes.root} onClick={onClick}>
+      <IconButton className={classes.root} onClick={onClick} size={size}>
         {icon}
       </IconButton>
     </Tooltip>
@@ -148,13 +148,13 @@ const useStyles = makeStyles((theme) => ({
       width: (props) => props.buttonWidth || '50px',
       height: (props) => props.buttonWidth || '50px',
       border: 'none',
-      // borderRadius: '50%',
+      borderRadius: '50%',
     },
     '& svg': {
-      width: '20px',
-      height: '20px',
+      width: '30px',
+      height: '30px',
       border: 'none',
-      // borderRadius: '50%',
+      borderRadius: '50%',
       fill: theme.palette.primary.contrastText,
     },
   },

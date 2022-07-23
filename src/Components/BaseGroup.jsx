@@ -1,9 +1,8 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
-// import AboutControl from './AboutControl'
-
-// import SampleModelsControl from './SampleModelsControl'
+import AboutControl from './AboutControl'
 import OpenModelControl from './OpenModelControl'
+import SampleModelsControl from './SampleModelsControl'
 
 
 /**
@@ -18,6 +17,8 @@ export default function BaseGroup({installPrefix, fileOpen}) {
   return (
     <div className={classes.root}>
       <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen}/>
+      <SampleModelsControl/>
+      <AboutControl installPrefix={installPrefix}/>
     </div>
   )
 }
@@ -29,7 +30,5 @@ const useStyles = makeStyles({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    // width: '50px',
-    // height: '50px',
   },
 })
