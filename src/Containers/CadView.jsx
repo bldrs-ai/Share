@@ -68,7 +68,7 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
 
-  // const closeDrawer = useStore((state) => state.closeDrawer)
+
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
 

@@ -19,6 +19,6 @@ If you use Bldrs for private hosting, please contribute to the [Bldrs Open Colle
 
 ## Development
 Bldrs is open source and we'd appreciate your help.
-- [Projects](https://github.com/orgs/bldrs-ai/projects?type=beta)
+- [Projects](https://github.com/orgs/bldrs-ai/projects?query=is%3Aopen&type=beta)
 - [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design)
-- [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Developer-Guide)
+- [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Dev:-Guide)

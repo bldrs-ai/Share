@@ -21,16 +21,17 @@ import useStore from '../store/useStore'
  * @return {Object}
  */
 export default function OperationsGroup({viewer, unSelectItem}) {
-  const classes = useStyles()
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const selectedElement = useStore((state) => state.selectedElement)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const classes = useStyles({isCommentsOn: isCommentsOn})
 
   const toggle = (panel) => {
     openDrawer()
     panel === 'Properties' ? toggleIsPropertiesOn() : null
-    panel === 'Notes' ? toggleIsCommentsOn() : null
+    panel === 'Notes' ? turnCommentsOn() : null
   }
 
   return (
