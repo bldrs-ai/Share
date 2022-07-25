@@ -1,9 +1,11 @@
 import React, {useState, useEffect} from 'react'
+import ReactMarkdown from 'react-markdown'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams} from '../utils/location'
+import {isRunningLocally} from '../utils/network'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
@@ -11,7 +13,6 @@ import {useIsMobile} from './Hooks'
 import Select from '../assets/2D_Icons/Select.svg'
 import Camera from '../assets/2D_Icons/Camera.svg'
 import Share from '../assets/2D_Icons/Share.svg'
-import {isRunningLocally} from '../utils/network'
 
 
 /**
@@ -106,6 +107,7 @@ export default function IssueCard({
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
+
   return (
     <Paper
       elevation={0}
@@ -137,7 +139,7 @@ export default function IssueCard({
         }
       </div>
       <div className={classes.body}>
-        {body}
+        <ReactMarkdown>{body}</ReactMarkdown>
       </div>
       {textOverflow &&
          <ShowMore

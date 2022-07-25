@@ -15,15 +15,19 @@ test('IssueCard', () => {
 test('Number of comments', () => {
   const id = 123
   const index = 123
-  render(<ShareMock><IssueCard id={id} index={index} numberOfComments={10}/></ShareMock>)
-  expect(screen.getByText(10)).toBeInTheDocument()
+  const commentCount = 10
+  render(<ShareMock><IssueCard id={id} index={index} numberOfComments={commentCount}/></ShareMock>)
+  expect(screen.getByText(commentCount)).toBeInTheDocument()
 })
 
 
 test('Select the issue card', () => {
   const id = 123
   const index = 123
-  const rendered = render(<ShareMock><IssueCard id={id} index={index} title="Select the issue card - title"/></ShareMock>)
+  const rendered = render(
+      <ShareMock>
+        <IssueCard id={id} index={index} title="Select the issue card - title"/>
+      </ShareMock>)
   const selectIssueButton = rendered.getByTestId('test-button')
   fireEvent.click(selectIssueButton)
   expect(selectIssueButton).not.toBeInTheDocument()
@@ -33,11 +37,15 @@ test('Select the issue card', () => {
 test('Click on the card to select', () => {
   const id = 123
   const index = 123
-  const rendered = render(<ShareMock><IssueCard id={id} index={index} title="Click on the card to select"/></ShareMock>)
+  const rendered = render(
+      <ShareMock>
+        <IssueCard id={id} index={index} title="Click on the card to select"/>
+      </ShareMock>)
   const selectionContainer = rendered.getByTestId('selectionContainer')
   fireEvent.click(selectionContainer)
   expect(screen.getByText('Click on the card to select')).toBeInTheDocument()
 })
+
 
 test('Camera Position control', () => {
   const id = 123
