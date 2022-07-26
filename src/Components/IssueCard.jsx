@@ -311,13 +311,18 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
   },
   body: {
-    height: (props) => props.expandText ? 'auto' : '62px',
-    margin: '5px',
-    paddingLeft: '5px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    fontSize: '1em',
-    lineHeight: '1.3em',
+    'height': (props) => props.expandText ? 'auto' : '62px',
+    'margin': '5px',
+    'paddingLeft': '5px',
+    'overflow': 'hidden',
+    'textOverflow': 'ellipsis',
+    'fontSize': '1em',
+    'lineHeight': '1.3em',
+    // Restore link styling for issues and comments
+    '& a': {
+      color: 'green',
+      textDecoration: 'underline',
+    },
   },
   showMore: {
     cursor: 'pointer',
