@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r364",
+  "version": "1.0.0-r365",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -82,9 +82,7 @@
   "jest": {
     "verbose": false,
     "testEnvironment": "jsdom",
-    "testPathIgnorePatterns": [
-      "src/Share.test.js"
-    ],
+    "testPathIgnorePatterns": [],
     "transform": {
       "\\.[jt]sx?$": "babel-jest",
       "^.+\\.svg$": "<rootDir>/svgTransform.js"

@@ -1,3 +1,30 @@
+import {getModelPath} from './Share'
+
+
+describe('Share', () => {
+  it('getModelPath parses ifc filepaths', () => {
+    const urlParams = {'*': 'asdf.ifc/1234'}
+    expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
+      filepath: '/asdf.ifc',
+      eltPath: '/1234',
+    })
+  })
+
+
+  it('getModelPath parses mixed-case ifc filepaths', () => {
+    ['ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc'].forEach((ext) => {
+      const urlParams = {'*': `asdf.${ext}/1234`}
+      expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
+        filepath: `/asdf.${ext}`,
+        eltPath: '/1234',
+      })
+    })
+  })
+})
+
+
+// TODO(88): Testing: headless screenshot regression testing
+/*
 import Canvas from 'canvas'
 // Needed for async test
 import 'regenerator-runtime/runtime'
@@ -43,3 +70,4 @@ test('Share', () => {
             pathPrefix={'v/p'} />}/>)
   expect(getByText(/BLDRS/i)).toBeInTheDocument()
 })
+*/
