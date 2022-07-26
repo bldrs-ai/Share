@@ -126,7 +126,7 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   if (filepath === '') {
     return null
   }
-  const splitRegex = /.ifc/i
+  const splitRegex = /\.ifc/i
   const match = splitRegex.exec(filepath)
   if (!match) {
     throw new Error('Filepath must contain ".ifc" (case-insensitive)')
