@@ -10,9 +10,9 @@ import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {useIsMobile} from './Hooks'
-import Select from '../assets/2D_Icons/Select.svg'
-import Camera from '../assets/2D_Icons/Camera.svg'
-import Share from '../assets/2D_Icons/Share.svg'
+import SelectIcon from '../assets/2D_Icons/Select.svg'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
 
 
 /**
@@ -182,7 +182,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
             size='small'
             placement='bottom'
             onClick={onClickSelect}
-            icon={<Select/>}
+            icon={<SelectIcon/>}
           />
         </div>
         }
@@ -212,16 +212,14 @@ const CardImage = ({imageUrl}) => {
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
-    <>
-      <div className={classes.showMore}
-        onClick={onClick}
-        role='button'
-        tabIndex={0}
-        onKeyPress={onClick}
-      >
-        {expandText ? 'show less' : 'show more'}
-      </div>
-    </>
+    <div className={classes.showMore}
+      onClick={onClick}
+      role='button'
+      tabIndex={0}
+      onKeyPress={onClick}
+    >
+      {expandText ? 'show less' : 'show more'}
+    </div>
   )
 }
 
@@ -240,7 +238,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
            placement='bottom'
            onClick={onClickNavigate}
            icon={
-             <Camera
+             <CameraIcon
                className={classes.buttonNavigate}
                style={{width: '24px', height: '24px'}}
              />}
@@ -256,7 +254,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
              setShareIssue(!shareIssue)
            }}
            icon={
-             <Share
+             <ShareIcon
                className={classes.buttonShare} style={{width: '24px', height: '24px'}}
              />}
          />
