@@ -403,6 +403,7 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: '5px',
   },
   username: {
     fontSize: '10px',
