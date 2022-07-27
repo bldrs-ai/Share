@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
+import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles, useTheme} from '@mui/styles'
@@ -136,6 +137,29 @@ export function FormButton({title, icon, type = 'submit', placement = 'left', si
         <IconButton type={type} size={size}>
           {icon}
         </IconButton>
+      </Tooltip>
+    </div>
+  )
+}
+
+/**
+ * A FormButton is a TooltipIconButton but with parameterized type for
+ * form actions.
+ * @param {string} title
+ * @param {Object} icon
+ * @param {string} type Type of button (and icon to render)
+ * @param {string} placement Placement of tooltip
+ * @param {string} size Size of button component
+ * @return {Object} React component
+ */
+export function RectangularButton({title, icon, placement = 'top'}) {
+  assertDefined(title, icon)
+  return (
+    <div >
+      <Tooltip title={title} describeChild placement={placement}>
+        <Button variant="outlined" startIcon={icon}>
+          {title}
+        </Button>
       </Tooltip>
     </div>
   )
