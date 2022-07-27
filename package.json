@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r364",
+  "version": "1.0.0-r370",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -33,7 +33,9 @@
     "normalize.css": "^8.0.1",
     "react": "^17.0.2",
     "react-dom": "^17.0.2",
+    "react-markdown": "^8.0.3",
     "react-router-dom": "^6.0.2",
+    "remark-gfm": "^3.0.1",
     "three": "^0.135",
     "web-ifc-viewer": "^1.0.184",
     "web-vitals": "^2.1.0",
@@ -78,26 +80,5 @@
     "jsdom": "^20.0.0",
     "shx": "^0.3.4",
     "storybook-addon-material-ui": "^0.9.0-alpha.24"
-  },
-  "jest": {
-    "verbose": false,
-    "testEnvironment": "jsdom",
-    "testPathIgnorePatterns": [
-      "src/Share.test.js"
-    ],
-    "transform": {
-      "\\.[jt]sx?$": "babel-jest",
-      "^.+\\.svg$": "<rootDir>/svgTransform.js"
-    },
-    "transformIgnorePatterns": [
-      "/node_modules/(?!(web-ifc|web-ifc-three|web-ifc-viewer|three|@bldrs-ai)/)"
-    ],
-    "moduleNameMapper": {
-      "^.+\\.css$": "identity-obj-proxy"
-    },
-    "setupFilesAfterEnv": [
-      "<rootDir>/src/setupTests.js",
-      "@alex_neo/jest-expect-message"
-    ]
   }
 }

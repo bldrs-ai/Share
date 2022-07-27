@@ -1,17 +1,18 @@
 import React, {useState, useEffect} from 'react'
+import ReactMarkdown from 'react-markdown'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams} from '../utils/location'
+import {isRunningLocally} from '../utils/network'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {useIsMobile} from './Hooks'
-import Select from '../assets/2D_Icons/Select.svg'
-import Camera from '../assets/2D_Icons/Camera.svg'
-import Share from '../assets/2D_Icons/Share.svg'
-import {isRunningLocally} from '../utils/network'
+import SelectIcon from '../assets/2D_Icons/Select.svg'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
 
 
 /**
@@ -106,6 +107,7 @@ export default function IssueCard({
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
+
   return (
     <Paper
       elevation={0}
@@ -137,7 +139,7 @@ export default function IssueCard({
         }
       </div>
       <div className={classes.body}>
-        {body}
+        <ReactMarkdown>{body}</ReactMarkdown>
       </div>
       {textOverflow &&
          <ShowMore
@@ -180,7 +182,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
             size='small'
             placement='bottom'
             onClick={onClickSelect}
-            icon={<Select/>}
+            icon={<SelectIcon/>}
           />
         </div>
         }
@@ -210,16 +212,14 @@ const CardImage = ({imageUrl}) => {
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
-    <>
-      <div className={classes.showMore}
-        onClick={onClick}
-        role='button'
-        tabIndex={0}
-        onKeyPress={onClick}
-      >
-        {expandText ? 'show less' : 'show more'}
-      </div>
-    </>
+    <div className={classes.showMore}
+      onClick={onClick}
+      role='button'
+      tabIndex={0}
+      onKeyPress={onClick}
+    >
+      {expandText ? 'show less' : 'show more'}
+    </div>
   )
 }
 
@@ -238,7 +238,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
            placement='bottom'
            onClick={onClickNavigate}
            icon={
-             <Camera
+             <CameraIcon
                className={classes.buttonNavigate}
                style={{width: '24px', height: '24px'}}
              />}
@@ -254,7 +254,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
              setShareIssue(!shareIssue)
            }}
            icon={
-             <Share
+             <ShareIcon
                className={classes.buttonShare} style={{width: '24px', height: '24px'}}
              />}
          />
@@ -311,13 +311,18 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
   },
   body: {
-    height: (props) => props.expandText ? 'auto' : '62px',
-    margin: '5px',
-    paddingLeft: '5px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    fontSize: '1em',
-    lineHeight: '1.3em',
+    'height': (props) => props.expandText ? 'auto' : '58px',
+    'margin': '5px',
+    'paddingLeft': '5px',
+    'overflow': 'hidden',
+    'textOverflow': 'ellipsis',
+    'fontSize': '1em',
+    'lineHeight': '1.3em',
+    // Restore link styling for issues and comments
+    '& a': {
+      color: 'green',
+      textDecoration: 'underline',
+    },
   },
   showMore: {
     cursor: 'pointer',

@@ -161,8 +161,15 @@ export const MOCK_ISSUES = {
       closed_at: null,
       author_association: 'NONE',
       active_lock_reason: null,
-      // eslint-disable-next-line
-      body: 'BLDRS aims to enable asynchronous workflows by  integrating essential communication channels and open standard.\r\n\r\n<img width=\'475\' alt=\'image\' src=\'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\'>\r\n\r\nimageURL\r\nhttps://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png\r\nimageURL\r\n\r\ncamera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06\r\n\r\n\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
+      body: `*BLDRS* aims to enable asynchronous workflows by  integrating essential communication channels and open standard.
+
+![bldrs ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)
+
+[Let's look at haus](/share/v/p/haus.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
+
+\`\`\`
+camera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06
+\`\`\``,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/reactions',
         'total_count': 0,

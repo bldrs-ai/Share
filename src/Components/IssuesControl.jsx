@@ -1,17 +1,17 @@
 import React, {useEffect} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import Paper from '@mui/material/Paper'
+import useStore from '../store/useStore'
 import {getIssues, getComments} from '../utils/GitHub'
 import debug from '../utils/debug'
 import {addHashParams, removeHashParams} from '../utils/location'
-import useStore from '../store/useStore'
 import IssueCard from './IssueCard'
 import {TooltipIconButton} from './Buttons'
 import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
-import Back from '../assets/2D_Icons/Back.svg'
-import Next from '../assets/2D_Icons/NavNext.svg'
-import Previous from '../assets/2D_Icons/NavPrev.svg'
+import BackIcon from '../assets/2D_Icons/Back.svg'
+import NextIcon from '../assets/2D_Icons/NavNext.svg'
+import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
 
 
 /** The prefix to use for issue id in the Url hash. */
@@ -72,7 +72,7 @@ export function IssuesNavBar() {
                  removeHashParams(window.location, ISSUE_PREFIX)
                  setSelectedIssueId(null)
                }}
-               icon={<Back style={{width: '30px', height: '30px'}}/>}
+               icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
              />
              <>
                <TooltipIconButton
@@ -80,14 +80,14 @@ export function IssuesNavBar() {
                  placement='bottom'
                  size='small'
                  onClick={() => selectIssue('previous')}
-                 icon={<Previous style={{width: '20px', height: '20px'}}/>}
+                 icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
                />
                <TooltipIconButton
                  title='Next Comment'
                  size='small'
                  placement='bottom'
                  onClick={() => selectIssue('next')}
-                 icon={<Next style={{width: '20px', height: '20px'}}/>}
+                 icon={<NextIcon style={{width: '20px', height: '20px'}}/>}
                />
              </>
            </>
