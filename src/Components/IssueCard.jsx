@@ -55,6 +55,7 @@ export default function IssueCard({
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
+  console.log('BODY', body)
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
   const isImage = imageUrl !== ''
