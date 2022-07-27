@@ -119,15 +119,20 @@ export function navToDefault(navigate, appPrefix) {
  * @param {Object} urlParams e.g. .../:org/:repo/:branch/*
  * @return {Object}
  */
-function getModelPath(installPrefix, pathPrefix, urlParams) {
+export function getModelPath(installPrefix, pathPrefix, urlParams) {
   // TODO: combine modelPath methods into class.
   let m = null
   let filepath = urlParams['*']
-  if (filepath == '') {
+  if (filepath === '') {
     return null
   }
-  const parts = filepath.split('.ifc')
-  filepath = '/' + parts[0] + '.ifc' // TODO(pablo)
+  const splitRegex = /\.ifc/i
+  const match = splitRegex.exec(filepath)
+  if (!match) {
+    throw new Error('Filepath must contain ".ifc" (case-insensitive)')
+  }
+  const parts = filepath.split(splitRegex)
+  filepath = `/${parts[0]}${match[0]}`
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:
     //   /v/p/*.  It should be only the filename.

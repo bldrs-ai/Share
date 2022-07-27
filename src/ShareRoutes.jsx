@@ -33,6 +33,7 @@ import debug from './utils/debug'
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
  *                    ^... here on handled by this component's paths.
  *              ^... path to the component in BaseRoutes.jsx.
+ * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
  * @return {Object}
  */
 export default function ShareRoutes({installPrefix, appPrefix}) {
@@ -104,7 +105,7 @@ function Forward({appPrefix}) {
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return input.endsWith('.ifc') && (
+  return input.toLowerCase().endsWith('.ifc') && (
     input.startsWith('http') ||
       input.startsWith('/') ||
       input.startsWith('bldrs') ||
