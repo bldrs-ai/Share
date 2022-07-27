@@ -59,7 +59,7 @@ export default function IssueCard({
   const textOverflow = body.length > bodyWidthChars
   const isImage = imageUrl !== ''
   const isMobile = useIsMobile()
-  const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
+  const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})
   useEffect(() => {
     if (isMobile) {
       setExpandImage(false)
@@ -122,15 +122,17 @@ export default function IssueCard({
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        <CardTitle
-          title={title}
-          userName={username}
-          date={date}
-          avatarUrl={avatarUrl}
-          isComment={isComment}
-          selected={selected}
-          onClickSelect={selectCard}
-        />
+        {isComment ? null :
+          <CardTitle
+            title={title}
+            userName={username}
+            date={date}
+            avatarUrl={avatarUrl}
+            isComment={isComment}
+            selected={selected}
+            onClickSelect={selectCard}
+          />
+        }
         {isImage &&
           <CardImage
             expandImage={expandImage}
@@ -170,7 +172,9 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
-        <div className={classes.titleString}>{title}</div>
+        {
+          isComment ? null : <div className={classes.titleString}>{title}</div>
+        }
         <div className={classes.username}>{username}</div>
         <div className={classes.username}>{date.split('T')[0]}</div>
       </div>
@@ -278,7 +282,7 @@ const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCar
 const useStyles = makeStyles((theme) => ({
   container: {
     padding: '4px',
-    border: (props) => props.select ? '1px solid green' : '1px solid lightGrey',
+    border: (props) => props.select ? '2px solid green' : '1px solid lightGrey',
     width: '270px',
     marginBottom: '20px',
   },
@@ -308,7 +312,7 @@ const useStyles = makeStyles((theme) => ({
     width: '150px',
   },
   selectionContainer: {
-    cursor: 'pointer',
+    cursor: (props) => props.isComment ? null : 'pointer',
   },
   body: {
     'height': (props) => props.expandText ? 'auto' : '58px',
@@ -394,7 +398,6 @@ const useStyles = makeStyles((theme) => ({
     width: '96%',
     borderRadius: '10px',
     border: '1px solid #DCDCDC',
-    cursor: 'pointer',
   },
   imageContainer: {
     display: 'flex',

@@ -284,7 +284,7 @@ export const MOCK_COMMENTS = {
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
       // eslint-disable-next-line
-      body: 'The Architecture, Engineering and Construction industries are trying to face challenging problems of the future with tools anchored in the past. Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative, open development.\r\n\r\nWe cant imagine a future where building the rest of the world hasnt been transformed by these new ways of working. We are part of that transformation.\r\n\r\ncamera=#c:-108.43,86.02,62.15,-27.83,27.16,1.58\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34 imageURL https://user-images.githubusercontent.com/3433606/178335990-11cc20fa-93e3-4bba-8651-e31f83165150.png imageURL',
+      body: 'The Architecture, Engineering and Construction industries are trying to face challenging problems of the future with tools anchored in the past. Meanwhile, a new dynamic has propelled the Tech industry: online, collaborative, open development.\r\n\r\nWe cant imagine a future where building the rest of the world hasnt been transformed by these new ways of working. We are part of that transformation.\r\n\r\ncamera=#c:-108.43,86.02,62.15,-27.83,27.16,1.58\r\nurl = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34 imageURL https://user-images.githubusercontent.com/3433606/180348236-8f0542d3-bae1-4d27-a8d0-2e0d158384d0.png imageURL',
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
