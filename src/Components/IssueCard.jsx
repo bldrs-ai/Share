@@ -311,7 +311,7 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
   },
   body: {
-    'height': (props) => props.expandText ? 'auto' : '62px',
+    'height': (props) => props.expandText ? 'auto' : '58px',
     'margin': '5px',
     'paddingLeft': '5px',
     'overflow': 'hidden',
