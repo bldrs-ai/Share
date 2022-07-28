@@ -2,7 +2,7 @@ import React, {useRef, useState} from 'react'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipIconButton} from './Buttons'
+import {TooltipToggleButton} from './Buttons'
 import Divider from '@mui/material/Divider'
 import {UilMinusSquare, UilGithub} from '@iconscout/react-unicons'
 
@@ -15,12 +15,12 @@ export default function InputBar() {
   const [inputText, setInputText] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles()
+  const classes = useStyles({inputWidth: '288px'})
 
   return (
     <div>
       <Paper component='form' className={classes.root} onSubmit={() => {}}>
-        <TooltipIconButton
+        <TooltipToggleButton
           placement='bottom'
           title='Toggle tree view'
           onClick={() => {}}
@@ -33,7 +33,7 @@ export default function InputBar() {
           error={true}
           placeholder={'Paste GitHub link here'}/>
         {inputText.length > 0 ?
-          <TooltipIconButton
+          <TooltipToggleButton
             title='clear'
             size='small'
             placement='bottom'
