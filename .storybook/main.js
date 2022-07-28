@@ -7,7 +7,8 @@ module.exports = {
     '@storybook/addon-links',
     '@storybook/addon-essentials',
     '@storybook/addon-interactions',
-    'storybook-addon-material-ui'
+    'storybook-addon-material-ui',
+    'storybook-addon-turbo-build'
   ],
   'framework': '@storybook/react',
   'features': {
