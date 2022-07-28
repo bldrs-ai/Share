@@ -1,25 +1,28 @@
 import React from 'react'
-import {TooltipToggleButton, RectangularButton} from '../../Components/Buttons'
-import {ArrowBack, ArrowForward, Check} from '@mui/icons-material'
-import {GitHub} from '../../assets/2D_Icons/GitHub.svg'
+import {RectangularButton} from '../../Components/Buttons'
+import {UilGithub, UilBuilding, UilUpload} from '@iconscout/react-unicons'
+
 
 
 export default {
   title: 'BLDRS UI/Buttons/RectangularButton',
-  component: TooltipToggleButton,
+  component: RectangularButton,
   argTypes: {
     icon: {
-      options: ['add', 'back', 'check', 'forward', 'github'],
+      options: ['github', 'building', 'upload'],
       mapping: {
-        github: <GitHub />,
-        back: <ArrowBack />,
-        check: <Check />,
-        forward: <ArrowForward />,
+        github: <UilGithub />,
+        building: <UilBuilding />,
+        upload: <UilUpload />,
       },
       control: {
         type: 'select',
       },
-      defaultValue: 'add',
+      defaultValue: 'github',
+    },
+    variant: {
+      options: ['contained', 'rectangular'],
+      defaultValue: 'rectangular',
     },
     onClick: {
       action: 'clicked',
@@ -44,31 +47,22 @@ export default {
       },
       defaultValue: 'left',
     },
-
-    size: {
-      control: {
-        type: 'select',
-      },
-      options: {
-        small: 'small',
-        medium: 'medium',
-        large: 'large',
-      },
-      defaultValue: 'medium',
+    color: {
+      options: ['primary', 'secondary'],
     },
   },
   args: {
-    title: 'Open from Github',
+    title: 'upload from device',
   },
   parameters: {
     backgrounds: {
-      default: 'dark',
+      default: 'light',
     },
   },
 }
 
 const Template = (args) => {
-  return <RectangularButton title={'open from github'} icon={<GitHub/>} />
+  return <RectangularButton type='contained' {...args}/>
 }
 
 export const Button = Template.bind({})

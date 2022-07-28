@@ -152,12 +152,24 @@ export function FormButton({title, icon, type = 'submit', placement = 'left', si
  * @param {string} size Size of button component
  * @return {Object} React component
  */
-export function RectangularButton({title, icon, placement = 'top'}) {
+export function RectangularButton({
+  title,
+  icon,
+  placement = 'top',
+  variant = 'outlined',
+}) {
   assertDefined(title, icon)
   return (
     <div >
-      <Tooltip title={title} describeChild placement={placement}>
-        <Button variant="outlined" startIcon={icon}>
+      <Tooltip title={title} placement={placement}>
+        <Button
+          variant={variant}
+          startIcon={icon}
+          sx={{
+            '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
+            '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+          }}
+        >
           {title}
         </Button>
       </Tooltip>

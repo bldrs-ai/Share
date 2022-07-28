@@ -24,6 +24,7 @@
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",
+    "@iconscout/react-unicons": "^1.1.6",
     "@mui/icons-material": "^5.1.1",
     "@mui/lab": "^5.0.0-alpha.48",
     "@mui/material": "^5.0.1",
