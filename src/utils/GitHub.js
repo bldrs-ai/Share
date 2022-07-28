@@ -231,14 +231,14 @@ camera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06
       active_lock_reason: null,
       body: `Test Issue body
 
-- Item 1
-- Item 2
-- Item 3
+- [cam 1](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
+- [cam 2](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48)
+- [cam 3](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48)
 
 ![The Bldrs Ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)
 \`\`\`
 camera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06
-url=http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48
+url=
 \`\`\``,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/reactions',

@@ -8,7 +8,7 @@ import {addHashParams} from '../utils/location'
 import {isRunningLocally} from '../utils/network'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
-import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {useIsMobile} from './Hooks'
 import SelectIcon from '../assets/2D_Icons/Select.svg'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
@@ -23,9 +23,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
  * @param {string} title issue title
  * @param {string} avatarUrl user avatarUrl
  * @param {string} body issue body
- * @param {string} imageUrl issue image
  * @param {string} date issue date
- * @param {string} embeddedUrl full url attached to GH issue with camera position
  * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
  * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
  * @param {boolean} isComment Comments/replies are formated differently
@@ -38,9 +36,7 @@ export default function IssueCard({
   title = 'Title',
   avatarUrl = '',
   body = '',
-  imageUrl = '',
   date = '',
-  embeddedUrl = '',
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
@@ -55,10 +51,36 @@ export default function IssueCard({
   const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedIssueId === id
-  console.log('BODY', body)
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const isImage = imageUrl !== ''
+  /**
+   * Checks all urls in body for links matching the current issue and
+   * extracts camera params from them.
+   * @param {string} bodyMarkdown Full body text in Markdown.
+   * @return {array} Camera params.
+   */
+  function extractCameraParamsFromUrls(bodyMarkdown) {
+    const urlRegex = new RegExp(/https?:\/\/[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9]{1,6}\b([-a-zA-Z0-9@:%_+.~#?&//=]*)/gi)
+    const urls = bodyMarkdown.match(urlRegex)
+    const out = []
+    if (urls === null) {
+      return out
+    }
+    let last
+    for (let i = 0; i < urls.length; i++) {
+      const cur = urls[i]
+      if (last === cur) {
+        continue
+      }
+      out.push(cur)
+      last = cur
+    }
+    console.log('Extracted URLs: ', out)
+    return out
+  }
+  const embeddedCameraParams = extractCameraParamsFromUrls(body)
+  // TODO(pablo): MOAR CAMERAS
+  const firstCamera = undefined // embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
   useEffect(() => {
@@ -67,18 +89,18 @@ export default function IssueCard({
     }
   }, [isMobile])
   useEffect(() => {
-    if (selected && embeddedUrl) {
-      setCameraFromEncodedPosition(embeddedUrl, cameraControls)
+    if (selected && firstCamera) {
+      setCameraFromParams(firstCamera, cameraControls)
     }
-  }, [selected, embeddedUrl, cameraControls])
+  }, [selected, firstCamera, cameraControls])
 
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
     setSelectedIssueIndex(index)
     setSelectedIssueId(id)
-    if (embeddedUrl) {
-      setCameraFromEncodedPosition(embeddedUrl)
+    if (embeddedCameraParams) {
+      setCameraFromParams(firstCamera)
     }
     addHashParams(window.location, ISSUE_PREFIX, {id: id})
   }
@@ -89,9 +111,9 @@ export default function IssueCard({
    * the issue/comment.
    */
   function showCameraView() {
-    setCameraFromEncodedPosition(embeddedUrl, cameraControls)
+    setCameraFromParams(firstCamera, cameraControls)
     addCameraUrlParams(cameraControls)
-    if (!embeddedUrl) {
+    if (!embeddedCameraParams) {
       removeCameraUrlParams()
     }
   }
@@ -132,12 +154,6 @@ export default function IssueCard({
           selected={selected}
           onClickSelect={selectCard}
         />
-        {isImage &&
-          <CardImage
-            expandImage={expandImage}
-            imageUrl={imageUrl}
-          />
-        }
       </div>
       <div className={classes.body}>
         <ReactMarkdown>{body}</ReactMarkdown>
@@ -151,11 +167,11 @@ export default function IssueCard({
            }}
          />
       }
-      {embeddedUrl || numberOfComments > 0 ?
+      {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
           numberOfComments={numberOfComments}
-          embeddedUrl={embeddedUrl}
+          embeddedCameras={embeddedCameraParams}
           selected={selected}
           onClickNavigate={showCameraView}
           onClickShare={shareIssue}
@@ -196,20 +212,6 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
 }
 
 
-const CardImage = ({imageUrl}) => {
-  const classes = useStyles()
-  return (
-    <div className={classes.imageContainer} role='button' tabIndex={0}>
-      <img
-        className={classes.image}
-        alt='cardImage'
-        src={imageUrl}
-      />
-    </div>
-  )
-}
-
-
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
@@ -225,13 +227,19 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
-const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCard, embeddedUrl, selected}) => {
+const CardActions = ({
+  onClickNavigate,
+  onClickShare,
+  numberOfComments,
+  selectCard,
+  embeddedCameras,
+  selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
-  const classes = useStyles({embeddedUrl: embeddedUrl, shareIssue: shareIssue})
+  const classes = useStyles()
   return (
     <div className={classes.actions}>
       <div className={classes.rightGroup}>
-        {embeddedUrl ?
+        {embeddedCameras ?
          <TooltipIconButton
            disable={true}
            title='Show the camera view'

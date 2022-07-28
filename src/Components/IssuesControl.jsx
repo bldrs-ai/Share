@@ -7,7 +7,7 @@ import debug from '../utils/debug'
 import {addHashParams, removeHashParams} from '../utils/location'
 import IssueCard from './IssueCard'
 import {TooltipIconButton} from './Buttons'
-import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import BackIcon from '../assets/2D_Icons/Back.svg'
 import NextIcon from '../assets/2D_Icons/NavNext.svg'
@@ -44,7 +44,7 @@ export function IssuesNavBar() {
       setSelectedIssueIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
       if (issue.url) {
-        setCameraFromEncodedPosition(issue.url)
+        setCameraFromParams(issue.url)
         addCameraUrlParams()
       } else {
         removeCameraUrlParams()

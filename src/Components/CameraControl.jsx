@@ -65,27 +65,28 @@ function onLoad(location, cameraControls) {
  */
 export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
-  if (encodedParams == undefined) {
+  if (encodedParams === undefined) {
     return
   }
-  setCameraFromEncodedPosition(encodedParams, cameraControls)
+  setCameraFromParams(encodedParams, cameraControls)
 }
 
 
 /**
  * Set the camera position
- * @param {String} encodedPosition camera position
+ * @param {String} encodedParams camera position
  * @param {Object} cameraControls obtained from the viewer
  */
-export function setCameraFromEncodedPosition(encodedPosition, cameraControls) {
+export function setCameraFromParams(encodedParams, cameraControls) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
   if (!cameraControls) {
     return
   }
-  const coords = parseHashParams(encodedPosition)
+  const coords = parseHashParams(encodedParams)
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
-    if (coords.length == 6) {
+    const extendedCoordsSize = 6
+    if (coords.length === extendedCoordsSize) {
       cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
@@ -96,7 +97,7 @@ export function setCameraFromEncodedPosition(encodedPosition, cameraControls) {
 const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
 const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
 const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
-const regex = new RegExp(paramPattern)
+const paramRegex = new RegExp(paramPattern)
 
 
 // Exported for testing
@@ -105,12 +106,13 @@ const regex = new RegExp(paramPattern)
  * @return {Object|undefined} The coordinates if present and valid else undefined
  */
 export function parseHashParams(encodedParams) {
-  const match = encodedParams.match(regex)
+  const match = encodedParams.match(paramRegex)
   const stof = (str) => {
-    const val = parseFloat(parseFloat(str).toFixed(2))
+    const floatDigits = 2
+    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
     if (isFinite(val)) {
       const rounded = parseFloat(val.toFixed(0))
-      return rounded == val ? rounded : val
+      return rounded === val ? rounded : val
     } else {
       console.warn('Invalid coordinate: ', str)
     }
@@ -151,12 +153,13 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
-  let camArr = roundCoord(...position, 2)
+  const floatDigits = 2
+  let camArr = roundCoord(...position, floatDigits)
   const target = cameraControls.getTarget()
-  if (target.x == 0 && target.y == 0 && target.z == 0) {
+  if (target.x === 0 && target.y === 0 && target.z === 0) {
     camArr = camArr.concat(0)
   } else {
-    camArr = camArr.concat(roundCoord(...target, 2))
+    camArr = camArr.concat(roundCoord(...target, floatDigits))
   }
   addHashParams(window.location, CAMERA_PREFIX, camArr)
 }
