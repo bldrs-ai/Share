@@ -1,11 +1,10 @@
 import React from 'react'
-import {ControlButton} from '../../Components/Buttons'
 import Dialog from '../../Components/Dialog_redesign'
 
 
 export default {
   title: 'BLDRS UI/Dialogs/Open_Dialog',
-  component: ControlButton,
+  component: Dialog,
   argTypes: {
     icon: {
       options: ['add', 'back', 'check', 'forward', 'help'],
@@ -28,4 +27,4 @@ const Template = (args) => {
   />
 }
 
-export const Button = Template.bind({})
+export const OpenDialog = Template.bind({})

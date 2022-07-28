@@ -158,18 +158,16 @@ export function RectangularButton({
 }) {
   assertDefined(title, icon)
   return (
-    <div >
-      <Button
-        variant='rectangular'
-        startIcon={icon}
-        sx={{
-          '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-          '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
-        }}
-      >
-        {title}
-      </Button>
-    </div>
+    <Button
+      variant='rectangular'
+      startIcon={icon}
+      sx={{
+        '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
+        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+      }}
+    >
+      {title}
+    </Button>
   )
 }
 

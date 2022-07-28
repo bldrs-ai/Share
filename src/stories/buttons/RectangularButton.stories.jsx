@@ -1,6 +1,6 @@
 import React from 'react'
 import {RectangularButton} from '../../Components/Buttons'
-import {UilGithub, UilBuilding, UilUpload} from '@iconscout/react-unicons'
+import {UilBuilding, UilUpload} from '@iconscout/react-unicons'
 
 
 
@@ -11,14 +11,13 @@ export default {
     icon: {
       options: ['github', 'building', 'upload'],
       mapping: {
-        github: <UilGithub />,
         building: <UilBuilding />,
         upload: <UilUpload />,
       },
       control: {
         type: 'select',
       },
-      defaultValue: 'github',
+      defaultValue: 'upload',
     },
     onClick: {
       action: 'clicked',
