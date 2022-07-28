@@ -117,7 +117,7 @@ function loadTheme(mode) {
             textTransform: 'none',
             font: 'Inter',
             fontWeight: 600,
-            fontSize: '14px',
+            fontSize: '16px',
           },
         },
       ],

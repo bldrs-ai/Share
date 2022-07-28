@@ -155,24 +155,20 @@ export function FormButton({title, icon, type = 'submit', placement = 'left', si
 export function RectangularButton({
   title,
   icon,
-  placement = 'top',
-  variant = 'outlined',
 }) {
   assertDefined(title, icon)
   return (
     <div >
-      <Tooltip title={title} placement={placement}>
-        <Button
-          variant={variant}
-          startIcon={icon}
-          sx={{
-            '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-            '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
-          }}
-        >
-          {title}
-        </Button>
-      </Tooltip>
+      <Button
+        variant='rectangular'
+        startIcon={icon}
+        sx={{
+          '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
+          '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+        }}
+      >
+        {title}
+      </Button>
     </div>
   )
 }
