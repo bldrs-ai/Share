@@ -1,6 +1,9 @@
 # dependencies
 /node_modules
 
+# no longer check-in docs for builds.  This is handled by Netlify
+/docs
+
 # misc
 .DS_Store
 .vscode
