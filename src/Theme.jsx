@@ -96,6 +96,38 @@ function loadTheme(mode) {
     h5: {fontSize: '1rem'},
     body2: {fontSize: '.8rem'},
   }
+  const components = {
+    overrides: {
+      MuiStartIcon: {
+        root: {
+          marginRight: '40px',
+        },
+      },
+    },
+    MuiButton: {
+      variants: [
+        {
+          props: {variant: 'rectangular'},
+          style: {
+            border: '1px solid grey',
+            width: '288px',
+            height: '50px',
+            color: '#000000',
+            background: 'none',
+            textTransform: 'none',
+            font: 'Inter',
+            fontWeight: 600,
+            fontSize: '16px',
+          },
+        },
+      ],
+      defaultProps: {
+        disableElevation: true,
+        disableFocusRipple: true,
+        disableRipple: true,
+      },
+    },
+  }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
   // it will be created automatically.  I think I've had that working
@@ -109,9 +141,11 @@ function loadTheme(mode) {
     },
   }}
   const theme = {
+    components: components,
     typography: typography,
     shape: {borderRadius: 5},
     palette: activePalette,
+    button: {},
   }
   return createTheme(theme)
 }
