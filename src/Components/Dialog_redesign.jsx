@@ -6,7 +6,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import {RectangularButton} from './Buttons'
 import {assertDefined} from '../utils/assert'
 import InputBar from './InputBar'
-import {UilBuilding, UilUpload, UilMultiply} from '@iconscout/react-unicons'
+import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap} from '@iconscout/react-unicons'
 import {grey} from '@mui/material/colors'
 import Divider from '@mui/material/Divider'
 
@@ -57,6 +57,12 @@ export function OpenDialogBodyContent() {
       <div className={classes.recommendedContainer}>
         <div className={classes.recommendedText}>Recommended Method</div>
         <InputBar/>
+        <div className={classes.fileDescriptionContainer}>
+          <UilGraduationCap className={classes.fileDescriptionIcon}/>
+          <div className={classes.fileDescriptionText}>
+            How do I host .ifc files on GitHub?
+          </div>
+        </div>
       </div>
       <div className={classes.divider}>
         <Divider/>
@@ -121,8 +127,8 @@ const useStyles = makeStyles((theme) => ({
     color: '#777777',
   },
   content: {
-    display: 'flex',
     height: '400px',
+    display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
     alignContent: 'center',
@@ -158,6 +164,25 @@ const useStyles = makeStyles((theme) => ({
     textTransform: 'uppercase',
     color: '#0085FF',
     textAlign: 'center',
+  },
+  fileDescriptionContainer: {
+    marginTop: '10px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignContent: 'center',
+    cursor: 'pointer',
+  },
+  fileDescriptionText: {
+    marginLeft: '5px',
+    width: '200px',
+    color: '#979797',
+    fontSize: '12px',
+  },
+  fileDescriptionIcon: {
+    color: '#979797',
+    width: '13px',
+    height: '13px',
   },
 }))
 
