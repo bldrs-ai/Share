@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../src/index.css"],
-  "sourcesContent": ["body {\n  overscroll-behavior: none;\n  overflow: hidden;\n  padding: 0;\n  height: 100%;\n  max-height: 100%;\n}\n\na {\n  color: inherit;\n  text-decoration: inherit;\n}\n"],
-  "mappings": "AAAA,KACE,yBACA,gBAFF,UAIE,YACA,gBAGF,EACE,cACA",
-  "names": []
-}
