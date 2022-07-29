@@ -13,4 +13,4 @@ const Template = (args) => {
   return <OpenDialogHeaderContent/>
 }
 
-export const OpenDialogHeader = Template.bind({})
+export const OpenDialogHeaders = Template.bind({})

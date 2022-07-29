@@ -5,15 +5,6 @@ import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from '../../Comp
 export default {
   title: 'BLDRS UI/Dialogs/Open_Dialog',
   component: Dialog,
-  argTypes: {
-    icon: {
-      options: ['add', 'back', 'check', 'forward', 'help'],
-      control: {
-        type: 'select',
-      },
-      defaultValue: 'help',
-    },
-  },
 }
 
 const Template = (args) => {
