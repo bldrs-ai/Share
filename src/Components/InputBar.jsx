@@ -22,7 +22,13 @@ export default function InputBar({startAdorment, onSubmit}) {
         <div className={classes.iconContainer}>
           {startAdorment}
         </div>
-        <Divider orientation="vertical" flexItem className={classes.divider}/>
+        <Divider orientation="vertical" flexItem
+          style={{
+            height: '30px',
+            alignSelf: 'center',
+            margin: '0px 10px 0px 0px',
+          }}
+        />
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -77,7 +83,7 @@ const useStyles = makeStyles({
     color: 'red',
   },
   divider: {
-    height: '36px',
+    height: '30px',
     alignSelf: 'center',
     margin: '0px 10px 0px 0px',
   },

@@ -129,7 +129,7 @@ const useStyles = makeStyles((theme) => ({
   },
   contentBody: {
     height: '400px',
-    maxWidth: '300px',
+    maxWidth: '340px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
