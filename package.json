@@ -1,24 +1,24 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r368",
+  "version": "1.0.0-r369",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn build-share",
-    "build-all": "yarn build-share && yarn build-storybook",
+    "build": "yarn build-docs && yarn build-share && yarn build-storybook",
     "build-docs": "yarn clean && shx cp -r public docs",
-    "build-share": "yarn build-docs && yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
+    "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "build-storybook": "build-storybook -o docs/sb",
     "clean": "shx rm -rf docs",
     "husky-init": "husky install",
     "lint": "yarn eslint src",
     "precommit": "yarn lint && yarn test",
-    "serve": "node config/serve.js",
-    "serve-storybook": "start-storybook -p 6006",
+    "serve": "yarn serve-share",
+    "serve-share": "yarn build-share && node config/serve.js",
+    "serve-storybook": "yarn build-storybook && start-storybook -p 6006",
     "test": "jest",
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
