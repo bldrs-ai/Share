@@ -6,7 +6,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import {RectangularButton} from './Buttons'
 import {assertDefined} from '../utils/assert'
 import InputBar from './InputBar'
-import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap} from '@iconscout/react-unicons'
+import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
 import {grey} from '@mui/material/colors'
 import Divider from '@mui/material/Divider'
 
@@ -56,7 +56,7 @@ export function OpenDialogBodyContent() {
     <>
       <div className={classes.recommendedContainer}>
         <div className={classes.recommendedText}>Recommended Method</div>
-        <InputBar/>
+        <InputBar startAdorment={<UilGithub/>}/>
         <div className={classes.fileDescriptionContainer}>
           <UilGraduationCap className={classes.fileDescriptionIcon}/>
           <div className={classes.fileDescriptionText}>
@@ -174,6 +174,7 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
   },
   fileDescriptionText: {
+    fontFamily: 'Helvetica',
     marginLeft: '5px',
     width: '200px',
     color: '#979797',
