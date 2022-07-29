@@ -10,6 +10,7 @@ import {UilBuilding, UilUpload, UilMultiply} from '@iconscout/react-unicons'
 import {grey} from '@mui/material/colors'
 import Divider from '@mui/material/Divider'
 
+
 /**
  * A generic base dialog component.
  * @param {Object} icon Leading icon above header description
@@ -21,12 +22,12 @@ import Divider from '@mui/material/Divider'
  * @return {Object} React component
  */
 export default function Dialog({
-  headerText,
+  headerContent,
+  bodyContent,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  content,
 }) {
-  assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, content)
+  assertDefined(headerContent, bodyContent, isDialogDisplayed, setIsDialogDisplayed)
   const classes = useStyles(useTheme())
   const close = () => setIsDialogDisplayed(false)
   return (
@@ -36,35 +37,64 @@ export default function Dialog({
       maxWidth={'sm'}
     >
       <DialogTitle className={classes.titleContainer}>
-        <div className={classes.titleTextContainer}>
-          <div className={classes.titleText}>
-            {headerText}
-            <div className={classes.secondarytext}>
-              We support .ifc file types
-            </div>
-          </div>
-        </div>
-        <div>
-          <UilMultiply style={{color: '#505050'}}/>
-        </div>
+        {headerContent}
       </DialogTitle>
       <DialogContent className={classes.content}>
-        <div className={classes.recommendedContainer}>
-          <div className={classes.recommendedText}>Recommended Method</div>
-          <InputBar/>
-        </div>
-        <div className={classes.divider}>
-          <Divider/>
-          <div className={classes.dividerText}>or</div>
-        </div>
-        <RectangularButton title='Upload from device' icon={<UilUpload/>}/>
-        <div className={classes.divider}>
-          <Divider/>
-          <div className={classes.dividerText}>or</div>
-        </div>
-        <RectangularButton title='Load Sample Model' icon={<UilBuilding/>}/>
+        {bodyContent}
       </DialogContent>
     </MuiDialog>)
+}
+
+
+/**
+ * Content for the open Dialog
+ * @return {Object} React component
+ */
+export function OpenDialogBodyContent() {
+  const classes = useStyles(useTheme())
+  return (
+    <>
+      <div className={classes.recommendedContainer}>
+        <div className={classes.recommendedText}>Recommended Method</div>
+        <InputBar/>
+      </div>
+      <div className={classes.divider}>
+        <Divider/>
+        <div className={classes.dividerText}>or</div>
+      </div>
+      <RectangularButton title='Upload from device' icon={<UilUpload/>}/>
+      <div className={classes.divider}>
+        <Divider/>
+        <div className={classes.dividerText}>or</div>
+      </div>
+      <RectangularButton title='Load Sample Model' icon={<UilBuilding/>}/>
+    </>
+  )
+}
+
+
+/**
+ * Title for the open Dialog
+ * @return {Object} React component
+ */
+export function OpenDialogHeaderContent() {
+  const classes = useStyles(useTheme())
+  return (
+    <>
+      <div className={classes.titleTextContainer}>
+        <div className={classes.titleText}>
+          Open file
+          <div className={classes.secondarytext}>
+            We support .ifc file types
+          </div>
+        </div>
+      </div>
+      <div>
+        <UilMultiply style={{color: '#505050'}}/>
+      </div>
+    </>
+
+  )
 }
 
 
