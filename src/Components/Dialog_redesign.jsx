@@ -36,10 +36,10 @@ export default function Dialog({
       onClose={close}
       maxWidth={'sm'}
     >
-      <DialogTitle className={classes.titleContainer}>
+      <DialogTitle>
         {headerContent}
       </DialogTitle>
-      <DialogContent className={classes.content}>
+      <DialogContent className={classes.contentBody}>
         {bodyContent}
       </DialogContent>
     </MuiDialog>)
@@ -53,7 +53,7 @@ export default function Dialog({
 export function OpenDialogBodyContent() {
   const classes = useStyles(useTheme())
   return (
-    <>
+    <div className={classes.contentBody}>
       <div className={classes.recommendedContainer}>
         <div className={classes.recommendedText}>Recommended Method</div>
         <InputBar startAdorment={<UilGithub/>}/>
@@ -74,7 +74,7 @@ export function OpenDialogBodyContent() {
         <div className={classes.dividerText}>or</div>
       </div>
       <RectangularButton title='Load Sample Model' icon={<UilBuilding/>}/>
-    </>
+    </div>
   )
 }
 
@@ -86,7 +86,7 @@ export function OpenDialogBodyContent() {
 export function OpenDialogHeaderContent() {
   const classes = useStyles(useTheme())
   return (
-    <>
+    <div className={classes.titleContainer}>
       <div className={classes.titleTextContainer}>
         <div className={classes.titleText}>
           Open file
@@ -98,7 +98,7 @@ export function OpenDialogHeaderContent() {
       <div>
         <UilMultiply style={{color: '#505050'}}/>
       </div>
-    </>
+    </div>
 
   )
 }
@@ -110,6 +110,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignContent: 'center',
+    maxWidth: '500px',
   },
   titleTextContainer: {
     flexDirection: 'row',
@@ -126,8 +127,9 @@ const useStyles = makeStyles((theme) => ({
     lineHeight: '17px',
     color: '#777777',
   },
-  content: {
+  contentBody: {
     height: '400px',
+    maxWidth: '300px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-around',
