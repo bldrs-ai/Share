@@ -1,29 +1,33 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r367",
+  "version": "1.0.0-r369",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "clean": "shx rm -rf docs ; shx cp -r public docs",
-    "new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json",
-    "copy-web-asm": "shx cp node_modules/web-ifc/*.wasm public/static/js",
-    "build": "yarn copy-web-asm && yarn clean && yarn new-version && node config/build.js",
-    "serve": "yarn build && node config/serve.js",
+    "build": "yarn clean && yarn build-docs && yarn build-share && yarn build-storybook",
+    "build-docs": "shx cp -r public docs",
+    "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
+    "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
+    "build-storybook": "build-storybook -o docs/sb",
+    "clean": "shx rm -rf docs",
+    "husky-init": "husky install",
     "lint": "yarn eslint src",
-    "test": "jest",
     "precommit": "yarn lint && yarn test",
-    "prepare": "husky install",
-    "storybook": "start-storybook -p 6006",
-    "build-storybook": "build-storybook"
+    "serve": "yarn serve-share",
+    "serve-share": "yarn build-share && node config/serve.js",
+    "serve-storybook": "yarn build-storybook && start-storybook -p 6006",
+    "test": "jest",
+    "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
   "dependencies": {
     "@babel/core": "^7.17.9",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.4.1",
     "@emotion/styled": "^11.3.0",
+    "@material-ui/core": "^4.12.4",
     "@mui/icons-material": "^5.1.1",
     "@mui/lab": "^5.0.0-alpha.48",
     "@mui/material": "^5.0.1",
@@ -79,6 +83,7 @@
     "jest-environment-jsdom": "^28.1.2",
     "jsdom": "^20.0.0",
     "shx": "^0.3.4",
-    "storybook-addon-material-ui": "^0.9.0-alpha.24"
+    "storybook-addon-material-ui": "^0.9.0-alpha.24",
+    "storybook-addon-turbo-build": "^1.1.0"
   }
 }
