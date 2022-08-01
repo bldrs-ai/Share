@@ -59,26 +59,27 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const bodyUrls = findUrls(body)
-  const embeddedCameraParams = bodyUrls
-      .filter((url) => url.indexOf('#') !== -1)
+  const embeddedCameraParams = findUrls(body)
       .filter((url) => {
-        const hashStr = url.substring(url.indexOf('#') + 1)
-        const encoded = getHashParamsFromHashStr(hashStr, CAMERA_PREFIX)
-        if (encoded && parseHashParams(encoded)) {
-          return true
+        if (url.indexOf('#') === -1) {
+          return false
         }
-        return false
+        const encoded = getHashParamsFromHashStr(
+            url.substring(url.indexOf('#') + 1),
+            CAMERA_PREFIX)
+        return encoded && parseHashParams(encoded)
       })
-  console.log('embed cameras', embeddedCameraParams)
   const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
-  const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})
+
+
   useEffect(() => {
     if (isMobile) {
       setExpandImage(false)
     }
   }, [isMobile])
+
+
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
@@ -120,6 +121,14 @@ export default function IssueCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+
+
+  const classes = useStyles({
+    expandText: expandText,
+    select: selected,
+    expandImage: expandImage,
+    isComment: isComment,
+  })
 
 
   return (
@@ -166,7 +175,7 @@ export default function IssueCard({
           numberOfComments={numberOfComments}
           embeddedCameras={embeddedCameraParams}
           selected={selected}
-          onClickNavigate={showCameraView}
+          onClickCamera={showCameraView}
           onClickShare={shareIssue}
         /> : null
       }
@@ -223,33 +232,33 @@ const ShowMore = ({onClick, expandText}) => {
 
 
 const CardActions = ({
-  onClickNavigate,
+  onClickCamera,
   onClickShare,
   numberOfComments,
   selectCard,
   embeddedCameras,
   selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
-  const classes = useStyles()
+  const hasCameras = embeddedCameras.length > 0
+  const classes = useStyles({embeddedCameras: hasCameras})
   return (
     <div className={classes.actions}>
       <div className={classes.rightGroup}>
-        {embeddedCameras ?
+        {hasCameras ?
          <TooltipIconButton
-           disable={true}
+           disabled={hasCameras}
            title='Show the camera view'
            size='small'
            placement='bottom'
-           onClick={onClickNavigate}
+           onClick={onClickCamera}
            icon={
              <CameraIcon
-               className={classes.buttonNavigate}
+               className={classes.buttonCamera}
                style={{width: '24px', height: '24px'}}
              />}
          /> : null}
         {selected &&
          <TooltipIconButton
-           disable={true}
            title='Share'
            size='small'
            placement='bottom'
@@ -413,8 +422,8 @@ const useStyles = makeStyles((theme) => ({
     height: '24px',
     backgroundColor: theme.palette.custom.highLight,
   },
-  buttonNavigate: {
-    backgroundColor: (props) => props.embeddedUrl ?
+  buttonCamera: {
+    backgroundColor: (props) => props.embeddedCameras ?
       theme.palette.custom.highLight : theme.palette.custom.disable,
     color: 'black',
   },
