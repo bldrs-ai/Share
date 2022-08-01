@@ -336,6 +336,9 @@ const useStyles = makeStyles((theme) => ({
       color: 'green',
       textDecoration: 'underline',
     },
+    '& img': {
+      width: '100%',
+    },
   },
   showMore: {
     cursor: 'pointer',
@@ -402,17 +405,6 @@ const useStyles = makeStyles((theme) => ({
     borderRadius: '6px',
     cursor: 'pointer',
     marginRight: '2px',
-  },
-  image: {
-    width: '96%',
-    borderRadius: '10px',
-    border: '1px solid #DCDCDC',
-  },
-  imageContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: '5px',
   },
   username: {
     fontSize: '10px',
