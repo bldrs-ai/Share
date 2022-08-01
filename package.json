@@ -18,7 +18,7 @@
     "precommit": "yarn lint && yarn test",
     "serve": "yarn serve-share",
     "serve-share": "yarn build-share && node config/serve.js",
-    "serve-storybook": "yarn build-storybook && start-storybook -p 6006",
+    "serve-storybook": "start-storybook -p 6006",
     "test": "jest",
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
