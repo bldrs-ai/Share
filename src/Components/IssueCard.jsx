@@ -59,17 +59,18 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const bodyUrls = findUrls(body) || []
+  const bodyUrls = findUrls(body)
   const embeddedCameraParams = bodyUrls
       .filter((url) => url.indexOf('#') !== -1)
       .filter((url) => {
-        const hashStr = url.substring(url.indexOf('#') + 1)[1]
+        const hashStr = url.substring(url.indexOf('#') + 1)
         const encoded = getHashParamsFromHashStr(hashStr, CAMERA_PREFIX)
         if (encoded && parseHashParams(encoded)) {
           return true
         }
         return false
       })
+  console.log('embed cameras', embeddedCameraParams)
   const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})

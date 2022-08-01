@@ -165,7 +165,7 @@ export const MOCK_ISSUES = {
 
 ![bldrs ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)
 
-[Let's look at haus](/share/v/p/haus.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
+[Let's look at haus](https://bldrs.ai/share/v/p/haus.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
 
 \`\`\`
 camera=#c:-29.47,18.53,111.13,-30.27,20.97,-10.06

@@ -24,14 +24,14 @@ export function toKey(str) {
 
 /**
  * @param {string} str
- * @return {array} url matches or null if no matches
+ * @return {array} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
   const urlRegex = new RegExp(/https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
   const urls = str.match(urlRegex)
   if (urls === null) {
-    return null
+    return []
   }
   return urls.filter((url) => {
     try {
