@@ -6,6 +6,7 @@ import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams} from '../utils/location'
 import {isRunningLocally} from '../utils/network'
+import {findUrls} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
@@ -60,8 +61,7 @@ export default function IssueCard({
    * @return {array} Camera params.
    */
   function extractCameraParamsFromUrls(bodyMarkdown) {
-    const urlRegex = new RegExp(/https?:\/\/[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9]{1,6}\b([-a-zA-Z0-9@:%_+.~#?&//=]*)/gi)
-    const urls = bodyMarkdown.match(urlRegex)
+    const urls = findUrls(bodyMarkdown)
     const out = []
     if (urls === null) {
       return out
