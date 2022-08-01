@@ -123,7 +123,7 @@ export default function IssueCard({
       >
         <CardTitle
           title={title}
-          userName={username}
+          username={username}
           date={date}
           avatarUrl={avatarUrl}
           isComment={isComment}
@@ -160,6 +160,7 @@ export default function IssueCard({
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles()
+  const dateParts = date.split('T')
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
@@ -167,7 +168,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           isComment ? null : <div className={classes.titleString}>{title}</div>
         }
         <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{date.split('T')[0]}</div>
+        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
         {!selected && !isComment &&
