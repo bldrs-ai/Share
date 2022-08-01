@@ -4,12 +4,18 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams} from '../utils/location'
+import {addHashParams, getHashParamsFromHashStr} from '../utils/location'
 import {isRunningLocally} from '../utils/network'
 import {findUrls} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
-import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {
+  CAMERA_PREFIX,
+  addCameraUrlParams,
+  setCameraFromParams,
+  parseHashParams,
+  removeCameraUrlParams,
+} from './CameraControl'
 import {useIsMobile} from './Hooks'
 import SelectIcon from '../assets/2D_Icons/Select.svg'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
@@ -42,8 +48,7 @@ export default function IssueCard({
   expandedImage = true,
   isComment = false,
 }) {
-  assertDefined(id)
-  assertDefined(index)
+  assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedIssueId = useStore((state) => state.selectedIssueId)
@@ -54,33 +59,18 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  /**
-   * Checks all urls in body for links matching the current issue and
-   * extracts camera params from them.
-   * @param {string} bodyMarkdown Full body text in Markdown.
-   * @return {array} Camera params.
-   */
-  function extractCameraParamsFromUrls(bodyMarkdown) {
-    const urls = findUrls(bodyMarkdown)
-    const out = []
-    if (urls === null) {
-      return out
-    }
-    let last
-    for (let i = 0; i < urls.length; i++) {
-      const cur = urls[i]
-      if (last === cur) {
-        continue
-      }
-      out.push(cur)
-      last = cur
-    }
-    console.log('Extracted URLs: ', out)
-    return out
-  }
-  const embeddedCameraParams = extractCameraParamsFromUrls(body)
-  // TODO(pablo): MOAR CAMERAS
-  const firstCamera = undefined // embeddedCameraParams[0] // intentionally undefined if empty
+  const bodyUrls = findUrls(body) || []
+  const embeddedCameraParams = bodyUrls
+      .filter((url) => url.indexOf('#') !== -1)
+      .filter((url) => {
+        const hashStr = url.substring(url.indexOf('#') + 1)[1]
+        const encoded = getHashParamsFromHashStr(hashStr, CAMERA_PREFIX)
+        if (encoded && parseHashParams(encoded)) {
+          return true
+        }
+        return false
+      })
+  const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage})
   useEffect(() => {

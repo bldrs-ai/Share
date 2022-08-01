@@ -29,5 +29,16 @@ export function toKey(str) {
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
   const urlRegex = new RegExp(/https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
-  return str.match(urlRegex)
+  const urls = str.match(urlRegex)
+  if (urls === null) {
+    return null
+  }
+  return urls.filter((url) => {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  })
 }
