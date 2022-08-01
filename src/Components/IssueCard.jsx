@@ -57,7 +57,6 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const isImage = imageUrl !== ''
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})
   useEffect(() => {
@@ -122,23 +121,15 @@ export default function IssueCard({
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        {isComment ? null :
-          <CardTitle
-            title={title}
-            userName={username}
-            date={date}
-            avatarUrl={avatarUrl}
-            isComment={isComment}
-            selected={selected}
-            onClickSelect={selectCard}
-          />
-        }
-        {isImage &&
-          <CardImage
-            expandImage={expandImage}
-            imageUrl={imageUrl}
-          />
-        }
+        <CardTitle
+          title={title}
+          userName={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isComment={isComment}
+          selected={selected}
+          onClickSelect={selectCard}
+        />
       </div>
       <div className={classes.body}>
         <ReactMarkdown>{body}</ReactMarkdown>
@@ -194,20 +185,6 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
         }
       </div>
-    </div>
-  )
-}
-
-
-const CardImage = ({imageUrl}) => {
-  const classes = useStyles()
-  return (
-    <div className={classes.imageContainer} role='button' tabIndex={0}>
-      <img
-        className={classes.image}
-        alt='cardImage'
-        src={imageUrl}
-      />
     </div>
   )
 }
