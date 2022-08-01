@@ -2,6 +2,9 @@
 /node_modules
 /docs
 
+# no longer check-in docs for builds.  This is handled by Netlify
+/docs
+
 # misc
 .DS_Store
 .vscode

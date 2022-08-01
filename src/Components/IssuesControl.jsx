@@ -76,14 +76,14 @@ export function IssuesNavBar() {
              />
              <>
                <TooltipIconButton
-                 title='Previous Comment'
+                 title='Previous Note'
                  placement='bottom'
                  size='small'
                  onClick={() => selectIssue('previous')}
                  icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
                />
                <TooltipIconButton
-                 title='Next Comment'
+                 title='Next Note'
                  size='small'
                  placement='bottom'
                  onClick={() => selectIssue('next')}
