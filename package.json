@@ -1,17 +1,17 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r369",
+  "version": "1.0.0-r372",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn clean && yarn build-docs && yarn build-share && yarn build-storybook",
-    "build-docs": "shx cp -r public docs",
-    "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
+    "build": "yarn build-docs && yarn build-share && yarn build-storybook",
+    "build-docs": "yarn clean && shx cp -r public docs",
+    "build-share": "yarn build-docs && yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
-    "build-storybook": "build-storybook -o docs/sb",
+    "build-storybook": "shx mkdir -p docs ; build-storybook -o docs/sb",
     "clean": "shx rm -rf docs",
     "husky-init": "husky install",
     "lint": "yarn eslint src",
