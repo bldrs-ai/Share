@@ -2,23 +2,21 @@ import React from 'react'
 import MuiDialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import {makeStyles, useTheme} from '@mui/styles'
-import {RectangularButton} from './Buttons'
-import {assertDefined} from '../utils/assert'
-import InputBar from './InputBar'
-import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
-import {grey} from '@mui/material/colors'
 import Divider from '@mui/material/Divider'
+import {grey} from '@mui/material/colors'
+import {makeStyles, useTheme} from '@mui/styles'
+import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
+import {assertDefined} from '../utils/assert'
+import {RectangularButton} from './Buttons'
+import InputBar from './InputBar'
 
 
 /**
  * A generic base dialog component.
- * @param {Object} icon Leading icon above header description
- * @param {string} headerText Short message describing the operation
+ * @param {string} headerContent Short message describing the operation
+ * @param {string} bodyContent
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
- * @param {Object} clazzes Optional classes
- * @param {Object} content node
  * @return {Object} React component
  */
 export default function Dialog({

@@ -8,11 +8,6 @@ export default {
   argTypes: {
     icon: {
       options: ['github', 'building', 'upload'],
-      // mapping: {
-      //   github: <UilGithub />,
-      //   building: <UilBuilding />,
-      //   upload: <UilUpload />,
-      // },
       control: {
         type: 'select',
       },

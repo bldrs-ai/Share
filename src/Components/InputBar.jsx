@@ -1,14 +1,16 @@
 import React, {useRef, useState} from 'react'
+import Divider from '@mui/material/Divider'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipToggleButton} from './Buttons'
-import Divider from '@mui/material/Divider'
 import {UilMinusSquare, UilSearch} from '@iconscout/react-unicons'
+import {TooltipToggleButton} from './Buttons'
 
 
 /**
- * Search bar component
+ * Search bar
+ * @param {Object} startAdornment Child component at start of search bar
+ * @param {function} onSubmit
  * @return {Object} The SearchBar react component
  */
 export default function InputBar({startAdorment, onSubmit}) {
