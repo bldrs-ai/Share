@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 // import {makeStyles} from '@mui/styles'
-import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from './Dialog_Redesign'
+import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from './Dialog_redesign'
 // import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
 import OpenFolder from '../assets/2D_Icons/OpenFolder.svg'
 // import ModelsIcon from '../assets/2D_Icons/Model.svg'
