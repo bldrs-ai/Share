@@ -199,14 +199,14 @@ const useStyles = makeStyles({
     'display': 'flex',
     'minWidth': '300px',
     'width': (props) => props.inputWidth,
-    'maxWidth': '700px',
+    'maxWidth': '800px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
-      maxWidth: '300px',
+      minWidth: '350px',
+      width: '350px',
+      maxWidth: '400px',
     },
     '& .MuiInputBase-root': {
       flex: 1,
