@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r375",
+  "version": "1.0.0-r376",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -23,6 +23,7 @@
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^1.10.2",
     "@babel/core": "^7.18.9",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
