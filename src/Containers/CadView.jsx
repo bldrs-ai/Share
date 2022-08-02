@@ -473,17 +473,20 @@ const useStyles = makeStyles({
 
   },
   search: {
-    position: 'absolute',
+    'position': 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
     // places, but there's now only 1 dialog object that also uses it
     // and it has multiple callers; passing that variable around seems
     // overkill. I don't like not having it as a variable, but going
     // to hardcode for now and look into passing via the theme later.
-    top: `16px`,
-    left: '20px',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
+    'top': `16px`,
+    'left': '20px',
+    'flexDirection': 'row',
+    'justifyContent': 'flex-start',
+    'alignItems': 'center',
+    '@media (max-width: 900px)': {
+      top: 30,
+    },
   },
   view: {
     position: 'absolute',
@@ -505,7 +508,7 @@ const useStyles = makeStyles({
     'borderRadius': '5px',
     'zIndex': 0,
     '@media (max-width: 900px)': {
-      top: 100,
+      top: 94,
       right: 16,
       border: 'none',
     },
