@@ -4,11 +4,18 @@ import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams} from '../utils/location'
+import {addHashParams, getHashParamsFromHashStr} from '../utils/location'
 import {isRunningLocally} from '../utils/network'
+import {findUrls} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import {ISSUE_PREFIX} from './IssuesControl'
-import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {
+  CAMERA_PREFIX,
+  addCameraUrlParams,
+  setCameraFromParams,
+  parseHashParams,
+  removeCameraUrlParams,
+} from './CameraControl'
 import {useIsMobile} from './Hooks'
 import SelectIcon from '../assets/2D_Icons/Select.svg'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
@@ -23,9 +30,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
  * @param {string} title issue title
  * @param {string} avatarUrl user avatarUrl
  * @param {string} body issue body
- * @param {string} imageUrl issue image
  * @param {string} date issue date
- * @param {string} embeddedUrl full url attached to GH issue with camera position
  * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
  * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
  * @param {boolean} isComment Comments/replies are formated differently
@@ -38,15 +43,12 @@ export default function IssueCard({
   title = 'Title',
   avatarUrl = '',
   body = '',
-  imageUrl = '',
   date = '',
-  embeddedUrl = '',
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
 }) {
-  assertDefined(id)
-  assertDefined(index)
+  assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedIssueId = useStore((state) => state.selectedIssueId)
@@ -57,27 +59,40 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const isImage = imageUrl !== ''
+  const embeddedCameraParams = findUrls(body)
+      .filter((url) => {
+        if (url.indexOf('#') === -1) {
+          return false
+        }
+        const encoded = getHashParamsFromHashStr(
+            url.substring(url.indexOf('#') + 1),
+            CAMERA_PREFIX)
+        return encoded && parseHashParams(encoded)
+      })
+  const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
-  const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})
+
+
   useEffect(() => {
     if (isMobile) {
       setExpandImage(false)
     }
   }, [isMobile])
+
+
   useEffect(() => {
-    if (selected && embeddedUrl) {
-      setCameraFromEncodedPosition(embeddedUrl, cameraControls)
+    if (selected && firstCamera) {
+      setCameraFromParams(firstCamera, cameraControls)
     }
-  }, [selected, embeddedUrl, cameraControls])
+  }, [selected, firstCamera, cameraControls])
 
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
     setSelectedIssueIndex(index)
     setSelectedIssueId(id)
-    if (embeddedUrl) {
-      setCameraFromEncodedPosition(embeddedUrl)
+    if (embeddedCameraParams) {
+      setCameraFromParams(firstCamera)
     }
     addHashParams(window.location, ISSUE_PREFIX, {id: id})
   }
@@ -88,9 +103,9 @@ export default function IssueCard({
    * the issue/comment.
    */
   function showCameraView() {
-    setCameraFromEncodedPosition(embeddedUrl, cameraControls)
+    setCameraFromParams(firstCamera, cameraControls)
     addCameraUrlParams(cameraControls)
-    if (!embeddedUrl) {
+    if (!embeddedCameraParams) {
       removeCameraUrlParams()
     }
   }
@@ -108,6 +123,14 @@ export default function IssueCard({
   }
 
 
+  const classes = useStyles({
+    expandText: expandText,
+    select: selected,
+    expandImage: expandImage,
+    isComment: isComment,
+  })
+
+
   return (
     <Paper
       elevation={0}
@@ -122,23 +145,15 @@ export default function IssueCard({
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        {isComment ? null :
-          <CardTitle
-            title={title}
-            userName={username}
-            date={date}
-            avatarUrl={avatarUrl}
-            isComment={isComment}
-            selected={selected}
-            onClickSelect={selectCard}
-          />
-        }
-        {isImage &&
-          <CardImage
-            expandImage={expandImage}
-            imageUrl={imageUrl}
-          />
-        }
+        <CardTitle
+          title={title}
+          username={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isComment={isComment}
+          selected={selected}
+          onClickSelect={selectCard}
+        />
       </div>
       <div className={classes.body}>
         <ReactMarkdown>{body}</ReactMarkdown>
@@ -152,13 +167,13 @@ export default function IssueCard({
            }}
          />
       }
-      {embeddedUrl || numberOfComments > 0 ?
+      {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
           numberOfComments={numberOfComments}
-          embeddedUrl={embeddedUrl}
+          embeddedCameras={embeddedCameraParams}
           selected={selected}
-          onClickNavigate={showCameraView}
+          onClickCamera={showCameraView}
           onClickShare={shareIssue}
         /> : null
       }
@@ -169,6 +184,7 @@ export default function IssueCard({
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles()
+  const dateParts = date.split('T')
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
@@ -176,7 +192,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           isComment ? null : <div className={classes.titleString}>{title}</div>
         }
         <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{date.split('T')[0]}</div>
+        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
         {!selected && !isComment &&
@@ -199,20 +215,6 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
 }
 
 
-const CardImage = ({imageUrl}) => {
-  const classes = useStyles()
-  return (
-    <div className={classes.imageContainer} role='button' tabIndex={0}>
-      <img
-        className={classes.image}
-        alt='cardImage'
-        src={imageUrl}
-      />
-    </div>
-  )
-}
-
-
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
@@ -228,28 +230,34 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
-const CardActions = ({onClickNavigate, onClickShare, numberOfComments, selectCard, embeddedUrl, selected}) => {
+const CardActions = ({
+  onClickCamera,
+  onClickShare,
+  numberOfComments,
+  selectCard,
+  embeddedCameras,
+  selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
-  const classes = useStyles({embeddedUrl: embeddedUrl, shareIssue: shareIssue})
+  const hasCameras = embeddedCameras.length > 0
+  const classes = useStyles({embeddedCameras: hasCameras})
   return (
     <div className={classes.actions}>
       <div className={classes.rightGroup}>
-        {embeddedUrl ?
+        {hasCameras ?
          <TooltipIconButton
-           disable={true}
+           disabled={hasCameras}
            title='Show the camera view'
            size='small'
            placement='bottom'
-           onClick={onClickNavigate}
+           onClick={onClickCamera}
            icon={
              <CameraIcon
-               className={classes.buttonNavigate}
+               className={classes.buttonCamera}
                style={{width: '24px', height: '24px'}}
              />}
          /> : null}
         {selected &&
          <TooltipIconButton
-           disable={true}
            title='Share'
            size='small'
            placement='bottom'
@@ -327,6 +335,9 @@ const useStyles = makeStyles((theme) => ({
       color: 'green',
       textDecoration: 'underline',
     },
+    '& img': {
+      width: '100%',
+    },
   },
   showMore: {
     cursor: 'pointer',
@@ -394,17 +405,6 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
     marginRight: '2px',
   },
-  image: {
-    width: '96%',
-    borderRadius: '10px',
-    border: '1px solid #DCDCDC',
-  },
-  imageContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingTop: '5px',
-  },
   username: {
     fontSize: '10px',
   },
@@ -413,8 +413,8 @@ const useStyles = makeStyles((theme) => ({
     height: '24px',
     backgroundColor: theme.palette.custom.highLight,
   },
-  buttonNavigate: {
-    backgroundColor: (props) => props.embeddedUrl ?
+  buttonCamera: {
+    backgroundColor: (props) => props.embeddedCameras ?
       theme.palette.custom.highLight : theme.palette.custom.disable,
     color: 'black',
   },

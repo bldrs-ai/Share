@@ -74,8 +74,18 @@ export function addHashParams(location, name, params, includeNames = false) {
  * @return {string|undfined} The encoded params
  */
 export function getHashParams(location, name) {
-  const sets = location.hash.substring(1).split('::')
-  const prefix = name + ':'
+  return getHashParamsFromHashStr(location.hash.substring(1), name)
+}
+
+
+/**
+ * @param {string} hashStr
+ * @param {String} name prefix of the params to fetch
+ * @return {string|undfined} The encoded params
+ */
+export function getHashParamsFromHashStr(hashStr, name) {
+  const sets = hashStr.split('::')
+  const prefix = `${name}:`
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (set.startsWith(prefix)) {
