@@ -90,7 +90,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel, fileOpen, instal
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
+      <Paper component='form' elevation={0} className={classes.root} onSubmit={onSubmit}>
         {/* <TooltipToggleButton
           placement='bottom'
           title='Toggle tree view'
@@ -104,7 +104,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel, fileOpen, instal
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'IFC search'}/>
+          placeholder={'Search model'}/>
         {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'
