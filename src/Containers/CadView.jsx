@@ -479,7 +479,7 @@ const useStyles = makeStyles({
     // and it has multiple callers; passing that variable around seems
     // overkill. I don't like not having it as a variable, but going
     // to hardcode for now and look into passing via the theme later.
-    top: `30px`,
+    top: `16px`,
     left: '20px',
     flexDirection: 'row',
     justifyContent: 'flex-start',
@@ -496,12 +496,13 @@ const useStyles = makeStyles({
   },
   operationsGroup: {
     'position': 'fixed',
-    'top': 30,
+    'top': 16,
     'right': 16,
     'borderLeft': '1px solid lightGrey',
     'borderTop': '1px solid lightGrey',
     'borderBottom': '1px solid lightGrey',
     'borderRight': '1px solid lightGrey',
+    'borderRadius': '5px',
     'zIndex': 0,
     '@media (max-width: 900px)': {
       top: 100,
