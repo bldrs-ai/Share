@@ -206,9 +206,11 @@ const useStyles = makeStyles({
     'minWidth': '300px',
     'width': (props) => props.inputWidth,
     'maxWidth': '800px',
+    'opacity': .8,
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
     'border': '1px solid lightGrey',
+    'color': 'black',
     '@media (max-width: 900px)': {
       minWidth: '350px',
       width: '350px',
