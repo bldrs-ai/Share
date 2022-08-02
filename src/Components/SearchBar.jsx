@@ -15,7 +15,11 @@ import {
 } from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
+// import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import OpenModelControl from './OpenModelControl'
+// import Logo from './Logo'
+// import LogoIcon from '../assets/2D_Icons/Logo_DS1.svg'
+// import LogoB from '../assets/2D_Icons/LogoB.svg'
 
 
 /**
@@ -24,7 +28,7 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * @param {boolean} showNavPanel toggle
  * @return {Object} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, showNavPanel}) {
+export default function SearchBar({onClickMenuCb, showNavPanel, fileOpen, installPrefix}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -86,19 +90,21 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' elevation={0} className={classes.root} onSubmit={onSubmit}>
-        <TooltipToggleButton
+      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
+        {/* <TooltipToggleButton
           placement='bottom'
           title='Toggle tree view'
           onClick={onClickMenuCb}
-          icon={<TreeIcon />}/>
+          icon={<TreeIcon />}/> */}
+        <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen}/>
+        {/* <LogoIcon style={{width: '50px'}}/> */}
         <InputBase
           inputRef={searchInputRef}
-          style={{fontSize: '18px'}}
+          style={{fontSize: '18px', marginLeft: '10px'}}
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search model'}/>
+          placeholder={'IFC search'}/>
         {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'

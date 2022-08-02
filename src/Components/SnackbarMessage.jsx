@@ -15,9 +15,11 @@ export default function SnackBarMessage({message, type, open}) {
   return (
     <Snackbar
       open={open}
+
       anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
     >
       <Alert
+        elevation={0}
         severity={type}
         className={classes.root}
         sx={{backgroundColor: '#848484'}}
@@ -36,8 +38,8 @@ const Alert = React.forwardRef(function Alert(props, ref) {
 const useStyles = makeStyles({
   root: {
     'position': 'relative',
-    'bottom': '70px',
-    'left': '6px',
+    'bottom': '60px',
+    'left': '0px',
     '@media (max-width: 900px)': {
       left: '18px',
       bottom: '90px',

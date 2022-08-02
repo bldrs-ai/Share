@@ -20,7 +20,7 @@ export default function OpenModelControl({fileOpen}) {
       placement='top'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<OpenFolder style={{height: '50px', width: '50px'}}/>}
+      icon={<OpenFolder style={{height: '40px', width: '40px'}}/>}
       dialog={
         <OpenModelDialog
           fileOpen={fileOpen}

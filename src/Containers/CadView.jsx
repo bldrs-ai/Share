@@ -5,7 +5,7 @@ import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
 import {ColorModeContext} from '../Context/ColorMode'
 import Alert from '../Components/Alert'
-import BaseGroup from '../Components/BaseGroup'
+// import BaseGroup from '../Components/BaseGroup'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -378,6 +378,8 @@ export default function CadView({
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
+              fileOpen={loadLocalFile}
+              installPrefix={installPrefix}
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
               showNavPanel={showNavPanel}
               isOpen={showNavPanel}/>
@@ -406,9 +408,9 @@ export default function CadView({
               installPrefix={installPrefix}
             />}
         </div>
-        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        {/* <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
-        </div>
+        </div> */}
         {alert}
       </div>
       <SideDrawerWrapper />
