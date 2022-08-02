@@ -1,15 +1,16 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
+import AuthControl from './AuthControl'
 import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
+import {useIsMobile} from './Hooks'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
-import {useIsMobile} from './Hooks'
-import useStore from '../store/useStore'
 
 
 /**
@@ -38,8 +39,10 @@ export default function OperationsGroup({viewer, unSelectItem}) {
     }
   }
 
+
   return (
     <div className={classes.container}>
+      <AuthControl/>
       <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
         <TooltipIconButton

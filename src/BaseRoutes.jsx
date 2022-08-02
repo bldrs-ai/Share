@@ -6,6 +6,7 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
+import {Auth0Provider} from '@auth0/auth0-react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
@@ -41,19 +42,28 @@ export default function BaseRoutes({testElt = null}) {
 
   const basePath = `${installPrefix }/`
   return (
-    <Routes>
-      <Route path={basePath} element={<Outlet/>}>
-        <Route
-          path="share/*"
-          element={
-            testElt ||
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={`${installPrefix }/share`}
-              />
-          }
-        />
-      </Route>
-    </Routes>
+    <Auth0Provider
+      domain={OAUTH_DOMAIN}
+      clientId={OAUTH_CLIENT_ID}
+      redirectUri={window.location.origin}
+    >
+      <Routes>
+        <Route path={basePath} element={<Outlet/>}>
+          <Route
+            path="share/*"
+            element={
+              testElt ||
+                <ShareRoutes
+                  installPrefix={installPrefix}
+                  appPrefix={`{installPrefix}/share`}/>
+            }/>
+        </Route>
+      </Routes>
+    </Auth0Provider>
   )
 }
+
+
+const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
+const OAUTH_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+

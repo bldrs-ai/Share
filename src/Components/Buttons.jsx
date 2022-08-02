@@ -3,6 +3,7 @@ import IconButton from '@mui/material/IconButton'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
@@ -171,6 +172,37 @@ export function RectangularButton({
     >
       {title}
     </Button>
+  )
+}
+
+
+/**
+ * @param {string} fullString Tooltip text
+ * @param {function} onClick
+ * @param {string} placement
+ * @param {string} size
+ * @return {Object} React component
+ */
+export function TooltipLetterButton({
+  fullString,
+  onClick,
+  placement = 'right',
+  size = 'medium',
+}) {
+  assertDefined(fullString, onClick)
+  if (fullString.length === 0) {
+    throw new Error('Cannot make a TooltipLetterButton with empty string')
+  }
+  const classes = useStyles(useTheme())
+  const innerTextLetter = fullString.charAt(0).toUpperCase()
+  return (
+    <div className={classes.root}>
+      <Tooltip title={fullString} describeChild placement={placement}>
+        <button onClick={onClick}>
+          <Typography variant='p' color='info'>{innerTextLetter}</Typography>
+        </button>
+      </Tooltip>
+    </div>
   )
 }
 
