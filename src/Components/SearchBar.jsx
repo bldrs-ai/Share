@@ -14,8 +14,7 @@ import {
   githubUrlOrPathToSharePath,
 } from '../ShareRoutes'
 import SearchIcon from '../assets/2D_Icons/Search.svg'
-import LinkIcon from '../assets/2D_Icons/Link.svg'
-import ClearIcon from '../assets/2D_Icons/Close.svg'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
@@ -87,14 +86,15 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
+      <Paper component='form' elevation={0} className={classes.root} onSubmit={onSubmit}>
         <TooltipToggleButton
           placement='bottom'
           title='Toggle tree view'
           onClick={onClickMenuCb}
-          icon={<TreeIcon/>}/>
+          icon={<TreeIcon />}/>
         <InputBase
           inputRef={searchInputRef}
+          style={{fontSize: '18px'}}
           value={inputText}
           onChange={onInputChange}
           error={true}
@@ -115,7 +115,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           size='small'
           placement='bottom'
           icon={<SearchIcon/>}/>
-        <TooltipToggleButton
+        {/* <TooltipToggleButton
           title={`Enter GitHub URL to access IFCs hosted on GitHub.
                   Click on the link icon to learn more.`}
           size='small'
@@ -123,7 +123,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           onClick={() => {
             window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
           }}
-          icon={<LinkIcon/>}/>
+          icon={<LinkIcon/>}/> */}
       </Paper>
       { inputText.length > 0 &&
         error.length > 0 &&
@@ -202,6 +202,7 @@ const useStyles = makeStyles({
     'maxWidth': '700px',
     'alignItems': 'center',
     'padding': '2px 2px 2px 2px',
+    'border': '1px solid lightGrey',
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',

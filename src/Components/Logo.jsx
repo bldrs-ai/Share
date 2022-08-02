@@ -25,8 +25,8 @@ export default function Logo({onClick}) {
 const useStyles = makeStyles((theme) => ({
   logoGroup: {
     'position': 'fixed',
-    'top': '20px',
-    'left': '25px',
+    'bottom': '26px',
+    'left': '0px',
     'width': '140px',
     'height': '50px',
     '& svg': {

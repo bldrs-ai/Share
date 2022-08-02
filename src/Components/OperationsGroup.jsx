@@ -81,7 +81,7 @@ const useStyles = makeStyles({
     justifyContent: 'space-around',
     opacity: .9,
     height: '340px',
-    background: 'rgba(245, 245, 245, 0.5)',
+    // background: 'rgba(245, 245, 245, 0.5)',
     // boxShadow: '0px 0px 5px rgba(0, 0, 0, 0.15)',
     bordeRadius: '5px 5px 5px 5px',
   },
