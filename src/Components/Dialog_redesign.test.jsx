@@ -18,5 +18,5 @@ test('Open Dialog', () => {
   expect(screen.getByText('Open file')).toBeInTheDocument()
   expect(screen.getByText('Recommended Method')).toBeInTheDocument()
   expect(screen.getByText('Upload from device')).toBeInTheDocument()
-  expect(screen.getByText('Load Sample Model')).toBeInTheDocument()
+  expect(screen.getByText('Browse Examples')).toBeInTheDocument()
 })
