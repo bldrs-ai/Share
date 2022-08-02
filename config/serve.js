@@ -2,10 +2,11 @@ import esbuild from 'esbuild'
 import http from 'http'
 import * as common from './common.js'
 
-const port = 8080
+
+const PORT = 8080
 
 esbuild.serve({
-  port: port,
+  port: PORT,
   servedir: common.build.outdir,
 }, common.build).then((result) => {
   // The result tells us where esbuild's local server is
@@ -23,10 +24,10 @@ esbuild.serve({
     // Forward each incoming request to esbuild
     const proxyReq = http.request(options, (proxyRes) => {
       // If esbuild returns "not found", send a custom 404 page
-      if (proxyRes.statusCode === 404) {
-        res.writeHead(404, {'Content-Type': 'text/html'})
-        res.end(
-`<!DOCTYPE html>
+      const HTTP_NOT_FOUND_CODE = 404
+      if (proxyRes.statusCode === HTTP_NOT_FOUND_CODE) {
+        res.writeHead(HTTP_NOT_FOUND_CODE, {'Content-Type': 'text/html'})
+        res.end(`<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">

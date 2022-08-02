@@ -43,7 +43,7 @@ function AvatarButton() {
     )
   }
   if (error) {
-    return <TooltipLetterButton fullString={'Error'} onClick={() => {}}/>
+    return <TooltipLetterButton fullString={'Error'}/>
   }
   if (isAuthenticated) {
     const name = user.nickname || user.name
@@ -53,7 +53,7 @@ function AvatarButton() {
       user.picture ?
         <TooltipIconButton
           title={name}
-          icon={<img className={classes.picture} src={user.picture} alt={name}/>}
+          icon={<img src={user.picture} className={classes.picture} alt={name}/>}
           onClick={() => logout({returnTo: logoutUrl})}
         /> :
         <TooltipLetterButton
@@ -78,12 +78,13 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    height: '30px',
+    width: '50px',
+    height: '50px',
     color: 'white',
   },
   'picture': {
-    width: '40px',
-    height: '40px',
+    width: '30px',
+    height: '30px',
     borderRadius: '50%',
     border: 'solid 1px #ccc',
   },

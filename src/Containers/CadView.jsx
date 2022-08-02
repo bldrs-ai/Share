@@ -160,66 +160,75 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
-    const auth0 = await createAuth0Client({
-      domain: OAUTH_DOMAIN,
-      client_id: OAUTH_CLIENT_ID,
-      redirect_uri: window.location.origin,
-    })
-    auth0
-        .getTokenSilently()
-        .then(async (accessToken) => {
-          console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken)
-          // viewer.IFC.loader.withCredentials = true
-          viewer.IFC.loader.requestHeader = {
-            // https://stackoverflow.com/questions/43871637/no-access-control-allow-origin-header-is-present-on-the-requested-resource-whe
-            // 'Access-Control-Allow-Credentials': 'true',
-            // 'Access-Control-Request-Method': 'GET',
-            // 'Access-Control-Request-Headers': 'Accept, Content-Type, Origin',
-            // 'Access-Control-Allow-Origin': 'http://localhost:8080',
-            // Origin: 'http://localhost:8080',
-            Authorization: `Bearer ${accessToken}`,
+    console.log('auth...')
+    // https://auth0.com/docs/libraries/auth0-single-page-app-sdk
+    let accessToken
+    try {
+      const auth0 = await createAuth0Client({
+        domain: OAUTH_DOMAIN,
+        client_id: OAUTH_CLIENT_ID,
+        // redirect_uri: window.location.origin,
+      })
+      accessToken = await auth0.getTokenSilently()
+    } catch (err) {
+      console.error(err)
+      // return
+    }
+    console.log('viewer.IFC: ', viewer.IFC, ' token: ', accessToken)
+
+    // viewer.IFC.loader.withCredentials = true
+    if (accessToken) {
+      viewer.IFC.loader.requestHeader = {
+        // https://stackoverflow.com/questions/43871637/no-access-control-allow-origin-header-is-present-on-the-requested-resource-whe
+        // 'Access-Control-Allow-Credentials': 'true',
+        // 'Access-Control-Request-Method': 'GET',
+        // 'Access-Control-Request-Headers': 'Accept, Content-Type, Origin',
+        // 'Access-Control-Allow-Origin': 'http://localhost:8080',
+        // Origin: 'http://localhost:8080',
+        Authorization: `Bearer ${accessToken}`,
+      }
+    }
+
+    console.log('loading file: ', filepath)
+    const loadedModel = await viewer.IFC.loadIfcUrl(
+        filepath,
+        !urlHasCameraParams(), // fitToFrame
+        (progressEvent) => {
+          if (Number.isFinite(progressEvent.loaded)) {
+            const loadedBytes = progressEvent.loaded
+            // eslint-disable-next-line no-magic-numbers
+            const megabyte = 1024 * 1024
+            const precision = 2
+            const loadedMegs = (loadedBytes / (megabyte)).toFixed(precision)
+            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
-
-          const loadedModel = await viewer.IFC.loadIfcUrl(
-              filepath,
-              !urlHasCameraParams(), // fitToFrame
-              (progressEvent) => {
-                if (Number.isFinite(progressEvent.loaded)) {
-                  const loadedBytes = progressEvent.loaded
-                  // eslint-disable-next-line no-magic-numbers
-                  const megabyte = 1024 * 1024
-                  const precision = 2
-                  const loadedMegs = (loadedBytes / (megabyte)).toFixed(precision)
-                  setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-                  debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-                }
-              },
-              (error) => {
-                console.warn('CadView#loadIfc$onError', error)
-                // TODO(pablo): error modal.
-                setIsLoading(false)
-                setAlertMessage(`Could not load file: ${filepath}`)
-              })
-          Privacy.recordEvent('select_content', {
-            content_type: 'ifc_model',
-            item_id: filepath,
-          })
-
+        },
+        (error) => {
+          console.warn('CadView#loadIfc$onError', error)
+          // TODO(pablo): error modal.
           setIsLoading(false)
-
-          if (loadedModel) {
-            // Fix for https://github.com/bldrs-ai/Share/issues/91
-            //
-            // TODO(pablo): huge hack. Somehow this is getting incremented to
-            // 1 even though we have a new IfcViewer instance for each file
-            // load.  That modelID is used in the IFCjs code as [modelID] and
-            // leads to undefined refs e.g. in prePickIfcItem.  The id should
-            // always be 0.
-            loadedModel.modelID = 0
-            setModel(loadedModel)
-            setModelStore(loadedModel)
-          }
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
+    Privacy.recordEvent('select_content', {
+      content_type: 'ifc_model',
+      item_id: filepath,
+    })
+
+    setIsLoading(false)
+
+    if (loadedModel) {
+      // Fix for https://github.com/bldrs-ai/Share/issues/91
+      //
+      // TODO(pablo): huge hack. Somehow this is getting incremented to
+      // 1 even though we have a new IfcViewer instance for each file
+      // load.  That modelID is used in the IFCjs code as [modelID] and
+      // leads to undefined refs e.g. in prePickIfcItem.  The id should
+      // always be 0.
+      loadedModel.modelID = 0
+      setModel(loadedModel)
+      setModelStore(loadedModel)
+    }
   }
 
 

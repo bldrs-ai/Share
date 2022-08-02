@@ -14,6 +14,8 @@ import debug from './utils/debug'
 // Enable when we build app in GitHub actions.
 // import {OAUTH_DOMAIN, OAUTH_CLIENT_ID} from 'env'
 
+export const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
+
 // Localhost app:
 // const OAUTH_CLIENT_ID = 'VGCcKJAno1y8RMbf1L7hZ4shLQCJ9nSp'
 
@@ -25,9 +27,6 @@ export const OAUTH_CLIENT_ID = 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
 
 // GitHub: OAuth app
 // const OAUTH_CLIENT_ID = 'c9521c42ff708172ca45'
-
-export const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
-
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -53,14 +52,14 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
-        location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+        location.pathname === (`${installPrefix}/`)) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix}/share`)
+      navigate(`${installPrefix}/share`)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = installPrefix + '/'
+  const basePath = `${installPrefix}`
   console.log('basePath: ', basePath)
   //       redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
 
@@ -68,7 +67,8 @@ export default function BaseRoutes({testElt = null}) {
     <Auth0Provider
       domain={OAUTH_DOMAIN}
       clientId={OAUTH_CLIENT_ID}
-      redirectUri={window.location.origin}>{/* Can add + '/Share' for local. */}
+      redirectUri={window.location.origin}
+    >{/* Can add + '/Share' for local. */}
       <Routes>
         <Route path={basePath} element={<Outlet/>}>
           <Route
@@ -77,11 +77,14 @@ export default function BaseRoutes({testElt = null}) {
               testElt ||
                 <ShareRoutes
                   installPrefix={installPrefix}
-                  appPrefix={installedAppPrefix} />
-            }/>
+                  appPrefix={installedAppPrefix}
+                />
+            }
+          />
           <Route
             path="login/*"
-            element={<h1>Login</h1>}/>
+            element={<h1>Login</h1>}
+          />
         </Route>
       </Routes>
     </Auth0Provider>
