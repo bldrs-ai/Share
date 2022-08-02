@@ -57,7 +57,6 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const isImage = imageUrl !== ''
   const isMobile = useIsMobile()
   const classes = useStyles({expandText: expandText, select: selected, expandImage: expandImage, isComment: isComment})
   useEffect(() => {
@@ -122,23 +121,15 @@ export default function IssueCard({
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        {isComment ? null :
-          <CardTitle
-            title={title}
-            userName={username}
-            date={date}
-            avatarUrl={avatarUrl}
-            isComment={isComment}
-            selected={selected}
-            onClickSelect={selectCard}
-          />
-        }
-        {isImage &&
-          <CardImage
-            expandImage={expandImage}
-            imageUrl={imageUrl}
-          />
-        }
+        <CardTitle
+          title={title}
+          username={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isComment={isComment}
+          selected={selected}
+          onClickSelect={selectCard}
+        />
       </div>
       <div className={classes.body}>
         <ReactMarkdown>{body}</ReactMarkdown>
@@ -169,6 +160,7 @@ export default function IssueCard({
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles()
+  const dateParts = date.split('T')
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
@@ -176,7 +168,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           isComment ? null : <div className={classes.titleString}>{title}</div>
         }
         <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{date.split('T')[0]}</div>
+        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
         {!selected && !isComment &&
@@ -194,20 +186,6 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
         }
       </div>
-    </div>
-  )
-}
-
-
-const CardImage = ({imageUrl}) => {
-  const classes = useStyles()
-  return (
-    <div className={classes.imageContainer} role='button' tabIndex={0}>
-      <img
-        className={classes.image}
-        alt='cardImage'
-        src={imageUrl}
-      />
     </div>
   )
 }
