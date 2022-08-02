@@ -145,17 +145,15 @@ export default function IssueCard({
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        {isComment ? null :
-          <CardTitle
-            title={title}
-            userName={username}
-            date={date}
-            avatarUrl={avatarUrl}
-            isComment={isComment}
-            selected={selected}
-            onClickSelect={selectCard}
-          />
-        }
+        <CardTitle
+          title={title}
+          username={username}
+          date={date}
+          avatarUrl={avatarUrl}
+          isComment={isComment}
+          selected={selected}
+          onClickSelect={selectCard}
+        />
       </div>
       <div className={classes.body}>
         <ReactMarkdown>{body}</ReactMarkdown>
@@ -186,6 +184,7 @@ export default function IssueCard({
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles()
+  const dateParts = date.split('T')
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
@@ -193,7 +192,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           isComment ? null : <div className={classes.titleString}>{title}</div>
         }
         <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{date.split('T')[0]}</div>
+        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
         {!selected && !isComment &&

@@ -7,8 +7,19 @@ import IssueCard from './IssueCard'
 test('IssueCard', () => {
   const id = 123
   const index = 123
-  render(<ShareMock><IssueCard id={id} index={index} title="new_title"/></ShareMock>)
+  render(
+      <ShareMock>
+        <IssueCard
+          id={id}
+          date='2000-01-01T00:00:00Z'
+          username='bob'
+          index={index}
+          title="new_title"
+        />
+      </ShareMock>)
   expect(screen.getByText('new_title')).toBeInTheDocument()
+  expect(screen.getByText('2000-01-01 00:00:00Z')).toBeInTheDocument()
+  expect(screen.getByText('bob')).toBeInTheDocument()
 })
 
 
