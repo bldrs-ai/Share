@@ -7,7 +7,7 @@ import debug from '../utils/debug'
 import {addHashParams, removeHashParams} from '../utils/location'
 import IssueCard from './IssueCard'
 import {TooltipIconButton} from './Buttons'
-import {setCameraFromEncodedPosition, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import BackIcon from '../assets/2D_Icons/Back.svg'
 import NextIcon from '../assets/2D_Icons/NavNext.svg'
@@ -44,7 +44,7 @@ export function IssuesNavBar() {
       setSelectedIssueIndex(issue.index)
       addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
       if (issue.url) {
-        setCameraFromEncodedPosition(issue.url)
+        setCameraFromParams(issue.url)
         addCameraUrlParams()
       } else {
         removeCameraUrlParams()
@@ -104,25 +104,6 @@ export function IssuesNavBar() {
   )
 }
 
-/**
- * Extracts the image URL from the issue body, if present
- * @param {Object} issue
- * @return {string} Issue image URL
- */
-export const extractImageFromIssue = (issue) => {
-  if (issue === null || issue.body === null || !issue.body.includes('img')) {
-    return ''
-  }
-
-  const isolateImageSrc = issue.body.split('src')[1].split('imageURL')[0]
-
-  // Match either single or double quote-wrapped attribute
-  //   <img src = "..." /> OR <img src = '...' />
-  const imageSrc = isolateImageSrc.match(/"([^"]*)"|'([^']*)'/)
-
-  // Then filter out the non-matched capture group (as that value will be undefined)
-  return imageSrc.slice(1).filter((u) => u !== undefined)[0]
-}
 
 
 /** @return {Object} List of issues and comments as react component. */
@@ -152,22 +133,16 @@ export function Issues() {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
-          const lines = issue.body.split('\r\n')
-          const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-          const body = lines[0]
-          const imageUrl = extractImageFromIssue(issue)
           issuesArr.push({
-            embeddedUrl: embeddedUrl,
             index: index,
             id: issue.id,
             number: issue.number,
             title: issue.title,
-            body: body,
+            body: issue.body,
             date: issue.created_at,
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
-            imageUrl: imageUrl,
           })
         })
         if (issuesArr.length > 0) {
@@ -191,20 +166,14 @@ export function Issues() {
         const commentsData = await getComments(repository, selectedIssue.number)
         if (commentsData) {
           commentsData.map((comment) => {
-            const lines = comment.body.split('\r\n')
-            const embeddedUrl = lines.filter((line) => line.includes('url'))[0]
-            const commentImageUrl = comment.body.split('imageURL')[1]
-            const body = lines[0]
             commentsArr.push({
-              embeddedUrl: embeddedUrl,
               id: comment.id,
               number: comment.number,
               title: comment.title,
-              body: body,
+              body: comment.body,
               date: comment.created_at,
               username: comment.user.login,
               avatarUrl: comment.user.avatar_url,
-              imageUrl: commentImageUrl,
             })
           })
         }
