@@ -100,7 +100,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel, fileOpen, instal
         {/* <LogoIcon style={{width: '50px'}}/> */}
         <InputBase
           inputRef={searchInputRef}
-          style={{fontSize: '18px', marginLeft: '10px'}}
+          style={{fontSize: '22px', marginLeft: '10px'}}
           value={inputText}
           onChange={onInputChange}
           error={true}
