@@ -66,7 +66,7 @@ test('Camera Position control', () => {
         <IssueCard
           id={id}
           index={index}
-          embeddedUrl="http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34"
+          body="Test body [test link](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34)"
         />
       </ShareMock>)
   const showCamera = rendered.getByTitle('Show the camera view')
