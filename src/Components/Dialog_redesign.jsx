@@ -6,9 +6,10 @@ import {makeStyles, useTheme} from '@mui/styles'
 import {RectangularButton} from './Buttons'
 import {assertDefined} from '../utils/assert'
 import InputBar from './InputBar'
-import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
+import {UilBuilding, UilUpload, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
 import {grey} from '@mui/material/colors'
 import Divider from '@mui/material/Divider'
+import Paper from '@mui/material/Paper'
 
 
 /**
@@ -66,14 +67,14 @@ export function OpenDialogBodyContent() {
       </div>
       <div className={classes.divider}>
         <Divider/>
-        <div className={classes.dividerText}>or</div>
+        <Paper elevation={0} className={classes.dividerText}>or</Paper>
       </div>
       <RectangularButton title='Upload from device' icon={<UilUpload/>}/>
       <div className={classes.divider}>
         <Divider/>
-        <div className={classes.dividerText}>or</div>
+        <Paper elevation={0} className={classes.dividerText}>or</Paper>
       </div>
-      <RectangularButton title='Load Sample Model' icon={<UilBuilding/>}/>
+      <RectangularButton title='Browse Examples' icon={<UilBuilding/>}/>
     </div>
   )
 }
@@ -95,9 +96,9 @@ export function OpenDialogHeaderContent() {
           </div>
         </div>
       </div>
-      <div>
+      {/* <div>
         <UilMultiply style={{color: '#505050'}}/>
-      </div>
+      </div> */}
     </div>
 
   )
