@@ -74,7 +74,7 @@ export function OpenDialogBodyContent() {
         <Divider/>
         <Paper elevation={0} className={classes.dividerText}>or</Paper>
       </div>
-      <RectangularButton title='Browse IFCs' icon={<UilBuilding/>}/>
+      <RectangularButton title='Browse Examples' icon={<UilBuilding/>}/>
     </div>
   )
 }
