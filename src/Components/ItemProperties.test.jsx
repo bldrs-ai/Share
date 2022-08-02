@@ -1,33 +1,26 @@
 import React from 'react'
 import {render, screen, waitFor} from '@testing-library/react'
+import {act, renderHook} from '@testing-library/react-hooks'
+import ShareMock from '../ShareMock'
+import {MockModel} from '../utils/IfcMock.test'
+import useStore from '../store/useStore'
 import ItemProperties from './ItemProperties'
-// eslint-disable-next-line no-unused-vars
-import testObj from './ItemProperties.testobj.json'
-import {MockModel, newMockStringValueElt} from '../utils/IfcMock.test'
-import {MockRoutes} from '../BaseRoutesMock.test'
 
 
 test('ItemProperties for single element', async () => {
-  const testLabel = 'Test node label'
-  const {getByText} = render(
-      <MockRoutes
-        contentElt={
-          <ItemProperties
-            model={new MockModel}
-            element={newMockStringValueElt(testLabel)}/>}/>)
-  await waitFor(() => screen.getByText(testLabel))
-  expect(getByText(testLabel)).toBeInTheDocument()
-})
+  const testLabel = 10
+  const {result} = renderHook(() => useStore((state) => state))
+  act(() => {
+    result.current.setSelectedElement({expressID: 10})
+  })
+  act(() => {
+    result.current.setModelStore(new MockModel)
+  })
 
-
-test('ItemProperties for single element', async () => {
-  const testLabel = 'Test node label'
   const {getByText} = render(
-      <MockRoutes
-        contentElt={
-          <ItemProperties
-            model={new MockModel}
-            element={newMockStringValueElt(testLabel)}/>}/>)
+      <ShareMock>
+        <ItemProperties/>
+      </ShareMock>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })

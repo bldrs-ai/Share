@@ -1,11 +1,11 @@
 import React from 'react'
 import {render, screen, fireEvent} from '@testing-library/react'
 import SampleModelsControl from './SampleModelsControl'
-import {MockRoutes} from '../BaseRoutesMock.test'
+import ShareMock from '../ShareMock'
 
 
 test('renders sample models control', async () => {
-  const rendered = render( <MockRoutes contentElt = {<SampleModelsControl/>} />)
+  const rendered = render(<ShareMock><SampleModelsControl/></ShareMock>)
   const sampleModelsButton = screen.getByTitle('Sample Models')
   fireEvent.mouseOver(sampleModelsButton)
   fireEvent.click(sampleModelsButton)

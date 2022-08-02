@@ -1,6 +1,6 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import {MockRoutes} from '../BaseRoutesMock.test'
+import ShareMock from '../ShareMock'
 import CameraControl, {
   onHash,
   parseHashParams,
@@ -19,7 +19,7 @@ test('parseHashParams, 6 params', () => {
 
 test('CameraControl', () => {
   const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
-  render(<MockRoutes contentElt={<CameraControl viewer={viewer}/>}/>)
+  render(<ShareMock><CameraControl viewer={viewer}/></ShareMock>)
   expect(screen.getByText('Camera')).toBeInTheDocument()
 })
 
@@ -27,7 +27,7 @@ test('CameraControl', () => {
 test('onHash, position', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3'}
-  onHash(cam, location)
+  onHash(location, cam)
   const expectCam = new MockCamera(1, 2, 3)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)
@@ -37,7 +37,7 @@ test('onHash, position', () => {
 test('onHash, target', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3,4,5,6'}
-  onHash(cam, location)
+  onHash(location, cam)
   const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)
@@ -55,7 +55,7 @@ class MockCamera {
    * @param {Number} tz
    * @param {boolean} doTween
    */
-  constructor(x=0, y=0, z=0, tx=0, ty=0, tz=0, doTween=false) {
+  constructor(x = 0, y = 0, z = 0, tx = 0, ty = 0, tz = 0, doTween = false) {
     this.x = x
     this.y = y
     this.z = z
@@ -77,6 +77,22 @@ class MockCamera {
     this.y = y
     this.z = z
     this.doTween = doTween
+  }
+
+
+  /**
+   * @return {Array} camera position
+   */
+  getPosition() {
+    return [this.x, this.y, this.z]
+  }
+
+
+  /**
+   * @return {Array} camera target
+   */
+  getTarget() {
+    return [this.x, this.y, this.z]
   }
 
 

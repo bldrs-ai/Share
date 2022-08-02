@@ -1,10 +1,12 @@
-import React, {createContext, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
 import useTheme from './Theme'
+import useStore from './store/useStore'
 import debug from './utils/debug'
+import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -24,6 +26,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
+  const setRepository = useStore((state) => state.setRepository)
 
 
   /**
@@ -36,6 +39,17 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    */
   useEffect(() => {
     onChangeUrlParams()
+    // TODO(pablo): currently expect these to both be defined.
+    const {org, repo} = urlParams
+    if (org && repo) {
+      console.log(`Setting GH repo ${org}/${repo}`)
+      setRepository(org, repo)
+    } else if (pathPrefix.startsWith('/share/v/p')) {
+      console.log('Setting default repo pablo-mayrgundter/Share')
+      setRepository('pablo-mayrgundter', 'Share')
+    } else {
+      console.warn('No repository set for project!', pathPrefix)
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlParams])
 
@@ -48,8 +62,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       return
     }
     if (modelPath === null ||
-        modelPath.filepath && modelPath.filepath != mp.filepath ||
-        modelPath.gitpath && modelPath.gitpath != mp.gitpath) {
+        (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
+        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
       setModelPath(mp)
       debug().log('Share#onChangeUrlParams: new model path: ', mp)
     }
@@ -82,10 +96,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
-  if (window.innerWidth <= 900) {
-    navigate(appPrefix + '/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28')
+  const mediaSizeTabletWith = 900
+  if (window.innerWidth <= mediaSizeTabletWith) {
+    navigate(`${appPrefix}/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28`)
   } else {
-    navigate(appPrefix + '/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34')
+    navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
   }
 }
 
@@ -104,15 +119,20 @@ export function navToDefault(navigate, appPrefix) {
  * @param {Object} urlParams e.g. .../:org/:repo/:branch/*
  * @return {Object}
  */
-function getModelPath(installPrefix, pathPrefix, urlParams) {
+export function getModelPath(installPrefix, pathPrefix, urlParams) {
   // TODO: combine modelPath methods into class.
   let m = null
   let filepath = urlParams['*']
-  if (filepath == '') {
+  if (filepath === '') {
     return null
   }
-  const parts = filepath.split('.ifc')
-  filepath = '/' + parts[0] + '.ifc' // TODO(pablo)
+  const splitRegex = /\.ifc/i
+  const match = splitRegex.exec(filepath)
+  if (!match) {
+    throw new Error('Filepath must contain ".ifc" (case-insensitive)')
+  }
+  const parts = filepath.split(splitRegex)
+  filepath = `/${parts[0]}${match[0]}`
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:
     //   /v/p/*.  It should be only the filename.
@@ -139,6 +159,3 @@ function getModelPath(installPrefix, pathPrefix, urlParams) {
   }
   return m
 }
-
-
-export const ColorModeContext = createContext({toggleColorMode: () => {}})

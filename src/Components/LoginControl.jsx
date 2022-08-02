@@ -1,8 +1,8 @@
 import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
-import {TooltipIconButton, TooltipLetterButton} from './Buttons'
 import {makeStyles, useTheme} from '@mui/styles'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
+import {TooltipIconButton, TooltipLetterButton} from './Buttons'
 import PersonIcon from '../assets/2D_Icons/Person.svg'
 
 
@@ -37,31 +37,37 @@ function AvatarButton() {
         <TooltipIconButton
           title='Loading...'
           icon={<AutorenewIcon/>}
-          onClick={()=>{}}/>
+          onClick={() => {}}
+        />
       </div>
     )
   }
   if (error) {
-    return <TooltipLetterButton fullString={'Error'} onClick={()=>{}}/>
+    return <TooltipLetterButton fullString={'Error'} onClick={() => {}}/>
   }
   if (isAuthenticated) {
     const name = user.nickname || user.name
+    const logoutUrl = `${window.location.origin}/share`
     return (
+      // TODO(pablo): smth more robust
       user.picture ?
         <TooltipIconButton
           title={name}
           icon={<img className={classes.picture} src={user.picture} alt={name}/>}
-          onClick={() => logout({returnTo: window.location.origin + '/share'})}/> :
+          onClick={() => logout({returnTo: logoutUrl})}
+        /> :
         <TooltipLetterButton
           fullString={name}
-          onClick={() => logout({returnTo: window.location.origin + '/share'})}/>
+          onClick={() => logout({returnTo: logoutUrl})}
+        />
     )
   } else {
     return (
       <TooltipIconButton
         title='Login'
         icon={<PersonIcon/>}
-        onClick={loginWithRedirect}/>
+        onClick={loginWithRedirect}
+      />
     )
   }
 }

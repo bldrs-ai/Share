@@ -33,6 +33,7 @@ import debug from './utils/debug'
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
  *                    ^... here on handled by this component's paths.
  *              ^... path to the component in BaseRoutes.jsx.
+ * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
  * @return {Object}
  */
 export default function ShareRoutes({installPrefix, appPrefix}) {
@@ -45,7 +46,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/new'}
+              pathPrefix={`${appPrefix}/v/new`}
             />
           }
         />
@@ -55,7 +56,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/p'}
+              pathPrefix={`${appPrefix}/v/p`}
             />
           }
         />
@@ -65,7 +66,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             <Share
               installPrefix={installPrefix}
               appPrefix={appPrefix}
-              pathPrefix={appPrefix + '/v/gh'}
+              pathPrefix={`${appPrefix}/v/gh`}
             />
           }
         />
@@ -87,7 +88,7 @@ function Forward({appPrefix}) {
 
   useEffect(() => {
     if (location.pathname == appPrefix) {
-      const dest = appPrefix + '/v/p'
+      const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
     }
@@ -104,7 +105,7 @@ function Forward({appPrefix}) {
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return input.endsWith('.ifc') && (
+  return input.toLowerCase().endsWith('.ifc') && (
     input.startsWith('http') ||
       input.startsWith('/') ||
       input.startsWith('bldrs') ||
@@ -119,7 +120,8 @@ export function looksLikeLink(input) {
  * @throws Error if the argument doesn't match the path pattern.
  */
 export function githubUrlOrPathToSharePath(urlWithPath) {
-  return '/share/v/gh' + extractOrgPrefixedPath(trimToPath(urlWithPath))
+  const orgRepoPath = extractOrgPrefixedPath(trimToPath(urlWithPath))
+  return `/share/v/gh${orgRepoPath}`
 }
 
 
@@ -147,7 +149,7 @@ export function trimToPath(urlStr) {
   }
   const firstSlashNdx = s.indexOf('/')
   if (firstSlashNdx == -1) {
-    throw new Error('Expected at least one slash for file path: ' + urlStr)
+    throw new Error(`Expected at least one slash for file path: ${urlStr}`)
   }
   return s.substring(firstSlashNdx)
 }
@@ -183,5 +185,5 @@ export function extractOrgPrefixedPath(urlWithPath) {
     const {groups: {org, repo, branch, file}} = match
     return `/${org}/${repo}/${branch}/${file}`
   }
-  throw new Error('Expected a multi-part file path: ' + urlWithPath)
+  throw new Error(`Expected a multi-part file path: ${urlWithPath}`)
 }

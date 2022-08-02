@@ -89,7 +89,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     <div>
       <Paper component='form' className={classes.root} onSubmit={onSubmit}>
         <TooltipToggleButton
-          placement = 'bottom'
+          placement='bottom'
           title='Toggle tree view'
           onClick={onClickMenuCb}
           icon={<TreeIcon/>}/>
@@ -97,37 +97,37 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
-          error = {true}
+          error={true}
           placeholder={'Search model'}/>
-        {inputText.length> 0 ?
+        {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>{
+            size='small'
+            placement='bottom'
+            onClick={() => {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon/>}/>:null
+            icon={<ClearIcon/>}/> : null
         }
         <FormButton
           title='search'
-          size = 'small'
-          placement = 'bottom'
+          size='small'
+          placement='bottom'
           icon={<SearchIcon/>}/>
         <TooltipToggleButton
           title={`Enter GitHub URL to access IFCs hosted on GitHub.
                   Click on the link icon to learn more.`}
-          size = 'small'
-          placement = 'right'
-          onClick={()=>{
+          size='small'
+          placement='right'
+          onClick={() => {
             window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
           }}
           icon={<LinkIcon/>}/>
       </Paper>
-      { inputText.length>0 &&
-        error.length>0 &&
-        <div className = {classes.error}>{error}</div>
+      { inputText.length > 0 &&
+        error.length > 0 &&
+        <div className={classes.error}>{error}</div>
       }
     </div>
   )

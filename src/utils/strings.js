@@ -6,7 +6,7 @@
 export function stoi(s) {
   const i = parseInt(s)
   if (!isFinite(i)) {
-    throw new Error('Expected integer, got: ' + s)
+    throw new Error(`Expected integer, got: ${s}`)
   }
   return i
 }
@@ -19,4 +19,26 @@ export function stoi(s) {
  */
 export function toKey(str) {
   return str.replace(/[^a-zA-Z0-9]+/, '')
+}
+
+
+/**
+ * @param {string} str
+ * @return {array} url matches
+ */
+export function findUrls(str) {
+  // TODO(pablo): maybe support example.com/asdf
+  const urlRegex = new RegExp(/https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
+  const urls = str.match(urlRegex)
+  if (urls === null) {
+    return []
+  }
+  return urls.filter((url) => {
+    try {
+      new URL(url)
+      return true
+    } catch {
+      return false
+    }
+  })
 }

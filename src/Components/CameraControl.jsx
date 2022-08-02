@@ -1,5 +1,6 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
+import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {
   addHashListener,
@@ -24,11 +25,14 @@ import {roundCoord} from '../utils/math'
  * @return {Object} React component
  */
 export default function CameraControl({viewer}) {
-  const camera = viewer.IFC.context.ifcCamera.cameraControls
+  const setCameraControls = useStore((state) => state.setCameraControls)
+  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
+  setCameraControls(cameraControls)
   const location = useLocation()
   useEffect(() => {
-    onLoad(camera, location)
-  }, [camera, location])
+    onHash(location, cameraControls)
+    onLoad(location, cameraControls)
+  }, [location, cameraControls])
   // NOTE: NOT DISPLAYED
   return (
     <div style={{display: 'none'}}>Camera</div>
@@ -43,13 +47,12 @@ export const CAMERA_PREFIX = 'c'
 /**
  * Set camera position from window location hash and add listener for
  * hash change.
- * @param {Object} camera The IFCjs camera
  * @param {Object} location Either window.location or react-router location
+ * @param {Object} cameraControls obtained from the viewer
  */
-function onLoad(camera, location) {
+function onLoad(location, cameraControls) {
   debug().log('CameraControl#onLoad')
-  onHash(camera, location)
-  addHashListener('camera', () => onHash(camera, location))
+  addHashListener('camera', () => onHash(location, cameraControls))
 }
 
 
@@ -57,31 +60,44 @@ function onLoad(camera, location) {
 /**
  * Sets the camera position to the coordinate encoded in the URL
  * hash if it is present
- * @param {Object} camera The IFCjs camera
  * @param {Object} location window.location
+ * @param {Object} cameraControls obtained from the viewer
  */
-export function onHash(camera, location) {
+export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
-  if (encodedParams == undefined) {
+  if (encodedParams === undefined) {
+    return
+  }
+  setCameraFromParams(encodedParams, cameraControls)
+}
+
+
+/**
+ * Set the camera position
+ * @param {String} encodedParams camera position
+ * @param {Object} cameraControls obtained from the viewer
+ */
+export function setCameraFromParams(encodedParams, cameraControls) {
+  // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
+  if (!cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
-  if (coords == undefined) {
-    return
-  }
   if (coords) {
-    camera.setPosition(coords[0], coords[1], coords[2], true)
-    if (coords.length == 6) {
-      camera.setTarget(coords[3], coords[4], coords[5], true)
+    cameraControls.setPosition(coords[0], coords[1], coords[2], true)
+    const extendedCoordsSize = 6
+    if (coords.length === extendedCoordsSize) {
+      cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
+  addCameraUrlParams(cameraControls)
 }
 
 
 const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
 const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
 const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
-const regex = new RegExp(paramPattern)
+const paramRegex = new RegExp(paramPattern)
 
 
 // Exported for testing
@@ -90,12 +106,13 @@ const regex = new RegExp(paramPattern)
  * @return {Object|undefined} The coordinates if present and valid else undefined
  */
 export function parseHashParams(encodedParams) {
-  const match = encodedParams.match(regex)
+  const match = encodedParams.match(paramRegex)
   const stof = (str) => {
-    const val = parseFloat(parseFloat(str).toFixed(2))
+    const floatDigits = 2
+    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
     if (isFinite(val)) {
       const rounded = parseFloat(val.toFixed(0))
-      return rounded == val ? rounded : val
+      return rounded === val ? rounded : val
     } else {
       console.warn('Invalid coordinate: ', str)
     }
@@ -128,17 +145,21 @@ export function hasValidUrlParams() {
 
 /**
  * Adds camera coords to url.
- * @param {Object} viewer IFCjs viewer that contains a camera.
+ * @param {Object} cameraControls obtained from the viewer
  */
-export function addCameraUrlParams(viewer) {
-  const camera = viewer.IFC.context.ifcCamera
-  const position = camera.cameraControls.getPosition()
-  let camArr = roundCoord(...position, 2)
-  const target = camera.cameraControls.getTarget()
-  if (target.x == 0 && target.y == 0 && target.z == 0) {
+export function addCameraUrlParams(cameraControls) {
+  // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
+  if (!cameraControls) {
+    return
+  }
+  const position = cameraControls.getPosition()
+  const floatDigits = 2
+  let camArr = roundCoord(...position, floatDigits)
+  const target = cameraControls.getTarget()
+  if (target.x === 0 && target.y === 0 && target.z === 0) {
     camArr = camArr.concat(0)
   } else {
-    camArr = camArr.concat(roundCoord(...target, 2))
+    camArr = camArr.concat(roundCoord(...target, floatDigits))
   }
   addHashParams(window.location, CAMERA_PREFIX, camArr)
 }

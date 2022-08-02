@@ -18,7 +18,7 @@ export default function GuidePanelControl({offsetTop}) {
     <IconButton onClick={() => {
       setOpen(!open)
     }}>
-      <Question className = {classes.icon}/> {open && <GuidePanel openToggle={()=>{
+      <Question className={classes.icon}/> {open && <GuidePanel openToggle={() => {
         setOpen(!open)
       }} offsetTop={offsetTop}/>}
     </IconButton>)
@@ -34,9 +34,9 @@ export default function GuidePanelControl({offsetTop}) {
 function GuidePanel({openToggle, offsetTop}) {
   const classes = useStyles({offsetTop: offsetTop})
   return (
-    <div className = {classes.container}>
+    <div className={classes.container}>
       <Paper elevation={3} className={classes.panel}>
-        <div className = {classes.closeButton}><Close onClick = {openToggle}/></div>
+        <div className={classes.closeButton}><Close onClick={openToggle}/></div>
         <h1>Guide</h1>
         <p>To select an element:</p>
         <ul>

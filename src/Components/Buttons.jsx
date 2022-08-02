@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import IconButton from '@mui/material/IconButton'
+import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
@@ -12,7 +13,7 @@ import {assertDefined} from '../utils/assert'
  * @param {function} onClick
  * @param {Object} icon
  * @param {string} placement
- * @param {string} size
+ * @param {string} size Size of button component
  * @param {string} dataTestId Internal attribute for component testing
  * @return {Object} React component
  */
@@ -29,8 +30,9 @@ export const TooltipIconButton = ({
 
   return (
     <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
-      data-testid={dataTestId}>
-      <IconButton className = {classes.root} onClick={onClick} size={size}>
+      data-testid={dataTestId}
+    >
+      <IconButton className={classes.root} onClick={onClick} size={size}>
         {icon}
       </IconButton>
     </Tooltip>
@@ -42,6 +44,7 @@ export const TooltipIconButton = ({
  * @param {function} onClick
  * @param {string} title Tooltip text
  * @param {Object} icon
+ * @param {string} size Size of button component
  * @param {string} placement Default: left
  * @return {Object} React component
  */
@@ -49,7 +52,8 @@ export function TooltipToggleButton({
   onClick,
   title,
   icon,
-  placement='left',
+  size = 'medium',
+  placement = 'left',
 }) {
   assertDefined(title, icon, onClick)
   const [isPressed, setIsPressed] = useState(false)
@@ -83,6 +87,7 @@ export function TooltipToggleButton({
  * @param {function} setIsDialogDisplayed
  * @param {Object} icon The header icon
  * @param {string} placement Default: left
+ * @param {string} size Size of button component
  * @param {Object} dialog The controlled dialog
  * @return {Object} React component
  */
@@ -91,7 +96,8 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   icon,
-  placement='left',
+  placement = 'left',
+  size = 'medium',
   dialog,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
@@ -104,7 +110,8 @@ export function ControlButton({
           value={title}
           selected={isDialogDisplayed}
           onClick={toggleIsDialogDisplayed}
-          color='primary'>
+          color='primary'
+        >
           {icon}
         </ToggleButton>
       </Tooltip>
@@ -119,9 +126,12 @@ export function ControlButton({
  * form actions.
  * @param {string} title
  * @param {Object} icon
+ * @param {string} type Type of button (and icon to render)
+ * @param {string} placement Placement of tooltip
+ * @param {string} size Size of button component
  * @return {Object} React component
  */
-export function FormButton({title, icon, type='submit', placement='left', size='medium'}) {
+export function FormButton({title, icon, type = 'submit', placement = 'left', size = 'medium'}) {
   assertDefined(title, icon)
   const classes = useStyles(useTheme())
   return (
@@ -132,6 +142,35 @@ export function FormButton({title, icon, type='submit', placement='left', size='
         </IconButton>
       </Tooltip>
     </div>
+  )
+}
+
+/**
+ * A FormButton is a TooltipIconButton but with parameterized type for
+ * form actions.
+ * @param {string} title
+ * @param {Object} icon
+ * @param {string} type Type of button (and icon to render)
+ * @param {string} placement Placement of tooltip
+ * @param {string} size Size of button component
+ * @return {Object} React component
+ */
+export function RectangularButton({
+  title,
+  icon,
+}) {
+  assertDefined(title, icon)
+  return (
+    <Button
+      variant='rectangular'
+      startIcon={icon}
+      sx={{
+        '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
+        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+      }}
+    >
+      {title}
+    </Button>
   )
 }
 
@@ -146,11 +185,11 @@ export function FormButton({title, icon, type='submit', placement='left', size='
 export function TooltipLetterButton({
   fullString,
   onClick,
-  placement='right',
-  size='medium',
+  placement = 'right',
+  size = 'medium',
 }) {
   assertDefined(fullString, onClick)
-  if (fullString.length == 0) {
+  if (fullString.length === 0) {
     throw new Error('Cannot make a TooltipLetterButton with empty string')
   }
   const classes = useStyles(useTheme())

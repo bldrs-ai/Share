@@ -70,7 +70,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
 function AboutContent({installPrefix}) {
   const classes = useStyles()
   const [privacySlider, setPrivacySlider] = useState(0)
-  useEffect(()=>{
+  useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(20)
     } else if (Privacy.isPrivacyUsageEnabled()) {
@@ -118,7 +118,7 @@ function AboutContent({installPrefix}) {
         <li><ShareIcon/> Share IFC models</li>
       </ul>
       <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
-      <div className = {classes.demoContainer}>
+      <div className={classes.demoContainer}>
         <a href={`${installPrefix}/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-12.84,3.53,9.64,-5.33,2.61,1.71`}>
           <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
         </a>

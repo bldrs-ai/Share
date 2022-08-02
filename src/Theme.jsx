@@ -12,7 +12,8 @@ export default function useTheme() {
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
     name: 'mode',
-    defaultValue: Themes.Day}))
+    defaultValue: getSystemCurrentLightDark(),
+  }))
 
 
   const theme = useMemo(() => {
@@ -48,7 +49,7 @@ export default function useTheme() {
 }
 
 
-const Themes = {
+export const Themes = {
   Day: 'Day',
   Night: 'Night',
 }
@@ -67,6 +68,11 @@ function loadTheme(mode) {
     secondary: {
       main: blueGrey[100],
     },
+    custom: {
+      highLight: '#70AB32',
+      disable: 'lightGrey',
+      neutral: 'white',
+    },
   }
   const night = {
     primary: {
@@ -74,6 +80,12 @@ function loadTheme(mode) {
     },
     secondary: {
       main: blueGrey[600],
+    },
+    custom: {
+      highLight: '#70AB32',
+      disable: 'lightGrey',
+      neutral: 'white',
+
     },
   }
   const typography = {
@@ -83,6 +95,38 @@ function loadTheme(mode) {
     h4: {fontSize: '1.1rem'},
     h5: {fontSize: '1rem'},
     body2: {fontSize: '.8rem'},
+  }
+  const components = {
+    overrides: {
+      MuiStartIcon: {
+        root: {
+          marginRight: '40px',
+        },
+      },
+    },
+    MuiButton: {
+      variants: [
+        {
+          props: {variant: 'rectangular'},
+          style: {
+            border: '1px solid grey',
+            width: '288px',
+            height: '50px',
+            color: '#000000',
+            background: 'none',
+            textTransform: 'none',
+            font: 'Inter',
+            fontWeight: 600,
+            fontSize: '16px',
+          },
+        },
+      ],
+      defaultProps: {
+        disableElevation: true,
+        disableFocusRipple: true,
+        disableRipple: true,
+      },
+    },
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
@@ -97,9 +141,25 @@ function loadTheme(mode) {
     },
   }}
   const theme = {
+    components: components,
     typography: typography,
-    shape: {borderRadius: 10},
+    shape: {borderRadius: 5},
     palette: activePalette,
+    button: {},
   }
   return createTheme(theme)
+}
+
+
+/**
+ * Look for explicit night, otherwise day
+ * See https://drafts.csswg.org/mediaqueries-5/#prefers-color-scheme
+ * @return {string}
+ * @private
+ */
+export function getSystemCurrentLightDark() {
+  if (window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
+  }
+  return Themes.Day
 }

@@ -1,14 +1,16 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import CameraControl from './CameraControl'
-import IssuesControl from './IssuesControl'
 import LoginControl from './LoginControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import MarkupIcon from '../assets/2D_Icons/Markup.svg'
+import ListIcon from '../assets/2D_Icons/List.svg'
 import {useIsMobile} from './Hooks'
+import useStore from '../store/useStore'
 
 
 /**
@@ -17,26 +19,53 @@ import {useIsMobile} from './Hooks'
  *
  * @param {Object} viewer The IFC viewer
  * @param {function} unSelectItem deselects currently selected element
- * @param {function} itemPanelControl The ItemPanel component
  * @return {Object}
  */
-export default function OperationsGroup({viewer, unSelectItem, itemPanelControl}) {
-  const classes = useStyles()
+export default function OperationsGroup({viewer, unSelectItem}) {
+  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const classes = useStyles({isCommentsOn: isCommentsOn})
+
+  const toggle = (panel) => {
+    openDrawer()
+    if (panel === 'Properties') {
+      toggleIsPropertiesOn()
+    } else if (panel === 'Notes') {
+      turnCommentsOn()
+    }
+  }
+
   return (
     <div className={classes.container}>
       <LoginControl/>
-      <div className={classes.shareAndIssues}>
+      <div className={classes.topGroup}>
         <ShareControl viewer={viewer}/>
-        <IssuesControl viewer={viewer}/>
+        <TooltipIconButton
+          title='Notes'
+          icon={<MarkupIcon/>}
+          onClick={() => toggle('Notes')}
+        />
       </div>
       <div className={classes.lowerGroup}>
-        {itemPanelControl}
+        {
+          selectedElement ?
+          <TooltipIconButton
+            title="Properties"
+            onClick={() => toggle('Properties')}
+            icon={<ListIcon/>}
+          /> :
+          null
+        }
         {useIsMobile() ?
-         <TooltipIconButton
-           title="Section plane"
-           onClick={() => viewer.clipper.createPlane()}
-           icon={<CutPlaneIcon/>}/>:
-          ''
+          <TooltipIconButton
+            title="Section plane"
+            onClick={() => viewer.clipper.createPlane()}
+            icon={<CutPlaneIcon/>}
+          /> :
+          null
         }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
@@ -55,14 +84,17 @@ const useStyles = makeStyles({
     height: 'calc(100vh - 40px)',
     margin: '20px 20px 0 0',
   },
-  shareAndIssues: {
-    marginTop: '20px',
+  topGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    height: '110px',
+    width: '50px',
   },
   lowerGroup: {
     position: 'fixed',
     bottom: 0,
     paddingBottom: '70px',
-    // 3x the size of a button
     minHeight: '150px',
   },
 })

@@ -40,6 +40,7 @@ export const OAUTH_DOMAIN = 'bldrs.us.auth0.com'
  *   http://host/share/v/p/indec.ifc
  *   http://host/share/v/gh/bldrs-ai/Share/main/public/index.ifc
  *
+ * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
  * @param {testElt} For unit test allow use of a stub here instead of loading the app.
  * @return {Object}
  */
