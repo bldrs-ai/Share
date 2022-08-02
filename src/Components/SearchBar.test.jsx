@@ -64,5 +64,5 @@ test('stripIfcPathFromLocation', () => {
 
 test('SeachBar', () => {
   render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
-  expect(screen.getByPlaceholderText('Search model')).toBeInTheDocument()
+  expect(screen.getByPlaceholderText('IFC search')).toBeInTheDocument()
 })
