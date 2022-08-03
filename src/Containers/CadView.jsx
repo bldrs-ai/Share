@@ -161,6 +161,7 @@ export default function CadView({
     const accessToken = await auth0.getAccessTokenSilently()
     if (accessToken) {
       viewer.IFC.loader.requestHeader = {
+        Accept: 'application/vnd.github.v3.raw',
         Authorization: `Bearer ${accessToken}`,
       }
     }
