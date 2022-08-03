@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import {useAuth0} from '@auth0/auth0-react'
 import {makeStyles} from '@mui/styles'
 import {ColorModeContext} from '../Context/ColorMode'
 import Alert from '../Components/Alert'
@@ -74,6 +75,7 @@ export default function CadView({
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const auth0 = useAuth0()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -156,6 +158,14 @@ export default function CadView({
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
+    const accessToken = await auth0.getTokenSilently()
+    if (accessToken) {
+      viewer.IFC.loader.requestHeader = {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    }
+
+
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
         urlHasCameraParams() ? false : true, // fitToFrame
