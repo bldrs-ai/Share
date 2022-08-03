@@ -18,6 +18,21 @@ export async function getIssues(repository) {
 
 
 /**
+ * Search issues in GitHub.
+ * @param {Object} repository
+ * @param {string} queryParams
+ * @return {Array} The issue array of issue objects.
+ */
+export async function searchIssues(repository, queryParams) {
+  assertDefined(repository.orgName, repository.name, queryParams)
+  debug().log('Dispatching GitHub issues search for repo:', repository, queryParams)
+  const issues = await octokit.request(`GET /search/issues?q=${queryParams}`)
+  debug().log('GitHub: issues: ', repository, issues)
+  return issues
+}
+
+
+/**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
  * @param {Object} repository
@@ -376,6 +391,9 @@ export class MockOctokit {
       return MOCK_COMMENTS
     }
     if (path.includes('/repos/{org}/{repo}/issues')) {
+      return MOCK_ISSUES
+    }
+    if (path.includes('/search/issues')) {
       return MOCK_ISSUES
     }
   }

@@ -27,6 +27,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
+  const setFilepath = useStore((state) => state.setFilepath)
 
 
   /**
@@ -65,6 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
         (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
       setModelPath(mp)
+      setFilepath(mp.filepath)
       debug().log('Share#onChangeUrlParams: new model path: ', mp)
     }
   }

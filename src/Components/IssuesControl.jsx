@@ -2,7 +2,7 @@ import React, {useEffect} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import Paper from '@mui/material/Paper'
 import useStore from '../store/useStore'
-import {getIssues, getComments} from '../utils/GitHub'
+import {searchIssues, getComments} from '../utils/GitHub'
 import debug from '../utils/debug'
 import {addHashParams, removeHashParams} from '../utils/location'
 import IssueCard from './IssueCard'
@@ -106,8 +106,11 @@ export function IssuesNavBar() {
 
 
 
-/** @return {Object} List of issues and comments as react component. */
-export function Issues() {
+/**
+ * @param {string} modelPath
+ * @return {Object} List of issues and comments as react component.
+ */
+export function Issues(modelPath) {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)
   const issues = useStore((state) => state.issues)
@@ -117,6 +120,7 @@ export function Issues() {
   const filteredIssue = selectedIssueId ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
+  const filepath = useStore((state) => state.filepath)
 
 
   useEffect(() => {
@@ -127,7 +131,9 @@ export function Issues() {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const issuesData = await getIssues(repository)
+        const q = `q=is:issue%20repo:${repository.owner}/${repository.name}+${filepath}`
+        console.log('IssuesControl: issues query:', q)
+        const issuesData = await searchIssues(repository, q)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)

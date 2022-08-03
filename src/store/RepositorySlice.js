@@ -13,5 +13,7 @@ export default function createRepositorySlice(set, get) {
         name: repoName,
       },
     })),
+    filepath: null,
+    setFilepath: (path) => set(() => ({filepath: path})),
   }
 }
