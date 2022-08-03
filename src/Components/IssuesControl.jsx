@@ -131,7 +131,7 @@ export function Issues(modelPath) {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const q = `is:issue%20repo:${repository.orgName}/${repository.name}+${filepath}`
+        const q = `repo:${repository.orgName}/${repository.name}+is:issue+is:open+${filepath}`
         console.log('IssuesControl: issues query:', q)
         const issuesData = await searchIssues(repository, q)
         issuesData.data.slice(0).reverse().map((issue, index) => {
