@@ -85,6 +85,9 @@ const useStyles = makeStyles({
   },
   lowerGroup: {
     position: 'fixed',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
     bottom: 0,
     paddingBottom: '70px',
     minHeight: '150px',

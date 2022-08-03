@@ -123,7 +123,7 @@ export default function SideDrawerWrapper() {
 const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   drawer: {
     '& > .MuiPaper-root': {
-      'width': '20em',
+      'width': '30em',
       // This lets the h1 in ItemProperties use 1em padding but have
       // its mid-line align with the text in SearchBar
       'padding': '4px 1em',

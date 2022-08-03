@@ -12,15 +12,15 @@ test('Issues NavBar Issues', () => {
 })
 
 
-test('Issues NavBar Comments', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  act(() => {
-    result.current.setSelectedIssueId(testIssueId)
-  })
-  render(<ShareMock><IssuesNavBar/></ShareMock>)
-  expect(screen.getByText('Note')).toBeInTheDocument()
-})
+// test('Issues NavBar Comments', () => {
+//   const {result} = renderHook(() => useStore((state) => state))
+//   const testIssueId = 10
+//   act(() => {
+//     result.current.setSelectedIssueId(testIssueId)
+//   })
+//   render(<ShareMock><IssuesNavBar/></ShareMock>)
+//   expect(screen.getByText(1)).toBeInTheDocument()
+// })
 
 
 test('Issues ', () => {

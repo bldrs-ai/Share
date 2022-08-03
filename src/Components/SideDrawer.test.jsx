@@ -51,7 +51,6 @@ test('side drawer - issues id in url', async () => {
   })
   render(<ShareMock><SideDrawerWrapper/></ShareMock>)
   await waitFor(() => {
-    expect(screen.getByText('Note')).toBeInTheDocument()
     expect(screen.getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
   })
   // reset the store
@@ -72,7 +71,6 @@ test('side drawer - opened via URL', async () => {
       </ShareMock>)
 
   await waitFor(() => {
-    expect(getByText('Note')).toBeInTheDocument()
     expect(getByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeInTheDocument()
   })
 

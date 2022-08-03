@@ -512,7 +512,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 0,
-    'right': '308px',
+    'right': '30em',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -532,7 +532,7 @@ const useStyles = makeStyles({
   baseGroupOpen: {
     'position': 'fixed',
     'bottom': '20px',
-    'right': '326px',
+    'right': '31em',
     '@media (max-width: 900px)': {
       display: 'none',
     },

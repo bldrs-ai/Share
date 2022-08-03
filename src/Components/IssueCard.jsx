@@ -1,7 +1,7 @@
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useContext} from 'react'
 import ReactMarkdown from 'react-markdown'
-import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
+import {ColorModeContext} from '../Context/ColorMode'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams, getHashParamsFromHashStr} from '../utils/location'
@@ -17,7 +17,6 @@ import {
   removeCameraUrlParams,
 } from './CameraControl'
 import {useIsMobile} from './Hooks'
-import SelectIcon from '../assets/2D_Icons/Select.svg'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 
@@ -59,6 +58,7 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
+  const theme = useContext(ColorModeContext)
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -124,6 +124,7 @@ export default function IssueCard({
 
 
   const classes = useStyles({
+    isDay: theme.isDay(),
     expandText: expandText,
     select: selected,
     expandImage: expandImage,
@@ -132,11 +133,7 @@ export default function IssueCard({
 
 
   return (
-    <Paper
-      elevation={0}
-      className={classes.container}
-      style={{borderRadius: '5px'}}
-    >
+    <div className={classes.container}>
       <div
         className={classes.selectionContainer}
         role='button'
@@ -177,7 +174,7 @@ export default function IssueCard({
           onClickShare={shareIssue}
         /> : null
       }
-    </Paper>
+    </div>
   )
 }
 
@@ -195,7 +192,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
         <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
-        {!selected && !isComment &&
+        {/* {!selected && !isComment &&
         <div className={classes.select}>
           <TooltipIconButton
             title={'Select Note'}
@@ -205,7 +202,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
             icon={<SelectIcon/>}
           />
         </div>
-        }
+        } */}
         {!isRunningLocally() &&
           <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
         }
@@ -289,10 +286,14 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    padding: '4px',
-    border: (props) => props.select ? '2px solid green' : '1px solid lightGrey',
-    width: '270px',
-    marginBottom: '20px',
+    'padding': '4px',
+    'width': '28em',
+    'marginBottom': '20px',
+    'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
+    'borderRadius': '5px',
+    '@media (max-width: 900px)': {
+      width: '270px',
+    },
   },
   titleContainer: {
     display: 'flex',
@@ -323,7 +324,8 @@ const useStyles = makeStyles((theme) => ({
     cursor: (props) => props.isComment ? null : 'pointer',
   },
   body: {
-    'height': (props) => props.expandText ? 'auto' : '58px',
+    // 'height': (props) => props.expandText ? 'auto' : '58px',
+    'height': 'auto',
     'margin': '5px',
     'paddingLeft': '5px',
     'overflow': 'hidden',
@@ -340,6 +342,7 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   showMore: {
+    display: 'none',
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
     overflow: 'fix',

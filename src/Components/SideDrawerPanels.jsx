@@ -78,7 +78,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     paddingLeft: '10px',
     borderRadius: '5px',
-    background: theme.palette.custom.highLight,
   },
   title: {
     height: '30px',
