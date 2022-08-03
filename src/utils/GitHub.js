@@ -396,7 +396,11 @@ export class MockOctokit {
       return MOCK_ISSUES
     }
     if (path.includes('/search/issues')) {
-      return MOCK_ISSUES
+      return {
+        data: {
+          items: MOCK_ISSUES.data,
+        },
+      }
     }
   }
 }
