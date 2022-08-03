@@ -158,7 +158,7 @@ export default function CadView({
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
-    const accessToken = await auth0.getTokenSilently()
+    const accessToken = await auth0.getAccessTokenSilently()
     if (accessToken) {
       viewer.IFC.loader.requestHeader = {
         Authorization: `Bearer ${accessToken}`,
