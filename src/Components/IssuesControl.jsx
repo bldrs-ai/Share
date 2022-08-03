@@ -132,8 +132,8 @@ export function Issues(modelPath) {
       try {
         const issuesArr = []
         const q = `repo:${repository.orgName}/${repository.name}+is:issue+is:open+${filepath}`
-        console.log('IssuesControl: issues query:', q)
         const issuesData = await searchIssues(repository, q)
+        console.log('IssuesControl: issues query and rsp:', q, issuesData)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
