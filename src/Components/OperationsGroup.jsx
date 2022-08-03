@@ -3,7 +3,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import CameraControl from './CameraControl'
 // import ShareControl from './ShareControl'
 // import ShortcutsControl from './ShortcutsControl'
-// import {TooltipIconButton} from './Buttons'
+import {TooltipToggleButton} from './Buttons_redesign'
 // import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import Notes from '../assets/2D_Icons/Notes.svg'
@@ -15,7 +15,7 @@ import Knowledge from '../assets/2D_Icons/Knowledge.svg'
 import InfoIcon from '../assets/2D_Icons/Info.svg'
 // import useStore from '../store/useStore'
 // import AboutControl from './AboutControl'
-import ToggleButton from '@mui/material/ToggleButton'
+// import ToggleButton from '@mui/material/ToggleButton'
 
 // import SampleModelsControl from './SampleModelsControl'
 import {ColorModeContext} from '../Context/ColorMode'
@@ -39,71 +39,29 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix}) {
 
   return (
     <div className={classes.container}>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          <Share/>
-        </ToggleButton>
-      </div>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          <Notes/>
-        </ToggleButton>
-      </div>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          <ListIcon/>
-        </ToggleButton>
-      </div>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => console.log('here')}
-          color='primary'>
-          <Knowledge/>
-        </ToggleButton>
-      </div>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          <ClearIcon/>
-        </ToggleButton>
-      </div>
-
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          <InfoIcon/>
-        </ToggleButton>
-      </div>
-      <div className={classes.root}>
-        <ToggleButton
-          value={'hi'}
-          selected={false}
-          onClick={() => {}}
-          color='primary'>
-          {theme.isDay() ? <Moon/> : <Sun/>}
-        </ToggleButton>
-      </div>
-
+      <TooltipToggleButton
+        state={true}
+        icon={<Share/>}
+      />
+      <TooltipToggleButton
+        icon={<Notes/>}
+      />
+      <TooltipToggleButton
+        icon={<ListIcon/>}
+      />
+      <TooltipToggleButton
+        state={true}
+        icon={<Knowledge/>}
+      />
+      <TooltipToggleButton
+        icon={<ClearIcon/>}
+      />
+      <TooltipToggleButton
+        icon={<InfoIcon/>}
+      />
+      <TooltipToggleButton
+        icon={theme.isDay() ? <Moon/> : <Sun/>}
+      />
       {/* Invisible */}
       <CameraControl viewer={viewer}/>
     </div>
