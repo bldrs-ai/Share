@@ -180,31 +180,35 @@ export default function IssueCard({
 
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
-  const classes = useStyles()
+  const classes = useStyles({isComment: isComment})
   const dateParts = date.split('T')
+  const [showMetaData, setShowMetaData] = useState(false)
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
         {
-          isComment ? null : <div className={classes.titleString}>{title}</div>
+          isComment ? null : <div >{title}</div>
         }
-        <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
-        {/* {!selected && !isComment &&
-        <div className={classes.select}>
-          <TooltipIconButton
-            title={'Select Note'}
-            size='small'
-            placement='bottom'
-            onClick={onClickSelect}
-            icon={<SelectIcon/>}
+        {
+          showMetaData ?
+          <div className={classes.metaDataContainer} style={{marginRight: '10px'}}>
+            <div className={classes.username}>{username}</div>
+            <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
+          </div> : null
+        }
+        {!isRunningLocally() ?
+          <img alt={'avatarImage'}
+            className={classes.avatarIcon}
+            src={avatarUrl}
+            onMouseEnter={() => setShowMetaData(true)}
+            onMouseLeave={() => setShowMetaData(false)}/> :
+          <div
+            className={classes.avatarPlaceholder}
+            onMouseEnter={() => setShowMetaData(true)}
+            onMouseLeave={() => setShowMetaData(false)}
           />
-        </div>
-        } */}
-        {!isRunningLocally() &&
-          <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
         }
       </div>
     </div>
@@ -286,7 +290,6 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'padding': '4px',
     'width': '28em',
     'marginBottom': '20px',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
@@ -297,28 +300,33 @@ const useStyles = makeStyles((theme) => ({
   },
   titleContainer: {
     display: 'flex',
+    height: '50px',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottom: '1px solid lightGrey',
-    margin: '5px',
-    padding: '0px 0px 5px 5px',
-    overflow: 'fix',
+    paddingRight: '10px',
+    paddingLeft: '10px',
+    background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
     fontSize: '1em',
-    lineHeight: '1.1em',
     fontFamily: 'Helvetica',
   },
   titleRightContainer: {
+    width: '200px',
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   title: {
-    marginTop: '5px',
+    marginTop: '0px',
+    color: 'black',
   },
-  titleString: {
-    width: '150px',
+  metaDataContainer: {
+    marginRight: '12px',
+    background: 'lightGrey',
+    paddingRight: '10px',
+    paddingLeft: '10px',
+    borderRadius: '5px',
   },
   selectionContainer: {
     cursor: (props) => props.isComment ? null : 'pointer',
@@ -334,7 +342,7 @@ const useStyles = makeStyles((theme) => ({
     'lineHeight': '1.3em',
     // Restore link styling for issues and comments
     '& a': {
-      color: 'green',
+      color: 'black',
       textDecoration: 'underline',
     },
     '& img': {
@@ -354,9 +362,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTop: '1px solid lightGrey',
-    margin: '5px 5px 0px 5px',
-    paddin: '5px 0px 0px 5px',
+    padding: '0px 5px 10px 5px',
     overflow: 'fix',
     fontSize: '10px',
   },
@@ -365,8 +371,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    margin: '5px 5px 0px 5px',
-    paddin: '5px 0px 0px 5px',
     overflow: 'fix',
     fontSize: '10px',
   },
@@ -375,7 +379,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    margin: '10px 6px 10px 0px',
+    marginRight: '10px',
   },
   avatarIcon: {
     width: 24,
@@ -388,6 +392,12 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     fontWeight: 'bold',
     border: '1px solid lightGrey',
+  },
+  avatarPlaceholder: {
+    width: '30px',
+    height: '30px',
+    background: 'lightGrey',
+    borderRadius: '50%',
   },
   commentsQuantity: {
     width: 16,
