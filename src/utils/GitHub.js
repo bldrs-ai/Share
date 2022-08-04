@@ -26,7 +26,9 @@ export async function getIssues(repository) {
 export async function searchIssues(repository, queryParams) {
   assertDefined(repository.orgName, repository.name, queryParams)
   debug().log('Dispatching GitHub issues search for repo:', repository, queryParams)
-  const issues = await octokit.request(`GET /search/issues?q=${queryParams}`)
+  const issues = await octokit.request(`GET /search/issues`, {
+    q: queryParams,
+  })
   debug().log('GitHub: issues: ', repository, issues)
   return issues
 }
@@ -394,7 +396,11 @@ export class MockOctokit {
       return MOCK_ISSUES
     }
     if (path.includes('/search/issues')) {
-      return MOCK_ISSUES
+      return {
+        data: {
+          items: MOCK_ISSUES.data,
+        },
+      }
     }
   }
 }

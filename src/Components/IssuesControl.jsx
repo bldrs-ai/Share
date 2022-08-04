@@ -131,10 +131,10 @@ export function Issues(modelPath) {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const q = `q=is:issue%20repo:${repository.owner}/${repository.name}+${filepath}`
-        console.log('IssuesControl: issues query:', q)
+        const q = `repo:${repository.orgName}/${repository.name}+is:issue+is:open+${filepath}`
         const issuesData = await searchIssues(repository, q)
-        issuesData.data.slice(0).reverse().map((issue, index) => {
+        console.log('IssuesControl: issues query and rsp:', q, issuesData)
+        issuesData.data.items.reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
