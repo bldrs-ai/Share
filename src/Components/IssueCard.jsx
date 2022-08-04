@@ -243,7 +243,7 @@ const CardActions = ({
   const classes = useStyles({embeddedCameras: hasCameras})
   return (
     <div className={classes.actions}>
-      <div className={classes.rightGroup}>
+      <div className={classes.actionsLeftGroup}>
         {hasCameras ?
          <TooltipIconButton
            disabled={hasCameras}
@@ -318,7 +318,7 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   title: {
-    marginTop: '0px',
+    marginLeft: '10px',
     color: 'black',
   },
   metaDataContainer: {
@@ -365,9 +365,10 @@ const useStyles = makeStyles((theme) => ({
     overflow: 'fix',
     fontSize: '10px',
   },
-  rightGroup: {
+  actionsLeftGroup: {
     display: 'flex',
     flexDirection: 'row',
+    marginLeft: '10px',
     justifyContent: 'flex-start',
     alignItems: 'center',
     overflow: 'fix',
