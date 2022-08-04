@@ -295,7 +295,7 @@ const useStyles = makeStyles((theme) => ({
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
     '@media (max-width: 900px)': {
-      width: '270px',
+      width: '350px',
     },
   },
   titleContainer: {
