@@ -122,6 +122,9 @@ export default function SideDrawerWrapper() {
 
 const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   drawer: {
+    '::-webkit-scrollbar': {
+      display: 'none',
+    },
     '& > .MuiPaper-root': {
       'width': '30em',
       // This lets the h1 in ItemProperties use 1em padding but have
