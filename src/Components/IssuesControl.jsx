@@ -273,8 +273,6 @@ const useStyles = makeStyles((theme) => ({
     fontSize: '18px',
     textDecoration: 'underline',
     fontWeight: 'bold',
-    marginRight: '10px',
-    paddingLeft: '2px',
     alignItems: 'center',
   },
   contentContainer: {
@@ -315,7 +313,6 @@ const useStyles = makeStyles((theme) => ({
     'fontSize': '18px',
     'textDecoration': 'underline',
     'fontWeight': 'bold',
-    'paddingLeft': '10px',
     '@media (max-width: 900px)': {
       paddingLeft: '6px',
     },
