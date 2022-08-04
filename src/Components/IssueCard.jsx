@@ -332,7 +332,6 @@ const useStyles = makeStyles((theme) => ({
     cursor: (props) => props.isComment ? null : 'pointer',
   },
   body: {
-    // 'height': (props) => props.expandText ? 'auto' : '58px',
     'height': 'auto',
     'margin': '5px',
     'paddingLeft': '5px',
@@ -342,7 +341,7 @@ const useStyles = makeStyles((theme) => ({
     'lineHeight': '1.3em',
     // Restore link styling for issues and comments
     '& a': {
-      color: 'black',
+      color: (props) => props.isDay ? 'black' : 'lightGrey',
       textDecoration: 'underline',
     },
     '& img': {
@@ -396,7 +395,7 @@ const useStyles = makeStyles((theme) => ({
   avatarPlaceholder: {
     width: '30px',
     height: '30px',
-    background: 'lightGrey',
+    background: 'green',
     borderRadius: '50%',
   },
   commentsQuantity: {
