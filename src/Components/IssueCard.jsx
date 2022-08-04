@@ -182,7 +182,6 @@ export default function IssueCard({
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles({isComment: isComment})
   const dateParts = date.split('T')
-  const [showMetaData, setShowMetaData] = useState(false)
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
@@ -191,23 +190,16 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
         }
       </div>
       <div className={classes.titleRightContainer}>
-        {
-          showMetaData ?
-          <div className={classes.metaDataContainer} style={{marginRight: '10px'}}>
-            <div className={classes.username}>{username}</div>
-            <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
-          </div> : null
-        }
+        <div className={classes.metaDataContainer} style={{marginRight: '10px'}}>
+          <div className={classes.username}>{username}</div>
+          <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
+        </div>
         {!isRunningLocally() ?
           <img alt={'avatarImage'}
             className={classes.avatarIcon}
-            src={avatarUrl}
-            onMouseEnter={() => setShowMetaData(true)}
-            onMouseLeave={() => setShowMetaData(false)}/> :
+            src={avatarUrl}/> :
           <div
             className={classes.avatarPlaceholder}
-            onMouseEnter={() => setShowMetaData(true)}
-            onMouseLeave={() => setShowMetaData(false)}
           />
         }
       </div>
@@ -322,7 +314,7 @@ const useStyles = makeStyles((theme) => ({
   },
   metaDataContainer: {
     marginRight: '12px',
-    background: 'lightGrey',
+    // background: 'lightGrey',
     paddingRight: '10px',
     paddingLeft: '10px',
     borderRadius: '5px',
@@ -392,8 +384,8 @@ const useStyles = makeStyles((theme) => ({
     border: '1px solid lightGrey',
   },
   avatarPlaceholder: {
-    width: '30px',
-    height: '30px',
+    width: 24,
+    height: 24,
     background: 'green',
     borderRadius: '50%',
   },
@@ -418,6 +410,7 @@ const useStyles = makeStyles((theme) => ({
   },
   username: {
     fontSize: '10px',
+    color: 'black',
   },
   button: {
     width: '24px',
