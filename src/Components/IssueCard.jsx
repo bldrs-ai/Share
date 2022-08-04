@@ -377,7 +377,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: '10px',
+    marginRight: '4px',
   },
   avatarIcon: {
     width: 24,
