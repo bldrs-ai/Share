@@ -314,10 +314,10 @@ const useStyles = makeStyles((theme) => ({
   },
   metaDataContainer: {
     marginRight: '12px',
-    // background: 'lightGrey',
     paddingRight: '10px',
     paddingLeft: '10px',
     borderRadius: '5px',
+    opacity: .5,
   },
   selectionContainer: {
     cursor: (props) => props.isComment ? null : 'pointer',

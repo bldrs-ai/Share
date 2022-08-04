@@ -292,10 +292,14 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   rightGroup: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'flex-end',
+    'alignItems': 'center',
+    'paddingRight': '5px',
+    '@media (max-width: 900px)': {
+      paddingRight: '0px',
+    },
   },
   middleGroup: {
     width: '400px',
@@ -313,6 +317,7 @@ const useStyles = makeStyles((theme) => ({
     'fontSize': '18px',
     'textDecoration': 'underline',
     'fontWeight': 'bold',
+    'paddingLeft': '16px',
     '@media (max-width: 900px)': {
       paddingLeft: '6px',
     },
