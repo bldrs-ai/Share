@@ -1,5 +1,5 @@
 import React from 'react'
-import {render, screen} from '@testing-library/react'
+import {render, screen, fireEvent} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import IssueCard from './IssueCard'
 
@@ -29,31 +29,17 @@ test('Number of comments', () => {
   expect(screen.getByText(commentCount)).toBeInTheDocument()
 })
 
-// test('Select the issue card', () => {
-//   const id = 123
-//   const index = 123
-//   const rendered = render(
-//       <ShareMock>
-//         <IssueCard id={id} index={index} title="Select the issue card - title"/>
-//       </ShareMock>)
-//   const selectIssueButton = rendered.getByTestId('test-button')
-//   fireEvent.click(selectIssueButton)
-//   expect(selectIssueButton).not.toBeInTheDocument()
-// })
-
-
-// test('Click on the card to select', () => {
-//   const id = 123
-//   const index = 123
-//   const rendered = render(
-//       <ShareMock>
-//         <IssueCard id={id} index={index} title="Click on the card to select"/>
-//       </ShareMock>)
-//   const selectionContainer = rendered.getByTestId('selectionContainer')
-//   fireEvent.click(selectionContainer)
-//   expect(screen.getByText('Click on the card to select')).toBeInTheDocument()
-// })
-
+test('Select the issue card', () => {
+  const id = 123
+  const index = 123
+  const rendered = render(
+      <ShareMock>
+        <IssueCard id={id} index={index} title="Select the issue card - title"/>
+      </ShareMock>)
+  const selectIssueButton = rendered.getByTestId('selectionContainer')
+  fireEvent.click(selectIssueButton)
+  expect(screen.getByText('Select the issue card - title')).toBeInTheDocument()
+})
 
 
 test('Camera Position control', () => {
