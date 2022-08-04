@@ -290,7 +290,7 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '28em',
+    'width': '27em',
     'marginBottom': '20px',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
@@ -304,8 +304,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingRight: '10px',
-    paddingLeft: '10px',
     background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
     fontSize: '1em',
     fontFamily: 'Helvetica',
@@ -369,7 +367,6 @@ const useStyles = makeStyles((theme) => ({
   actionsLeftGroup: {
     display: 'flex',
     flexDirection: 'row',
-    marginLeft: '10px',
     justifyContent: 'flex-start',
     alignItems: 'center',
     overflow: 'fix',
