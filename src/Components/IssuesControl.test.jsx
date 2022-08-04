@@ -19,7 +19,7 @@ test('Issues NavBar Comments', () => {
     result.current.setSelectedIssueId(testIssueId)
   })
   render(<ShareMock><IssuesNavBar/></ShareMock>)
-  expect(screen.getByText('Note')).toBeInTheDocument()
+  expect(screen.getByTitle('Back to the list')).toBeInTheDocument()
 })
 
 

@@ -56,42 +56,44 @@ export function IssuesNavBar() {
   return (
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
-        <div className={classes.title}>
-          {selectedIssueId ? 'Note' : 'Notes' }
-        </div>
+        {selectedIssueId ? null : 'Notes' }
+        { selectedIssueId ?
+          <div style={{marginLeft: '-12px'}}><TooltipIconButton
+            title='Back to the list'
+            placement='bottom'
+            size='small'
+            onClick={() => {
+              removeHashParams(window.location, ISSUE_PREFIX)
+              setSelectedIssueId(null)
+            }}
+            icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
+          /></div> : null
+        }
       </div>
+
+      <div className={classes.middleGroup} >
+        {selectedIssueId && issues.length > 1 &&
+          <>
+            <TooltipIconButton
+              title='Previous Note'
+              placement='bottom'
+              size='small'
+              onClick={() => selectIssue('previous')}
+              icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
+            />
+            <TooltipIconButton
+              title='Next Note'
+              size='small'
+              placement='bottom'
+              onClick={() => selectIssue('next')}
+              icon={<NextIcon style={{width: '20px', height: '20px'}}/>}
+            />
+          </>
+        }
+      </div>
+
       <div className={classes.rightGroup}>
         <div className={classes.controls}>
-          {selectedIssueId &&
-           <>
-             <TooltipIconButton
-               title='Back to the list'
-               placement='bottom'
-               size='small'
-               onClick={() => {
-                 removeHashParams(window.location, ISSUE_PREFIX)
-                 setSelectedIssueId(null)
-               }}
-               icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
-             />
-             <>
-               <TooltipIconButton
-                 title='Previous Note'
-                 placement='bottom'
-                 size='small'
-                 onClick={() => selectIssue('previous')}
-                 icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
-               />
-               <TooltipIconButton
-                 title='Next Note'
-                 size='small'
-                 placement='bottom'
-                 onClick={() => selectIssue('next')}
-                 icon={<NextIcon style={{width: '20px', height: '20px'}}/>}
-               />
-             </>
-           </>
-          }
         </div>
         <TooltipIconButton
           title='Close Comments'
@@ -262,9 +264,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: '10px',
     borderRadius: '2px',
-    background: theme.palette.custom.highLight,
   },
   title: {
     height: '30px',
@@ -272,8 +272,6 @@ const useStyles = makeStyles((theme) => ({
     fontSize: '18px',
     textDecoration: 'underline',
     fontWeight: 'bold',
-    marginRight: '10px',
-    paddingLeft: '2px',
     alignItems: 'center',
   },
   contentContainer: {
@@ -293,18 +291,35 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   rightGroup: {
-    width: '160px',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'flex-end',
+    'alignItems': 'center',
+    'paddingRight': '5px',
+    '@media (max-width: 900px)': {
+      paddingRight: '0px',
+    },
+  },
+  middleGroup: {
+    width: '400px',
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
     alignItems: 'center',
   },
   leftGroup: {
-    width: '100px',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    'height': '30px',
+    'fontSize': '18px',
+    'textDecoration': 'underline',
+    'fontWeight': 'bold',
+    'paddingLeft': '16px',
+    '@media (max-width: 900px)': {
+      paddingLeft: '6px',
+    },
   },
   container: {
     background: '#7EC43B',
