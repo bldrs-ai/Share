@@ -316,6 +316,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'flex-end',
     alignItems: 'center',
+    marginRight: '6px',
   },
   title: {
     marginLeft: '10px',
