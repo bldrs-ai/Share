@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React from 'react'
 // import IconButton from '@mui/material/IconButton'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
@@ -14,13 +14,12 @@ import {assertDefined} from '../utils/assert'
  */
 export function TooltipToggleButton({icon, state, onClick}) {
   assertDefined(icon)
-  const [selected, setSelected] = useState(false)
   const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <ToggleButton
-        selected={selected}
-        onClick={() => setSelected(!selected)}
+        selected={state}
+        onClick={onClick}
         color='primary'
       >
         {icon}
@@ -71,10 +70,9 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '40px',
       'height': '40px',
-      // 'borderRadius': '50%',
       'border': 'none',
       '&.Mui-selected, &.Mui-selected:hover': {
-        backgroundColor: 'lightGrey',
+        backgroundColor: '#97979770',
       },
     },
     '& svg': {

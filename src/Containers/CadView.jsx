@@ -523,7 +523,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 30,
-    'right': '320px',
+    'right': '330px',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
