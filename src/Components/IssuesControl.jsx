@@ -81,7 +81,6 @@ export function IssuesNavBar() {
               onClick={() => selectIssue('previous')}
               icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
             />
-            {/* <div style={{fontSize: '10px'}}> {selectedIssueIndex + 1} of {issues.length}</div> */}
             <TooltipIconButton
               title='Next Note'
               size='small'
