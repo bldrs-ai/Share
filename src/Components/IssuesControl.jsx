@@ -58,16 +58,16 @@ export function IssuesNavBar() {
       <div className={classes.leftGroup}>
         {selectedIssueId ? null : 'Notes' }
         { selectedIssueId ?
-        <TooltipIconButton
-          title='Back to the list'
-          placement='bottom'
-          size='small'
-          onClick={() => {
-            removeHashParams(window.location, ISSUE_PREFIX)
-            setSelectedIssueId(null)
-          }}
-          icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
-        /> : null
+          <div style={{marginLeft: '-12px'}}><TooltipIconButton
+            title='Back to the list'
+            placement='bottom'
+            size='small'
+            onClick={() => {
+              removeHashParams(window.location, ISSUE_PREFIX)
+              setSelectedIssueId(null)
+            }}
+            icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
+          /></div> : null
         }
       </div>
 
