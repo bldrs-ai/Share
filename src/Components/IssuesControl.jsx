@@ -57,7 +57,7 @@ export function IssuesNavBar() {
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
         {selectedIssueId ? null : 'Notes' }
-        { selectedIssueId ?
+        {selectedIssueId ?
           <div style={{marginLeft: '-12px'}}>
             <TooltipIconButton
               title='Back to the list'
