@@ -29,13 +29,6 @@ export function IssuesNavBar() {
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
 
 
-  useEffect(() => {
-    if (!selectedIssueId) {
-      removeCameraUrlParams()
-    }
-  }, [selectedIssueId])
-
-
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
     if (index >= 0 && index < issues.length) {
