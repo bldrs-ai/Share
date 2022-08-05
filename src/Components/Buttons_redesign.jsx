@@ -2,7 +2,7 @@ import React from 'react'
 // import IconButton from '@mui/material/IconButton'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
-// import Tooltip from '@mui/material/Tooltip'
+import Tooltip from '@mui/material/Tooltip'
 import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
 
@@ -12,18 +12,20 @@ import {assertDefined} from '../utils/assert'
  * @param {Boolean} state
  * @return {Object} React component
  */
-export function TooltipToggleButton({icon, state, onClick}) {
+export function TooltipToggleButton({icon, state, onClick, title = 'title', placement = 'left'}) {
   assertDefined(icon)
   const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
-      <ToggleButton
-        selected={state}
-        onClick={onClick}
-        color='primary'
-      >
-        {icon}
-      </ToggleButton>
+      <Tooltip title={title} describeChild placement={placement}>
+        <ToggleButton
+          selected={state}
+          onClick={onClick}
+          color='primary'
+        >
+          {icon}
+        </ToggleButton>
+      </Tooltip>
     </div>
   )
 }

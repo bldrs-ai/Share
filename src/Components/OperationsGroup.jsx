@@ -8,6 +8,7 @@ import Share from '../assets/2D_Icons/Share.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import Sun from '../assets/2D_Icons/Sun.svg'
 import Moon from '../assets/2D_Icons/Moon.svg'
+import Tree from '../assets/2D_Icons/Tree.svg'
 import Knowledge from '../assets/2D_Icons/Knowledge.svg'
 import InfoIcon from '../assets/2D_Icons/Info.svg'
 import useStore from '../store/useStore'
@@ -37,10 +38,12 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix}) {
   return (
     <div className={classes.container}>
       <TooltipToggleButton
+        title='Share'
         state={false}
         icon={<Share/>}
       />
       <TooltipToggleButton
+        title='Notes'
         state={isCommentsOn}
         onClick={() => {
           isCommentsOn ? turnCommentsOff() : turnCommentsOn()
@@ -49,6 +52,7 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix}) {
         icon={<Notes/>}
       />
       <TooltipToggleButton
+        title='Properties'
         icon={<ListIcon/>}
         state={isPropertiesOn}
         onClick={() => {
@@ -57,17 +61,26 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix}) {
         }}
       />
       <TooltipToggleButton
+        title='Tree'
+        state={false}
+        icon={<Tree/>}
+      />
+      <TooltipToggleButton
+        title='Hot keys'
         state={false}
         icon={<Knowledge/>}
       />
       <TooltipToggleButton
+        title='Clear'
         icon={<ClearIcon/>}
       />
       <TooltipToggleButton
+        title='About'
         icon={<InfoIcon/>}
       />
       <TooltipToggleButton
-        icon={theme.isDay() ? <Moon/> : <Sun/>}
+        title='Theme'
+        icon={theme.isDay() ? <Moon style={{width: '30px', height: '30px'}}/> : <Sun style={{width: '40px', height: '40px'}}/>}
       />
       {/* Invisible */}
       <CameraControl viewer={viewer}/>
@@ -82,7 +95,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'column',
     justifyContent: 'space-around',
     opacity: .9,
-    height: '340px',
+    height: '400px',
   },
   root: {
     '& button': {
