@@ -38,8 +38,10 @@ export default function AboutControl({installPrefix}) {
             setIsDialogDisplayed(false)
             Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
           }}
-          installPrefix={installPrefix}/>
-      }/>
+          installPrefix={installPrefix}
+        />
+      }
+    />
   )
 }
 
@@ -58,7 +60,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
       headerText='BLDRS'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent installPrefix={installPrefix}/>}/>)
+      content={<AboutContent installPrefix={installPrefix}/>}
+    />)
 }
 
 
@@ -106,7 +109,8 @@ function AboutContent({installPrefix}) {
     <div className={classes.content}>
       <Typography
         variant='h4'
-        gutterBottom={false}>Build Every Thing Together</Typography>
+        gutterBottom={false}
+      >Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source 🌱<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
@@ -127,7 +131,8 @@ function AboutContent({installPrefix}) {
           <img
             alt="Schependomlaan"
             src={`${installPrefix}/Schependomlaan.png`}
-            className={classes.demo}/>
+            className={classes.demo}
+          />
         </a>
       </div>
       <div className={classes.settings}>
@@ -139,7 +144,8 @@ function AboutContent({installPrefix}) {
           step={10}
           min={0}
           max={20}
-          sx={{width: '80%', textAlign: 'center'}}/>
+          sx={{width: '80%', textAlign: 'center'}}
+        />
       </div>
     </div>)
 }

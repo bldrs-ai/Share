@@ -61,7 +61,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += (newHash.length == 0 ? '' : '::') + `${setKey}:${setValue}`
+      newHash += `${newHash.length == 0 ? '' : '::' }${setKey}:${setValue}`
     }
   }
   location.hash = newHash
@@ -103,7 +103,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')
-  const prefix = name + ':'
+  const prefix = `${name }:`
   let newParamsEncoded = ''
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]

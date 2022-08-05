@@ -50,14 +50,16 @@ export default function OperationsGroup({viewer, unSelectItem}) {
           <TooltipIconButton
             title="Properties"
             onClick={() => toggle('Properties')}
-            icon={<ListIcon/>}/> :
+            icon={<ListIcon/>}
+          /> :
           null
         }
         {useIsMobile() ?
           <TooltipIconButton
             title="Section plane"
             onClick={() => viewer.clipper.createPlane()}
-            icon={<CutPlaneIcon/>}/> :
+            icon={<CutPlaneIcon/>}
+          /> :
           null
         }
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>

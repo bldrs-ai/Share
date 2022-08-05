@@ -17,10 +17,12 @@ export default function GuidePanelControl({offsetTop}) {
   return (
     <IconButton onClick={() => {
       setOpen(!open)
-    }}>
+    }}
+    >
       <Question className={classes.icon}/> {open && <GuidePanel openToggle={() => {
         setOpen(!open)
-      }} offsetTop={offsetTop}/>}
+      }} offsetTop={offsetTop}
+      />}
     </IconButton>)
 }
 

@@ -41,7 +41,8 @@ export default function ItemProperties() {
               Property Sets
               <Switch
                 checked={expandAll}
-                onChange={() => setExpandAll(!expandAll)}/>
+                onChange={() => setExpandAll(!expandAll)}
+              />
             </h2>
             {psetsList || 'Loading...'}
           </>
@@ -105,7 +106,7 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
     }
   }
   return (
-    <table key={'table-' + serial++}>
+    <table key={`table-${ serial++}`}>
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -127,7 +128,7 @@ async function createPsetsList(model, element, classes, expandAll) {
           psets.map(
               async (ps, ndx) => {
                 return (
-                  <li key={'pset-' + ndx} className={classes.section}>
+                  <li key={`pset-${ ndx}`} className={classes.section}>
                     <ExpansionPanel
                       summary={decodeIFCString(ps.Name.value) || 'Property Set'}
                       detail={await createPropertyTable(model, ps, 0, true)}
@@ -154,7 +155,7 @@ async function createPsetsList(model, element, classes, expandAll) {
  */
 async function prettyProps(model, propName, propValue, serial = 0) {
   /* eslint-enable */
-  let label = '' + propName
+  let label = `${ propName}`
   if (label.startsWith('Ref')) {
     label = label.substring(3)
   }
@@ -221,7 +222,7 @@ async function hasProperties(model, hasPropertiesArr, serial) {
     const value = (dObj.NominalValue === undefined || dObj.NominalValue == null) ?
       '<error>' :
       decodeIFCString(dObj.NominalValue.value)
-    rows.push(row(name, value, serial++ + '-row'))
+    rows.push(row(name, value, `${serial++ }-row`))
   })
 }
 
@@ -243,7 +244,7 @@ async function quantities(model, quantitiesObj, serial) {
       }
     }
     val = decodeIFCString(val)
-    rows.push(row(name, val, serial++ + '-row'))
+    rows.push(row(name, val, `${serial++ }-row`))
   })
 }
 
@@ -277,7 +278,7 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
       }
     }
     return (
-      <tr key={'hasProps-' + serial++}>
+      <tr key={`hasProps-${ serial++}`}>
         <td>
           <table>
             <tbody>{rows}</tbody>

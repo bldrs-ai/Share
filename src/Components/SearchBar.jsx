@@ -92,13 +92,15 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           placement='bottom'
           title='Toggle tree view'
           onClick={onClickMenuCb}
-          icon={<TreeIcon/>}/>
+          icon={<TreeIcon/>}
+        />
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search model'}/>
+          placeholder={'Search model'}
+        />
         {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'
@@ -108,13 +110,15 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon/>}/> : null
+            icon={<ClearIcon/>}
+          /> : null
         }
         <FormButton
           title='search'
           size='small'
           placement='bottom'
-          icon={<SearchIcon/>}/>
+          icon={<SearchIcon/>}
+        />
         <TooltipToggleButton
           title={`Enter GitHub URL to access IFCs hosted on GitHub.
                   Click on the link icon to learn more.`}
@@ -123,7 +127,8 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           onClick={() => {
             window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
           }}
-          icon={<LinkIcon/>}/>
+          icon={<LinkIcon/>}
+        />
       </Paper>
       { inputText.length > 0 &&
         error.length > 0 &&
@@ -186,7 +191,7 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
     const pathAndQuery = baseAndPathquery[1].split('?')
     if (pathAndQuery.length == 2) {
       const query = pathAndQuery[1]
-      newPath += '?' + query
+      newPath += `?${ query}`
     }
     return newPath
   }

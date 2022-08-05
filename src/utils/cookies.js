@@ -10,7 +10,7 @@ import gtag from '../utils/gtag'
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name)
-  if (cookie && (typeof cookie == 'string')) {
+  if (cookie && (typeof cookie === 'string')) {
     return true
   }
   return false
@@ -22,7 +22,7 @@ export function isCookieSet(name) {
  * @return {string} The cookie
  */
 export function getCookie(name) {
-  const namePrefix = name + '='
+  const namePrefix = `${name }=`
   const decodedCookie = decodeURIComponent(document.cookie)
   const ca = decodedCookie.split(';')
   for (let i = 0; i < ca.length; i++) {
@@ -46,7 +46,7 @@ export function getCookie(name) {
 export function setCookie(name, value, exdays = 1) {
   const d = new Date()
   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
-  const expires = 'expires=' + d.toUTCString()
+  const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }
 
@@ -64,7 +64,7 @@ export function setCookie(name, value, exdays = 1) {
 export function setGtagCookie(command, commandParameters, additionalConfigInfo) {
   if (command != 'config') {
     // TODO: not sure all gtags should be passed through, so err for now.
-    throw new Error('gtags cookie with non-config command being used: ' + command)
+    throw new Error(`gtags cookie with non-config command being used: ${ command}`)
   }
   gtag(command, commandParameters, additionalConfigInfo)
 }

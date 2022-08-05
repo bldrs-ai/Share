@@ -30,7 +30,8 @@ export default function InputBar({startAdorment, onSubmit}) {
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Paste GitHub link here'}/>
+          placeholder={'Paste GitHub link here'}
+        />
         {inputText.length > 0 ?
           <TooltipToggleButton
             title='clear'
@@ -39,7 +40,8 @@ export default function InputBar({startAdorment, onSubmit}) {
             onClick={() => {
               setInputText('')
             }}
-            icon={<UilMinusSquare/>}/> : null
+            icon={<UilMinusSquare/>}
+          /> : null
         }
         {inputText.length > 0 ?
           <TooltipToggleButton
@@ -47,7 +49,8 @@ export default function InputBar({startAdorment, onSubmit}) {
             size='small'
             placement='bottom'
             onClick={() => onSubmit()}
-            icon={<UilSearch/>}/> : null
+            icon={<UilSearch/>}
+          /> : null
         }
       </Paper>
     </div>

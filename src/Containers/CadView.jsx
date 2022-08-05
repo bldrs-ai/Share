@@ -151,14 +151,14 @@ export default function CadView({
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug(3).log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
     const model = await viewer.IFC.loadIfcUrl(
         filepath,
-        urlHasCameraParams() ? false : true, // fitToFrame
+        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -171,7 +171,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage('Could not load file: ' + filepath)
+          setAlertMessage(`Could not load file: ${ filepath}`)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -273,7 +273,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => id + ''))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -326,7 +326,7 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItems(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => id + ''))
+    setSelectedElements(resultIDs.map((id) => `${id }`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
@@ -374,13 +374,15 @@ export default function CadView({
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
-          open={isLoading || snackMessage !== null}/>
+          open={isLoading || snackMessage !== null}
+        />
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
               showNavPanel={showNavPanel}
-              isOpen={showNavPanel}/>
+              isOpen={showNavPanel}
+            />
           )}
         </div>
         {showNavPanel &&
@@ -394,11 +396,13 @@ export default function CadView({
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }/>}
+            }
+          />}
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
-                        classes.operationsGroup}>
+                        classes.operationsGroup}
+        >
           {viewer &&
             <OperationsGroup
               viewer={viewer}

@@ -107,7 +107,6 @@ export function IssuesNavBar() {
 }
 
 
-
 /** @return {Object} List of issues and comments as react component. */
 export function Issues() {
   const classes = useStyles()

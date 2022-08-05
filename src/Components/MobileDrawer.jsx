@@ -35,7 +35,8 @@ export default function MobileDrawer({content}) {
         onClose={closeDrawer}
         onOpen={openDrawer}
         swipeAreaWidth={drawerBleeding}
-        disableSwipeToOpen={false}>
+        disableSwipeToOpen={false}
+      >
         <StyledBox className={classes.contentContainer}>
           <div className={classes.openToggle}>
             <TooltipIconButton title='Expand' onClick={toggleDrawer} icon={<CaretIcon/>}/>

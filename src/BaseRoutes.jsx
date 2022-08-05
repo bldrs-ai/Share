@@ -32,14 +32,14 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
-        location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+        location.pathname === (`${installPrefix }/`)) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
+      navigate(`${installPrefix }/share`)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = installPrefix + '/'
+  const basePath = `${installPrefix }/`
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
@@ -49,8 +49,10 @@ export default function BaseRoutes({testElt = null}) {
             testElt ||
               <ShareRoutes
                 installPrefix={installPrefix}
-                appPrefix={installPrefix + '/share'} />
-          }/>
+                appPrefix={`${installPrefix }/share`}
+              />
+          }
+        />
       </Route>
     </Routes>
   )

@@ -36,17 +36,18 @@ export default function ItemPanelControl({model, element, isOpenState}) {
          <TooltipIconButton
            title='Properties'
            icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
-           onClick={() => isOpenState.set(!isOpenState.value)}/>}
+           onClick={() => isOpenState.set(!isOpenState.value)}
+         />}
         {isOpenState.value &&
          (isMobile ? <MobileDrawer content={itemProps}/> :
          <ItemPropertiesDrawer
            content={itemProps}
            title={titleStr}
-           onClose={() => isOpenState.set(false)}/>)}
+           onClose={() => isOpenState.set(false)}
+         />)}
       </>
     )
   }
   return null
 }
-
 

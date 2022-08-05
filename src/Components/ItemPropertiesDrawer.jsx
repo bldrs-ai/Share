@@ -27,13 +27,15 @@ export default function ItemPropertiesDrawer({
       anchor={'right'}
       variant='persistent'
       elevation={4}
-      className={classes.drawer}>
+      className={classes.drawer}
+    >
       <div className={classes.headerBar}>
         <h1>{title}</h1>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
-          icon={<CloseIcon/>}/>
+          icon={<CloseIcon/>}
+        />
       </div>
       <div className={classes.content}>{content}</div>
     </Drawer>

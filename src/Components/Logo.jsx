@@ -21,7 +21,8 @@ export default function Logo({onClick}) {
         title={`Change theme from ${theme.isDay() ? 'Day' : 'Night'}` +
                ` to ${theme.isDay() ? 'Night' : 'Day'}`}
         onClick={() => theme.toggleColorMode()}
-        icon={theme.isDay() ? '☼' : '☽'}>
+        icon={theme.isDay() ? '☼' : '☽'}
+      >
       </TooltipIconButton>
       <Tooltip title={`Bldrs: ${PkgJson.version}`} describeChild placement="right">
         <IconButton disableRipple onClick={onClick}><LogoIcon/></IconButton>

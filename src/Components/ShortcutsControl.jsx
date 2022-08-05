@@ -22,7 +22,9 @@ export default function ShortcutsControl() {
       dialog={
         <ShortcutsDialog
           isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />}
+    />)
 }
 
 
@@ -67,7 +69,8 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             <p>To clear selection:</p>
             <li>Press <strong>A to clear selected element</strong></li>
           </ul>)
-      }/>
+      }
+    />
   )
 }
 

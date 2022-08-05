@@ -25,7 +25,7 @@ export function getCookieBoolean(name, defaultValue) {
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name, '')
-  if (cookie && (typeof cookie == 'string')) {
+  if (cookie && (typeof cookie === 'string')) {
     return true
   }
   return false
@@ -49,7 +49,7 @@ export function getCookie(name, defaultValue) {
       return propValue
     }
   }
-  return defaultValue + ''
+  return `${defaultValue }`
 }
 
 
@@ -61,6 +61,6 @@ export function getCookie(name, defaultValue) {
 export function setCookie(name, value, exdays = 7) {
   const d = new Date()
   d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
-  const expires = 'expires=' + d.toUTCString()
+  const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }

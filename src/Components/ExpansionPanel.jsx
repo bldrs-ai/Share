@@ -22,12 +22,14 @@ export default function Property({detail, summary, expandState, classes}) {
       elevation={0}
       className={classes.accordian}
       expanded={expand === true}
-      onChange={() => setExpand(!expand)}>
+      onChange={() => setExpand(!expand)}
+    >
       <AccordionSummary
         expandIcon={<CaretIcon/>}
         aria-controls="panel1a-content"
         id="panel1a-header"
-        className={classes.accordionSummary}>
+        className={classes.accordionSummary}
+      >
         <Typography className={classes.accordionTitle}>
           {summary}
         </Typography>

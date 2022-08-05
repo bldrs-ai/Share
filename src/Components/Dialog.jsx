@@ -33,7 +33,8 @@ export default function Dialog({
     <MuiDialog
       open={isDialogDisplayed}
       onClose={close}
-      className={classes.root}>
+      className={classes.root}
+    >
       <DialogTitle>
         <div>{icon}</div>
         {headerText}

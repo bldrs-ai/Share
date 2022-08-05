@@ -25,7 +25,9 @@ export default function SampleModelsControl() {
       dialog={
         <SampleModelsDialog
           isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />}
+    />)
 }
 
 
@@ -51,7 +53,7 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       7: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/5007/2907#c:-115.5,-36.4,109.55,0,-41.93,13.88',
       // eslint-disable-next-line max-len
       8: '/share/v/gh/Alhakam/BIMsage/master/BIMsage-Source/BIMsage/src/test/resources/ontology/20200121_Promnitz_Stones.ifc/70/91/116/131/80830#c:-7.58,-3.45,0,0.11,-1.73,-0.32',
-      // eslint-disable-next-line max-len
+
     }
     navigate({
       pathname: modelPath[e.target.value],
@@ -82,7 +84,8 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 className={classes.link}
                 target="_blank"
                 href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
-                rel="noreferrer">wiki</a>
+                rel="noreferrer"
+              >wiki</a>
               &nbsp; to learn more.
             </p>
             <p>
@@ -112,7 +115,8 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           </div>
         </div>
 
-      }/>
+      }
+    />
   )
 }
 

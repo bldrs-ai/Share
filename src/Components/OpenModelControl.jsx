@@ -25,7 +25,9 @@ export default function OpenModelControl({fileOpen}) {
         <OpenModelDialog
           fileOpen={fileOpen}
           isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />}
+    />)
 }
 
 
@@ -55,7 +57,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               className={classes.link}
               target="_blank"
               href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
-              rel="noreferrer">wiki</a>
+              rel="noreferrer"
+            >wiki</a>
             <br/>
 
           </p>
@@ -75,9 +78,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             onClick={() => {
               fileOpen()
               setIsDialogDisplayed(false)
-            }}>OPEN</span>
+            }}
+          >OPEN</span>
         </div>
-      }/>
+      }
+    />
   )
 }
 

@@ -40,5 +40,5 @@ export function computeElementPath(elt, getNameCb) {
   if (getNameCb === undefined || getNameCb == null) {
     throw new Error('Illegal argument: getNameCb undefined')
   }
-  return (elt.parent ? computeElementPath(elt.parent, getNameCb) : '' ) + '/' + getNameCb(elt)
+  return `${elt.parent ? computeElementPath(elt.parent, getNameCb) : '' }/${ getNameCb(elt)}`
 }
