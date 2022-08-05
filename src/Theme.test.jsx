@@ -18,7 +18,7 @@ describe('Theme', () => {
   test('getSystemCurrentLightDark is day when system is day', () => {
     windowSpy.mockImplementation(() => ({
       matchMedia: jest.fn((query) => {
-        return {matches: query != '(prefers-color-scheme: dark)'}
+        return {matches: query !== '(prefers-color-scheme: dark)'}
       }),
     }))
     expect(getSystemCurrentLightDark()).toBe(Themes.Day)
@@ -27,7 +27,7 @@ describe('Theme', () => {
   test('getSystemCurrentLightDark is night when system is night', () => {
     windowSpy.mockImplementation(() => ({
       matchMedia: jest.fn((query) => {
-        return {matches: query == '(prefers-color-scheme: dark)'}
+        return {matches: query === '(prefers-color-scheme: dark)'}
       }),
     }))
     expect(getSystemCurrentLightDark()).toBe(Themes.Night)

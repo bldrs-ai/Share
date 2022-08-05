@@ -1,4 +1,3 @@
-
 const hashListeners = {}
 window.onhashchange = () => {
   for (const name in hashListeners) {
@@ -40,7 +39,7 @@ export function addHashParams(location, name, params, includeNames = false) {
       continue
     }
     const paramValue = params[paramName]
-    const separator = encodedParams == '' ? '' : ','
+    const separator = encodedParams === '' ? '' : ','
     const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
     encodedParams += `${separator}${encodedParam}`
   }
@@ -48,7 +47,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   const setMap = {}
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
-    if (set == '') {
+    if (set === '') {
       continue
     }
     const setParts = set.split(':')
@@ -61,7 +60,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += `${newHash.length == 0 ? '' : '::' }${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : '::' }${setKey}:${setValue}`
     }
   }
   location.hash = newHash
@@ -110,11 +109,11 @@ export function removeHashParams(location, name) {
     if (set.startsWith(prefix)) {
       continue
     }
-    const separator = newParamsEncoded.length == 0 ? '' : '::'
+    const separator = newParamsEncoded.length === 0 ? '' : '::'
     newParamsEncoded += separator + set
   }
   location.hash = newParamsEncoded
-  if (location.hash == '') {
+  if (location.hash === '') {
     history.pushState(
         '', document.title, window.location.pathname + window.location.search)
   }

@@ -8,11 +8,13 @@ import CameraControl, {
 
 
 test('parseHashParams, 3 params', () => {
+  // eslint-disable-next-line no-magic-numbers
   expect(parseHashParams('c:1,2,3')).toStrictEqual([1, 2, 3])
 })
 
 
 test('parseHashParams, 6 params', () => {
+  // eslint-disable-next-line no-magic-numbers
   expect(parseHashParams('c:1,2,3,4,5,6')).toStrictEqual([1, 2, 3, 4, 5, 6])
 })
 
@@ -28,6 +30,7 @@ test('onHash, position', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3'}
   onHash(location, cam)
+  // eslint-disable-next-line no-magic-numbers
   const expectCam = new MockCamera(1, 2, 3)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)
@@ -38,6 +41,7 @@ test('onHash, target', () => {
   const cam = new MockCamera()
   const location = {hash: '#c:1,2,3,4,5,6'}
   onHash(location, cam)
+  // eslint-disable-next-line no-magic-numbers
   const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
   expectCam.setDoTween(true)
   expect(cam).toStrictEqual(expectCam)

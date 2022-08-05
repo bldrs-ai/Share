@@ -11,11 +11,11 @@ import {assertDefined} from '../utils/assert'
 export function getCookieBoolean(name, defaultValue) {
   assertDefined(name, defaultValue)
   const value = getCookie(name, defaultValue)
-  if (value == '') {
+  if (value === '') {
     return defaultValue
   }
   assertDefined(value)
-  return value.toLowerCase() == 'true'
+  return value.toLowerCase() === 'true'
 }
 
 
@@ -45,7 +45,7 @@ export function getCookie(name, defaultValue) {
     const parts = properties[i].trim().split('=')
     const propName = parts[0]
     const propValue = parts[1]
-    if (propName == name) {
+    if (propName === name) {
       return propValue
     }
   }
@@ -60,7 +60,9 @@ export function getCookie(name, defaultValue) {
  */
 export function setCookie(name, value, exdays = 7) {
   const d = new Date()
-  d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
+  // eslint-disable-next-line no-magic-numbers
+  const msInDay = 24 * 60 * 60 * 1000
+  d.setTime(d.getTime() + (exdays * msInDay))
   const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }

@@ -27,10 +27,10 @@ export function getCookie(name) {
   const ca = decodedCookie.split(';')
   for (let i = 0; i < ca.length; i++) {
     let c = ca[i]
-    while (c.charAt(0) == ' ') {
+    while (c.charAt(0) === ' ') {
       c = c.substring(1)
     }
-    if (c.indexOf(namePrefix) == 0) {
+    if (c.indexOf(namePrefix) === 0) {
       return c.substring(namePrefix.length, c.length)
     }
   }
@@ -45,7 +45,9 @@ export function getCookie(name) {
  */
 export function setCookie(name, value, exdays = 1) {
   const d = new Date()
-  d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
+  // eslint-disable-next-line no-magic-numbers
+  const msPerDay = 24 * 60 * 60 * 1000
+  d.setTime(d.getTime() + (exdays * msPerDay))
   const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }
@@ -62,7 +64,7 @@ export function setCookie(name, value, exdays = 1) {
  * @param {object} additionalConfigInfo
  */
 export function setGtagCookie(command, commandParameters, additionalConfigInfo) {
-  if (command != 'config') {
+  if (command !== 'config') {
     // TODO: not sure all gtags should be passed through, so err for now.
     throw new Error(`gtags cookie with non-config command being used: ${ command}`)
   }

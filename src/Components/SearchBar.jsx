@@ -34,7 +34,9 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
-  const calculatedInputWidth = Number(inputText.length) * 10 + 130
+  const widthPerChar = 10
+  const padding = 130
+  const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
@@ -44,7 +46,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     if (location.search) {
       if (validSearchQuery(searchParams)) {
         const newInputText = searchParams.get('q')
-        if (inputText != newInputText) {
+        if (inputText !== newInputText) {
           setInputText(newInputText)
         }
       } else {
@@ -154,7 +156,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
  * @return {boolean}
  */
 export function containsIfcPath(location) {
-  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) != null
+  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) !== null
 }
 
 
@@ -166,7 +168,7 @@ export function containsIfcPath(location) {
  */
 export function validSearchQuery(searchParams) {
   const value = searchParams.get('q')
-  return value != null && value.length > 0
+  return value !== null && value.length > 0
 }
 
 
@@ -185,11 +187,12 @@ export function validSearchQuery(searchParams) {
  */
 export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
   const baseAndPathquery = location.pathname.split(fileExtension)
-  if (baseAndPathquery.length == 2) {
+  const expectedPartsCount = 2
+  if (baseAndPathquery.length === expectedPartsCount) {
     const base = baseAndPathquery[0]
     let newPath = base + fileExtension
     const pathAndQuery = baseAndPathquery[1].split('?')
-    if (pathAndQuery.length == 2) {
+    if (pathAndQuery.length === expectedPartsCount) {
       const query = pathAndQuery[1]
       newPath += `?${ query}`
     }

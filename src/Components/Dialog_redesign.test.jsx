@@ -12,7 +12,7 @@ test('Open Dialog', () => {
           bodyContent={<OpenDialogBodyContent/>}
           headerText={'Open file'}
           isDialogDisplayed={ true }
-          setIsDialogDisplayed={() => {}}
+          setIsDialogDisplayed={() => console.log('setIsDialogDisplayed')}
         />
       </ShareMock>)
   expect(screen.getByText('Open file')).toBeInTheDocument()

@@ -30,8 +30,12 @@ export default function OperationsGroup({viewer, unSelectItem}) {
 
   const toggle = (panel) => {
     openDrawer()
-    panel === 'Properties' ? toggleIsPropertiesOn() : null
-    panel === 'Notes' ? turnCommentsOn() : null
+    if (panel === 'Properties') {
+      toggleIsPropertiesOn()
+    }
+    if (panel === 'Notes') {
+      turnCommentsOn()
+    }
   }
 
   return (

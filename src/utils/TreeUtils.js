@@ -20,7 +20,7 @@ export function visitTree(elt, observeCb) {
  * @param {Object} elementsById An already existing map of elements by ID.
  */
 export function setupLookupAndParentLinks(rootElt, elementsById) {
-  if (elementsById === undefined || elementsById == null) {
+  if (elementsById === undefined || elementsById === null) {
     throw new Error('Illegal argument: elementsById undefined')
   }
   visitTree(rootElt, (elt, parent) => {
@@ -37,7 +37,7 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
  * @return {string} The URL path fragment for the element.
  */
 export function computeElementPath(elt, getNameCb) {
-  if (getNameCb === undefined || getNameCb == null) {
+  if (getNameCb === undefined || getNameCb === null) {
     throw new Error('Illegal argument: getNameCb undefined')
   }
   return `${elt.parent ? computeElementPath(elt.parent, getNameCb) : '' }/${ getNameCb(elt)}`

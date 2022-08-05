@@ -12,11 +12,11 @@ export default {
     icon: {
       options: ['add', 'back', 'check', 'forward', 'help'],
       mapping: {
-        add: <AddCircle />,
-        back: <ArrowBack />,
-        check: <Check />,
-        forward: <ArrowForward />,
-        help: <Help />,
+        add: <AddCircle/>,
+        back: <ArrowBack/>,
+        check: <Check/>,
+        forward: <ArrowForward/>,
+        help: <Help/>,
       },
       control: {
         type: 'select',
@@ -75,20 +75,24 @@ export default {
 const Template = (args) => {
   const [{isDialogDisplayed}, updateArgs] = useArgs()
   const setIsDialogDisplayed = (v) => updateArgs({isDialogDisplayed: v})
-  const dialog = <Dialog
-    icon={<Announcement />}
-    headerText={'Example Dialog'}
-    isDialogDisplayed={isDialogDisplayed}
-    setIsDialogDisplayed={setIsDialogDisplayed}
-    content={<>Example content.</>}
-  />
+  const dialog = (
+    <Dialog
+      icon={<Announcement/>}
+      headerText={'Example Dialog'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      content={<>Example content.</>}
+    />
+  )
 
-  return <ControlButton
-    isDialogDisplayed={isDialogDisplayed}
-    setIsDialogDisplayed={setIsDialogDisplayed}
-    dialog={dialog}
-    {...args}
-  />
+  return (
+    <ControlButton
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      dialog={dialog}
+      {...args}
+    />
+  )
 }
 
 export const Button = Template.bind({})

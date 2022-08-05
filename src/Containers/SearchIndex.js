@@ -22,8 +22,9 @@ export default class SearchIndex {
     const type = Ifc.getType(model, elt)
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt)
-      if (type.startsWith('IFC')) {
-        this.indexElementByString(this.eltsByType, type.substring(3), elt)
+      const ifcPrefix = 'IFC'
+      if (type.startsWith(ifcPrefix)) {
+        this.indexElementByString(this.eltsByType, type.substring(ifcPrefix.length), elt)
       }
     }
 
@@ -142,7 +143,7 @@ export default class SearchIndex {
     debug().log(`SearchIndex#search: query rewrite: ${query}`)
 
     const token = query // TODO(pablo): tokenization
-    debug(2).log('SearchIndex#search: this: ', this)
+    debug().log('SearchIndex#search: this: ', this)
 
     addAll(this.eltsByName[token])
     addAll(this.eltsByType[token])

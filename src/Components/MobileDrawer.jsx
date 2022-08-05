@@ -78,7 +78,7 @@ const useStyles = makeStyles((props) => ({
       // TODO(pablo): Workaround bug..
       // https://github.com/mui/material-ui/issues/16942
       height: '100%',
-      overflow: (props) => props.isOpen ? 'scroll' : 'visible',
+      overflow: (p) => p.isOpen ? 'scroll' : 'visible',
     },
   },
   openToggle: {
@@ -86,7 +86,7 @@ const useStyles = makeStyles((props) => ({
     'right': '0.8em',
     'top': '.2em',
     '& svg': {
-      transform: (props) => props.isOpen ? 'none' : 'rotate(180deg)',
+      transform: (p) => p.isOpen ? 'none' : 'rotate(180deg)',
     },
   },
   iconContainer: {
@@ -100,7 +100,7 @@ const useStyles = makeStyles((props) => ({
   contentContainer: {
     position: 'absolute',
     visibility: 'visible',
-    top: (props) => props.isOpen ? '0px' : `-${drawerBleeding}px`,
+    top: (p) => p.isOpen ? '0px' : `-${drawerBleeding}px`,
     right: 0,
     left: 0,
     padding: '1em',

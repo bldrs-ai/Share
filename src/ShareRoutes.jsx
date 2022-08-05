@@ -87,7 +87,7 @@ function Forward({appPrefix}) {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (location.pathname == appPrefix) {
+    if (location.pathname === appPrefix) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
       navigate(dest)
@@ -148,7 +148,7 @@ export function trimToPath(urlStr) {
     s = s.substring(sharePathNdx + 'share/v/gh'.length)
   }
   const firstSlashNdx = s.indexOf('/')
-  if (firstSlashNdx == -1) {
+  if (firstSlashNdx === -1) {
     throw new Error(`Expected at least one slash for file path: ${urlStr}`)
   }
   return s.substring(firstSlashNdx)

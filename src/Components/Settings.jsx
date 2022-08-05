@@ -14,7 +14,7 @@ import SettingsIcon from '../assets/2D_Icons/Settings.svg'
  */
 export default function Settings() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const isOpen = Boolean(anchorEl == null)
+  const isOpen = Boolean(anchorEl === null)
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
