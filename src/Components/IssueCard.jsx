@@ -1,7 +1,7 @@
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useContext} from 'react'
 import ReactMarkdown from 'react-markdown'
-import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
+import {ColorModeContext} from '../Context/ColorMode'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams, getHashParamsFromHashStr} from '../utils/location'
@@ -17,7 +17,6 @@ import {
   removeCameraUrlParams,
 } from './CameraControl'
 import {useIsMobile} from './Hooks'
-import SelectIcon from '../assets/2D_Icons/Select.svg'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 
@@ -59,6 +58,7 @@ export default function IssueCard({
   const selected = selectedIssueId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
+  const theme = useContext(ColorModeContext)
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -124,6 +124,7 @@ export default function IssueCard({
 
 
   const classes = useStyles({
+    isDay: theme.isDay(),
     expandText: expandText,
     select: selected,
     expandImage: expandImage,
@@ -132,11 +133,7 @@ export default function IssueCard({
 
 
   return (
-    <Paper
-      elevation={0}
-      className={classes.container}
-      style={{borderRadius: '5px'}}
-    >
+    <div className={classes.container}>
       <div
         className={classes.selectionContainer}
         role='button'
@@ -177,37 +174,33 @@ export default function IssueCard({
           onClickShare={shareIssue}
         /> : null
       }
-    </Paper>
+    </div>
   )
 }
 
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
-  const classes = useStyles()
+  const classes = useStyles({isComment: isComment})
   const dateParts = date.split('T')
   return (
     <div className={classes.titleContainer}>
       <div className={classes.title}>
         {
-          isComment ? null : <div className={classes.titleString}>{title}</div>
+          isComment ? null : <div >{title}</div>
         }
-        <div className={classes.username}>{username}</div>
-        <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
       </div>
       <div className={classes.titleRightContainer}>
-        {!selected && !isComment &&
-        <div className={classes.select}>
-          <TooltipIconButton
-            title={'Select Note'}
-            size='small'
-            placement='bottom'
-            onClick={onClickSelect}
-            icon={<SelectIcon/>}
-          />
+        <div className={classes.metaDataContainer} style={{marginRight: '10px'}}>
+          <div className={classes.username}>{username}</div>
+          <div className={classes.username}>{dateParts[0]} {dateParts[1]}</div>
         </div>
-        }
-        {!isRunningLocally() &&
-          <img alt={'avatarImage'} className={classes.avatarIcon} src={avatarUrl}/>
+        {!isRunningLocally() ?
+          <img alt={'avatarImage'}
+            className={classes.avatarIcon}
+            src={avatarUrl}/> :
+          <div
+            className={classes.avatarPlaceholder}
+          />
         }
       </div>
     </div>
@@ -242,7 +235,7 @@ const CardActions = ({
   const classes = useStyles({embeddedCameras: hasCameras})
   return (
     <div className={classes.actions}>
-      <div className={classes.rightGroup}>
+      <div className={classes.actionsLeftGroup}>
         {hasCameras ?
          <TooltipIconButton
            disabled={hasCameras}
@@ -289,41 +282,48 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    padding: '4px',
-    border: (props) => props.select ? '2px solid green' : '1px solid lightGrey',
-    width: '270px',
-    marginBottom: '20px',
+    'width': '27em',
+    'marginBottom': '20px',
+    'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
+    'borderRadius': '5px',
+    '@media (max-width: 900px)': {
+      width: '350px',
+    },
   },
   titleContainer: {
     display: 'flex',
+    height: '50px',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottom: '1px solid lightGrey',
-    margin: '5px',
-    padding: '0px 0px 5px 5px',
-    overflow: 'fix',
+    background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
     fontSize: '1em',
-    lineHeight: '1.1em',
     fontFamily: 'Helvetica',
   },
   titleRightContainer: {
+    width: '200px',
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
+    marginRight: '6px',
   },
   title: {
-    marginTop: '5px',
+    marginLeft: '10px',
+    color: 'black',
   },
-  titleString: {
-    width: '150px',
+  metaDataContainer: {
+    marginRight: '12px',
+    paddingRight: '10px',
+    paddingLeft: '10px',
+    borderRadius: '5px',
+    opacity: .5,
   },
   selectionContainer: {
     cursor: (props) => props.isComment ? null : 'pointer',
   },
   body: {
-    'height': (props) => props.expandText ? 'auto' : '58px',
+    'height': 'auto',
     'margin': '5px',
     'paddingLeft': '5px',
     'overflow': 'hidden',
@@ -332,7 +332,7 @@ const useStyles = makeStyles((theme) => ({
     'lineHeight': '1.3em',
     // Restore link styling for issues and comments
     '& a': {
-      color: 'green',
+      color: (props) => props.isDay ? 'black' : 'lightGrey',
       textDecoration: 'underline',
     },
     '& img': {
@@ -340,6 +340,7 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   showMore: {
+    display: 'none',
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
     overflow: 'fix',
@@ -351,19 +352,15 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTop: '1px solid lightGrey',
-    margin: '5px 5px 0px 5px',
-    paddin: '5px 0px 0px 5px',
+    padding: '0px 5px 10px 5px',
     overflow: 'fix',
     fontSize: '10px',
   },
-  rightGroup: {
+  actionsLeftGroup: {
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    margin: '5px 5px 0px 5px',
-    paddin: '5px 0px 0px 5px',
     overflow: 'fix',
     fontSize: '10px',
   },
@@ -372,7 +369,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    margin: '10px 6px 10px 0px',
+    marginRight: '4px',
   },
   avatarIcon: {
     width: 24,
@@ -385,6 +382,12 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     fontWeight: 'bold',
     border: '1px solid lightGrey',
+  },
+  avatarPlaceholder: {
+    width: 24,
+    height: 24,
+    background: 'green',
+    borderRadius: '50%',
   },
   commentsQuantity: {
     width: 16,
@@ -407,6 +410,7 @@ const useStyles = makeStyles((theme) => ({
   },
   username: {
     fontSize: '10px',
+    color: 'black',
   },
   button: {
     width: '24px',

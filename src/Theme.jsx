@@ -69,7 +69,7 @@ function loadTheme(mode) {
       main: blueGrey[100],
     },
     custom: {
-      highLight: '#70AB32',
+      highLight: '#C8E8C7',
       disable: 'lightGrey',
       neutral: 'white',
     },
