@@ -38,6 +38,7 @@ export function disableDebug() {
  * away log messages.
  */
 const mockLog = {
+  /* eslint-disable no-empty-function */
   log: () => {},
   warn: () => {},
   time: () => {},

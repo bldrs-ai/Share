@@ -63,6 +63,7 @@ test('stripIfcPathFromLocation', () => {
 
 
 test('SeachBar', () => {
+  // eslint-disable-next-line no-empty-function
   render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
   expect(screen.getByPlaceholderText('Search model')).toBeInTheDocument()
 })

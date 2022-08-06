@@ -30,7 +30,7 @@ export function getCookie({component, name, defaultValue}) {
 export function getCookieBoolean({component, name, defaultValue}) {
   assertDefined(component, name, defaultValue)
   const value = getCookieBooleanPrivate(name, defaultValue)
-  if (value == undefined) {
+  if (value === undefined) {
     return defaultValue
   }
   debug().log('Privacy#getCookieBoolean: ', component, name, value)
@@ -79,7 +79,8 @@ export function isPrivacySocialEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'social',
-      defaultValue: true})
+      defaultValue: true,
+    })
   )
 }
 
@@ -92,6 +93,7 @@ export function isPrivacyUsageEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'usage',
-      defaultValue: true})
+      defaultValue: true,
+    })
   )
 }

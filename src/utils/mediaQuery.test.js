@@ -2,7 +2,8 @@ import {preprocessMediaQuery} from './mediaQuery'
 
 
 test('preprocessMediaQuery', () => {
-  expect(preprocessMediaQuery(100, {
+  const mobileWidthPx = 100
+  expect(preprocessMediaQuery(mobileWidthPx, {
     '@media (max-width: MOBILE_WIDTH)': {
       'display': 'none',
       '@media (max-width: MOBILE_WIDTH)': {

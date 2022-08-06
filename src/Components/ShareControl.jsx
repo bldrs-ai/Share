@@ -38,8 +38,10 @@ export default function ShareControl({viewer}) {
         <ShareDialog
           viewer={viewer}
           isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}/>
-      }/>
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />
+      }
+    />
   )
 }
 
@@ -119,7 +121,8 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
               selected={isLinkCopied}
               onClick={onCopy}
               aria-label='Copy the link'
-              color='success'>
+              color='success'
+            >
               <CopyIcon/>
             </ToggleButton>
           </div>
@@ -131,11 +134,14 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
                   onClick={toggleCameraIncluded}
                   icon={<CameraButton/>}
                   checkedIcon={<CameraButton/>}
-                  color='success'/>
-              }/>
+                  color='success'
+                />
+              }
+            />
           </FormGroup>
         </div>
-      }/>)
+      }
+    />)
 }
 
 

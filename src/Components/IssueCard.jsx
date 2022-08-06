@@ -197,7 +197,8 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
         {!isRunningLocally() ?
           <img alt={'avatarImage'}
             className={classes.avatarIcon}
-            src={avatarUrl}/> :
+            src={avatarUrl}
+          /> :
           <div
             className={classes.avatarPlaceholder}
           />

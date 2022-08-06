@@ -52,7 +52,7 @@ describe('ShareRoutes', () => {
           expect(e.message, `With input ${pair.s}`).toBe(pair.err)
           return
         }
-        throw new Error('Fail: expected parse error for input: ' + pair.s)
+        throw new Error(`Fail: expected parse error for input: ${ pair.s}`)
       }
     })
   })
@@ -61,15 +61,15 @@ describe('ShareRoutes', () => {
     const errPrefix = 'Expected a multi-part file path: '
     const errPrefix2 = 'Expected at least one slash for file path: ';
     [
-      {s: 'a/b/c', err: errPrefix + '/b/c'},
-      {s: 'www.google.com', err: errPrefix2 + 'www.google.com'},
-      {s: 'http://www.google.com', err: errPrefix2 + 'http://www.google.com'},
-      {s: 'http://www.google.com/', err: errPrefix + '/'},
+      {s: 'a/b/c', err: `${errPrefix }/b/c`},
+      {s: 'www.google.com', err: `${errPrefix2 }www.google.com`},
+      {s: 'http://www.google.com', err: `${errPrefix2 }http://www.google.com`},
+      {s: 'http://www.google.com/', err: `${errPrefix }/`},
     ].concat(tests).forEach((pair) => {
       if (pair.out !== undefined) {
         const out = pair.out.replace(/blob\//, '')
         expect(githubUrlOrPathToSharePath(pair.s), `With input ${pair.s}`)
-            .toBe('/share/v/gh' + out)
+            .toBe(`/share/v/gh${ out}`)
       } else {
         try {
           githubUrlOrPathToSharePath(pair.s)
@@ -77,7 +77,7 @@ describe('ShareRoutes', () => {
           expect(e.message, `With input ${pair.s}`).toBe(pair.err)
           return
         }
-        throw new Error('Fail: expected parse error for input: ' + pair.s)
+        throw new Error(`Fail: expected parse error for input: ${ pair.s}`)
       }
     })
   })

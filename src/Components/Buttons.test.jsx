@@ -13,6 +13,7 @@ describe('<TooltipIconButton />', () => {
   })
 
   test('should render successfully', async () => {
+    /* eslint-disable no-empty-function */
     const rendered = render(<MockComponent>
       <TooltipIconButton
         data-testid={'test-button'}
@@ -21,6 +22,7 @@ describe('<TooltipIconButton />', () => {
         icon={<QuestionIcon/>}
       />
     </MockComponent>)
+    /* eslint-enable no-empty-function */
 
     const button = rendered.getByTestId('test-button')
     fireEvent.mouseOver(button)

@@ -23,7 +23,7 @@ export default function useTheme() {
 
   const colorMode = useMemo(() => {
     return {
-      isDay: () => mode == Themes.Day,
+      isDay: () => mode === Themes.Day,
       getTheme: () => theme,
       toggleColorMode: () => {
         setMode((prevMode) => {
@@ -133,9 +133,9 @@ function loadTheme(mode) {
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
-  let activePalette = mode == Themes.Day ? day : night
+  let activePalette = mode === Themes.Day ? day : night
   activePalette = {...activePalette, ...{
-    mode: mode == Themes.Day ? 'light' : 'dark',
+    mode: mode === Themes.Day ? 'light' : 'dark',
     background: {
       paper: activePalette.primary.main,
     },

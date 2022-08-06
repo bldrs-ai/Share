@@ -14,7 +14,7 @@ import SettingsIcon from '../assets/2D_Icons/Settings.svg'
  */
 export default function Settings() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const isOpen = Boolean(anchorEl == null)
+  const isOpen = Boolean(anchorEl === null)
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const themeMode = useTheme()
@@ -26,7 +26,8 @@ export default function Settings() {
         title='Settings'
         onClick={(event) => handleMenu(event) }
         icon={<SettingsIcon/>}
-        placement='left-start'/>
+        placement='left-start'
+      />
       {isOpen &&
        <Menu
          id='menu-appbar'
@@ -43,7 +44,8 @@ export default function Settings() {
            style: {
              transform: 'translateX(-6px) translateY(-52px)',
            },
-         }}>
+         }}
+       >
          <MenuItem className={classes.menuItem} disableRipple>Version: {PkgJson.version}</MenuItem>
          <MenuItem className={classes.menuItem} disableRipple >
            <p>Theme: {themeMode.palette.mode}</p>

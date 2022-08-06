@@ -29,7 +29,8 @@ export const TooltipIconButton = ({
 
   return (
     <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
-      data-testid={dataTestId}>
+      data-testid={dataTestId}
+    >
       <IconButton className={classes.root} onClick={onClick} size={size}>
         {icon}
       </IconButton>
@@ -71,7 +72,8 @@ export function TooltipToggleButton({
               onClick(event)
             }
           }}
-          color='primary'>
+          color='primary'
+        >
           {icon}
         </ToggleButton>
       </Tooltip>
@@ -108,7 +110,8 @@ export function ControlButton({
           value={title}
           selected={isDialogDisplayed}
           onClick={toggleIsDialogDisplayed}
-          color='primary'>
+          color='primary'
+        >
           {icon}
         </ToggleButton>
       </Tooltip>

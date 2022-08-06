@@ -10,11 +10,11 @@ export default {
     icon: {
       options: ['add', 'back', 'check', 'forward', 'search'],
       mapping: {
-        add: <AddCircle />,
-        back: <ArrowBack />,
-        check: <Check />,
-        forward: <ArrowForward />,
-        search: <Search />,
+        add: <AddCircle/>,
+        back: <ArrowBack/>,
+        check: <Check/>,
+        forward: <ArrowForward/>,
+        search: <Search/>,
       },
       control: {
         type: 'select',
@@ -79,9 +79,11 @@ export default {
 }
 
 const Template = (args) => {
-  return <FormButton
-    {...args}
-  />
+  return (
+    <FormButton
+      {...args}
+    />
+  )
 }
 
 export const Button = Template.bind({})

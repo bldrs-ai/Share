@@ -41,7 +41,8 @@ export default function ItemProperties() {
               Property Sets
               <Switch
                 checked={expandAll}
-                onChange={() => setExpandAll(!expandAll)}/>
+                onChange={() => setExpandAll(!expandAll)}
+              />
             </h2>
             {psetsList || 'Loading...'}
           </>
@@ -82,7 +83,7 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
   const ROWS = []
   let rowKey = 0
   if (ifcProps.constructor && ifcProps.constructor.name &&
-      ifcProps.constructor.name != 'IfcPropertySet') {
+      ifcProps.constructor.name !== 'IfcPropertySet') {
     ROWS.push(
         <tr key='ifcType'>
           <td>
@@ -92,20 +93,20 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
         </tr>)
   }
   for (const key in ifcProps) {
-    if (isPset && (key == 'expressID' || key == 'Name')) {
+    if (isPset && (key === 'expressID' || key === 'Name')) {
       continue
     }
     const val = ifcProps[key]
     const propRow = await prettyProps(model, key, val, rowKey++)
     if (propRow) {
-      if (propRow.key == null) {
+      if (propRow.key === null) {
         throw new Error(`Row for key=(${key}) created with invalid react key`)
       }
       ROWS.push(propRow)
     }
   }
   return (
-    <table key={'table-' + serial++}>
+    <table key={`table-${ serial++}`}>
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -127,7 +128,7 @@ async function createPsetsList(model, element, classes, expandAll) {
           psets.map(
               async (ps, ndx) => {
                 return (
-                  <li key={'pset-' + ndx} className={classes.section}>
+                  <li key={`pset-${ ndx}`} className={classes.section}>
                     <ExpansionPanel
                       summary={decodeIFCString(ps.Name.value) || 'Property Set'}
                       detail={await createPropertyTable(model, ps, 0, true)}
@@ -154,11 +155,12 @@ async function createPsetsList(model, element, classes, expandAll) {
  */
 async function prettyProps(model, propName, propValue, serial = 0) {
   /* eslint-enable */
-  let label = '' + propName
-  if (label.startsWith('Ref')) {
-    label = label.substring(3)
+  let label = `${ propName}`
+  const refPrefix = 'Ref'
+  if (label.startsWith(refPrefix)) {
+    label = label.substring(refPrefix.length)
   }
-  if (propValue === null || propValue === undefined || propValue == '') {
+  if (propValue === null || propValue === undefined || propValue === '') {
     debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
     return null
   }
@@ -192,7 +194,7 @@ async function prettyProps(model, propName, propValue, serial = 0) {
       return await hasProperties(model, propValue, serial)
     default: {
       // Not sure where else to put this.. but seems better than handling in deref.
-      if (propValue.type == 0) {
+      if (propValue.type === 0) {
         return null
       }
       return row(
@@ -218,10 +220,10 @@ async function hasProperties(model, hasPropertiesArr, serial) {
   }
   return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
-    const value = (dObj.NominalValue === undefined || dObj.NominalValue == null) ?
+    const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
       '<error>' :
       decodeIFCString(dObj.NominalValue.value)
-    rows.push(row(name, value, serial++ + '-row'))
+    rows.push(row(name, value, `${serial++ }-row`))
   })
 }
 
@@ -243,7 +245,7 @@ async function quantities(model, quantitiesObj, serial) {
       }
     }
     val = decodeIFCString(val)
-    rows.push(row(name, val, serial++ + '-row'))
+    rows.push(row(name, val, `${serial++ }-row`))
   })
 }
 
@@ -264,7 +266,8 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
     for (const i in eltArr) {
       if (Object.prototype.hasOwnProperty.call(eltArr, i)) {
         const p = eltArr[i]
-        if (p.type != 5) {
+        const refTypeVal = 5
+        if (p.type !== refTypeVal) {
           throw new Error('Array contains non-reference type')
         }
         const refId = stoi(p.value)
@@ -277,7 +280,7 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
       }
     }
     return (
-      <tr key={'hasProps-' + serial++}>
+      <tr key={`hasProps-${ serial++}`}>
         <td>
           <table>
             <tbody>{rows}</tbody>

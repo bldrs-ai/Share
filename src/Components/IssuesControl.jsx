@@ -57,17 +57,19 @@ export function IssuesNavBar() {
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
         {selectedIssueId ? null : 'Notes' }
-        { selectedIssueId ?
-          <div style={{marginLeft: '-12px'}}><TooltipIconButton
-            title='Back to the list'
-            placement='bottom'
-            size='small'
-            onClick={() => {
-              removeHashParams(window.location, ISSUE_PREFIX)
-              setSelectedIssueId(null)
-            }}
-            icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
-          /></div> : null
+        {selectedIssueId ?
+          <div style={{marginLeft: '-12px'}}>
+            <TooltipIconButton
+              title='Back to the list'
+              placement='bottom'
+              size='small'
+              onClick={() => {
+                removeHashParams(window.location, ISSUE_PREFIX)
+                setSelectedIssueId(null)
+              }}
+              icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
+            />
+          </div> : null
         }
       </div>
 
@@ -105,7 +107,6 @@ export function IssuesNavBar() {
     </div>
   )
 }
-
 
 
 /** @return {Object} List of issues and comments as react component. */

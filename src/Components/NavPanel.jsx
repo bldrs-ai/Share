@@ -24,7 +24,8 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
       <Tooltip title="Model Navigation" placement="bottom">
         <IconButton onClick={() => {
           onClickMenuCb()
-        }}>
+        }}
+        >
           <Hamburger className={classes.treeIcon}/>
         </IconButton>
       </Tooltip>
@@ -90,7 +91,8 @@ export default function NavPanel({
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key='tree'>
+          key='tree'
+        >
           {
             <NavTree
               model={model}

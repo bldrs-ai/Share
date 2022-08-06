@@ -38,8 +38,10 @@ export default function AboutControl({installPrefix}) {
             setIsDialogDisplayed(false)
             Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
           }}
-          installPrefix={installPrefix}/>
-      }/>
+          installPrefix={installPrefix}
+        />
+      }
+    />
   )
 }
 
@@ -58,7 +60,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
       headerText='BLDRS'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent installPrefix={installPrefix}/>}/>)
+      content={<AboutContent installPrefix={installPrefix}/>}
+    />)
 }
 
 
@@ -70,35 +73,38 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
 function AboutContent({installPrefix}) {
   const classes = useStyles()
   const [privacySlider, setPrivacySlider] = useState(0)
+  const privacyLevelFunctional = 0
+  const privacyLevelUsage = 10
+  const privacyLevelSocial = 20
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
-      setPrivacySlider(20)
+      setPrivacySlider(privacyLevelSocial)
     } else if (Privacy.isPrivacyUsageEnabled()) {
-      setPrivacySlider(10)
+      setPrivacySlider(privacyLevelUsage)
     } else {
-      setPrivacySlider(0)
+      setPrivacySlider(privacyLevelFunctional)
     }
   }, [])
   const marks = [
-    {value: 0, label: 'Functional', info: 'Theme, UI state, cookie preference'},
-    {value: 10, label: 'Usage', info: 'Stats from your use of Bldrs'},
-    {value: 20, label: 'Social', info: 'Google\'s guess of your location and demographic'},
+    {value: privacyLevelFunctional, label: 'Functional', info: 'Theme, UI state, cookie preference'},
+    {value: privacyLevelUsage, label: 'Usage', info: 'Stats from your use of Bldrs'},
+    {value: privacyLevelSocial, label: 'Social', info: 'Google\'s guess of your location and demographic'},
   ]
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
     switch (event.target.value) {
-      case 0:
-        Privacy.setUsageAndSocialEnabled(false, false)
-        setPrivacySlider(0)
-        break
-      case 10:
+      case privacyLevelUsage:
         Privacy.setUsageAndSocialEnabled(true, false)
-        setPrivacySlider(10)
+        setPrivacySlider(privacyLevelUsage)
         break
-      case 20:
+      case privacyLevelSocial:
         Privacy.setUsageAndSocialEnabled(true, true)
-        setPrivacySlider(20)
+        setPrivacySlider(privacyLevelSocial)
         break
+      case 0:
+      default:
+        Privacy.setUsageAndSocialEnabled(false, false)
+        setPrivacySlider(privacyLevelFunctional)
     }
   }
 
@@ -106,7 +112,8 @@ function AboutContent({installPrefix}) {
     <div className={classes.content}>
       <Typography
         variant='h4'
-        gutterBottom={false}>Build Every Thing Together</Typography>
+        gutterBottom={false}
+      >Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source 🌱<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
@@ -127,7 +134,8 @@ function AboutContent({installPrefix}) {
           <img
             alt="Schependomlaan"
             src={`${installPrefix}/Schependomlaan.png`}
-            className={classes.demo}/>
+            className={classes.demo}
+          />
         </a>
       </div>
       <div className={classes.settings}>
@@ -139,7 +147,8 @@ function AboutContent({installPrefix}) {
           step={10}
           min={0}
           max={20}
-          sx={{width: '80%', textAlign: 'center'}}/>
+          sx={{width: '80%', textAlign: 'center'}}
+        />
       </div>
     </div>)
 }

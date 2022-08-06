@@ -101,7 +101,7 @@ export default function SideDrawerWrapper() {
       openDrawer()
       turnCommentsOn()
     }
-  }, [location])
+  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn])
 
 
   return (
@@ -175,22 +175,22 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   },
   containerNotes: {
     overflow: 'hidden ',
-    height: (props) => props.isPropertiesOn ? '50%' : '1200px',
-    display: (props) => props.isCommentsOn ? '' : 'none',
+    height: (p) => p.isPropertiesOn ? '50%' : '1200px',
+    display: (p) => p.isCommentsOn ? '' : 'none',
     borderRadius: '0px',
     borderBottom: '1px solid lightGrey',
   },
   containerProperties: {
     borderRadius: '5px',
     overflow: 'hidden',
-    display: (props) => props.isPropertiesOn ? '' : 'none',
-    height: (props) => props.isCommentsOn ? '50%' : '1200px',
+    display: (p) => p.isPropertiesOn ? '' : 'none',
+    height: (p) => p.isCommentsOn ? '50%' : '1200px',
   },
   divider: {
     height: '1px',
     width: '100%',
     marginTop: '2px',
     marginBottom: '2px',
-    display: (props) => props.divider ? 'block' : 'none',
+    display: (p) => p.divider ? 'block' : 'none',
   },
 })))
