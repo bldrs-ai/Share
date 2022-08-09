@@ -188,7 +188,7 @@ export default function CadView({
       // load.  That modelID is used in the IFCjs code as [modelID] and
       // leads to undefined refs e.g. in prePickIfcItem.  The id should
       // always be 0.
-      model.modelID = 0
+      loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
     }
