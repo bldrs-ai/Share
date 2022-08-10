@@ -128,7 +128,7 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    if (viewer == null) {
+    if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
     }
@@ -150,28 +150,29 @@ export default function CadView({
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
-      debug(3).log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
+      debug().log('CadView#loadIfc: parsed blob: ', filepath)
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
-    const model = await viewer.IFC.loadIfcUrl(
+    const loadedModel = await viewer.IFC.loadIfcUrl(
         filepath,
-        urlHasCameraParams() ? false : true, // fitToFrame
+        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
+            // eslint-disable-next-line no-magic-numbers
             const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
             setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
         },
         (error) => {
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage('Could not load file: ' + filepath)
+          setAlertMessage(`Could not load file: ${ filepath}`)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -179,7 +180,7 @@ export default function CadView({
     })
     setIsLoading(false)
 
-    if (model) {
+    if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
       //
       // TODO(pablo): huge hack. Somehow this is getting incremented to
@@ -187,9 +188,9 @@ export default function CadView({
       // load.  That modelID is used in the IFCjs code as [modelID] and
       // leads to undefined refs e.g. in prePickIfcItem.  The id should
       // always be 0.
-      model.modelID = 0
-      setModel(model)
-      setModelStore(model)
+      loadedModel.modelID = 0
+      setModel(loadedModel)
+      setModelStore(loadedModel)
     }
   }
 
@@ -217,11 +218,11 @@ export default function CadView({
 
   /** Analyze loaded IFC model to configure UI elements. */
   async function onModel() {
-    if (model == null) {
+    if (model === null) {
       return
     }
     const rootElt = await model.ifcManager.getSpatialStructure(0, true)
-    if (rootElt.expressID == undefined) {
+    if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
@@ -273,7 +274,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItems(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => id + ''))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -297,7 +298,7 @@ export default function CadView({
    */
   async function setDoubleClickListener() {
     window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName == 'CANVAS') {
+      if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
         if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
           const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
@@ -326,14 +327,14 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItems(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => id + ''))
+    setSelectedElements(resultIDs.map((id) => `${id }`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
       // setup its properties.
-      debug(3).log('TODO: no visual element for item ids: ', resultIDs)
+      debug().log('TODO: no visual element for item ids: ', resultIDs)
     }
   }
 
@@ -374,13 +375,15 @@ export default function CadView({
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
-          open={isLoading || snackMessage !== null}/>
+          open={isLoading || snackMessage !== null}
+        />
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
               showNavPanel={showNavPanel}
-              isOpen={showNavPanel}/>
+              isOpen={showNavPanel}
+            />
           )}
         </div>
         {showNavPanel &&
@@ -394,11 +397,13 @@ export default function CadView({
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }/>}
+            }
+          />}
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
-                        classes.operationsGroup}>
+                        classes.operationsGroup}
+        >
           {viewer &&
             <OperationsGroup
               viewer={viewer}
@@ -449,7 +454,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     if (event.code === 'KeyW') {
       v.clipper.deletePlane()
     }
-    if (event.code == 'KeyA') {
+    if (event.code === 'KeyA') {
       v.IFC.unpickIfcItems()
     }
   }
