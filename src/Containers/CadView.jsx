@@ -60,7 +60,8 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
-  const [showNavPanel, setShowNavPanel] = useState(false)
+  const [navPanelReady, setNavPanelReady] = useState(false)
+  const [displayNavPanel, setDisplayNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -111,7 +112,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    setShowNavPanel(false)
+    setNavPanelReady(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
     const intializedViewer = initViewer(
@@ -239,7 +240,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(true)
+    setNavPanelReady(true)
   }
 
 
@@ -380,13 +381,11 @@ export default function CadView({
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              isOpen={showNavPanel}
+              onClickMenuCb={() => setDisplayNavPanel(!displayNavPanel)}
             />
           )}
         </div>
-        {showNavPanel &&
+        {navPanelReady &&
           <NavPanel
             model={model}
             element={rootElement}
@@ -395,6 +394,7 @@ export default function CadView({
             expandedElements={expandedElements}
             onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
+            displayNavPanel={displayNavPanel}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }

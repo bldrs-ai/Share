@@ -53,6 +53,7 @@ export default function NavPanel({
   onElementSelect,
   setExpandedElements,
   pathPrefix,
+  displayNavPanel,
 }) {
   assertDefined(...arguments)
 
@@ -73,7 +74,7 @@ export default function NavPanel({
   // eslint-disable-next-line
   }, [location])
 
-  const classes = useStyles()
+  const classes = useStyles({displayNavPanel: displayNavPanel})
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
@@ -111,6 +112,7 @@ export default function NavPanel({
 
 const useStyles = makeStyles({
   root: {
+    'display': (props) => props.displayNavPanel ? 'block' : 'none',
     'position': 'absolute',
     'top': '94px',
     'left': '20px',
