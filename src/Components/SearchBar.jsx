@@ -7,7 +7,7 @@ import {
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipToggleButton, FormButton} from './Buttons'
+import {TooltipToggleButton, FormButton, TooltipIconButton} from './Buttons'
 import debug from '../utils/debug'
 import {
   looksLikeLink,
@@ -90,7 +90,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   return (
     <div>
       <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-        <TooltipToggleButton
+        <TooltipIconButton
           placement='bottom'
           title='Toggle tree view'
           onClick={onClickMenuCb}
