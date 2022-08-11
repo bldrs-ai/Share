@@ -17,6 +17,7 @@ import SearchIcon from '../assets/2D_Icons/Search.svg'
 import LinkIcon from '../assets/2D_Icons/Link.svg'
 import ClearIcon from '../assets/2D_Icons/Close.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import useStore from '../store/useStore'
 
 
 /**
@@ -40,6 +41,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -51,6 +53,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         }
       } else {
         navigate(location.pathname)
+        setSelectedIssueId(null)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
