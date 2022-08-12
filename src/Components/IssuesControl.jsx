@@ -189,6 +189,7 @@ export function Issues() {
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
     }
+    // This address bug #314 by clearing selected issue when new model is loaded
     if (!filteredIssue) {
       setSelectedIssueId(null)
     }
