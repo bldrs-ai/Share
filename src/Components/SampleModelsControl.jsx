@@ -109,8 +109,8 @@ function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               <MenuItem value={2}>Astra</MenuItem>
               <MenuItem value={4}>Open Source House</MenuItem>
               <MenuItem value={3}>Eisvogel</MenuItem>
-              <MenuItem value={7}>Scan</MenuItem>
-              <MenuItem value={8}>Modular</MenuItem>
+              <MenuItem value={8}>High Fidelity Scan</MenuItem>
+              <MenuItem value={7}>Structural Detail</MenuItem>
             </TextField>
           </div>
         </div>
