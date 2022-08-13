@@ -422,11 +422,16 @@ const useStyles = makeStyles((theme) => ({
   psetsList: {
     padding: '0px',
     margin: 0,
-    minHeight: '400px',
+    height: '370px',
+    overflow: 'scroll',
+    width: '100%',
   },
   section: {
-    listStyle: 'none',
-    maxWidth: '400px',
+    'listStyle': 'none',
+    'width': '94%',
+    '@media (max-width: 900px)': {
+      width: '93%',
+    },
   },
   noElement: {
     maxWidth: '240px',

@@ -15,7 +15,7 @@ import MarkupIcon from '../assets/2D_Icons/Markup.svg'
  * @return {Object} React component
  */
 export default function MobileDrawer({content}) {
-  const [open, setOpen] = useState(false)
+  const [open, setOpen] = useState(true)
   const toggleDrawer = () => setOpen(!open)
   const classes = useStyles({isOpen: open})
   const closeDrawer = useStore((state) => state.closeDrawer)
