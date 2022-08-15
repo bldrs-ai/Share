@@ -4,14 +4,11 @@ import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
-// import {useIsMobile} from './Hooks'
 import useStore from '../store/useStore'
-import {getModelCenter} from '../utils/cutPlane'
-import {Vector3} from 'three'
+import CutPlaneMenu from './CutPlaneMenu'
 
 
 /**
@@ -29,10 +26,8 @@ export default function OperationsGroup({unSelectItem}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const viewer = useStore((state) => state.viewerStore)
-  const model = useStore((state) => state.modelStore)
+
   const classes = useStyles({isCommentsOn: isCommentsOn})
-
-
   const toggle = (panel) => {
     openDrawer()
     if (panel === 'Properties') {
@@ -43,11 +38,6 @@ export default function OperationsGroup({unSelectItem}) {
     }
   }
 
-  const createPlane = () => {
-    const modelCenter = getModelCenter(model)
-    const normal = new Vector3(0, 0, -1)
-    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
-  }
 
   return (
     <div className={classes.container}>
@@ -69,23 +59,10 @@ export default function OperationsGroup({unSelectItem}) {
           /> :
           null
         }
-        {/* {useIsMobile() ?
-          <TooltipIconButton
-            title="Section plane"
-            onClick={() => viewer.clipper.createPlane()}
-            icon={<CutPlaneIcon/>}
-          /> :
-          null
-        } */}
-        <TooltipIconButton
-          title="Section plane"
-          onClick={createPlane}
-          icon={<CutPlaneIcon/>}
-        />
+        <CutPlaneMenu/>
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>
-      {/* Invisible */}
       <CameraControl viewer={viewer}/>
     </div>
   )
