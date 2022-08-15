@@ -1,14 +1,14 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
+import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
-import useStore from '../store/useStore'
-import CutPlaneMenu from './CutPlaneMenu'
 
 
 /**

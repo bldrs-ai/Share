@@ -27,45 +27,42 @@ export function getSelectionAxisFromBoundingBox(boundingBox) {
 
 
 /**
- * getModelCenter is the helper method for the cutplane logic
- *
- * @param {Object} ifcModel bouding box
- * @return {Object} centerCoordinates
- */
-/**
- * getModelCenter is the helper method for the cutplane logic
+ * getModelCenter return the center of the model based on bounding box
  *
  * @param {Object} ifcModel bouding box
  * @return {Object} centerCoordinates
  */
 export function getModelCenter(ifcModel) {
-  return {
-    x:
+  return new Vector3(
       (ifcModel?.geometry.boundingBox.max.x +
         ifcModel?.geometry.boundingBox.min.x) /
       2,
-    y:
       (ifcModel?.geometry.boundingBox.max.y +
         ifcModel?.geometry.boundingBox.min.y) /
       2,
-    z:
       (ifcModel?.geometry.boundingBox.max.z +
         ifcModel?.geometry.boundingBox.min.z) /
       2,
-  }
+  )
 }
 
+
 /**
- * getElementBoundingBox is the helper method to get a bounding box of the element
+ * getElementBoundingBox creates a bounding box around the model
  *
- * @param {Object} selection bouding box
- * @return {Object} centerCoordinates
+ * @param {Object} selection seclected meshes
+ * @return {Object} boudingBox geometry
  */
 export function getElementBoundingBox(selection) {
   const geometry = new BufferGeometry()
   const coordinates = []
   const alreadySaved = new Set()
   const position = selection.geometry.attributes['position']
+  const vertices = Float32Array.from(coordinates)
+  const mesh = new Mesh(geometry)
+  const boundingBox = new Box3()
+  geometry.setAttribute('position', new BufferAttribute(vertices, selection.geometry.index.count))
+  boundingBox.setFromObject(mesh)
 
   for (let i = 0; i < selection.geometry.index.array.length; i++) {
     if (!alreadySaved.has(selection.geometry.index.array[i])) {
@@ -76,128 +73,6 @@ export function getElementBoundingBox(selection) {
     }
   }
 
-  const vertices = Float32Array.from(coordinates)
-  geometry.setAttribute('position', new BufferAttribute(vertices, selection.geometry.index.count))
-  const mesh = new Mesh(geometry)
-  const boundingBox = new Box3()
-  boundingBox.setFromObject(mesh)
   return boundingBox
-}
-
-/**
- * toggleClippingPlane turns clipping plane on and off
- *
- * @param {Boolean } on bouding box
- * @param {Number} expressId centerCoordinates
- * @param {IfcViewerAPI } ifcViewer bouding box
- */
-export function toggleClippingPlane(on, expressId, ifcViewer) {
-  if (on) {
-    const modelCenter = getModelCenter()
-    const boundingBox = getElementBoundingBox(ifcViewer?.IFC.selector.selection.mesh)
-    const selectionAxis = getSelectionAxisFromBoundingBox(boundingBox)
-
-    let direction = 1
-
-    let normal
-    if (
-      selectionAxis.x.size < selectionAxis.y.size &&
-      selectionAxis.x.size < selectionAxis.z.size
-    ) {
-      if (selectionAxis.x.center > modelCenter.x) {
-        direction = -1
-      }
-      normal = new Vector3(direction, 0, 0)
-    } else if (
-      selectionAxis.y.size < selectionAxis.x.size &&
-      selectionAxis.y.size < selectionAxis.z.size
-    ) {
-      if (selectionAxis.y.center > modelCenter.y) {
-        direction = -1
-      }
-      normal = new Vector3(0, direction, 0)
-    } else {
-      if (selectionAxis.z.center > modelCenter.z) {
-        direction = -1
-      }
-      normal = new Vector3(0, 0, direction)
-    }
-
-    const point = new Vector3(
-        selectionAxis.x.center,
-        selectionAxis.y.center,
-        selectionAxis.z.center,
-    )
-
-    ifcViewer?.clipper.createFromNormalAndCoplanarPoint(normal, point)
-    ifcViewer?.IFC.selector.unpickIfcItems()
-  } else {
-    removePlanes(ifcViewer)
-    showElement([expressId], true)
-  }
-}
-
-
-/**
- * toggleClippingPlane turns clipping plane on and off
- *
- * @param {IfcViewerAPI } viewer bouding box
- */
-function removePlanes(viewer) {
-  viewer?.clipper.deleteAllPlanes()
-  const clippingPlanes = viewer?.clipper['context'].clippingPlanes
-  for (const plane of clippingPlanes) {
-    viewer?.clipper['context'].removeClippingPlane(plane)
-  }
-}
-
-
-/**
- * toggleClippingPlane turns clipping plane on and off
- *
- * @param {Number} expressId centerCoordinates
- * @param {Boolean } select bouding box
- * @param {IfcViewerAPI } ifcViewer bouding box
- */
-export function showElement(expressId, select, ifcViewer) {
-  const subset = getSubset(expressId)
-  ifcViewer?.context.scene.scene.add(subset)
-  if (select) {
-    expressId.forEach((element) => selectElement(element))
-  }
-}
-
-
-/**
- * selectElement turns clipping plane on and off
- *
- * @param {Number} expressId centerCoordinates
- * @param {IfcViewerAPI } ifcViewer bouding box
- * @param {IfcModel } ifcModel bouding box
- */
-async function selectElement(expressId, ifcViewer, ifcModel) {
-  ifcViewer?.IFC.selector.selection.pickByID(
-      ifcModel.modelID,
-      [expressId],
-      true,
-  )
-}
-
-
-/**
- * selectElement turns clipping plane on and off
- *
- * @param {Number[]} expressId centerCoordinates
- * @param {IfcViewerAPI } ifcViewer bouding box
- * @param {IfcModel } ifcModel bouding box
- * @return {Object}
- */
-export function getSubset(expressId, ifcViewer, ifcModel) {
-  return ifcViewer?.IFC.loader.ifcManager.createSubset({
-    modelID: ifcModel.modelID,
-    removePrevious: true,
-    ids: expressId,
-    scene: ifcViewer?.context.scene.scene,
-  })
 }
 
