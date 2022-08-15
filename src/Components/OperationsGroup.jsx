@@ -8,8 +8,10 @@ import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
-import {useIsMobile} from './Hooks'
+// import {useIsMobile} from './Hooks'
 import useStore from '../store/useStore'
+import {getModelCenter} from '../utils/cutPlane'
+import {Vector3} from 'three'
 
 
 /**
@@ -20,13 +22,16 @@ import useStore from '../store/useStore'
  * @param {function} unSelectItem deselects currently selected element
  * @return {Object}
  */
-export default function OperationsGroup({viewer, unSelectItem}) {
+export default function OperationsGroup({unSelectItem}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const selectedElement = useStore((state) => state.selectedElement)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.modelStore)
   const classes = useStyles({isCommentsOn: isCommentsOn})
+
 
   const toggle = (panel) => {
     openDrawer()
@@ -36,6 +41,12 @@ export default function OperationsGroup({viewer, unSelectItem}) {
     if (panel === 'Notes') {
       turnCommentsOn()
     }
+  }
+
+  const createPlane = () => {
+    const modelCenter = getModelCenter(model)
+    const normal = new Vector3(0, 0, -1)
+    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
   }
 
   return (
@@ -58,14 +69,19 @@ export default function OperationsGroup({viewer, unSelectItem}) {
           /> :
           null
         }
-        {useIsMobile() ?
+        {/* {useIsMobile() ?
           <TooltipIconButton
             title="Section plane"
             onClick={() => viewer.clipper.createPlane()}
             icon={<CutPlaneIcon/>}
           /> :
           null
-        }
+        } */}
+        <TooltipIconButton
+          title="Section plane"
+          onClick={createPlane}
+          icon={<CutPlaneIcon/>}
+        />
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>
