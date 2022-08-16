@@ -241,6 +241,7 @@ export default function CadView({
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setNavPanelReady(true)
+    setDisplayNavPanel(true)
   }
 
 
