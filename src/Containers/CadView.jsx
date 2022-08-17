@@ -3,7 +3,8 @@ import {useNavigate, useSearchParams} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
-import {ColorModeContext} from '../Context/ColorMode'
+import SearchIndex from './SearchIndex'
+import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BaseGroup from '../Components/BaseGroup'
 import Logo from '../Components/Logo'
@@ -12,14 +13,14 @@ import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
+import {useIsMobile} from '../Components/Hooks'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {navToDefault} from '../Share'
+import {ColorModeContext} from '../Context/ColorMode'
 import * as Privacy from '../privacy/Privacy'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import SearchIndex from './SearchIndex.js'
 
 
 /**
@@ -137,20 +138,17 @@ export default function CadView({
   }
 
 
+  const isMobile = useIsMobile()
   // Shrink the scene viewer when drawer is open.  This recenters the
   // view in the new shrunk canvas, which preserves what the user is
   // looking at.
   // TODO(pablo): add render testing
   useEffect(() => {
-    if (viewer) {
-      if (isDrawerOpen) {
-        viewer.container.style.width = `calc(100% - ${SIDE_DRAWER_WIDTH})`
-      } else {
-        viewer.container.style.width = '100%'
-      }
+    if (viewer && !isMobile) {
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, viewer])
+  }, [isDrawerOpen, isMobile, viewer])
 
 
   const setAlertMessage = (msg) =>
