@@ -10,7 +10,7 @@ import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper from '../Components/SideDrawer'
+import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {navToDefault} from '../Share'
@@ -114,14 +114,14 @@ export default function CadView({
     setShowNavPanel(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
-    const intializedViewer = initViewer(
+    const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-        theme.palette &&
-        theme.palette.background &&
-        theme.palette.background.paper) || '0xabcdef')
-    setViewer(intializedViewer)
-    setViewerStore(intializedViewer)
+         theme.palette &&
+         theme.palette.background &&
+         theme.palette.background.paper) || '0xabcdef')
+    setViewer(initializedViewer)
+    setViewerStore(initializedViewer)
     debug().log('CadView#onModelPath, done setting new viewer')
   }
 
@@ -135,6 +135,23 @@ export default function CadView({
     addThemeListener()
     await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
   }
+
+
+  // Shrink the scene viewer when drawer is open.  This recenters the
+  // view in the new shrunk canvas, which preserves what the user is
+  // looking at.
+  // TODO(pablo): add render testing
+  useEffect(() => {
+    if (viewer) {
+      if (isDrawerOpen) {
+        viewer.container.style.width = `calc(100% - ${SIDE_DRAWER_WIDTH})`
+      } else {
+        viewer.container.style.width = '100%'
+      }
+      viewer.context.resize()
+    }
+  }, [isDrawerOpen, viewer])
+
 
   const setAlertMessage = (msg) =>
     setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
@@ -422,9 +439,10 @@ export default function CadView({
 
 
 /**
- * @param {string} pathPrefix e.g. /share/v/p
+ * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {Object} IfcViewerAPI viewer
+ * @return {Object} IfcViewerAPI viewer, width a .container property
+ *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
@@ -459,6 +477,9 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     }
   }
 
+  // window.addEventListener('resize', () => {v.context.resize()})
+
+  v.container = container
   return v
 }
 
