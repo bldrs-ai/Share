@@ -71,7 +71,7 @@
     "babel-loader": "^8.2.5",
     "esbuild": "^0.15.5",
     "esbuild-plugin-svgr": "^1.0.1",
-    "eslint": "^8.21.0",
+    "eslint": "^8.22.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-jsx-a11y": "^6.6.1",
