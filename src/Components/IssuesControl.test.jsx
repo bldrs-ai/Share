@@ -1,6 +1,5 @@
 import React from 'react'
-import {render, screen} from '@testing-library/react'
-import {act, renderHook} from '@testing-library/react-hooks'
+import {act, render, renderHook, screen} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import {IssuesNavBar, Issues} from './IssuesControl'

@@ -1,6 +1,5 @@
 import React from 'react'
-import {render, screen, waitFor} from '@testing-library/react'
-import {act, renderHook} from '@testing-library/react-hooks'
+import {act, render, renderHook, screen, waitFor} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import {MockModel} from '../utils/IfcMock.test'
 import useStore from '../store/useStore'
