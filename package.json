@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r385",
+  "version": "1.0.0-r386",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -69,7 +69,7 @@
     "@testing-library/react-hooks": "^8.0.1",
     "babel-jest": "^28.1.3",
     "babel-loader": "^8.2.5",
-    "esbuild": "^0.14.54",
+    "esbuild": "^0.15.5",
     "esbuild-plugin-svgr": "^1.0.1",
     "eslint": "^8.21.0",
     "eslint-config-google": "^0.14.0",

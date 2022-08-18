@@ -1,8 +1,9 @@
 import svgrPlugin from 'esbuild-plugin-svgr'
 
+
 const entry = 'src/index.jsx'
 const buildDir = 'docs'
-const build = {
+export const build = {
   entryPoints: [entry],
   bundle: true,
   minify: true,
@@ -24,5 +25,3 @@ const build = {
   logLevel: 'info',
   plugins: [svgrPlugin()],
 }
-
-export {build}
