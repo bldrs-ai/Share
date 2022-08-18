@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r388",
+  "version": "1.0.0-r389",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -30,7 +30,7 @@
     "@iconscout/react-unicons": "^1.1.6",
     "@material-ui/core": "^4.12.4",
     "@mui/icons-material": "^5.8.4",
-    "@mui/lab": "^5.0.0-alpha.94",
+    "@mui/lab": "^5.0.0-alpha.95",
     "@mui/material": "^5.9.2",
     "@mui/styled-engine": "^5.8.7",
     "@mui/styles": "^5.9.2",
