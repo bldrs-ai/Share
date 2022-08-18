@@ -1,6 +1,5 @@
 import React from 'react'
-import {render, screen, waitFor} from '@testing-library/react'
-import {act, renderHook} from '@testing-library/react-hooks'
+import {act, render, renderHook, screen, waitFor} from '@testing-library/react'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
 import SideDrawerWrapper from './SideDrawer'
