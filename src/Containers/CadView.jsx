@@ -96,6 +96,14 @@ export default function CadView({
   useEffect(() => {
     (async () => {
       await onModel()
+      const parts = location.pathname.split(/\//)
+      if (parts.length > 0) {
+        const targetId = parseInt(parts[parts.length - 1])
+        if (isFinite(targetId)) {
+          onElementSelect({expressID: targetId})
+          setExpandedElements(parts)
+        }
+      }
     })()
   }, [model])
 
@@ -108,10 +116,9 @@ export default function CadView({
 
 
   const location = useLocation()
-
   // Get the property of the element when the url changes
   useEffect(() => {
-    if (location.pathname.length <= 0) {
+    if (location.pathname.length <= 0 || Object.keys(rootElement) < 1) {
       return
     }
     const parts = location.pathname.split(/\//)
@@ -119,7 +126,7 @@ export default function CadView({
       const targetId = parseInt(parts[parts.length - 1])
       if (isFinite(targetId)) {
         onElementSelect({expressID: targetId})
-        // setExpandedElements(parts)
+        setExpandedElements(parts)
       }
     }
   // eslint-disable-next-line
