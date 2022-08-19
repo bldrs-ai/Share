@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
@@ -106,6 +106,24 @@ export default function CadView({
   }, [searchParams])
   /* eslint-enable */
 
+
+  const location = useLocation()
+
+  // Get the property of the element when the url changes
+  useEffect(() => {
+    if (location.pathname.length <= 0) {
+      return
+    }
+    const parts = location.pathname.split(/\//)
+    if (parts.length > 0) {
+      const targetId = parseInt(parts[parts.length - 1])
+      if (isFinite(targetId)) {
+        onElementSelect({expressID: targetId})
+        setExpandedElements(parts)
+      }
+    }
+  // eslint-disable-next-line
+  }, [location])
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
@@ -360,6 +378,7 @@ export default function CadView({
    */
   async function onElementSelect(elt) {
     const id = elt.expressID
+    console.log('in the onElement select', elt)
     if (id === undefined) {
       throw new Error('Selected element is missing Express ID')
     }
