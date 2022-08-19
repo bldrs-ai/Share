@@ -119,7 +119,7 @@ export default function CadView({
       const targetId = parseInt(parts[parts.length - 1])
       if (isFinite(targetId)) {
         onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
+        // setExpandedElements(parts)
       }
     }
   // eslint-disable-next-line
