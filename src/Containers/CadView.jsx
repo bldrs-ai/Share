@@ -75,6 +75,7 @@ export default function CadView({
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const location = useLocation()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -96,14 +97,7 @@ export default function CadView({
   useEffect(() => {
     (async () => {
       await onModel()
-      const parts = location.pathname.split(/\//)
-      if (parts.length > 0) {
-        const targetId = parseInt(parts[parts.length - 1])
-        if (isFinite(targetId)) {
-          onElementSelect({expressID: targetId})
-          setExpandedElements(parts)
-        }
-      }
+      extractElementPathFromURL()
     })()
   }, [model])
 
@@ -115,20 +109,20 @@ export default function CadView({
   /* eslint-enable */
 
 
-  const location = useLocation()
   // Get the property of the element when the url changes
   useEffect(() => {
     if (location.pathname.length <= 0 || Object.keys(rootElement) < 1) {
       return
     }
-    const parts = location.pathname.split(/\//)
-    if (parts.length > 0) {
-      const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
-      }
-    }
+    // const parts = location.pathname.split(/\//)
+    // if (parts.length > 0) {
+    //   const targetId = parseInt(parts[parts.length - 1])
+    //   if (isFinite(targetId)) {
+    //     onElementSelect({expressID: targetId})
+    //     setExpandedElements(parts)
+    //   }
+    // }
+    extractElementPathFromURL()
   // eslint-disable-next-line
   }, [location])
 
@@ -407,6 +401,21 @@ export default function CadView({
         setViewerStore(intializedViewer)
       }
     })
+  }
+
+
+  /**
+   * Extracts the path to the element from the url and selects the element
+   */
+  function extractElementPathFromURL() {
+    const parts = location.pathname.split(/\//)
+    if (parts.length > 0) {
+      const targetId = parseInt(parts[parts.length - 1])
+      if (isFinite(targetId)) {
+        onElementSelect({expressID: targetId})
+        setExpandedElements(parts)
+      }
+    }
   }
 
   return (
