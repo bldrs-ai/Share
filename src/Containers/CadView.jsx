@@ -97,7 +97,7 @@ export default function CadView({
   useEffect(() => {
     (async () => {
       await onModel()
-      extractElementPathFromURL()
+      selectElementBasedOnUrlPath()
     })()
   }, [model])
 
@@ -114,15 +114,7 @@ export default function CadView({
     if (location.pathname.length <= 0 || Object.keys(rootElement) < 1) {
       return
     }
-    // const parts = location.pathname.split(/\//)
-    // if (parts.length > 0) {
-    //   const targetId = parseInt(parts[parts.length - 1])
-    //   if (isFinite(targetId)) {
-    //     onElementSelect({expressID: targetId})
-    //     setExpandedElements(parts)
-    //   }
-    // }
-    extractElementPathFromURL()
+    selectElementBasedOnUrlPath()
   // eslint-disable-next-line
   }, [location])
 
@@ -407,7 +399,7 @@ export default function CadView({
   /**
    * Extracts the path to the element from the url and selects the element
    */
-  function extractElementPathFromURL() {
+  function selectElementBasedOnUrlPath() {
     const parts = location.pathname.split(/\//)
     if (parts.length > 0) {
       const targetId = parseInt(parts[parts.length - 1])
