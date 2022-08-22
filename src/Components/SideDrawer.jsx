@@ -109,7 +109,7 @@ export default function SideDrawerWrapper() {
     if (issueHash !== undefined && isDrawerOpen) {
       setSelectedIssueId(null)
     }
-  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn, isDrawerOpen])
+  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn])
 
 
   return (
