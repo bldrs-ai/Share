@@ -371,7 +371,6 @@ export default function CadView({
    */
   async function onElementSelect(elt) {
     const id = elt.expressID
-    console.log('in the onElement select', elt)
     if (id === undefined) {
       throw new Error('Selected element is missing Express ID')
     }
