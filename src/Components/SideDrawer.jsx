@@ -105,7 +105,11 @@ export default function SideDrawerWrapper() {
       openDrawer()
       turnCommentsOn()
     }
-  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn])
+    // This address bug #314 by clearing selected issue when new model is loaded
+    if (issueHash !== undefined && isDrawerOpen) {
+      setSelectedIssueId(null)
+    }
+  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn, isDrawerOpen])
 
 
   return (
