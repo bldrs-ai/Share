@@ -97,6 +97,7 @@ export default function SideDrawerWrapper() {
 
   useEffect(() => {
     const issueHash = getHashParams(location, 'i')
+    console.log('in the side drawer use Effect', issueHash)
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
       console.log('extracted comment id', extractedCommentId)
