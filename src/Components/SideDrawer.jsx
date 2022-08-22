@@ -99,6 +99,7 @@ export default function SideDrawerWrapper() {
     const issueHash = getHashParams(location, 'i')
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
+      console.log('extracted comment id', extractedCommentId)
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       turnCommentsOn()
