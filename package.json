@@ -35,6 +35,7 @@
     "@mui/styled-engine": "^5.8.7",
     "@mui/styles": "^5.9.2",
     "@octokit/rest": "^19.0.3",
+    "@testing-library/react-hooks": "^8.0.1",
     "normalize.css": "^8.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
