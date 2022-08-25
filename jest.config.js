@@ -43,8 +43,6 @@ module.exports = {
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [
     'src/Share.test.js',
-    'src/Components/SideDrawerPanels.test.js',
-    // 'src/Components/IssuesControl.test.js',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',

@@ -22,19 +22,18 @@ test('Issues NavBar Issues', () => {
   })
 
 
-  it('displays all Setting issues summaries when no issue selectedin zustand', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const {getByText, debug} = render(<ShareMock><Issues/></ShareMock>)
+test('Setting issues in zustand', async () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  const {getByText} = render(<ShareMock><Issues/></ShareMock>)
   await act(() => {
-      result.current.setSelectedIssueId(null)
-    })
-    await act(() => {
-      result.current.setIssues(MOCK_ISSUES)
-    })
-    debug()
-    expect(await getByText('open_workspace')).toBeInTheDocument()
-    expect(await getByText('closed_system')).toBeInTheDocument()
+    result.current.setSelectedIssueId(null)
   })
+  await act(() => {
+    result.current.setIssues(MOCK_ISSUES)
+  })
+  expect(await getByText('open_workspace')).toBeInTheDocument()
+  expect(await getByText('closed_system')).toBeInTheDocument()
+})
 
 
 test('Setting comments in zustand ', async () => {
