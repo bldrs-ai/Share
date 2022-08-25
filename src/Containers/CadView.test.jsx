@@ -1,36 +1,14 @@
 import React from 'react'
-import {render} from '@testing-library/react'
+import {render, screen, waitFor} from '@testing-library/react'
 import CadView from './CadView'
 import ShareMock from '../ShareMock'
 
 
+jest.mock('three')
 jest.mock('web-ifc-viewer')
 
-import {IfcViewerAPI} from 'web-ifc-viewer'
-
-
-const ifcObj = {
-  IFC: {
-    context: {
-      ifcCamera: {
-        cameraControls: {},
-      },
-    },
-    setWasmPath: jest.fn(),
-    loadIfcUrl: jest.fn(),
-  },
-  clipper: {
-    active: false,
-  },
-  context: {
-    resize: jest.fn(),
-  },
-}
-IfcViewerAPI.mockImplementation(() => ifcObj)
-
-
 describe('CadView', () => {
-  it('renders with mock IfcViewerAPI', () => {
+  it('renders with mock IfcViewerAPI', async () => {
     // Mock IfcViewerApi is in $repo/__mocks__/web-ifc-viewer.js
     const modelPath = {
       gitPath: '',
@@ -44,5 +22,8 @@ describe('CadView', () => {
             modelPath={modelPath}
           />
         </ShareMock>)
+    // Necessary to wait for some of the component to render to avoid
+    // act() warningings from testing-library.
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
   })
 })
