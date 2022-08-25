@@ -4,7 +4,11 @@ import CadView from './CadView'
 import ShareMock from '../ShareMock'
 
 
+// TODO(pablo): This mock suppresses "WARNING: Multiple instances of
+// Three.js being imported", but why is it being included if
+// web-ifc-viewer is being mocked?
 jest.mock('three')
+
 jest.mock('web-ifc-viewer')
 
 describe('CadView', () => {
