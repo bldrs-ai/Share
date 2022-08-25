@@ -14,6 +14,7 @@ import BaseRoutesMock from './BaseRoutesMock.test'
 export default function ShareMock({initialEntries, children} = {}) {
   const {theme, colorMode} = useTheme()
   const setRepository = useStore((state) => state.setRepository)
+  console.log('initial entries --- ', initialEntries)
   useEffect(() => {
     setRepository('pablo-mayrgundter', 'Share')
   }, [setRepository])
