@@ -42,6 +42,16 @@ export async function getAll(category, model) {
 }
 
 /**
+// Gets ids of all of the elements in the mmodel
+ * @param {Object} model
+ * @return {Array} all items of a category type
+ */
+export function getAllIds(model) {
+  return Array.from(new Set(model.geometry.attributes.expressID.array))
+}
+
+
+/**
  * newSubsetOfType creates a subset of a specified type
  * @param {String} category
  * @param {Object} model
