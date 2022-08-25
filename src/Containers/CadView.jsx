@@ -21,6 +21,7 @@ import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {categories, newSubsetOfType} from '../utils/viewer'
 
 
 /**
@@ -240,6 +241,9 @@ export default function CadView({
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
+    const newSubset = await newSubsetOfType(categories['IFCWINDOW'], model)
+    console.log('new subset', newSubset)
+    viewer.IFC.unpickIfcItems()
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
     initSearch(model, rootElt)
