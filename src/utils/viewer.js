@@ -66,3 +66,12 @@ export async function newSubsetOfType(category, model) {
   })
 }
 
+
+/**
+ * hide subset
+ * @param {Object} subset
+ */
+export function hideSubset(subset) {
+  console.log('in the hideSubset', subset)
+  subset.removeFromParent()
+}
