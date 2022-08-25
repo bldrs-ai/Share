@@ -9,7 +9,6 @@ import {
   IFCPLATE,
 } from 'web-ifc'
 
-
 // List of categories names
 export const categories = {
   IFCWALLSTANDARDCASE,
@@ -20,7 +19,6 @@ export const categories = {
   IFCPLATE,
   IFCMEMBER,
 }
-
 
 /**
 Get the name of a category based on the categories dictionary
@@ -43,12 +41,8 @@ export async function getAll(category, model) {
   return model.ifcManager.getAllItemsOfType(0, category, false)
 }
 
-// Creates a new subset containing all elements of a category
-
 /**
- * SideDrawer contains the ItemPanel and CommentPanel and allows for
- * show/hide from the right of the screen.
- * it is connected to the global store and controlled by isDrawerOpen property.
+ * newSubsetOfType creates a subset of a specified type
  * @param {String} category
  * @param {Object} model
  * @return {String} all items of a category type
@@ -66,12 +60,11 @@ export async function newSubsetOfType(category, model) {
   })
 }
 
-
 /**
  * hide subset
  * @param {Object} subset
+ * @return {Object}
  */
 export function hideSubset(subset) {
-  console.log('in the hideSubset', subset)
-  subset.removeFromParent()
+  return subset.removeFromParent()
 }
