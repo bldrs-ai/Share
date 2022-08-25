@@ -49,7 +49,7 @@ export function PropertiesPanel() {
           </div>
         }
       />
-      <div className={classes.contentContainer}>
+      <div className={classes.contentContainerProperties}>
         {selectedElement ? <ItemProperties/> : null}
       </div>
     </>
@@ -62,7 +62,7 @@ export const NotesPanel = () => {
   return (
     <>
       <IssuesNavBar/>
-      <div className={classes.contentContainer}>
+      <div className={classes.contentContainerNotes}>
         <Issues/>
       </div>
     </>
@@ -89,13 +89,21 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: '2px',
     alignItems: 'center',
   },
-  contentContainer: {
+  contentContainerProperties: {
     marginTop: '4px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     height: '100%',
     overflow: 'scroll',
+  },
+  contentContainerNotes: {
+    marginTop: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    overflow: 'auto',
   },
   controls: {
     height: '100%',
