@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {useNavigate, useSearchParams} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
@@ -75,13 +75,13 @@ export default function CadView({
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const location = useLocation()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
+    debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
   }, [modelPath])
 
@@ -89,17 +89,19 @@ export default function CadView({
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
+      debug().log('CadView#useEffect2[viewer], calling onViewer...')
+      if (viewer === null) {
+        debug().warn('CadView#useEffect2[viewer], viewer is still null')
+        return
+      }
+      if (modelPath === null) {
+        debug().log('CadView#useEffect2[viewer], required modelPath still null')
+        return
+      }
       await onViewer()
     })()
   }, [viewer])
 
-  // Model changes in onViewer (above)
-  useEffect(() => {
-    (async () => {
-      await onModel()
-      selectElementBasedOnUrlPath()
-    })()
-  }, [model])
 
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
@@ -108,15 +110,6 @@ export default function CadView({
   }, [searchParams])
   /* eslint-enable */
 
-
-  // Get the property of the element when the url changes
-  useEffect(() => {
-    if (location.pathname.length <= 0 || Object.keys(rootElement) < 1) {
-      return
-    }
-    selectElementBasedOnUrlPath()
-  // eslint-disable-next-line
-  }, [location])
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
@@ -134,7 +127,6 @@ export default function CadView({
          theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
-    debug().log('CadView#onModelPath, done setting new viewer')
   }
 
 
@@ -145,7 +137,10 @@ export default function CadView({
       return
     }
     addThemeListener()
-    await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const tmpModelRef = await loadIfc(pathToLoad)
+    await onModel(tmpModelRef)
+    selectElementBasedOnFilepath(pathToLoad)
   }
 
 
@@ -170,7 +165,7 @@ export default function CadView({
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
-    debug().log(`CadView#loadIfc: `, filepath, viewer)
+    debug().log(`CadView#loadIfc: `, filepath)
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
@@ -217,7 +212,9 @@ export default function CadView({
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
+      return loadedModel
     }
+    debug().error('CadView#loadIfc: Model load failed!')
   }
 
 
@@ -242,18 +239,20 @@ export default function CadView({
   }
 
 
-  /** Analyze loaded IFC model to configure UI elements. */
-  async function onModel() {
-    if (model === null) {
-      return
-    }
-    const rootElt = await model.ifcManager.getSpatialStructure(0, true)
+  /**
+   * Analyze loaded IFC model to configure UI elements.
+   * @param {object} m IFCjs loaded model.
+   */
+  async function onModel(m) {
+    assertDefined(m)
+    debug().log('CadView#onModel', m)
+    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
-    initSearch(model, rootElt)
+    initSearch(m, rootElt)
     // The spatial structure doesn't contain properties.  NavTree uses
     // the callback for onElementSelect in this class to fill out
     // details for the rest of the tree items, so just root needs
@@ -397,10 +396,12 @@ export default function CadView({
 
   /**
    * Extracts the path to the element from the url and selects the element
+   * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
-  function selectElementBasedOnUrlPath() {
-    const parts = location.pathname.split(/\//)
+  function selectElementBasedOnFilepath(filepath) {
+    const parts = filepath.split(/\//)
     if (parts.length > 0) {
+      debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
       if (isFinite(targetId)) {
         onElementSelect({expressID: targetId})
@@ -445,7 +446,7 @@ export default function CadView({
                         classes.operationsGroupOpen :
                         classes.operationsGroup}
         >
-          {viewer &&
+          {viewer && viewer.IFC &&
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
@@ -477,7 +478,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created: ', v)
+  debug().log('CadView#initViewer: viewer created:', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
