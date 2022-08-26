@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -25,8 +25,10 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigate = useNavigate()
   const urlParams = useParams()
-  const [modelPath, setModelPath] = useState(null)
+  // const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
+  const modelPath = useStore((state) => state.modelPath)
+  const setModelPath = useStore((state) => state.setModelPath)
 
 
   /**
