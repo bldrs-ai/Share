@@ -3,6 +3,7 @@ import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
+import ExtractLevelsMenu from './ExtractLevelsMenu'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
@@ -60,6 +61,7 @@ export default function OperationsGroup({unSelectItem}) {
           null
         }
         <CutPlaneMenu/>
+        <ExtractLevelsMenu/>
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>
