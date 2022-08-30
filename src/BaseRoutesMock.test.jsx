@@ -1,6 +1,7 @@
 import React from 'react'
 import {MemoryRouter, Routes, Route} from 'react-router-dom'
 import {render} from '@testing-library/react'
+import {Auth0Provider} from '@auth0/auth0-react'
 
 
 test('mockRoutes', () => {
@@ -21,10 +22,12 @@ export default function MockRoutes({initialEntries = ['/'], contentElt} = {}) {
   // so setting the default as defined in
   // https://reactrouter.com/docs/en/v6/routers/memory-router.
   return (
-    <MemoryRouter initialEntries={initialEntries}>
-      <Routes>
-        <Route path="/*" element={contentElt}/>
-      </Routes>
-    </MemoryRouter>
+    <Auth0Provider>
+      <MemoryRouter initialEntries={initialEntries}>
+        <Routes>
+          <Route path="/*" element={contentElt}/>
+        </Routes>
+      </MemoryRouter>
+    </Auth0Provider>
   )
 }

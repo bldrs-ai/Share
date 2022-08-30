@@ -30,17 +30,17 @@ export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigate = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const installPath = `${installPrefix}/`
+  const appPath = `${installPath}share`
 
   useEffect(() => {
-    if (location.pathname === installPrefix ||
-        location.pathname === (`${installPrefix }/`)) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
-      navigate(`${installPrefix }/share`)
+    if (location.pathname === installPrefix || location.pathname === installPath) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', appPath)
+      navigate(appPath)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = `${installPrefix }/`
   return (
     <Auth0Provider
       domain={OAUTH_DOMAIN}
@@ -48,15 +48,17 @@ export default function BaseRoutes({testElt = null}) {
       redirectUri={window.location.origin}
     >
       <Routes>
-        <Route path={basePath} element={<Outlet/>}>
+        <Route path={installPath} element={<Outlet/>}>
           <Route
             path="share/*"
             element={
               testElt ||
                 <ShareRoutes
                   installPrefix={installPrefix}
-                  appPrefix={`{installPrefix}/share`}/>
-            }/>
+                  appPrefix={appPath}
+                />
+            }
+          />
         </Route>
       </Routes>
     </Auth0Provider>

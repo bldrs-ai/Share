@@ -2,10 +2,8 @@ import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import {makeStyles, useTheme} from '@mui/styles'
 import AutorenewIcon from '@mui/icons-material/Autorenew'
-import {TooltipIconButton, TooltipLetterButton} from './Buttons'
+import {TooltipIconButton, TooltipLetterButton, TooltipLetterButtonDisabled} from './Buttons'
 import PersonIcon from '../assets/2D_Icons/Person.svg'
-// import LoginButton from './LoginButton'
-// import LogoutButton from './LogoutButton'
 
 
 /**
@@ -15,7 +13,6 @@ import PersonIcon from '../assets/2D_Icons/Person.svg'
 export default function AuthControl() {
   const classes = useStyles(useTheme())
   return (
-    // <div className={classes.root}>{isAuthenticated ? <LogoutButton/> : <LoginButton/>}</div>
     <div className={classes.root}><AvatarButton/></div>
   )
 }
@@ -39,16 +36,12 @@ function AvatarButton() {
   if (isLoading) {
     return (
       <div className={classes.loading}>
-        <TooltipIconButton
-          title='Loading...'
-          icon={<AutorenewIcon/>}
-          onClick={() => {}}
-        />
+        <AutorenewIcon/>
       </div>
     )
   }
   if (error) {
-    return <TooltipLetterButton fullString={'Error'}/>
+    return <TooltipLetterButtonDisabled fullString='Error'/>
   }
   if (isAuthenticated) {
     const name = user.nickname || user.name
