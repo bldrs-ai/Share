@@ -85,6 +85,8 @@ module.exports = {
     'func-call-spacing': ['error', 'never'],
     'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 1}],
     'react/jsx-closing-bracket-location': 'error',
+    'valid-jsdoc': 'off',
+    'jsdoc/newline-after-description': 'error',
   },
   settings: {
     react: {
