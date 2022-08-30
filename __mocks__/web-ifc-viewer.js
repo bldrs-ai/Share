@@ -1,25 +1,56 @@
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
-export default ifcjsMock
 
-const constructorMock = ifcjsMock.IfcViewerAPI
 // Not sure why this is required, but otherwise these internal fields
 // are not present in the instantiated IfcViewerAPI.
+const loadedModel = {
+  ifcManager: {
+    getSpatialStructure: jest.fn(),
+    getProperties: jest.fn((eltId) => ({})),
+  },
+  getIfcType: jest.fn(),
+}
+
+
 const impl = {
+  _isMock: true,
+  _loadedModel: loadedModel,
   IFC: {
     context: {
       ifcCamera: {
         cameraControls: {},
       },
     },
+    loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
     setWasmPath: jest.fn(),
-    loadIfcUrl: jest.fn(),
+    unpickIfcItems: jest.fn(),
   },
   clipper: {
     active: false,
   },
+  container: {
+    style: {},
+  },
   context: {
     resize: jest.fn(),
   },
+  getProperties: jest.fn((modelId, eltId) => {
+    return loadedModel.ifcManager.getProperties(eltId)
+  }),
 }
+const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)
-export {constructorMock as IfcViewerAPI}
+
+
+/**
+ * @return {object} The single mock instance of IfcViewerAPI.
+ */
+function __getIfcViewerAPIMockSingleton() {
+  return impl
+}
+
+
+export {
+  ifcjsMock as default,
+  constructorMock as IfcViewerAPI,
+  __getIfcViewerAPIMockSingleton,
+}

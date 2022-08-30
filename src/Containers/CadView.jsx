@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
+import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
@@ -20,7 +20,7 @@ import * as Privacy from '../privacy/Privacy'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
-import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
 /**
@@ -53,7 +53,7 @@ export default function CadView({
   // IFC
   const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
-  const elementsById = useState({})
+  const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
@@ -81,6 +81,7 @@ export default function CadView({
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
+    debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
   }, [modelPath])
 
@@ -92,18 +93,28 @@ export default function CadView({
     })()
   }, [viewer])
 
-  // Model changes in onViewer (above)
-  useEffect(() => {
-    (async () => {
-      await onModel()
-    })()
-  }, [model])
 
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  // Watch for path changes within the model.
+  // TODO(pablo): would be nice to have more consistent handling of path parsing.
+  const location = useLocation()
+  useEffect(() => {
+    if (model) {
+      (async () => {
+        const parts = location.pathname.split(/\.ifc/i)
+        const expectedPartCount = 2
+        if (parts.length === expectedPartCount) {
+          await selectElementBasedOnFilepath(parts[1])
+        }
+      })()
+    }
+  }, [location, model])
   /* eslint-enable */
 
 
@@ -123,7 +134,6 @@ export default function CadView({
          theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
-    debug().log('CadView#onModelPath, done setting new viewer')
   }
 
 
@@ -134,7 +144,10 @@ export default function CadView({
       return
     }
     addThemeListener()
-    await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const tmpModelRef = await loadIfc(pathToLoad)
+    await onModel(tmpModelRef)
+    selectElementBasedOnFilepath(pathToLoad)
   }
 
 
@@ -159,7 +172,7 @@ export default function CadView({
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
-    debug().log(`CadView#loadIfc: `, filepath, viewer)
+    debug().log(`CadView#loadIfc: `, filepath)
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
@@ -206,7 +219,9 @@ export default function CadView({
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
+      return loadedModel
     }
+    debug().error('CadView#loadIfc: Model load failed!')
   }
 
 
@@ -231,26 +246,22 @@ export default function CadView({
   }
 
 
-  /** Analyze loaded IFC model to configure UI elements. */
-  async function onModel() {
-    if (model === null) {
-      return
-    }
-    const rootElt = await model.ifcManager.getSpatialStructure(0, true)
+  /**
+   * Analyze loaded IFC model to configure UI elements.
+   * @param {object} m IFCjs loaded model.
+   */
+  async function onModel(m) {
+    assertDefined(m)
+    debug().log('CadView#onModel', m)
+    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
-    initSearch(model, rootElt)
-    // The spatial structure doesn't contain properties.  NavTree uses
-    // the callback for onElementSelect in this class to fill out
-    // details for the rest of the tree items, so just root needs
-    // special handling.
-    // TODO(pablo): not sure if this is expected or a problem with the
-    // IFC API.  Could also try to get the initial root elt load to
-    // use shared logic with setSelectedElement.
+    initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
+    // console.log('setupLookupAndParentLinks', rootElt, elementsById, rootProps)
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
@@ -288,7 +299,7 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItems(resultIDs)
+      selectItemsInScene(resultIDs)
       setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
@@ -308,27 +319,6 @@ export default function CadView({
   }
 
 
-  /**
-   * Select items in model when they are double-clicked.
-   */
-  async function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName === 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-          if (modelPath.gitpath) {
-            navigate(pathPrefix + modelPath.getRepoPath() + path)
-          } else {
-            navigate(pathPrefix + modelPath.filepath + path)
-          }
-          setSelectedElement(item)
-        }
-      }
-    }
-  }
-
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     setSelectedElement({})
@@ -341,8 +331,8 @@ export default function CadView({
    * Pick the given items in the scene.
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItems(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => `${id }`))
+  async function selectItemsInScene(resultIDs) {
+    setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
@@ -355,21 +345,57 @@ export default function CadView({
 
 
   /**
-   * Select the items in the NavTree and update item properties for ItemPanel.
-   * @param {Object} elt The selected IFC element.
+   * Select the items in the NavTree and update ItemProperties.
+   * Returns the ids of path parts from root to this elt in spatial
+   * structure.
+   * @param {number} expressId
+   * @return {array} pathIds
    */
-  async function onElementSelect(elt) {
-    const id = elt.expressID
-    if (id === undefined) {
-      throw new Error('Selected element is missing Express ID')
+  async function onElementSelect(expressId) {
+    const lookupElt = elementsById[parseInt(expressId)]
+    if (!lookupElt) {
+      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      return
     }
-    selectItems([id])
-    const props = await viewer.getProperties(0, elt.expressID)
+    selectItemsInScene([expressId])
+    const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
+    setExpandedElements(pathIds.map((n) => `${n}`))
+    setSelectedElements(`${expressId}`)
+    const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
+    return pathIds
+  }
 
-    // TODO(pablo): just found out this method is getting called a lot
-    // when i added navigation on select, which flooded the browser
-    // IPC.
+
+  /**
+   * Extracts the path to the element from the url and selects the element
+   * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
+   */
+  function selectElementBasedOnFilepath(filepath) {
+    const parts = filepath.split(/\//)
+    if (parts.length > 0) {
+      debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
+      const targetId = parseInt(parts[parts.length - 1])
+      if (isFinite(targetId)) {
+        onElementSelect(targetId)
+      }
+    }
+  }
+
+
+  /** Select items in model when they are double-clicked. */
+  async function setDoubleClickListener() {
+    window.ondblclick = async (event) => {
+      if (event.target && event.target.tagName === 'CANVAS') {
+        const item = await viewer.IFC.pickIfcItem(true)
+        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+          const pathIds = await onElementSelect(item.id)
+          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const path = pathIds.join('/')
+          navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        }
+      }
+    }
   }
 
 
@@ -382,6 +408,7 @@ export default function CadView({
       }
     })
   }
+
 
   return (
     <div className={classes.root}>
@@ -408,7 +435,6 @@ export default function CadView({
             selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
-            onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
@@ -451,7 +477,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created: ', v)
+  debug().log('CadView#initViewer: viewer created:', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
