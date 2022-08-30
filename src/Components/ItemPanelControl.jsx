@@ -12,6 +12,7 @@ import ListIcon from '../assets/2D_Icons/List.svg'
 /**
  * Container for ItemProperties. ItemProperties is wrapped in an
  * ItemPropertiesDrawer to toggle hiding.
+ *
  * @param {Object} model IFC model
  * @param {Object} element The currently selected IFC element
  * @param {Object} isOpenState React state object: {value, set}

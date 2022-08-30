@@ -10,6 +10,7 @@ let DEBUG_LEVEL = OFF
  * Create debug statement.
  * @param {Number} level Default is INFO.
  * @return {function} returned function is console.log or a no-op if debugging is turned off
+ *
  */
 export default function debug(level = INFO) {
   return level < DEBUG_LEVEL ? console : mockLog

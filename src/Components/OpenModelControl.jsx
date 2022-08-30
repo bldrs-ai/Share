@@ -11,6 +11,7 @@ import {ControlButton} from './Buttons'
 /**
  * Displays open warning.
  * @return {Object} React component
+ *
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)

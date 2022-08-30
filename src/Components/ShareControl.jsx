@@ -22,6 +22,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
 /**
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
+ *
  * @param {Object} viewer ifc viewer
  * @return {Object} The button react component, with a hosted
  *   ShareDialog component
@@ -50,6 +51,7 @@ export default function ShareControl({viewer}) {
  * The ShareDialog component lets the user control what state is
  * included in the shared URL and assists in copying the URL to
  * clipboard.
+ *
  * @param {Object} viewer IFC viewer
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed

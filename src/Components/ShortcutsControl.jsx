@@ -10,6 +10,7 @@ import {ControlButton} from './Buttons'
 /**
  * Displays keyboard shortcuts like how to add a cut plane.
  * @return {Object} React component
+ *
  */
 export default function ShortcutsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)

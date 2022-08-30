@@ -17,6 +17,7 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 
 /**
  * Handles path demuxing to pass to CadView.
+ *
  * @param {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
  * @param {string} appPrefix e.g. /share is the prefix for this component.
  * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
@@ -91,6 +92,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 /**
  * Navigate to index.ifc with nice camera setting.
+ *
  * @param {Object} navigate
  * @param {string} appPrefix
  */

@@ -1,5 +1,6 @@
 /**
  * Convert string to integer.
+ *
  * @param {string} s Input string.
  * @return {Number} integer.
  */
@@ -14,6 +15,7 @@ export function stoi(s) {
 
 /**
  * Create a simple key by removing any non alpha-numeric character
+ *
  * @param {string} str To convert
  * @return {string} The converted result
  */

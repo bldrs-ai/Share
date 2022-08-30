@@ -10,6 +10,7 @@ import {useNavigate} from 'react-router-dom'
 
 /**
  * Display sample models control button
+ *
  * @return {Object} React component
  */
 export default function SampleModelsControl() {

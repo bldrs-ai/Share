@@ -15,6 +15,7 @@ import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
 
 /**
  * Button to toggle About panel on and off
+ *
  * @param {string} installPrefix For use in static asset links.
  * @return {Object} The AboutControl react component.
  */
@@ -48,6 +49,7 @@ export default function AboutControl({installPrefix}) {
 
 /**
  * The AboutDialog component
+ *
  * @param {boolean} isDialogDisplayed
  * @param {function} setIsDialogDisplayed
  * @param {string} installPrefix node
@@ -67,6 +69,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
 
 /**
  * The content portion of the AboutDialog
+ *
  * @param {string} installPrefix node
  * @return {Object} React component
  */

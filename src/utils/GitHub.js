@@ -7,6 +7,7 @@ import {isRunningLocally} from './network'
 
 /**
  * Fetch all of the issues from GitHub.
+ *
  * @param {Object} repository
  * @return {Array} The issue array of issue objects.
  */
@@ -20,6 +21,7 @@ export async function getIssues(repository) {
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
+ *
  * @param {Object} repository
  * @param {Number} issueId
  * @return {Object} The issue object.
@@ -33,6 +35,7 @@ export async function getIssue(repository, issueId) {
 
 /**
  * The comments should have the following structure:
+ *
  * @param {Object} repository
  * @param {Number} issueId
  * @return {Array} The comments array.
@@ -55,6 +58,7 @@ export async function getComments(repository, issueId) {
 
 /**
  * The comments should have the following structure:
+ *
  * @param {Object} repository
  * @param {Number} issueId
  * @param {Number} commentId
@@ -84,6 +88,7 @@ export async function getComment(repository, issueId, commentId) {
 /**
  * Fetch the resource at the given path from GitHub, substituting in
  * the given args.
+ *
  * @param {Object} repository
  * @param {Object} path The resource path with arg substitution markers
  * @param {Object} args The args to substitute

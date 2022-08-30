@@ -1,5 +1,6 @@
 /**
  * Data stored in Zustand for UI state.
+ *
  * @param {function} set
  * @param {function} get
  * @return {Object} Zustand slice.

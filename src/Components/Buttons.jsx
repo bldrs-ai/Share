@@ -124,6 +124,7 @@ export function ControlButton({
 /**
  * A FormButton is a TooltipIconButton but with parameterized type for
  * form actions.
+ *
  * @param {string} title
  * @param {Object} icon
  * @param {string} type Type of button (and icon to render)
@@ -148,6 +149,7 @@ export function FormButton({title, icon, type = 'submit', placement = 'left', si
 /**
  * A FormButton is a TooltipIconButton but with parameterized type for
  * form actions.
+ *
  * @param {string} title
  * @param {Object} icon
  * @param {string} type Type of button (and icon to render)

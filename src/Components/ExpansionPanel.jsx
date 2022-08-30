@@ -8,6 +8,7 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 /**
  * Expansion panels are used to package property sets
+ *
  * @param {string} detail title of the panel
  * @param {string} summary content of the panel
  * @param {boolean} expandState global control of the panel

@@ -23,6 +23,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
 
 /**
  * Issue card
+ *
  * @param {number} id issue id
  * @param {number} index issue index
  * @param {string} username username of the issue author

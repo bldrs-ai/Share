@@ -30,6 +30,7 @@ export function isAnalyticsAllowed() {
 
 /**
  * Enable or disable analytics cookies
+ *
  * @param {boolean} isAllowed Is analytics enabled
  */
 export function setIsAnalyticsAllowed(isAllowed) {

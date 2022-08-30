@@ -85,6 +85,7 @@ export class MockViewer {
 
   /**
    * Get the IFC type.
+   *
    * @param {string} modelId
    * @param {string} id
    * @return {Object} returns property object
@@ -96,6 +97,7 @@ export class MockViewer {
 
 /**
  * Create a mock element with the given label.
+ *
  * @param {string} label
  * @param {Number} id Express ID for the element.
  * @return {Object} Mock IFC element

@@ -35,6 +35,7 @@ let count = 0
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
  * @return {Object}
+ *
  */
 export default function CadView({
   installPrefix,
@@ -156,6 +157,7 @@ export default function CadView({
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
+   *
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
@@ -264,6 +266,7 @@ export default function CadView({
    * URL.  Enables search bar when done.
    * @param {Object} m The IfcViewerAPI instance.
    * @param {Object} rootElt Root ifc element for recursive indexing.
+   *
    */
   function initSearch(m, rootElt) {
     searchIndex.clearIndex()

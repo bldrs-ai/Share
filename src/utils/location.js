@@ -99,6 +99,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
  * Removes the given named hash param.
  * @param {Object} location
  * @param {String} name prefix of the params to fetch
+ *
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')

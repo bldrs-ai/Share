@@ -13,6 +13,7 @@ import Hamburger from '../assets/2D_Icons/Menu.svg'
 
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel
+ *
  * @param {Number} topOffset global offset defined in the cad view
  * @param {function} onClickMenuCb callback passed from cad view
  * @return {Object} The button react component

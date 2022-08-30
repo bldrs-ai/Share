@@ -47,6 +47,7 @@ export const CAMERA_PREFIX = 'c'
 /**
  * Set camera position from window location hash and add listener for
  * hash change.
+ *
  * @param {Object} location Either window.location or react-router location
  * @param {Object} cameraControls obtained from the viewer
  */
@@ -60,6 +61,7 @@ function onLoad(location, cameraControls) {
 /**
  * Sets the camera position to the coordinate encoded in the URL
  * hash if it is present
+ *
  * @param {Object} location window.location
  * @param {Object} cameraControls obtained from the viewer
  */
@@ -74,6 +76,7 @@ export function onHash(location, cameraControls) {
 
 /**
  * Set the camera position
+ *
  * @param {String} encodedParams camera position
  * @param {Object} cameraControls obtained from the viewer
  */
@@ -145,6 +148,7 @@ export function hasValidUrlParams() {
 
 /**
  * Adds camera coords to url.
+ *
  * @param {Object} cameraControls obtained from the viewer
  */
 export function addCameraUrlParams(cameraControls) {

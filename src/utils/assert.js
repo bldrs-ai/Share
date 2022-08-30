@@ -1,5 +1,6 @@
 /**
  * If cond is true, do nothing.  Otherwise, throw error with msg.
+ *
  * @param {string} cond path to the button icon.
  * @param {string} msg path to the button icon.
  * @throws If the condition is false.
@@ -16,6 +17,7 @@ export function assert(cond, msg) {
  * Equivalent to calling assertDefined on each parameter.
  * @param {array} args Variable length arguments to assert are defined.
  * @return {array} args That was passed in
+ *
  * @throws If any argument is not defined.
  */
 export function assertDefined(...args) {

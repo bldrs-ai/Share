@@ -7,6 +7,7 @@ import SampleModelsControl from './SampleModelsControl'
 
 /**
  * Base group contains Settings, ModelUpload, About
+ *
  * @param {string} installPrefix Serving prefix for the app, for use in
  * constructing static asset links.
  * @param {Object} fileOpen ItemPanel component

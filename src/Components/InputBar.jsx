@@ -9,6 +9,7 @@ import {TooltipToggleButton} from './Buttons'
 
 /**
  * Search bar
+ *
  * @param {Object} startAdornment Child component at start of search bar
  * @param {function} onSubmit
  * @return {Object} The SearchBar react component

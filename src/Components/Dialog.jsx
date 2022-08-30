@@ -10,6 +10,7 @@ import {assertDefined} from '../utils/assert'
 
 /**
  * A generic base dialog component.
+ *
  * @param {Object} icon Leading icon above header description
  * @param {string} headerText Short message describing the operation
  * @param {boolean} isDialogDisplayed

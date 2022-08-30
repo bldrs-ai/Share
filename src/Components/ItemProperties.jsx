@@ -13,6 +13,7 @@ import useStore from '../store/useStore'
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
  * @return {Object} The ItemProperties react component
+ *
  */
 export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
@@ -54,6 +55,7 @@ export default function ItemProperties() {
 /**
  * If string is longer than maxWidth characters, wrap it in a tooltip.
  * Otherwise wrap it in a paragraph.
+ *
  * @param {string} str
  * @param {Number} maxWidth (default 20)
  * @return {Object} React component
@@ -148,6 +150,7 @@ async function createPsetsList(model, element, classes, expandAll) {
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
  * @param {Object} model IFC model
+ *
  * @param {string} propName Property name
  * @param {Object|string} propValue Property value
  * @param {Number} serial
@@ -253,6 +256,7 @@ async function quantities(model, quantitiesObj, serial) {
 /**
  * Convert a HasProperties to react component
  * @param {Object} model IFC model
+ *
  * @param {Array} eltArr Array of IFC elements
  * @param {Number} serial
  * @param {function} ifcToRowCb Callback to convert an IFC elt to a table row
@@ -300,6 +304,7 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
  * @param {Object} d2 Table cell data 2
  * @param {Number} serial
  * @return {Object} Table row react component
+ *
  */
 function row(d1, d2, serial) {
   if (serial === undefined) {
@@ -319,6 +324,7 @@ function row(d1, d2, serial) {
  * @param {Object} d1 Table cell data 1
  * @param {Object} d2 Table cell data 2
  * @return {Object} The react component
+ *
  */
 function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
@@ -342,6 +348,7 @@ function Row({d1, d2}) {
  * @param {Number} deg Degrees
  * @param {Number} min Minutes
  * @param {Number} sec Seconds
+ *
  * @return {string} Formatted DMS coorindate string
  */
 const dms = (deg, min, sec) => {

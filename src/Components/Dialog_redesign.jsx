@@ -13,6 +13,7 @@ import InputBar from './InputBar'
 
 /**
  * A generic base dialog component.
+ *
  * @param {string} headerContent Short message describing the operation
  * @param {string} bodyContent
  * @param {boolean} isDialogDisplayed
@@ -46,6 +47,7 @@ export default function Dialog({
 
 /**
  * Content for the open Dialog
+ *
  * @return {Object} React component
  */
 export function OpenDialogBodyContent() {
@@ -79,6 +81,7 @@ export function OpenDialogBodyContent() {
 
 /**
  * Title for the open Dialog
+ *
  * @return {Object} React component
  */
 export function OpenDialogHeaderContent() {

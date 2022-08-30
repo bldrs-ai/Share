@@ -6,6 +6,7 @@ import {
 /**
  *Helper to create a mock IFC doc object tree.
  *@return {Object} The mock IFC obj.
+ *
  */
 function makeTestTree() {
   return {

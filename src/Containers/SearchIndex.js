@@ -17,6 +17,7 @@ export default class SearchIndex {
    * Recursively visits elt and indexes properties.
    * @param {Object} model IFC model.
    * @param {Object} elt async callback for rendering sub-object
+   *
    */
   indexElement(model, elt) {
     const type = Ifc.getType(model, elt)
@@ -60,6 +61,7 @@ export default class SearchIndex {
 
   /**
    * Returns a set of word tokens from the string.
+   *
    * @param {str} str
    * @return {Set} token
    */
@@ -69,6 +71,7 @@ export default class SearchIndex {
 
   /**
    * Create index set of found results
+   *
    * @param {Object} index
    * @param {string} key
    * @return {Object} The index set.
@@ -83,6 +86,7 @@ export default class SearchIndex {
 
   /**
    * Add entry for key in index pointing to given elt
+   *
    * @param {Object} index
    * @param {string} key
    * @param {Object} elt
@@ -94,6 +98,7 @@ export default class SearchIndex {
 
   /**
    * Add entry for key in index pointing to given elt for each key in the set
+   *
    * @param {Object} index index of the element in the set
    * @param {Set} strSet set of strings
    * @param {Object} elt IFC element
@@ -114,6 +119,7 @@ export default class SearchIndex {
 
   /**
    * Search the index with the given query and return the express IDs of matching IFC elements
+   *
    * @param {string} query The search query.
    * @return {string} resultIDs
    */

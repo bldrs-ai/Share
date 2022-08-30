@@ -153,7 +153,9 @@ function loadTheme(mode) {
 
 /**
  * Look for explicit night, otherwise day
+ *
  * See https://drafts.csswg.org/mediaqueries-5/#prefers-color-scheme
+ *
  * @return {string}
  * @private
  */

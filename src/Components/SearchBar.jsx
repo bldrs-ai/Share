@@ -21,6 +21,7 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 /**
  * Search bar component
+ *
  * @param {function} onClickMenuCb callback
  * @param {boolean} showNavPanel toggle
  * @return {Object} The SearchBar react component
