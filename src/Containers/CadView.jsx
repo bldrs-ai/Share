@@ -311,7 +311,7 @@ export default function CadView({
   /**
    * Select items in model when they are double-clicked.
    */
-  async function setDoubleClickListener() {
+  function setDoubleClickListener() {
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
