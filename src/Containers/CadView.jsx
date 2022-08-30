@@ -363,7 +363,7 @@ export default function CadView({
     if (id === undefined) {
       throw new Error('Selected element is missing Express ID')
     }
-    selectItems([id])
+    await selectItems([id])
     const props = await viewer.getProperties(0, elt.expressID)
     setSelectedElement(props)
 
