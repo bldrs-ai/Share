@@ -87,6 +87,7 @@ module.exports = {
     'react/jsx-closing-bracket-location': 'error',
     'valid-jsdoc': 'off',
     'jsdoc/newline-after-description': 'error',
+    'jsdoc/check-types': 'error',
   },
   settings: {
     react: {
