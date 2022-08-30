@@ -12,6 +12,7 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
     'plugin:storybook/recommended',
+    'plugin:jsdoc/recommended',
   ],
   overrides: [{
     files: ['*.js', '*.mjs', '*.jsx'],
@@ -33,6 +34,7 @@ module.exports = {
     'import',
     'react',
     'jsx-a11y',
+    'jsdoc',
   ],
   rules: {
     'import/newline-after-import': ['error', {count: 2}],
@@ -87,6 +89,11 @@ module.exports = {
   settings: {
     react: {
       version: '17.0.2',
+    },
+    jsdoc: {
+      tagNamePreference: {
+        'returns': 'return',
+      },
     },
   },
   reportUnusedDisableDirectives: true,
