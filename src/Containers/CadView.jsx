@@ -357,7 +357,7 @@ export default function CadView({
       console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
-    selectItemsInScene([expressId])
+    await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
     setSelectedElements(`${expressId}`)
@@ -384,7 +384,7 @@ export default function CadView({
 
 
   /** Select items in model when they are double-clicked. */
-  async function setDoubleClickListener() {
+  function setDoubleClickListener() {
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)

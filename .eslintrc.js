@@ -83,6 +83,7 @@ module.exports = {
     'func-call-spacing': ['error', 'never'],
     'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 1}],
     'react/jsx-closing-bracket-location': 'error',
+    'require-await': 'error',
   },
   settings: {
     react: {

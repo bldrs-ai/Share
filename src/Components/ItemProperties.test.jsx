@@ -9,10 +9,8 @@ import ItemProperties from './ItemProperties'
 test('ItemProperties for single element', async () => {
   const testLabel = 10
   const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
+  await act(() => {
     result.current.setSelectedElement({expressID: 10})
-  })
-  act(() => {
     result.current.setModelStore(new MockModel)
   })
 
