@@ -88,6 +88,8 @@ module.exports = {
     'valid-jsdoc': 'off',
     'jsdoc/newline-after-description': 'error',
     'jsdoc/check-types': 'error',
+    'jsdoc/require-param-description': 'off',
+    'jsdoc/require-returns-description': 'off',
   },
   settings: {
     react: {
