@@ -20,9 +20,9 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @param {Object} viewer The IFC viewer, which contains the
+ * @param {object} viewer The IFC viewer, which contains the
  *   cameraControls
- * @return {Object} React component
+ * @return {object} React component
  */
 export default function CameraControl({viewer}) {
   const setCameraControls = useStore((state) => state.setCameraControls)
@@ -48,8 +48,8 @@ export const CAMERA_PREFIX = 'c'
  * Set camera position from window location hash and add listener for
  * hash change.
  *
- * @param {Object} location Either window.location or react-router location
- * @param {Object} cameraControls obtained from the viewer
+ * @param {object} location Either window.location or react-router location
+ * @param {object} cameraControls obtained from the viewer
  */
 function onLoad(location, cameraControls) {
   debug().log('CameraControl#onLoad')
@@ -62,8 +62,8 @@ function onLoad(location, cameraControls) {
  * Sets the camera position to the coordinate encoded in the URL
  * hash if it is present
  *
- * @param {Object} location window.location
- * @param {Object} cameraControls obtained from the viewer
+ * @param {object} location window.location
+ * @param {object} cameraControls obtained from the viewer
  */
 export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
@@ -77,8 +77,8 @@ export function onHash(location, cameraControls) {
 /**
  * Set the camera position
  *
- * @param {String} encodedParams camera position
- * @param {Object} cameraControls obtained from the viewer
+ * @param {string} encodedParams camera position
+ * @param {object} cameraControls obtained from the viewer
  */
 export function setCameraFromParams(encodedParams, cameraControls) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
@@ -106,7 +106,7 @@ const paramRegex = new RegExp(paramPattern)
 // Exported for testing
 /**
  * @param {string} encodedParams
- * @return {Object|undefined} The coordinates if present and valid else undefined
+ * @return {object|undefined} The coordinates if present and valid else undefined
  */
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
@@ -149,7 +149,7 @@ export function hasValidUrlParams() {
 /**
  * Adds camera coords to url.
  *
- * @param {Object} cameraControls obtained from the viewer
+ * @param {object} cameraControls obtained from the viewer
  */
 export function addCameraUrlParams(cameraControls) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render

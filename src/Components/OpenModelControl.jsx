@@ -10,8 +10,8 @@ import {ControlButton} from './Buttons'
 
 /**
  * Displays open warning.
- * @return {Object} React component
  *
+ * @return {object} React component
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -34,8 +34,8 @@ export default function OpenModelControl({fileOpen}) {
 
 /**
  * @param {boolean} isDialogDisplayed
- * @param {function} setIsDialogDisplayed
- * @return {Object} React component
+ * @param {Function} setIsDialogDisplayed
+ * @return {object} React component
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const classes = useStyles()

@@ -15,9 +15,9 @@ export function assert(cond, msg) {
 
 /**
  * Equivalent to calling assertDefined on each parameter.
- * @param {array} args Variable length arguments to assert are defined.
- * @return {array} args That was passed in
  *
+ * @param {Array} args Variable length arguments to assert are defined.
+ * @return {Array} args That was passed in
  * @throws If any argument is not defined.
  */
 export function assertDefined(...args) {

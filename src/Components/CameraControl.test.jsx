@@ -51,12 +51,12 @@ test('onHash, target', () => {
 /** Mocks the IFCjs camera. */
 class MockCamera {
   /**
-   * @param {Number} x
-   * @param {Number} y
-   * @param {Number} z
-   * @param {Number} tx
-   * @param {Number} ty
-   * @param {Number} tz
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @param {number} tx
+   * @param {number} ty
+   * @param {number} tz
    * @param {boolean} doTween
    */
   constructor(x = 0, y = 0, z = 0, tx = 0, ty = 0, tz = 0, doTween = false) {
@@ -71,10 +71,10 @@ class MockCamera {
 
 
   /**
-   * @param {Number} x
-   * @param {Number} y
-   * @param {Number} z
-   * @param {Boolean} doTween
+   * @param {number} x
+   * @param {number} y
+   * @param {number} z
+   * @param {boolean} doTween
    */
   setPosition(x, y, z, doTween) {
     this.x = x
@@ -101,10 +101,10 @@ class MockCamera {
 
 
   /**
-   * @param {Number} tx
-   * @param {Number} ty
-   * @param {Number} tz
-   * @param {Boolean} doTween
+   * @param {number} tx
+   * @param {number} ty
+   * @param {number} tz
+   * @param {boolean} doTween
    */
   setTarget(tx, ty, tz, doTween) {
     this.tx = tx

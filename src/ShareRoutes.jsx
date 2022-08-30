@@ -35,7 +35,7 @@ import debug from './utils/debug'
  *              ^... path to the component in BaseRoutes.jsx.
  *
  * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
- * @return {Object}
+ * @return {object}
  */
 export default function ShareRoutes({installPrefix, appPrefix}) {
   return (
@@ -82,7 +82,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
  *   https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
  * @param {string} appPrefix The install prefix, e.g. /share.
- * @return {Object}
+ * @return {object}
  */
 function Forward({appPrefix}) {
   const location = useLocation()
@@ -132,7 +132,7 @@ export function githubUrlOrPathToSharePath(urlWithPath) {
 /**
  * Look for any obvious problems with the given url.
  *
- * @param {Object} urlStr
+ * @param {object} urlStr
  * @return {boolean} return true if url is found
  * @throws Error if the argument have path slash '/' characters after
  * trimming host and appinstal prefix.

@@ -10,9 +10,9 @@ import {TooltipToggleButton} from './Buttons'
 /**
  * Search bar
  *
- * @param {Object} startAdornment Child component at start of search bar
- * @param {function} onSubmit
- * @return {Object} The SearchBar react component
+ * @param {object} startAdornment Child component at start of search bar
+ * @param {Function} onSubmit
+ * @return {object} The SearchBar react component
  */
 export default function InputBar({startAdorment, onSubmit}) {
   const [inputText, setInputText] = useState('')

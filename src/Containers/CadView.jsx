@@ -34,8 +34,8 @@ let count = 0
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
- * @return {Object}
  *
+ * @return {object}
  */
 export default function CadView({
   installPrefix,
@@ -264,9 +264,9 @@ export default function CadView({
    * Index the model starting at the given rootElt, clearing any
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
-   * @param {Object} m The IfcViewerAPI instance.
-   * @param {Object} rootElt Root ifc element for recursive indexing.
    *
+   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
     searchIndex.clearIndex()
@@ -342,6 +342,7 @@ export default function CadView({
 
   /**
    * Pick the given items in the scene.
+   *
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItems(resultIDs) {
@@ -359,7 +360,8 @@ export default function CadView({
 
   /**
    * Select the items in the NavTree and update item properties for ItemPanel.
-   * @param {Object} elt The selected IFC element.
+   *
+   * @param {object} elt The selected IFC element.
    */
   async function onElementSelect(elt) {
     const id = elt.expressID
@@ -442,7 +444,7 @@ export default function CadView({
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {Object} IfcViewerAPI viewer, width a .container property
+ * @return {object} IfcViewerAPI viewer, width a .container property
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {

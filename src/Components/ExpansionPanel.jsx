@@ -12,8 +12,8 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
  * @param {string} detail title of the panel
  * @param {string} summary content of the panel
  * @param {boolean} expandState global control of the panel
- * @param {Object} classes styles for the panel
- * @return {Object}
+ * @param {object} classes styles for the panel
+ * @return {object}
  */
 export default function Property({detail, summary, expandState, classes}) {
   useEffect(() => setExpand(expandState), [expandState])

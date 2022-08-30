@@ -18,7 +18,7 @@ import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
 export const ISSUE_PREFIX = 'i'
 
 
-/** @return {Object} React component. */
+/** @return {object} React component. */
 export function IssuesNavBar() {
   const classes = useStyles(useTheme())
   const issues = useStore((state) => state.issues)
@@ -102,7 +102,7 @@ export function IssuesNavBar() {
 }
 
 
-/** @return {Object} List of issues and comments as react component. */
+/** @return {object} List of issues and comments as react component. */
 export function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)

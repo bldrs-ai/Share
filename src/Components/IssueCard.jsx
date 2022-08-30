@@ -34,7 +34,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
  * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
  * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
  * @param {boolean} isComment Comments/replies are formated differently
- * @return {Object} React component
+ * @return {object} React component
  */
 export default function IssueCard({
   id = null,

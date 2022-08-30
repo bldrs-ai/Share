@@ -17,8 +17,8 @@ import InputBar from './InputBar'
  * @param {string} headerContent Short message describing the operation
  * @param {string} bodyContent
  * @param {boolean} isDialogDisplayed
- * @param {function} setIsDialogDisplayed
- * @return {Object} React component
+ * @param {Function} setIsDialogDisplayed
+ * @return {object} React component
  */
 export default function Dialog({
   headerContent,
@@ -48,7 +48,7 @@ export default function Dialog({
 /**
  * Content for the open Dialog
  *
- * @return {Object} React component
+ * @return {object} React component
  */
 export function OpenDialogBodyContent() {
   const classes = useStyles(useTheme())
@@ -82,7 +82,7 @@ export function OpenDialogBodyContent() {
 /**
  * Title for the open Dialog
  *
- * @return {Object} React component
+ * @return {object} React component
  */
 export function OpenDialogHeaderContent() {
   const classes = useStyles(useTheme())

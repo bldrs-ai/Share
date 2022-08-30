@@ -39,8 +39,8 @@ test('assert', () => {
 
 /**
  * Catches expected failures or throws if no failure.
- * @param {function} assertCb The function to call which should fail.
  *
+ * @param {Function} assertCb The function to call which should fail.
  */
 function expectFailure(assertCb) {
   try {

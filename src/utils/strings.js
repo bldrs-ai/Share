@@ -2,7 +2,7 @@
  * Convert string to integer.
  *
  * @param {string} s Input string.
- * @return {Number} integer.
+ * @return {number} integer.
  */
 export function stoi(s) {
   const i = parseInt(s)
@@ -26,7 +26,7 @@ export function toKey(str) {
 
 /**
  * @param {string} str
- * @return {array} url matches
+ * @return {Array} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf

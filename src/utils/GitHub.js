@@ -8,7 +8,7 @@ import {isRunningLocally} from './network'
 /**
  * Fetch all of the issues from GitHub.
  *
- * @param {Object} repository
+ * @param {object} repository
  * @return {Array} The issue array of issue objects.
  */
 export async function getIssues(repository) {
@@ -22,9 +22,9 @@ export async function getIssues(repository) {
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
  *
- * @param {Object} repository
- * @param {Number} issueId
- * @return {Object} The issue object.
+ * @param {object} repository
+ * @param {number} issueId
+ * @return {object} The issue object.
  */
 export async function getIssue(repository, issueId) {
   const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
@@ -36,8 +36,8 @@ export async function getIssue(repository, issueId) {
 /**
  * The comments should have the following structure:
  *
- * @param {Object} repository
- * @param {Number} issueId
+ * @param {object} repository
+ * @param {number} issueId
  * @return {Array} The comments array.
  */
 export async function getComments(repository, issueId) {
@@ -59,10 +59,10 @@ export async function getComments(repository, issueId) {
 /**
  * The comments should have the following structure:
  *
- * @param {Object} repository
- * @param {Number} issueId
- * @param {Number} commentId
- * @return {Object} The comment object.
+ * @param {object} repository
+ * @param {number} issueId
+ * @param {number} commentId
+ * @return {object} The comment object.
  */
 export async function getComment(repository, issueId, commentId) {
   const comments = await getGitHub(
@@ -89,10 +89,10 @@ export async function getComment(repository, issueId, commentId) {
  * Fetch the resource at the given path from GitHub, substituting in
  * the given args.
  *
- * @param {Object} repository
- * @param {Object} path The resource path with arg substitution markers
- * @param {Object} args The args to substitute
- * @return {Object} The object at the resource
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args to substitute
+ * @return {object} The object at the resource
  */
 async function getGitHub(repository, path, args) {
   assertDefined(repository.orgName)
@@ -371,9 +371,9 @@ transformation.
 export class MockOctokit {
   /**
    * @param {string} path
-   * @param {Object} account
-   * @param {Object} args
-   * @return {Object} Mock response
+   * @param {object} account
+   * @param {object} args
+   * @return {object} Mock response
    */
   request(path, account, args) {
     debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)

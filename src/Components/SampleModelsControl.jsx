@@ -11,7 +11,7 @@ import {useNavigate} from 'react-router-dom'
 /**
  * Display sample models control button
  *
- * @return {Object} React component
+ * @return {object} React component
  */
 export default function SampleModelsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -34,8 +34,8 @@ export default function SampleModelsControl() {
 
 /**
  * @param {boolean} isDialogDisplayed
- * @param {function} setIsDialogDisplayed
- * @return {Object} React component
+ * @param {Function} setIsDialogDisplayed
+ * @return {React.Component} React component
  */
 function SampleModelsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [selected, setSelected] = React.useState('')

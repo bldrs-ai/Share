@@ -15,9 +15,9 @@ export default class SearchIndex {
 
   /**
    * Recursively visits elt and indexes properties.
-   * @param {Object} model IFC model.
-   * @param {Object} elt async callback for rendering sub-object
    *
+   * @param {object} model IFC model.
+   * @param {object} elt async callback for rendering sub-object
    */
   indexElement(model, elt) {
     const type = Ifc.getType(model, elt)
@@ -72,9 +72,9 @@ export default class SearchIndex {
   /**
    * Create index set of found results
    *
-   * @param {Object} index
+   * @param {object} index
    * @param {string} key
-   * @return {Object} The index set.
+   * @return {object} The index set.
    */
   findCreateIndexSet(index, key) {
     let set = index[key]
@@ -87,9 +87,9 @@ export default class SearchIndex {
   /**
    * Add entry for key in index pointing to given elt
    *
-   * @param {Object} index
+   * @param {object} index
    * @param {string} key
-   * @param {Object} elt
+   * @param {object} elt
    */
   indexElementByString(index, key, elt) {
     this.findCreateIndexSet(index, key).add(elt)
@@ -99,9 +99,9 @@ export default class SearchIndex {
   /**
    * Add entry for key in index pointing to given elt for each key in the set
    *
-   * @param {Object} index index of the element in the set
+   * @param {object} index index of the element in the set
    * @param {Set} strSet set of strings
-   * @param {Object} elt IFC element
+   * @param {object} elt IFC element
    */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {

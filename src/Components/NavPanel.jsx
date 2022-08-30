@@ -14,9 +14,9 @@ import Hamburger from '../assets/2D_Icons/Menu.svg'
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel
  *
- * @param {Number} topOffset global offset defined in the cad view
- * @param {function} onClickMenuCb callback passed from cad view
- * @return {Object} The button react component
+ * @param {number} topOffset global offset defined in the cad view
+ * @param {Function} onClickMenuCb callback passed from cad view
+ * @return {object} The button react component
  */
 export function NavPanelControl({topOffset, onClickMenuCb}) {
   const classes = useStyles({topOffset: topOffset})
@@ -35,15 +35,15 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
 }
 
 /**
- * @param {Object} model
- * @param {Object} element
+ * @param {object} model
+ * @param {object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
  * @param {Array} expandedElements
- * @param {function} onElementSelect
- * @param {function} setExpandedElements
+ * @param {Function} onElementSelect
+ * @param {Function} setExpandedElements
  * @param {string} pathPrefix
- * @return {Object}
+ * @return {object}
  */
 export default function NavPanel({
   model,

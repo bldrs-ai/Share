@@ -12,8 +12,8 @@ import useStore from '../store/useStore'
 
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
- * @return {Object} The ItemProperties react component
  *
+ * @return {object} The ItemProperties react component
  */
 export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
@@ -57,8 +57,8 @@ export default function ItemProperties() {
  * Otherwise wrap it in a paragraph.
  *
  * @param {string} str
- * @param {Number} maxWidth (default 20)
- * @return {Object} React component
+ * @param {number} maxWidth (default 20)
+ * @return {object} React component
  */
 function paragraphMaybeWithTooltip(str, maxWidth = 15) {
   const inner = (<Typography variant='body1'>{str}</Typography>)
@@ -74,12 +74,12 @@ function paragraphMaybeWithTooltip(str, maxWidth = 15) {
  *
  *    createPropertyTable -> prettyProps -> createPropertyTable
  *
- * @param {Object} model IFC model
- * @param {Object} ifcProps Caller should pass the root IFC element.
+ * @param {object} model IFC model
+ * @param {object} ifcProps Caller should pass the root IFC element.
  * Recursive calls will pass children
- * @param {Number} serial
+ * @param {number} serial
  * @param {boolean} isPset Is property set
- * @return {Object} A property table react component
+ * @return {object} A property table react component
  */
 async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) {
   const ROWS = []
@@ -116,11 +116,11 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
 
 
 /**
- * @param {Object} model IFC model
- * @param {Object} element IFC element
- * @param {Object} classes Styles
+ * @param {object} model IFC model
+ * @param {object} element IFC element
+ * @param {object} classes Styles
  * @param {boolean} expandAll React state expansion toggle
- * @return {Object} A list of property sets react component
+ * @return {object} A list of property sets react component
  */
 async function createPsetsList(model, element, classes, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
@@ -149,12 +149,12 @@ async function createPsetsList(model, element, classes, expandAll) {
 /**
  * The keys are defined here:
  * https://standards.buildingsmart.org/IFC/DEV/IFC4_3/RC2/HTML/schema/ifcproductextension/lexical/ifcelement.htm
- * @param {Object} model IFC model
  *
+ * @param {object} model IFC model
  * @param {string} propName Property name
- * @param {Object|string} propValue Property value
- * @param {Number} serial
- * @return {Object}
+ * @param {object | string} propValue Property value
+ * @param {number} serial
+ * @return {object}
  */
 async function prettyProps(model, propName, propValue, serial = 0) {
   /* eslint-enable */
@@ -212,10 +212,10 @@ async function prettyProps(model, propName, propValue, serial = 0) {
 
 
 /**
- * @param {Object} model IFC model
+ * @param {object} model IFC model
  * @param {Array} hasPropertiesArr Array of HasProperties elements
- * @param {Number} serial
- * @return {Object} Table rows for given hasPropertiesArr
+ * @param {number} serial
+ * @return {object} Table rows for given hasPropertiesArr
  */
 async function hasProperties(model, hasPropertiesArr, serial) {
   if (!Array.isArray(hasPropertiesArr)) {
@@ -232,10 +232,10 @@ async function hasProperties(model, hasPropertiesArr, serial) {
 
 
 /**
- * @param {Object} model IFC model
- * @param {Object} quantitiesObj Quantities element
- * @param {Number} serial
- * @return {Object} Table of quantities
+ * @param {object} model IFC model
+ * @param {object} quantitiesObj Quantities element
+ * @param {number} serial
+ * @return {object} Table of quantities
  */
 async function quantities(model, quantitiesObj, serial) {
   return await unpackHelper(model, quantitiesObj, serial, (ifcElt, rows) => {
@@ -255,12 +255,12 @@ async function quantities(model, quantitiesObj, serial) {
 
 /**
  * Convert a HasProperties to react component
- * @param {Object} model IFC model
  *
+ * @param {object} model IFC model
  * @param {Array} eltArr Array of IFC elements
- * @param {Number} serial
- * @param {function} ifcToRowCb Callback to convert an IFC elt to a table row
- * @return {Object} The react component or null if fail
+ * @param {number} serial
+ * @param {Function} ifcToRowCb Callback to convert an IFC elt to a table row
+ * @return {object} The react component or null if fail
  */
 async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
   // HasProperties behaves a little special.
@@ -300,11 +300,11 @@ async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
 
 /**
  * HTML table row
- * @param {Object} d1 Table cell data 1
- * @param {Object} d2 Table cell data 2
- * @param {Number} serial
- * @return {Object} Table row react component
  *
+ * @param {object} d1 Table cell data 1
+ * @param {object} d2 Table cell data 2
+ * @param {number} serial
+ * @return {object} Table row react component
  */
 function row(d1, d2, serial) {
   if (serial === undefined) {
@@ -321,10 +321,12 @@ function row(d1, d2, serial) {
 
 /**
  * Wrapper component for a table row
- * @param {Object} d1 Table cell data 1
- * @param {Object} d2 Table cell data 2
- * @return {Object} The react component
  *
+ * @param d1.d1
+ * @param {object} d1 Table cell data 1
+ * @param {object} d2 Table cell data 2
+ * @param d1.d2
+ * @return {object} The react component
  */
 function Row({d1, d2}) {
   if (d1 === null || d1 === undefined ||
@@ -345,10 +347,10 @@ function Row({d1, d2}) {
 
 /**
  * A coordinate in Degree-Minutes-Seconds (DMS) syntax, e..g. 1° 2' 3''
- * @param {Number} deg Degrees
- * @param {Number} min Minutes
- * @param {Number} sec Seconds
  *
+ * @param {number} deg Degrees
+ * @param {number} min Minutes
+ * @param {number} sec Seconds
  * @return {string} Formatted DMS coorindate string
  */
 const dms = (deg, min, sec) => {

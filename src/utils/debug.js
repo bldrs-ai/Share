@@ -8,9 +8,9 @@ let DEBUG_LEVEL = OFF
 
 /**
  * Create debug statement.
- * @param {Number} level Default is INFO.
- * @return {function} returned function is console.log or a no-op if debugging is turned off
  *
+ * @param {number} level Default is INFO.
+ * @return {Function} returned function is console.log or a no-op if debugging is turned off
  */
 export default function debug(level = INFO) {
   return level < DEBUG_LEVEL ? console : mockLog
@@ -18,7 +18,7 @@ export default function debug(level = INFO) {
 
 
 /**
- * @param {Number} level One of OFF, INFO, DEBUG, VERBOSE.
+ * @param {number} level One of OFF, INFO, DEBUG, VERBOSE.
  */
 export function setDebugLevel(level) {
   if (!Number.isFinite(level) || level < OFF || level > VERBOSE) {

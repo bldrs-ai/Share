@@ -1,8 +1,8 @@
 /**
  * Recursively visit nodes if the node has children
  *
- * @param {Object} elt tree element
- * @param {function} observeCb Callback for each child/element pair:
+ * @param {object} elt tree element
+ * @param {Function} observeCb Callback for each child/element pair:
  * observeCb(child, elt).
  */
 export function visitTree(elt, observeCb) {
@@ -18,8 +18,8 @@ export function visitTree(elt, observeCb) {
 /**
  * Visits an element tree and sets parent links for each element.
  *
- * @param {Object} rootElt Root IFC element.
- * @param {Object} elementsById An already existing map of elements by ID.
+ * @param {object} rootElt Root IFC element.
+ * @param {object} elementsById An already existing map of elements by ID.
  */
 export function setupLookupAndParentLinks(rootElt, elementsById) {
   if (elementsById === undefined || elementsById === null) {
@@ -35,8 +35,8 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
 /**
  * Generate a URL address fragment for the element.
  *
- * @param {Object} elt IFC element.
- * @param {function} getNameCb Instance of.
+ * @param {object} elt IFC element.
+ * @param {Function} getNameCb Instance of.
  * @return {string} The URL path fragment for the element.
  */
 export function computeElementPath(elt, getNameCb) {
