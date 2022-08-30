@@ -5,53 +5,55 @@ import useStore from '../store/useStore'
 import {IssuesNavBar, Issues} from './IssuesControl'
 
 
-test('Issues NavBar Issues', () => {
-  render(<ShareMock><IssuesNavBar/></ShareMock>)
-  expect(screen.getByText('Notes')).toBeInTheDocument()
-})
+describe('IssuesControl', () => {
+  it('displays NavBar', () => {
+    render(<ShareMock><IssuesNavBar/></ShareMock>)
+    expect(screen.getByText('Notes')).toBeInTheDocument()
+  })
 
 
-test('Issues NavBar Comments', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+  it('NavBar changes to back nav when issue selected', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    render(<ShareMock><IssuesNavBar/></ShareMock>)
+    expect(screen.getByTitle('Back to the list')).toBeInTheDocument()
   })
-  render(<ShareMock><IssuesNavBar/></ShareMock>)
-  expect(screen.getByTitle('Back to the list')).toBeInTheDocument()
-})
 
 
-test('Issues ', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
-    result.current.setSelectedIssueId(null)
+  it('displays all Issues summaries when no issue selected', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => {
+      result.current.setSelectedIssueId(null)
+    })
+    act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    render(<ShareMock><Issues/></ShareMock>)
+    expect(screen.getByText('open_workspace')).toBeInTheDocument()
+    expect(screen.getByText('closed_system')).toBeInTheDocument()
   })
-  act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  render(<ShareMock><Issues/></ShareMock>)
-  expect(screen.getByText('open_workspace')).toBeInTheDocument()
-  expect(screen.getByText('closed_system')).toBeInTheDocument()
-})
 
 
-test('Issues ', () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+  it('displays a single issue when issue selected in store', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    act(() => {
+      result.current.setComments(MOCK_COMMENTS)
+    })
+    render(<ShareMock><Issues/></ShareMock>)
+    expect(screen.getByText('open_workspace')).toBeInTheDocument()
+    expect(screen.getByText('The Architecture, Engineering and Construction')).toBeInTheDocument()
+    expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
   })
-  act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  act(() => {
-    result.current.setComments(MOCK_COMMENTS)
-  })
-  render(<ShareMock><Issues/></ShareMock>)
-  expect(screen.getByText('open_workspace')).toBeInTheDocument()
-  expect(screen.getByText('The Architecture, Engineering and Construction')).toBeInTheDocument()
-  expect(screen.getByText('Email is the medium that still facilitates major portion of communication')).toBeInTheDocument()
 })
 
 

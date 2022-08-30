@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useState} from 'react'
-import {grey, blueGrey} from '@mui/material/colors'
+import {grey} from '@mui/material/colors'
 import {createTheme} from '@mui/material/styles'
 import * as Privacy from './privacy/Privacy'
 
@@ -66,7 +66,8 @@ function loadTheme(mode) {
       main: grey[100],
     },
     secondary: {
-      main: blueGrey[100],
+      main: grey[200],
+      background: grey[800],
     },
     custom: {
       highLight: '#C8E8C7',
@@ -79,7 +80,8 @@ function loadTheme(mode) {
       main: grey[800],
     },
     secondary: {
-      main: blueGrey[600],
+      main: grey[600],
+      background: grey[200],
     },
     custom: {
       highLight: '#70AB32',
@@ -96,11 +98,33 @@ function loadTheme(mode) {
     h5: {fontSize: '1rem'},
     body2: {fontSize: '.8rem'},
   }
+  // TODO(pablo): still not sure how this works.  The docs make it
+  // look like we don't need an explicit color scheme for dark; that
+  // it will be created automatically.  I think I've had that working
+  // before, but this is all that works now.
+  // https://mui.com/customization/dark-mode/
+  let activePalette = mode === Themes.Day ? day : night
+  activePalette = {...activePalette, ...{
+    mode: mode === Themes.Day ? 'light' : 'dark',
+    background: {
+      paper: activePalette.primary.main,
+    },
+  }}
   const components = {
     overrides: {
       MuiStartIcon: {
         root: {
           marginRight: '40px',
+        },
+      },
+    },
+    MuiTreeItem: {
+      styleOverrides: {
+        root: {
+          '& > div.Mui-selected, & > div.Mui-selected:hover': {
+            color: activePalette.secondary.main,
+            backgroundColor: activePalette.secondary.background,
+          },
         },
       },
     },
@@ -128,18 +152,6 @@ function loadTheme(mode) {
       },
     },
   }
-  // TODO(pablo): still not sure how this works.  The docs make it
-  // look like we don't need an explicit color scheme for dark; that
-  // it will be created automatically.  I think I've had that working
-  // before, but this is all that works now.
-  // https://mui.com/customization/dark-mode/
-  let activePalette = mode === Themes.Day ? day : night
-  activePalette = {...activePalette, ...{
-    mode: mode === Themes.Day ? 'light' : 'dark',
-    background: {
-      paper: activePalette.primary.main,
-    },
-  }}
   const theme = {
     components: components,
     typography: typography,
