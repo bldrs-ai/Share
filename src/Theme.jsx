@@ -73,6 +73,8 @@ function loadTheme(mode) {
       highLight: '#C8E8C7',
       disable: 'lightGrey',
       neutral: 'white',
+      preselect: '#CCCCCC',
+      select: '#99E397',
     },
   }
   const night = {
@@ -87,7 +89,8 @@ function loadTheme(mode) {
       highLight: '#70AB32',
       disable: 'lightGrey',
       neutral: 'white',
-
+      preselect: '#CCCCCC',
+      select: '#99E397',
     },
   }
   const typography = {
