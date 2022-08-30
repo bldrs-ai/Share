@@ -1,5 +1,4 @@
-import React, {useEffect} from 'react'
-import {useLocation} from 'react-router-dom'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
@@ -10,6 +9,7 @@ import {assertDefined} from '../utils/assert'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import Hamburger from '../assets/2D_Icons/Menu.svg'
+
 
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel
@@ -55,24 +55,6 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-
-  const location = useLocation()
-
-  useEffect(() => {
-    if (location.pathname.length <= 0) {
-      return
-    }
-    const parts = location.pathname.split(/\//)
-    if (parts.length > 0) {
-      const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
-      }
-    }
-  // eslint-disable-next-line
-  }, [location])
-
   const classes = useStyles()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
