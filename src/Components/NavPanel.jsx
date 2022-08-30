@@ -39,7 +39,6 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
  * @param {Array} expandedElements
- * @param {function} onElementSelect
  * @param {function} setExpandedElements
  * @param {string} pathPrefix
  * @return {Object}
@@ -50,7 +49,6 @@ export default function NavPanel({
   selectedElements,
   defaultExpandedElements,
   expandedElements,
-  onElementSelect,
   setExpandedElements,
   pathPrefix,
 }) {
@@ -80,8 +78,6 @@ export default function NavPanel({
               model={model}
               element={element}
               pathPrefix={pathPrefix}
-              onElementSelect={onElementSelect}
-              setExpandedElements={setExpandedElements}
             />
           }
         </TreeView>

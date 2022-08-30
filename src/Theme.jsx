@@ -121,7 +121,7 @@ function loadTheme(mode) {
     MuiTreeItem: {
       styleOverrides: {
         root: {
-          '& > div.Mui-selected': {
+          '& > div.Mui-selected, & > div.Mui-selected:hover': {
             color: activePalette.secondary.main,
             backgroundColor: activePalette.secondary.background,
           },

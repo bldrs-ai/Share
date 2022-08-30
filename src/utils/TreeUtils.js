@@ -30,6 +30,7 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
   })
 }
 
+
 /**
  * Generate a URL address fragment for the element.
  * @param {Object} elt IFC element.
@@ -37,6 +38,9 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
  * @return {array} The element path array
  */
 export function computeElementPathIds(elt, getIdCb) {
+  if (elt === undefined || elt === null) {
+    throw new Error('Illegal argument: elt undefined')
+  }
   if (getIdCb === undefined || getIdCb === null) {
     throw new Error('Illegal argument: getIdCb undefined')
   }

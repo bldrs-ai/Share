@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
+import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import {Color} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
@@ -53,7 +53,7 @@ export default function CadView({
   // IFC
   const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
-  const elementsById = useState({})
+  const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
@@ -99,6 +99,22 @@ export default function CadView({
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  // Watch for path changes within the model.
+  // TODO(pablo): would be nice to have more consistent handling of path parsing.
+  const location = useLocation()
+  useEffect(() => {
+    if (model) {
+      (async () => {
+        const parts = location.pathname.split(/\.ifc/i)
+        const expectedPartCount = 2
+        if (parts.length === expectedPartCount) {
+          await selectElementBasedOnFilepath(parts[1])
+        }
+      })()
+    }
+  }, [location, model])
   /* eslint-enable */
 
 
@@ -244,14 +260,8 @@ export default function CadView({
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
     initSearch(m, rootElt)
-    // The spatial structure doesn't contain properties.  NavTree uses
-    // the callback for onElementSelect in this class to fill out
-    // details for the rest of the tree items, so just root needs
-    // special handling.
-    // TODO(pablo): not sure if this is expected or a problem with the
-    // IFC API.  Could also try to get the initial root elt load to
-    // use shared logic with setSelectedElement.
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
+    // console.log('setupLookupAndParentLinks', rootElt, elementsById, rootProps)
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
@@ -289,7 +299,7 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItems(resultIDs)
+      selectItemsInScene(resultIDs)
       setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
@@ -309,27 +319,6 @@ export default function CadView({
   }
 
 
-  /**
-   * Select items in model when they are double-clicked.
-   */
-  async function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName === 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const pathIds = computeElementPathIds(elementsById[item.id], (elt) => elt.expressID)
-          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-          const path = pathIds.join('/')
-          navigate(`${pathPrefix}${repoFilePath}/${path}`)
-          setSelectedElement(item)
-          setExpandedElements(pathIds.map((n) => `${n}`))
-          setSelectedElements(`${item.id}`)
-        }
-      }
-    }
-  }
-
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     setSelectedElement({})
@@ -342,7 +331,7 @@ export default function CadView({
    * Pick the given items in the scene.
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItems(resultIDs) {
+  async function selectItemsInScene(resultIDs) {
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
@@ -356,32 +345,25 @@ export default function CadView({
 
 
   /**
-   * Select the items in the NavTree and update item properties for ItemPanel.
-   * @param {Object} elt The selected IFC element.
+   * Select the items in the NavTree and update ItemProperties.
+   * Returns the ids of path parts from root to this elt in spatial
+   * structure.
+   * @param {number} expressId
+   * @return {array} pathIds
    */
-  async function onElementSelect(elt) {
-    const id = elt.expressID
-    if (id === undefined) {
-      throw new Error('Selected element is missing Express ID')
+  async function onElementSelect(expressId) {
+    const lookupElt = elementsById[parseInt(expressId)]
+    if (!lookupElt) {
+      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      return
     }
-    selectItems([id])
-    const props = await viewer.getProperties(0, elt.expressID)
+    selectItemsInScene([expressId])
+    const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
+    setExpandedElements(pathIds.map((n) => `${n}`))
+    setSelectedElements(`${expressId}`)
+    const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
-
-    // TODO(pablo): just found out this method is getting called a lot
-    // when i added navigation on select, which flooded the browser
-    // IPC.
-  }
-
-
-  const addThemeListener = () => {
-    colorModeContext.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
-      }
-    })
+    return pathIds
   }
 
 
@@ -395,11 +377,38 @@ export default function CadView({
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
       if (isFinite(targetId)) {
-        onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
+        onElementSelect(targetId)
       }
     }
   }
+
+
+  /** Select items in model when they are double-clicked. */
+  async function setDoubleClickListener() {
+    window.ondblclick = async (event) => {
+      if (event.target && event.target.tagName === 'CANVAS') {
+        const item = await viewer.IFC.pickIfcItem(true)
+        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+          const pathIds = await onElementSelect(item.id)
+          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const path = pathIds.join('/')
+          navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        }
+      }
+    }
+  }
+
+
+  const addThemeListener = () => {
+    colorModeContext.addThemeChangeListener((newMode, theme) => {
+      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
+        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(intializedViewer)
+        setViewerStore(intializedViewer)
+      }
+    })
+  }
+
 
   return (
     <div className={classes.root}>
@@ -426,7 +435,6 @@ export default function CadView({
             selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
-            onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)

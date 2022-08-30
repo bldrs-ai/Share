@@ -4,7 +4,7 @@ const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 // are not present in the instantiated IfcViewerAPI.
 const loadedModel = {
   ifcManager: {
-    getSpatialStructure: jest.fn(() => ({expressID: 0, children: []})),
+    getSpatialStructure: jest.fn(),
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),

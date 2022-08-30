@@ -45,16 +45,12 @@ const NavTreePropTypes = {
  * @param {Object} element IFC element of the model
  * @param {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @param {string} onElementSelect Callback when tree item element is selected
- * @param {string} setExpandedElements React state setter to update items to expand in tree
  * @return {Object} React component
  */
 export default function NavTree({
   model,
   element,
   pathPrefix,
-  onElementSelect,
-  setExpandedElements,
 }) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
@@ -94,7 +90,6 @@ export default function NavTree({
 
     useEffect(() => {
       if (selectedElement) {
-        onElementSelect(selectedElement)
         const newPath =
               `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
         navigate(newPath)
@@ -148,8 +143,6 @@ export default function NavTree({
                 model={model}
                 element={child}
                 pathPrefix={pathPrefix}
-                onElementSelect={onElementSelect}
-                setExpandedElements={setExpandedElements}
               />
             </React.Fragment>
           )

@@ -3,6 +3,7 @@ import {render, renderHook, screen, waitFor} from '@testing-library/react'
 import CadView from './CadView'
 import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
+import {makeTestTree} from '../utils/TreeUtils.test'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
@@ -16,6 +17,8 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `index.ifc`,
     }
+    const viewer = __getIfcViewerAPIMockSingleton()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -34,11 +37,14 @@ describe('CadView', () => {
 
 
   it('renders and selects the element ID from URL', async () => {
-    const eltId = 1234
+    const testTree = makeTestTree()
+    const targetEltId = testTree.children[0].expressID
     const modelPath = {
-      filepath: `index.ifc/${eltId}`,
+      filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
+    const viewer = __getIfcViewerAPIMockSingleton()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -51,14 +57,13 @@ describe('CadView', () => {
         </ShareMock>)
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
-    const viewer = __getIfcViewerAPIMockSingleton()
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
     expect(getPropsCalls[0][0]).toBe(0) // call 2, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
-    expect(getPropsCalls[1][1]).toBe(eltId) // call 2, arg 2
+    expect(getPropsCalls[1][1]).toBe(targetEltId) // call 2, arg 2
     await actAsyncFlush()
   })
 })

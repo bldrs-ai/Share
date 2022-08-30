@@ -3,11 +3,12 @@ import {
   setupLookupAndParentLinks,
 } from './TreeUtils'
 
+
 /**
- *Helper to create a mock IFC doc object tree.
- *@return {Object} The mock IFC obj.
+ * Helper to create a mock IFC doc object tree.
+ * @return {Object} The mock IFC obj.
  */
-function makeTestTree() {
+export function makeTestTree() {
   return {
     name: 'a',
     expressID: 0,
