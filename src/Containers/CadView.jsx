@@ -1,5 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
@@ -156,8 +156,10 @@ export default function CadView({
       color: theme.palette.custom.select,
       depthTest: true,
     })
-    viewer.IFC.selector.preselection.material = preselectMat
-    viewer.IFC.selector.selection.material = selectMat
+    if (viewer.IFC.selector) {
+      viewer.IFC.selector.preselection.material = preselectMat
+      viewer.IFC.selector.selection.material = selectMat
+    }
     addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
