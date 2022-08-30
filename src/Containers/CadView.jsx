@@ -89,15 +89,6 @@ export default function CadView({
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
-      debug().log('CadView#useEffect2[viewer], calling onViewer...')
-      if (viewer === null) {
-        debug().warn('CadView#useEffect2[viewer], viewer is still null')
-        return
-      }
-      if (modelPath === null) {
-        debug().log('CadView#useEffect2[viewer], required modelPath still null')
-        return
-      }
       await onViewer()
     })()
   }, [viewer])
@@ -446,7 +437,7 @@ export default function CadView({
                         classes.operationsGroupOpen :
                         classes.operationsGroup}
         >
-          {viewer && viewer.IFC &&
+          {viewer &&
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}

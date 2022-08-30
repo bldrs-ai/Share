@@ -29,14 +29,14 @@ export default function CameraControl({viewer}) {
   assertDefined(viewer, viewer.IFC, viewer.IFC.context, viewer.IFC.context.ifcCamera)
   const setCameraControls = useStore((state) => state.setCameraControls)
   const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
+  setCameraControls(cameraControls)
   const location = useLocation()
 
 
   useEffect(() => {
-    setCameraControls(cameraControls)
     onHash(location, cameraControls)
     onLoad(location, cameraControls)
-  }, [location, cameraControls, setCameraControls])
+  }, [location, cameraControls])
 
 
   // NOTE: NOT DISPLAYED
