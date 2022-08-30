@@ -20,7 +20,7 @@ import * as Privacy from '../privacy/Privacy'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
-import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
 /**
@@ -317,13 +317,13 @@ export default function CadView({
       if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
         if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-          if (modelPath.gitpath) {
-            navigate(pathPrefix + modelPath.getRepoPath() + path)
-          } else {
-            navigate(pathPrefix + modelPath.filepath + path)
-          }
+          const pathIds = computeElementPathIds(elementsById[item.id], (elt) => elt.expressID)
+          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const path = pathIds.join('/')
+          navigate(`${pathPrefix}${repoFilePath}/${path}`)
           setSelectedElement(item)
+          setExpandedElements(pathIds.map((n) => `${n}`))
+          setSelectedElements(`${item.id}`)
         }
       }
     }
@@ -343,7 +343,7 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItems(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => `${id }`))
+    setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {

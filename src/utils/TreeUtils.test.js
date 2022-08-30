@@ -1,5 +1,5 @@
 import {
-  computeElementPath,
+  computeElementPathIds,
   setupLookupAndParentLinks,
 } from './TreeUtils'
 
@@ -40,18 +40,18 @@ test('Test setupLookupAndParentLinks', () => {
 })
 
 
-test('Test computeElementPath', () => {
+test('Test computeElementPathIds', () => {
   const tree = makeTestTree()
   const a = tree
   const b = tree.children[0]
   const c = tree.children[0].children[0]
-  const getNameCb = (elt) => elt.name
-  expect('/a').toEqual(computeElementPath(a, getNameCb))
-  expect('/b').toEqual(computeElementPath(b, getNameCb))
-  expect('/c').toEqual(computeElementPath(c, getNameCb))
+  const getIdCb = (elt) => elt.name
+  expect(computeElementPathIds(a, getIdCb)).toEqual(['a'])
+  expect(computeElementPathIds(b, getIdCb)).toEqual(['b'])
+  expect(computeElementPathIds(c, getIdCb)).toEqual(['c'])
   const eltsById = {}
   setupLookupAndParentLinks(tree, eltsById)
-  expect('/a').toEqual(computeElementPath(a, getNameCb))
-  expect('/a/b').toEqual(computeElementPath(b, getNameCb))
-  expect('/a/b/c').toEqual(computeElementPath(c, getNameCb))
+  expect(computeElementPathIds(a, getIdCb)).toEqual(['a'])
+  expect(computeElementPathIds(b, getIdCb)).toEqual(['a', 'b'])
+  expect(computeElementPathIds(c, getIdCb)).toEqual(['a', 'b', 'c'])
 })

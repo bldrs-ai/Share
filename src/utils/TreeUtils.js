@@ -33,12 +33,13 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
 /**
  * Generate a URL address fragment for the element.
  * @param {Object} elt IFC element.
- * @param {function} getNameCb Instance of.
- * @return {string} The URL path fragment for the element.
+ * @param {function} getIdCb Instance of.
+ * @return {array} The element path array
  */
-export function computeElementPath(elt, getNameCb) {
-  if (getNameCb === undefined || getNameCb === null) {
-    throw new Error('Illegal argument: getNameCb undefined')
+export function computeElementPathIds(elt, getIdCb) {
+  if (getIdCb === undefined || getIdCb === null) {
+    throw new Error('Illegal argument: getIdCb undefined')
   }
-  return `${elt.parent ? computeElementPath(elt.parent, getNameCb) : '' }/${ getNameCb(elt)}`
+  const id = getIdCb(elt)
+  return elt.parent ? computeElementPathIds(elt.parent, getIdCb).concat(id) : [id]
 }
