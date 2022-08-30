@@ -29,7 +29,10 @@ export const TooltipIconButton = ({
   const classes = useStyles(useTheme())
 
   return (
-    <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
+    <Tooltip
+      classes={{tooltip: classes.root}}
+      title={title}
+      describeChild placement={placement}
       data-testid={dataTestId}
     >
       <IconButton className={classes.root} onClick={onClick} size={size}>

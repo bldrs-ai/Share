@@ -34,7 +34,8 @@ export default function BaseRoutes({testElt = null}) {
   const appPath = `${installPath}share`
 
   useEffect(() => {
-    if (location.pathname === installPrefix || location.pathname === installPath) {
+    if (location.pathname === installPrefix ||
+        location.pathname === installPath) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', appPath)
       navigate(appPath)
     }

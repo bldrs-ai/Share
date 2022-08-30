@@ -182,7 +182,6 @@ export default function CadView({
       }
     }
 
-
     const loadedModel = await viewer.IFC.loadIfcUrl(
         filepath,
         !urlHasCameraParams(), // fitToFrame
