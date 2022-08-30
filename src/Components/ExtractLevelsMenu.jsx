@@ -43,6 +43,12 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
   }
 
+  const planView = () => {
+    // viewer.context.ifcCamera.projectionManager.setOrthoCamera()
+    viewer.context.ifcCamera.toggleProjection()
+    viewer.plans.moveCameraTo2DPlanPosition(true)
+  }
+
   const createPlane = (normalDirection) => {
     const modelCenter = getModelCenter(model)
     const planeHash = getHashParams(location, 'p')
@@ -143,6 +149,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           },
         }}
       >
+        <MenuItem onClick={() => planView()}> Plan View</MenuItem>
         {floorplanMenu}
       </Menu>
     </div>
