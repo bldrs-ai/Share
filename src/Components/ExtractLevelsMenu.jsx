@@ -47,6 +47,10 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     // viewer.context.ifcCamera.projectionManager.setOrthoCamera()
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
+    const yConst = 100 // value used in moveCameraTo2DPlanPosition
+    const modelCenterX = getModelCenter(model).x
+    const modelCenterZ = getModelCenter(model).z
+    viewer.context.ifcCamera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
   }
 
   const createPlane = (normalDirection) => {
