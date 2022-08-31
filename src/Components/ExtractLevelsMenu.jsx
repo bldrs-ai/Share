@@ -11,6 +11,7 @@ import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
+import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -159,7 +160,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           },
         }}
       >
-        <MenuItem onClick={() => planView()}> Plan View</MenuItem>
+        <TooltipIconButton
+          title={'Toggle Plan View'}
+          icon={<PlanViewIcon/>}
+          onClick={planView}
+        />
         {floorplanMenu}
       </Menu>
     </div>
