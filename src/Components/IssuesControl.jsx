@@ -179,11 +179,11 @@ export function Issues() {
         debug().log('failed to fetch comments')
       }
     }
-    if (selectedIssueId !== null) {
-      fetchComments(filteredIssue)
-    }
+
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredIssue) {
+    if (filteredIssue !== null) {
+      fetchComments(filteredIssue)
+    } else if (!filteredIssue) {
       setSelectedIssueId(null)
     }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
