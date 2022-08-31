@@ -37,22 +37,24 @@ export function PropertiesPanel() {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const selectedElement = useStore((state) => state.selectedElement)
   const classes = useStyles(useTheme())
+  // TODO(pablo): this render was sometimes coming up with a react
+  // error where createElement is undefined.  I've refactored a little
+  // and now can't reproduce.
   return (
     <>
       <PanelTitle
         title='Properties'
         controlsGroup={
-          <div>
-            <TooltipIconButton
-              title='toggle drawer'
-              onClick={toggleIsPropertiesOn}
-              icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
-            />
-          </div>
+          <TooltipIconButton
+            title='Close'
+            onClick={toggleIsPropertiesOn}
+            icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
+          />
         }
       />
-      <div className={classes.contentContainer}>
+      <div className={classes.contentContainerProperties}>
         {selectedElement ? <ItemProperties/> : null}
+
       </div>
     </>
   )
@@ -64,7 +66,7 @@ export const NotesPanel = () => {
   return (
     <>
       <IssuesNavBar/>
-      <div className={classes.contentContainer}>
+      <div className={classes.contentContainerNotes}>
         <Issues/>
       </div>
     </>
@@ -91,13 +93,21 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: '2px',
     alignItems: 'center',
   },
-  contentContainer: {
+  contentContainerProperties: {
     marginTop: '4px',
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
     height: '100%',
     overflow: 'scroll',
+  },
+  contentContainerNotes: {
+    marginTop: '4px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    overflow: 'auto',
   },
   controls: {
     height: '100%',

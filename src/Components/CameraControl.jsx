@@ -2,6 +2,7 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
+import {assertDefined} from '../utils/assert'
 import {
   addHashListener,
   addHashParams,
@@ -25,14 +26,19 @@ import {roundCoord} from '../utils/math'
  * @return {object} React component
  */
 export default function CameraControl({viewer}) {
-  const setCameraControls = useStore((state) => state.setCameraControls)
+  assertDefined(viewer, viewer.IFC, viewer.IFC.context, viewer.IFC.context.ifcCamera)
   const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
-  setCameraControls(cameraControls)
+  const setCameraControls = useStore((state) => state.setCameraControls)
   const location = useLocation()
+
+
   useEffect(() => {
+    setCameraControls(cameraControls)
     onHash(location, cameraControls)
     onLoad(location, cameraControls)
-  }, [location, cameraControls])
+  }, [location, cameraControls, setCameraControls])
+
+
   // NOTE: NOT DISPLAYED
   return (
     <div style={{display: 'none'}}>Camera</div>

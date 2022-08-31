@@ -27,6 +27,9 @@ export function assertDefined(...args) {
       assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`)
     }
   }
+  if (args.length === 1) {
+    return args[0]
+  }
   return args
 }
 

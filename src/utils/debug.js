@@ -1,9 +1,9 @@
 const VERBOSE = 3
 // eslint-disable-next-line no-unused-vars
-const DEBUG = 1
+const DEBUG = 2
 const INFO = 1
 const OFF = 0
-let DEBUG_LEVEL = OFF
+let DEBUG_LEVEL = 0
 
 
 /**
@@ -13,7 +13,7 @@ let DEBUG_LEVEL = OFF
  * @return {Function} returned function is console.log or a no-op if debugging is turned off
  */
 export default function debug(level = INFO) {
-  return level < DEBUG_LEVEL ? console : mockLog
+  return level <= DEBUG_LEVEL ? console : mockLog
 }
 
 

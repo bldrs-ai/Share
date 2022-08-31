@@ -164,7 +164,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     },
   },
   content: {
-    'overflow': 'hidden',
+    'overflow': 'scroll',
     'height': '95%',
     'marginTop': '20px',
     'display': 'flex',
@@ -189,7 +189,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     borderRadius: '5px',
     overflow: 'hidden',
     display: (p) => p.isPropertiesOn ? '' : 'none',
-    height: (p) => p.isCommentsOn ? '50%' : '1200px',
+    height: (p) => p.isCommentsOn ? '50%' : '98%',
   },
   divider: {
     height: '1px',

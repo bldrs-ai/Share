@@ -97,14 +97,17 @@ export async function getComment(repository, issueId, commentId) {
 async function getGitHub(repository, path, args) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
+
   debug().log('Dispatching GitHub request for repo:', repository)
-  return await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+  const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
     ...{
       org: repository.orgName,
       repo: repository.name,
     },
     ...args,
   })
+
+  return res
 }
 
 export const MOCK_ISSUE = {

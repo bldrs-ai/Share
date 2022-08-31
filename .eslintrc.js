@@ -90,6 +90,7 @@ module.exports = {
     'jsdoc/check-types': 'error',
     'jsdoc/require-param-description': 'off',
     'jsdoc/require-returns-description': 'off',
+    'require-await': 'error',
   },
   settings: {
     react: {

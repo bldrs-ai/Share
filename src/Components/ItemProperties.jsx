@@ -431,9 +431,11 @@ const useStyles = makeStyles((theme) => ({
   psetsList: {
     padding: '0px',
     margin: 0,
-    height: '370px',
+    minHeight: '370px',
+    height: '100%',
     overflow: 'scroll',
     width: '100%',
+    flexGrow: 1,
   },
   section: {
     'listStyle': 'none',

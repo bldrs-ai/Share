@@ -46,7 +46,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       console.log(`Setting GH repo ${org}/${repo}`)
       setRepository(org, repo)
     } else if (pathPrefix.startsWith('/share/v/p')) {
-      console.log('Setting default repo pablo-mayrgundter/Share')
+      debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
     } else {
       console.warn('No repository set for project!', pathPrefix)
