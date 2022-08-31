@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename)
 
 const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
 const assetsDir = path.resolve(__dirname, '..', 'public')
-const buildDir = path.resolve(__dirname, '..', 'dist')
+const buildDir = path.resolve(__dirname, '..', 'docs')
 
 export const build = {
   entryPoints: [entryPoint],
