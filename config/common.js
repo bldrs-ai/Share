@@ -17,7 +17,7 @@ const buildDir = path.resolve(__dirname, '..', 'docs')
 export const build = {
   entryPoints: [entryPoint],
   bundle: true,
-  minify: true,
+  minify: process.env.NODE_ENV === 'production',
   // https://esbuild.github.io/api/#keep-names
   // We use code identifiers e.g. in ItemProperties for their names
   keepNames: true,
