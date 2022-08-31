@@ -44,13 +44,19 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
 
   const planView = () => {
-    // viewer.context.ifcCamera.projectionManager.setOrthoCamera()
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
-    const yConst = 100 // value used in moveCameraTo2DPlanPosition
+    const yConst = 100 // value used in moveCameraTo2DPlanPosition in web-ifc
     const modelCenterX = getModelCenter(model).x
+    const modelCenterY = getModelCenter(model).y
     const modelCenterZ = getModelCenter(model).z
     viewer.context.ifcCamera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
+    const currentProjection = viewer.context.ifcCamera.projectionManager.currentProjection
+    const camFac = 5
+    if (currentProjection === 0) {
+      viewer.context.ifcCamera.cameraControls.setLookAt(
+          modelCenterX * camFac, modelCenterY * camFac, -modelCenterZ * camFac, modelCenterX, modelCenterY, modelCenterZ, true)
+    }
   }
 
   const createPlane = (normalDirection) => {
