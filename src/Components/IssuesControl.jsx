@@ -113,8 +113,10 @@ export function Issues() {
   const filteredIssue = selectedIssueId ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
+  console.log('filteredIssue', filteredIssue)
+  console.log('comments', comments)
 
-
+  console.log('issues is triggered')
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 1, no repo defined')

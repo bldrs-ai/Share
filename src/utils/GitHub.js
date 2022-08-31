@@ -170,10 +170,8 @@ export const MOCK_ISSUES = {
       author_association: 'NONE',
       active_lock_reason: null,
       body: `*BLDRS* aims to enable asynchronous workflows by  integrating essential communication channels and open standard.
-
-![bldrs ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)
-
-[Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-29.47,18.53,111.13,-30.27,20.97,-10.06)`,
+      ![bldrs ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)
+      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-29.47,18.53,111.13,-30.27,20.97,-10.06)`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/reactions',
         'total_count': 0,
@@ -234,12 +232,11 @@ export const MOCK_ISSUES = {
       author_association: 'NONE',
       active_lock_reason: null,
       body: `Test Issue body
+      - [cam 1](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
+      - [cam 2](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48)
+      - [cam 3](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48)
 
-- [cam 1](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
-- [cam 2](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48)
-- [cam 3](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48)
-
-![The Bldrs Ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)`,
+      ![The Bldrs Ecosystem](https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png)`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/reactions',
         'total_count': 0,
@@ -293,15 +290,15 @@ export const MOCK_COMMENTS = {
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
       body: `The Architecture, Engineering and Construction industries are trying
-to face challenging problems of the future with tools anchored in the
-past. Meanwhile, a new dynamic has propelled the Tech industry:
-online, collaborative, open development.
+      to face challenging problems of the future with tools anchored in the
+      past. Meanwhile, a new dynamic has propelled the Tech industry:
+      online, collaborative, open development.
 
-We can't imagine a future where building the rest of the world hasn't
-been transformed by these new ways of working. We are part of that
-transformation.
+      We can't imagine a future where building the rest of the world hasn't
+      been transformed by these new ways of working. We are part of that
+      transformation.
 
-[a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      [a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
@@ -320,7 +317,7 @@ transformation.
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
       issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935479,
+      id: 1144935480,
       number: 2,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       user: {
@@ -348,8 +345,8 @@ transformation.
       author_association: 'NONE',
       body: `Email is the medium that still facilitates major portion of communication.
 
-[Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
-[Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
+      [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
