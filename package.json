@@ -69,6 +69,7 @@
     "esbuild": "^0.15.5",
     "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
+    "esbuild-plugin-progress": "^1.0.1",
     "esbuild-plugin-svgr": "^1.0.1",
     "eslint": "^8.22.0",
     "eslint-config-google": "^0.14.0",

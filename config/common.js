@@ -1,6 +1,7 @@
 import svgrPlugin from 'esbuild-plugin-svgr'
 import copyStaticFiles from 'esbuild-copy-static-files'
 import {cleanPlugin} from 'esbuild-clean-plugin'
+import progress from 'esbuild-plugin-progress'
 import {fileURLToPath} from 'url'
 import * as path from 'node:path'
 import * as process from 'node:process'
@@ -36,6 +37,7 @@ export const build = {
   logLevel: 'info',
   plugins: [
     svgrPlugin(),
+    progress(),
     cleanPlugin(),
     copyStaticFiles({
       src: assetsDir,
