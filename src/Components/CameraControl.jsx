@@ -1,5 +1,5 @@
 import React, {useEffect} from 'react'
-import {useLocation} from 'react-router'
+import {useLocation} from 'react-router-dom'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
