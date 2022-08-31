@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useRef, useState} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -23,7 +23,7 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  * @return {Object} The Share react component.
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
-  const navigate = useNavigate()
+  const navigation = useRef(useNavigate())
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
@@ -38,7 +38,22 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    * path, so no other useEffect is triggered.
    */
   useEffect(() => {
+    /** A demux to help forward to the index file, load a new model or do nothing. */
+    const onChangeUrlParams = (() => {
+      const mp = getModelPath(installPrefix, pathPrefix, urlParams)
+      if (mp === null) {
+        navToDefault(navigation, appPrefix)
+        return
+      }
+      if (modelPath === null ||
+        (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
+        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
+        setModelPath(mp)
+        debug().log('Share#onChangeUrlParams: new model path: ', mp)
+      }
+    })
     onChangeUrlParams()
+
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = urlParams
     if (org && repo) {
@@ -50,24 +65,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       console.warn('No repository set for project!', pathPrefix)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlParams])
-
-
-  /** A demux to help forward to the index file, load a new model or do nothing. */
-  function onChangeUrlParams() {
-    const mp = getModelPath(installPrefix, pathPrefix, urlParams)
-    if (mp === null) {
-      navToDefault(navigate, appPrefix)
-      return
-    }
-    if (modelPath === null ||
-        (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
-        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
-      setModelPath(mp)
-      debug().log('Share#onChangeUrlParams: new model path: ', mp)
-    }
-  }
+  }, [appPrefix, installPrefix, modelPath, pathPrefix, urlParams])
 
 
   const {theme, colorMode} = useTheme()
