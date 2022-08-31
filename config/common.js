@@ -1,12 +1,20 @@
 import svgrPlugin from 'esbuild-plugin-svgr'
 import copyStaticFiles from 'esbuild-copy-static-files'
 import {cleanPlugin} from 'esbuild-clean-plugin'
+import {fileURLToPath} from 'url'
+import * as path from 'node:path'
+import * as process from 'node:process'
 
 
-const entry = 'src/index.jsx'
-const buildDir = 'docs'
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
+const assetsDir = path.resolve(__dirname, '..', 'public')
+const buildDir = path.resolve(__dirname, '..', 'dist')
+
 export const build = {
-  entryPoints: [entry],
+  entryPoints: [entryPoint],
   bundle: true,
   minify: true,
   // https://esbuild.github.io/api/#keep-names
@@ -30,7 +38,7 @@ export const build = {
     svgrPlugin(),
     cleanPlugin(),
     copyStaticFiles({
-      src: './public',
+      src: assetsDir,
       dest: buildDir,
     }),
   ],
