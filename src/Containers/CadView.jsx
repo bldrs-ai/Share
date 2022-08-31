@@ -1,6 +1,6 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import {Color} from 'three'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {makeStyles} from '@mui/styles'
 import SearchIndex from './SearchIndex'
@@ -139,9 +139,26 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
+    const theme = colorModeContext.getTheme()
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
+    }
+    // define mesh colors for selected and preselected element
+    const preselectMat = new MeshLambertMaterial({
+      transparent: true,
+      opacity: 0.5,
+      color: theme.palette.custom.preselect,
+      depthTest: true,
+    })
+    const selectMat = new MeshLambertMaterial({
+      transparent: true,
+      color: theme.palette.custom.select,
+      depthTest: true,
+    })
+    if (viewer.IFC.selector) {
+      viewer.IFC.selector.preselection.material = preselectMat
+      viewer.IFC.selector.selection.material = selectMat
     }
     addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
