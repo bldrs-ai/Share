@@ -53,7 +53,6 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
         navigation.current(location.current.pathname)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inputText, searchParams])
 
   const onSubmit = (event) => {
