@@ -33,6 +33,7 @@ export const build = {
   outdir: buildDir,
   format: 'esm',
   sourcemap: true,
+  platform: 'browser',
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
   plugins: [
