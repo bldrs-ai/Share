@@ -157,6 +157,7 @@ export function Issues() {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
+
     const fetchComments = ((selectedIssue) => {
       try {
         const commentsArr = []
@@ -183,7 +184,7 @@ export function Issues() {
     // This address bug #314 by clearing selected issue when new model is loaded
     if (filteredIssue !== null) {
       fetchComments(filteredIssue)
-    } else if (!filteredIssue) {
+    } else {
       setSelectedIssueId(null)
     }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
