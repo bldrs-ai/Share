@@ -3,7 +3,8 @@ import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import ItemProperties from './ItemProperties'
 import {TooltipIconButton} from './Buttons'
-import {IssuesNavBar, Issues} from './IssuesControl'
+import Issues from './issues/Issues'
+import {IssuesNavBar} from './issues/IssuesControl'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
