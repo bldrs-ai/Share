@@ -157,10 +157,10 @@ export function Issues() {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
-    const fetchComments = async (selectedIssue) => {
+    const fetchComments = ((selectedIssue) => {
       try {
         const commentsArr = []
-        const commentsData = await getComments(repository, selectedIssue.number)
+        const commentsData = getComments(repository, selectedIssue.number)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -178,7 +178,7 @@ export function Issues() {
       } catch {
         debug().log('failed to fetch comments')
       }
-    }
+    })
 
     // This address bug #314 by clearing selected issue when new model is loaded
     if (filteredIssue !== null) {
