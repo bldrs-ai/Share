@@ -7,12 +7,10 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn build-docs && yarn build-share && yarn build-storybook",
-    "build-docs": "yarn clean && shx cp -r public docs",
+    "build": "yarn build-share && yarn build-storybook",
     "build-storybook": "shx mkdir -p docs && build-storybook -o docs/sb",
-    "build-share": "yarn build-docs && yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
+    "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
-    "clean": "shx rm -rf docs",
     "husky-init": "husky install",
     "lint": "yarn eslint src",
     "precommit": "yarn lint && yarn test",
