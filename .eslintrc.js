@@ -90,6 +90,9 @@ module.exports = {
     'jsdoc/check-types': 'error',
     'jsdoc/require-param-description': 'off',
     'jsdoc/require-returns-description': 'off',
+    'jsdoc/check-param-names': 'off',
+    'jsdoc/require-param': 'off',
+    'jsdoc/require-param-type': 'off',
     'require-await': 'error',
   },
   settings: {
