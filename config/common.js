@@ -1,4 +1,6 @@
 import svgrPlugin from 'esbuild-plugin-svgr'
+import copyStaticFiles from 'esbuild-copy-static-files'
+import {cleanPlugin} from 'esbuild-clean-plugin'
 
 
 const entry = 'src/index.jsx'
@@ -18,10 +20,18 @@ export const build = {
   //   https://esbuild.github.io/api/#chunk-names
   //   https://github.com/evanw/esbuild/issues/16
   splitting: false,
+  metafile: true,
   outdir: buildDir,
   format: 'esm',
   sourcemap: true,
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
-  plugins: [svgrPlugin()],
+  plugins: [
+    svgrPlugin(),
+    cleanPlugin(),
+    copyStaticFiles({
+      src: './public',
+      dest: buildDir,
+    }),
+  ],
 }
