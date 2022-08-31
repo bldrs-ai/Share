@@ -1,5 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react'
-import {useNavigate, useParams} from 'react-router-dom'
+// eslint-disable-next-line no-unused-vars
+import {NavigateFunction, useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
@@ -42,7 +43,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const onChangeUrlParams = (() => {
       const mp = getModelPath(installPrefix, pathPrefix, urlParams)
       if (mp === null) {
-        navToDefault(navigation, appPrefix)
+        navToDefault(navigation.current, appPrefix)
         return
       }
       if (modelPath === null ||
@@ -89,7 +90,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 /**
  * Navigate to index.ifc with nice camera setting.
- * @param {Object} navigate
+ * @param {NavigateFunction} navigate
  * @param {string} appPrefix
  */
 export function navToDefault(navigate, appPrefix) {
