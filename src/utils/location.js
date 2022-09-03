@@ -15,7 +15,7 @@ window.onhashchange = () => {
 /**
  * @param {string} name Name of listener.  Can be used to later remove
  * listener. TODO: add remove method
- * @param {function} onHashCb Called when window.location.hash changes
+ * @param {Function} onHashCb Called when window.location.hash changes
  */
 export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
@@ -26,9 +26,9 @@ export function addHashListener(name, onHashCb) {
  * Serialize the given paramObj and add it to the current
  * location.hash
  *
- * @param {Object} location The window.location object
+ * @param {object} location The window.location object
  * @param {string} name A unique name for the params
- * @param {Object} params The parameters to encode
+ * @param {object} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -68,9 +68,9 @@ export function addHashParams(location, name, params, includeNames = false) {
 
 
 /**
- * @param {Object} location
- * @param {String} name prefix of the params to fetch
- * @return {string|undfined} The encoded params
+ * @param {object} location
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params
  */
 export function getHashParams(location, name) {
   return getHashParamsFromHashStr(location.hash.substring(1), name)
@@ -79,8 +79,8 @@ export function getHashParams(location, name) {
 
 /**
  * @param {string} hashStr
- * @param {String} name prefix of the params to fetch
- * @return {string|undfined} The encoded params
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params
  */
 export function getHashParamsFromHashStr(hashStr, name) {
   const sets = hashStr.split('::')
@@ -97,8 +97,9 @@ export function getHashParamsFromHashStr(hashStr, name) {
 
 /**
  * Removes the given named hash param.
- * @param {Object} location
- * @param {String} name prefix of the params to fetch
+ *
+ * @param {object} location
+ * @param {string} name prefix of the params to fetch
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')

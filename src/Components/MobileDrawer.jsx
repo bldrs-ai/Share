@@ -11,8 +11,8 @@ import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 
 
 /**
- * @param {Object} content React component to be wrapped
- * @return {Object} React component
+ * @param {object} content React component to be wrapped
+ * @return {object} React component
  */
 export default function MobileDrawer({content}) {
   const [open, setOpen] = useState(true)

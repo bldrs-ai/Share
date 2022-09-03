@@ -14,7 +14,8 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
  * show/hide from the right of the screen.
  * it is connected to the global store and controlled by isDrawerOpen property.
- * @return {Object} SideDrawer react component
+ *
+ * @return {object} SideDrawer react component
  */
 export function SideDrawer({
   isDrawerOpen,
@@ -80,7 +81,8 @@ export function SideDrawer({
  * SideDrawerWrapper is the container for the SideDrawer component.
  * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
  * It makes it is possible to test Side Drawer outside of the cad view.
- * @return {Object} SideDrawer react component
+ *
+ * @return {object} SideDrawer react component
  */
 export default function SideDrawerWrapper() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)

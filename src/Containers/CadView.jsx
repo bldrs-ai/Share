@@ -34,7 +34,8 @@ let count = 0
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
- * @return {Object}
+ *
+ * @return {object}
  */
 export default function CadView({
   installPrefix,
@@ -186,6 +187,7 @@ export default function CadView({
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
+   *
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
@@ -265,6 +267,7 @@ export default function CadView({
 
   /**
    * Analyze loaded IFC model to configure UI elements.
+   *
    * @param {object} m IFCjs loaded model.
    */
   async function onModel(m) {
@@ -290,8 +293,9 @@ export default function CadView({
    * Index the model starting at the given rootElt, clearing any
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
-   * @param {Object} m The IfcViewerAPI instance.
-   * @param {Object} rootElt Root ifc element for recursive indexing.
+   *
+   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
     searchIndex.clearIndex()
@@ -346,6 +350,7 @@ export default function CadView({
 
   /**
    * Pick the given items in the scene.
+   *
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
@@ -365,8 +370,9 @@ export default function CadView({
    * Select the items in the NavTree and update ItemProperties.
    * Returns the ids of path parts from root to this elt in spatial
    * structure.
+   *
    * @param {number} expressId
-   * @return {array} pathIds
+   * @return {Array} pathIds
    */
   async function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
@@ -386,6 +392,7 @@ export default function CadView({
 
   /**
    * Extracts the path to the element from the url and selects the element
+   *
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
   function selectElementBasedOnFilepath(filepath) {
@@ -482,7 +489,7 @@ export default function CadView({
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {Object} IfcViewerAPI viewer, width a .container property
+ * @return {object} IfcViewerAPI viewer, width a .container property
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {

@@ -10,10 +10,11 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 /**
  * ItemPropertiesDrawer contains the ItemPanel and allows for
  * show/hide from the right of the screen.
+ *
  * @param {string} title Title for the drawer
- * @param {Object} content The contained ItemPanel
- * @param {function} onClose Callback
- * @return {Object} ItemPropertiesDrawer react component
+ * @param {object} content The contained ItemPanel
+ * @param {Function} onClose Callback
+ * @return {object} ItemPropertiesDrawer react component
  */
 export default function ItemPropertiesDrawer({
   title,

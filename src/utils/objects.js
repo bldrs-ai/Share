@@ -1,6 +1,7 @@
 /**
  * Delete all properties defined in the given object.
- * @param {Object} obj The object whose properties to delete.
+ *
+ * @param {object} obj The object whose properties to delete.
  */
 export function deleteProperties(obj) {
   for (const key in obj) {
@@ -12,7 +13,7 @@ export function deleteProperties(obj) {
 
 
 /**
- * @param {Object} obj
+ * @param {object} obj
  * @return {boolean} True iff val is an object
  */
 export function isObject(obj) {

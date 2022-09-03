@@ -22,8 +22,8 @@ import debug from './utils/debug'
  *   http://host/share/v/gh/bldrs-ai/Share/main/public/index.ifc
  *
  * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
- * @param {testElt} For unit test allow use of a stub here instead of loading the app.
- * @return {Object}
+ * @param {React.Component} testElt For unit test allow use of a stub here instead of loading the app.
+ * @return {object}
  */
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
