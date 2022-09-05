@@ -37,7 +37,6 @@ export function SideDrawer({
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
-  console.log('the side drawer is triggered')
   return (
     <>
       {isMobile && isDrawerOpen ?
@@ -97,10 +96,8 @@ export default function SideDrawerWrapper() {
 
   useEffect(() => {
     const issueHash = getHashParams(location, 'i')
-    console.log('issue hash', issueHash)
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
-      console.log('extracted comment id', extractedCommentId)
       setSelectedIssueId(Number(extractedCommentId))
       openDrawer()
       turnCommentsOn()

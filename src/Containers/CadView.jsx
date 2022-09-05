@@ -281,7 +281,6 @@ export default function CadView({
     setDoubleClickListener()
     initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
-    // console.log('setupLookupAndParentLinks', rootElt, elementsById, rootProps)
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
