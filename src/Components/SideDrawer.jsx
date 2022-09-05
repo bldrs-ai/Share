@@ -99,14 +99,16 @@ export default function SideDrawerWrapper() {
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
       setSelectedIssueId(Number(extractedCommentId))
-      openDrawer()
-      turnCommentsOn()
+      if (!isDrawerOpen) {
+        openDrawer()
+        turnCommentsOn()
+      }
     }
     // This address bug #314 by clearing selected issue when new model is loaded
     if (issueHash === undefined && isDrawerOpen) {
       setSelectedIssueId(null)
     }
-  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn, isDrawerOpen])
+  }, [location, openDrawer, setSelectedIssueId])
 
 
   return (
