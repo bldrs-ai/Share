@@ -14,7 +14,8 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
  * show/hide from the right of the screen.
  * it is connected to the global store and controlled by isDrawerOpen property.
- * @return {Object} SideDrawer react component
+ *
+ * @return {object} SideDrawer react component
  */
 export function SideDrawer({
   isDrawerOpen,
@@ -35,7 +36,6 @@ export function SideDrawer({
       closeDrawer()
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
-
 
   return (
     <>
@@ -80,7 +80,8 @@ export function SideDrawer({
  * SideDrawerWrapper is the container for the SideDrawer component.
  * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
  * It makes it is possible to test Side Drawer outside of the cad view.
- * @return {Object} SideDrawer react component
+ *
+ * @return {object} SideDrawer react component
  */
 export default function SideDrawerWrapper() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
@@ -98,10 +99,16 @@ export default function SideDrawerWrapper() {
     if (issueHash !== undefined) {
       const extractedCommentId = issueHash.split(':')[1]
       setSelectedIssueId(Number(extractedCommentId))
-      openDrawer()
-      turnCommentsOn()
+      if (!isDrawerOpen) {
+        openDrawer()
+        turnCommentsOn()
+      }
     }
-  }, [location, openDrawer, setSelectedIssueId, turnCommentsOn])
+    // This address bug #314 by clearing selected issue when new model is loaded
+    if (issueHash === undefined && isDrawerOpen) {
+      setSelectedIssueId(null)
+    }
+  }, [location, openDrawer, setSelectedIssueId])
 
 
   return (

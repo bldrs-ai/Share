@@ -1,8 +1,9 @@
 /**
  * Data stored in Zustand for IFC state.
- * @param {function} set
- * @param {function} get
- * @return {Object} Zustand slice.
+ *
+ * @param {Function} set
+ * @param {Function} get
+ * @return {object} Zustand slice.
  */
 export default function createIFCSlice(set, get) {
   return {

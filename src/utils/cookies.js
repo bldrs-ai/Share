@@ -41,7 +41,7 @@ export function getCookie(name) {
 /**
  * @param {string} name Name of the cookie
  * @param {string} value Value of the cookie
- * @param {Number} exdays Number of days cookie should last
+ * @param {number} exdays Number of days cookie should last
  */
 export function setCookie(name, value, exdays = 1) {
   const d = new Date()

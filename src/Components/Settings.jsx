@@ -10,7 +10,7 @@ import SettingsIcon from '../assets/2D_Icons/Settings.svg'
 
 
 /**
- * @return {Object} React component
+ * @return {React.Component} React component
  */
 export default function Settings() {
   const [anchorEl, setAnchorEl] = useState(null)

@@ -12,6 +12,7 @@ module.exports = {
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
     'plugin:storybook/recommended',
+    'plugin:jsdoc/recommended',
   ],
   overrides: [{
     files: ['*.js', '*.mjs', '*.jsx'],
@@ -33,6 +34,7 @@ module.exports = {
     'import',
     'react',
     'jsx-a11y',
+    'jsdoc',
   ],
   rules: {
     'import/newline-after-import': ['error', {count: 2}],
@@ -83,11 +85,24 @@ module.exports = {
     'func-call-spacing': ['error', 'never'],
     'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 1}],
     'react/jsx-closing-bracket-location': 'error',
+    'valid-jsdoc': 'off',
+    'jsdoc/newline-after-description': 'error',
+    'jsdoc/check-types': 'error',
+    'jsdoc/require-param-description': 'off',
+    'jsdoc/require-returns-description': 'off',
+    'jsdoc/check-param-names': 'off',
+    'jsdoc/require-param': 'off',
+    'jsdoc/require-param-type': 'off',
     'require-await': 'error',
   },
   settings: {
     react: {
       version: '17.0.2',
+    },
+    jsdoc: {
+      tagNamePreference: {
+        'returns': 'return',
+      },
     },
   },
   reportUnusedDisableDirectives: true,

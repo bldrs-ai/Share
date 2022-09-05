@@ -33,8 +33,9 @@ import debug from './utils/debug'
  *   http://host/share/v/gh/IFCjs/test-ifc-files/main/Others/479l7.ifc
  *                    ^... here on handled by this component's paths.
  *              ^... path to the component in BaseRoutes.jsx.
+ *
  * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
- * @return {Object}
+ * @return {object}
  */
 export default function ShareRoutes({installPrefix, appPrefix}) {
   return (
@@ -79,8 +80,9 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
 /**
  * Forward page from /share to /share/v/p per spect at:
  *   https://github.com/bldrs-ai/Share/wiki/URL-Structure
+ *
  * @param {string} appPrefix The install prefix, e.g. /share.
- * @return {Object}
+ * @return {object}
  */
 function Forward({appPrefix}) {
   const location = useLocation()
@@ -100,6 +102,7 @@ function Forward({appPrefix}) {
 
 /**
  * Check if input is a url
+ *
  * @param {input} input
  * @return {boolean} return true if url is found
  */
@@ -128,7 +131,8 @@ export function githubUrlOrPathToSharePath(urlWithPath) {
 // Functions below exported only for testing.
 /**
  * Look for any obvious problems with the given url.
- * @param {Object} urlStr
+ *
+ * @param {object} urlStr
  * @return {boolean} return true if url is found
  * @throws Error if the argument have path slash '/' characters after
  * trimming host and appinstal prefix.
@@ -174,6 +178,7 @@ const re = new RegExp(`^/${pathParts.join('/')}$`)
 /**
  * Convert a Github repository URL or partial path to a Share path
  * rooted at an organization.
+ *
  * @param {string} urlWithPath
  * @return {string} Structured path to the model repository
  * @throws Error if the argument doesn't match the path pattern.

@@ -9,10 +9,10 @@ import CheckIcon from '@mui/icons-material/Check'
 
 
 /**
- * @param {function} onCloseCb
+ * @param {Function} onCloseCb
  * @param {string} title
  * @param {string} message
- * @return {Object} React component
+ * @return {object} React component
  */
 export default function Alert({onCloseCb, title = 'Oops', message}) {
   const [isOpen, setIsOpen] = useState(true)
