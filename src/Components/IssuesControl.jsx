@@ -106,7 +106,6 @@ export function IssuesNavBar() {
 export function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const issues = useStore((state) => state.issues)
   const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
@@ -114,8 +113,6 @@ export function Issues() {
   const filteredIssue = selectedIssueId ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
-
-
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 1, no repo defined')
@@ -181,10 +178,6 @@ export function Issues() {
     }
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
-    }
-    // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredIssue) {
-      setSelectedIssueId(null)
     }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
