@@ -80,23 +80,3 @@ test('side drawer - opened via URL', async () => {
   })
 })
 
-
-test('Shared issue with comments via URL - test for issue body', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const {getByText, debug} = render(
-      <ShareMock
-        initialEntries={['/v/p/index.ifc#i:2']}
-      >
-        <SideDrawerWrapper/>
-      </ShareMock>)
-  debug()
-  await waitFor(() => {
-    expect(getByText('Test Issue body')).toBeInTheDocument()
-  })
-
-  // reset the store
-  await act(() => {
-    result.current.setSelectedElement({})
-    result.current.turnCommentsOff()
-  })
-})
