@@ -31,12 +31,14 @@ export default function Property({detail, summary, expandState, classes}) {
         id="panel1a-header"
         className={classes.accordionSummary}
       >
-        <Typography className={classes.accordionTitle}>
+        <Typography variant={'h3'}>
           {summary}
         </Typography>
       </AccordionSummary>
-      <AccordionDetails className={classes.accordianDetails}>
-        {detail}
+      <AccordionDetails>
+        <div style={{marginLeft: '-30px'}}>
+          {detail}
+        </div>
       </AccordionDetails>
     </Accordion>
   )

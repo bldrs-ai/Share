@@ -51,16 +51,15 @@ export function IssuesNavBar() {
       <div className={classes.leftGroup}>
         {selectedIssueId ? null : 'Notes' }
         {selectedIssueId ?
-          <div style={{marginLeft: '-12px'}}>
+          <div style={{marginLeft: '-8px'}}>
             <TooltipIconButton
               title='Back to the list'
               placement='bottom'
-              size='small'
               onClick={() => {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
-              icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
+              icon={<div className={classes.iconContainer}><BackIcon/></div>}
             />
           </div> : null
         }
@@ -74,14 +73,14 @@ export function IssuesNavBar() {
               placement='bottom'
               size='small'
               onClick={() => selectIssue('previous')}
-              icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
+              icon={<PreviousIcon/>}
             />
             <TooltipIconButton
               title='Next Note'
               size='small'
               placement='bottom'
               onClick={() => selectIssue('next')}
-              icon={<NextIcon style={{width: '20px', height: '20px'}}/>}
+              icon={<NextIcon/>}
             />
           </>
         }
@@ -90,12 +89,14 @@ export function IssuesNavBar() {
       <div className={classes.rightGroup}>
         <div className={classes.controls}>
         </div>
-        <TooltipIconButton
-          title='Close Comments'
-          placement='bottom'
-          onClick={turnCommentsOff}
-          icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
-        />
+        <div>
+          <TooltipIconButton
+            title='Close Comments'
+            placement='bottom'
+            onClick={turnCommentsOff}
+            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+          />
+        </div>
       </div>
     </div>
   )
@@ -106,6 +107,7 @@ export function IssuesNavBar() {
 export function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const issues = useStore((state) => state.issues)
   const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
@@ -180,6 +182,10 @@ export function Issues() {
 
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
+    }
+    // This address bug #314 by clearing selected issue when new model is loaded
+    if (!filteredIssue) {
+      setSelectedIssueId(null)
     }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
@@ -304,13 +310,10 @@ const useStyles = makeStyles((theme) => ({
     'flexDirection': 'row',
     'justifyContent': 'center',
     'alignItems': 'center',
-    'height': '30px',
-    'fontSize': '18px',
-    'textDecoration': 'underline',
-    'fontWeight': 'bold',
+    'fontSize': '20px',
     'paddingLeft': '16px',
     '@media (max-width: 900px)': {
-      paddingLeft: '6px',
+      paddingLeft: '12px',
     },
   },
   container: {
@@ -339,5 +342,19 @@ const useStyles = makeStyles((theme) => ({
     '@media (max-width: 900px)': {
       paddingTop: '0px',
     },
+  },
+  iconContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '20px',
+    height: '20px',
+  },
+  iconContainerClose: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '14px',
+    height: '14px',
   },
 }))

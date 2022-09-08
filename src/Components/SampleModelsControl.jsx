@@ -15,14 +15,14 @@ import {useNavigate} from 'react-router-dom'
  */
 export default function SampleModelsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const classes = useStyles()
 
   return (
     <ControlButton
-      placement='top'
-      title='Sample Models'
+      title='Browse Examples'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<ModelIcon/>}
+      icon={<div className={classes.iconContainer}><ModelIcon/></div>}
       dialog={
         <SampleModelsDialog
           isDialogDisplayed={isDialogDisplayed}
@@ -167,5 +167,9 @@ const useStyles = makeStyles({
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
       borderColor: 'blue',
     },
+  },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
   },
 })

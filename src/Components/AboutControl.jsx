@@ -6,7 +6,7 @@ import Dialog from './Dialog'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
-import AboutIcon from '../assets/2D_Icons/Wave_person.svg'
+import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -25,13 +25,13 @@ export default function AboutControl({installPrefix}) {
           component: 'about',
           name: 'isFirstTime',
           defaultValue: true}))
+  const classes = useStyles()
   return (
     <ControlButton
       title='About BLDRS'
-      icon={<AboutIcon/>}
+      icon={<div className={classes.iconContainer}><AboutIcon /></div>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      placement='top'
       dialog={
         <AboutDialog
           isDialogDisplayed={isDialogDisplayed}
@@ -265,5 +265,10 @@ const useStyles = makeStyles({
     '& .MuiSwitch-thumb': {
       backgroundColor: 'lightGrey',
     },
+  },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+    marginBottom: '2px',
   },
 })

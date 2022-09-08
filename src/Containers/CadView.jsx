@@ -68,11 +68,8 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-
-
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
-
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
@@ -136,6 +133,7 @@ export default function CadView({
          theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
+    setSelectedElement(null)
   }
 
 
@@ -609,7 +607,7 @@ const useStyles = makeStyles({
   baseGroupOpen: {
     'position': 'fixed',
     'bottom': '20px',
-    'right': '31em',
+    'right': '32em',
     '@media (max-width: 900px)': {
       display: 'none',
     },

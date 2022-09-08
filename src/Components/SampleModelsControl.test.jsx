@@ -6,7 +6,7 @@ import ShareMock from '../ShareMock'
 
 test('renders sample models control', async () => {
   const rendered = render(<ShareMock><SampleModelsControl/></ShareMock>)
-  const sampleModelsButton = screen.getByTitle('Sample Models')
+  const sampleModelsButton = screen.getByTitle('Browse Examples')
   fireEvent.mouseOver(sampleModelsButton)
   fireEvent.click(sampleModelsButton)
 

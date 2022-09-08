@@ -67,7 +67,7 @@ function loadTheme(mode) {
     },
     secondary: {
       main: grey[200],
-      background: grey[800],
+      background: grey[600],
     },
     custom: {
       highLight: '#C8E8C7',
@@ -83,7 +83,7 @@ function loadTheme(mode) {
     },
     secondary: {
       main: grey[600],
-      background: grey[200],
+      background: grey[300],
     },
     custom: {
       highLight: '#70AB32',
@@ -96,9 +96,13 @@ function loadTheme(mode) {
   const typography = {
     h1: {fontSize: '1.4rem'},
     h2: {fontSize: '1.3rem'},
-    h3: {fontSize: '1.2rem'},
-    h4: {fontSize: '1.1rem'},
-    h5: {fontSize: '1rem'},
+    h3: {fontSize: '1.3rem', letterSpacing: '.07rem', lineHeight: '1.5em', fontWeight: 'lighter', fontFamily: 'Helvetica'},
+    h4: {fontSize: '1.28rem', letterSpacing: '.07rem', llineHeight: '1.5em', fontFamily: 'Helvetica'},
+    h5: {fontSize: '1.2rem', letterSpacing: '.07rem', llineHeight: '1.5em', fontFamily: 'Helvetica'},
+    h6: {fontSize: '.9rem', letterSpacing: '.07rem', llineHeight: '1.5em', fontFamily: 'Helvetica'},
+    h7: {fontSize: '1.1rem', letterSpacing: '.07rem', llineHeight: '1.5em', fontFamily: 'Helvetica'},
+    dialogHeader: {fontSize: '1.2rem', letterSpacing: '.1rem', fontFamily: 'Helvetica'},
+    dialogBody: {fontSize: '.9rem', letterSpacing: '.1rem', fontFamily: 'Helvetica'},
     body2: {fontSize: '.8rem'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it

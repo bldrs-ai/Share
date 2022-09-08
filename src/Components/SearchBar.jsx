@@ -7,16 +7,15 @@ import {
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import SearchIcon from '../assets/2D_Icons/Search.svg'
+import TreeIcon from '../assets/2D_Icons/Tree.svg'
 import {
   looksLikeLink,
   githubUrlOrPathToSharePath,
 } from '../ShareRoutes'
-import SearchIcon from '../assets/2D_Icons/Search.svg'
-import LinkIcon from '../assets/2D_Icons/Link.svg'
-import ClearIcon from '../assets/2D_Icons/Close.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import {TooltipIconButton, FormButton} from './Buttons'
 
 
 /**
@@ -89,10 +88,10 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-        <TooltipToggleButton
+      <Paper component='form' className={classes.root} onSubmit={onSubmit} elevation={0}>
+        <TooltipIconButton
           placement='bottom'
-          title='Toggle tree view'
+          title='Elements Hierarchy'
           onClick={onClickMenuCb}
           icon={<TreeIcon/>}
         />
@@ -101,35 +100,24 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search model'}
+          placeholder={'Search'}
+          style={{marginLeft: '6px', fontSize: '1.3em'}}
         />
-        {inputText.length > 0 ?
-          <TooltipToggleButton
+        {inputText.length > 0 &&
+          <TooltipIconButton
             title='clear'
-            size='small'
-            placement='bottom'
             onClick={() => {
               setInputText('')
               setError('')
             }}
             icon={<ClearIcon/>}
-          /> : null
+          />
         }
         <FormButton
-          title='search'
+          title=''
           size='small'
           placement='bottom'
           icon={<SearchIcon/>}
-        />
-        <TooltipToggleButton
-          title={`Enter GitHub URL to access IFCs hosted on GitHub.
-                  Click on the link icon to learn more.`}
-          size='small'
-          placement='right'
-          onClick={() => {
-            window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
-          }}
-          icon={<LinkIcon/>}
         />
       </Paper>
       { inputText.length > 0 &&
@@ -207,9 +195,12 @@ const useStyles = makeStyles({
     'display': 'flex',
     'minWidth': '300px',
     'width': (props) => props.inputWidth,
+    'height': '56px',
     'maxWidth': '700px',
     'alignItems': 'center',
-    'padding': '2px 2px 2px 2px',
+    'padding': '2px 6px 2px 6px',
+    'border': '1px solid lightGrey',
+    'opacity': .8,
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',

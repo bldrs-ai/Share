@@ -1,5 +1,4 @@
-import React, {useState} from 'react'
-import IconButton from '@mui/material/IconButton'
+import React from 'react'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -12,73 +11,58 @@ import {assertDefined} from '../utils/assert'
  * @param {Function} onClick
  * @param {object} icon
  * @param {string} placement
- * @param {string} size Size of button component
+ * @param {boolean} selected
  * @param {string} dataTestId Internal attribute for component testing
  * @return {React.Component} React component
  */
-export const TooltipIconButton = ({
-  title,
-  onClick,
-  icon,
-  placement = 'right',
-  size = 'medium',
-  dataTestId = 'test-button',
-}) => {
-  assertDefined(title, icon, onClick)
+export function TooltipIconButton({title, onClick, icon, placement = 'left', selected = false}) {
+  assertDefined(icon, onClick, title)
   const classes = useStyles(useTheme())
   return (
-    <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
-      data-testid={dataTestId}
-    >
-      <IconButton className={classes.root} onClick={onClick} size={size}>
-        {icon}
-      </IconButton>
-    </Tooltip>
-  )
-}
-
-
-/**
- * @param {Function} onClick
- * @param {string} title Tooltip text
- * @param {object} icon
- * @param {string} size Size of button component
- * @param {string} placement Default: left
- * @return {React.Component} React component
- */
-export function TooltipToggleButton({
-  onClick,
-  title,
-  icon,
-  size = 'medium',
-  placement = 'left',
-}) {
-  assertDefined(title, icon, onClick)
-  const [isPressed, setIsPressed] = useState(false)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
-  return (
     <div className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement}>
+      <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
         <ToggleButton
-          value={title}
-          selected={isPressed}
-          onClick={(event) => {
-            setIsPressed(!isPressed)
-            if (event === null || event === undefined) {
-              console.error('Buttons#TooltipToggleButton: undefined event')
-            }
-            if (onClick) {
-              onClick(event)
-            }
-          }}
+          selected={selected}
+          onClick={onClick}
           color='primary'
         >
           {icon}
         </ToggleButton>
       </Tooltip>
-    </div>)
+    </div>
+  )
 }
 
+/**
+ * A RectangularButton is used in dialogs
+ *
+ * @param {string} title
+ * @param {object} icon
+ * @param {string} type Type of button (and icon to render)
+ * @param {string} placement Placement of tooltip
+ * @param {string} size Size of button component
+ * @return {object} React component
+ */
+export function RectangularButton({
+  title,
+  icon,
+  onClick,
+}) {
+  assertDefined(title, icon, onClick)
+  return (
+    <Button
+      onClick={onClick}
+      variant='rectangular'
+      startIcon={icon}
+      sx={{
+        '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
+        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+      }}
+    >
+      {title}
+    </Button>
+  )
+}
 
 /**
  * @param {string} title The text for tooltip
@@ -96,24 +80,25 @@ export function ControlButton({
   setIsDialogDisplayed,
   icon,
   placement = 'left',
-  size = 'medium',
   dialog,
+  state = false,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
-  const toggleIsDialogDisplayed = () => setIsDialogDisplayed(!isDialogDisplayed)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(useTheme())
   return (
-    <div className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement}>
-        <ToggleButton
-          value={title}
-          selected={isDialogDisplayed}
-          onClick={toggleIsDialogDisplayed}
-          color='primary'
-        >
-          {icon}
-        </ToggleButton>
-      </Tooltip>
+    <div>
+      <div className={classes.root}>
+        <Tooltip title={title} describeChild placement={placement}>
+          <ToggleButton
+            className={classes.root}
+            selected={isDialogDisplayed}
+            onClick={setIsDialogDisplayed}
+            color='primary'
+          >
+            {icon}
+          </ToggleButton>
+        </Tooltip>
+      </div>
       {isDialogDisplayed && dialog}
     </div>
   )
@@ -131,65 +116,52 @@ export function ControlButton({
  * @param {string} size Size of button component
  * @return {React.Component} React component
  */
-export function FormButton({title, icon, type = 'submit', placement = 'left', size = 'medium'}) {
+export function FormButton({title, icon, placement = 'left'}) {
   assertDefined(title, icon)
-  const classes = useStyles(size === 'small' ? {buttonWidth: '40px'} : {buttonWidth: '50px'})
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.root}>
       <Tooltip title={title} describeChild placement={placement}>
-        <IconButton type={type} size={size}>
+        <ToggleButton
+          type='submit'
+          className={classes.root}
+          selected={false}
+          color='primary'
+        >
           {icon}
-        </IconButton>
+        </ToggleButton>
       </Tooltip>
     </div>
   )
 }
 
-/**
- * A FormButton is a TooltipIconButton but with parameterized type for
- * form actions.
- *
- * @param {string} title
- * @param {object} icon
- * @param {string} type Type of button (and icon to render)
- * @param {string} placement Placement of tooltip
- * @param {string} size Size of button component
- * @return {React.Component} React component
- */
-export function RectangularButton({
-  title,
-  icon,
-}) {
-  assertDefined(title, icon)
-  return (
-    <Button
-      variant='rectangular'
-      startIcon={icon}
-      sx={{
-        '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
-      }}
-    >
-      {title}
-    </Button>
-  )
-}
-
 
 const useStyles = makeStyles((theme) => ({
+  container: {
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-around',
+    opacity: .9,
+    height: '340px',
+  },
   root: {
     '& button': {
-      width: (props) => props.buttonWidth || '50px',
-      height: (props) => props.buttonWidth || '50px',
-      border: 'none',
-      borderRadius: '50%',
+      'width': '40px',
+      'height': '40px',
+      'border': 'none ',
+      '&.Mui-selected, &.Mui-selected:hover': {
+        backgroundColor: '#97979770',
+      },
     },
     '& svg': {
-      width: '30px',
-      height: '30px',
-      border: 'none',
-      borderRadius: '50%',
+      width: '22px',
+      height: '22px',
       fill: theme.palette.primary.contrastText,
     },
   },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+  },
 }))
+

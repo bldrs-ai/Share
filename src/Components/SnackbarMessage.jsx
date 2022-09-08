@@ -2,6 +2,7 @@ import React from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
 import {makeStyles} from '@mui/styles'
+import Typography from '@mui/material/Typography'
 
 
 /**
@@ -23,7 +24,9 @@ export default function SnackBarMessage({message, type, open}) {
         sx={{backgroundColor: '#848484'}}
         icon={false}
       >
-        {message}
+        <Typography variant={'h6'}>
+          {message}
+        </Typography>
       </Alert>
     </Snackbar>
   )

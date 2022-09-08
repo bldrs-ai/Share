@@ -35,17 +35,19 @@ export default function ItemProperties() {
     <div className={classes.propsContainer}>
       {
         Object.keys(element).length === 0 ?
-          <h2 className={classes.noElement}>No element selected</h2> :
+          <Typography variant={'h4'} >No element selected</Typography> :
           <>
             {propTable || 'Loading...'}
-            <h2>
-              Property Sets
-              <Switch
-                checked={expandAll}
-                onChange={() => setExpandAll(!expandAll)}
-              />
-            </h2>
-            {psetsList || 'Loading...'}
+            <div className={classes.pset}>
+              <Typography variant={'h4'}>
+                Property Sets
+                <Switch
+                  checked={expandAll}
+                  onChange={() => setExpandAll(!expandAll)}
+                />
+              </Typography>
+              {psetsList || 'Loading...'}
+            </div>
           </>
       }
     </div>)
@@ -61,7 +63,7 @@ export default function ItemProperties() {
  * @return {object} React component
  */
 function paragraphMaybeWithTooltip(str, maxWidth = 15) {
-  const inner = (<Typography variant='body1'>{str}</Typography>)
+  const inner = (<Typography variant='h3'>{str}</Typography>)
   return (
     str.length > maxWidth ?
       <Tooltip title={str} placement='top'>{inner}</Tooltip> : inner
@@ -89,7 +91,7 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
     ROWS.push(
         <tr key='ifcType'>
           <td>
-            <h3>IFC Type:</h3>
+            <Typography variant='h3' >IFC Type:</Typography>
             {paragraphMaybeWithTooltip(ifcProps.constructor.name)}
           </td>
         </tr>)
@@ -108,7 +110,7 @@ async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) 
     }
   }
   return (
-    <table key={`table-${ serial++}`}>
+    <table key={`table-${ serial++}`} >
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -337,7 +339,7 @@ function Row({d1, d2}) {
   return (
     <tr>
       <td colSpan={2}>
-        <h3>{d1}:</h3>
+        <Typography variant='h3' >{d1}:</Typography>
         {paragraphMaybeWithTooltip(d2)}
       </td>
     </tr>
@@ -366,17 +368,14 @@ const useStyles = makeStyles((theme) => ({
     },
     '& h2': {
       fontSize: '1.1em',
-      fontWeight: 600,
       margin: '1em 0 0.5em 0',
     },
     '& h3': {
-      fontWeight: 600,
       fontSize: '1.05em',
     },
     '& p': {
       marginBottom: '0.25em',
       fontSize: '1.0em',
-      fontWeight: 400,
     },
     '& td': {
       // As of https://github.com/bldrs-ai/Share/pull/148
@@ -389,7 +388,6 @@ const useStyles = makeStyles((theme) => ({
       whiteSpace: 'nowrap',
       overflow: 'hidden',
       textOverflow: 'ellipsis',
-      fontFamily: 'Helvetica',
       cursor: 'default',
     },
     '& table': {
@@ -413,7 +411,7 @@ const useStyles = makeStyles((theme) => ({
       fill: theme.palette.primary.contrastText,
     },
     '& .MuiAccordionDetails-root': {
-      padding: 0,
+      // padding: 0,
     },
     '& .MuiSwitch-root': {
       'float': 'right',
@@ -431,11 +429,9 @@ const useStyles = makeStyles((theme) => ({
   psetsList: {
     padding: '0px',
     margin: 0,
-    minHeight: '370px',
-    height: '100%',
+    height: '370px',
     overflow: 'scroll',
     width: '100%',
-    flexGrow: 1,
   },
   section: {
     'listStyle': 'none',
@@ -446,9 +442,7 @@ const useStyles = makeStyles((theme) => ({
   },
   noElement: {
     maxWidth: '240px',
-    fontFamily: 'Helvetica',
     fontSize: '20px',
-    fontWeight: 200,
     width: '240px',
   },
   icons: {
@@ -461,5 +455,9 @@ const useStyles = makeStyles((theme) => ({
     width: '200px',
     textOverflow: 'ellipsis',
     overflowWrap: 'break-word',
+  },
+  pset: {
+    marginTop: '20px',
+    marginLeft: '10px',
   },
 }))

@@ -238,19 +238,15 @@ const CardActions = ({
   return (
     <div className={classes.actions}>
       <div className={classes.actionsLeftGroup}>
-        {hasCameras ?
+        {hasCameras &&
          <TooltipIconButton
            disabled={hasCameras}
            title='Show the camera view'
            size='small'
            placement='bottom'
            onClick={onClickCamera}
-           icon={
-             <CameraIcon
-               className={classes.buttonCamera}
-               style={{width: '24px', height: '24px'}}
-             />}
-         /> : null}
+           icon={<div className={classes.iconContainer}><CameraIcon/></div>}
+         />}
         {selected &&
          <TooltipIconButton
            title='Share'
@@ -260,10 +256,7 @@ const CardActions = ({
              onClickShare()
              setShareIssue(!shareIssue)
            }}
-           icon={
-             <ShareIcon
-               className={classes.buttonShare} style={{width: '24px', height: '24px'}}
-             />}
+           icon={<div className={classes.iconContainer}><ShareIcon/></div>}
          />
         }
       </div>
@@ -427,6 +420,11 @@ const useStyles = makeStyles((theme) => ({
   buttonShare: {
     backgroundColor: theme.palette.custom.highLight,
     color: 'black',
+  },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+    marginBottom: '2px',
   },
 }),
 )

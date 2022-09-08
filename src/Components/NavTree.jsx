@@ -110,10 +110,10 @@ export default function NavTree({
       >
         {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
             jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} style={{margin: '0px 10px'}}>
+        <div onClick={handleExpansionClick} style={{margin: '0px 12px'}}>
           {icon}
         </div>
-        <Typography onClick={handleSelectionClick}>
+        <Typography variant='h3' onClick={handleSelectionClick}>
           {label}
         </Typography>
       </div>

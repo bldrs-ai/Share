@@ -1,11 +1,9 @@
 import React from 'react'
 import MuiDialog from '@mui/material/Dialog'
 import DialogContent from '@mui/material/DialogContent'
-import DialogTitle from '@mui/material/DialogTitle'
-import CheckIcon from '@mui/icons-material/Check'
 import {makeStyles, useTheme} from '@mui/styles'
-import {TooltipIconButton} from './Buttons'
 import {assertDefined} from '../utils/assert'
+import {Typography} from '@mui/material'
 
 
 /**
@@ -36,14 +34,14 @@ export default function Dialog({
       onClose={close}
       className={classes.root}
     >
-      <DialogTitle>
-        <div>{icon}</div>
+      <Typography variant='dialogHeader' style={{marginTop: '40px'}}>
         {headerText}
-      </DialogTitle>
-      <DialogContent>{content}</DialogContent>
-      <div>
-        <TooltipIconButton title='OK' icon={<CheckIcon/>} onClick={close} onKeyDown={close}/>
-      </div>
+      </Typography>
+      <DialogContent>
+        <Typography variant='dialogBody'>
+          {content}
+        </Typography>
+      </DialogContent>
     </MuiDialog>)
 }
 
@@ -54,17 +52,7 @@ const useStyles = makeStyles((theme) => ({
     'fontFamily': 'Helvetica',
     '& .MuiButtonBase-root': {
       padding: 0,
-      margin: '0.5em',
-      borderRadius: '50%',
       border: 'none',
-    },
-    '& svg': {
-      padding: 0,
-      margin: 0,
-      width: '30px',
-      height: '30px',
-      borderRadius: '50%',
-      fill: theme.palette.primary.contrastText,
     },
   },
 }))

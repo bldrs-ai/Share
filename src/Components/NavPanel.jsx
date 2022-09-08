@@ -34,7 +34,7 @@ export default function NavPanel({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.root} >
+    <Paper className={classes.root} elevation={0}>
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
@@ -73,9 +73,10 @@ const useStyles = makeStyles({
     'justifyContent': 'space-around',
     'alignItems': 'center',
     'maxHeight': '50%',
+    'opacity': .9,
     '@media (max-width: 900px)': {
       maxHeight: '30%',
-      width: '250px',
+      width: '300px',
       top: '80px',
     },
   },

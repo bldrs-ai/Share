@@ -45,11 +45,13 @@ export function PropertiesPanel() {
       <PanelTitle
         title='Properties'
         controlsGroup={
-          <TooltipIconButton
-            title='Close'
-            onClick={toggleIsPropertiesOn}
-            icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
-          />
+          <div>
+            <TooltipIconButton
+              title='toggle drawer'
+              onClick={toggleIsPropertiesOn}
+              icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+            />
+          </div>
         }
       />
       <div className={classes.contentContainerProperties}>
@@ -86,9 +88,7 @@ const useStyles = makeStyles((theme) => ({
   title: {
     height: '30px',
     display: 'flex',
-    fontSize: '18px',
-    textDecoration: 'underline',
-    fontWeight: 'bold',
+    fontSize: '1.3em',
     marginRight: '10px',
     paddingLeft: '2px',
     alignItems: 'center',
@@ -148,5 +148,12 @@ const useStyles = makeStyles((theme) => ({
     fontSize: '10px',
     color: 'black',
     borderRadius: '20px',
+  },
+  iconContainerClose: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '14px',
+    height: '14px',
   },
 }))
