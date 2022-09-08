@@ -317,7 +317,7 @@ export const MOCK_COMMENTS = {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
       issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935480,
+      id: 1144935481,
       number: 2,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       user: {
