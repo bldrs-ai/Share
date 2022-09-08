@@ -41,6 +41,7 @@ test('side drawer properties', async () => {
 test('side drawer - issues id in url', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   const extractedIssueId = '1257156364'
+  const {findByText} = render(<ShareMock><SideDrawerWrapper/></ShareMock>)
   await act(() => {
     result.current.setSelectedIssueId(Number(extractedIssueId))
     result.current.turnCommentsOn()
@@ -64,10 +65,7 @@ test('side drawer - opened via URL', async () => {
       >
         <SideDrawerWrapper/>
       </ShareMock>)
-
-  await waitFor(() => {
-    expect(getByText('LOCAL ISSUE 2')).toBeInTheDocument()
-  })
+  expect(await getByText('LOCAL ISSUE 2')).toBeInTheDocument()
 
   // reset the store
   await act(() => {

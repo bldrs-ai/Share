@@ -11,15 +11,15 @@ test('Issues NavBar Issues', () => {
 })
 
 
-  it('NavBar changes to back nav when issue selected', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const testIssueId = 10
-    const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
+it('NavBar changes to back nav when issue selected', async () => {
+  const {result} = renderHook(() => useStore((state) => state))
+  const testIssueId = 10
+  const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
   await act(() => {
-      result.current.setSelectedIssueId(testIssueId)
-    })
-      expect(await getByTitle('Back to the list')).toBeInTheDocument()
+    result.current.setSelectedIssueId(testIssueId)
   })
+  expect(await getByTitle('Back to the list')).toBeInTheDocument()
+})
 
 
 test('Setting issues in zustand', async () => {

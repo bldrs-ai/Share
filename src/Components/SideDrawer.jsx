@@ -108,6 +108,7 @@ export default function SideDrawerWrapper() {
     if (issueHash === undefined && isDrawerOpen) {
       setSelectedIssueId(null)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, openDrawer, setSelectedIssueId])
 
 
