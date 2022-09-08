@@ -5,17 +5,18 @@ import useStore from '../store/useStore'
 import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
 
 
-test('Notes panel', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(null)
+describe('Side drawer panels', () => {
+  it('Notes', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(null)
+    })
+    expect(getByText('Notes')).toBeInTheDocument()
   })
-  expect(getByText('Notes')).toBeInTheDocument()
-})
 
-
-test('Properties panel', () => {
-  const {getByText} = render(<ShareMock><PropertiesPanel/></ShareMock>)
-  expect(getByText('Properties')).toBeInTheDocument()
+  it('Properties', () => {
+    const {getByText} = render(<ShareMock><PropertiesPanel/></ShareMock>)
+    expect(getByText('Properties')).toBeInTheDocument()
+  })
 })

@@ -4,7 +4,7 @@ import {TooltipIconButton} from './Buttons'
 import QuestionIcon from '../assets/2D_Icons/Question.svg'
 import {MockComponent} from '../__mocks__/MockComponent'
 
-// When this test i ran an error is thrown by the assert as expected therefore the test is passing,
+// When this test is ran an error is thrown by the assert as expected therefore the test is passing,
 // but the error is printed on the screen making it look like something is wrong.
 describe('<TooltipIconButton />', () => {
   test('should throw error if missing required props', () => {

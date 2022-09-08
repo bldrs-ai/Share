@@ -5,53 +5,52 @@ import useStore from '../store/useStore'
 import {IssuesNavBar, Issues} from './IssuesControl'
 
 
-test('Issues NavBar Issues', () => {
-  const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-  expect(getByText('Notes')).toBeInTheDocument()
-})
-
-
-it('NavBar changes to back nav when issue selected', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+describe('issue control', () => {
+  it('Issues NavBar Issues', () => {
+    const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
+    expect(getByText('Notes')).toBeInTheDocument()
   })
-  expect(await getByTitle('Back to the list')).toBeInTheDocument()
-})
 
+  it('NavBar changes to back nav when issue selected', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    expect(await getByTitle('Back to the list')).toBeInTheDocument()
+  })
 
-test('Setting issues in zustand', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const {getByText} = render(<ShareMock><Issues/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(null)
+  it('Setting issues in zustand', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(null)
+    })
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    expect(await getByText('open_workspace')).toBeInTheDocument()
+    expect(await getByText('closed_system')).toBeInTheDocument()
   })
-  await act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  expect(await getByText('open_workspace')).toBeInTheDocument()
-  expect(await getByText('closed_system')).toBeInTheDocument()
-})
 
-
-test('Setting comments in zustand ', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  const {getByText} = render(<ShareMock><Issues/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+  it('Setting comments in zustand ', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    await act(() => {
+      result.current.setComments(MOCK_COMMENTS)
+    })
+    expect(await getByText('open_workspace')).toBeVisible()
+    expect(await getByText('The Architecture, Engineering and Construction')).toBeVisible()
+    expect(await getByText('Email is the medium that still facilitates major portion of communication')).toBeVisible()
   })
-  await act(() => {
-    result.current.setIssues(MOCK_ISSUES)
-  })
-  await act(() => {
-    result.current.setComments(MOCK_COMMENTS)
-  })
-  expect(await getByText('open_workspace')).toBeVisible()
-  expect(await getByText('The Architecture, Engineering and Construction')).toBeVisible()
-  expect(await getByText('Email is the medium that still facilitates major portion of communication')).toBeVisible()
 })
 
 
