@@ -7,44 +7,42 @@ import CameraControl, {
 } from './CameraControl'
 
 
-test('parseHashParams, 3 params', () => {
-  // eslint-disable-next-line no-magic-numbers
-  expect(parseHashParams('c:1,2,3')).toStrictEqual([1, 2, 3])
-})
+describe('CameraControl', () => {
+  it('parseHashParams, 3 params', () => {
+    // eslint-disable-next-line no-magic-numbers
+    expect(parseHashParams('c:1,2,3')).toStrictEqual([1, 2, 3])
+  })
 
+  it('parseHashParams, 6 params', () => {
+    // eslint-disable-next-line no-magic-numbers
+    expect(parseHashParams('c:1,2,3,4,5,6')).toStrictEqual([1, 2, 3, 4, 5, 6])
+  })
 
-test('parseHashParams, 6 params', () => {
-  // eslint-disable-next-line no-magic-numbers
-  expect(parseHashParams('c:1,2,3,4,5,6')).toStrictEqual([1, 2, 3, 4, 5, 6])
-})
+  it('CameraControl', () => {
+    const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
+    render(<ShareMock><CameraControl viewer={viewer}/></ShareMock>)
+    expect(screen.getByText('Camera')).toBeInTheDocument()
+  })
 
+  it('onHash, position', () => {
+    const cam = new MockCamera()
+    const location = {hash: '#c:1,2,3'}
+    onHash(location, cam)
+    // eslint-disable-next-line no-magic-numbers
+    const expectCam = new MockCamera(1, 2, 3)
+    expectCam.setDoTween(true)
+    expect(cam).toStrictEqual(expectCam)
+  })
 
-test('CameraControl', () => {
-  const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
-  render(<ShareMock><CameraControl viewer={viewer}/></ShareMock>)
-  expect(screen.getByText('Camera')).toBeInTheDocument()
-})
-
-
-test('onHash, position', () => {
-  const cam = new MockCamera()
-  const location = {hash: '#c:1,2,3'}
-  onHash(location, cam)
-  // eslint-disable-next-line no-magic-numbers
-  const expectCam = new MockCamera(1, 2, 3)
-  expectCam.setDoTween(true)
-  expect(cam).toStrictEqual(expectCam)
-})
-
-
-test('onHash, target', () => {
-  const cam = new MockCamera()
-  const location = {hash: '#c:1,2,3,4,5,6'}
-  onHash(location, cam)
-  // eslint-disable-next-line no-magic-numbers
-  const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
-  expectCam.setDoTween(true)
-  expect(cam).toStrictEqual(expectCam)
+  it('onHash, target', () => {
+    const cam = new MockCamera()
+    const location = {hash: '#c:1,2,3,4,5,6'}
+    onHash(location, cam)
+    // eslint-disable-next-line no-magic-numbers
+    const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
+    expectCam.setDoTween(true)
+    expect(cam).toStrictEqual(expectCam)
+  })
 })
 
 

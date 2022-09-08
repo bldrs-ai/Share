@@ -263,12 +263,12 @@ export const MOCK_COMMENTS = {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
       issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935479,
+      id: 1144935480,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       number: 1,
       user: {
         login: 'OlegMoshkovich',
-        id: 3433606,
+        id: 3433607,
         node_id: 'MDQ6VXNlcjM0MzM2MDY=',
         avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
         gravatar_id: '',
@@ -317,7 +317,7 @@ export const MOCK_COMMENTS = {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
       issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935480,
+      id: 1144935481,
       number: 2,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       user: {
