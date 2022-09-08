@@ -8,7 +8,7 @@ import SearchBar, {
 } from './SearchBar'
 
 
-describe( 'Search bar', () => {
+describe( 'SearchBar', () => {
   it('containsIfcPath', () => {
     const testPairs = {
       '/share/v/p/index.ifc': false,

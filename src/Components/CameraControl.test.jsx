@@ -7,7 +7,7 @@ import CameraControl, {
 } from './CameraControl'
 
 
-describe('camera control', () => {
+describe('CameraControl', () => {
   it('parseHashParams, 3 params', () => {
     // eslint-disable-next-line no-magic-numbers
     expect(parseHashParams('c:1,2,3')).toStrictEqual([1, 2, 3])

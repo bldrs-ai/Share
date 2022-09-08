@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
 
 
-describe('Side drawer panels', () => {
+describe('SideDrawerPanels', () => {
   it('Notes', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)

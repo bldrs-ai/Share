@@ -4,7 +4,7 @@ import ShareMock from '../ShareMock'
 import IssueCard from './IssueCard'
 
 
-describe('Issue card', () => {
+describe('IssueCard', () => {
   it('IssueCard', () => {
     const id = 123
     const index = 123

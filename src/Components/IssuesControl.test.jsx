@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import {IssuesNavBar, Issues} from './IssuesControl'
 
 
-describe('issue control', () => {
+describe('IssueControl', () => {
   it('Issues NavBar Issues', () => {
     const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
     expect(getByText('Notes')).toBeInTheDocument()

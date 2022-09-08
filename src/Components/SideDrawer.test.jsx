@@ -5,7 +5,7 @@ import ShareMock from '../ShareMock'
 import SideDrawerWrapper from './SideDrawer'
 
 
-describe('Side drawer', () => {
+describe('SideDrawer', () => {
   it('notes', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {findByText} = render(<ShareMock><SideDrawerWrapper/></ShareMock>)
