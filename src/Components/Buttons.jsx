@@ -26,7 +26,6 @@ export const TooltipIconButton = ({
 }) => {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
-
   return (
     <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
       data-testid={dataTestId}

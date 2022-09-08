@@ -184,7 +184,6 @@ export function Issues() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedIssueId, issues, repository])
 
-
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
       <div className={classes.cardsContainer}>
