@@ -1,8 +1,9 @@
 import React from 'react'
-import {render, fireEvent} from '@testing-library/react'
+import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import CutPlaneMenu from './CutPlaneMenu'
 import ShareMock from '../ShareMock'
 import {makeTestTree} from '../utils/TreeUtils.test'
+import useStore from '../store/useStore'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
@@ -23,16 +24,21 @@ describe('CutPlane', () => {
     expect(getByText('Z')).toBeInTheDocument()
   })
 
-  it('X Section', () => {
+  it('X Section', async () => {
     const {getByTitle, getByText, debug} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+      result.current.toggleIsPropertiesOn()
+    })
     fireEvent.click(sectionButton)
     const xDirection = getByText('X')
     fireEvent.click(xDirection)
-    const viewer = __getIfcViewerAPIMockSingleton()
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes
-    console.log('callDeletePlanes', callDeletePlanes)
     debug()
+    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    console.log('callDeletePlanes', callDeletePlanes)
     // expect(getByText('X')).toBeInTheDocument()
     // expect(getByText('Y')).toBeInTheDocument()
     // expect(getByText('Z')).toBeInTheDocument()
