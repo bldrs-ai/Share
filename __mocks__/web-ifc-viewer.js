@@ -54,13 +54,6 @@ function __getIfcViewerAPIMockSingleton() {
   return impl
 }
 
-/**
- * delete all planes mock fucntion
- */
-function deleteAllPlanes() {
-  console.log('deletePlane ')
-}
-
 
 export {
   ifcjsMock as default,
