@@ -1,15 +1,14 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
+import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
-import {useIsMobile} from './Hooks'
-import useStore from '../store/useStore'
 
 
 /**
@@ -20,14 +19,15 @@ import useStore from '../store/useStore'
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({viewer, unSelectItem}) {
+export default function OperationsGroup({unSelectItem}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const selectedElement = useStore((state) => state.selectedElement)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
-  const classes = useStyles({isCommentsOn: isCommentsOn})
+  const viewer = useStore((state) => state.viewerStore)
 
+  const classes = useStyles({isCommentsOn: isCommentsOn})
   const toggle = (panel) => {
     openDrawer()
     if (panel === 'Properties') {
@@ -37,6 +37,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
       turnCommentsOn()
     }
   }
+
 
   return (
     <div className={classes.container}>
@@ -58,18 +59,10 @@ export default function OperationsGroup({viewer, unSelectItem}) {
           /> :
           null
         }
-        {useIsMobile() ?
-          <TooltipIconButton
-            title="Section plane"
-            onClick={() => viewer.clipper.createPlane()}
-            icon={<CutPlaneIcon/>}
-          /> :
-          null
-        }
+        <CutPlaneMenu/>
         <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
         <ShortcutsControl/>
       </div>
-      {/* Invisible */}
       <CameraControl viewer={viewer}/>
     </div>
   )
