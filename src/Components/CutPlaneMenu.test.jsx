@@ -1,0 +1,41 @@
+import React from 'react'
+import {render, fireEvent} from '@testing-library/react'
+import CutPlaneMenu from './CutPlaneMenu'
+import ShareMock from '../ShareMock'
+import {makeTestTree} from '../utils/TreeUtils.test'
+import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
+
+
+describe('CutPlane', () => {
+  it('Section Button', () => {
+    const {getByTitle, debug} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    debug()
+    expect(getByTitle('Section')).toBeInTheDocument()
+  })
+
+  it('Section Menu', () => {
+    const {getByTitle, getByText, debug} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const sectionButton = getByTitle('Section')
+    fireEvent.click(sectionButton)
+    debug()
+    expect(getByText('X')).toBeInTheDocument()
+    expect(getByText('Y')).toBeInTheDocument()
+    expect(getByText('Z')).toBeInTheDocument()
+  })
+
+  it('X Section', () => {
+    const {getByTitle, getByText, debug} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const sectionButton = getByTitle('Section')
+    fireEvent.click(sectionButton)
+    const xDirection = getByText('X')
+    fireEvent.click(xDirection)
+    const viewer = __getIfcViewerAPIMockSingleton()
+    const callDeletePlanes = viewer.clipper.deleteAllPlanes
+    console.log('callDeletePlanes', callDeletePlanes)
+    debug()
+    // expect(getByText('X')).toBeInTheDocument()
+    // expect(getByText('Y')).toBeInTheDocument()
+    // expect(getByText('Z')).toBeInTheDocument()
+  })
+})
+

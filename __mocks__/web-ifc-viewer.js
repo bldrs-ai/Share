@@ -26,6 +26,9 @@ const impl = {
   },
   clipper: {
     active: false,
+    deleteAllPlanes: jest.fn(() => {
+      return 'cutPlane'
+    }),
   },
   container: {
     style: {},
@@ -46,6 +49,13 @@ constructorMock.mockImplementation(() => impl)
  */
 function __getIfcViewerAPIMockSingleton() {
   return impl
+}
+
+/**
+ * delete all planes mock fucntion
+ */
+function deleteAllPlanes() {
+  console.log('deletePlane ')
 }
 
 

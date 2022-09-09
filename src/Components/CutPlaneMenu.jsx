@@ -79,7 +79,7 @@ export default function CutPlaneMenu({listOfOptions, icon, title}) {
   return (
     <div>
       <TooltipIconButton
-        title={'Cut Planes'}
+        title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
       />
