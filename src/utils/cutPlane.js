@@ -5,8 +5,8 @@ import {Box3, BufferAttribute, BufferGeometry, Mesh, Vector3} from 'three'
 /**
  * getSelectionAxisFromBoundingBox is the helper method for the cutplane logic
  *
- * @param {Object} boundingBox bouding box
- * @return {Object}
+ * @param {object} boundingBox bouding box
+ * @return {object}
  */
 export function getSelectionAxisFromBoundingBox(boundingBox) {
   return {
@@ -29,8 +29,8 @@ export function getSelectionAxisFromBoundingBox(boundingBox) {
 /**
  * getModelCenter return the center of the model based on bounding box
  *
- * @param {Object} ifcModel bouding box
- * @return {Object} centerCoordinates
+ * @param {object} ifcModel bouding box
+ * @return {object} centerCoordinates
  */
 export function getModelCenter(ifcModel) {
   return new Vector3(
@@ -50,8 +50,8 @@ export function getModelCenter(ifcModel) {
 /**
  * getElementBoundingBox creates a bounding box around the model
  *
- * @param {Object} selection seclected meshes
- * @return {Object} boudingBox geometry
+ * @param {object} selection seclected meshes
+ * @return {object} boudingBox geometry
  */
 export function getElementBoundingBox(selection) {
   const geometry = new BufferGeometry()
