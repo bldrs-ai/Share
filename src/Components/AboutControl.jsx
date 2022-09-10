@@ -63,6 +63,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent installPrefix={installPrefix}/>}
+      data-testid={'about-dialog'}
     />)
 }
 

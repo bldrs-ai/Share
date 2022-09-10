@@ -26,6 +26,7 @@ export default function Dialog({
   setIsDialogDisplayed,
   clazzes = {},
   content,
+  ...props
 }) {
   assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)
   const classes = {...useStyles(useTheme()), ...clazzes}
@@ -35,6 +36,7 @@ export default function Dialog({
       open={isDialogDisplayed}
       onClose={close}
       className={classes.root}
+      {...props}
     >
       <DialogTitle>
         <div>{icon}</div>
