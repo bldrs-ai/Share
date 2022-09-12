@@ -4,6 +4,7 @@ import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
 import ShortcutsControl from './ShortcutsControl'
 import {TooltipIconButton} from './Buttons'
+import AuthNav from './AuthNav'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import MarkupIcon from '../assets/2D_Icons/Markup.svg'
@@ -41,6 +42,7 @@ export default function OperationsGroup({viewer, unSelectItem}) {
   return (
     <div className={classes.container}>
       <div className={classes.topGroup}>
+        <AuthNav />
         <ShareControl viewer={viewer}/>
         <TooltipIconButton
           title='Notes'
