@@ -344,6 +344,9 @@ export default function CadView({
     setSelectedElement({})
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
+    const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    navigate(`${pathPrefix}${repoFilePath}`)
+    setSelectedElements([])
   }
 
 
