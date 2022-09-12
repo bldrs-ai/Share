@@ -36,6 +36,11 @@ export const build = {
   platform: 'browser',
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
+  define: {
+    'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
+    'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI),
+    'process.env.AUTH0_DOMAIN': JSON.stringify(process.env.AUTH0_DOMAIN),
+  },
   plugins: [
     progress(),
     cleanPlugin(),
