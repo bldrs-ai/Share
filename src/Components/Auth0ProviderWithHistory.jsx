@@ -6,7 +6,7 @@ import {Auth0Provider} from '@auth0/auth0-react'
 export const Auth0ProviderWithHistory = ({children}) => {
   const navigate = useNavigate()
   const onRedirect = (state) => {
-    navigate(state?.returnTo || window.location.pathname)
+    navigate((state && state.returnTo) || window.location.pathname)
   }
 
   return (
