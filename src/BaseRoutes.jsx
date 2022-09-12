@@ -34,7 +34,17 @@ export default function BaseRoutes({testElt = null}) {
     if (location.pathname === installPrefix ||
         location.pathname === (`${installPrefix }/`)) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
-      navigate(`${installPrefix }/share`)
+
+      let targetURL = `${installPrefix}/share`
+      if (location.search !== '') {
+        targetURL += location.search
+      }
+
+      if (location.hash !== '') {
+        targetURL += location.hash
+      }
+
+      navigate(targetURL)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
