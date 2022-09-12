@@ -56,7 +56,7 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElements, setSelectedElements] = useState([])
+  // const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
@@ -76,6 +76,9 @@ export default function CadView({
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const selectedElements = useStore((state) => state.selectedElements)
+  console.log('selectedElements in cad view', selectedElements)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -341,7 +344,7 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement({})
+    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
@@ -356,6 +359,7 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
+    console.log('selected elements in scene', resultIDs)
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
@@ -458,7 +462,6 @@ export default function CadView({
           <NavPanel
             model={model}
             element={rootElement}
-            selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
             setExpandedElements={setExpandedElements}
