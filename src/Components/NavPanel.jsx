@@ -33,7 +33,6 @@ export default function NavPanel({
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
-  console.log('selectedElements', selectedElements)
   return (
     <Paper className={classes.root} >
       <div className={classes.treeContainer}>

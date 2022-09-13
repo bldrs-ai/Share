@@ -56,7 +56,6 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  // const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
@@ -359,7 +358,6 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
-    console.log('selected elements in scene', resultIDs)
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
