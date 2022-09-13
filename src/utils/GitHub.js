@@ -2,7 +2,6 @@ import {Octokit} from '@octokit/rest'
 import PkgJson from '../../package.json'
 import debug from './debug'
 import {assertDefined} from './assert'
-import {isRunningLocally} from './network'
 
 
 /**
@@ -388,7 +387,7 @@ export class MockOctokit {
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
-const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+const octokit = process.env.NODE_ENV === 'test' ? new MockOctokit() : new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
 
