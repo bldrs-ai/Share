@@ -69,7 +69,7 @@ const UserProfile = ({size = 'medium'}) => {
           </ListItemIcon>
         </MenuItem>
         <Divider/>
-        <MenuItem onClick={() => logout({returnTo: window.location.origin})}>
+        <MenuItem onClick={() => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})}>
           <ListItemIcon>
             <Logout/>
             <Typography sx={{paddingLeft: '11px'}}>
