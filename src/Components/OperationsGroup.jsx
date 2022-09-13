@@ -88,7 +88,7 @@ const useStyles = makeStyles({
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'space-between',
-    height: '110px',
+    height: '170px',
     width: '50px',
   },
   lowerGroup: {

@@ -10,3 +10,7 @@ a {
   color: inherit;
   text-decoration: inherit;
 }
+
+.no-hover {
+  background-color: inherit !important;
+}
