@@ -349,7 +349,7 @@ export default function CadView({
     viewer.clipper.deleteAllPlanes()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
-    setSelectedElements([])
+    setSelectedElements(null)
   }
 
 
