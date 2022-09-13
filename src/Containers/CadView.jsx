@@ -76,8 +76,6 @@ export default function CadView({
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
-  const selectedElements = useStore((state) => state.selectedElements)
-  console.log('selectedElements in cad view', selectedElements)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
