@@ -131,14 +131,15 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     for (let i = 0; i < sampleHeights.length; i++) {
       sampleHeightsIndex[i] = i
     }
-  
+    const floorplanMenu = []
+
     const planeoffset = 0.5
     sampleHeightsIndex.forEach((data) => {
       floorplanMenu.push(
           <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
     })
+    return floorplanMenu
   }
-  const floorplanMenu = []
   showExtractMenu()
 
  
@@ -166,7 +167,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         }}
       >
         <MenuItem onClick={() => planView()}> Plan View</MenuItem>
-        {floorplanMenu}
+        {showExtractMenu}
       </Menu>
     </div>
   )
