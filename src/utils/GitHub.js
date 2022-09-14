@@ -103,6 +103,9 @@ async function getGitHub(repository, path, args = {}) {
       org: repository.orgName,
       repo: repository.name,
     },
+  },
+  {
+    accept: 'application/vnd.github+json',
     ...args,
   })
 
