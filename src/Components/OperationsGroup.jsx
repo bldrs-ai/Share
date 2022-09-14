@@ -1,6 +1,7 @@
 import React from 'react'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
+import AppTray from './AppTray'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
@@ -42,6 +43,7 @@ export default function OperationsGroup({unSelectItem}) {
   return (
     <div className={classes.container}>
       <div className={classes.topGroup}>
+        APPPPZZZ <AppTray/>
         <ShareControl viewer={viewer}/>
         <TooltipIconButton
           title='Notes'
