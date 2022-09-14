@@ -9,8 +9,8 @@ import LogoIcon from '../assets/2D_Icons/Logo.svg'
 
 
 /**
- * @param {function} onClick function triggered when logo is cliked
- * @return {Object} React component
+ * @param {Function} onClick function triggered when logo is cliked
+ * @return {object} React component
  */
 export default function Logo({onClick}) {
   const classes = useStyles(useTheme())

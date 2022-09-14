@@ -9,9 +9,10 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 /**
  * Panel Title
- * @param {String} title Panel title
- * @param {Object} controlsGroup Controls Group is placed on the right of the title
- * @return {Object} Properties Panel react component
+ *
+ * @param {string} title Panel title
+ * @param {object} controlsGroup Controls Group is placed on the right of the title
+ * @return {object} Properties Panel react component
  */
 function PanelTitle({title, controlsGroup}) {
   const classes = useStyles(useTheme())
@@ -28,8 +29,9 @@ function PanelTitle({title, controlsGroup}) {
 
 /**
  * PropertiesPanel is a wrapper for the item properties component.
- * It containe the title with additional controls, and the item properties styled container.
- * @return {Object} Properties Panel react component
+ * It contains the title with additional controls, and the item properties styled container.
+ *
+ * @return {object} Properties Panel react component
  */
 export function PropertiesPanel() {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)

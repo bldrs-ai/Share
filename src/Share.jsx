@@ -18,10 +18,11 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 
 /**
  * Handles path demuxing to pass to CadView.
+ *
  * @param {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
  * @param {string} appPrefix e.g. /share is the prefix for this component.
  * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
- * @return {Object} The Share react component.
+ * @return {React.Component} The Share react component.
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
@@ -90,6 +91,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 /**
  * Navigate to index.ifc with nice camera setting.
+ *
  * @param {NavigateFunction} navigate
  * @param {string} appPrefix
  */
@@ -115,8 +117,8 @@ export function navToDefault(navigate, appPrefix) {
  *
  * @param {string} installPrefix e.g. /share
  * @param {string} pathPrefix e.g. /share/v/p
- * @param {Object} urlParams e.g. .../:org/:repo/:branch/*
- * @return {Object}
+ * @param {object} urlParams e.g. .../:org/:repo/:branch/*
+ * @return {object}
  */
 export function getModelPath(installPrefix, pathPrefix, urlParams) {
   // TODO: combine modelPath methods into class.

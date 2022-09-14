@@ -5,7 +5,7 @@ import * as Privacy from './privacy/Privacy'
 
 
 /**
- * @return {Object} {theme, colorMode}
+ * @return {object} {theme, colorMode}
  */
 export default function useTheme() {
   const [themeChangeListeners] = useState({})
@@ -57,7 +57,7 @@ export const Themes = {
 
 /**
  * @param {string} mode
- * @return {Object} Theme settings
+ * @return {object} Theme settings
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
@@ -168,7 +168,9 @@ function loadTheme(mode) {
 
 /**
  * Look for explicit night, otherwise day
+ *
  * See https://drafts.csswg.org/mediaqueries-5/#prefers-color-scheme
+ *
  * @return {string}
  * @private
  */

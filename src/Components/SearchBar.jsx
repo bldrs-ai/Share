@@ -21,9 +21,10 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 /**
  * Search bar component
- * @param {function} onClickMenuCb callback
+ *
+ * @param {Function} onClickMenuCb callback
  * @param {boolean} showNavPanel toggle
- * @return {Object} The SearchBar react component
+ * @return {React.Component} The SearchBar react component
  */
 export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const location = useRef(useLocation())
@@ -151,7 +152,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
  *
  *   /share/v/p/index.ifc
  *
- * @param {Object} location React router location object.
+ * @param {object} location React router location object.
  * @return {boolean}
  */
 export function containsIfcPath(location) {
@@ -162,7 +163,7 @@ export function containsIfcPath(location) {
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
- * @param {Object} searchParams Object with a 'q' parameter and optional string value.
+ * @param {object} searchParams Object with a 'q' parameter and optional string value.
  * @return {boolean}
  */
 export function validSearchQuery(searchParams) {
@@ -180,7 +181,7 @@ export function validSearchQuery(searchParams) {
  *
  *   /share/v/p/index.ifc?q=foo
  *
- * @param {Object} location React router location object.
+ * @param {object} location React router location object.
  * @param {string} fileExtension defaults to '.ifc' for now.
  * @return {string}
  */

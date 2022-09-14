@@ -1,8 +1,9 @@
 /**
  * Data stored in Zustand for IFC state.
- * @param {function} set
- * @param {function} get
- * @return {Object} Zustand slice.
+ *
+ * @param {Function} set
+ * @param {Function} get
+ * @return {object} Zustand slice.
  */
 export default function createIFCSlice(set, get) {
   return {
@@ -10,11 +11,13 @@ export default function createIFCSlice(set, get) {
     modelPath: null,
     modelStore: null,
     selectedElement: null,
+    selectedElements: [],
     cameraControls: null,
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
     setModelStore: (model) => set(() => ({modelStore: model})),
     setSelectedElement: (element) => set(() => ({selectedElement: element})),
+    setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
     setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
   }
 }

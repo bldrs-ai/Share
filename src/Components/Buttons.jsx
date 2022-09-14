@@ -9,12 +9,12 @@ import {assertDefined} from '../utils/assert'
 
 /**
  * @param {string} title Tooltip text
- * @param {function} onClick
- * @param {Object} icon
+ * @param {Function} onClick
+ * @param {object} icon
  * @param {string} placement
  * @param {string} size Size of button component
  * @param {string} dataTestId Internal attribute for component testing
- * @return {Object} React component
+ * @return {React.Component} React component
  */
 export const TooltipIconButton = ({
   title,
@@ -26,7 +26,6 @@ export const TooltipIconButton = ({
 }) => {
   assertDefined(title, icon, onClick)
   const classes = useStyles(useTheme())
-
   return (
     <Tooltip classes={{tooltip: classes.root}} title={title} describeChild placement={placement}
       data-testid={dataTestId}
@@ -40,12 +39,12 @@ export const TooltipIconButton = ({
 
 
 /**
- * @param {function} onClick
+ * @param {Function} onClick
  * @param {string} title Tooltip text
- * @param {Object} icon
+ * @param {object} icon
  * @param {string} size Size of button component
  * @param {string} placement Default: left
- * @return {Object} React component
+ * @return {React.Component} React component
  */
 export function TooltipToggleButton({
   onClick,
@@ -84,12 +83,12 @@ export function TooltipToggleButton({
 /**
  * @param {string} title The text for tooltip
  * @param {boolean} isDialogDisplayed
- * @param {function} setIsDialogDisplayed
- * @param {Object} icon The header icon
+ * @param {Function} setIsDialogDisplayed
+ * @param {object} icon The header icon
  * @param {string} placement Default: left
  * @param {string} size Size of button component
- * @param {Object} dialog The controlled dialog
- * @return {Object} React component
+ * @param {object} dialog The controlled dialog
+ * @return {React.Component} React component
  */
 export function ControlButton({
   title,
@@ -124,12 +123,13 @@ export function ControlButton({
 /**
  * A FormButton is a TooltipIconButton but with parameterized type for
  * form actions.
+ *
  * @param {string} title
- * @param {Object} icon
+ * @param {object} icon
  * @param {string} type Type of button (and icon to render)
  * @param {string} placement Placement of tooltip
  * @param {string} size Size of button component
- * @return {Object} React component
+ * @return {React.Component} React component
  */
 export function FormButton({title, icon, type = 'submit', placement = 'left', size = 'medium'}) {
   assertDefined(title, icon)
@@ -148,12 +148,13 @@ export function FormButton({title, icon, type = 'submit', placement = 'left', si
 /**
  * A FormButton is a TooltipIconButton but with parameterized type for
  * form actions.
+ *
  * @param {string} title
- * @param {Object} icon
+ * @param {object} icon
  * @param {string} type Type of button (and icon to render)
  * @param {string} placement Placement of tooltip
  * @param {string} size Size of button component
- * @return {Object} React component
+ * @return {React.Component} React component
  */
 export function RectangularButton({
   title,
