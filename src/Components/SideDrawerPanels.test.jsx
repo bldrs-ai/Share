@@ -1,16 +1,22 @@
 import React from 'react'
-import {render, screen} from '@testing-library/react'
+import {act, render, renderHook} from '@testing-library/react'
 import ShareMock from '../ShareMock'
+import useStore from '../store/useStore'
 import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
 
 
-test('Notes panel', () => {
-  render(<ShareMock><NotesPanel/></ShareMock>)
-  expect(screen.getByText('Notes')).toBeInTheDocument()
-})
+describe('SideDrawerPanels', () => {
+  it('Notes', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(null)
+    })
+    expect(getByText('Notes')).toBeInTheDocument()
+  })
 
-
-test('Properties panel', () => {
-  render(<ShareMock><PropertiesPanel/></ShareMock>)
-  expect(screen.getByText('Properties')).toBeInTheDocument()
+  it('Properties', () => {
+    const {getByText} = render(<ShareMock><PropertiesPanel/></ShareMock>)
+    expect(getByText('Properties')).toBeInTheDocument()
+  })
 })

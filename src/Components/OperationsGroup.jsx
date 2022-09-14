@@ -16,9 +16,9 @@ import ListIcon from '../assets/2D_Icons/List.svg'
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
  *
- * @param {Object} viewer The IFC viewer
- * @param {function} unSelectItem deselects currently selected element
- * @return {Object}
+ * @param {object} viewer The IFC viewer
+ * @param {Function} unSelectItem deselects currently selected element
+ * @return {React.Component}
  */
 export default function OperationsGroup({unSelectItem}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)

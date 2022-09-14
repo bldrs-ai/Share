@@ -1,6 +1,6 @@
 /**
- * @param {Number} num Number to convert to float
- * @return {Number} The number as a float
+ * @param {number} num Number to convert to float
+ * @return {number} The number as a float
  */
 export function numToFloat(num) {
   return parseFloat(num)
@@ -8,9 +8,9 @@ export function numToFloat(num) {
 
 
 /**
- * @param {Number} num Number to round
- * @param {Number} numDigits Number of digits to round to, default = 0
- * @return {Number} The rounded number
+ * @param {number} num Number to round
+ * @param {number} numDigits Number of digits to round to, default = 0
+ * @return {number} The rounded number
  */
 export function round(num, numDigits = 0) {
   return numToFloat(numToFloat(num).toFixed(numDigits))
@@ -18,10 +18,10 @@ export function round(num, numDigits = 0) {
 
 
 /**
- * @param {Number} x X coordinate
- * @param {Number} y y coordinate
- * @param {Number} z Z coordinate
- * @param {Number} numDigits Number of digits to round to, default = 0
+ * @param {number} x X coordinate
+ * @param {number} y y coordinate
+ * @param {number} z Z coordinate
+ * @param {number} numDigits Number of digits to round to, default = 0
  * @return {Array} Array of [x, y, z]
  */
 export function roundCoord(x, y, z, numDigits = 0) {

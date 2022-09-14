@@ -1,6 +1,5 @@
 import React from 'react'
-import {act, render, screen, waitFor} from '@testing-library/react'
-import {renderHook} from '@testing-library/react-hooks'
+import {act, render, screen, waitFor, renderHook} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import {MockModel} from '../utils/IfcMock.test'
 import useStore from '../store/useStore'
@@ -10,10 +9,8 @@ import ItemProperties from './ItemProperties'
 test('ItemProperties for single element', async () => {
   const testLabel = 10
   const {result} = renderHook(() => useStore((state) => state))
-  act(() => {
+  await act(() => {
     result.current.setSelectedElement({expressID: 10})
-  })
-  act(() => {
     result.current.setModelStore(new MockModel)
   })
 

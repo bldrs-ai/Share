@@ -1,5 +1,4 @@
-import React, {useEffect} from 'react'
-import {useLocation} from 'react-router-dom'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
@@ -11,11 +10,13 @@ import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import Hamburger from '../assets/2D_Icons/Menu.svg'
 
+
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel
- * @param {Number} topOffset global offset defined in the cad view
- * @param {function} onClickMenuCb callback passed from cad view
- * @return {Object} The button react component
+ *
+ * @param {number} topOffset global offset defined in the cad view
+ * @param {Function} onClickMenuCb callback passed from cad view
+ * @return {object} The button react component
  */
 export function NavPanelControl({topOffset, onClickMenuCb}) {
   const classes = useStyles({topOffset: topOffset})
@@ -34,15 +35,14 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
 }
 
 /**
- * @param {Object} model
- * @param {Object} element
+ * @param {object} model
+ * @param {object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
  * @param {Array} expandedElements
- * @param {function} onElementSelect
- * @param {function} setExpandedElements
+ * @param {Function} setExpandedElements
  * @param {string} pathPrefix
- * @return {Object}
+ * @return {object}
  */
 export default function NavPanel({
   model,
@@ -50,29 +50,10 @@ export default function NavPanel({
   selectedElements,
   defaultExpandedElements,
   expandedElements,
-  onElementSelect,
   setExpandedElements,
   pathPrefix,
 }) {
   assertDefined(...arguments)
-
-  const location = useLocation()
-
-  useEffect(() => {
-    if (location.pathname.length <= 0) {
-      return
-    }
-    const parts = location.pathname.split(/\//)
-    if (parts.length > 0) {
-      const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
-      }
-    }
-  // eslint-disable-next-line
-  }, [location])
-
   const classes = useStyles()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
@@ -98,8 +79,6 @@ export default function NavPanel({
               model={model}
               element={element}
               pathPrefix={pathPrefix}
-              onElementSelect={onElementSelect}
-              setExpandedElements={setExpandedElements}
             />
           }
         </TreeView>

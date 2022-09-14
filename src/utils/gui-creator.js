@@ -1,5 +1,6 @@
 /**
  * Create menu button using plain JS
+ *
  * @param {string} iconSource path to the button icon
  * @return {HTMLElement} The sum of the two numbers.
  */

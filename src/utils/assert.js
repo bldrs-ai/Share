@@ -1,5 +1,6 @@
 /**
  * If cond is true, do nothing.  Otherwise, throw error with msg.
+ *
  * @param {string} cond path to the button icon.
  * @param {string} msg path to the button icon.
  * @throws If the condition is false.
@@ -14,8 +15,9 @@ export function assert(cond, msg) {
 
 /**
  * Equivalent to calling assertDefined on each parameter.
- * @param {array} args Variable length arguments to assert are defined.
- * @return {array} args That was passed in
+ *
+ * @param {Array} args Variable length arguments to assert are defined.
+ * @return {Array} args That was passed in
  * @throws If any argument is not defined.
  */
 export function assertDefined(...args) {
@@ -24,6 +26,9 @@ export function assertDefined(...args) {
       const arg = args[ndx]
       assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`)
     }
+  }
+  if (args.length === 1) {
+    return args[0]
   }
   return args
 }

@@ -14,8 +14,9 @@ import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 /**
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.
+ *
  * @param {Array} listOfOptions Title for the drawer
- * @return {Object} ItemPropertiesDrawer react component
+ * @return {object} ItemPropertiesDrawer react component
  */
 export default function CutPlaneMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
@@ -78,7 +79,7 @@ export default function CutPlaneMenu({listOfOptions, icon, title}) {
   return (
     <div>
       <TooltipIconButton
-        title={'Cut Planes'}
+        title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
       />

@@ -7,8 +7,8 @@ import {makeStyles} from '@mui/styles'
 /**
  * @param {string} message
  * @param {string} type
- * @param {function} open
- * @return {Object}
+ * @param {Function} open
+ * @return {object}
  */
 export default function SnackBarMessage({message, type, open}) {
   const classes = useStyles()
