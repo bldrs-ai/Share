@@ -11,6 +11,8 @@ import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
+import {extractHeight} from '../utils/extractHeight'
+
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -23,6 +25,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const classes = useStyles()
   const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
+  console.log(model)
+  extractHeight(model)
   const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
