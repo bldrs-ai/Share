@@ -3,7 +3,7 @@
  * @param {object} ifcModel
  * @return {array} elevation values
  */
-export function extractHeight(ifcModel) {
+export async function extractHeight(ifcModel) {
   try {
     const ifcBuildingStoreyID = 3124254112
     const ifcBuildingStorey = ifcModel.getAllItemsOfType(ifcBuildingStoreyID, true)
@@ -14,14 +14,14 @@ export function extractHeight(ifcModel) {
       for (let i = 0; i < allStor.length; i++) {
         elevValues[i] = allStor[i].Elevation.value
       }
-      console.log(elevValues)
+      // console.log(elevValues)
       return elevValues
     }
     const elevValues = []
     for (let i = 0; i < ifcBuildingStorey.length; i++) {
       elevValues[i] = ifcBuildingStorey[i].Elevation.value
     }
-    return printStorey()
+    return await printStorey()
   } catch {
     console.log('No Levels detected')
   }

@@ -25,8 +25,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const classes = useStyles()
   const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
-  console.log(model)
-  extractHeight(model)
+
   const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -108,28 +107,41 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }, [model])
 
-  let sampleHeights = []
+  const showExtractMenu = async () => {
+    const allStor = await extractHeight(model)
+    console.log(allStor)
+
+    let sampleHeights = []
 
 
-  // PLACEHOLDER VALUES
-  /* eslint-disable */
-  const EISVOGEL = [
-    -2.24, 0, 3.5,
-    6.4, 9.5, 12.6,
-    15.7, 18.8, 21.81,
-    27.12,
-  ]
-
-  const sampleHeightsIndex = [0, 1, 2, 3, 4, 5, 6]
-  /* eslint-enable */
-
-  sampleHeights = EISVOGEL
+    // PLACEHOLDER VALUES
+    /* eslint-disable */
+    const EISVOGEL = [
+      -2.24, 0, 3.5,
+      6.4, 9.5, 12.6,
+      15.7, 18.8, 21.81,
+      27.12,
+    ]
+  
+    /* eslint-enable */
+  
+    //sampleHeights = EISVOGEL
+    sampleHeights = allStor
+    const sampleHeightsIndex = []
+    for (let i = 0; i < sampleHeights.length; i++) {
+      sampleHeightsIndex[i] = i
+    }
+  
+    const planeoffset = 0.5
+    sampleHeightsIndex.forEach((data) => {
+      floorplanMenu.push(
+          <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
+    })
+  }
   const floorplanMenu = []
-  const planeoffset = 0.5
-  sampleHeightsIndex.forEach((data) => {
-    floorplanMenu.push(
-        <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
-  })
+  showExtractMenu()
+
+ 
   return (
     <div>
       <TooltipIconButton
