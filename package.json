@@ -34,6 +34,7 @@
     "@mui/styled-engine": "^5.8.7",
     "@mui/styles": "^5.9.2",
     "@octokit/rest": "^19.0.3",
+    "@testing-library/react-hooks": "^8.0.1",
     "clsx": "^1.2.1",
     "material-ui-popup-state": "^4.0.2",
     "normalize.css": "^8.0.1",
