@@ -11,6 +11,7 @@ export default function createUISlice(set, get) {
     isPropertiesOn: false,
     isCommentsOn: false,
     snackMessage: null,
+    cutPlaneDirection: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
@@ -18,5 +19,6 @@ export default function createUISlice(set, get) {
     turnCommentsOn: () => set(() => ({isCommentsOn: true})),
     turnCommentsOff: () => set(() => ({isCommentsOn: false})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
+    setCutPlaneDirection: (direction) => set(() => ({cutPlaneDirection: direction})),
   }
 }

@@ -13,7 +13,6 @@ describe('CadView', () => {
     jest.clearAllMocks()
   })
 
-
   it('renders with mock IfcViewerAPI', async () => {
     const modelPath = {
       filepath: `index.ifc`,
@@ -68,8 +67,7 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-
-  it('clear elements on unselect', async () => {
+  it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
@@ -80,10 +78,11 @@ describe('CadView', () => {
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.setSelectedElement(targetEltId)
-      result.current.setSelectedElements([targetEltId])
+      // result.current.setSelectedElement(targetEltId)
+      // result.current.setSelectedElements([targetEltId])
+      result.current.setCutPlaneDirection('y')
     })
-    const {debug, getByTitle} = render(
+    const {getByTitle} = render(
         <ShareMock>
           <CadView
             installPrefix={'/'}
@@ -92,13 +91,16 @@ describe('CadView', () => {
             modelPath={modelPath}
           />
         </ShareMock>)
-    debug()
     expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear selection')
-    fireEvent.click(clearSelection)
+    act(() => {
+      fireEvent.click(clearSelection)
+    })
     const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toBe(null)
     expect(result.current.selectedElement).toBe(null)
+    expect(result.current.cutPlaneDirection).toBe(null)
+    await actAsyncFlush()
   })
 })

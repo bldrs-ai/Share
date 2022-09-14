@@ -18,9 +18,8 @@ import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function CutPlaneMenu({listOfOptions, icon, title}) {
+export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const [cutPlaneDirection, setCutPlaneDirection] = useState('')
   const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
   const PLANE_PREFIX = 'p'
@@ -33,6 +32,8 @@ export default function CutPlaneMenu({listOfOptions, icon, title}) {
     setAnchorEl(null)
   }
   const viewer = useStore((state) => state.viewerStore)
+  const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
+  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const location = useLocation()
 
   const createPlane = (normalDirection) => {
