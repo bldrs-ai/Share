@@ -124,8 +124,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     ]
   
     /* eslint-enable */
-  
-    //sampleHeights = EISVOGEL
+
+    // sampleHeights = EISVOGEL
     sampleHeights = allStor
     const sampleHeightsIndex = []
     for (let i = 0; i < sampleHeights.length; i++) {
@@ -142,7 +142,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
   showExtractMenu()
 
- 
+
   return (
     <div>
       <TooltipIconButton
