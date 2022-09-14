@@ -78,8 +78,8 @@ describe('CadView', () => {
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      // result.current.setSelectedElement(targetEltId)
-      // result.current.setSelectedElements([targetEltId])
+      result.current.setSelectedElement(targetEltId)
+      result.current.setSelectedElements([targetEltId])
       result.current.setCutPlaneDirection('y')
     })
     const {getByTitle} = render(
