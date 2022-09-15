@@ -1,6 +1,6 @@
 import React, {useEffect, useRef, useState} from 'react'
 // eslint-disable-next-line no-unused-vars
-import {NavigateFunction, useNavigate, useParams} from 'react-router-dom'
+import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
