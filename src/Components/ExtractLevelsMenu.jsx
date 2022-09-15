@@ -17,8 +17,9 @@ import {extractHeight} from '../utils/extractHeight'
 /**
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.
+ *
  * @param {Array} listOfOptions Title for the drawer
- * @return {Object} ItemPropertiesDrawer react component
+ * @return {object} ItemPropertiesDrawer react component
  */
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
@@ -110,8 +111,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }, [model])
 
 
-
-  const showExtractMenu = async (floorplanMenu) => {
+  const showExtractMenu = async () => {
     const allStor = await extractHeight(model)
     console.log(allStor)
 
@@ -129,7 +129,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   
     /* eslint-enable */
 
-    //sampleHeights = EISVOGEL
+    // sampleHeights = EISVOGEL
     sampleHeights = allStor
     const sampleHeightsIndex = []
     for (let i = 0; i < sampleHeights.length; i++) {
@@ -144,9 +144,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     })
     return floorplanMenu
   }
-
-
-  
 
 
   return (

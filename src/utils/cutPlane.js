@@ -81,7 +81,7 @@ export function getElementBoundingBox(selection) {
  *
  * @param {IfcViewerAPI } viewer bouding box
  */
- export function removePlanes(viewer) {
+export function removePlanes(viewer) {
   viewer?.clipper.deleteAllPlanes()
   const clippingPlanes = viewer?.clipper['context'].clippingPlanes
   for (const plane of clippingPlanes) {

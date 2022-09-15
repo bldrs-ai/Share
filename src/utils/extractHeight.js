@@ -1,7 +1,8 @@
 /**
  * Extract related elements.
+ *
  * @param {object} ifcModel
- * @return {array} elevation values
+ * @return {Array} elevation values
  */
 export async function extractHeight(ifcModel) {
   try {
