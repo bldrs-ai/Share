@@ -1,11 +1,5 @@
-import React, {useEffect} from 'react'
-import {
-  Outlet,
-  Routes,
-  Route,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom'
+import React, {useEffect, useRef} from 'react'
+import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
@@ -26,20 +20,19 @@ import debug from './utils/debug'
  * @return {object}
  */
 export default function BaseRoutes({testElt = null}) {
-  const location = useLocation()
-  const navigate = useNavigate()
+  const location = useRef(useLocation())
+  const navigation = useRef(useNavigate())
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+  const basePath = `${installPrefix }/`
 
   useEffect(() => {
-    if (location.pathname === installPrefix ||
-        location.pathname === (`${installPrefix }/`)) {
+    if (location.current.pathname === installPrefix ||
+        location.current.pathname === basePath) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
-      navigate(`${installPrefix }/share`)
+      navigation.current(`${installPrefix }/share`)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [basePath, installPrefix, location, navigation])
 
-  const basePath = `${installPrefix }/`
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>

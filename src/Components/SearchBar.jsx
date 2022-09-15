@@ -27,8 +27,8 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * @return {React.Component} The SearchBar react component
  */
 export default function SearchBar({onClickMenuCb, showNavPanel}) {
-  const location = useLocation()
-  const navigate = useNavigate()
+  const location = useRef(useLocation())
+  const navigation = useRef(useNavigate())
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
@@ -51,11 +51,10 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
           setInputText(newInputText)
         }
       } else {
-        navigate(location.pathname)
+        navigation.current(location.current.pathname)
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [inputText, searchParams])
 
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
@@ -67,7 +66,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
-        navigate(modelPath, {replace: true})
+        navigation.current(modelPath, {replace: true})
       } catch (e) {
         console.error(e)
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
@@ -78,7 +77,7 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
-      navigate({
+      navigation.current({
         pathname: newPath,
         search: `?q=${inputText}`,
       })
