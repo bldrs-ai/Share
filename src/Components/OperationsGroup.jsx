@@ -43,7 +43,7 @@ export default function OperationsGroup({unSelectItem}) {
   return (
     <div className={classes.container}>
       <div className={classes.topGroup}>
-        App Button <AppTray/>
+        <AppTray/>
         <ShareControl viewer={viewer}/>
         <TooltipIconButton
           title='Notes'
