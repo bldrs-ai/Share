@@ -7,7 +7,7 @@ import React from 'react'
 export default function AppTray() {
   return (
     <>
-      Apps
+      App IFrame:
       <iframe
         title='Vyzn'
         src='https://www.vyzn.tech/'
