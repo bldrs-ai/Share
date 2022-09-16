@@ -11,6 +11,9 @@ import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 
 
+import MatrixWidgetApi from './MatrixWidgetApi'
+
+
 /**
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
@@ -42,6 +45,7 @@ export default function OperationsGroup({unSelectItem}) {
   return (
     <div className={classes.container}>
       <div className={classes.topGroup}>
+        <MatrixWidgetApi/>
         <ShareControl viewer={viewer}/>
         <TooltipIconButton
           title='Notes'
