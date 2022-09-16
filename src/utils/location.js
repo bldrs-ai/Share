@@ -1,4 +1,3 @@
-
 const hashListeners = {}
 window.onhashchange = () => {
   for (const name in hashListeners) {
@@ -16,7 +15,7 @@ window.onhashchange = () => {
 /**
  * @param {string} name Name of listener.  Can be used to later remove
  * listener. TODO: add remove method
- * @param {function} onHashCb Called when window.location.hash changes
+ * @param {Function} onHashCb Called when window.location.hash changes
  */
 export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
@@ -27,9 +26,9 @@ export function addHashListener(name, onHashCb) {
  * Serialize the given paramObj and add it to the current
  * location.hash
  *
- * @param {Object} location The window.location object
+ * @param {object} location The window.location object
  * @param {string} name A unique name for the params
- * @param {Object} params The parameters to encode
+ * @param {object} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -40,7 +39,7 @@ export function addHashParams(location, name, params, includeNames = false) {
       continue
     }
     const paramValue = params[paramName]
-    const separator = encodedParams == '' ? '' : ','
+    const separator = encodedParams === '' ? '' : ','
     const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
     encodedParams += `${separator}${encodedParam}`
   }
@@ -48,7 +47,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   const setMap = {}
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
-    if (set == '') {
+    if (set === '') {
       continue
     }
     const setParts = set.split(':')
@@ -61,7 +60,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += (newHash.length == 0 ? '' : '::') + `${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : '::' }${setKey}:${setValue}`
     }
   }
   location.hash = newHash
@@ -69,13 +68,23 @@ export function addHashParams(location, name, params, includeNames = false) {
 
 
 /**
- * @param {Object} location
- * @param {String} name prefix of the params to fetch
- * @return {string|undfined} The encoded params
+ * @param {object} location
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params
  */
 export function getHashParams(location, name) {
-  const sets = location.hash.substring(1).split('::')
-  const prefix = name + ':'
+  return getHashParamsFromHashStr(location.hash.substring(1), name)
+}
+
+
+/**
+ * @param {string} hashStr
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params
+ */
+export function getHashParamsFromHashStr(hashStr, name) {
+  const sets = hashStr.split('::')
+  const prefix = `${name}:`
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (set.startsWith(prefix)) {
@@ -88,23 +97,24 @@ export function getHashParams(location, name) {
 
 /**
  * Removes the given named hash param.
- * @param {Object} location
- * @param {String} name prefix of the params to fetch
+ *
+ * @param {object} location
+ * @param {string} name prefix of the params to fetch
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')
-  const prefix = name + ':'
+  const prefix = `${name }:`
   let newParamsEncoded = ''
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (set.startsWith(prefix)) {
       continue
     }
-    const separator = newParamsEncoded.length == 0 ? '' : '::'
+    const separator = newParamsEncoded.length === 0 ? '' : '::'
     newParamsEncoded += separator + set
   }
   location.hash = newParamsEncoded
-  if (location.hash == '') {
+  if (location.hash === '') {
     history.pushState(
         '', document.title, window.location.pathname + window.location.search)
   }

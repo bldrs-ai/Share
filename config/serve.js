@@ -2,31 +2,14 @@ import esbuild from 'esbuild'
 import http from 'http'
 import * as common from './common.js'
 
-const port = 8080
 
-esbuild.serve({
-  port: port,
-  servedir: common.build.outdir,
-}, common.build).then((result) => {
-  // The result tells us where esbuild's local server is
-  const {host, port} = result
+const SERVE_PORT = 8080
+const HTTP_NOT_FOUND = 404
 
-  http.createServer((req, res) => {
-    const options = {
-      hostname: host,
-      port: port,
-      path: req.url,
-      method: req.method,
-      headers: req.headers,
-    }
-
-    // Forward each incoming request to esbuild
-    const proxyReq = http.request(options, (proxyRes) => {
-      // If esbuild returns "not found", send a custom 404 page
-      if (proxyRes.statusCode === 404) {
-        res.writeHead(404, {'Content-Type': 'text/html'})
-        res.end(
-`<!DOCTYPE html>
+const serveNotFound = ((res) => {
+  res.writeHead(HTTP_NOT_FOUND, {'Content-Type': 'text/html'})
+  res.end(
+      `<!DOCTYPE html>
 <html>
   <head>
     <meta charset="utf-8">
@@ -51,13 +34,39 @@ esbuild.serve({
     Resource not found.  Redirecting...
   </body>
 </html>`)
-        return
-      }
+})
 
-      // Otherwise, forward the response from esbuild to the client
-      res.writeHead(proxyRes.statusCode, proxyRes.headers)
-      proxyRes.pipe(res, {end: true})
-    })
+const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) => {
+  // If esbuild returns "not found", send a custom 404 page
+  if (proxyRes.statusCode === HTTP_NOT_FOUND) {
+    serveNotFound(res)
+  }
+
+  // Otherwise, forward the response from esbuild to the client
+  res.writeHead(proxyRes.statusCode, proxyRes.headers)
+  proxyRes.pipe(res, {end: true})
+})
+)
+
+
+esbuild.serve({
+  port: SERVE_PORT,
+  servedir: common.build.outdir,
+}, {}).then((result) => {
+  // The result tells us where esbuild's local server is
+  const {host, port} = result
+
+  http.createServer((req, res) => {
+    const options = {
+      hostname: host,
+      port: port,
+      path: req.url,
+      method: req.method,
+      headers: req.headers,
+    }
+
+    // Forward each incoming request to esbuild
+    const proxyReq = proxyRequestHandler(options, res)
 
     // Forward the body of the request to esbuild
     req.pipe(proxyReq, {end: true})

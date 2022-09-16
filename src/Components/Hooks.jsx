@@ -13,7 +13,7 @@ export function useIsMobile() {
 
 
 /**
- * @return {Object} {width, height}
+ * @return {object} {width, height}
  */
 export function useWindowDimensions() {
   const [windowDimensions, setWindowDimensions] = useState(getWindowDimensions())
@@ -33,7 +33,7 @@ export function useWindowDimensions() {
 
 
 /**
- * @return {Object} {width, height}
+ * @return {object} {width, height}
  */
 function getWindowDimensions() {
   const {innerWidth: width, innerHeight: height} = window

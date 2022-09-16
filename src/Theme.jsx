@@ -1,18 +1,19 @@
 import {useEffect, useMemo, useState} from 'react'
-import {grey, blueGrey} from '@mui/material/colors'
+import {grey} from '@mui/material/colors'
 import {createTheme} from '@mui/material/styles'
 import * as Privacy from './privacy/Privacy'
 
 
 /**
- * @return {Object} {theme, colorMode}
+ * @return {object} {theme, colorMode}
  */
 export default function useTheme() {
   const [themeChangeListeners] = useState({})
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
     name: 'mode',
-    defaultValue: Themes.Day}))
+    defaultValue: getSystemCurrentLightDark(),
+  }))
 
 
   const theme = useMemo(() => {
@@ -22,7 +23,7 @@ export default function useTheme() {
 
   const colorMode = useMemo(() => {
     return {
-      isDay: () => mode == Themes.Day,
+      isDay: () => mode === Themes.Day,
       getTheme: () => theme,
       toggleColorMode: () => {
         setMode((prevMode) => {
@@ -48,7 +49,7 @@ export default function useTheme() {
 }
 
 
-const Themes = {
+export const Themes = {
   Day: 'Day',
   Night: 'Night',
 }
@@ -56,50 +57,143 @@ const Themes = {
 
 /**
  * @param {string} mode
- * @return {Object} Theme settings
+ * @return {object} Theme settings
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
+  const lightGreen = '#C8E8C7'
+  const darkGreen = '#459A47'
+  const darkGrey = '#707070'
+  const lightGrey = '#CCCCCC'
+  const fontFamily = 'Helvetica'
+  const lime = '#4EEF4B'
   const day = {
     primary: {
       main: grey[100],
+      background: grey[200],
     },
     secondary: {
-      main: blueGrey[100],
+      main: grey[800],
+      background: grey[300],
+    },
+    highlight: {
+      main: lightGreen,
+      secondary: darkGreen,
+      dark: darkGrey,
+      light: lightGrey,
+      lime: lime,
     },
   }
   const night = {
     primary: {
       main: grey[800],
+      background: grey[700],
     },
     secondary: {
-      main: blueGrey[600],
+      main: grey[100],
+      background: grey[700],
+    },
+    highlight: {
+      main: darkGreen,
+      secondary: lightGreen,
+      dark: darkGrey,
+      light: lightGrey,
+      lime: lime,
     },
   }
   const typography = {
-    h1: {fontSize: '1.4rem'},
-    h2: {fontSize: '1.3rem'},
-    h3: {fontSize: '1.2rem'},
-    h4: {fontSize: '1.1rem'},
-    h5: {fontSize: '1rem'},
-    body2: {fontSize: '.8rem'},
+    fontWeightRegular: 400,
+    fontWeightBold: 400,
+    fontWeightMedium: 400,
+    h1: {fontSize: '1.2rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    h2: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    h3: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '200', fontFamily: fontFamily},
+    h4: {fontSize: '1.0rem', lineHeight: '1.2em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    h5: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    p: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    tree: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    propTitle: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '200', fontFamily: fontFamily},
+    propValue: {
+      fontSize: '1.0rem',
+      lineHeight: '1.5em',
+      letterSpacing: '.03em',
+      fontWeight: '400',
+      fontFamily: fontFamily,
+      marginLeft: '4px'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
-  let activePalette = mode == Themes.Day ? day : night
+  let activePalette = mode === Themes.Day ? day : night
   activePalette = {...activePalette, ...{
-    mode: mode == Themes.Day ? 'light' : 'dark',
+    mode: mode === Themes.Day ? 'light' : 'dark',
     background: {
       paper: activePalette.primary.main,
     },
   }}
+  const components = {
+    MuiTreeItem: {
+      styleOverrides: {
+        root: {
+          '& > div.Mui-selected, & > div.Mui-selected:hover': {
+            color: activePalette.secondary.main,
+            backgroundColor: activePalette.secondary.background,
+            borderRadius: '5px',
+          },
+          '& > div.MuiTreeItem-content': {
+            borderRadius: '5px',
+          },
+        },
+      },
+    },
+    MuiButton: {
+      variants: [
+        {
+          props: {variant: 'rectangular'},
+          style: {
+            border: '1px solid grey',
+            width: '288px',
+            height: '50px',
+            color: '#000000',
+            background: 'none',
+            textTransform: 'none',
+            font: 'Inter',
+            fontWeight: 600,
+            fontSize: '16px',
+          },
+        },
+      ],
+      defaultProps: {
+        disableElevation: true,
+        disableFocusRipple: true,
+        disableRipple: true,
+      },
+    },
+  }
   const theme = {
+    components: components,
     typography: typography,
-    shape: {borderRadius: 10},
+    shape: {borderRadius: '8px'},
     palette: activePalette,
+    button: {},
   }
   return createTheme(theme)
+}
+
+
+/**
+ * Look for explicit night, otherwise day
+ *
+ * See https://drafts.csswg.org/mediaqueries-5/#prefers-color-scheme
+ *
+ * @return {string}
+ * @private
+ */
+export function getSystemCurrentLightDark() {
+  if (window.matchMedia) {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
+  }
+  return Themes.Day
 }

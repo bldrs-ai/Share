@@ -1,11 +1,23 @@
+import {cleanPlugin} from 'esbuild-clean-plugin'
+import copyStaticFiles from 'esbuild-copy-static-files'
+import progress from 'esbuild-plugin-progress'
 import svgrPlugin from 'esbuild-plugin-svgr'
+import {fileURLToPath} from 'url'
+import * as path from 'node:path'
+import * as process from 'node:process'
 
-const entry = 'src/index.jsx'
-const buildDir = 'docs'
-const build = {
-  entryPoints: [entry],
+
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
+
+const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
+const assetsDir = path.resolve(__dirname, '..', 'public')
+const buildDir = path.resolve(__dirname, '..', 'docs')
+
+export const build = {
+  entryPoints: [entryPoint],
   bundle: true,
-  minify: true,
+  minify: process.env.NODE_ENV === 'production',
   // https://esbuild.github.io/api/#keep-names
   // We use code identifiers e.g. in ItemProperties for their names
   keepNames: true,
@@ -17,12 +29,20 @@ const build = {
   //   https://esbuild.github.io/api/#chunk-names
   //   https://github.com/evanw/esbuild/issues/16
   splitting: false,
+  metafile: true,
   outdir: buildDir,
   format: 'esm',
   sourcemap: true,
+  platform: 'browser',
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
-  plugins: [svgrPlugin()],
+  plugins: [
+    progress(),
+    cleanPlugin(),
+    svgrPlugin(),
+    copyStaticFiles({
+      src: assetsDir,
+      dest: buildDir,
+    }),
+  ],
 }
-
-export {build}

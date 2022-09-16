@@ -1,4 +1,4 @@
-import * as Ifc from '../utils/Ifc'
+import * as Ifc from '@bldrs-ai/ifclib'
 import debug from '../utils/debug'
 import {deleteProperties} from '../utils/objects'
 
@@ -15,15 +15,17 @@ export default class SearchIndex {
 
   /**
    * Recursively visits elt and indexes properties.
-   * @param {Object} model IFC model.
-   * @param {Object} elt async callback for rendering sub-object
+   *
+   * @param {object} model IFC model.
+   * @param {object} elt async callback for rendering sub-object
    */
   indexElement(model, elt) {
     const type = Ifc.getType(model, elt)
     if (type) {
       this.indexElementByString(this.eltsByType, type, elt)
-      if (type.startsWith('IFC')) {
-        this.indexElementByString(this.eltsByType, type.substring(3), elt)
+      const ifcPrefix = 'IFC'
+      if (type.startsWith(ifcPrefix)) {
+        this.indexElementByString(this.eltsByType, type.substring(ifcPrefix.length), elt)
       }
     }
 
@@ -59,6 +61,7 @@ export default class SearchIndex {
 
   /**
    * Returns a set of word tokens from the string.
+   *
    * @param {str} str
    * @return {Set} token
    */
@@ -68,9 +71,10 @@ export default class SearchIndex {
 
   /**
    * Create index set of found results
-   * @param {Object} index
+   *
+   * @param {object} index
    * @param {string} key
-   * @return {Object} The index set.
+   * @return {object} The index set.
    */
   findCreateIndexSet(index, key) {
     let set = index[key]
@@ -82,9 +86,10 @@ export default class SearchIndex {
 
   /**
    * Add entry for key in index pointing to given elt
-   * @param {Object} index
+   *
+   * @param {object} index
    * @param {string} key
-   * @param {Object} elt
+   * @param {object} elt
    */
   indexElementByString(index, key, elt) {
     this.findCreateIndexSet(index, key).add(elt)
@@ -93,9 +98,10 @@ export default class SearchIndex {
 
   /**
    * Add entry for key in index pointing to given elt for each key in the set
-   * @param {Object} index index of the element in the set
+   *
+   * @param {object} index index of the element in the set
    * @param {Set} strSet set of strings
-   * @param {Object} elt IFC element
+   * @param {object} elt IFC element
    */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
@@ -113,6 +119,7 @@ export default class SearchIndex {
 
   /**
    * Search the index with the given query and return the express IDs of matching IFC elements
+   *
    * @param {string} query The search query.
    * @return {string} resultIDs
    */
@@ -142,7 +149,7 @@ export default class SearchIndex {
     debug().log(`SearchIndex#search: query rewrite: ${query}`)
 
     const token = query // TODO(pablo): tokenization
-    debug(2).log('SearchIndex#search: this: ', this)
+    debug().log('SearchIndex#search: this: ', this)
 
     addAll(this.eltsByName[token])
     addAll(this.eltsByType[token])

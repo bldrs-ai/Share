@@ -2,42 +2,46 @@ import React, {useState} from 'react'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
+import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
 import {useIsMobile} from './Hooks'
-import QuestionIcon from '../assets/2D_Icons/Question.svg'
 import {ControlButton} from './Buttons'
 
 
 /**
  * Displays keyboard shortcuts like how to add a cut plane.
- * @return {Object} React component
+ *
+ * @return {object} React component
  */
 export default function ShortcutsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const classes = useStyles()
   return (
     <ControlButton
-      title='Shortcut keys'
+      title='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<QuestionIcon/>}
+      icon={<div className={classes.iconContainer}><KnowledgeIcon/></div>}
       dialog={
         <ShortcutsDialog
           isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}/>}/>)
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />}
+    />)
 }
 
 
 /**
  * @param {boolean} isDialogDisplayed
- * @param {function} setIsDialogDisplayed
- * @return {Object} React component
+ * @param {Function} setIsDialogDisplayed
+ * @return {object} React component
  */
 function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const classes = useStyles()
   const isMobile = useIsMobile()
   return (
     <Dialog
-      icon={<QuestionIcon/>}
-      headerText='Shortcuts'
+      icon={<KnowledgeIcon/>}
+      headerText='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
@@ -57,7 +61,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               <li>Attach multiple planes</li>
               <li>X is used to clear the planes</li>
             </ul>
-          </div>):
+          </div>) :
           (<ul className={classes.content}>
             <p>To attach a section plane:</p>
             <li>Hover over an element</li>
@@ -67,7 +71,8 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             <p>To clear selection:</p>
             <li>Press <strong>A to clear selected element</strong></li>
           </ul>)
-      }/>
+      }
+    />
   )
 }
 
@@ -75,5 +80,10 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 const useStyles = makeStyles({
   content: {
     textAlign: 'left',
+  },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+    marginBottom: '4px',
   },
 })

@@ -1,8 +1,6 @@
-import React, {createContext} from 'react'
-import {ThemeProvider} from '@mui/material/styles'
-import useTheme from './Theme'
-import {render} from '@testing-library/react'
+import React from 'react'
 import {MemoryRouter, Routes, Route} from 'react-router-dom'
+import {render} from '@testing-library/react'
 
 
 test('mockRoutes', () => {
@@ -12,23 +10,21 @@ test('mockRoutes', () => {
 })
 
 
-const ColorModeContext = createContext({toggleColorMode: () => {}})
-
 /**
- * @param {Object} contentElt React component
- * @return {Object} React component
+ * @param {Array} initialEntries For react-router MemoryRouter.
+ * @param {object} contentElt React component for Route.
+ * @return {React.Component} React component
  */
-export function MockRoutes({contentElt}) {
-  const {theme, colorMode} = useTheme()
+export default function MockRoutes({initialEntries = ['/'], contentElt} = {}) {
+  // TODO(pablo): would be better to not include the initialEntries
+  // attribute if not given, but don't know how to do this in React,
+  // so setting the default as defined in
+  // https://reactrouter.com/docs/en/v6/routers/memory-router.
   return (
-    <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
-        <MemoryRouter>
-          <Routes>
-            <Route path="/*" element={contentElt} />
-          </Routes>
-        </MemoryRouter>
-      </ThemeProvider>
-    </ColorModeContext.Provider>
+    <MemoryRouter initialEntries={initialEntries}>
+      <Routes>
+        <Route path="/*" element={contentElt}/>
+      </Routes>
+    </MemoryRouter>
   )
 }

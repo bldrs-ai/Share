@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react'
+import React, {useRef, useEffect, useState, useContext} from 'react'
 import {
   useLocation,
   useNavigate,
@@ -7,25 +7,26 @@ import {
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipToggleButton, FormButton} from './Buttons'
+import OpenModelControl from './OpenModelControl'
 import debug from '../utils/debug'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import {ColorModeContext} from '../Context/ColorMode'
+import {TooltipIconButton} from './Buttons'
+import useTheme from '../Theme'
 import {
   looksLikeLink,
   githubUrlOrPathToSharePath,
 } from '../ShareRoutes'
-import SearchIcon from '../assets/2D_Icons/Search.svg'
-import LinkIcon from '../assets/2D_Icons/Link.svg'
-import ClearIcon from '../assets/2D_Icons/Close.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
  * Search bar component
- * @param {function} onClickMenuCb callback
+ *
+ * @param {Function} onClickMenuCb callback
  * @param {boolean} showNavPanel toggle
- * @return {Object} The SearchBar react component
+ * @return {React.Component} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, showNavPanel}) {
+export default function SearchBar({fileOpen}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,17 +35,23 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
-  const calculatedInputWidth = Number(inputText.length) * 10 + 130
+  const widthPerChar = 5
+  const padding = 130
+  const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
+  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
+  console.log('theme', theme)
+
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
     if (location.search) {
       if (validSearchQuery(searchParams)) {
         const newInputText = searchParams.get('q')
-        if (inputText != newInputText) {
+        if (inputText !== newInputText) {
           setInputText(newInputText)
         }
       } else {
@@ -87,47 +94,43 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-        <TooltipToggleButton
-          placement = 'bottom'
-          title='Toggle tree view'
-          onClick={onClickMenuCb}
-          icon={<TreeIcon/>}/>
+      <Paper
+        component='form'
+        className={classes.root}
+        onSubmit={onSubmit}
+        elevation={0}
+        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+      >
+        <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
-          error = {true}
-          placeholder={'Search model'}/>
-        {inputText.length> 0 ?
-          <TooltipToggleButton
+          error={true}
+          placeholder={'Search / Insert GitHub link'}
+          sx={{
+            ...theme.theme.typography.tree,
+            'marginTop': '4px',
+            'marginLeft': '4px',
+            '& input::placeholder': {
+              opacity: .3,
+            },
+          }}
+        />
+        {inputText.length > 0 &&
+          <TooltipIconButton
             title='clear'
-            size = 'small'
-            placement = 'bottom'
-            onClick={()=>{
+            onClick={() => {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon/>}/>:null
+            icon={<ClearIcon/>}
+          />
         }
-        <FormButton
-          title='search'
-          size = 'small'
-          placement = 'bottom'
-          icon={<SearchIcon/>}/>
-        <TooltipToggleButton
-          title={`Enter GitHub URL to access IFCs hosted on GitHub.
-                  Click on the link icon to learn more.`}
-          size = 'small'
-          placement = 'right'
-          onClick={()=>{
-            window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
-          }}
-          icon={<LinkIcon/>}/>
       </Paper>
-      { inputText.length>0 &&
-        error.length>0 &&
-        <div className = {classes.error}>{error}</div>
+      { inputText.length > 0 &&
+        error.length > 0 &&
+        <div className={classes.error}>{error}</div>
       }
     </div>
   )
@@ -145,23 +148,23 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
  *
  *   /share/v/p/index.ifc
  *
- * @param {Object} location React router location object.
+ * @param {object} location React router location object.
  * @return {boolean}
  */
 export function containsIfcPath(location) {
-  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) != null
+  return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) !== null
 }
 
 
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
- * @param {Object} searchParams Object with a 'q' parameter and optional string value.
+ * @param {object} searchParams Object with a 'q' parameter and optional string value.
  * @return {boolean}
  */
 export function validSearchQuery(searchParams) {
   const value = searchParams.get('q')
-  return value != null && value.length > 0
+  return value !== null && value.length > 0
 }
 
 
@@ -174,19 +177,20 @@ export function validSearchQuery(searchParams) {
  *
  *   /share/v/p/index.ifc?q=foo
  *
- * @param {Object} location React router location object.
+ * @param {object} location React router location object.
  * @param {string} fileExtension defaults to '.ifc' for now.
  * @return {string}
  */
 export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
   const baseAndPathquery = location.pathname.split(fileExtension)
-  if (baseAndPathquery.length == 2) {
+  const expectedPartsCount = 2
+  if (baseAndPathquery.length === expectedPartsCount) {
     const base = baseAndPathquery[0]
     let newPath = base + fileExtension
     const pathAndQuery = baseAndPathquery[1].split('?')
-    if (pathAndQuery.length == 2) {
+    if (pathAndQuery.length === expectedPartsCount) {
       const query = pathAndQuery[1]
-      newPath += '?' + query
+      newPath += `?${ query}`
     }
     return newPath
   }
@@ -199,9 +203,11 @@ const useStyles = makeStyles({
     'display': 'flex',
     'minWidth': '300px',
     'width': (props) => props.inputWidth,
+    'height': '56px',
     'maxWidth': '700px',
     'alignItems': 'center',
-    'padding': '2px 2px 2px 2px',
+    'opacity': .8,
+    'padding': '2px 6px 2px 6px',
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',

@@ -1,23 +1,26 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams} from 'react-router-dom'
-import {makeStyles} from '@mui/styles'
-import {Color} from 'three'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {ColorModeContext, navToDefault} from '../Share'
-import SearchIndex from './SearchIndex.js'
+import {makeStyles} from '@mui/styles'
+import SearchIndex from './SearchIndex'
+import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import BaseGroup from '../Components/BaseGroup'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ItemPanelControl from '../Components/ItemPanelControl'
+// import BaseGroup from '../Components/BaseGroup'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
+import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import debug from '../utils/debug'
+import {useIsMobile} from '../Components/Hooks'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {ColorModeContext} from '../Context/ColorMode'
 import * as Privacy from '../privacy/Privacy'
+import useStore from '../store/useStore'
+import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
-import {computeElementPath, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 
 
 /**
@@ -31,7 +34,8 @@ let count = 0
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
- * @return {Object}
+ *
+ * @return {object}
  */
 export default function CadView({
   installPrefix,
@@ -50,9 +54,8 @@ export default function CadView({
   // IFC
   const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
-  const elementsById = useState({})
+  const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElement, setSelectedElement] = useState({})
   const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
@@ -62,17 +65,21 @@ export default function CadView({
   const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isItemPanelOpen, setIsItemPanelOpen] = useState(false)
-  const isItemPanelOpenState = {value: isItemPanelOpen, set: setIsItemPanelOpen}
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const setModelStore = useStore((state) => state.setModelStore)
+  const setSelectedElement = useStore((state) => state.setSelectedElement)
+  const setViewerStore = useStore((state) => state.setViewerStore)
+  const snackMessage = useStore((state) => state.snackMessage)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
+    debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
   }, [modelPath])
 
@@ -84,18 +91,28 @@ export default function CadView({
     })()
   }, [viewer])
 
-  // Model changes in onViewer (above)
-  useEffect(() => {
-    (async () => {
-      await onModel()
-    })()
-  }, [model])
 
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  // Watch for path changes within the model.
+  // TODO(pablo): would be nice to have more consistent handling of path parsing.
+  const location = useLocation()
+  useEffect(() => {
+    if (model) {
+      (async () => {
+        const parts = location.pathname.split(/\.ifc/i)
+        const expectedPartCount = 2
+        if (parts.length === expectedPartCount) {
+          await selectElementBasedOnFilepath(parts[1])
+        }
+      })()
+    }
+  }, [location, model])
   /* eslint-enable */
 
 
@@ -106,64 +123,101 @@ export default function CadView({
   function onModelPath() {
     setShowNavPanel(false)
     setShowSearchBar(false)
-    setIsItemPanelOpen(false)
     const theme = colorModeContext.getTheme()
-    setViewer(initViewer(
+    const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
          theme.palette &&
          theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef'))
-    debug().log('CadView#onModelPath, done setting new viewer')
+         theme.palette.background.paper) || '0xabcdef')
+    setViewer(initializedViewer)
+    setViewerStore(initializedViewer)
+    setSelectedElement(null)
   }
 
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    if (viewer == null) {
+    const theme = colorModeContext.getTheme()
+    if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
     }
+    // define mesh colors for selected and preselected element
+    const preselectMat = new MeshLambertMaterial({
+      transparent: true,
+      opacity: 0.5,
+      color: theme.palette.highlight.light,
+      depthTest: true,
+    })
+    const selectMat = new MeshLambertMaterial({
+      transparent: true,
+      color: theme.palette.highlight.main,
+      depthTest: true,
+    })
+    if (viewer.IFC.selector) {
+      viewer.IFC.selector.preselection.material = preselectMat
+      viewer.IFC.selector.selection.material = selectMat
+    }
     addThemeListener()
-    await loadIfc(modelPath.gitpath || (installPrefix + modelPath.filepath))
+    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const tmpModelRef = await loadIfc(pathToLoad)
+    await onModel(tmpModelRef)
+    selectElementBasedOnFilepath(pathToLoad)
   }
+
+
+  const isMobile = useIsMobile()
+  // Shrink the scene viewer when drawer is open.  This recenters the
+  // view in the new shrunk canvas, which preserves what the user is
+  // looking at.
+  // TODO(pablo): add render testing
+  useEffect(() => {
+    if (viewer && !isMobile) {
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
+      viewer.context.resize()
+    }
+  }, [isDrawerOpen, isMobile, viewer])
+
 
   const setAlertMessage = (msg) =>
     setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
+   *
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
-    debug().log(`CadView#loadIfc: `, filepath, viewer)
+    debug().log(`CadView#loadIfc: `, filepath)
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
-      debug(3).log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? ':' + l.port : '')}/${filepath}`
+      debug().log('CadView#loadIfc: parsed blob: ', filepath)
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
-    const model = await viewer.IFC.loadIfcUrl(
+    const loadedModel = await viewer.IFC.loadIfcUrl(
         filepath,
-        urlHasCameraParams() ? false : true, // fitToFrame
+        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
+            // eslint-disable-next-line no-magic-numbers
             const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
             setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug(3).log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
           }
         },
         (error) => {
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage('Could not load file: ' + filepath)
+          setAlertMessage(`Could not load file: ${ filepath}`)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -171,7 +225,7 @@ export default function CadView({
     })
     setIsLoading(false)
 
-    if (model) {
+    if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
       //
       // TODO(pablo): huge hack. Somehow this is getting incremented to
@@ -179,9 +233,12 @@ export default function CadView({
       // load.  That modelID is used in the IFCjs code as [modelID] and
       // leads to undefined refs e.g. in prePickIfcItem.  The id should
       // always be 0.
-      model.modelID = 0
-      setModel(model)
+      loadedModel.modelID = 0
+      setModel(loadedModel)
+      setModelStore(loadedModel)
+      return loadedModel
     }
+    debug().error('CadView#loadIfc: Model load failed!')
   }
 
 
@@ -206,20 +263,31 @@ export default function CadView({
   }
 
 
-  /** Analyze loaded IFC model to configure UI elements. */
-  async function onModel() {
-    if (model == null) {
-      return
-    }
-    const rootElt = await model.ifcManager.getSpatialStructure(0, true)
-    if (rootElt.expressID == undefined) {
+  /**
+   * Analyze loaded IFC model to configure UI elements.
+   *
+   * @param {object} m IFCjs loaded model.
+   */
+  async function onModel(m) {
+    assertDefined(m)
+    debug().log('CadView#onModel', m)
+    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
-    initSearch(model, rootElt)
+    initSearch(m, rootElt)
+    const rootProps = await viewer.getProperties(0, rootElt.expressID)
+    rootElt.Name = rootProps.Name
+    rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(true)
+
+    if (isMobile) {
+      setShowNavPanel(false)
+    } else {
+      setShowNavPanel(true)
+    }
   }
 
 
@@ -227,14 +295,15 @@ export default function CadView({
    * Index the model starting at the given rootElt, clearing any
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
-   * @param {Object} m The IfcViewerAPI instance.
-   * @param {Object} rootElt Root ifc element for recursive indexing.
+   *
+   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
     searchIndex.clearIndex()
     debug().log('CadView#initSearch: ', m, rootElt)
     debug().time('build searchIndex')
-    searchIndex.indexElement(m, rootElt)
+    searchIndex.indexElement({properties: m}, rootElt)
     debug().timeEnd('build searchIndex')
     onSearchParams()
     setShowSearchBar(true)
@@ -243,7 +312,6 @@ export default function CadView({
 
   /**
    * Search for the query in the index and select matching items in UI elts.
-   * @param {string} query The search query.
    */
   function onSearchParams() {
     const sp = new URLSearchParams(window.location.search)
@@ -254,8 +322,8 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItems(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => id + ''))
+      selectItemsInScene(resultIDs)
+      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -274,31 +342,9 @@ export default function CadView({
   }
 
 
-  /**
-   * Select items in model when they are double-clicked.
-   * @param {string} filepath
-   */
-  async function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName == 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const path = computeElementPath(elementsById[item.id], (elt) => elt.expressID)
-          if (modelPath.gitpath) {
-            navigate(pathPrefix + modelPath.getRepoPath() + path)
-          } else {
-            navigate(pathPrefix + modelPath.filepath + path)
-          }
-          setSelectedElement(item)
-        }
-      }
-    }
-  }
-
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement({})
+    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
   }
@@ -306,62 +352,104 @@ export default function CadView({
 
   /**
    * Pick the given items in the scene.
+   *
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItems(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => id + ''))
+  async function selectItemsInScene(resultIDs) {
+    setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
       // setup its properties.
-      debug(3).log('TODO: no visual element for item ids: ', resultIDs)
+      debug().log('TODO: no visual element for item ids: ', resultIDs)
     }
   }
 
 
   /**
-   * Select the items in the NavTree and update item properties for ItemPanel.
-   * @param {Object} elt The selected IFC element.
+   * Select the items in the NavTree and update ItemProperties.
+   * Returns the ids of path parts from root to this elt in spatial
+   * structure.
+   *
+   * @param {number} expressId
+   * @return {Array} pathIds
    */
-  async function onElementSelect(elt) {
-    const id = elt.expressID
-    if (id === undefined) {
-      throw new Error('Selected element is missing Express ID')
+  async function onElementSelect(expressId) {
+    const lookupElt = elementsById[parseInt(expressId)]
+    if (!lookupElt) {
+      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      return
     }
-    selectItems([id])
-    const props = await viewer.getProperties(0, elt.expressID)
+    await selectItemsInScene([expressId])
+    const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
+    setExpandedElements(pathIds.map((n) => `${n}`))
+    setSelectedElements(`${expressId}`)
+    const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
-    // TODO(pablo): just found out this method is getting called a lot
-    // when i added navigation on select, which flooded the browser
-    // IPC.
-    // console.log('CadView#onElementSelect: in...')
+    return pathIds
+  }
+
+
+  /**
+   * Extracts the path to the element from the url and selects the element
+   *
+   * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
+   */
+  function selectElementBasedOnFilepath(filepath) {
+    const parts = filepath.split(/\//)
+    if (parts.length > 0) {
+      debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
+      const targetId = parseInt(parts[parts.length - 1])
+      if (isFinite(targetId)) {
+        onElementSelect(targetId)
+      }
+    }
+  }
+
+
+  /** Select items in model when they are double-clicked. */
+  function setDoubleClickListener() {
+    window.ondblclick = async (event) => {
+      if (event.target && event.target.tagName === 'CANVAS') {
+        const item = await viewer.IFC.pickIfcItem(true)
+        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+          const pathIds = await onElementSelect(item.id)
+          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const path = pathIds.join('/')
+          navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        }
+      }
+    }
   }
 
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        setViewer(initViewer(pathPrefix, theme.palette.background.paper))
+        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(intializedViewer)
+        setViewerStore(intializedViewer)
       }
     })
   }
+
 
   return (
     <div className={classes.root}>
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
-          message={loadingMessage}
+          message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
-          open={isLoading}/>
+          open={isLoading || snackMessage !== null}
+        />
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              isOpen={showNavPanel}/>
+              fileOpen={loadLocalFile}
+            />
           )}
         </div>
         {showNavPanel &&
@@ -371,39 +459,41 @@ export default function CadView({
             selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
-            onElementSelect={onElementSelect}
             setExpandedElements={setExpandedElements}
             pathPrefix={
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }/>}
-        <Logo onClick = {() => navToDefault(navigate, appPrefix)}/>
-        <div className={isItemPanelOpen ?
+            }
+          />}
+        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+        <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
-                        classes.operationsGroup}>
+                        classes.operationsGroup}
+        >
           {viewer &&
-           <OperationsGroup
-             viewer={viewer}
-             unSelectItem={unSelectItems}
-             itemPanelControl={
-               <ItemPanelControl
-                 model={model}
-                 element={selectedElement}
-                 isOpenState={isItemPanelOpenState}/>}/>}
+            <OperationsGroup
+              viewer={viewer}
+              unSelectItem={unSelectItems}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              showNavPanel={showNavPanel}
+              installPrefix={installPrefix}
+            />}
         </div>
-        <div className={isItemPanelOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        {/* <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
-        </div>
+        </div> */}
         {alert}
       </div>
+      <SideDrawerWrapper />
     </div>
   )
 }
 
 
 /**
- * @param {string} pathPrefix e.g. /share/v/p
+ * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {Object} IfcViewerAPI viewer
+ * @return {object} IfcViewerAPI viewer, width a .container property
+ *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
@@ -414,7 +504,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created: ', v)
+  debug().log('CadView#initViewer: viewer created:', v)
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
@@ -433,11 +523,14 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     if (event.code === 'KeyW') {
       v.clipper.deletePlane()
     }
-    if (event.code == 'KeyA') {
+    if (event.code === 'KeyA') {
       v.IFC.unpickIfcItems()
     }
   }
 
+  // window.addEventListener('resize', () => {v.context.resize()})
+
+  v.container = container
   return v
 }
 
@@ -453,6 +546,9 @@ const useStyles = makeStyles({
       height: ' calc(100vh - calc(100vh - 100%))',
       minHeight: '-webkit-fill-available',
     },
+
+  },
+  searchContainer: {
 
   },
   search: {
@@ -496,7 +592,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 0,
-    'right': '308px',
+    'right': '31em',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -516,7 +612,7 @@ const useStyles = makeStyles({
   baseGroupOpen: {
     'position': 'fixed',
     'bottom': '20px',
-    'right': '326px',
+    'right': '32em',
     '@media (max-width: 900px)': {
       display: 'none',
     },

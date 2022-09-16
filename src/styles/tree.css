@@ -12,7 +12,7 @@
 }
 
 .treeview {
-  overflow: 'auto';
+  overflow: auto;
 }
 
 .treeview > .toggle {

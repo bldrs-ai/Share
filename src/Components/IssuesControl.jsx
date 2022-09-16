@@ -1,299 +1,362 @@
-import React, {useEffect, useState} from 'react'
-import {useLocation, useNavigate} from 'react-router'
-import DialogActions from '@mui/material/DialogActions'
-import DialogTitle from '@mui/material/DialogTitle'
-import DialogContent from '@mui/material/DialogContent'
-import MuiDialog from '@mui/material/Dialog'
+import React, {useEffect} from 'react'
+import {makeStyles, useTheme} from '@mui/styles'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import Slide from '@mui/material/Slide'
-import {makeStyles} from '@mui/styles'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import useStore from '../store/useStore'
+import {getIssues, getComments} from '../utils/GitHub'
 import debug from '../utils/debug'
-import {
-  addHashParams,
-  getHashParams,
-  removeHashParams,
-} from '../utils/location'
-import {getIssue, getComment} from '../utils/GitHub'
-import CommentIcon from '../assets/2D_Icons/Comment.svg'
-import NavPrevIcon from '../assets/2D_Icons/NavPrev.svg'
-import NavNextIcon from '../assets/2D_Icons/NavNext.svg'
+import {addHashParams, removeHashParams} from '../utils/location'
+import IssueCard from './IssueCard'
+import {TooltipIconButton} from './Buttons'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+import BackIcon from '../assets/2D_Icons/Back.svg'
+import NextIcon from '../assets/2D_Icons/NavNext.svg'
+import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
 
 
-/**
- * The IssuesControl is a button that toggles display of issues for
- * the currently selected element.  On load, this component also reads
- * the current URL hash and fetches a related issue from GitHub, as
- * well as adds a hash listener to do the same whenever the hash
- * changes.
- *
- * @param {Object} viewer The viewer object from IFCjs.
- * @return {Object} React component
- */
-export default function IssuesControl({viewer}) {
-  const location = useLocation()
-  const navigate = useNavigate()
-  const [isDialogDisplayed, setIsDialogDisplayed] =
-        useState(parseHashParams(location) ? true : false)
-  const [text, setText] = useState('')
-  const [next, setNext] = useState(null)
-
-
-  useEffect(() => {
-    if (location) {
-      const p = parseHashParams(location)
-      if (p && p.issueId) {
-        if (Number.isInteger(p.commentId)) {
-          (async () => {
-            await showComment(p.issueId, p.commentId, setText, setNext)
-          })()
-        } else {
-          (async () => {
-            await showIssue(p.issueId, setText, setNext)
-          })()
-        }
-      }
-    }
-  }, [location])
-
-
-  // TODO: do a fetch to validate content before displaying panel
-  const showIssues = (doShow) => {
-    if (doShow) {
-      addHashParams(window.location, ISSUE_PREFIX, {id: 8})
-      setIsDialogDisplayed(true)
-    } else {
-      removeHashParams(window.location, ISSUE_PREFIX)
-      setText('')
-      setIsDialogDisplayed(false)
-    }
-  }
-
-  let title = null
-  let body = text
-  const titleSplitNdx = text.indexOf('::title::')
-  if (titleSplitNdx >= 0) {
-    title = text.substring(0, titleSplitNdx)
-    body = text.substring(titleSplitNdx + 9)
-  }
-  return (
-    <ControlButton
-      title='Show issues'
-      icon={<CommentIcon/>}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={showIssues}
-      dialog={
-        text ?
-          <CommentPanel
-            body={body}
-            title={title}
-            next={next}
-            navigate={navigate}/> :
-        <></>
-      }/>)
-}
-
-
-const Transition = React.forwardRef(function Transition(props, ref) {
-  return <Slide direction="up" ref={ref} {...props} />
-})
-
-
-/**
- * Displays the comment panel
- * @param {string} body The comment body
- * @param {string|null} title The comment title, optional
- * @param {string|null} next Full URL for next comment link href
- * @param {function|null} navigate React router navigate for back button
- * @return {Object} React component
- */
-function CommentPanel({body, title, next, navigate}) {
-  const [count, setCount] = useState(0)
-  const [isOpen, setIsOpen] = useState(true)
-  const [fullWidth] = useState(window.innerWidth <= 900)
-  const classes = useStyles()
-  return (
-    <MuiDialog
-      open={isOpen}
-      onClose={() => setIsOpen(false)}
-      fullWidth={fullWidth}
-      scroll='paper'
-      TransitionComponent={Transition}
-      BackdropProps={{style: {opacity: 0}}}
-      PaperProps={{
-        style: {
-          padding: 0,
-          margin: 0,
-          minHeight: '220px',
-          maxHeight: '250px',
-          width: fullWidth ? '100%' : 'default'}}}
-      className={classes.issueDialog}>
-      {title &&
-       <DialogTitle>
-         <h1>{title}</h1>
-       </DialogTitle>}
-      <DialogContent>
-        <Typography paragraph={true}>{body}</Typography>
-      </DialogContent>
-      <DialogActions sx={{justifyContent: 'center'}}>
-        <div>
-          {count > 0 &&
-           <TooltipIconButton
-             title='Back'
-             onClick={() => {
-               if (count > 0) {
-                 setCount(count - 1)
-                 navigate(-1)
-               }
-             }}
-             icon={<NavPrevIcon/>}
-             placement='left'/>}
-          {next &&
-           <TooltipIconButton
-             title='Next'
-             onClick={() => {
-               setCount(count + 1)
-               window.location = next
-             }}
-             icon={<NavNextIcon/>}
-             placement='right'/>}
-        </div>
-      </DialogActions>
-    </MuiDialog>
-  )
-}
-
-/** The prefix to use for issue id in the URL hash. */
+/** The prefix to use for issue id in the Url hash. */
 export const ISSUE_PREFIX = 'i'
 
 
-// exported for testing only
-const regex = new RegExp(`${ISSUE_PREFIX}:(\\d+)(?::(\\d+))?`)
+/** @return {object} React component. */
+export function IssuesNavBar() {
+  const classes = useStyles(useTheme())
+  const issues = useStore((state) => state.issues)
+  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
+  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
+  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
 
 
-/**
- * @param {Object} location
- * @return {Object|undefined}
- */
-function parseHashParams(location) {
-  const encodedParams = getHashParams(location, ISSUE_PREFIX)
-  if (encodedParams == undefined) {
-    return
-  }
-  const match = encodedParams.match(regex)
-  if (match) {
-    if (match[1] && match[2]) {
-      return {
-        issueId: parseInt(match[1]),
-        commentId: parseInt(match[2]),
-      }
-    } else if (match[1]) {
-      return {
-        issueId: parseInt(match[1]),
+  const selectIssue = (direction) => {
+    const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
+    if (index >= 0 && index < issues.length) {
+      const issue = issues.filter((i) => i.index === index)[0]
+      setSelectedIssueId(issue.id)
+      setSelectedIssueIndex(issue.index)
+      addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
+      if (issue.url) {
+        setCameraFromParams(issue.url)
+        addCameraUrlParams()
+      } else {
+        removeCameraUrlParams()
       }
     }
   }
-  debug().log('IssuesControl#parseHashParams, could not parse hash: ', location.hash)
+
+
+  return (
+    <div className={classes.titleContainer}>
+      <div className={classes.leftGroup}>
+        <Typography variant='h1'>
+          {!selectedIssueId && 'Notes' }
+        </Typography>
+
+        {selectedIssueId ?
+          <div style={{marginLeft: '-8px'}}>
+            <TooltipIconButton
+              title='Back to the list'
+              placement='bottom'
+              onClick={() => {
+                removeHashParams(window.location, ISSUE_PREFIX)
+                setSelectedIssueId(null)
+              }}
+              icon={<div className={classes.iconContainer}><BackIcon/></div>}
+            />
+          </div> : null
+        }
+      </div>
+
+      <div className={classes.middleGroup} >
+        {selectedIssueId && issues.length > 1 &&
+          <>
+            <TooltipIconButton
+              title='Previous Note'
+              placement='bottom'
+              size='small'
+              onClick={() => selectIssue('previous')}
+              icon={<PreviousIcon/>}
+            />
+            <TooltipIconButton
+              title='Next Note'
+              size='small'
+              placement='bottom'
+              onClick={() => selectIssue('next')}
+              icon={<NextIcon/>}
+            />
+          </>
+        }
+      </div>
+
+      <div className={classes.rightGroup}>
+        <div className={classes.controls}>
+        </div>
+        <div>
+          <TooltipIconButton
+            title='Close Comments'
+            placement='bottom'
+            onClick={turnCommentsOff}
+            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+          />
+        </div>
+      </div>
+    </div>
+  )
 }
 
 
-/**
- * Show the issue with the given id.
- * @param {Number} issueId
- * @param {function} setText React state setter for comment text
- * @param {function} setNext React state setter for next Link
- */
-async function showIssue(issueId, setText, setNext) {
-  const issue = await getIssue(issueId)
-  debug().log(`IssuesControl#showIssue: id:(${issueId}), getIssue result: `, issue)
-  if (issue && issue.data && issue.data.body) {
-    const title = issue.data.title
-    const body = issue.data.body
-    debug().log(`IssuesControl#onHash: got issue id:(${issueId})`, title, body)
-    setPanelText(title, body, setText, setNext)
-  } else {
-    debug().warn(`IssuesControl#showIssue: no issue object to display`)
-  }
-}
-
-
-/**
- * Fetch the issue with the given id from GitHub.
- * @param {Number} issueId
- * @param {Number} commentId
- * @param {function} setText React state setter for the CommentPanel
- * @param {function} setNext React state setter for next Link
- */
-async function showComment(issueId, commentId, setText, setNext) {
-  const comment = await getComment(issueId, commentId)
-  debug().log(`IssuesControl#showComment: id:(${commentId}), getComment result: `, comment)
-  if (comment && comment.body) {
-    setPanelText('', comment.body, setText, setNext)
-  } else {
-    debug().warn(`IssuesControl#showComment: no comment object to display`)
-  }
-}
-
-
-/**
- * @param {string} title Comment title, may be empty
- * @param {string} body Comment body, may include code
- * @param {function} setText React state setter for comment text
- * @param {function} setNext React state setter for next Link
- */
-function setPanelText(title, body, setText, setNext) {
-  const bodyParts = body.split('```')
-  const text = bodyParts[0]
-  setText(title + '::title::' + text)
-  if (bodyParts.length > 0) {
-    const code = bodyParts[1]
-    const lines = code.split('\r\n')
-    debug().log('IssuesControl#setPanelText, got code: ', lines)
-    if (lines[1].startsWith('url=')) {
-      const href = lines[1].split(/=(.+)/)[1]
-      setNext(href)
+/** @return {object} List of issues and comments as react component. */
+export function Issues() {
+  const classes = useStyles()
+  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const issues = useStore((state) => state.issues)
+  const setIssues = useStore((state) => state.setIssues)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
+  const filteredIssue = selectedIssueId ?
+        issues.filter((issue) => issue.id === selectedIssueId)[0] : null
+  const repository = useStore((state) => state.repository)
+  useEffect(() => {
+    if (!repository) {
+      debug().warn('IssuesControl#Issues: 1, no repo defined')
+      return
     }
-  }
+    const fetchIssues = async () => {
+      try {
+        const issuesArr = []
+        const issuesData = await getIssues(repository)
+        issuesData.data.slice(0).reverse().map((issue, index) => {
+          if (issue.body === null) {
+            debug().warn(`issue ${index} has no body: `, issue)
+            return null
+          }
+          issuesArr.push({
+            index: index,
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            date: issue.created_at,
+            username: issue.user.login,
+            avatarUrl: issue.user.avatar_url,
+            numberOfComments: issue.comments,
+          })
+        })
+        if (issuesArr.length > 0) {
+          setIssues(issuesArr)
+        }
+      } catch (e) {
+        debug().warn('failed to fetch issues', e)
+      }
+    }
+    fetchIssues()
+  }, [setIssues, repository])
+
+  useEffect(() => {
+    if (!repository) {
+      debug().warn('IssuesControl#Issues: 2, no repo defined')
+      return
+    }
+    const fetchComments = async (selectedIssue) => {
+      try {
+        const commentsArr = []
+        const commentsData = await getComments(repository, selectedIssue.number)
+        if (commentsData) {
+          commentsData.map((comment) => {
+            commentsArr.push({
+              id: comment.id,
+              number: comment.number,
+              title: comment.title,
+              body: comment.body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarUrl: comment.user.avatar_url,
+            })
+          })
+        }
+        setComments(commentsArr)
+      } catch {
+        debug().log('failed to fetch comments')
+      }
+    }
+    if (selectedIssueId !== null) {
+      fetchComments(filteredIssue)
+    }
+    // This address bug #314 by clearing selected issue when new model is loaded
+    if (!filteredIssue) {
+      setSelectedIssueId(null)
+    }
+    // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
+    // using the link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedIssueId, issues, repository])
+
+  return (
+    <Paper className={classes.commentsContainer} elevation={0}>
+      <div className={classes.cardsContainer}>
+        {!selectedIssueId ?
+          issues.map((issue, index) => {
+            return (
+              <IssueCard
+                embeddedUrl={issue.embeddedUrl}
+                index={issue.index}
+                id={issue.id}
+                key={index}
+                title={issue.title}
+                date={issue.date}
+                body={issue.body}
+                username={issue.username}
+                numberOfComments={issue.numberOfComments}
+                avatarUrl={issue.avatarUrl}
+                imageUrl={issue.imageUrl}
+              />
+            )
+          }) :
+        <>
+          {filteredIssue ?
+           <IssueCard
+             embeddedUrl={filteredIssue.embeddedUrl}
+             index={filteredIssue.index}
+             id={filteredIssue.id}
+             key={filteredIssue.id}
+             title={filteredIssue.title}
+             date={filteredIssue.date}
+             body={filteredIssue.body}
+             username={filteredIssue.username}
+             numberOfComments={filteredIssue.numberOfComments}
+             avatarUrl={filteredIssue.avatarUrl}
+             imageUrl={filteredIssue.imageUrl}
+           /> :
+           <div>loading</div>
+          }
+          {comments &&
+           comments.map((comment, index) => {
+             return (
+               <IssueCard
+                 embeddedUrl={comment.embeddedUrl}
+                 isComment={true}
+                 index=''
+                 id={comment.id}
+                 key={comment.id}
+                 title={index + 1}
+                 date={comment.date}
+                 body={comment.body}
+                 username={comment.username}
+                 avatarUrl={comment.avatarUrl}
+                 imageUrl={comment.imageUrl}
+               />
+             )
+           })
+          }
+        </>
+        }
+      </div>
+    </Paper>
+  )
 }
 
 
-const useStyles = makeStyles({
-  issueDialog: {
-    'fontFamily': 'Helvetica',
-    '& .MuiDialog-container': {
-      alignItems: 'flex-end',
-    },
-    '& .MuiDialogTitle-root h1': {
-      fontSize: '1.1em',
-      margin: 0,
-    },
-    '& .MuiDialogActions-root': {
-      borderTop: 'solid 1px lightgrey',
-      margin: '0.5em 1em',
-      padding: '0em',
-    },
-    '& .MuiPaper-root': {
-      padding: '1em',
-    },
-    '& .MuiButtonBase-root': {
-      padding: 0,
-      margin: '0.5em',
-      borderRadius: '50%',
-      border: 'none',
-    },
-    '& svg': {
-      padding: 0,
-      margin: 0,
-      width: '25px',
-      height: '25px',
-      border: 'solid 0.5px grey',
-      borderRadius: '50%',
-    },
-    '& h1, & p': {
-      fontWeight: 300,
-    },
-    '& h1': {
-      fontSize: '1.2em',
+const useStyles = makeStyles((theme) => ({
+  titleContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: '2px',
+  },
+  title: {
+    height: '30px',
+    display: 'flex',
+    fontSize: '18px',
+    textDecoration: 'underline',
+    fontWeight: 'lighter',
+    alignItems: 'center',
+  },
+  contentContainer: {
+    marginTop: '10px',
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    height: '100%',
+    overflow: 'scroll',
+    paddingBottom: '30px',
+  },
+  controls: {
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  rightGroup: {
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'flex-end',
+    'alignItems': 'center',
+    'paddingRight': '5px',
+    '@media (max-width: 900px)': {
+      paddingRight: '0px',
     },
   },
-})
+  middleGroup: {
+    width: '400px',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  leftGroup: {
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    'paddingLeft': '16px',
+    '@media (max-width: 900px)': {
+      paddingLeft: '12px',
+    },
+  },
+  container: {
+    background: '#7EC43B',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  notifications: {
+    width: '19px',
+    height: '20px',
+    border: '1px solid lime',
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    fontSize: '10px',
+    color: 'black',
+    borderRadius: '20px',
+  },
+  cardsContainer: {
+    'width': '100%',
+    'paddingTop': '10px',
+    'paddingBottom': '30px',
+    '@media (max-width: 900px)': {
+      paddingTop: '0px',
+    },
+  },
+  iconContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '20px',
+    height: '20px',
+  },
+  iconContainerClose: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '14px',
+    height: '14px',
+  },
+}))

@@ -10,10 +10,11 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 /**
  * ItemPropertiesDrawer contains the ItemPanel and allows for
  * show/hide from the right of the screen.
+ *
  * @param {string} title Title for the drawer
- * @param {Object} content The contained ItemPanel
- * @param {function} onClose Callback
- * @return {Object} ItemPropertiesDrawer react component
+ * @param {object} content The contained ItemPanel
+ * @param {Function} onClose Callback
+ * @return {object} ItemPropertiesDrawer react component
  */
 export default function ItemPropertiesDrawer({
   title,
@@ -27,13 +28,15 @@ export default function ItemPropertiesDrawer({
       anchor={'right'}
       variant='persistent'
       elevation={4}
-      className={classes.drawer}>
+      className={classes.drawer}
+    >
       <div className={classes.headerBar}>
         <h1>{title}</h1>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
-          icon={<CloseIcon/>}/>
+          icon={<CloseIcon/>}
+        />
       </div>
       <div className={classes.content}>{content}</div>
     </Drawer>
@@ -57,13 +60,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
       marginTop: '0px',
       borderRadius: '0px',
       zIndex: 10,
-    },
-    '& h1, & h2': {
-      fontSize: '1.2em',
-      fontWeight: 200,
-      marginLeft: '1em 0',
-      paddingBottom: '.5em',
-      borderBottom: '1px solid lightGrey',
     },
   },
   headerBar: {

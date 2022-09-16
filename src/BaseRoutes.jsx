@@ -21,8 +21,9 @@ import debug from './utils/debug'
  *   http://host/share/v/p/indec.ifc
  *   http://host/share/v/gh/bldrs-ai/Share/main/public/index.ifc
  *
- * @param {testElt} For unit test allow use of a stub here instead of loading the app.
- * @return {Object}
+ * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
+ * @param {React.Component} testElt For unit test allow use of a stub here instead of loading the app.
+ * @return {object}
  */
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
@@ -31,14 +32,14 @@ export default function BaseRoutes({testElt = null}) {
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
-        location.pathname === (installPrefix + '/')) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', installPrefix + '/share')
-      navigate(installPrefix + '/share')
+        location.pathname === (`${installPrefix }/`)) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
+      navigate(`${installPrefix }/share`)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const basePath = installPrefix + '/'
+  const basePath = `${installPrefix }/`
   return (
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
@@ -48,8 +49,10 @@ export default function BaseRoutes({testElt = null}) {
             testElt ||
               <ShareRoutes
                 installPrefix={installPrefix}
-                appPrefix={installPrefix + '/share'} />
-          }/>
+                appPrefix={`${installPrefix }/share`}
+              />
+          }
+        />
       </Route>
     </Routes>
   )

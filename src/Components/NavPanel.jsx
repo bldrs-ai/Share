@@ -1,21 +1,24 @@
-import React, {useEffect} from 'react'
-import {useLocation} from 'react-router-dom'
+import React, {useContext} from 'react'
 import Paper from '@mui/material/Paper'
 import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
 import IconButton from '@mui/material/IconButton'
 import {makeStyles} from '@mui/styles'
+import {useIsMobile} from './Hooks'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
+import {ColorModeContext} from '../Context/ColorMode'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import Hamburger from '../assets/2D_Icons/Menu.svg'
 
+
 /**
  * Navigation panel control is a button that toggles the visibility of nav panel
- * @param {Number} topOffset global offset defined in the cad view
- * @param {function} onClickMenuCb callback passed from cad view
- * @return {Object} The button react component
+ *
+ * @param {number} topOffset global offset defined in the cad view
+ * @param {Function} onClickMenuCb callback passed from cad view
+ * @return {object} The button react component
  */
 export function NavPanelControl({topOffset, onClickMenuCb}) {
   const classes = useStyles({topOffset: topOffset})
@@ -24,7 +27,8 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
       <Tooltip title="Model Navigation" placement="bottom">
         <IconButton onClick={() => {
           onClickMenuCb()
-        }}>
+        }}
+        >
           <Hamburger className={classes.treeIcon}/>
         </IconButton>
       </Tooltip>
@@ -33,15 +37,14 @@ export function NavPanelControl({topOffset, onClickMenuCb}) {
 }
 
 /**
- * @param {Object} model
- * @param {Object} element
+ * @param {object} model
+ * @param {object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
  * @param {Array} expandedElements
- * @param {function} onElementSelect
- * @param {function} setExpandedElements
+ * @param {Function} setExpandedElements
  * @param {string} pathPrefix
- * @return {Object}
+ * @return {object}
  */
 export default function NavPanel({
   model,
@@ -49,40 +52,27 @@ export default function NavPanel({
   selectedElements,
   defaultExpandedElements,
   expandedElements,
-  onElementSelect,
   setExpandedElements,
   pathPrefix,
 }) {
   assertDefined(...arguments)
-
-  const location = useLocation()
-
-  useEffect(() => {
-    if (location.pathname.length <= 0) {
-      return
-    }
-    const parts = location.pathname.split(/\//)
-    if (parts.length > 0) {
-      const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect({expressID: targetId})
-        setExpandedElements(parts)
-      }
-    }
-  // eslint-disable-next-line
-  }, [location])
-
-  const classes = useStyles()
+  const theme = useContext(ColorModeContext)
+  const classes = useStyles({isDay: theme.isDay()})
+  const isMobile = useIsMobile()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.root} >
+    <Paper
+      elevation={0}
+      className={classes.root}
+      style={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
+    >
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
-          defaultCollapseIcon={<NodeOpen className = {classes.icon} />}
-          defaultExpandIcon={<NodeClosed className = {classes.icon} />}
+          defaultCollapseIcon={<NodeOpen className={classes.icon} />}
+          defaultExpandIcon={<NodeClosed className={classes.icon} />}
           sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto', overflowX: 'hidden'}}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
@@ -90,14 +80,13 @@ export default function NavPanel({
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key='tree'>
+          key='tree'
+        >
           {
             <NavTree
               model={model}
               element={element}
               pathPrefix={pathPrefix}
-              onElementSelect={onElementSelect}
-              setExpandedElements={setExpandedElements}
             />
           }
         </TreeView>
@@ -107,20 +96,21 @@ export default function NavPanel({
 }
 
 
-const useStyles = makeStyles({
+const useStyles = makeStyles((theme) => ({
   root: {
     'position': 'absolute',
-    'top': '94px',
+    'top': '86px',
     'left': '20px',
     'overflow': 'auto',
     'width': '300px',
+    'opacity': .8,
     'justifyContent': 'space-around',
     'alignItems': 'center',
     'maxHeight': '50%',
     '@media (max-width: 900px)': {
-      maxHeight: '30%',
-      width: '250px',
-      top: '80px',
+      maxHeight: '150px',
+      width: '300px',
+      top: '86px',
     },
   },
   treeContainer: {
@@ -139,15 +129,16 @@ const useStyles = makeStyles({
     height: '30px',
   },
   icon: {
-    width: '12px',
-    height: '12px',
+    width: '0.8em',
+    height: '0.8em',
   },
   toggleButton: {
     'position': 'absolute',
-    'top': (props) =>`${props.topOffset}px`,
+    'top': (props) => `${props.topOffset}px`,
     'left': '30px',
     '@media (max-width: 900px)': {
       left: '20px',
     },
   },
-})
+}),
+)

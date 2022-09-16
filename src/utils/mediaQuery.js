@@ -3,9 +3,10 @@ import {isObject} from './objects'
 
 /**
  * Recursively replace MOBILE_WIDTH in object with its given value.
+ *
  * @param {number} mobileWidth
- * @param {Object} obj
- * @return {Object} The same object, potentially with some properties changed.
+ * @param {object} obj
+ * @return {object} The same object, potentially with some properties changed.
  */
 export function preprocessMediaQuery(mobileWidth, obj) {
   for (const key in obj) {
@@ -15,10 +16,10 @@ export function preprocessMediaQuery(mobileWidth, obj) {
         // Depth-first recursion
         val = preprocessMediaQuery(mobileWidth, val)
       }
-      const keyStr = key+''
+      const keyStr = `${key }`
       if (keyStr.includes('MOBILE_WIDTH')) {
         delete obj[key]
-        const newKey = key.replace('MOBILE_WIDTH', mobileWidth+'px')
+        const newKey = key.replace('MOBILE_WIDTH', `${mobileWidth }px`)
         obj[newKey] = val
       }
     }

@@ -1,11 +1,12 @@
-import React from 'react'
-import {Link as RouterLink} from 'react-router-dom'
-import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
+import React, {useEffect, useState} from 'react'
 import PropTypes from 'prop-types'
 import clsx from 'clsx'
+import {useNavigate} from 'react-router-dom'
+import Box from '@mui/material/Box'
+import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Typography from '@mui/material/Typography'
-import {reifyName} from '../utils/Ifc'
-import {computeElementPath} from '../utils/TreeUtils'
+import {reifyName} from '@bldrs-ai/ifclib'
+import {computeElementPathIds} from '../utils/TreeUtils'
 
 
 const NavTreePropTypes = {
@@ -41,20 +42,16 @@ const NavTreePropTypes = {
 
 
 /**
- * @param {Object} model IFC model
- * @param {Object} element IFC element of the model
+ * @param {object} model IFC model
+ * @param {object} element IFC element of the model
  * @param {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @param {string} onElementSelect Callback when tree item element is selected
- * @param {string} setExpandedElements React state setter to update items to expand in tree
- * @return {Object} React component
+ * @return {object} React component
  */
 export default function NavTree({
   model,
   element,
   pathPrefix,
-  onElementSelect,
-  setExpandedElements,
 }) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
@@ -79,18 +76,26 @@ export default function NavTree({
 
     const icon = iconProp || expansionIcon || displayIcon
 
-    const handleMouseDown = (event) => {
-      preventSelection(event)
-    }
+    const handleMouseDown = (event) => preventSelection(event)
 
-    const handleExpansionClick = (event) => {
-      handleExpansion(event)
-    }
+    const handleExpansionClick = (event) => handleExpansion(event)
+
+    const [selectedElement, setSelectedElement] = useState(null)
 
     const handleSelectionClick = (event) => {
       handleSelection(event)
-      onElementSelect(element)
+      setSelectedElement(element)
     }
+
+    const navigate = useNavigate()
+
+    useEffect(() => {
+      if (selectedElement) {
+        const newPath =
+              `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
+        navigate(newPath)
+      }
+    }, [selectedElement, navigate])
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -102,27 +107,19 @@ export default function NavTree({
           [classes.disabled]: disabled,
         })}
         onMouseDown={handleMouseDown}
-        ref={ref}>
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
-            jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} style={{marginLeft: 10}}>
+        ref={ref}
+      >
+        <Box
+          onClick={handleExpansionClick}
+          sx={{margin: '0px 10px 0px 16px'}}
+        >
           {icon}
-        </div>
-        <Typography onClick={handleSelectionClick} >
-          <RouterLink
-            to={
-              pathPrefix +
-              computeElementPath(element, (elt) => elt.expressID.toString())
-            }
-            style={{
-              textDecoration: 'none',
-              fontFamily: 'helvetica',
-              fontWeight: 200,
-              marginLeft: 8,
-            }}
-          >
-            {label}
-          </RouterLink>
+        </Box>
+        <Typography
+          variant='tree'
+          onClick={handleSelectionClick}
+        >
+          {label}
         </Typography>
       </div>
     )
@@ -140,8 +137,8 @@ export default function NavTree({
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
-      label={reifyName(model, element)}
-      onClick={() => onElementSelect(element)}>
+      label={reifyName({properties: model}, element)}
+    >
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {
           const childKey = `${pathPrefix}-${i++}`
@@ -151,8 +148,6 @@ export default function NavTree({
                 model={model}
                 element={child}
                 pathPrefix={pathPrefix}
-                onElementSelect={onElementSelect}
-                setExpandedElements={setExpandedElements}
               />
             </React.Fragment>
           )

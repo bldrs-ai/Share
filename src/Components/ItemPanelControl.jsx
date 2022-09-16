@@ -12,10 +12,11 @@ import ListIcon from '../assets/2D_Icons/List.svg'
 /**
  * Container for ItemProperties. ItemProperties is wrapped in an
  * ItemPropertiesDrawer to toggle hiding.
- * @param {Object} model IFC model
- * @param {Object} element The currently selected IFC element
- * @param {Object} isOpenState React state object: {value, set}
- * @return {Object} React components
+ *
+ * @param {object} model IFC model
+ * @param {object} element The currently selected IFC element
+ * @param {object} isOpenState React state object: {value, set}
+ * @return {object} React components
  */
 export default function ItemPanelControl({model, element, isOpenState}) {
   let titleStr = 'Element Properties'
@@ -36,17 +37,18 @@ export default function ItemPanelControl({model, element, isOpenState}) {
          <TooltipIconButton
            title='Properties'
            icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
-           onClick={() => isOpenState.set(!isOpenState.value)}/>}
+           onClick={() => isOpenState.set(!isOpenState.value)}
+         />}
         {isOpenState.value &&
          (isMobile ? <MobileDrawer content={itemProps}/> :
          <ItemPropertiesDrawer
            content={itemProps}
            title={titleStr}
-           onClose={() => isOpenState.set(false)}/>)}
+           onClose={() => isOpenState.set(false)}
+         />)}
       </>
     )
   }
   return null
 }
-
 

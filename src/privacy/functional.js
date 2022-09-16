@@ -11,11 +11,11 @@ import {assertDefined} from '../utils/assert'
 export function getCookieBoolean(name, defaultValue) {
   assertDefined(name, defaultValue)
   const value = getCookie(name, defaultValue)
-  if (value == '') {
+  if (value === '') {
     return defaultValue
   }
   assertDefined(value)
-  return value.toLowerCase() == 'true'
+  return value.toLowerCase() === 'true'
 }
 
 
@@ -25,7 +25,7 @@ export function getCookieBoolean(name, defaultValue) {
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name, '')
-  if (cookie && (typeof cookie == 'string')) {
+  if (cookie && (typeof cookie === 'string')) {
     return true
   }
   return false
@@ -45,22 +45,24 @@ export function getCookie(name, defaultValue) {
     const parts = properties[i].trim().split('=')
     const propName = parts[0]
     const propValue = parts[1]
-    if (propName == name) {
+    if (propName === name) {
       return propValue
     }
   }
-  return defaultValue + ''
+  return `${defaultValue }`
 }
 
 
 /**
  * @param {string} name Name of the cookie
  * @param {string} value Value of the cookie
- * @param {Number} exdays Number of days cookie should last
+ * @param {number} exdays Number of days cookie should last
  */
-export function setCookie(name, value, exdays=7) {
+export function setCookie(name, value, exdays = 7) {
   const d = new Date()
-  d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000))
-  const expires = 'expires=' + d.toUTCString()
+  // eslint-disable-next-line no-magic-numbers
+  const msInDay = 24 * 60 * 60 * 1000
+  d.setTime(d.getTime() + (exdays * msInDay))
+  const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }
