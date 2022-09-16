@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r420",
+  "version": "1.0.0-r440",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -34,6 +34,7 @@
     "@mui/styles": "^5.9.2",
     "@octokit/rest": "^19.0.3",
     "clsx": "^1.2.1",
+    "matrix-widget-api": "^1.1.1",
     "normalize.css": "^8.0.1",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
