@@ -22,7 +22,7 @@ export function SideDrawer({
   closeDrawer,
   isCommentsOn,
   isPropertiesOn,
-  setSelectedIssueId}) {
+}) {
   const classes = useStyles({
     divider: (isCommentsOn && isPropertiesOn),
     isCommentsOn: isCommentsOn,
@@ -66,7 +66,7 @@ export function SideDrawer({
             </div>
             <div className={classes.divider}/>
             <div className={classes.containerProperties}>
-              {isPropertiesOn ? <PropertiesPanel/> : null }
+              {isPropertiesOn ? <PropertiesPanel/> : null}
             </div>
           </div>
         </Drawer>
@@ -121,7 +121,6 @@ export default function SideDrawerWrapper() {
           isCommentsOn={isCommentsOn}
           isPropertiesOn={isPropertiesOn}
           openDrawer={openDrawer}
-          setSelectedIssueId={setSelectedIssueId}
         />}
     </>
   )
