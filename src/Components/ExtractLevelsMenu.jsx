@@ -11,6 +11,7 @@ import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
+import {extractHeight} from '../utils/extractHeight'
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -24,9 +25,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const classes = useStyles()
   const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
+  const floorplanMenu = []
   const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
+    showExtractMenu(floorplanMenu)
   }
   const handleClose = () => {
     setAnchorEl(null)
@@ -43,13 +46,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     viewer.clipper.createFromNormalAndCoplanarPoint(normal1, modelCenter1)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
   }
-
   const planView = () => {
     // viewer.context.ifcCamera.projectionManager.setOrthoCamera()
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
   }
-
   const createPlane = (normalDirection) => {
     const modelCenter = getModelCenter(model)
     const planeHash = getHashParams(location, 'p')
@@ -105,28 +106,36 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }, [model])
 
-  let sampleHeights = []
+  const showExtractMenu = async () => {
+    const allStor = await extractHeight(model)
+    console.log(allStor)
+    let sampleHeights = []
 
+    // PLACEHOLDER VALUES
+    /* eslint-disable */
+    const EISVOGEL = [
+      -2.24, 0, 3.5,
+      6.4, 9.5, 12.6,
+      15.7, 18.8, 21.81,
+      27.12,
+    ]
+  
+    /* eslint-enable */
+    // sampleHeights = EISVOGEL
+    sampleHeights = allStor
+    const sampleHeightsIndex = []
+    for (let i = 0; i < sampleHeights.length; i++) {
+      sampleHeightsIndex[i] = i
+    }
 
-  // PLACEHOLDER VALUES
-  /* eslint-disable */
-  const EISVOGEL = [
-    -2.24, 0, 3.5,
-    6.4, 9.5, 12.6,
-    15.7, 18.8, 21.81,
-    27.12,
-  ]
+    const planeoffset = 0.5
+    sampleHeightsIndex.forEach((data) => {
+      floorplanMenu.push(
+          <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
+    })
+    return floorplanMenu
+  }
 
-  const sampleHeightsIndex = [0, 1, 2, 3, 4, 5, 6]
-  /* eslint-enable */
-
-  sampleHeights = EISVOGEL
-  const floorplanMenu = []
-  const planeoffset = 0.5
-  sampleHeightsIndex.forEach((data) => {
-    floorplanMenu.push(
-        <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
-  })
   return (
     <div>
       <TooltipIconButton
@@ -156,7 +165,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     </div>
   )
 }
-
 
 const useStyles = makeStyles({
   root: {
