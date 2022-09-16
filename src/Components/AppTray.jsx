@@ -1,25 +1,38 @@
-import React from 'react'
+import React, {useState} from 'react'
 
 
 /**
  * @return {object} React component
  */
 export default function AppTray() {
+  const [frameSource, setFrameSource] = useState('https://www.vyzn.tech/')
   return (
     <>
-      App IFrame:
-      <iframe
-        title='Vyzn'
-        src='https://www.vyzn.tech/'
-        width='400'
-        height='400'
+      <div
         style={{
           position: 'absolute',
-          top: '40px',
-          right: '40px',
-          border: 'solid 3px red',
+          top: '0.5em',
+          right: '5em',
+          width: '20em',
         }}
-      ></iframe>
+      >
+        <form name='appFrame' onSubmit={(e) => {
+          e.preventDefault()
+          setFrameSource(document.forms.appFrame.children.frameSource.value)
+        }}
+        >
+          IFrame source: <input name='frameSource' defaultValue={frameSource} width='20'/>
+        </form>
+        <iframe
+          title='Vyzn'
+          src={frameSource}
+          style={{
+            border: 'solid 3px red',
+            width: '20em',
+            height: '20em',
+          }}
+        ></iframe>
+      </div>
     </>
   )
 }
