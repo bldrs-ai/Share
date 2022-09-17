@@ -27,9 +27,9 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const model = useStore((state) => state.modelStore)
   const floorplanMenu = []
   const PLANE_PREFIX = 'p'
-  const handleClick = (event) => {
+  const handleClick = async (event) => {
     setAnchorEl(event.currentTarget)
-    showExtractMenu(floorplanMenu)
+    await showExtractMenu()
   }
   const handleClose = () => {
     setAnchorEl(null)
@@ -160,11 +160,16 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         }}
       >
         <MenuItem onClick={() => planView()}> Plan View</MenuItem>
+        <MenuItem onClick={async () => {
+          await showExtractMenu()
+        }}
+        >Extract Levels</MenuItem>
         {floorplanMenu}
       </Menu>
     </div>
   )
 }
+
 
 const useStyles = makeStyles({
   root: {
