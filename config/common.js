@@ -37,8 +37,6 @@ export const build = {
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
   plugins: [
-    progress(),
-    cleanPlugin(),
     svgrPlugin(),
     copyStaticFiles({
       src: assetsDir,

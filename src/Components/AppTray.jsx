@@ -60,7 +60,7 @@ function check(invalid, msg) {
 /** */
 function initMatrix(iframe) {
   // First we need to set up a listener to ensure we're able to hear the client's requests
-  window.onmessage = function(event) {
+  window.addEventListener('message', (event) => {
     // First make sure we are roughly in shape to be a widget: we need a parent window to
     // make sure it's not another tab trying to contact us.
     check(!window.parent, 'request not from parent; ignoring')
@@ -98,7 +98,7 @@ function initMatrix(iframe) {
         },
       }, event.origin)
     }
-  }
+  })
 
 
   // console.log('AppTray.jsx, sending initial message')
