@@ -56,7 +56,6 @@ export default function CadView({
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [selectedElements, setSelectedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
@@ -76,6 +75,8 @@ export default function CadView({
 
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -341,9 +342,13 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement({})
+    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
+    setSelectedElements(null)
+    setCutPlaneDirection(null)
+    const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    navigate(`${pathPrefix}${repoFilePath}`)
   }
 
 
@@ -455,7 +460,6 @@ export default function CadView({
           <NavPanel
             model={model}
             element={rootElement}
-            selectedElements={selectedElements}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
             setExpandedElements={setExpandedElements}
