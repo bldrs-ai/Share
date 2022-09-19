@@ -86,11 +86,6 @@ const useStyles = makeStyles({
       width: '86%',
       height: '310px',
     },
-    '& h1, & h2': {
-      color: '#696969',
-      fontWeight: 200,
-      textAlign: 'left',
-    },
     '& h1': {
       marginTop: 0,
       fontWeight: 200,

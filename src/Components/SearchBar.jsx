@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, useState} from 'react'
+import React, {useRef, useEffect, useState, useContext} from 'react'
 import {
   useLocation,
   useNavigate,
@@ -7,15 +7,16 @@ import {
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
+import OpenModelControl from './OpenModelControl'
 import debug from '../utils/debug'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import SearchIcon from '../assets/2D_Icons/Search.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import {ColorModeContext} from '../Context/ColorMode'
+import {TooltipIconButton} from './Buttons'
+import useTheme from '../Theme'
 import {
   looksLikeLink,
   githubUrlOrPathToSharePath,
 } from '../ShareRoutes'
-import {TooltipIconButton, FormButton} from './Buttons'
 
 
 /**
@@ -25,7 +26,7 @@ import {TooltipIconButton, FormButton} from './Buttons'
  * @param {boolean} showNavPanel toggle
  * @return {React.Component} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, showNavPanel}) {
+export default function SearchBar({fileOpen}) {
   const location = useRef(useLocation())
   const navigation = useRef(useNavigate())
   const [searchParams, setSearchParams] = useSearchParams()
@@ -34,12 +35,15 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
-  const widthPerChar = 10
+  const widthPerChar = 5
   const padding = 130
   const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
+  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
+
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -88,20 +92,28 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit} elevation={0}>
-        <TooltipIconButton
-          placement='bottom'
-          title='Elements Hierarchy'
-          onClick={onClickMenuCb}
-          icon={<TreeIcon/>}
-        />
+      <Paper
+        component='form'
+        className={classes.root}
+        onSubmit={onSubmit}
+        elevation={0}
+        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+      >
+        <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search'}
-          style={{marginLeft: '6px', fontSize: '1.3em'}}
+          placeholder={'Search / Insert GitHub link'}
+          sx={{
+            ...theme.theme.typography.tree,
+            'marginTop': '4px',
+            'marginLeft': '4px',
+            '& input::placeholder': {
+              opacity: .3,
+            },
+          }}
         />
         {inputText.length > 0 &&
           <TooltipIconButton
@@ -113,12 +125,6 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
             icon={<ClearIcon/>}
           />
         }
-        <FormButton
-          title=''
-          size='small'
-          placement='bottom'
-          icon={<SearchIcon/>}
-        />
       </Paper>
       { inputText.length > 0 &&
         error.length > 0 &&
@@ -198,9 +204,8 @@ const useStyles = makeStyles({
     'height': '56px',
     'maxWidth': '700px',
     'alignItems': 'center',
-    'padding': '2px 6px 2px 6px',
-    'border': '1px solid lightGrey',
     'opacity': .8,
+    'padding': '2px 6px 2px 6px',
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',

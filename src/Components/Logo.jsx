@@ -3,7 +3,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import PkgJson from '../../package.json'
-import LogoIcon from '../assets/LogoB.svg'
+import LogoIcon from '../assets/LogoB_4.svg'
 
 
 /**

@@ -6,7 +6,7 @@ import {makeStyles} from '@mui/styles'
 import SearchIndex from './SearchIndex'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import BaseGroup from '../Components/BaseGroup'
+// import BaseGroup from '../Components/BaseGroup'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -148,12 +148,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.custom.preselect,
+      color: theme.palette.highlight.light,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.custom.select,
+      color: theme.palette.highlight.main,
       depthTest: true,
     })
     if (viewer.IFC.selector) {
@@ -283,7 +283,12 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(true)
+
+    if (isMobile) {
+      setShowNavPanel(false)
+    } else {
+      setShowNavPanel(true)
+    }
   }
 
 
@@ -448,9 +453,7 @@ export default function CadView({
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              isOpen={showNavPanel}
+              fileOpen={loadLocalFile}
             />
           )}
         </div>
@@ -474,11 +477,14 @@ export default function CadView({
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              showNavPanel={showNavPanel}
+              installPrefix={installPrefix}
             />}
         </div>
-        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
+        {/* <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
           <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
-        </div>
+        </div> */}
         {alert}
       </div>
       <SideDrawerWrapper />
@@ -546,6 +552,9 @@ const useStyles = makeStyles({
     },
 
   },
+  searchContainer: {
+
+  },
   search: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
@@ -587,7 +596,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 0,
-    'right': '30em',
+    'right': '31em',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {

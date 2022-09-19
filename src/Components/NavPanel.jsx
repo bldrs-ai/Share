@@ -1,9 +1,11 @@
-import React from 'react'
+import React, {useContext} from 'react'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
 import {makeStyles} from '@mui/styles'
+import {useIsMobile} from './Hooks'
 import NavTree from './NavTree'
 import {assertDefined} from '../utils/assert'
+import {ColorModeContext} from '../Context/ColorMode'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
@@ -28,13 +30,19 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const classes = useStyles()
+  const theme = useContext(ColorModeContext)
+  const classes = useStyles({isDay: theme.isDay()})
   const selectedElements = useStore((state) => state.selectedElements)
+  const isMobile = useIsMobile()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
   return (
-    <Paper className={classes.root} elevation={0}>
+    <Paper
+      elevation={0}
+      className={classes.root}
+      style={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
+    >
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
@@ -63,21 +71,21 @@ export default function NavPanel({
 }
 
 
-const useStyles = makeStyles({
+const useStyles = makeStyles((theme) => ({
   root: {
     'position': 'absolute',
-    'top': '94px',
+    'top': '86px',
     'left': '20px',
     'overflow': 'auto',
     'width': '300px',
+    'opacity': .8,
     'justifyContent': 'space-around',
     'alignItems': 'center',
     'maxHeight': '50%',
-    'opacity': .9,
     '@media (max-width: 900px)': {
-      maxHeight: '30%',
+      maxHeight: '150px',
       width: '300px',
-      top: '80px',
+      top: '86px',
     },
   },
   treeContainer: {
@@ -96,8 +104,8 @@ const useStyles = makeStyles({
     height: '30px',
   },
   icon: {
-    width: '12px',
-    height: '12px',
+    width: '0.8em',
+    height: '0.8em',
   },
   toggleButton: {
     'position': 'absolute',
@@ -107,4 +115,5 @@ const useStyles = makeStyles({
       left: '20px',
     },
   },
-})
+}),
+)

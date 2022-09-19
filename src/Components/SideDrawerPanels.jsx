@@ -1,5 +1,7 @@
 import React from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import useStore from '../store/useStore'
 import ItemProperties from './ItemProperties'
 import {TooltipIconButton} from './Buttons'
@@ -18,9 +20,9 @@ function PanelTitle({title, controlsGroup}) {
   const classes = useStyles(useTheme())
   return (
     <div className={classes.titleContainer}>
-      <div className={classes.title}>
+      <Typography variant='h1'>
         {title}
-      </div>
+      </Typography>
       {controlsGroup}
     </div>
   )
@@ -55,8 +57,17 @@ export function PropertiesPanel() {
         }
       />
       <div className={classes.contentContainerProperties}>
-        {selectedElement ? <ItemProperties/> : null}
-
+        {selectedElement ?
+          <ItemProperties/> :
+          <Box sx={{width: '96%'}}>
+            <Typography
+              variant='h1'
+              sx={{textAlign: 'left'}}
+            >
+              Please select an element
+            </Typography>
+          </Box>
+        }
       </div>
     </>
   )
@@ -82,7 +93,7 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: '10px',
+    paddingLeft: '8px',
     borderRadius: '5px',
   },
   title: {

@@ -1,11 +1,10 @@
 import React, {useEffect, useRef, useState} from 'react'
-// eslint-disable-next-line no-unused-vars
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
-import useTheme from './Theme'
 import useStore from './store/useStore'
+import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
@@ -92,7 +91,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 /**
  * Navigate to index.ifc with nice camera setting.
  *
- * @param {NavigateFunction} navigate
+ * @param {Function} navigate
  * @param {string} appPrefix
  */
 export function navToDefault(navigate, appPrefix) {

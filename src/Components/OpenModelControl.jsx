@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useContext} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import {useNavigate} from 'react-router-dom'
 import MenuItem from '@mui/material/MenuItem'
@@ -11,6 +11,8 @@ import Dialog from './Dialog'
 import ModelsIcon from '../assets/2D_Icons/Model.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
 import {TooltipIconButton} from '../Components/Buttons'
+import OpenIcon from '../assets/2D_Icons/Open.svg'
+import {ColorModeContext} from '../Context/ColorMode'
 
 
 /**
@@ -21,16 +23,20 @@ import {TooltipIconButton} from '../Components/Buttons'
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const classes = useStyles(useTheme())
+  const theme = useContext(ColorModeContext)
   return (
     <div>
-      <Paper className={classes.root} elevation={1}>
-        <Tooltip title={''} describeChild placement={'top'}>
+      <Paper className={classes.root} elevation={0}
+        style={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+      >
+        <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
             onClick={() => setIsDialogDisplayed(true)}
             color='primary'
+            value={'something'}
           >
-            <Typography variant={'h7'} className={classes.iconContainer}>Open</Typography>
+            <OpenIcon/>
           </ToggleButton>
         </Tooltip>
       </Paper>
@@ -89,22 +95,20 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <p>
-            <TextField
-              className={classes.dropDown}
-              value={selected}
-              onChange={(e) => handleSelect(e)}
-              variant='outlined'
-              label='Sample Projects'
-              select
-              size='small'
-            >
-              <MenuItem value={4}><Typography variant='h2'>Momentum</Typography></MenuItem>
-              <MenuItem value={3}><Typography variant='h2'>Eisvogel</Typography></MenuItem>
-              <MenuItem value={2}><Typography variant='h2'>Astra</Typography></MenuItem>
-              <MenuItem value={7}><Typography variant='h2'>Structural Detail</Typography></MenuItem>
-            </TextField>
-          </p>
+          <TextField
+            className={classes.dropDown}
+            value={selected}
+            onChange={(e) => handleSelect(e)}
+            variant='outlined'
+            label='Sample Projects'
+            select
+            size='small'
+          >
+            <MenuItem value={4}><Typography variant='p'>Momentum</Typography></MenuItem>
+            <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+            <MenuItem value={2}><Typography variant='p'>Astra</Typography></MenuItem>
+            <MenuItem value={7}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+          </TextField>
           <p className={classes.bullet}>
             Models hosted on GitHub are opened by inserting the link to the file into the Search.
             <br/>
@@ -119,17 +123,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
                 wiki
               </a>
             </span> to learn more.
-
           </p>
-
-          <div>
-            <TooltipIconButton
-              title='Open IFC file'
-              icon={<div style={{padding: '6px 10px 4px 10px', borderRadius: '6px'}}><UploadIcon/></div>}
-              onClick={openFile}
-            />
-          </div>
-          <p className={classes.disclaimer}>
+          <TooltipIconButton
+            title='Open IFC file'
+            icon={<UploadIcon/>}
+            onClick={openFile}
+          />
+          <p className={classes.bullet}>
             Models opened from local drive cannot be saved or shared.
           </p>
         </div>
@@ -142,6 +142,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 const useStyles = makeStyles((theme) => ({
   content: {
     width: '270px',
+    marginTop: '6px',
   },
   snippet: {
     textAlign: 'left',
@@ -151,18 +152,11 @@ const useStyles = makeStyles((theme) => ({
     paddingLeft: '10px',
     paddingRight: '10px',
   },
-  disclaimer: {
-    fontSize: '12px',
-    textAlign: 'left',
-    paddingLeft: '10px',
-    paddingRight: '10px',
-    fontWeight: 'bold',
-  },
   link: {
     fontWeight: 'bold',
-    color: '#00B2FF',
+    color: theme.palette.highlight.secondary,
     cursor: 'pointer',
-    borderBottom: '1px solid #00B2FF',
+    borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
   },
   openIcon: {
     textAlign: 'center',
@@ -172,49 +166,47 @@ const useStyles = makeStyles((theme) => ({
   },
   root: {
     '& button': {
-      'width': '80px',
-      'height': '50px',
+      'width': '44px',
+      'height': '44px',
       'border': 'none',
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979770',
       },
     },
     '& svg': {
-      width: '30px',
-      height: '30px',
+      width: '40px',
+      height: '40px',
       fill: theme.palette.primary.contrastText,
     },
   },
   dropDown: {
     'width': '260px',
     '& .MuiOutlinedInput-input': {
-      color: '#00B2FF',
+      color: theme.palette.highlight.secondary,
     },
-    // TODO(oleg): Find suited colors
     '& .MuiInputLabel-root': {
-      color: '#00B2FF',
+      color: theme.palette.highlight.secondary,
     },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#00B2FF',
+      borderColor: theme.palette.highlight.secondary,
     },
     '&:hover .MuiOutlinedInput-input': {
-      color: '#00B2FF',
+      color: theme.palette.highlight.secondary,
     },
     '&:hover .MuiInputLabel-root': {
-      color: '#00B2FF',
+      color: theme.palette.highlight.secondary,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#00B2FF',
+      borderColor: theme.palette.highlight.secondary,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: '#00B2FF',
+      color: theme.palette.highlight.secondary,
     },
-    // TODO(oleg): Find suited colors
     '& .MuiInputLabel-root.Mui-focused': {
-      color: '#00B2FF ',
+      color: theme.palette.highlight.secondary,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: '#00B2FF',
+      borderColor: theme.palette.highlight.secondary,
     },
   },
 }),

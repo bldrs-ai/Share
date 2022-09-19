@@ -25,6 +25,7 @@ export function TooltipIconButton({title, onClick, icon, placement = 'left', sel
           selected={selected}
           onClick={onClick}
           color='primary'
+          value={''}
         >
           {icon}
         </ToggleButton>
@@ -94,6 +95,7 @@ export function ControlButton({
             selected={isDialogDisplayed}
             onClick={setIsDialogDisplayed}
             color='primary'
+            value={''}
           >
             {icon}
           </ToggleButton>
@@ -105,52 +107,15 @@ export function ControlButton({
 }
 
 
-/**
- * A FormButton is a TooltipIconButton but with parameterized type for
- * form actions.
- *
- * @param {string} title
- * @param {object} icon
- * @param {string} type Type of button (and icon to render)
- * @param {string} placement Placement of tooltip
- * @param {string} size Size of button component
- * @return {React.Component} React component
- */
-export function FormButton({title, icon, placement = 'left'}) {
-  assertDefined(title, icon)
-  const classes = useStyles(useTheme())
-  return (
-    <div className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement}>
-        <ToggleButton
-          type='submit'
-          className={classes.root}
-          selected={false}
-          color='primary'
-        >
-          {icon}
-        </ToggleButton>
-      </Tooltip>
-    </div>
-  )
-}
-
-
 const useStyles = makeStyles((theme) => ({
-  container: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-around',
-    opacity: .9,
-    height: '340px',
-  },
   root: {
     '& button': {
       'width': '40px',
       'height': '40px',
       'border': 'none ',
+      'margin': '4px 0px 4px 0px',
       '&.Mui-selected, &.Mui-selected:hover': {
-        backgroundColor: '#97979770',
+        backgroundColor: '#97979720',
       },
     },
     '& svg': {

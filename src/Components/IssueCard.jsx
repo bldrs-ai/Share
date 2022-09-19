@@ -277,7 +277,7 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '27em',
+    'width': '26.5em',
     'marginBottom': '20px',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
@@ -306,6 +306,7 @@ const useStyles = makeStyles((theme) => ({
   title: {
     marginLeft: '10px',
     color: 'black',
+    width: '230px',
   },
   metaDataContainer: {
     marginRight: '12px',
@@ -340,7 +341,7 @@ const useStyles = makeStyles((theme) => ({
     margin: '5px 5px 15px 10px',
     overflow: 'fix',
     fontSize: '10px',
-    color: theme.palette.custom.highLight,
+    color: theme.palette.highlight.main,
   },
   actions: {
     display: 'flex',
@@ -405,20 +406,6 @@ const useStyles = makeStyles((theme) => ({
   },
   username: {
     fontSize: '10px',
-    color: 'black',
-  },
-  button: {
-    width: '24px',
-    height: '24px',
-    backgroundColor: theme.palette.custom.highLight,
-  },
-  buttonCamera: {
-    backgroundColor: (props) => props.embeddedCameras ?
-      theme.palette.custom.highLight : theme.palette.custom.disable,
-    color: 'black',
-  },
-  buttonShare: {
-    backgroundColor: theme.palette.custom.highLight,
     color: 'black',
   },
   iconContainer: {

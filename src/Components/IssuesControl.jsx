@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import Paper from '@mui/material/Paper'
+import Typography from '@mui/material/Typography'
 import useStore from '../store/useStore'
 import {getIssues, getComments} from '../utils/GitHub'
 import debug from '../utils/debug'
@@ -49,7 +50,10 @@ export function IssuesNavBar() {
   return (
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
-        {selectedIssueId ? null : 'Notes' }
+        <Typography variant='h1'>
+          {!selectedIssueId && 'Notes' }
+        </Typography>
+
         {selectedIssueId ?
           <div style={{marginLeft: '-8px'}}>
             <TooltipIconButton
@@ -189,6 +193,7 @@ export function Issues() {
     }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredIssue, repository, setComments])
 
   return (
@@ -269,7 +274,7 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     fontSize: '18px',
     textDecoration: 'underline',
-    fontWeight: 'bold',
+    fontWeight: 'lighter',
     alignItems: 'center',
   },
   contentContainer: {
@@ -310,7 +315,6 @@ const useStyles = makeStyles((theme) => ({
     'flexDirection': 'row',
     'justifyContent': 'center',
     'alignItems': 'center',
-    'fontSize': '20px',
     'paddingLeft': '16px',
     '@media (max-width: 900px)': {
       paddingLeft: '12px',

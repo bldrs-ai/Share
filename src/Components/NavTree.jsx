@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react'
 import PropTypes from 'prop-types'
 import clsx from 'clsx'
 import {useNavigate} from 'react-router-dom'
+import Box from '@mui/material/Box'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Typography from '@mui/material/Typography'
 import {reifyName} from '@bldrs-ai/ifclib'
@@ -108,12 +109,16 @@ export default function NavTree({
         onMouseDown={handleMouseDown}
         ref={ref}
       >
-        {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events,
-            jsx-a11y/no-static-element-interactions */}
-        <div onClick={handleExpansionClick} style={{margin: '0px 12px'}}>
+        <Box
+          onClick={handleExpansionClick}
+          sx={{margin: '0px 14px 0px 14px'}}
+        >
           {icon}
-        </div>
-        <Typography variant='h3' onClick={handleSelectionClick}>
+        </Box>
+        <Typography
+          variant='tree'
+          onClick={handleSelectionClick}
+        >
           {label}
         </Typography>
       </div>

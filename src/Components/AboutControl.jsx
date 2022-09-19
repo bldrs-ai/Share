@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {useState, useEffect, useContext} from 'react'
 import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
@@ -6,11 +6,9 @@ import Dialog from './Dialog'
 import debug from '../utils/debug'
 import * as Privacy from '../privacy/Privacy'
 import {ControlButton} from './Buttons'
+import {ColorModeContext} from '../Context/ColorMode'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
-import LogoB from '../assets/LogoB.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
-import OpenIcon from '../assets/2D_Icons/Open.svg'
-import GitHubIcon from '../assets/2D_Icons/GitHub.svg'
+import LogoB from '../assets/LogoB_4.svg'
 
 
 /**
@@ -59,7 +57,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
   return (
     <Dialog
       icon={<LogoB/>}
-      headerText='BLDRS'
+      headerText={<LogoB style={{width: '50px', height: '50px'}} />}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent installPrefix={installPrefix}/>}
@@ -75,6 +73,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
  */
 function AboutContent({installPrefix}) {
   const classes = useStyles()
+  const theme = useContext(ColorModeContext)
   const [privacySlider, setPrivacySlider] = useState(0)
   const privacyLevelFunctional = 0
   const privacyLevelUsage = 10
@@ -113,36 +112,19 @@ function AboutContent({installPrefix}) {
 
   return (
     <div className={classes.content}>
-      <Typography
-        variant='h4'
-        gutterBottom={false}
-      >Build Every Thing Together</Typography>
-      <Typography gutterBottom={false} >We are open source 🌱<br/>
+      <Typography variant='h1'>Build Every Thing Together</Typography>
+      <Typography gutterBottom={false} >We are open source<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
         </a>
       </Typography>
-      <ul>
-        <li><OpenIcon/> View local IFC models</li>
-        <li><GitHubIcon/> Open IFC models from GitHub</li>
-        <li><ShareIcon/> Share IFC models</li>
+      <ul style={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C', opacity: .8, marginTop: '10px'}}>
+        <li><Typography variant='p'>View IFC models</Typography></li>
+        <li><Typography variant='p'>Open IFC models from GitHub</Typography></li>
+        <li><Typography variant='p'>Share IFC models</Typography></li>
       </ul>
-      <Typography variant='h5' color='info'>Highlighted Projects:</Typography>
-      <div className={classes.demoContainer}>
-        <a href={`${installPrefix}/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-12.84,3.53,9.64,-5.33,2.61,1.71`}>
-          <img alt="Tinyhouse" src={`${installPrefix}/Tinyhouse.png`} className={classes.demo}/>
-        </a>
-        {/* eslint-disable-next-line */}
-        <a href={`${installPrefix}/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:-19.95,17.97,25.31,4.52,0.65,1.24`}>
-          <img
-            alt="Schependomlaan"
-            src={`${installPrefix}/Schependomlaan.png`}
-            className={classes.demo}
-          />
-        </a>
-      </div>
       <div className={classes.settings}>
-        <Typography variant='h5' color='info'>Privacy</Typography>
+        <Typography variant='p' style={{marginBottom: '6px'}}>Privacy</Typography>
         <Slider
           onChange={setPrivacy}
           marks={marks}
@@ -157,118 +139,70 @@ function AboutContent({installPrefix}) {
 }
 
 
-const useStyles = makeStyles({
-  content: {
-    'minHeight': '300px',
-    '& .MuiTypography-body1': {
-      padding: '1em 0',
-    },
-    '& .MuiTypography-body2': {
-      padding: '1em 0',
-      opacity: 0.5,
-    },
-    '& ul': {
-      width: '100%',
-      margin: '0px',
-      marginTop: '-10px',
-      marginBottom: '15px',
-      padding: '0px',
-      textAlign: 'left',
-      // TODO(pablo): appears to be removed but not sure why.  Here to
-      // make sure.
-      listStyleType: 'none',
-    },
-    '& li': {
-      display: 'flex',
-      justifyContent: 'flex-start',
-      alignItems: 'center',
-      margin: '0.5em',
-      padding: '0px',
-      fontWeight: 200,
-      fontSize: '0.9em',
-      // TODO(pablo): appears to be removed but not sure why.  Here to
-      // make sure.
-      listStyleType: 'none',
-    },
-    '& li svg': {
-      width: '25px',
-      height: '25px',
-      marginRight: '0.5em',
-    },
-    '& a': {
-      color: 'grey',
-      paddingLeft: '4px',
-      paddingRight: '4px',
-      paddingBottom: '2px',
-    },
-  },
-  version: {
-    '@media (max-width: 900px)': {
-      display: 'none',
-    },
-  },
-  demo: {
-    'height': '100px',
-    'textAlign': 'center',
-    'marginTop': '10px',
-    'borderRadius': '10px',
-    'boxShadow': 'rgba(50, 50, 93, 0.25) 0px 6px 12px -2px, rgba(0, 0, 0, 0.3) 0px 3px 7px -3px',
-    '@media (max-width: 900px)': {
-      height: '60px',
-    },
-  },
-  demoContainer: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'space-between',
-    'height': '50px',
-    '@media (max-width: 900px)': {
-      height: '0px',
-      justifyContent: 'center',
-    },
-  },
-  settings: {
-    'display': 'flex',
-    'flexDirection': 'column',
-    'justifyContent': 'center',
-    'alignItems': 'center',
-    'margin': '5em 0 0 0',
-    'textAlign': 'center',
-    'paddingTop': '20px',
-    'borderTop': '1px solid lightGrey',
-    '@media (max-width: 900px)': {
-      paddingTop: '10px',
-    },
-    '& .MuiSlider-thumb': {
-      backgroundColor: 'green',
-      width: '15px',
-      height: '15px',
-    },
-    '& .MuiSlider-track': {
-      color: 'lightGray',
-    },
-    '& .MuiSlider-rail': {
-      color: 'lightGray',
-    },
-  },
-  toggle: {
-    'width': '50px',
-    '& .MuiSwitch-switchBase.Mui-checked': {
-      'color': 'green',
-      '&:hover': {
-        backgroundColor: 'green',
+const useStyles = makeStyles((theme) => (
+  {
+    content: {
+      'minHeight': '300px',
+      '& .MuiTypography-body1': {
+        padding: '1em 0',
+      },
+      '& ul': {
+        width: '100%',
+        marginTop: '-2px',
+        marginBottom: '15px',
+        padding: '4px 6px',
+        textAlign: 'left',
+        borderRadius: '8px',
+      },
+      '& li': {
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: '10px 6px',
+        listStyleType: 'none',
+      },
+      '& a': {
+        color: 'grey',
+        paddingLeft: '4px',
+        paddingRight: '4px',
+        paddingBottom: '2px',
+      },
+      '@media (max-width: 900px)': {
+        marginTop: '-10px',
       },
     },
-    '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
-      backgroundColor: 'gray',
+    settings: {
+      'display': 'flex',
+      'flexDirection': 'column',
+      'justifyContent': 'center',
+      'alignItems': 'center',
+      'textAlign': 'center',
+      'paddingTop': '10px',
+      'paddingBottom': '30px',
+      '@media (max-width: 900px)': {
+        paddingTop: '16px',
+        paddingBottom: '30px',
+      },
+      '& .MuiSlider-thumb': {
+        backgroundColor: theme.palette.highlight.main,
+        width: '18px',
+        height: '18px',
+      },
+      '& .MuiSlider-track': {
+        color: 'lightGray',
+      },
+      '& .MuiSlider-rail': {
+        color: 'lightGray',
+      },
+      '& .MuiSlider-markLabel': {
+        paddingTop: '4px',
+        fontSize: '1em',
+      },
     },
-    '& .MuiSwitch-thumb': {
-      backgroundColor: 'lightGrey',
+    iconContainer: {
+      width: '20px',
+      height: '20px',
+      marginBottom: '2px',
     },
-  },
-  iconContainer: {
-    width: '20px',
-    height: '20px',
-    marginBottom: '2px',
-  },
-})
+  }
+))

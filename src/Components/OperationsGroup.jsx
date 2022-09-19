@@ -1,18 +1,21 @@
 import React, {useContext} from 'react'
 import {makeStyles} from '@mui/styles'
+import {useIsMobile} from './Hooks'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
-// import CutPlaneMenu from './CutPlaneMenu'
+import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import AboutControl from './AboutControl'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
 import NotesIcon from '../assets/2D_Icons/Notes.svg'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
+import TreeIcon from '../assets/2D_Icons/Tree.svg'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
+import ButtonGroup from '@mui/material/ButtonGroup'
+import Divider from '@mui/material/Divider'
 
 
 /**
@@ -23,14 +26,18 @@ import {TooltipIconButton} from './Buttons'
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({viewer, unSelectItem, installPrefix, fileOpen}) {
+export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const viewer = useStore((state) => state.viewerStore)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
-  const selectedElement = useStore((state) => state.selectedElement)
+
 
   const toggle = (panel) => {
     openDrawer()
@@ -45,40 +52,50 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix, fi
 
   return (
     <div className={classes.container}>
-      <div className={classes.topGroup}>
+      <ButtonGroup orientation="vertical" >
         <ShareControl viewer={viewer}/>
+      </ButtonGroup>
+      {!isMobile && <Divider />}
+      <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
+          selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
         <TooltipIconButton
           title="Properties"
           onClick={() => toggle('Properties')}
+          selected={isPropertiesOn}
           icon={<ListIcon/>}
         />
+        {isMobile &&
+          <TooltipIconButton
+            title='Elements Hierarchy'
+            selected={showNavPanel}
+            onClick={onClickMenuCb}
+            icon={<TreeIcon/>}
+          />
+        }
+        <CutPlaneMenu/>
         <TooltipIconButton
-          title="Section plane"
-          onClick={() => viewer.clipper.createPlane()}
-          icon={<CutPlaneIcon/>}
-        />
-        <TooltipIconButton
-          title="Clear selected element"
+          title="Clear"
           onClick={unSelectItem}
           selected={selectedElement !== null}
           icon={<ClearIcon />}
         />
-        <div>
-          <TooltipIconButton
-            title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
-            onClick={() => theme.toggleColorMode()}
-            icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
-          />
-        </div>
+      </ButtonGroup>
+      <Divider/>
+      <ButtonGroup orientation="vertical">
+        <TooltipIconButton
+          title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
+          onClick={() => theme.toggleColorMode()}
+          icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
+        />
         <AboutControl installPrefix={installPrefix}/>
-        {/* Invisible */}
-        <CameraControl viewer={viewer}/>
-      </div>
+      </ButtonGroup>
+      {/* Invisible */}
+      <CameraControl viewer={viewer}/>
     </div>
   )
 }
@@ -87,29 +104,13 @@ export default function OperationsGroup({viewer, unSelectItem, installPrefix, fi
 const useStyles = makeStyles({
   container: {
     // Actually want 100 - size of settings button
-    'height': 'calc(100vh - 40px)',
-    'margin': '26px 20px 0 0',
-    '@media (max-width: 900px)': {
-      margin: '30px 10px 0 0',
-    },
-  },
-  topGroup: {
     'display': 'flex',
     'flexDirection': 'column',
-    'justifyContent': 'space-between',
-    'height': '360px',
+    'height': 'calc(100vh - 40px)',
+    'margin': '20px 20px 0 0',
     '@media (max-width: 900px)': {
-      height: '380px',
+      margin: '20px 10px 0 0',
     },
-  },
-  lowerGroup: {
-    position: 'fixed',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    bottom: 0,
-    paddingBottom: '70px',
-    minHeight: '150px',
   },
 })
 
