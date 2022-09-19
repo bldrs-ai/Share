@@ -1,5 +1,6 @@
 import React, {useState, useEffect, useContext} from 'react'
 import Slider from '@mui/material/Slider'
+import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
@@ -118,13 +119,16 @@ function AboutContent({installPrefix}) {
           github.com/bldrs-ai/Share
         </a>
       </Typography>
-      <ul style={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C', opacity: .8, marginTop: '10px'}}>
-        <li><Typography variant='p'>View IFC models</Typography></li>
-        <li><Typography variant='p'>Open IFC models from GitHub</Typography></li>
-        <li><Typography variant='p'>Share IFC models</Typography></li>
-      </ul>
+      <Box sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C', opacity: .8, marginTop: '10px'}} >
+        <ul>
+          <li><Typography variant='p'>View IFC models</Typography></li>
+          <li><Typography variant='p'>Open IFC models from GitHub</Typography></li>
+          <li><Typography variant='p'>Share IFC models</Typography></li>
+        </ul>
+      </Box>
+
       <div className={classes.settings}>
-        <Typography variant='p' style={{marginBottom: '6px'}}>Privacy</Typography>
+        <Typography variant='p' sx={{marginBottom: '6px'}}>Privacy</Typography>
         <Slider
           onChange={setPrivacy}
           marks={marks}

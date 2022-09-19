@@ -41,7 +41,7 @@ export default function NavPanel({
     <Paper
       elevation={0}
       className={classes.root}
-      style={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
+      sx={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
     >
       <div className={classes.treeContainer}>
         <TreeView

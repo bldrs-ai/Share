@@ -1,6 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
+import Box from '@mui/material/Box'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
@@ -39,9 +40,9 @@ export default function Property({detail, summary, expandState}) {
         </Typography>
       </AccordionSummary>
       <AccordionDetails>
-        <div style={{marginLeft: '-30px'}}>
+        <Box sx={{marginLeft: '-30px'}}>
           {detail}
-        </div>
+        </Box>
       </AccordionDetails>
     </Accordion>
   )

@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import Paper from '@mui/material/Paper'
+import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useStore from '../store/useStore'
 import {getIssues, getComments} from '../utils/GitHub'
@@ -55,7 +56,7 @@ export function IssuesNavBar() {
         </Typography>
 
         {selectedIssueId ?
-          <div style={{marginLeft: '-8px'}}>
+          <Box sx={{marginLeft: '-8px'}}>
             <TooltipIconButton
               title='Back to the list'
               placement='bottom'
@@ -65,7 +66,7 @@ export function IssuesNavBar() {
               }}
               icon={<div className={classes.iconContainer}><BackIcon/></div>}
             />
-          </div> : null
+          </Box> : null
         }
       </div>
 

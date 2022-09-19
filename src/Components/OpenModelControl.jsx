@@ -27,7 +27,7 @@ export default function OpenModelControl({fileOpen}) {
   return (
     <div>
       <Paper className={classes.root} elevation={0}
-        style={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+        sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
         <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton

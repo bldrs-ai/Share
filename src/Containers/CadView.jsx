@@ -482,9 +482,6 @@ export default function CadView({
               installPrefix={installPrefix}
             />}
         </div>
-        {/* <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
-        </div> */}
         {alert}
       </div>
       <SideDrawerWrapper />
