@@ -98,7 +98,7 @@ export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
   if (window.innerWidth <= mediaSizeTabletWith) {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28`)
+    navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
   } else {
     navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
   }
