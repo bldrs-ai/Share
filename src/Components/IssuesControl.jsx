@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {makeStyles, useTheme} from '@mui/styles'
 import Paper from '@mui/material/Paper'
+import {useAuth0} from '@auth0/auth0-react'
 import useStore from '../store/useStore'
 import {getIssues, getComments} from '../utils/GitHub'
 import debug from '../utils/debug'
@@ -27,7 +28,6 @@ export function IssuesNavBar() {
   const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
   const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
-
 
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
@@ -111,8 +111,10 @@ export function Issues() {
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredIssue = selectedIssueId ?
-        issues.filter((issue) => issue.id === selectedIssueId)[0] : null
+    issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
+  const {getAccessTokenWithPopup} = useAuth0()
+
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 1, no repo defined')
@@ -121,7 +123,12 @@ export function Issues() {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const issuesData = await getIssues(repository)
+        const accessToken = await getAccessTokenWithPopup({
+          audience: 'https://api.github.com/',
+          scope: 'repo',
+        })
+
+        const issuesData = await getIssues(repository, accessToken)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
@@ -147,7 +154,7 @@ export function Issues() {
       }
     }
     fetchIssues()
-  }, [setIssues, repository])
+  }, [setIssues, repository, getAccessTokenWithPopup])
 
   useEffect(() => {
     if (!repository) {
