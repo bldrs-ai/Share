@@ -4,6 +4,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {makeStyles, useTheme} from '@mui/styles'
 import {assertDefined} from '../utils/assert'
+import {useIsMobile} from './Hooks'
 
 
 /**
@@ -18,9 +19,10 @@ import {assertDefined} from '../utils/assert'
 export function TooltipIconButton({title, onClick, icon, placement = 'left', selected = false}) {
   assertDefined(icon, onClick, title)
   const classes = useStyles(useTheme())
+  const isMobile = useIsMobile()
   return (
     <div className={classes.root}>
-      <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
+      {isMobile ?
         <ToggleButton
           selected={selected}
           onClick={onClick}
@@ -28,8 +30,18 @@ export function TooltipIconButton({title, onClick, icon, placement = 'left', sel
           value={''}
         >
           {icon}
-        </ToggleButton>
-      </Tooltip>
+        </ToggleButton> :
+        <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
+          <ToggleButton
+            selected={selected}
+            onClick={onClick}
+            color='primary'
+            value={''}
+          >
+            {icon}
+          </ToggleButton>
+        </Tooltip>
+      }
     </div>
   )
 }

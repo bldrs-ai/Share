@@ -269,7 +269,7 @@ const dms = (deg, min, sec) => {
  * @param {number} maxWidth (default 20)
  * @return {object} React component
  */
-function paragraphMaybeWithTooltip(str, maxWidth = 15) {
+function paragraphMaybeWithTooltip(str, maxWidth = 100) {
   const inner = (<Typography variant='propValue'>{str}</Typography>)
   return (
     str.length > maxWidth ?
