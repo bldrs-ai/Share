@@ -79,6 +79,7 @@ function AboutContent({installPrefix}) {
   const privacyLevelFunctional = 0
   const privacyLevelUsage = 10
   const privacyLevelSocial = 20
+  const bulletStyle = {textAlign: 'center'}
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(privacyLevelSocial)
@@ -126,10 +127,10 @@ function AboutContent({installPrefix}) {
         marginTop: '10px'}}
       >
         <ul>
-          <li><Typography sx={{textAlign: 'center'}} variant='p'>View IFC models</Typography></li>
-          <li><Typography sx={{textAlign: 'center'}} variant='p'>Open IFC models hosted on GitHub</Typography></li>
-          <li><Typography sx={{textAlign: 'center'}} variant='p'>Search IFC models</Typography></li>
-          <li><Typography sx={{textAlign: 'center'}} variant='p'>Share IFC models via permalink</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>View IFC models</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>Open IFC models fromn GitHub</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>Search IFC models</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>Share IFC models</Typography></li>
         </ul>
       </Box>
 
