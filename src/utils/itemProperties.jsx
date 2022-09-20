@@ -1,8 +1,9 @@
 import React from 'react'
 import debug from './debug'
-import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
+import Box from '@mui/material/Typography'
 import Typography from '@mui/material/Typography'
-import Tooltip from '@mui/material/Tooltip'
+import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
+import ScrollIcon from '../assets/2D_Icons/Scroll.svg'
 import {stoi} from './strings'
 
 
@@ -232,16 +233,16 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
  * @return {object} The react component
  */
 function Row({d1, d2}) {
+  const keyLength = d1.length
   if (d1 === null || d1 === undefined ||
     d2 === null || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
-
   return (
     <tr>
       <td colSpan={2} >
         <Typography variant='propTitle' > {d1}:</Typography>
-        <Typography variant='propValue'>{paragraphMaybeWithTooltip(d2)}</Typography>
+        <Typography variant='propValue'>{paragraphMaybeWithTooltip(d2, keyLength )}</Typography>
       </td>
     </tr>
   )
@@ -269,10 +270,15 @@ const dms = (deg, min, sec) => {
  * @param {number} maxWidth (default 20)
  * @return {object} React component
  */
-function paragraphMaybeWithTooltip(str, maxWidth = 100) {
+function paragraphMaybeWithTooltip(str, keyLength, maxWidth = 40) {
   const inner = (<Typography variant='propValue'>{str}</Typography>)
+  const propLength = str.length + keyLength
   return (
-    str.length > maxWidth ?
-      <Tooltip title={str} placement='top'>{inner}</Tooltip> : inner
+    propLength > maxWidth ?
+    <Box
+      component="span"
+    >
+      <ScrollIcon style={{height: '10px'}} />{inner}
+    </Box> : inner
   )
 }
