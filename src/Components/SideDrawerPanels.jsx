@@ -1,12 +1,12 @@
 import React from 'react'
-import {makeStyles, useTheme} from '@mui/styles'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import useStore from '../store/useStore'
-import ItemProperties from './ItemProperties'
-import {TooltipIconButton} from './Buttons'
-import {IssuesNavBar, Issues} from './IssuesControl'
+import {makeStyles, useTheme} from '@mui/styles'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
+import ItemProperties from './ItemProperties'
+import useStore from '../store/useStore'
+import {IssuesNavBar, Issues} from './IssuesControl'
+import {TooltipIconButton} from './Buttons'
 
 
 /**

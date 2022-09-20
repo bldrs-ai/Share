@@ -1,17 +1,16 @@
 import React, {createRef, useEffect, useState} from 'react'
 import TextField from '@mui/material/TextField'
 import {makeStyles} from '@mui/styles'
-import useStore from '../store/useStore'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
+import CopyIcon from '../assets/2D_Icons/Copy.svg'
 import Dialog from './Dialog'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
+import useStore from '../store/useStore'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
-import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
-
+import {ControlButton, TooltipIconButton} from './Buttons'
 
 /**
  * This button hosts the ShareDialog component and toggles it open and

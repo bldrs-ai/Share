@@ -1,6 +1,6 @@
 import {Octokit} from '@octokit/rest'
-import PkgJson from '../../package.json'
 import debug from './debug'
+import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
 import {isRunningLocally} from './network'
 

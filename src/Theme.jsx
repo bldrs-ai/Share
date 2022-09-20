@@ -1,6 +1,6 @@
-import {useEffect, useMemo, useState} from 'react'
-import {grey} from '@mui/material/colors'
 import {createTheme} from '@mui/material/styles'
+import {grey} from '@mui/material/colors'
+import {useEffect, useMemo, useState} from 'react'
 import * as Privacy from './privacy/Privacy'
 
 

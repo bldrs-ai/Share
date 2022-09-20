@@ -12,7 +12,6 @@ import {ControlButton} from './Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 
 
-
 /**
  * Button to toggle About panel on and off
  *
