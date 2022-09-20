@@ -8,10 +8,19 @@ import {assertDefined} from './assert'
  * Fetch all of the issues from GitHub.
  *
  * @param {object} repository
+ * @param {string} accessToken Github API OAuth access token
  * @return {Array} The issue array of issue objects.
  */
-export async function getIssues(repository) {
-  const issues = await getGitHub(repository, 'issues')
+export async function getIssues(repository, accessToken = '') {
+  const args = {}
+  if (accessToken && accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const issues = await getGitHub(repository, 'issues', args)
   debug().log('GitHub: issue: ', repository, issues)
   return issues
 }
@@ -23,10 +32,22 @@ export async function getIssues(repository) {
  *
  * @param {object} repository
  * @param {number} issueId
+ * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
  */
-export async function getIssue(repository, issueId) {
-  const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
+export async function getIssue(repository, issueId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken && accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const issue = await getGitHub(repository, 'issues/{issue_number}', args)
   debug().log('GitHub: issue: ', issue)
   return issue
 }
@@ -37,16 +58,24 @@ export async function getIssue(repository, issueId) {
  *
  * @param {object} repository
  * @param {number} issueId
+ * @param {string} accessToken Github API OAuth access token
  * @return {Array} The comments array.
  */
-export async function getComments(repository, issueId) {
-  const comments = await getGitHub(
-      repository,
-      'issues/{issue_number}/comments',
-      {
-        issue_number: issueId,
-      })
+export async function getComments(repository, issueId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken && accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
   debug().log('GitHub: comments: ', comments)
+
   if (comments && comments.data && comments.data.length > 0) {
     return comments.data
   } else {
@@ -61,16 +90,24 @@ export async function getComments(repository, issueId) {
  * @param {object} repository
  * @param {number} issueId
  * @param {number} commentId
+ * @param {string} accessToken Github API OAuth access token
  * @return {object} The comment object.
  */
-export async function getComment(repository, issueId, commentId) {
-  const comments = await getGitHub(
-      repository,
-      'issues/{issue_number}/comments',
-      {
-        issue_number: issueId,
-      })
+export async function getComment(repository, issueId, commentId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken && accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
   debug().log('GitHub: comments: ', comments)
+
   if (comments && comments.data && comments.data.length > 0) {
     if (commentId > comments.data.length) {
       console.error(`Given commentId(${commentId}) is out of range(${comments.data.length}): `)
