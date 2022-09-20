@@ -126,10 +126,10 @@ function AboutContent({installPrefix}) {
         marginTop: '10px'}}
       >
         <ul>
-          <li><Typography variant='p'>View IFC models</Typography></li>
-          <li><Typography variant='p'>Open IFC models hosted on GitHub</Typography></li>
-          <li><Typography variant='p'>Search IFC models</Typography></li>
-          <li><Typography variant='p'>Share IFC models via permalink</Typography></li>
+          <li><Typography sx={{textAlign: 'center'}} variant='p'>View IFC models</Typography></li>
+          <li><Typography sx={{textAlign: 'center'}} variant='p'>Open IFC models hosted on GitHub</Typography></li>
+          <li><Typography sx={{textAlign: 'center'}} variant='p'>Search IFC models</Typography></li>
+          <li><Typography sx={{textAlign: 'center'}} variant='p'>Share IFC models via permalink</Typography></li>
         </ul>
       </Box>
 
