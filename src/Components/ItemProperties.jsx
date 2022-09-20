@@ -99,7 +99,7 @@ const useStyles = makeStyles((theme) => ({
       width: '100%',
       overflow: 'hidden',
       borderSpacing: 0,
-      paddingLeft: '8px',
+      paddingLeft: '10px',
     },
     '& .MuiSwitch-root': {
       float: 'right',
@@ -113,11 +113,12 @@ const useStyles = makeStyles((theme) => ({
     },
   },
   psetsList: {
-    padding: '0px',
     margin: 0,
-    height: '370px',
-    overflow: 'scroll',
+    minHeight: '370px',
+    height: '100%',
     width: '100%',
+    padding: '0px 0px 50px 0px',
+    overflow: 'scroll',
   },
   section: {
     'listStyle': 'none',
@@ -131,9 +132,13 @@ const useStyles = makeStyles((theme) => ({
     marginLeft: '10px',
   },
   psetTitle: {
+    position: 'sticky',
+    top: '0px',
     display: 'flex',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    background: theme.palette.primary.main,
+    zIndex: 1000,
   },
 }))
