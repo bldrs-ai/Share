@@ -119,11 +119,17 @@ function AboutContent({installPrefix}) {
           github.com/bldrs-ai/Share
         </a>
       </Typography>
-      <Box sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C', opacity: .8, marginTop: '10px'}} >
+      <Box sx={{
+        backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C',
+        borderRadius: '5px',
+        opacity: .8,
+        marginTop: '10px'}}
+      >
         <ul>
           <li><Typography variant='p'>View IFC models</Typography></li>
-          <li><Typography variant='p'>Open IFC models from GitHub</Typography></li>
-          <li><Typography variant='p'>Share IFC models</Typography></li>
+          <li><Typography variant='p'>Open IFC models hosted on GitHub</Typography></li>
+          <li><Typography variant='p'>Search IFC models</Typography></li>
+          <li><Typography variant='p'>Share IFC models via permalink</Typography></li>
         </ul>
       </Box>
 
@@ -162,7 +168,7 @@ const useStyles = makeStyles((theme) => (
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        margin: '10px 6px',
+        margin: '5px 6px',
         listStyleType: 'none',
       },
       '& a': {
