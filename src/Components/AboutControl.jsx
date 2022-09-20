@@ -1,15 +1,16 @@
 import React, {useState, useEffect, useContext} from 'react'
-import Slider from '@mui/material/Slider'
 import Box from '@mui/material/Box'
+import Slider from '@mui/material/Slider'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
+import * as Privacy from '../privacy/Privacy'
+import AboutIcon from '../assets/2D_Icons/Information.svg'
 import Dialog from './Dialog'
 import debug from '../utils/debug'
-import * as Privacy from '../privacy/Privacy'
+import LogoB from '../assets/LogoB_4.svg'
 import {ControlButton} from './Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
-import AboutIcon from '../assets/2D_Icons/Information.svg'
-import LogoB from '../assets/LogoB_4.svg'
+
 
 
 /**

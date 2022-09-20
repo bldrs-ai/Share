@@ -1,12 +1,12 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
-import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import Paper from '@mui/material/Paper'
-import {styled} from '@mui/material/styles'
+import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {makeStyles} from '@mui/styles'
-import {TooltipIconButton} from './Buttons'
-import useStore from '../store/useStore'
+import {styled} from '@mui/material/styles'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
+import useStore from '../store/useStore'
+import {TooltipIconButton} from './Buttons'
 
 
 /**

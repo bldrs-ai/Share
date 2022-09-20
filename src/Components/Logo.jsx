@@ -1,9 +1,9 @@
 import React from 'react'
-import {makeStyles, useTheme} from '@mui/styles'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
-import PkgJson from '../../package.json'
+import {makeStyles, useTheme} from '@mui/styles'
 import LogoIcon from '../assets/LogoB_4.svg'
+import PkgJson from '../../package.json'
 
 
 /**

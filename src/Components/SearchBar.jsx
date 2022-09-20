@@ -1,22 +1,15 @@
 import React, {useRef, useEffect, useState, useContext} from 'react'
-import {
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from 'react-router-dom'
+import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import OpenModelControl from './OpenModelControl'
 import debug from '../utils/debug'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import {ColorModeContext} from '../Context/ColorMode'
-import {TooltipIconButton} from './Buttons'
+import OpenModelControl from './OpenModelControl'
 import useTheme from '../Theme'
-import {
-  looksLikeLink,
-  githubUrlOrPathToSharePath,
-} from '../ShareRoutes'
+import {ColorModeContext} from '../Context/ColorMode'
+import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
+import {TooltipIconButton} from './Buttons'
 
 
 /**
@@ -35,7 +28,7 @@ export default function SearchBar({fileOpen}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
-  const widthPerChar = 5
+  const widthPerChar = 6.5
   const padding = 130
   const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth

@@ -7,11 +7,11 @@ import {MockComponent} from '../__mocks__/MockComponent'
 // When this test is ran an error is thrown by the assert as expected therefore the test is passing,
 // but the error is printed on the screen making it look like something is wrong.
 describe('<TooltipIconButton />', () => {
-  // test('should throw error if missing required props', () => {
-  //   expect(() => render(<MockComponent>
-  //     <TooltipIconButton/>
-  //   </MockComponent>)).toThrowError('Arg 0 is not defined')
-  // })
+  test('should throw error if missing required props', () => {
+    expect(() => render(<MockComponent>
+      <TooltipIconButton/>
+    </MockComponent>)).toThrowError('Arg 0 is not defined')
+  })
 
   test('should render successfully', async () => {
     /* eslint-disable no-empty-function */
