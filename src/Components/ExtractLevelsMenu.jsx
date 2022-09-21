@@ -25,11 +25,10 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const classes = useStyles()
   const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
-  const floorplanMenu = []
+
   const PLANE_PREFIX = 'p'
-  const handleClick = async (event) => {
+  const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
-    await showExtractMenu()
   }
   const handleClose = () => {
     setAnchorEl(null)
@@ -38,6 +37,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const location = useLocation()
   const farInt = 1000
   const createFloorplanPlane = (h1, h2) => {
+    console.log('Got here')
     removePlanes(viewer)
     const modelCenter1 = new Vector3(farInt, h1, farInt)
     const modelCenter2 = new Vector3(farInt, h2, farInt)
@@ -106,35 +106,31 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }, [model])
 
-  const showExtractMenu = async () => {
+
+  let [floorplanMenuItems, showExtractMenu] = useState([])
+
+  showExtractMenu = async () => {
     const allStor = await extractHeight(model)
     console.log(allStor)
     let sampleHeights = []
-
-    // PLACEHOLDER VALUES
-    /* eslint-disable */
-    const EISVOGEL = [
-      -2.24, 0, 3.5,
-      6.4, 9.5, 12.6,
-      15.7, 18.8, 21.81,
-      27.12,
-    ]
-  
-    /* eslint-enable */
-    // sampleHeights = EISVOGEL
     sampleHeights = allStor
     const sampleHeightsIndex = []
     for (let i = 0; i < sampleHeights.length; i++) {
       sampleHeightsIndex[i] = i
     }
-
-    const planeoffset = 0.5
-    sampleHeightsIndex.forEach((data) => {
-      floorplanMenu.push(
-          <MenuItem onClick={() => createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}>  L{data} </MenuItem>)
-    })
-    return floorplanMenu
+    if (floorplanMenuItems.length !== sampleHeights.length) {
+      const planeoffset = 0.5
+      sampleHeightsIndex.forEach((data) => {
+        floorplanMenuItems.push(
+            <MenuItem onClick={() =>
+              createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}
+            >  L{data} </MenuItem>)
+      })
+    }
   }
+
+  showExtractMenu()
+
 
   return (
     <div>
@@ -160,11 +156,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         }}
       >
         <MenuItem onClick={() => planView()}> Plan View</MenuItem>
-        <MenuItem onClick={async () => {
-          await showExtractMenu()
+        <MenuItem onClick={() => {
+          // showExtractMenu()
         }}
         >Extract Levels</MenuItem>
-        {floorplanMenu}
+        {floorplanMenuItems}
       </Menu>
     </div>
   )
