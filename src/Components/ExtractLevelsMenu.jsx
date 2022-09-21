@@ -105,29 +105,18 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }, [model])
 
-
   let [floorplanMenuItems, showExtractMenu] = useState([])
-
-  const exLevels = []
 
   showExtractMenu = async () => {
     const allStor = await extractHeight(model)
-    console.log(allStor)
-    let sampleHeights = []
-    sampleHeights = allStor
-    const sampleHeightsIndex = []
-    for (let i = 0; i < sampleHeights.length; i++) {
-      sampleHeightsIndex[i] = i
-    }
-    if (floorplanMenuItems.length + 1 <= sampleHeights.length) {
+    if (floorplanMenuItems.length + 1 <= allStor.length) {
       const planeoffset = 0.5
-      sampleHeightsIndex.forEach((data) => {
+      for (let i = 0; i < allStor.length; i++) {
         floorplanMenuItems.push(
             <MenuItem onClick={() =>
-              createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}
-            >  L{data} </MenuItem>)
-        exLevels.push(data)
-      })
+              createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
+            >  L{i} </MenuItem>)
+      }
     }
   }
 
@@ -162,7 +151,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     </div>
   )
 }
-
 
 const useStyles = makeStyles({
   root: {
