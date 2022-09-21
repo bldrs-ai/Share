@@ -35,12 +35,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
   const viewer = useStore((state) => state.viewerStore)
   const location = useLocation()
-  const farInt = 1000
   const createFloorplanPlane = (h1, h2) => {
     console.log('Got here')
     removePlanes(viewer)
-    const modelCenter1 = new Vector3(farInt, h1, farInt)
-    const modelCenter2 = new Vector3(farInt, h2, farInt)
+    const modelCenter1 = new Vector3(0, h1, 0)
+    const modelCenter2 = new Vector3(0, h2, 0)
     const normal1 = new Vector3(0, 1, 0)
     const normal2 = new Vector3(0, -1, 0)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal1, modelCenter1)
@@ -109,6 +108,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   let [floorplanMenuItems, showExtractMenu] = useState([])
 
+  const exLevels = []
+
   showExtractMenu = async () => {
     const allStor = await extractHeight(model)
     console.log(allStor)
@@ -121,17 +122,16 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     if (floorplanMenuItems.length + 1 <= sampleHeights.length) {
       const planeoffset = 0.5
       sampleHeightsIndex.forEach((data) => {
-        console.log(floorplanMenuItems.length)
         floorplanMenuItems.push(
             <MenuItem onClick={() =>
               createFloorplanPlane(sampleHeights[data], sampleHeights[data + 1] - planeoffset)}
             >  L{data} </MenuItem>)
+        exLevels.push(data)
       })
     }
   }
 
   showExtractMenu()
-
 
   return (
     <div>
