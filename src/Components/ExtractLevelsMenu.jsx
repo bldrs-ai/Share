@@ -12,6 +12,7 @@ import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
 import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
+import {extractHeight} from '../utils/extractHeight'
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -161,7 +162,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           icon={<PlanViewIcon/>}
           onClick={planView}
         />
-        {floorplanMenu}
+        {floorplanMenuItems}
       </Menu>
     </div>
   )
