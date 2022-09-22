@@ -24,7 +24,10 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const classes = useStyles()
   const open = Boolean(anchorEl)
+
   const model = useStore((state) => state.modelStore)
+  let [floorplanMenuItems, showExtractMenu] = useState([])
+
 
   const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
@@ -105,17 +108,15 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }, [model])
 
-  let [floorplanMenuItems, showExtractMenu] = useState([])
-
   showExtractMenu = async () => {
     const allStor = await extractHeight(model)
     if (floorplanMenuItems.length + 1 <= allStor.length) {
       const planeoffset = 0.5
       for (let i = 0; i < allStor.length; i++) {
-        floorplanMenuItems.push(
-            <MenuItem onClick={() =>
-              createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
-            >  L{i} </MenuItem>)
+        floorplanMenuItems[i] = (
+          <MenuItem onClick={() =>
+            createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
+          >  L{i} </MenuItem>)
       }
     }
   }
