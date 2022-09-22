@@ -112,12 +112,12 @@ function loadTheme(mode) {
     h5: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
     p: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
     tree: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    propTitle: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '200', fontFamily: fontFamily},
+    propTitle: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
     propValue: {
       fontSize: '1.1rem',
       lineHeight: '1.5em',
       letterSpacing: '.03em',
-      fontWeight: '400',
+      fontWeight: '200',
       fontFamily: fontFamily,
       marginLeft: '4px'},
   }
