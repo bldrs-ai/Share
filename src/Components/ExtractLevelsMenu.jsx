@@ -129,6 +129,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
             createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
           >  L{i} </MenuItem>)
       }
+    }
   }
 
   showExtractMenu()
