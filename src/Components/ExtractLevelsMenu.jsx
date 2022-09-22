@@ -121,14 +121,18 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   showExtractMenu = async () => {
     const allStor = await extractHeight(model)
-    if (floorplanMenuItems.length + 1 <= allStor.length) {
-      const planeoffset = 0.5
-      for (let i = 0; i < allStor.length; i++) {
-        floorplanMenuItems[i] = (
-          <MenuItem onClick={() =>
-            createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
-          >  L{i} </MenuItem>)
+    try {
+      if (floorplanMenuItems.length + 1 <= allStor.length) {
+        const planeoffset = 0.5
+        for (let i = 0; i < allStor.length; i++) {
+          floorplanMenuItems[i] = (
+            <MenuItem onClick={() =>
+              createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
+            >  L{i} </MenuItem>)
+        }
       }
+    } catch {
+      console.log('No levels found')
     }
   }
 
