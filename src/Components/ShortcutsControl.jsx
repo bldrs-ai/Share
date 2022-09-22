@@ -2,9 +2,10 @@ import React, {useState} from 'react'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
-import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
+
 import {useIsMobile} from './Hooks'
 import {ControlButton} from './Buttons'
+import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
 
 
 /**

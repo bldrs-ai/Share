@@ -1,20 +1,23 @@
 import React, {useEffect} from 'react'
-import {makeStyles, useTheme} from '@mui/styles'
+
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import BackIcon from '../assets/2D_Icons/Back.svg'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
+
 import debug from '../utils/debug'
-import IssueCard from './IssueCard'
-import NextIcon from '../assets/2D_Icons/NavNext.svg'
-import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
+
+
 import useStore from '../store/useStore'
+import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'
 import {getIssues, getComments} from '../utils/GitHub'
+import IssueCard from './IssueCard'
 import {TooltipIconButton} from './Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
-
+import BackIcon from '../assets/2D_Icons/Back.svg'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
+import NextIcon from '../assets/2D_Icons/NavNext.svg'
+import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
 
 /** The prefix to use for issue id in the Url hash. */
 export const ISSUE_PREFIX = 'i'

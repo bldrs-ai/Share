@@ -4,12 +4,12 @@ import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
-import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import OpenModelControl from './OpenModelControl'
-import useTheme from '../Theme'
 import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
+import useTheme from '../Theme'
+import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
 
 
 /**

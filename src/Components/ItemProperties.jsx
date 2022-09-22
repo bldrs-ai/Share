@@ -1,11 +1,12 @@
 import React, {useEffect, useState} from 'react'
+import {decodeIFCString} from '@bldrs-ai/ifclib'
 import Switch from '@mui/material/Switch'
 import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
-import {decodeIFCString} from '@bldrs-ai/ifclib'
-import ExpansionPanel from './ExpansionPanel'
 import useStore from '../store/useStore'
 import {createPropertyTable} from '../utils/itemProperties'
+
+import ExpansionPanel from './ExpansionPanel'
 
 
 /**

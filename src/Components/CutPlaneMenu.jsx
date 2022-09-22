@@ -1,14 +1,14 @@
 import React, {useState, useEffect} from 'react'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
 import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import useStore from '../store/useStore'
-import {TooltipIconButton} from './Buttons'
-import {getModelCenter} from '../utils/cutPlane'
-import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import useTheme from '../Theme'
+import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
+import {getModelCenter} from '../utils/cutPlane'
+import {TooltipIconButton} from './Buttons'
+import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 
 /**
  * BasicMenu used when there are several option behind UI button

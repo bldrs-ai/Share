@@ -2,11 +2,13 @@ import React, {createRef, useEffect, useState} from 'react'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
+import Dialog from './Dialog'
+
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import Dialog from './Dialog'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
-import useStore from '../store/useStore'
+
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
