@@ -60,7 +60,7 @@ export function PropertiesPanel() {
       <div className={classes.contentContainerProperties}>
         {selectedElement ?
           <ItemProperties/> :
-          <Box sx={{width: '100%', paddingLeft: '10px'}}>
+          <Box sx={{width: '100%'}}>
             <Typography
               variant='h1'
               sx={{textAlign: 'left'}}
@@ -94,7 +94,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: '10px',
     borderRadius: '5px',
   },
   title: {

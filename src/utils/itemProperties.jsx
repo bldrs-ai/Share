@@ -3,7 +3,6 @@ import debug from './debug'
 import Box from '@mui/material/Typography'
 import Typography from '@mui/material/Typography'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
-import ScrollIcon from '../assets/2D_Icons/Scroll.svg'
 import {stoi} from './strings'
 
 
@@ -278,7 +277,7 @@ function paragraphMaybeWithTooltip(str, keyLength, maxWidth = 40) {
     <Box
       component="span"
     >
-      <ScrollIcon style={{height: '10px'}} />{inner}
+      {inner}
     </Box> : inner
   )
 }

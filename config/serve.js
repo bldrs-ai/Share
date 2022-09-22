@@ -50,9 +50,9 @@ const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) 
 
 
 esbuild.serve({
-  port: SERVE_PORT,
+  port: SERVE_PORT - 1,
   servedir: common.build.outdir,
-}, {}).then((result) => {
+}, common.build).then((result) => {
   // The result tells us where esbuild's local server is
   const {host, port} = result
 
@@ -70,8 +70,8 @@ esbuild.serve({
 
     // Forward the body of the request to esbuild
     req.pipe(proxyReq, {end: true})
-  }).listen()
-  console.log(`serving on http://localhost:${port} and watching...`)
+  }).listen(SERVE_PORT)
+  console.log(`serving on http://localhost:${SERVE_PORT} and watching...`)
 }).catch((error) => {
   console.error(`could not start serving: `, error)
   process.exit(1)

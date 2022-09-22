@@ -38,7 +38,6 @@ export const build = {
   logLevel: 'info',
   plugins: [
     progress(),
-    cleanPlugin(),
     svgrPlugin(),
     copyStaticFiles({
       src: assetsDir,
