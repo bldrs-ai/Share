@@ -1,4 +1,5 @@
 import React, {createRef, useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import {makeStyles} from '@mui/styles'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
@@ -93,7 +94,7 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText='Share'
+      headerText={<Box style={{paddingBottom: '0px', marginTop: '-10px'}}>Share</Box>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
@@ -103,7 +104,7 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
-            rows={2}
+            rows={5}
             InputProps={{
               readOnly: true,
               className: classes.input}}
@@ -132,12 +133,10 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
 
 const useStyles = makeStyles({
   content: {
-    height: '12em',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: '-10px',
   },
   iconContainer: {
     width: '20px',

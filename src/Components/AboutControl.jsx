@@ -127,8 +127,8 @@ function AboutContent({installPrefix}) {
         marginTop: '10px'}}
       >
         <ul>
-          <li><Typography sx={bulletStyle} variant='p'>View IFC models</Typography></li>
-          <li><Typography sx={bulletStyle} variant='p'>Open IFC models fromn GitHub</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>Open IFC models from GitHub</Typography></li>
+          <li><Typography sx={bulletStyle} variant='p'>View IFC properties</Typography></li>
           <li><Typography sx={bulletStyle} variant='p'>Search IFC models</Typography></li>
           <li><Typography sx={bulletStyle} variant='p'>Share IFC models</Typography></li>
         </ul>
@@ -154,6 +154,7 @@ const useStyles = makeStyles((theme) => (
   {
     content: {
       'minHeight': '300px',
+      'maxWidth': '240px',
       '& .MuiTypography-body1': {
         padding: '1em 0',
       },
