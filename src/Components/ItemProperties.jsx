@@ -93,6 +93,11 @@ const useStyles = makeStyles((theme) => ({
       padding: '4px 0px',
       // borderBottom: `.2px solid ${theme.palette.highlight.dark}`,
     },
+    '& td:hover': {
+      whiteSpace: 'normal',
+      overflowY: 'scroll',
+      textOverflow: 'clip',
+    },
     '& td::-webkit-scrollbar': {
       display: 'none',
     },

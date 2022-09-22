@@ -1,6 +1,5 @@
 import React from 'react'
 import debug from './debug'
-import Box from '@mui/material/Typography'
 import Typography from '@mui/material/Typography'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import {stoi} from './strings'
@@ -26,7 +25,7 @@ export async function createPropertyTable(model, ifcProps, serial = 0, isPset = 
         <tr key='ifcType'>
           <td>
             <Typography variant='propTitle' >IFC Type:</Typography>
-            {paragraphMaybeWithTooltip(ifcProps.constructor.name)}
+            <Typography variant='propValue'>{ifcProps.constructor.name}</Typography>
           </td>
         </tr>)
   }
@@ -232,7 +231,6 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
  * @return {object} The react component
  */
 function Row({d1, d2}) {
-  const keyLength = d1.length
   if (d1 === null || d1 === undefined ||
     d2 === null || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
@@ -240,8 +238,8 @@ function Row({d1, d2}) {
   return (
     <tr>
       <td colSpan={2} >
-        <Typography variant='propTitle' > {d1}:</Typography>
-        <Typography variant='propValue'>{paragraphMaybeWithTooltip(d2, keyLength )}</Typography>
+        <Typography variant='propTitle' >{d1}:</Typography>
+        <Typography variant='propValue'>{d2}</Typography>
       </td>
     </tr>
   )
@@ -258,26 +256,4 @@ function Row({d1, d2}) {
  */
 const dms = (deg, min, sec) => {
   return `${deg}° ${min}' ${sec}''`
-}
-
-
-/**
- * If string is longer than maxWidth characters, wrap it in a tooltip.
- * Otherwise wrap it in a paragraph.
- *
- * @param {string} str
- * @param {number} maxWidth (default 20)
- * @return {object} React component
- */
-function paragraphMaybeWithTooltip(str, keyLength, maxWidth = 40) {
-  const inner = (<Typography variant='propValue'>{str}</Typography>)
-  const propLength = str.length + keyLength
-  return (
-    propLength > maxWidth ?
-    <Box
-      component="span"
-    >
-      {inner}
-    </Box> : inner
-  )
 }

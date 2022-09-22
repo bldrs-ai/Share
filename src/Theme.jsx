@@ -176,33 +176,6 @@ function loadTheme(mode) {
         disableRipple: true,
       },
     },
-    // https://stackoverflow.com/questions/63249267/how-can-i-override-the-style-of-the-material-ui-switch-component-when-checked
-    /*
-    MuiSwitch: {
-      styleOverrides: {
-        switchBase: {
-          // Controls default (unchecked) color for the thumb
-          color: 'red',
-        },
-        colorSecondary: {
-          '&$checked': {
-            // Controls checked color for the thumb
-            color: 'green',
-          },
-        },
-        track: {
-          // Controls default (unchecked) color for the track
-          'opacity': 0.2,
-          'backgroundColor': 'blue',
-          '$checked$checked + &': {
-            // Controls checked color for the track
-            opacity: 0.7,
-            backgroundColor: 'yellow',
-          },
-        },
-      },
-    },
-    */
   }
   const theme = {
     components: components,
