@@ -79,23 +79,12 @@ async function createPsetsList(model, element, classes, expandAll) {
 const useStyles = makeStyles((theme) => ({
   propsContainer: {
     '& td': {
-      // As of https://github.com/bldrs-ai/Share/pull/148
-      // There should only be 1 table data per row now.
-      width: '100%',
       minWidth: '130px',
       maxWidth: '130px',
       verticalAlign: 'top',
-      whiteSpace: 'nowrap',
-      overflowY: 'scroll',
-      textOverflow: 'ellipsis',
       cursor: 'default',
-      padding: '4px 0px',
-      borderBottom: `.2px solid ${theme.palette.highlight.light}`,
-    },
-    '& td:hover': {
-      whiteSpace: 'normal',
-      overflowY: 'scroll',
-      textOverflow: 'clip',
+      padding: '3px 0',
+      borderBottom: `.2px solid #ddd`,
     },
     '& td::-webkit-scrollbar': {
       display: 'none',
