@@ -63,8 +63,8 @@ function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
   const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
+  const fontFamily = 'Helvetica'
   const lime = '#4EEF4B'
-  const fontFamily = 'sans-serif'
   const day = {
     primary: {
       main: grey[100],
@@ -102,8 +102,8 @@ function loadTheme(mode) {
   const fontSize = '1rem'
   const lineHeight = '1.5em'
   const letterSpacing = 'normal'
-  const fontWeight = '400'
-  const fontWeightBold = '600'
+  const fontWeight = '200'
+  const fontWeightBold = '400'
   const typography = {
     fontWeightRegular: fontWeight,
     fontWeightBold,
@@ -120,9 +120,8 @@ function loadTheme(mode) {
       fontSize,
       lineHeight,
       letterSpacing,
-      fontWeight: '200',
-      fontFamily,
-      marginLeft: '4px'},
+      fontWeight,
+      fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
