@@ -113,7 +113,7 @@ function loadTheme(mode) {
     h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     h4: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    p: {fontSize: '.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     tree: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: '400', fontFamily},
     propValue: {
