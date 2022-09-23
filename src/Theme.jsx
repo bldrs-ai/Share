@@ -63,8 +63,6 @@ function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
   const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
-  const darkGrey = '#707070'
-  const lightGrey = '#CCCCCC'
   const fontFamily = 'Helvetica'
   const lime = '#4EEF4B'
   const day = {
@@ -79,9 +77,9 @@ function loadTheme(mode) {
     highlight: {
       main: lightGreen,
       secondary: darkGreen,
-      dark: darkGrey,
-      light: lightGrey,
-      lime: lime,
+      dark: grey[500],
+      light: grey[300],
+      lime,
     },
   }
   const night = {
@@ -96,9 +94,9 @@ function loadTheme(mode) {
     highlight: {
       main: darkGreen,
       secondary: lightGreen,
-      dark: darkGrey,
-      light: lightGrey,
-      lime: lime,
+      dark: grey[500],
+      light: grey[600],
+      lime,
     },
   }
   const fontSize = '1rem'
@@ -117,7 +115,7 @@ function loadTheme(mode) {
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: fontWeightBold, fontFamily},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: '400', fontFamily},
     propValue: {
       fontSize,
       lineHeight,
@@ -179,7 +177,7 @@ function loadTheme(mode) {
   const theme = {
     components: components,
     typography: typography,
-    shape: {borderRadius: '8px'},
+    shape: {borderRadius: 8},
     palette: activePalette,
     button: {},
   }

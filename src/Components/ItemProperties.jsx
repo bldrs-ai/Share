@@ -5,7 +5,6 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {createPropertyTable} from '../utils/itemProperties'
-
 import ExpansionPanel from './ExpansionPanel'
 
 
@@ -33,7 +32,7 @@ export default function ItemProperties() {
       {propTable}
       <div className={classes.psetContainer}>
         {psetsList && psetsList.props.children.length > 0 &&
-        <Typography variant='h1' className={classes.psetTitle}>
+        <Typography variant='h2' className={classes.psetTitle}>
           Property Sets
           <Switch
             checked={expandAll}
