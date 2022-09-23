@@ -102,7 +102,7 @@ function loadTheme(mode) {
   const fontSize = '1rem'
   const lineHeight = '1.5em'
   const letterSpacing = 'normal'
-  const fontWeight = '200'
+  const fontWeight = '400'
   const fontWeightBold = '400'
   const typography = {
     fontWeightRegular: fontWeight,
@@ -115,12 +115,12 @@ function loadTheme(mode) {
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: '400', fontFamily},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     propValue: {
       fontSize,
       lineHeight,
       letterSpacing,
-      fontWeight,
+      fontWeight: '200',
       fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
