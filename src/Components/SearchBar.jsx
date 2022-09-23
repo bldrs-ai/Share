@@ -20,8 +20,8 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
  * @return {React.Component} The SearchBar react component
  */
 export default function SearchBar({fileOpen}) {
-  const location = useRef(useLocation())
-  const navigation = useRef(useNavigate())
+  const location = useLocation()
+  const navigation = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
