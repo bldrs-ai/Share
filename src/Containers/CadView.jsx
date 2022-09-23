@@ -1,26 +1,29 @@
 import React, {useContext, useEffect, useState} from 'react'
-import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+
 import {makeStyles} from '@mui/styles'
-import SearchIndex from './SearchIndex'
-import {navToDefault} from '../Share'
+
+import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
-import BaseGroup from '../Components/BaseGroup'
+import debug from '../utils/debug'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
+import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import {useIsMobile} from '../Components/Hooks'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {ColorModeContext} from '../Context/ColorMode'
-import * as Privacy from '../privacy/Privacy'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
+
+
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {ColorModeContext} from '../Context/ColorMode'
+import {navToDefault} from '../Share'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {useIsMobile} from '../Components/Hooks'
+import SearchIndex from './SearchIndex'
 
 
 /**
@@ -68,11 +71,8 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-
-
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
-
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
@@ -136,6 +136,7 @@ export default function CadView({
          theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
+    setSelectedElement(null)
   }
 
 
@@ -150,12 +151,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.custom.preselect,
+      color: theme.palette.highlight.light,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.custom.select,
+      color: theme.palette.highlight.main,
       depthTest: true,
     })
     if (viewer.IFC.selector) {
@@ -285,7 +286,12 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-    setShowNavPanel(true)
+
+    if (isMobile) {
+      setShowNavPanel(false)
+    } else {
+      setShowNavPanel(true)
+    }
   }
 
 
@@ -450,9 +456,7 @@ export default function CadView({
         <div className={classes.search}>
           {showSearchBar && (
             <SearchBar
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              isOpen={showNavPanel}
+              fileOpen={loadLocalFile}
             />
           )}
         </div>
@@ -476,10 +480,10 @@ export default function CadView({
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              showNavPanel={showNavPanel}
+              installPrefix={installPrefix}
             />}
-        </div>
-        <div className={isDrawerOpen ? classes.baseGroupOpen : classes.baseGroup}>
-          <BaseGroup installPrefix={installPrefix} fileOpen={loadLocalFile}/>
         </div>
         {alert}
       </div>
@@ -548,6 +552,9 @@ const useStyles = makeStyles({
     },
 
   },
+  searchContainer: {
+
+  },
   search: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
@@ -589,7 +596,7 @@ const useStyles = makeStyles({
   operationsGroupOpen: {
     'position': 'fixed',
     'top': 0,
-    'right': '30em',
+    'right': '31em',
     'border': 'none',
     'zIndex': 0,
     '@media (max-width: 900px)': {
@@ -609,7 +616,7 @@ const useStyles = makeStyles({
   baseGroupOpen: {
     'position': 'fixed',
     'bottom': '20px',
-    'right': '31em',
+    'right': '32em',
     '@media (max-width: 900px)': {
       display: 'none',
     },

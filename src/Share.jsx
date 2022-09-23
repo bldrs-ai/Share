@@ -1,11 +1,10 @@
 import React, {useEffect, useRef, useState} from 'react'
-// eslint-disable-next-line no-unused-vars
+import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
-import CssBaseline from '@mui/material/CssBaseline'
 import CadView from './Containers/CadView'
-import useTheme from './Theme'
 import useStore from './store/useStore'
+import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
@@ -92,14 +91,14 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 /**
  * Navigate to index.ifc with nice camera setting.
  *
- * @param {NavigateFunction} navigate
+ * @param {Function} navigate
  * @param {string} appPrefix
  */
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
   if (window.innerWidth <= mediaSizeTabletWith) {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-144.36,14.11,147.82,-40.42,17.84,-2.28`)
+    navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
   } else {
     navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
   }

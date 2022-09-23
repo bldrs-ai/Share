@@ -2,9 +2,9 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
+import useStore from '../store/useStore'
 import {getHashParams} from '../utils/location'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
-import useStore from '../store/useStore'
 import MobileDrawer from './MobileDrawer'
 import {MOBILE_WIDTH, useIsMobile} from './Hooks'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
@@ -130,7 +130,7 @@ export default function SideDrawerWrapper() {
 export const SIDE_DRAWER_WIDTH = '31em'
 
 
-const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
+const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   drawer: {
     '::-webkit-scrollbar': {
       display: 'none',
@@ -149,13 +149,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
       marginTop: '0px',
       borderRadius: '0px',
       zIndex: 10,
-    },
-    '& h1, & h2': {
-      fontSize: '1.2em',
-      fontWeight: 200,
-      marginLeft: '1em 0',
-      paddingBottom: '.5em',
-      borderBottom: '1px solid lightGrey',
     },
   },
   headerBar: {
@@ -188,7 +181,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     height: (p) => p.isPropertiesOn ? '50%' : '1200px',
     display: (p) => p.isCommentsOn ? '' : 'none',
     borderRadius: '0px',
-    borderBottom: '1px solid lightGrey',
+    borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
   },
   containerProperties: {
     borderRadius: '5px',
