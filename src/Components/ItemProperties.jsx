@@ -65,7 +65,7 @@ async function createPsetsList(model, element, classes, expandAll) {
                   <ExpansionPanel
                     key={`pset-${ ndx }`}
                     summary={decodeIFCString(ps.Name.value) || 'Property Set'}
-                    detail={await createPropertyTable(model, ps, 0, true)}
+                    detail={await createPropertyTable(model, ps, true, 0)}
                     expandState={expandAll}
                   />
                 )
