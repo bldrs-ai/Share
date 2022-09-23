@@ -1,22 +1,15 @@
-import React, {useRef, useEffect, useState} from 'react'
-import {
-  useLocation,
-  useNavigate,
-  useSearchParams,
-} from 'react-router-dom'
+import React, {useRef, useEffect, useState, useContext} from 'react'
+import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import {makeStyles} from '@mui/styles'
-import {TooltipToggleButton, FormButton} from './Buttons'
 import debug from '../utils/debug'
-import {
-  looksLikeLink,
-  githubUrlOrPathToSharePath,
-} from '../ShareRoutes'
-import SearchIcon from '../assets/2D_Icons/Search.svg'
-import LinkIcon from '../assets/2D_Icons/Link.svg'
-import ClearIcon from '../assets/2D_Icons/Close.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
+import {ColorModeContext} from '../Context/ColorMode'
+import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
+import useTheme from '../Theme'
+import OpenModelControl from './OpenModelControl'
+import {TooltipIconButton} from './Buttons'
+import ClearIcon from '../assets/2D_Icons/Clear.svg'
 
 
 /**
@@ -26,7 +19,7 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * @param {boolean} showNavPanel toggle
  * @return {React.Component} The SearchBar react component
  */
-export default function SearchBar({onClickMenuCb, showNavPanel}) {
+export default function SearchBar({fileOpen}) {
   const location = useRef(useLocation())
   const navigation = useRef(useNavigate())
   const [searchParams, setSearchParams] = useSearchParams()
@@ -35,12 +28,15 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
-  const widthPerChar = 10
+  const widthPerChar = 6.5
   const padding = 130
   const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
+  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
+
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -89,48 +85,39 @@ export default function SearchBar({onClickMenuCb, showNavPanel}) {
 
   return (
     <div>
-      <Paper component='form' className={classes.root} onSubmit={onSubmit}>
-        <TooltipToggleButton
-          placement='bottom'
-          title='Toggle tree view'
-          onClick={onClickMenuCb}
-          icon={<TreeIcon/>}
-        />
+      <Paper
+        component='form'
+        className={classes.root}
+        onSubmit={onSubmit}
+        elevation={0}
+        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+      >
+        <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search model'}
+          placeholder={'Search / Insert GitHub link'}
+          sx={{
+            ...theme.theme.typography.tree,
+            'marginTop': '4px',
+            'marginLeft': '4px',
+            '& input::placeholder': {
+              opacity: .3,
+            },
+          }}
         />
-        {inputText.length > 0 ?
-          <TooltipToggleButton
+        {inputText.length > 0 &&
+          <TooltipIconButton
             title='clear'
-            size='small'
-            placement='bottom'
             onClick={() => {
               setInputText('')
               setError('')
             }}
             icon={<ClearIcon/>}
-          /> : null
+          />
         }
-        <FormButton
-          title='search'
-          size='small'
-          placement='bottom'
-          icon={<SearchIcon/>}
-        />
-        <TooltipToggleButton
-          title={`Enter GitHub URL to access IFCs hosted on GitHub.
-                  Click on the link icon to learn more.`}
-          size='small'
-          placement='right'
-          onClick={() => {
-            window.open('https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub')
-          }}
-          icon={<LinkIcon/>}
-        />
       </Paper>
       { inputText.length > 0 &&
         error.length > 0 &&
@@ -207,9 +194,11 @@ const useStyles = makeStyles({
     'display': 'flex',
     'minWidth': '300px',
     'width': (props) => props.inputWidth,
+    'height': '56px',
     'maxWidth': '700px',
     'alignItems': 'center',
-    'padding': '2px 2px 2px 2px',
+    'opacity': .8,
+    'padding': '2px 6px 2px 6px',
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',

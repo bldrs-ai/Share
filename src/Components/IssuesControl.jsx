@@ -1,18 +1,19 @@
 import React, {useEffect} from 'react'
-import {makeStyles, useTheme} from '@mui/styles'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import useStore from '../store/useStore'
-import {getIssues, getComments} from '../utils/GitHub'
+import Typography from '@mui/material/Typography'
 import debug from '../utils/debug'
+import useStore from '../store/useStore'
+import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'
+import {getIssues, getComments} from '../utils/GitHub'
 import IssueCard from './IssueCard'
 import {TooltipIconButton} from './Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
 import BackIcon from '../assets/2D_Icons/Back.svg'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
 import NextIcon from '../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../assets/2D_Icons/NavPrev.svg'
-
 
 /** The prefix to use for issue id in the Url hash. */
 export const ISSUE_PREFIX = 'i'
@@ -49,20 +50,22 @@ export function IssuesNavBar() {
   return (
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
-        {selectedIssueId ? null : 'Notes' }
+        <Typography variant='h2'>
+          {!selectedIssueId && 'Notes' }
+        </Typography>
+
         {selectedIssueId ?
-          <div style={{marginLeft: '-12px'}}>
+          <Box>
             <TooltipIconButton
               title='Back to the list'
               placement='bottom'
-              size='small'
               onClick={() => {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
-              icon={<BackIcon style={{width: '30px', height: '30px'}}/>}
+              icon={<div className={classes.iconContainer}><BackIcon/></div>}
             />
-          </div> : null
+          </Box> : null
         }
       </div>
 
@@ -74,28 +77,28 @@ export function IssuesNavBar() {
               placement='bottom'
               size='small'
               onClick={() => selectIssue('previous')}
-              icon={<PreviousIcon style={{width: '20px', height: '20px'}}/>}
+              icon={<PreviousIcon/>}
             />
             <TooltipIconButton
               title='Next Note'
               size='small'
               placement='bottom'
               onClick={() => selectIssue('next')}
-              icon={<NextIcon style={{width: '20px', height: '20px'}}/>}
+              icon={<NextIcon/>}
             />
           </>
         }
       </div>
 
       <div className={classes.rightGroup}>
-        <div className={classes.controls}>
+        <div>
+          <TooltipIconButton
+            title='Close Comments'
+            placement='bottom'
+            onClick={turnCommentsOff}
+            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+          />
         </div>
-        <TooltipIconButton
-          title='Close Comments'
-          placement='bottom'
-          onClick={turnCommentsOff}
-          icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
-        />
       </div>
     </div>
   )
@@ -106,6 +109,7 @@ export function IssuesNavBar() {
 export function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
   const issues = useStore((state) => state.issues)
   const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
@@ -181,8 +185,13 @@ export function Issues() {
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
     }
+    // This address bug #314 by clearing selected issue when new model is loaded
+    if (!filteredIssue) {
+      setSelectedIssueId(null)
+    }
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredIssue, repository, setComments])
 
   return (
@@ -258,39 +267,11 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     borderRadius: '2px',
   },
-  title: {
-    height: '30px',
-    display: 'flex',
-    fontSize: '18px',
-    textDecoration: 'underline',
-    fontWeight: 'bold',
-    alignItems: 'center',
-  },
-  contentContainer: {
-    marginTop: '10px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    height: '100%',
-    overflow: 'scroll',
-    paddingBottom: '30px',
-  },
-  controls: {
-    height: '100%',
+  rightGroup: {
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-  },
-  rightGroup: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'flex-end',
-    'alignItems': 'center',
-    'paddingRight': '5px',
-    '@media (max-width: 900px)': {
-      paddingRight: '0px',
-    },
   },
   middleGroup: {
     width: '400px',
@@ -304,33 +285,9 @@ const useStyles = makeStyles((theme) => ({
     'flexDirection': 'row',
     'justifyContent': 'center',
     'alignItems': 'center',
-    'height': '30px',
-    'fontSize': '18px',
-    'textDecoration': 'underline',
-    'fontWeight': 'bold',
-    'paddingLeft': '16px',
     '@media (max-width: 900px)': {
-      paddingLeft: '6px',
+      paddingLeft: '12px',
     },
-  },
-  container: {
-    background: '#7EC43B',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  notifications: {
-    width: '19px',
-    height: '20px',
-    border: '1px solid lime',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontSize: '10px',
-    color: 'black',
-    borderRadius: '20px',
   },
   cardsContainer: {
     'width': '100%',
@@ -339,5 +296,19 @@ const useStyles = makeStyles((theme) => ({
     '@media (max-width: 900px)': {
       paddingTop: '0px',
     },
+  },
+  iconContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '14px',
+    height: '14px',
+  },
+  iconContainerClose: {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: '14px',
+    height: '14px',
   },
 }))

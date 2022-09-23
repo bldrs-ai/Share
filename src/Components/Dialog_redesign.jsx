@@ -68,12 +68,12 @@ export function OpenDialogBodyContent() {
         <Divider/>
         <div className={classes.dividerText}>or</div>
       </div>
-      <RectangularButton title='Upload from device' icon={<UilUpload/>}/>
+      <RectangularButton title='Upload from device' onClick={() => console.log('clicked')} icon={<UilUpload/>}/>
       <div className={classes.divider}>
         <Divider/>
         <div className={classes.dividerText}>or</div>
       </div>
-      <RectangularButton title='Load Sample Model' icon={<UilBuilding/>}/>
+      <RectangularButton title='Load Sample Model' onClick={() => console.log('clicked')} icon={<UilBuilding/>}/>
     </div>
   )
 }
@@ -100,7 +100,6 @@ export function OpenDialogHeaderContent() {
         <UilMultiply style={{color: '#505050'}}/>
       </div>
     </div>
-
   )
 }
 
