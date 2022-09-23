@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useState} from 'react'
 import debug from './debug'
 import Typography from '@mui/material/Typography'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
@@ -23,10 +23,8 @@ export async function createPropertyTable(model, ifcProps, serial = 0, isPset = 
   if (ifcProps.constructor && ifcProps.constructor.name && ifcProps.constructor.name !== 'IfcPropertySet') {
     ROWS.push(
         <tr key='ifcType'>
-          <td>
-            <Typography variant='propTitle' >IFC Type:</Typography>
-            <Typography variant='propValue'>{ifcProps.constructor.name}</Typography>
-          </td>
+          <td><Typography variant='propTitle' >IFC Type:</Typography></td>
+          <td><Typography variant='propValue'>{ifcProps.constructor.name}</Typography></td>
         </tr>)
   }
   for (const key in ifcProps) {
@@ -235,13 +233,29 @@ function Row({d1, d2}) {
     d2 === null || d2 === undefined) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
+  const [isActive, setIsActive] = useState(false)
+  const toggleActive = () => {
+    setIsActive(!isActive)
+  }
+  const rowStyleInactive = {
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  }
   return (
-    <tr>
-      <td colSpan={2} >
-        <Typography variant='propTitle' >{d1}:</Typography>
-        <Typography variant='propValue'>{d2}</Typography>
-      </td>
-    </tr>
+    isActive ? (
+      <tr onDoubleClick={toggleActive}>
+        <td colSpan={2}>
+          <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
+          <Typography variant='propValue'>{d2}</Typography>
+        </td>
+      </tr>
+    ) : (
+      <tr onDoubleClick={toggleActive}>
+        <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
+        <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
+      </tr>
+    )
   )
 }
 

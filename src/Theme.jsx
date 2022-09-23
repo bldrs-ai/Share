@@ -65,7 +65,7 @@ function loadTheme(mode) {
   const darkGreen = '#459A47'
   const darkGrey = '#707070'
   const lightGrey = '#CCCCCC'
-  const fontFamily = 'sans-serif'
+  const fontFamily = 'Helvetica'
   const lime = '#4EEF4B'
   const day = {
     primary: {
@@ -104,8 +104,8 @@ function loadTheme(mode) {
   const fontSize = '1rem'
   const lineHeight = '1.5em'
   const letterSpacing = 'normal'
-  const fontWeight = '400'
-  const fontWeightBold = '600'
+  const fontWeight = '200'
+  const fontWeightBold = '400'
   const typography = {
     fontWeightRegular: fontWeight,
     fontWeightBold,
@@ -123,8 +123,7 @@ function loadTheme(mode) {
       lineHeight,
       letterSpacing,
       fontWeight,
-      fontFamily,
-      marginLeft: '4px'},
+      fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
