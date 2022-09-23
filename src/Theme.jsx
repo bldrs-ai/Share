@@ -65,7 +65,7 @@ function loadTheme(mode) {
   const darkGreen = '#459A47'
   const darkGrey = '#707070'
   const lightGrey = '#CCCCCC'
-  const fontFamily = 'Helvetica'
+  const fontFamily = 'sans-serif'
   const lime = '#4EEF4B'
   const day = {
     primary: {
@@ -101,24 +101,29 @@ function loadTheme(mode) {
       lime: lime,
     },
   }
+  const fontSize = '1rem'
+  const lineHeight = '1.5em'
+  const letterSpacing = 'normal'
+  const fontWeight = '400'
+  const fontWeightBold = '600'
   const typography = {
-    fontWeightRegular: 400,
-    fontWeightBold: 400,
-    fontWeightMedium: 400,
-    h1: {fontSize: '1.2rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    h2: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    h3: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '200', fontFamily: fontFamily},
-    h4: {fontSize: '1.0rem', lineHeight: '1.2em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    h5: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    p: {fontSize: '1.0rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    tree: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
-    propTitle: {fontSize: '1.1rem', lineHeight: '1.5em', letterSpacing: '.03em', fontWeight: '400', fontFamily: fontFamily},
+    fontWeightRegular: fontWeight,
+    fontWeightBold,
+    fontWeightMedium: fontWeight,
+    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h4: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: fontWeightBold, fontFamily},
     propValue: {
-      fontSize: '1.1rem',
-      lineHeight: '1.5em',
-      letterSpacing: '.03em',
-      fontWeight: '200',
-      fontFamily: fontFamily,
+      fontSize,
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
       marginLeft: '4px'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it

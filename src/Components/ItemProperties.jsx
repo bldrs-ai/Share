@@ -87,9 +87,15 @@ const useStyles = makeStyles((theme) => ({
       verticalAlign: 'top',
       whiteSpace: 'nowrap',
       overflowY: 'scroll',
+      textOverflow: 'ellipsis',
       cursor: 'default',
       padding: '4px 0px',
-      borderBottom: `.2px solid ${theme.palette.highlight.dark}`,
+      // borderBottom: `.2px solid ${theme.palette.highlight.dark}`,
+    },
+    '& td:hover': {
+      whiteSpace: 'normal',
+      overflowY: 'scroll',
+      textOverflow: 'clip',
     },
     '& td::-webkit-scrollbar': {
       display: 'none',
@@ -99,7 +105,6 @@ const useStyles = makeStyles((theme) => ({
       width: '100%',
       overflow: 'hidden',
       borderSpacing: 0,
-      paddingLeft: '10px',
     },
     '& .MuiSwitch-root': {
       float: 'right',
@@ -107,6 +112,7 @@ const useStyles = makeStyles((theme) => ({
     '& .MuiSwitch-track': {
       backgroundColor: theme.palette.highlight.secondary,
       opacity: 0.8,
+      border: 'solid 2px grey',
     },
     '& .MuiSwitch-thumb': {
       backgroundColor: theme.palette.highlight.main,
@@ -129,7 +135,6 @@ const useStyles = makeStyles((theme) => ({
   },
   psetContainer: {
     marginTop: '20px',
-    marginLeft: '10px',
   },
   psetTitle: {
     position: 'sticky',

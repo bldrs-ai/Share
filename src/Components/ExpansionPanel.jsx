@@ -2,7 +2,6 @@ import React, {useState, useEffect} from 'react'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
-import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
@@ -40,9 +39,7 @@ export default function Property({detail, summary, expandState}) {
         </Typography>
       </AccordionSummary>
       <AccordionDetails>
-        <Box sx={{marginLeft: '-30px'}}>
-          {detail}
-        </Box>
+        {detail}
       </AccordionDetails>
     </Accordion>
   )
@@ -55,6 +52,12 @@ const useStyles = makeStyles((theme) => ({
       width: '100%',
       padding: 0,
       borderBottom: `.5px solid ${theme.palette.highlight.dark}`,
+    },
+    '& .MuiAccordionSummary-root.Mui-expanded': {
+      marginBottom: '0.5em',
+    },
+    '& .MuiAccordionDetails-root': {
+      padding: 0,
     },
     '& svg': {
       width: '14px',
