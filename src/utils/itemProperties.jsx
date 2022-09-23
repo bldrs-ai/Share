@@ -13,26 +13,24 @@ import {stoi} from './strings'
  * @param {object} model IFC model
  * @param {object} ifcProps Caller should pass the root IFC element.
  * Recursive calls will pass children
- * @param {number} serial
  * @param {boolean} isPset Is property set
+ * @param {number} serial
  * @return {object} A property table react component
  */
-export async function createPropertyTable(model, ifcProps, serial = 0, isPset = false) {
+export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
   const ROWS = []
   let rowKey = 0
-  if (ifcProps.constructor && ifcProps.constructor.name && ifcProps.constructor.name !== 'IfcPropertySet') {
-    ROWS.push(
-        <tr key='ifcType'>
-          <td><Typography variant='propTitle' >IFC Type:</Typography></td>
-          <td><Typography variant='propValue'>{ifcProps.constructor.name}</Typography></td>
-        </tr>)
+  if (ifcProps.constructor &&
+      ifcProps.constructor.name &&
+      ifcProps.constructor.name !== 'IfcPropertySet') {
+    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`}/>)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
       continue
     }
     const val = ifcProps[key]
-    const propRow = await prettyProps(model, key, val, rowKey++ )
+    const propRow = await prettyProps(model, key, val, false, rowKey++ )
     if (propRow) {
       if (propRow.key === null) {
         throw new Error(`Row for key=(${key}) created with invalid react key`)
@@ -41,7 +39,7 @@ export async function createPropertyTable(model, ifcProps, serial = 0, isPset = 
     }
   }
   return (
-    <table key={`table-${ serial++}`} >
+    <table key={`table-${serial++}`} >
       <tbody>{ROWS}</tbody>
     </table>
   )
@@ -55,12 +53,12 @@ export async function createPropertyTable(model, ifcProps, serial = 0, isPset = 
  * @param {object} model IFC model
  * @param {string} propName Property name
  * @param {object | string} propValue Property value
+ * @param {boolean} isPset
  * @param {number} serial
  * @return {object}
  */
-export async function prettyProps(model, propName, propValue, isPset, serial = 0) {
-  /* eslint-enable */
-  let label = `${ propName}`
+async function prettyProps(model, propName, propValue, isPset, serial = 0) {
+  let label = `${propName}`
   const refPrefix = 'Ref'
   if (label.startsWith(refPrefix)) {
     label = label.substring(refPrefix.length)
@@ -86,28 +84,37 @@ export async function prettyProps(model, propName, propValue, isPset, serial = 0
       return null
     case 'Coordinates':
     case 'RefLatitude':
-    case 'RefLongitude':
-      return row(label, dms(
-          await deref(propValue[0]),
-          await deref(propValue[1]),
-          await deref(propValue[2])), serial)
-    case 'expressID':
-      return row('Express Id', propValue, serial)
-    case 'Quantities':
-      return await quantities(model, propValue, serial)
-    case 'HasProperties':
-      return await hasProperties(model, propValue, serial)
+    case 'RefLongitude': return (
+      <Row
+        d1={label}
+        d2={
+          dms(
+              await deref(propValue[0]),
+              await deref(propValue[1]),
+              await deref(propValue[2]))
+        }
+        key={serial}
+      />
+    )
+    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial}/>
+    case 'Quantities': return await quantities(model, propValue, serial)
+    case 'HasProperties': return await hasProperties(model, propValue, serial)
     default: {
       // Not sure where else to put this.. but seems better than handling in deref.
       if (propValue.type === 0) {
         return null
       }
-      return row(
-          label,
-          await deref(
-              propValue, model, serial,
-              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl)),
-          serial)
+      return (
+        <Row
+          d1={label}
+          d2={
+            await deref(
+                propValue, model, serial,
+                async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
+          }
+          key={serial}
+        />
+      )
     }
   }
 }
@@ -130,7 +137,7 @@ export async function quantities(model, quantitiesObj, serial) {
       }
     }
     val = decodeIFCString(val)
-    rows.push(row(name, val, `${serial++ }-row`))
+    rows.push(<Row d1={name} d2={val} key={serial++}/>)
   })
 }
 
@@ -166,36 +173,17 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
       }
     }
     return (
-      <tr key={`hasProps-${ serial++}`}>
-        <table>
-          <tbody>{rows}</tbody>
-        </table>
+      <tr key={`hasProps-${serial++}`}>
+        <td colSpan={2}>
+          <table>
+            <tbody>{rows}</tbody>
+          </table>
+        </td>
       </tr>
     )
   }
   debug().warn('HasProperties with unknown structure: ', eltArr)
   return null
-}
-
-
-/**
- * HTML table row
- *
- * @param {object} d1 Table cell data 1
- * @param {object} d2 Table cell data 2
- * @param {number} serial
- * @return {object} Table row react component
- */
-function row(d1, d2, serial) {
-  if (serial === undefined) {
-    throw new Error('Must have serial for key')
-  }
-  if (d2 === null) {
-    return (
-      <tr key={serial}><td colSpan='2'>{d1}</td></tr>
-    )
-  }
-  return <Row key={serial} d1={d1} d2={d2} />
 }
 
 
@@ -214,25 +202,20 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
     const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
       '<error>' :
       decodeIFCString(dObj.NominalValue.value)
-    rows.push(row(name, value, `${serial++ }-row`))
+    rows.push(<Row d1={name} d2={value} key={serial++}/>)
   })
 }
 
 
 /**
- * Wrapper component for a table row
+ * HTML table row
  *
- * @param d1.d1
  * @param {object} d1 Table cell data 1
  * @param {object} d2 Table cell data 2
- * @param d1.d2
+ * @param {number} serial
  * @return {object} The react component
  */
 function Row({d1, d2}) {
-  if (d1 === null || d1 === undefined ||
-    d2 === null || d2 === undefined) {
-    debug().warn('Row with invalid data: ', d1, d2)
-  }
   const [isActive, setIsActive] = useState(false)
   const toggleActive = () => {
     setIsActive(!isActive)
@@ -241,6 +224,12 @@ function Row({d1, d2}) {
     whiteSpace: 'nowrap',
     overflow: 'hidden',
     textOverflow: 'ellipsis',
+  }
+  if (d1 === null || d1 === undefined || d2 === undefined) {
+    debug().warn('Row with invalid data: ', d1, d2)
+  }
+  if (d2 === null) {
+    return <tr onDoubleClick={toggleActive}><td colSpan='2'>{d1}</td></tr>
   }
   return (
     isActive ? (
