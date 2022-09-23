@@ -32,7 +32,7 @@ export default function ItemProperties() {
       {propTable}
       <div className={classes.psetContainer}>
         {psetsList && psetsList.props.children.length > 0 &&
-        <Typography variant='h1' className={classes.psetTitle}>
+        <Typography variant='h2' className={classes.psetTitle}>
           Property Sets
           <Switch
             checked={expandAll}
@@ -90,7 +90,7 @@ const useStyles = makeStyles((theme) => ({
       textOverflow: 'ellipsis',
       cursor: 'default',
       padding: '4px 0px',
-      // borderBottom: `.2px solid ${theme.palette.highlight.dark}`,
+      borderBottom: `.2px solid ${theme.palette.highlight.light}`,
     },
     '& td:hover': {
       whiteSpace: 'normal',

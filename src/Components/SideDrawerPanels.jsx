@@ -20,7 +20,7 @@ function PanelTitle({title, controlsGroup}) {
   const classes = useStyles(useTheme())
   return (
     <div className={classes.titleContainer}>
-      <Typography variant='h1'>
+      <Typography variant='h2'>
         {title}
       </Typography>
       {controlsGroup}

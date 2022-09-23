@@ -47,7 +47,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={
         isMobile ?
           (<div>
-            <Typography variant='h1'>Guide</Typography>
+            <Typography variant='h2'>Guide</Typography>
             <p>To select an element:</p>
             <ul>
               <li>Double tap an element</li>

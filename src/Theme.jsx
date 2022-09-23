@@ -63,10 +63,8 @@ function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
   const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
-  const darkGrey = '#707070'
-  const lightGrey = '#CCCCCC'
-  const fontFamily = 'sans-serif'
   const lime = '#4EEF4B'
+  const fontFamily = 'sans-serif'
   const day = {
     primary: {
       main: grey[100],
@@ -79,9 +77,9 @@ function loadTheme(mode) {
     highlight: {
       main: lightGreen,
       secondary: darkGreen,
-      dark: darkGrey,
-      light: lightGrey,
-      lime: lime,
+      dark: grey[400],
+      light: grey[300],
+      lime,
     },
   }
   const night = {
@@ -96,9 +94,9 @@ function loadTheme(mode) {
     highlight: {
       main: darkGreen,
       secondary: lightGreen,
-      dark: darkGrey,
-      light: lightGrey,
-      lime: lime,
+      dark: grey[500],
+      light: grey[700],
+      lime,
     },
   }
   const fontSize = '1rem'
@@ -116,13 +114,13 @@ function loadTheme(mode) {
     h4: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: fontWeightBold, fontFamily},
+    tree: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight: '400', fontFamily},
     propValue: {
       fontSize,
       lineHeight,
       letterSpacing,
-      fontWeight,
+      fontWeight: '200',
       fontFamily,
       marginLeft: '4px'},
   }

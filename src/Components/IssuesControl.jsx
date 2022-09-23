@@ -50,7 +50,7 @@ export function IssuesNavBar() {
   return (
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
-        <Typography variant='h1'>
+        <Typography variant='h2'>
           {!selectedIssueId && 'Notes' }
         </Typography>
 
