@@ -49,6 +49,17 @@ const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) 
 )
 
 
+/**
+ * "It's not possible to hook into esbuild's local server to customize
+ * the behavior of the server itself. Instead, behavior should be
+ * customized by putting a proxy in front of esbuild."
+ *
+ * We intend to serve on the SERVE_PORT defined above, so run esbuild
+ * on the port below it, and use the SERVE_PORT for a proxy.  The
+ * proxy handles 404s with the bounce script above.
+ *
+ * See https://esbuild.github.io/api/#customizing-server-behavior
+ */
 esbuild.serve({
   port: SERVE_PORT - 1,
   servedir: common.build.outdir,

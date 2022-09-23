@@ -1,4 +1,3 @@
-import {cleanPlugin} from 'esbuild-clean-plugin'
 import copyStaticFiles from 'esbuild-copy-static-files'
 import progress from 'esbuild-plugin-progress'
 import svgrPlugin from 'esbuild-plugin-svgr'
