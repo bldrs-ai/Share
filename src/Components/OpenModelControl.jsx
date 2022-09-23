@@ -68,6 +68,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
+      0: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc',
       1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
       2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
       3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
@@ -99,6 +100,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             select
             size='small'
           >
+            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
             <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
             <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
