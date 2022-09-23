@@ -28,6 +28,7 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  */
 export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
+  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
@@ -45,7 +46,11 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
       toggleIsPropertiesOn()
     }
     if (panel === 'Notes') {
-      turnCommentsOn()
+      if (isCommentsOn) {
+        turnCommentsOff()
+      } else {
+        turnCommentsOn()
+      }
     }
   }
 

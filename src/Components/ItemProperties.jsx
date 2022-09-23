@@ -82,7 +82,7 @@ const useStyles = makeStyles((theme) => ({
       minWidth: '130px',
       maxWidth: '130px',
       verticalAlign: 'top',
-      cursor: 'default',
+      cursor: 'pointer',
       padding: '3px 0',
       borderBottom: `.2px solid ${theme.palette.highlight.heavy}`,
     },

@@ -122,7 +122,7 @@ function loadTheme(mode) {
       fontSize,
       lineHeight,
       letterSpacing,
-      fontWeight: '200',
+      fontWeight: '100',
       fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
