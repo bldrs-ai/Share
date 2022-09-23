@@ -61,7 +61,7 @@ export function PropertiesPanel() {
           <ItemProperties/> :
           <Box sx={{width: '100%'}}>
             <Typography
-              variant='h1'
+              variant='h2'
               sx={{textAlign: 'left'}}
             >
               Please select an element
