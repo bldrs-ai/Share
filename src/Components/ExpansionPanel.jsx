@@ -51,7 +51,7 @@ const useStyles = makeStyles((theme) => ({
     '& .MuiAccordionSummary-root': {
       width: '100%',
       padding: 0,
-      borderBottom: `.5px solid ${theme.palette.highlight.dark}`,
+      borderBottom: `.5px solid ${theme.palette.highlight.heavier}`,
     },
     '& .MuiAccordionSummary-root.Mui-expanded': {
       marginBottom: '0.5em',

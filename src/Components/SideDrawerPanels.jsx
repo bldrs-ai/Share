@@ -119,13 +119,6 @@ const useStyles = makeStyles((theme) => ({
     height: '100%',
     overflow: 'auto',
   },
-  controls: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
   rightGroup: {
     width: '160px',
     display: 'flex',
@@ -146,18 +139,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  notifications: {
-    width: '19px',
-    height: '20px',
-    border: '1px solid lime',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    fontSize: '10px',
-    color: 'black',
-    borderRadius: '20px',
   },
   iconContainerClose: {
     display: 'flex',

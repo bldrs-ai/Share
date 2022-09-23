@@ -84,7 +84,7 @@ const useStyles = makeStyles((theme) => ({
       verticalAlign: 'top',
       cursor: 'default',
       padding: '3px 0',
-      borderBottom: `.2px solid #ddd`,
+      borderBottom: `.2px solid ${theme.palette.highlight.heavy}`,
     },
     '& td::-webkit-scrollbar': {
       display: 'none',

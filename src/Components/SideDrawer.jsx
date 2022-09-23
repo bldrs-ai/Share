@@ -130,7 +130,7 @@ export default function SideDrawerWrapper() {
 export const SIDE_DRAWER_WIDTH = '31em'
 
 
-const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
+const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDTH, {
   drawer: {
     '::-webkit-scrollbar': {
       display: 'none',
@@ -181,7 +181,7 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
     height: (p) => p.isPropertiesOn ? '50%' : '1200px',
     display: (p) => p.isCommentsOn ? '' : 'none',
     borderRadius: '0px',
-    borderBottom: '1px solid lightGrey',
+    borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
   },
   containerProperties: {
     borderRadius: '5px',

@@ -77,8 +77,9 @@ function loadTheme(mode) {
     highlight: {
       main: lightGreen,
       secondary: darkGreen,
-      dark: grey[500],
-      light: grey[300],
+      heavy: grey[400],
+      heavier: grey[500],
+      heaviest: grey[600],
       lime,
     },
   }
@@ -94,8 +95,9 @@ function loadTheme(mode) {
     highlight: {
       main: darkGreen,
       secondary: lightGreen,
-      dark: grey[500],
-      light: grey[600],
+      heavy: grey[700],
+      heavier: grey[600],
+      heaviest: grey[500],
       lime,
     },
   }
