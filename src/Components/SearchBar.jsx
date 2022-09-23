@@ -21,7 +21,7 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
  */
 export default function SearchBar({fileOpen}) {
   const location = useLocation()
-  const navigation = useNavigate()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
@@ -37,7 +37,6 @@ export default function SearchBar({fileOpen}) {
   const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
-
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
     if (location.search) {
@@ -47,10 +46,11 @@ export default function SearchBar({fileOpen}) {
           setInputText(newInputText)
         }
       } else {
-        navigation.current(location.current.pathname)
+        navigate(location.pathname)
       }
     }
-  }, [inputText, searchParams])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams])
 
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
@@ -62,7 +62,7 @@ export default function SearchBar({fileOpen}) {
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
-        navigation.current(modelPath, {replace: true})
+        navigate(modelPath, {replace: true})
       } catch (e) {
         console.error(e)
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
@@ -73,7 +73,7 @@ export default function SearchBar({fileOpen}) {
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
-      navigation.current({
+      navigate({
         pathname: newPath,
         search: `?q=${inputText}`,
       })
@@ -82,7 +82,6 @@ export default function SearchBar({fileOpen}) {
     }
     searchInputRef.current.blur()
   }
-
   return (
     <div>
       <Paper
