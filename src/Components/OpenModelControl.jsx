@@ -68,17 +68,12 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
-      1: '/share/v/gh/OlegMoshkovich/BLDRS_models/main/haus.ifc',
-      2: '/share/v/gh/Swiss-Property-AG/Portfolio/main/ASTRA.ifc#c:-81.42,13,62.13,26.05,15.66,-12.89',
-      3: '/share/v/gh/Swiss-Property-AG/Portfolio/main/EISVOGEL.ifc#c:96.08,3.46,130.78,2.76,2.45,17.22',
-      4: '/share/v/gh/Swiss-Property-AG/Portfolio/main/KNIK.ifc#c:-28.69,7.17,40.11,-5.02,3.35,0.61',
-      5: '/share/v/gh/Swiss-Property-AG/Portfolio/main/MOMENTUM%20TINYHOUSE.ifc',
-      6: '/share/v/gh/Swiss-Property-AG/Portfolio/main/NIEDERSCHERLI.ifc',
+      1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc',
+      2: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/blob/main/SEESTRASSE.ifc',
+      3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/blob/main/EISVOGEL.ifc',
+      4: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/blob/main/ZGRAGGEN.ifc',
       // eslint-disable-next-line max-len
-      7: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
-      // eslint-disable-next-line max-len
-      8: '/share/v/gh/Alhakam/BIMsage/master/BIMsage-Source/BIMsage/src/test/resources/ontology/20200121_Promnitz_Stones.ifc/70/91/116/131/80830#c:-7.58,-3.45,0,0.11,-1.73,-0.32',
-
+      5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
     }
     navigate({
       pathname: modelPath[e.target.value],
@@ -104,10 +99,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             select
             size='small'
           >
-            <MenuItem value={4}><Typography variant='p'>Momentum</Typography></MenuItem>
+            <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+            <MenuItem value={2}><Typography variant='p'>Seestrasse</Typography></MenuItem>
             <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Astra</Typography></MenuItem>
-            <MenuItem value={7}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+            <MenuItem value={4}><Typography variant='p'>Schneestock</Typography></MenuItem>
+            <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
           </TextField>
           <p className={classes.bullet}>
             Models hosted on GitHub are opened by inserting the link to the file into the Search.
