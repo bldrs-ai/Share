@@ -55,7 +55,7 @@ export function IssuesNavBar() {
         </Typography>
 
         {selectedIssueId ?
-          <Box sx={{marginLeft: '-8px'}}>
+          <Box>
             <TooltipIconButton
               title='Back to the list'
               placement='bottom'
@@ -91,8 +91,6 @@ export function IssuesNavBar() {
       </div>
 
       <div className={classes.rightGroup}>
-        <div className={classes.controls}>
-        </div>
         <div>
           <TooltipIconButton
             title='Close Comments'
@@ -269,39 +267,11 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     borderRadius: '2px',
   },
-  title: {
-    height: '30px',
-    display: 'flex',
-    fontSize: '18px',
-    textDecoration: 'underline',
-    fontWeight: 'lighter',
-    alignItems: 'center',
-  },
-  contentContainer: {
-    marginTop: '10px',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    height: '100%',
-    overflow: 'scroll',
-    paddingBottom: '30px',
-  },
-  controls: {
-    height: '100%',
+  rightGroup: {
     display: 'flex',
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
-  },
-  rightGroup: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'flex-end',
-    'alignItems': 'center',
-    'paddingRight': '5px',
-    '@media (max-width: 900px)': {
-      paddingRight: '0px',
-    },
   },
   middleGroup: {
     width: '400px',
@@ -311,33 +281,10 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   leftGroup: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'center',
-    'alignItems': 'center',
-    'paddingLeft': '16px',
-    '@media (max-width: 900px)': {
-      paddingLeft: '12px',
-    },
-  },
-  container: {
-    background: '#7EC43B',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  notifications: {
-    width: '19px',
-    height: '20px',
-    border: '1px solid lime',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    fontSize: '10px',
-    color: 'black',
-    borderRadius: '20px',
   },
   cardsContainer: {
     'width': '100%',
