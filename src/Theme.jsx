@@ -175,7 +175,7 @@ function loadTheme(mode) {
   const theme = {
     components: components,
     typography: typography,
-    shape: {borderRadius: '8px'},
+    shape: {borderRadius: 8},
     palette: activePalette,
     button: {},
   }
