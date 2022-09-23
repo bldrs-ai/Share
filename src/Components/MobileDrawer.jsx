@@ -4,7 +4,6 @@ import Paper from '@mui/material/Paper'
 import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {makeStyles} from '@mui/styles'
 import {styled} from '@mui/material/styles'
-
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'

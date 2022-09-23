@@ -1,12 +1,8 @@
 import React, {useEffect} from 'react'
-
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-
 import debug from '../utils/debug'
-
-
 import useStore from '../store/useStore'
 import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'

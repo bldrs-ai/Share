@@ -1,14 +1,11 @@
 import React, {useEffect, useState} from 'react'
-
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
 import {useNavigate} from 'react-router-dom'
 import {reifyName} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
-
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Typography from '@mui/material/Typography'
-
 import {computeElementPathIds} from '../utils/TreeUtils'
 
 

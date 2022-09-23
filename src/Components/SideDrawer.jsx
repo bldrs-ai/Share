@@ -2,7 +2,6 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-
 import useStore from '../store/useStore'
 import {getHashParams} from '../utils/location'
 import {preprocessMediaQuery} from '../utils/mediaQuery'

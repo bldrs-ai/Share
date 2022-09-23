@@ -5,7 +5,6 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {createPropertyTable} from '../utils/itemProperties'
-
 import ExpansionPanel from './ExpansionPanel'
 
 
