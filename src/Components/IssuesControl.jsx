@@ -281,10 +281,13 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   leftGroup: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
+    'display': 'flex',
+    'flexDirection': 'row',
+    'justifyContent': 'center',
+    'alignItems': 'center',
+    '@media (max-width: 900px)': {
+      paddingLeft: '12px',
+    },
   },
   cardsContainer: {
     'width': '100%',
@@ -298,8 +301,8 @@ const useStyles = makeStyles((theme) => ({
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',
-    width: '20px',
-    height: '20px',
+    width: '14px',
+    height: '14px',
   },
   iconContainerClose: {
     display: 'flex',

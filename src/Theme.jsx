@@ -77,7 +77,7 @@ function loadTheme(mode) {
     highlight: {
       main: lightGreen,
       secondary: darkGreen,
-      dark: grey[400],
+      dark: grey[500],
       light: grey[300],
       lime,
     },
@@ -95,7 +95,7 @@ function loadTheme(mode) {
       main: darkGreen,
       secondary: lightGreen,
       dark: grey[500],
-      light: grey[700],
+      light: grey[600],
       lime,
     },
   }
