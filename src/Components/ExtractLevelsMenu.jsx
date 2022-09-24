@@ -10,9 +10,10 @@ import {addHashParams, getHashParams} from '../utils/location'
 import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
+import {extractHeight} from '../utils/extractHeight'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
 import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
-import {extractHeight} from '../utils/extractHeight'
+
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -29,7 +30,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const model = useStore((state) => state.modelStore)
   let [floorplanMenuItems, showExtractMenu] = useState([])
 
-
   const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -40,7 +40,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const viewer = useStore((state) => state.viewerStore)
   const location = useLocation()
   const createFloorplanPlane = (h1, h2) => {
-    console.log('Got here')
     removePlanes(viewer)
     const modelCenter1 = new Vector3(0, h1, 0)
     const modelCenter2 = new Vector3(0, h2, 0)
@@ -56,18 +55,18 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     const modelCenterX = getModelCenter(model).x
     const modelCenterY = getModelCenter(model).y
     const modelCenterZ = getModelCenter(model).z
-    viewer.context.ifcCamera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
-    const currentProjection = viewer.context.ifcCamera.projectionManager.currentProjection
+    const camera = viewer.context.ifcCamera
+    camera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
+    const currentProjection = camera.projectionManager.currentProjection
     const camFac = 5
     if (currentProjection === 0) {
-      viewer.context.ifcCamera.cameraControls.setLookAt(
+      camera.cameraControls.setLookAt(
           modelCenterX * camFac, modelCenterY * camFac, -modelCenterZ * camFac, modelCenterX, modelCenterY, modelCenterZ, true)
     }
   }
   const createPlane = (normalDirection) => {
     const modelCenter = getModelCenter(model)
     const planeHash = getHashParams(location, 'p')
-    console.log('in the function modelCenter', modelCenter)
     let normal
     switch (normalDirection) {
       case 'x':
@@ -83,7 +82,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         normal = new Vector3(0, 1, 0)
         break
     }
-    console.log('in the function normal', normal)
     if (!planeHash || planeHash !== normalDirection ) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
@@ -92,30 +90,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
-      const modelCenter = getModelCenter(model)
       const planeDirection = planeHash.split(':')[1]
-      let normal
-      switch (planeDirection) {
-        case 'x':
-          normal = new Vector3(1, 0, 0)
-          break
-        case 'y':
-          normal = new Vector3(0, 1, 0)
-          break
-        case 'z':
-          normal = new Vector3(0, 0, 1)
-          break
-        default:
-          normal = new Vector3(0, 1, 0)
-          break
-      }
-      console.log(' ------------------------- ')
-      console.log('the modelCenter from the useEffect', modelCenter)
-      console.log('plane direction', planeDirection)
-      console.log('normal', normal)
-      console.log(' ------------------------- ')
       createPlane(planeDirection)
-      // viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
     }
   }, [model])
 
@@ -132,7 +108,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         }
       }
     } catch {
-      console.log('No levels found')
+      console.error('No levels found')
     }
   }
 

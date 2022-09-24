@@ -15,7 +15,6 @@ export async function extractHeight(ifcModel) {
       for (let i = 0; i < allStor.length; i++) {
         elevValues[i] = allStor[i].Elevation.value
       }
-      // console.log(elevValues)
       return elevValues
     }
     const elevValues = []
@@ -24,6 +23,6 @@ export async function extractHeight(ifcModel) {
     }
     return await printStorey()
   } catch {
-    console.log('No Levels detected')
+    console.error('No Levels detected')
   }
 }
