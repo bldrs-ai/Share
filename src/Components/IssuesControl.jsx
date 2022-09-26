@@ -125,7 +125,6 @@ export function Issues() {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        console.log('issueArray before the fetch', issuesArr)
         const issuesData = await getIssues(repository)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
@@ -144,12 +143,12 @@ export function Issues() {
             numberOfComments: issue.comments,
           })
         })
-        console.log('number of issues in the general use effect', issuesArr)
         if (issuesArr.length > 0) {
           console.log('in the issue array bigger than zero', issues)
           setIssues(issuesArr)
         } else {
           console.log('in the issue array smaller than zero', issues)
+          setIssues(null)
         }
       } catch (e) {
         debug().warn('failed to fetch issues', e)
