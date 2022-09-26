@@ -1,10 +1,9 @@
-
 import React, {useState, useEffect} from 'react'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import {makeStyles} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
+import useTheme from '../Theme'
 import {getModelCenter} from '../utils/cutPlane'
 import {addHashParams, getHashParams} from '../utils/location'
 import {Vector3} from 'three'
@@ -24,7 +23,7 @@ import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
  */
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
-  const classes = useStyles()
+  const theme = useTheme()
   const open = Boolean(anchorEl)
 
   const model = useStore((state) => state.modelStore)
@@ -121,23 +120,29 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         title={'Extract Levels'}
         icon={<LevelsIcon/>}
         onClick={handleClick}
+        selected={anchorEl !== null}
       />
-      <Menu
-        elevation={1}
-        id='basic-menu'
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleClose}
-        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-        transformOrigin={{vertical: 'top', horizontal: 'center'}}
-        className={classes.root}
-        PaperProps={{
-          style: {
-            left: '300px',
-            transform: 'translateX(-40px) translateY(-40px)',
+    <Menu
+      elevation={1}
+      id='basic-menu'
+      anchorEl={anchorEl}
+      open={open}
+      onClose={handleClose}
+      anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+      transformOrigin={{vertical: 'top', horizontal: 'center'}}
+      PaperProps={{
+        style: {
+          left: '300px',
+          transform: 'translateX(-50px)',
+        },
+        sx: {
+          '& .Mui-selected': {
+            color: theme.theme.palette.highlight.main,
+            fontWeight: 600,
           },
-        }}
-      >
+        },
+      }}
+    >
         <TooltipIconButton
           title={'Toggle Plan View'}
           icon={<PlanViewIcon/>}
@@ -149,13 +154,3 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   )
 }
 
-const useStyles = makeStyles({
-  root: {
-    '& .MuiMenu-root': {
-      position: 'absolute',
-      left: '-200px',
-      top: '200px',
-    },
-  },
-},
-)
