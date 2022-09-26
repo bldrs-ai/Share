@@ -153,6 +153,7 @@ export function Issues() {
       }
     }
     fetchIssues()
+    console.log('issues.length', issues.length === 0)
   }, [setIssues, repository])
 
   useEffect(() => {
