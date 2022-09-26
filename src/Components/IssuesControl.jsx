@@ -148,7 +148,7 @@ export function Issues() {
           setIssues(issuesArr)
         } else {
           console.log('in the issue array smaller than zero', issues)
-          setIssues(null)
+          setIssues([])
         }
       } catch (e) {
         debug().warn('failed to fetch issues', e)
