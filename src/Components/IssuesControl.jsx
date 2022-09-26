@@ -146,11 +146,10 @@ export function Issues() {
         })
         console.log('number of issues in the general use effect', issuesArr)
         if (issuesArr.length > 0) {
-          console.log('in the issue array bigger than zero')
+          console.log('in the issue array bigger than zero', issues)
           setIssues(issuesArr)
         } else {
-          console.log('in the issue array smaller than zero')
-          setIssues(null)
+          console.log('in the issue array smaller than zero', issues)
         }
       } catch (e) {
         debug().warn('failed to fetch issues', e)
