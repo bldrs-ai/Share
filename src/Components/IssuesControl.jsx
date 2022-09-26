@@ -113,7 +113,7 @@ export function Issues() {
   const filteredIssue = selectedIssueId ?
     issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
-  const {getAccessTokenWithPopup} = useAuth0()
+  const {getAccessTokenSilently} = useAuth0()
 
   useEffect(() => {
     if (!repository) {
@@ -123,7 +123,7 @@ export function Issues() {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const accessToken = await getAccessTokenWithPopup({
+        const accessToken = await getAccessTokenSilently({
           audience: 'https://api.github.com/',
           scope: 'repo',
         })
@@ -154,7 +154,7 @@ export function Issues() {
       }
     }
     fetchIssues()
-  }, [setIssues, repository, getAccessTokenWithPopup])
+  }, [setIssues, repository, getAccessTokenSilently])
 
   useEffect(() => {
     if (!repository) {
