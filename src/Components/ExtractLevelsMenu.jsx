@@ -99,11 +99,12 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     const allStor = await extractHeight(model)
     try {
       if (floorplanMenuItems.length + 1 <= allStor.length) {
-        const planeoffset = 0.5
+        const floorOffset = 0.2
+        const ceilOffset = 0.4
         for (let i = 0; i < allStor.length; i++) {
           floorplanMenuItems[i] = (
             <MenuItem onClick={() =>
-              createFloorplanPlane(allStor[i], allStor[i + 1] - planeoffset)}
+              createFloorplanPlane(allStor[i] + floorOffset, allStor[i + 1] - ceilOffset)}
             >  L{i} </MenuItem>)
         }
       }
