@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
@@ -24,7 +24,7 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
  * @return {React.Component} The Share react component.
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
-  const navigation = useRef(useNavigate())
+  const navigation = useNavigate()
   const urlParams = useParams()
   const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
@@ -43,7 +43,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     const onChangeUrlParams = (() => {
       const mp = getModelPath(installPrefix, pathPrefix, urlParams)
       if (mp === null) {
-        navToDefault(navigation.current, appPrefix)
+        navToDefault(navigation, appPrefix)
         return
       }
       if (modelPath === null ||
