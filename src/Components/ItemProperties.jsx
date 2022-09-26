@@ -113,7 +113,6 @@ const useStyles = makeStyles((theme) => ({
     height: '100%',
     width: '100%',
     padding: '0px 0px 50px 0px',
-    overflow: 'scroll',
   },
   section: {
     'listStyle': 'none',
