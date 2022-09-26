@@ -153,8 +153,6 @@ export function Issues() {
       }
     }
     fetchIssues()
-    console.log('issues.length', issues.length === 0)
-    console.log('issues.length', issues)
   }, [setIssues, repository])
 
   useEffect(() => {
@@ -254,15 +252,6 @@ export function Issues() {
                />
              )
            })
-          }
-          {issues.length === 0 ?
-          <Typography
-            variant='h4'
-            sx={{textAlign: 'left'}}
-          >
-            Model does not include any notes
-          </Typography> :
-          null
           }
         </>
         }
