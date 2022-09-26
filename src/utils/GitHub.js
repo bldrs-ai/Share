@@ -13,7 +13,7 @@ import {assertDefined} from './assert'
  */
 export async function getIssues(repository, accessToken = '') {
   const args = {}
-  if (accessToken && accessToken.length > 0) {
+  if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
@@ -40,7 +40,7 @@ export async function getIssue(repository, issueId, accessToken = '') {
     issue_number: issueId,
   }
 
-  if (accessToken && accessToken.length > 0) {
+  if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
@@ -66,7 +66,7 @@ export async function getComments(repository, issueId, accessToken = '') {
     issue_number: issueId,
   }
 
-  if (accessToken && accessToken.length > 0) {
+  if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
@@ -98,7 +98,7 @@ export async function getComment(repository, issueId, commentId, accessToken = '
     issue_number: issueId,
   }
 
-  if (accessToken && accessToken.length > 0) {
+  if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
