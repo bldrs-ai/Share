@@ -117,6 +117,8 @@ export function Issues() {
   const filteredIssue = selectedIssueId ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
+
+
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 1, no repo defined')
@@ -158,11 +160,10 @@ export function Issues() {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
-
-    const fetchComments = ((selectedIssue) => {
+    const fetchComments = async (selectedIssue) => {
       try {
         const commentsArr = []
-        const commentsData = getComments(repository, selectedIssue.number)
+        const commentsData = await getComments(repository, selectedIssue.number)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -180,8 +181,7 @@ export function Issues() {
       } catch {
         debug().log('failed to fetch comments')
       }
-    })
-
+    }
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
     }
@@ -192,7 +192,7 @@ export function Issues() {
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredIssue, repository, setComments, selectedIssueId])
+  }, [filteredIssue, repository, setComments])
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
