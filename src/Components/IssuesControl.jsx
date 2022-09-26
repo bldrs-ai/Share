@@ -145,6 +145,8 @@ export function Issues() {
         })
         if (issuesArr.length > 0) {
           setIssues(issuesArr)
+        } else {
+          setIssues(null)
         }
       } catch (e) {
         debug().warn('failed to fetch issues', e)
