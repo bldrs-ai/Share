@@ -109,7 +109,6 @@ const useStyles = makeStyles((theme) => ({
   },
   psetsList: {
     margin: 0,
-    minHeight: '370px',
     height: '100%',
     width: '100%',
     padding: '0px 0px 50px 0px',
