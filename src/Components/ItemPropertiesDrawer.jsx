@@ -61,13 +61,6 @@ const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
       borderRadius: '0px',
       zIndex: 10,
     },
-    '& h1, & h2': {
-      fontSize: '1.2em',
-      fontWeight: 200,
-      marginLeft: '1em 0',
-      paddingBottom: '.5em',
-      borderBottom: '1px solid lightGrey',
-    },
   },
   headerBar: {
     'display': 'flex',

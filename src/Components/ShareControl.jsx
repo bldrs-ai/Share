@@ -1,23 +1,17 @@
 import React, {createRef, useEffect, useState} from 'react'
-import Checkbox from '@mui/material/Checkbox'
-import FormControlLabel from '@mui/material/FormControlLabel'
-import FormGroup from '@mui/material/FormGroup'
+import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
-import ToggleButton from '@mui/material/ToggleButton'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
-import {ControlButton} from './Buttons'
 import Dialog from './Dialog'
-import {
-  addCameraUrlParams,
-  hasValidUrlParams as urlHasCameraCoords,
-  removeCameraUrlParams,
-} from './CameraControl'
-import {assertDefinedBoolean} from '../utils/assert'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import CopyIcon from '../assets/2D_Icons/Copy.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
-
+import {
+  addCameraUrlParams,
+  removeCameraUrlParams,
+} from './CameraControl'
+import {ControlButton, TooltipIconButton} from './Buttons'
 
 /**
  * This button hosts the ShareDialog component and toggles it open and
@@ -29,10 +23,11 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
  */
 export default function ShareControl({viewer}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const classes = useStyles()
   return (
     <ControlButton
-      title='Share this model'
-      icon={<ShareIcon/>}
+      title='Share'
+      icon={<div className={classes.iconContainer}><ShareIcon/></div>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -59,7 +54,7 @@ export default function ShareControl({viewer}) {
  */
 function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
-  const [isCameraInUrl, setIsCameraInUrl] = useState(assertDefinedBoolean(urlHasCameraCoords()))
+  const [isCameraInUrl, setIsCameraInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
   const urlTextFieldRef = createRef()
   const classes = useStyles()
@@ -96,51 +91,40 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }
 
-  const CameraButton = () => {
-    return (
-      <ToggleButton value='cameraInclude' selected={isCameraInUrl}>
-        <CameraIcon/>
-      </ToggleButton>)
-  }
-
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText='Share the model link'
+      headerText={<Box style={{paddingBottom: '0px', marginTop: '-10px'}}>Share</Box>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
         <div className={classes.content}>
-          <div>
-            <TextField
-              value={window.location}
-              inputRef={urlTextFieldRef}
-              variant='outlined'
-              InputProps={{readOnly: true}}
+          <TextField
+            value={window.location}
+            inputRef={urlTextFieldRef}
+            variant='outlined'
+            multiline
+            rows={5}
+            InputProps={{
+              readOnly: true,
+              className: classes.input}}
+          />
+          <div className={classes.buttonsContainer}>
+            <TooltipIconButton
+              title='Include camera position'
+              selected={isCameraInUrl}
+              placement={'bottom'}
+              onClick={toggleCameraIncluded}
+              icon={<CameraIcon />}
             />
-            <ToggleButton
-              value='copy'
+            <TooltipIconButton
+              title='Copy Link'
               selected={isLinkCopied}
+              placement={'bottom'}
               onClick={onCopy}
-              aria-label='Copy the link'
-              color='success'
-            >
-              <CopyIcon/>
-            </ToggleButton>
-          </div>
-          <FormGroup>
-            <FormControlLabel
-              label={'Include camera position'}
-              control={
-                <Checkbox
-                  onClick={toggleCameraIncluded}
-                  icon={<CameraButton/>}
-                  checkedIcon={<CameraButton/>}
-                  color='success'
-                />
-              }
+              icon={<CopyIcon />}
             />
-          </FormGroup>
+          </div>
         </div>
       }
     />)
@@ -149,20 +133,22 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
 
 const useStyles = makeStyles({
   content: {
-    '& .MuiTextField-root': {
-      width: '80%',
-    },
-    '& input': {
-      width: '20em',
-    },
-    '& .MuiFormGroup-root': {
-      width: '100%',
-      alignItems: 'center',
-      verticalAlign: 'middle',
-      margin: 0,
-    },
-    '& .MuiFormControlLabel-root': {
-      margin: 0,
-    },
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+    marginBottom: '2px',
+  },
+  buttonsContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '20px',
+    width: '50%',
   },
 })
