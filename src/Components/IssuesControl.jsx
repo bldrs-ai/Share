@@ -253,13 +253,14 @@ export function Issues() {
              )
            })
           }
-          {issues.length === 0 &&
+          {issues.length === 0 ?
           <Typography
             variant='h4'
             sx={{textAlign: 'left'}}
           >
             Model does not include any notes
-          </Typography>
+          </Typography> :
+          null
           }
         </>
         }
