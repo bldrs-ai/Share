@@ -162,7 +162,7 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
     },
   },
   content: {
-    'overflow': 'scroll',
+    'overflow': 'hidden',
     'height': '95%',
     'marginTop': '20px',
     'display': 'flex',
