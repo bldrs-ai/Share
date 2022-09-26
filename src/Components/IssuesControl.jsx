@@ -154,6 +154,7 @@ export function Issues() {
     }
     fetchIssues()
     console.log('issues.length', issues.length === 0)
+    console.log('issues.length', issues)
   }, [setIssues, repository])
 
   useEffect(() => {
