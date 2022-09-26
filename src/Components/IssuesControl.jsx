@@ -144,10 +144,8 @@ export function Issues() {
           })
         })
         if (issuesArr.length > 0) {
-          console.log('in the issue array bigger than zero', issues)
           setIssues(issuesArr)
         } else {
-          console.log('in the issue array smaller than zero', issues)
           setIssues([])
         }
       } catch (e) {
@@ -254,6 +252,14 @@ export function Issues() {
                />
              )
            })
+          }
+          {issues.length === 0 &&
+          <Typography
+            variant='h4'
+            sx={{textAlign: 'left'}}
+          >
+            Model does not include any notes
+          </Typography>
           }
         </>
         }

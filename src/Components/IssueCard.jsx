@@ -277,7 +277,6 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '29em',
     'marginBottom': '20px',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
