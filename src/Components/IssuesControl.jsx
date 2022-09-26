@@ -159,10 +159,10 @@ export function Issues() {
       return
     }
 
-    const fetchComments = ((selectedIssue) => {
+    const fetchComments = async (selectedIssue) => {
       try {
         const commentsArr = []
-        const commentsData = getComments(repository, selectedIssue.number)
+        const commentsData = await getComments(repository, selectedIssue.number)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -180,7 +180,7 @@ export function Issues() {
       } catch {
         debug().log('failed to fetch comments')
       }
-    })
+    }
 
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
