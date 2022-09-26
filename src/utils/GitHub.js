@@ -136,13 +136,8 @@ async function getGitHub(repository, path, args = {}) {
 
   debug().log('Dispatching GitHub request for repo:', repository)
   const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
-    ...{
-      org: repository.orgName,
-      repo: repository.name,
-    },
-  },
-  {
-    accept: 'application/vnd.github+json',
+    org: repository.orgName,
+    repo: repository.name,
     ...args,
   })
 
