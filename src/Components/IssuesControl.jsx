@@ -192,7 +192,7 @@ export function Issues() {
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredIssue, repository, setComments])
+  }, [filteredIssue, repository, setComments, selectedIssueId])
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
