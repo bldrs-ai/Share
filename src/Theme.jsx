@@ -1,6 +1,6 @@
-import {useEffect, useMemo, useState} from 'react'
-import {grey} from '@mui/material/colors'
 import {createTheme} from '@mui/material/styles'
+import {grey} from '@mui/material/colors'
+import {useEffect, useMemo, useState} from 'react'
 import * as Privacy from './privacy/Privacy'
 
 
@@ -61,45 +61,69 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
+  const lightGreen = '#C8E8C7'
+  const darkGreen = '#459A47'
+  const fontFamily = 'Helvetica'
+  const lime = '#4EEF4B'
   const day = {
     primary: {
       main: grey[100],
+      background: grey[200],
     },
     secondary: {
-      main: grey[200],
-      background: grey[800],
+      main: grey[800],
+      background: grey[300],
     },
-    custom: {
-      highLight: '#C8E8C7',
-      disable: 'lightGrey',
-      neutral: 'white',
-      preselect: '#CCCCCC',
-      select: '#99E397',
+    highlight: {
+      main: lightGreen,
+      secondary: darkGreen,
+      heavy: grey[300],
+      heavier: grey[400],
+      heaviest: grey[500],
+      lime,
     },
   }
   const night = {
     primary: {
       main: grey[800],
+      background: grey[700],
     },
     secondary: {
-      main: grey[600],
-      background: grey[200],
+      main: grey[100],
+      background: grey[700],
     },
-    custom: {
-      highLight: '#70AB32',
-      disable: 'lightGrey',
-      neutral: 'white',
-      preselect: '#CCCCCC',
-      select: '#99E397',
+    highlight: {
+      main: darkGreen,
+      secondary: lightGreen,
+      heavy: grey[700],
+      heavier: grey[600],
+      heaviest: grey[500],
+      lime,
     },
   }
+  const fontSize = '1rem'
+  const lineHeight = '1.5em'
+  const letterSpacing = 'normal'
+  const fontWeight = '400'
+  const fontWeightBold = '400'
   const typography = {
-    h1: {fontSize: '1.4rem'},
-    h2: {fontSize: '1.3rem'},
-    h3: {fontSize: '1.2rem'},
-    h4: {fontSize: '1.1rem'},
-    h5: {fontSize: '1rem'},
-    body2: {fontSize: '.8rem'},
+    fontWeightRegular: fontWeight,
+    fontWeightBold,
+    fontWeightMedium: fontWeight,
+    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h4: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    propValue: {
+      fontSize,
+      lineHeight,
+      letterSpacing,
+      fontWeight: '100',
+      fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
@@ -114,19 +138,16 @@ function loadTheme(mode) {
     },
   }}
   const components = {
-    overrides: {
-      MuiStartIcon: {
-        root: {
-          marginRight: '40px',
-        },
-      },
-    },
     MuiTreeItem: {
       styleOverrides: {
         root: {
           '& > div.Mui-selected, & > div.Mui-selected:hover': {
             color: activePalette.secondary.main,
             backgroundColor: activePalette.secondary.background,
+            borderRadius: '5px',
+          },
+          '& > div.MuiTreeItem-content': {
+            borderRadius: '5px',
           },
         },
       },
@@ -158,7 +179,7 @@ function loadTheme(mode) {
   const theme = {
     components: components,
     typography: typography,
-    shape: {borderRadius: 5},
+    shape: {borderRadius: 8},
     palette: activePalette,
     button: {},
   }

@@ -26,6 +26,12 @@ const impl = {
   },
   clipper: {
     active: false,
+    deleteAllPlanes: jest.fn(() => {
+      return 'cutPlane'
+    }),
+    createFromNormalAndCoplanarPoint: jest.fn(() => {
+      return 'createFromNormalAndCoplanarPoint'
+    }),
   },
   container: {
     style: {},

@@ -1,9 +1,11 @@
 import React from 'react'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import ItemProperties from './ItemProperties'
-import {TooltipIconButton} from './Buttons'
 import {IssuesNavBar, Issues} from './IssuesControl'
+import {TooltipIconButton} from './Buttons'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
@@ -18,9 +20,9 @@ function PanelTitle({title, controlsGroup}) {
   const classes = useStyles(useTheme())
   return (
     <div className={classes.titleContainer}>
-      <div className={classes.title}>
+      <Typography variant='h2'>
         {title}
-      </div>
+      </Typography>
       {controlsGroup}
     </div>
   )
@@ -45,16 +47,27 @@ export function PropertiesPanel() {
       <PanelTitle
         title='Properties'
         controlsGroup={
-          <TooltipIconButton
-            title='Close'
-            onClick={toggleIsPropertiesOn}
-            icon={<CloseIcon style={{width: '24px', height: '24px'}}/>}
-          />
+          <div>
+            <TooltipIconButton
+              title='toggle drawer'
+              onClick={toggleIsPropertiesOn}
+              icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+            />
+          </div>
         }
       />
       <div className={classes.contentContainerProperties}>
-        {selectedElement ? <ItemProperties/> : null}
-
+        {selectedElement ?
+          <ItemProperties/> :
+          <Box sx={{width: '100%'}}>
+            <Typography
+              variant='h4'
+              sx={{textAlign: 'left'}}
+            >
+              Please select an element
+            </Typography>
+          </Box>
+        }
       </div>
     </>
   )
@@ -80,15 +93,12 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingLeft: '10px',
     borderRadius: '5px',
   },
   title: {
     height: '30px',
     display: 'flex',
-    fontSize: '18px',
-    textDecoration: 'underline',
-    fontWeight: 'bold',
+    fontSize: '1.3em',
     marginRight: '10px',
     paddingLeft: '2px',
     alignItems: 'center',
@@ -108,13 +118,6 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
     height: '100%',
     overflow: 'auto',
-  },
-  controls: {
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
   },
   rightGroup: {
     width: '160px',
@@ -137,16 +140,11 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  notifications: {
-    width: '19px',
-    height: '20px',
-    border: '1px solid lime',
+  iconContainerClose: {
     display: 'flex',
-    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    fontSize: '10px',
-    color: 'black',
-    borderRadius: '20px',
+    width: '14px',
+    height: '14px',
   },
 }))
