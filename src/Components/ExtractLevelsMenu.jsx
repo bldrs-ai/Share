@@ -122,27 +122,27 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         onClick={handleClick}
         selected={anchorEl !== null}
       />
-    <Menu
-      elevation={1}
-      id='basic-menu'
-      anchorEl={anchorEl}
-      open={open}
-      onClose={handleClose}
-      anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-      transformOrigin={{vertical: 'top', horizontal: 'center'}}
-      PaperProps={{
-        style: {
-          left: '300px',
-          transform: 'translateX(-50px)',
-        },
-        sx: {
-          '& .Mui-selected': {
-            color: theme.theme.palette.highlight.main,
-            fontWeight: 600,
+      <Menu
+        elevation={1}
+        id='basic-menu'
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        PaperProps={{
+          style: {
+            left: '300px',
+            transform: 'translateX(-50px)',
           },
-        },
-      }}
-    >
+          sx: {
+            '& .Mui-selected': {
+              color: theme.theme.palette.highlight.main,
+              fontWeight: 600,
+            },
+          },
+        }}
+      >
         <TooltipIconButton
           title={'Toggle Plan View'}
           icon={<PlanViewIcon/>}
