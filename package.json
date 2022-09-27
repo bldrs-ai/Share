@@ -80,6 +80,7 @@
     "esbuild-plugin-svgr": "^1.0.1",
     "eslint": "^8.22.0",
     "eslint-config-google": "^0.14.0",
+    "eslint-plugin-cypress": "^2.12.1",
     "eslint-plugin-import": "^2.26.0",
     "eslint-plugin-jest-dom": "^4.0.2",
     "eslint-plugin-jsdoc": "^39.3.6",
