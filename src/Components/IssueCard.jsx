@@ -277,7 +277,7 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'marginBottom': '20px',
+    'marginBottom': '1em',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
     '@media (max-width: 900px)': {
@@ -286,13 +286,11 @@ const useStyles = makeStyles((theme) => ({
   },
   titleContainer: {
     display: 'flex',
-    height: '50px',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: '0.5em',
     background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
-    fontSize: '1em',
-    fontFamily: 'Helvetica',
   },
   titleRightContainer: {
     width: '200px',
@@ -303,7 +301,6 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '6px',
   },
   title: {
-    marginLeft: '10px',
     color: 'black',
     width: '230px',
   },
@@ -338,7 +335,6 @@ const useStyles = makeStyles((theme) => ({
     display: 'none',
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
-    overflow: 'fix',
     fontSize: '10px',
     color: theme.palette.highlight.main,
   },
@@ -348,7 +344,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0px 5px 10px 5px',
-    overflow: 'fix',
     fontSize: '10px',
   },
   actionsLeftGroup: {
@@ -356,7 +351,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    overflow: 'fix',
     fontSize: '10px',
   },
   commentsIconContainer: {
