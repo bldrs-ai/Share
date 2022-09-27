@@ -286,7 +286,6 @@ const useStyles = makeStyles((theme) => ({
   },
   titleContainer: {
     display: 'flex',
-    height: '50px',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -338,7 +337,6 @@ const useStyles = makeStyles((theme) => ({
     display: 'none',
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
-    overflow: 'fix',
     fontSize: '10px',
     color: theme.palette.highlight.main,
   },
@@ -348,7 +346,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0px 5px 10px 5px',
-    overflow: 'fix',
     fontSize: '10px',
   },
   actionsLeftGroup: {
@@ -356,7 +353,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    overflow: 'fix',
     fontSize: '10px',
   },
   commentsIconContainer: {

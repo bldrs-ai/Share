@@ -262,6 +262,9 @@ export function Issues() {
 
 
 const useStyles = makeStyles((theme) => ({
+  commentsContainer: {
+    width: '100%',
+  },
   titleContainer: {
     display: 'flex',
     flexDirection: 'row',
