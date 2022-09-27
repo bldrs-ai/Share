@@ -23,6 +23,6 @@ export async function extractHeight(ifcModel) {
     }
     return await printStorey()
   } catch {
-    console.error('No Levels detected')
+    console.log('No Levels detected')
   }
 }

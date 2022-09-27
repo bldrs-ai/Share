@@ -108,7 +108,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         }
       }
     } catch {
-      console.error('No levels found')
+      console.log('No levels found')
     }
   }
 
