@@ -158,7 +158,6 @@ export function Issues() {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
-    // Restore async function which was removed in PR #366 - 'Be explicit about side effect dependencies'
     const fetchComments = async (selectedIssue) => {
       try {
         const commentsArr = []
