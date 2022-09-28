@@ -13,6 +13,7 @@ module.exports = {
     'plugin:jsx-a11y/recommended',
     'plugin:storybook/recommended',
     'plugin:jsdoc/recommended',
+    'plugin:cypress/recommended',
   ],
   overrides: [{
     files: ['*.js', '*.mjs', '*.jsx'],
@@ -31,6 +32,7 @@ module.exports = {
     sourceType: 'module',
   },
   plugins: [
+    'cypress',
     'import',
     'react',
     'jsx-a11y',

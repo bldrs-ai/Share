@@ -1,0 +1,25 @@
+name: End-to-end Tests
+
+on:
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  run-cypress:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v2
+
+      - name: E2E Tests on Google Chrome
+        id: e2e-on-google-chrome
+        uses: cypress-io/github-action@v4
+        with:
+          browser: chrome
+          build: yarn build-share
