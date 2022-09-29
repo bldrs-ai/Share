@@ -21,3 +21,17 @@ export function isObject(obj) {
   // https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript
   return obj === Object(obj) && Object.prototype.toString.call(obj) !== '[object Array]'
 }
+
+
+/**
+ * @param {Array} array
+ * @param {string} key
+ * @return {Array} array sorted according to the key
+ */
+export function sortObjectsByKey(array, key) {
+  return array.sort(function(a, b) {
+    const x = a[key]
+    const y = b[key]
+    return ((x < y) ? -1 : ((x > y) ? 1 : 0))
+  })
+}

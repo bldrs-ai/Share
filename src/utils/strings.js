@@ -44,3 +44,32 @@ export function findUrls(str) {
     }
   })
 }
+
+
+/**
+ * @param {string} str
+ * @return {string} content of the body
+ */
+export function notesOrder(str) {
+  let extractedNumber
+  if (str.includes('note#')) {
+    extractedNumber = str.split('note#')[1].split(' ')[0]
+    return extractedNumber
+  } else {
+    return 0
+  }
+}
+
+
+/**
+ * @param {string} str
+ * @return {string} content of the body
+ */
+export function extractBodyContent(str) {
+  if (str.includes('---')) {
+    const extractedNumber = str.split('---')
+    return extractedNumber[0]
+  } else {
+    return str
+  }
+}

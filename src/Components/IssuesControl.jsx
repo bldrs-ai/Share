@@ -2,14 +2,16 @@ import React, {useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
+import {makeStyles, useTheme} from '@mui/styles'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
-import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'
 import {getIssues, getComments} from '../utils/GitHub'
+import {notesOrder} from '../utils/strings'
+import {sortObjectsByKey} from '../utils/objects'
 import IssueCard from './IssueCard'
-import {TooltipIconButton} from './Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import {TooltipIconButton} from './Buttons'
 import BackIcon from '../assets/2D_Icons/Back.svg'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import NextIcon from '../assets/2D_Icons/NavNext.svg'
@@ -131,6 +133,8 @@ export function Issues() {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
+          const notesNumber = notesOrder(issue.body)
+
           issuesArr.push({
             index: index,
             id: issue.id,
@@ -141,9 +145,14 @@ export function Issues() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
+            noteOrder: notesNumber,
           })
         })
+
         if (issuesArr.length > 0) {
+          const sortedArr = sortObjectsByKey(issuesArr, 'noteOrder')
+          console.log('sorted arrays', sortedArr)
+          setIssues(sortedArr)
           setIssues(issuesArr)
         } else {
           setIssues([])

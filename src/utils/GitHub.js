@@ -344,7 +344,6 @@ export const MOCK_COMMENTS = {
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
       body: `Email is the medium that still facilitates major portion of communication.
-
       [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
       [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
       reactions: {

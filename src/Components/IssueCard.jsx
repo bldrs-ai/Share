@@ -19,6 +19,7 @@ import {
 import {useIsMobile} from './Hooks'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
+import {extractBodyContent} from '../utils/strings'
 
 
 /**
@@ -154,7 +155,7 @@ export default function IssueCard({
         />
       </div>
       <div className={classes.body}>
-        <ReactMarkdown>{body}</ReactMarkdown>
+        <ReactMarkdown>{extractBodyContent(body)}</ReactMarkdown>
       </div>
       {textOverflow &&
          <ShowMore
