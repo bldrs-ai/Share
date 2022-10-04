@@ -5,14 +5,11 @@ import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '../Theme'
 import {getModelCenter} from '../utils/cutPlane'
-import {addHashParams, getHashParams} from '../utils/location'
 import {Vector3} from 'three'
-import {useLocation} from 'react-router-dom'
 import {removePlanes} from '../utils/cutPlane'
 import {extractHeight} from '../utils/extractHeight'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
 import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
-
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -27,9 +24,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const open = Boolean(anchorEl)
 
   const model = useStore((state) => state.modelStore)
-  let [floorplanMenuItems, showExtractMenu] = useState([])
+  const [allStoreys, setAllStor] = useState([])
 
-  const PLANE_PREFIX = 'p'
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
   }
@@ -37,7 +33,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     setAnchorEl(null)
   }
   const viewer = useStore((state) => state.viewerStore)
-  const location = useLocation()
   const createFloorplanPlane = (h1, h2) => {
     removePlanes(viewer)
     const modelCenter1 = new Vector3(0, h1, 0)
@@ -63,56 +58,19 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           modelCenterX * camFac, modelCenterY * camFac, -modelCenterZ * camFac, modelCenterX, modelCenterY, modelCenterZ, true)
     }
   }
-  const createPlane = (normalDirection) => {
-    const modelCenter = getModelCenter(model)
-    const planeHash = getHashParams(location, 'p')
-    let normal
-    switch (normalDirection) {
-      case 'x':
-        normal = new Vector3(1, 0, 0)
-        break
-      case 'y':
-        normal = new Vector3(0, 1, 0)
-        break
-      case 'z':
-        normal = new Vector3(0, 0, 1)
-        break
-      default:
-        normal = new Vector3(0, 1, 0)
-        break
-    }
-    if (!planeHash || planeHash !== normalDirection ) {
-      addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
-    }
-    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
-  }
+
   useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
-    if (planeHash && model && viewer) {
-      const planeDirection = planeHash.split(':')[1]
-      createPlane(planeDirection)
-    }
+    fetchStorey()
   }, [model])
 
-  showExtractMenu = async () => {
-    const allStor = await extractHeight(model)
-    try {
-      if (floorplanMenuItems.length + 1 <= allStor.length) {
-        const floorOffset = 0.2
-        const ceilOffset = 0.4
-        for (let i = 0; i < allStor.length; i++) {
-          floorplanMenuItems[i] = (
-            <MenuItem onClick={() =>
-              createFloorplanPlane(allStor[i] + floorOffset, allStor[i + 1] - ceilOffset)}
-            >  L{i} </MenuItem>)
-        }
-      }
-    } catch {
-      console.log('No levels found')
-    }
+  const fetchStorey = async () => {
+    const allStorey = await extractHeight(model)
+    setAllStor(allStorey)
+    console.log(allStorey)
   }
 
-  showExtractMenu()
+  const floorOffset = 0.2
+  const ceilingOffset = 0.4
 
   return (
     <div>
@@ -147,8 +105,16 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           title={'Toggle Plan View'}
           icon={<PlanViewIcon/>}
           onClick={planView}
-        />
-        {floorplanMenuItems}
+        /> 
+        {allStoreys && allStoreys.map((storey, i) => (
+          <MenuItem
+            key={i}
+            onClick={() =>
+              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)}
+          >  L{i}
+          </MenuItem>))
+        }
+
       </Menu>
     </div>
   )
