@@ -105,7 +105,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           title={'Toggle Plan View'}
           icon={<PlanViewIcon/>}
           onClick={planView}
-        /> 
+        />
         {allStoreys && allStoreys.map((storey, i) => (
           <MenuItem
             key={i}
