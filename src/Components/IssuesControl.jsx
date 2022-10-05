@@ -145,6 +145,8 @@ export function Issues() {
         })
         if (issuesArr.length > 0) {
           setIssues(issuesArr)
+        } else {
+          setIssues([])
         }
       } catch (e) {
         debug().warn('failed to fetch issues', e)
@@ -158,11 +160,11 @@ export function Issues() {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
-
-    const fetchComments = ((selectedIssue) => {
+    const fetchComments = async (selectedIssue) => {
       try {
         const commentsArr = []
-        const commentsData = getComments(repository, selectedIssue.number)
+
+        const commentsData = await getComments(repository, selectedIssue.number)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -180,7 +182,7 @@ export function Issues() {
       } catch {
         debug().log('failed to fetch comments')
       }
-    })
+    }
 
     if (selectedIssueId !== null) {
       fetchComments(filteredIssue)
@@ -260,6 +262,9 @@ export function Issues() {
 
 
 const useStyles = makeStyles((theme) => ({
+  commentsContainer: {
+    width: '100%',
+  },
   titleContainer: {
     display: 'flex',
     flexDirection: 'row',
