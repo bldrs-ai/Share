@@ -1,11 +1,13 @@
 import React, {useState} from 'react'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
+import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 import useStore from '../store/useStore'
-import CadView from './CadView'
+
 import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
+
+import CadView from './CadView'
 
 
 describe('CadView', () => {
@@ -92,7 +94,7 @@ describe('CadView', () => {
           />
         </ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear selection')
+    const clearSelection = getByTitle('Clear')
     act(() => {
       fireEvent.click(clearSelection)
     })

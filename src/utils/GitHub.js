@@ -1,6 +1,6 @@
 import {Octokit} from '@octokit/rest'
-import PkgJson from '../../package.json'
 import debug from './debug'
+import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
 
 
@@ -170,7 +170,7 @@ export const MOCK_ISSUES = {
       id: 1257156364,
       node_id: 'I_kwDOFwgxOc5K7q8M',
       number: 1,
-      title: 'BLDRS-LOCAL_MODE-ID:1257156364',
+      title: 'Local issue - some text is here to test - Id:1257156364',
       user: {
         login: 'OlegMoshkovich',
         id: 3433606,
@@ -232,7 +232,7 @@ export const MOCK_ISSUES = {
       id: 2,
       node_id: 'I_kwDOFwgxOc5K7q8M',
       number: 2,
-      title: 'LOCAL ISSUE 2',
+      title: 'Local issue 2',
       user: {
         login: 'OlegMoshkovich',
         id: 3433606,

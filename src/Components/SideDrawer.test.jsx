@@ -46,7 +46,7 @@ describe('SideDrawer', () => {
       result.current.turnCommentsOn()
       result.current.openDrawer()
     })
-    expect(await findByText('BLDRS-LOCAL_MODE-ID:1257156364')).toBeVisible()
+    expect(await findByText('Local issue - some text is here to test - Id:1257156364')).toBeVisible()
     // reset the store
     act(() => {
       result.current.setSelectedIssueId(null)
@@ -62,7 +62,7 @@ describe('SideDrawer', () => {
         >
           <SideDrawerWrapper/>
         </ShareMock>)
-    expect(await getByText('LOCAL ISSUE 2')).toBeInTheDocument()
+    expect(await getByText('Local issue 2')).toBeInTheDocument()
 
     // reset the store
     await act(() => {

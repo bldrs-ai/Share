@@ -1,15 +1,23 @@
-import React from 'react'
+import React, {useContext} from 'react'
+import ButtonGroup from '@mui/material/ButtonGroup'
+import Divider from '@mui/material/Divider'
 import {makeStyles} from '@mui/styles'
-import useStore from '../store/useStore'
+import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
-import ShareControl from './ShareControl'
-import ShortcutsControl from './ShortcutsControl'
+import ExtractLevelsMenu from './ExtractLevelsMenu'
+import useStore from '../store/useStore'
+import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
+import {useIsMobile} from './Hooks'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import MarkupIcon from '../assets/2D_Icons/Markup.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
+import MoonIcon from '../assets/2D_Icons/Moon.svg'
+import NotesIcon from '../assets/2D_Icons/Notes.svg'
+import ShareControl from './ShareControl'
+import SunIcon from '../assets/2D_Icons/Sun.svg'
+import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
@@ -20,51 +28,82 @@ import ListIcon from '../assets/2D_Icons/List.svg'
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({unSelectItem}) {
+export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
+  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const selectedElement = useStore((state) => state.selectedElement)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const viewer = useStore((state) => state.viewerStore)
-
+  const selectedElement = useStore((state) => state.selectedElement)
+  const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
+  const theme = useContext(ColorModeContext)
+
+
   const toggle = (panel) => {
     openDrawer()
     if (panel === 'Properties') {
       toggleIsPropertiesOn()
     }
     if (panel === 'Notes') {
-      turnCommentsOn()
+      if (isCommentsOn) {
+        turnCommentsOff()
+      } else {
+        turnCommentsOn()
+      }
     }
   }
 
 
   return (
     <div className={classes.container}>
-      <div className={classes.topGroup}>
-        <AuthNav />
+      <AuthNav />
+      <ButtonGroup orientation="vertical" >
         <ShareControl viewer={viewer}/>
+      </ButtonGroup>
+      {!isMobile && <Divider />}
+      <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
-          icon={<MarkupIcon/>}
+          icon={<NotesIcon/>}
+          selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
-      </div>
-      <div className={classes.lowerGroup}>
-        {
-          selectedElement ?
+        <TooltipIconButton
+          title="Properties"
+          onClick={() => toggle('Properties')}
+          selected={isPropertiesOn}
+          icon={<ListIcon/>}
+        />
+        {isMobile &&
           <TooltipIconButton
-            title="Properties"
-            onClick={() => toggle('Properties')}
-            icon={<ListIcon/>}
-          /> :
-          null
+            title='Elements Hierarchy'
+            selected={showNavPanel}
+            onClick={onClickMenuCb}
+            icon={<TreeIcon/>}
+          />
         }
         <CutPlaneMenu/>
-        <TooltipIconButton title="Clear selection" onClick={unSelectItem} icon={<ClearIcon/>}/>
-        <ShortcutsControl/>
-      </div>
+        <ExtractLevelsMenu/>
+        <TooltipIconButton
+          title="Clear"
+          onClick={unSelectItem}
+          selected={selectedElement !== null}
+          icon={<ClearIcon />}
+        />
+      </ButtonGroup>
+      <Divider/>
+      <ButtonGroup orientation="vertical">
+        <TooltipIconButton
+          title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
+          onClick={() => theme.toggleColorMode()}
+          icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
+        />
+        <AboutControl installPrefix={installPrefix}/>
+      </ButtonGroup>
+      {/* Invisible */}
       <CameraControl viewer={viewer}/>
     </div>
   )
@@ -74,24 +113,13 @@ export default function OperationsGroup({unSelectItem}) {
 const useStyles = makeStyles({
   container: {
     // Actually want 100 - size of settings button
-    height: 'calc(100vh - 40px)',
-    margin: '20px 20px 0 0',
-  },
-  topGroup: {
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    height: '170px',
-    width: '50px',
-  },
-  lowerGroup: {
-    position: 'fixed',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'space-between',
-    bottom: 0,
-    paddingBottom: '70px',
-    minHeight: '150px',
+    'display': 'flex',
+    'flexDirection': 'column',
+    'height': 'calc(100vh - 40px)',
+    'margin': '20px 20px 0 0',
+    '@media (max-width: 900px)': {
+      margin: '20px 10px 0 0',
+    },
   },
 })
 

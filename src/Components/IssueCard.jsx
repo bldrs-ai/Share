@@ -238,19 +238,15 @@ const CardActions = ({
   return (
     <div className={classes.actions}>
       <div className={classes.actionsLeftGroup}>
-        {hasCameras ?
+        {hasCameras &&
          <TooltipIconButton
            disabled={hasCameras}
            title='Show the camera view'
            size='small'
            placement='bottom'
            onClick={onClickCamera}
-           icon={
-             <CameraIcon
-               className={classes.buttonCamera}
-               style={{width: '24px', height: '24px'}}
-             />}
-         /> : null}
+           icon={<div className={classes.iconContainer}><CameraIcon/></div>}
+         />}
         {selected &&
          <TooltipIconButton
            title='Share'
@@ -260,10 +256,7 @@ const CardActions = ({
              onClickShare()
              setShareIssue(!shareIssue)
            }}
-           icon={
-             <ShareIcon
-               className={classes.buttonShare} style={{width: '24px', height: '24px'}}
-             />}
+           icon={<div className={classes.iconContainer}><ShareIcon/></div>}
          />
         }
       </div>
@@ -284,8 +277,7 @@ const CardActions = ({
 
 const useStyles = makeStyles((theme) => ({
   container: {
-    'width': '27em',
-    'marginBottom': '20px',
+    'marginBottom': '1em',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
     '@media (max-width: 900px)': {
@@ -294,13 +286,11 @@ const useStyles = makeStyles((theme) => ({
   },
   titleContainer: {
     display: 'flex',
-    height: '50px',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    padding: '0.5em',
     background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
-    fontSize: '1em',
-    fontFamily: 'Helvetica',
   },
   titleRightContainer: {
     width: '200px',
@@ -311,8 +301,8 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '6px',
   },
   title: {
-    marginLeft: '10px',
     color: 'black',
+    width: '230px',
   },
   metaDataContainer: {
     marginRight: '12px',
@@ -345,9 +335,8 @@ const useStyles = makeStyles((theme) => ({
     display: 'none',
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
-    overflow: 'fix',
     fontSize: '10px',
-    color: theme.palette.custom.highLight,
+    color: theme.palette.highlight.main,
   },
   actions: {
     display: 'flex',
@@ -355,7 +344,6 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0px 5px 10px 5px',
-    overflow: 'fix',
     fontSize: '10px',
   },
   actionsLeftGroup: {
@@ -363,7 +351,6 @@ const useStyles = makeStyles((theme) => ({
     flexDirection: 'row',
     justifyContent: 'flex-start',
     alignItems: 'center',
-    overflow: 'fix',
     fontSize: '10px',
   },
   commentsIconContainer: {
@@ -414,19 +401,10 @@ const useStyles = makeStyles((theme) => ({
     fontSize: '10px',
     color: 'black',
   },
-  button: {
-    width: '24px',
-    height: '24px',
-    backgroundColor: theme.palette.custom.highLight,
-  },
-  buttonCamera: {
-    backgroundColor: (props) => props.embeddedCameras ?
-      theme.palette.custom.highLight : theme.palette.custom.disable,
-    color: 'black',
-  },
-  buttonShare: {
-    backgroundColor: theme.palette.custom.highLight,
-    color: 'black',
+  iconContainer: {
+    width: '20px',
+    height: '20px',
+    marginBottom: '2px',
   },
 }),
 )
