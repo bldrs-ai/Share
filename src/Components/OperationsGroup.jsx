@@ -5,6 +5,7 @@ import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
+import ExtractLevelsMenu from './ExtractLevelsMenu'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
@@ -83,6 +84,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           />
         }
         <CutPlaneMenu/>
+        <ExtractLevelsMenu/>
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
