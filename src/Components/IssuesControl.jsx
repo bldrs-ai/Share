@@ -201,7 +201,7 @@ export function Issues() {
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
       <div className={classes.cardsContainer}>
-        {issues === null && <Loader/> }
+        {issues === null && <Loader type={'linear'}/> }
         {issues && issues.length === 0 && <NoContent/> }
         {issues && !selectedIssueId ?
           issues.map((issue, index) => {
