@@ -1,11 +1,25 @@
 import debug from './debug'
 
 
+let disabledForUnitTests = false
+
+/**
+ * For unit testing we are mocking out github anyway so this code should not intercept those calls
+ */
+export function restoreRegularNetworkingForUnitTests() {
+  disabledForUnitTests = true
+}
+
+
 /**
  * @return {boolean} True if running locally
  */
 export function isRunningLocally() {
-  const local = window.location.hostname === 'localhost' ||
+  if (disabledForUnitTests) {
+    return false
+  }
+  const local =
+      window.location.hostname === 'localhost' ||
       window.location.hostname === '[::1]' ||
       window.location.hostname.startsWith('10.') ||
       window.location.hostname.startsWith('127.') ||

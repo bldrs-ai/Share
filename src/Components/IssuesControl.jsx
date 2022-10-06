@@ -8,7 +8,8 @@ import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'
 import {getIssues, getComments} from '../utils/GitHub'
 import IssueCard from './IssueCard'
-import LinearProgress from '@mui/material/LinearProgress'
+import Loader from './Loader'
+import NoContent from './NoContent'
 import {TooltipIconButton} from './Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import BackIcon from '../assets/2D_Icons/Back.svg'
@@ -71,7 +72,7 @@ export function IssuesNavBar() {
       </div>
 
       <div className={classes.middleGroup} >
-        {selectedIssueId && issues.length > 1 &&
+        {(issues && selectedIssueId) && issues.length > 1 &&
           <>
             <TooltipIconButton
               title='Previous Note'
@@ -115,7 +116,7 @@ export function Issues() {
   const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = selectedIssueId ?
+  const filteredIssue = (issues && selectedIssueId) ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
   useEffect(() => {
@@ -146,7 +147,6 @@ export function Issues() {
         })
         if (issuesArr.length > 0) {
           setIssues(issuesArr)
-          // setIssues([])
         } else {
           setIssues([])
         }
@@ -201,10 +201,9 @@ export function Issues() {
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
       <div className={classes.cardsContainer}>
-        {issues.length === 0 &&
-          <LinearProgress color="success" sx={{height: '16px', width: '100%', borderRadius: '5px'}}/>
-        }
-        {!selectedIssueId ?
+        {issues === null && <Loader/> }
+        {issues && issues.length === 0 && <NoContent/> }
+        {issues && !selectedIssueId ?
           issues.map((issue, index) => {
             return (
               <IssueCard
@@ -236,8 +235,7 @@ export function Issues() {
              numberOfComments={filteredIssue.numberOfComments}
              avatarUrl={filteredIssue.avatarUrl}
              imageUrl={filteredIssue.imageUrl}
-           /> :
-           <div>loading</div>
+           /> : null
           }
           {comments &&
            comments.map((comment, index) => {

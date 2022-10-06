@@ -254,7 +254,6 @@ export const MOCK_ISSUES = {
   ],
 }
 
-
 export const MOCK_COMMENTS = {
   data: [
     {
@@ -361,6 +360,8 @@ export const MOCK_COMMENTS = {
     },
   ],
 }
+
+export const MOCK_ISSUES_EMPTY = {data: []}
 
 
 /**

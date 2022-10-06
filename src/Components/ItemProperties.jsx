@@ -6,6 +6,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {createPropertyTable} from '../utils/itemProperties'
 import ExpansionPanel from './ExpansionPanel'
+import Loader from './Loader'
 
 
 /**
@@ -27,20 +28,26 @@ export default function ItemProperties() {
       setPsetsList(await createPsetsList(model, element, classes, expandAll))
     })()
   }, [model, element, classes, expandAll])
+  console.log('prop table', propTable)
   return (
-    <div className={classes.propsContainer}>
-      {propTable}
-      <div className={classes.psetContainer}>
-        {psetsList && psetsList.props.children.length > 0 &&
-        <Typography variant='h2' className={classes.psetTitle}>
-          Property Sets
-          <Switch
-            checked={expandAll}
-            onChange={() => setExpandAll(!expandAll)}
-          />
-        </Typography>
+    <div>
+      <div className={classes.propsContainer}>
+        {(propTable === null) &&
+          <Loader duration={2000} showError={false}/>
         }
-        {psetsList}
+        {propTable}
+        <div className={classes.psetContainer}>
+          {psetsList && psetsList.props.children.length > 0 &&
+          <Typography variant='h2' className={classes.psetTitle}>
+            Property Sets
+            <Switch
+              checked={expandAll}
+              onChange={() => setExpandAll(!expandAll)}
+            />
+          </Typography>
+          }
+          {psetsList}
+        </div>
       </div>
     </div>
   )
