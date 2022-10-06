@@ -4,6 +4,11 @@ import {BrowserRouter} from 'react-router-dom'
 import BaseRoutes from './BaseRoutes'
 
 
+if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+  const {worker} = require('./__mocks__/browser')
+  worker.start()
+}
+
 const root = createRoot(document.getElementById('root'))
 root.render(
     <BrowserRouter>
