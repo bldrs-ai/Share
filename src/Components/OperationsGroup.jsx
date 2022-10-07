@@ -42,7 +42,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   const theme = useContext(ColorModeContext)
 
 
-  const selected = () => {
+  const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
       cutPlaneDirection !== null
@@ -97,7 +97,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
-          selected={selected()}
+          selected={isSelected()}
           icon={<ClearIcon />}
         />
       </ButtonGroup>
