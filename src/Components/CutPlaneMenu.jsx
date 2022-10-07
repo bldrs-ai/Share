@@ -42,7 +42,7 @@ export default function CutPlaneMenu() {
     if (normalDirection === cutPlaneDirection) {
       viewer.clipper.deleteAllPlanes()
       removeHashParams(window.location, PLANE_PREFIX)
-      setCutPlaneDirection('')
+      setCutPlaneDirection(null)
       return
     }
     let normal
@@ -82,7 +82,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null}
+        selected={anchorEl !== null || cutPlaneDirection !== null}
       />
       <Menu
         elevation={1}
