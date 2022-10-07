@@ -422,11 +422,6 @@ export class MockOctokit {
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
-// const octokit = process.env.NODE_ENV === 'test' ? new MockOctokit() : new Octokit({
-//   baseUrl: 'http://localhost:8083/p/gh',
-//   userAgent: `bldrs/${PkgJson.version}`,
-// })
-
 const octokit = new Octokit({
   baseUrl: process.env.GITHUB_BASE_URL,
   userAgent: `bldrs/${PkgJson.version}`,
