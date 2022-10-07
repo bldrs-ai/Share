@@ -2,14 +2,28 @@ import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
+import {restoreRegularNetworkingForUnitTests} from '../utils/network'
+import {MOCK_ISSUES_EMPTY} from '../../src/utils/GitHub'
+import {__setMockIssues} from '../../__mocks__/@octokit/rest'
 import {IssuesNavBar, Issues} from './IssuesControl'
 
 
 describe('IssueControl', () => {
+  beforeAll(() => restoreRegularNetworkingForUnitTests(true))
+
+  beforeEach(async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setIssues(null)
+    })
+  })
+
+
   it('Issues NavBar Issues', () => {
     const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
     expect(getByText('Notes')).toBeInTheDocument()
   })
+
 
   it('NavBar changes to back nav when issue selected', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -20,6 +34,7 @@ describe('IssueControl', () => {
     })
     expect(await getByTitle('Back to the list')).toBeInTheDocument()
   })
+
 
   it('Setting issues in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -33,23 +48,34 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeInTheDocument()
     expect(await getByText('closed_system')).toBeInTheDocument()
   })
-})
-test('Setting comments in zustand ', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  const {getByText} = render(<ShareMock><Issues/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+
+
+  it('Setting comments in zustand ', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+      result.current.setComments(MOCK_COMMENTS)
+    })
+    expect(await getByText('open_workspace')).toBeVisible()
   })
-  await act(() => {
-    result.current.setIssues(MOCK_ISSUES)
+
+  it('test Loader is present if issues are null, and removed when issues set', async () => {
+    __setMockIssues(MOCK_ISSUES_EMPTY)
+    const {getByRole, queryByRole} = render(<ShareMock><Issues/></ShareMock>)
+    expect(getByRole('progressbar')).toBeInTheDocument()
+    __setMockIssues(MOCK_ISSUES)
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    // queryByRole is used to not throw an error is the element is missing.
+    expect(queryByRole('progressbar')).not.toBeInTheDocument()
   })
-  await act(() => {
-    result.current.setComments(MOCK_COMMENTS)
-  })
-  expect(await getByText('open_workspace')).toBeVisible()
-  // expect(await getByText('The Architecture, Engineering and Construction')).toBeVisible()
-  // expect(await getByText('Email is the medium that still facilitates major portion of communication')).toBeVisible()
 })
 
 
