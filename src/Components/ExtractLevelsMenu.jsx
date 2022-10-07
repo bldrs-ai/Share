@@ -33,7 +33,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     setAnchorEl(null)
   }
   const viewer = useStore((state) => state.viewerStore)
-  //ADDED
+  // ADDED
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
 
@@ -125,8 +125,9 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() =>
-              //ADDED SELECTED:
-              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)} selected = {levelInstance === (allStoreys[i] + floorOffset)}
+              // ADDED SELECTED:
+              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)} selected={
+              levelInstance === (allStoreys[i] + floorOffset)}
           >  L{i}
           </MenuItem>))
         }
