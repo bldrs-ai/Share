@@ -29,7 +29,7 @@ const UserProfile = ({size = 'medium'}) => {
         <Avatar
           alt={user.name}
           src={user.picture}
-          sx={{width: 50, height: 50}}
+          sx={{width: 22, height: 22}}
         />
       </IconButton>
 
