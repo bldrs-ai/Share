@@ -39,6 +39,7 @@ export default function CutPlaneMenu() {
     viewer.clipper.deleteAllPlanes()
     const modelCenter = getModelCenter(model)
     const planeHash = getHashParams(location, 'p')
+    setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
       viewer.clipper.deleteAllPlanes()
       removeHashParams(window.location, PLANE_PREFIX)
