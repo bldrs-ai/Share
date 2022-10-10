@@ -41,7 +41,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)
-    const planeHash = getHashParams(location, 'l')
+    const levelHash = getHashParams(location, 'l')
     const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
     const modelCenter2 = new Vector3(0, planeHeightTop, 0)
     const normal1 = new Vector3(0, 1, 0)
@@ -54,7 +54,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       setLevelInstance(null)
       return
     }
-    if (!planeHash || planeHash !== planeHeightBottom ) {
+    if (!levelHash || levelHash !== level ) {
       addHashParams(window.location, LEVEL_PREFIX, {levelSelected: level})
     }
     setLevelInstance(planeHeightBottom)
@@ -78,9 +78,9 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   useEffect(() => {
     fetchStorey()
-    const planeHash = getHashParams(location, 'p')
-    if (planeHash && model && viewer) {
-      const level = parseInt(planeHash.split(':')[1])
+    const levelHash = getHashParams(location, 'l')
+    if (levelHash && model && viewer) {
+      const level = parseInt(levelHash.split(':')[1])
       createFloorplanPlane(allStoreys[level] + floorOffset, allStoreys[level + 1] - ceilingOffset, level)
     }
   }, [model])
