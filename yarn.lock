@@ -13498,6 +13498,11 @@ vm-browserify@^1.0.1:
   resolved "https://registry.yarnpkg.com/vm-browserify/-/vm-browserify-1.1.2.tgz#78641c488b8e6ca91a75f511e7a3b32a86e5dda0"
   integrity sha512-2ham8XPWTONajOR0ohOKOHXkm3+gaBmGut3SRuu75xLd/RRaY6vqgh8NBYYk7+RW3u5AtzPQZG8F10LHkl0lAQ==
 
+vyzn-ui@^1.0.0:
+  version "1.0.0"
+  resolved "https://registry.yarnpkg.com/vyzn-ui/-/vyzn-ui-1.0.0.tgz#cc920166e720f6815dbc5e88058bb1c5874ad36d"
+  integrity sha512-tvNYNU0Kb0CyvshSYniw6ZZPoy3gzV+/XexyYsjtKSHzJmaoEunmys8luPd9y8yerCBi0qAnd3QOYop7wcGd9A==
+
 w3c-hr-time@^1.0.2:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/w3c-hr-time/-/w3c-hr-time-1.0.2.tgz#0a89cdf5cc15822df9c360543676963e0cc308cd"

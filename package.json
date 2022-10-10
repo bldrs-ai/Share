@@ -43,6 +43,7 @@
     "react-router-dom": "^6.3.0",
     "remark-gfm": "^3.0.1",
     "three": "^0.135",
+    "vyzn-ui": "^1.0.0",
     "web-ifc-viewer": "^1.0.209",
     "web-vitals": "^2.1.0",
     "zustand": "^4.0.0"
