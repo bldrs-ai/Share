@@ -78,7 +78,13 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   useEffect(() => {
     fetchStorey()
+    const planeHash = getHashParams(location, 'p')
+    if (planeHash && model && viewer) {
+      const level = parseInt(planeHash.split(':')[1])
+      createFloorplanPlane(allStoreys[level] + floorOffset, allStoreys[level + 1] - ceilingOffset, level)
+    }
   }, [model])
+
 
   const fetchStorey = async () => {
     const allStorey = await extractHeight(model)
