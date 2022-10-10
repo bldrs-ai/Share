@@ -119,8 +119,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() =>
-              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)} selected={
-              levelInstance === (allStoreys[i] + floorOffset)}
+              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)}
+            selected={levelInstance === (allStoreys[i] + floorOffset)}
           >  L{i}
           </MenuItem>))
         }
