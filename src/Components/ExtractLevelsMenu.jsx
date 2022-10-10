@@ -23,7 +23,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const theme = useTheme()
   const open = Boolean(anchorEl)
-
   const model = useStore((state) => state.modelStore)
   const [allStoreys, setAllStor] = useState([])
 
