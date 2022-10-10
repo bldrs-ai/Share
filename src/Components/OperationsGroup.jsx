@@ -36,6 +36,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const viewer = useStore((state) => state.viewerStore)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
+  const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
@@ -45,7 +46,8 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
-      cutPlaneDirection !== null
+      cutPlaneDirection !== null ||
+      levelInstance !== null
     )
     return ifSelected
   }
