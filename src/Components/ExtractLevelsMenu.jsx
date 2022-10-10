@@ -33,30 +33,24 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     setAnchorEl(null)
   }
   const viewer = useStore((state) => state.viewerStore)
-  // ADDED
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
 
 
-  const createFloorplanPlane = (h1, h2) => {
+  const createFloorplanPlane = (planeHeightBottom, planeHeightTop) => {
     removePlanes(viewer)
-    const modelCenter1 = new Vector3(0, h1, 0)
-    const modelCenter2 = new Vector3(0, h2, 0)
+    const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
+    const modelCenter2 = new Vector3(0, planeHeightTop, 0)
     const normal1 = new Vector3(0, 1, 0)
     const normal2 = new Vector3(0, -1, 0)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal1, modelCenter1)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
-    console.log(h1)
-    console.log(levelInstance)
-    // ADDED THIS IF STATEMENT
-    if (h1 === levelInstance) {
+    if (planeHeightBottom === levelInstance) {
       removePlanes(viewer)
-      console.log('Here')
-      setLevelInstance(0)
+      setLevelInstance(null)
       return
     }
-    console.log(h1)
-    setLevelInstance(h1)
+    setLevelInstance(planeHeightBottom)
   }
   const planView = () => {
     viewer.context.ifcCamera.toggleProjection()
@@ -90,7 +84,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   return (
     <div>
       <TooltipIconButton
-        title={'Extract Levels'}
+        title={'Isolate Levels'}
         icon={<LevelsIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null}
@@ -125,7 +119,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() =>
-              // ADDED SELECTED:
               createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)} selected={
               levelInstance === (allStoreys[i] + floorOffset)}
           >  L{i}
