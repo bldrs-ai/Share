@@ -78,6 +78,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   useEffect(() => {
     fetchStorey()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
 
