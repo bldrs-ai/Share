@@ -4,6 +4,7 @@ import MenuItem from '@mui/material/MenuItem'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '../Theme'
+import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {getModelCenter} from '../utils/cutPlane'
 import {Vector3} from 'three'
 import {removePlanes} from '../utils/cutPlane'
@@ -36,9 +37,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
 
+  const LEVEL_PREFIX = 'l'
 
-  const createFloorplanPlane = (planeHeightBottom, planeHeightTop) => {
+  const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)
+    const planeHash = getHashParams(location, 'l')
     const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
     const modelCenter2 = new Vector3(0, planeHeightTop, 0)
     const normal1 = new Vector3(0, 1, 0)
@@ -47,8 +50,12 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
     if (planeHeightBottom === levelInstance) {
       removePlanes(viewer)
+      removeHashParams(window.location, LEVEL_PREFIX)
       setLevelInstance(null)
       return
+    }
+    if (!planeHash || planeHash !== planeHeightBottom ) {
+      addHashParams(window.location, LEVEL_PREFIX, {levelSelected: level})
     }
     setLevelInstance(planeHeightBottom)
   }
@@ -119,7 +126,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() =>
-              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)}
+              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset, i)}
             selected={levelInstance === (allStoreys[i] + floorOffset)}
           >  L{i}
           </MenuItem>))
