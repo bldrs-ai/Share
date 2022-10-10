@@ -78,17 +78,22 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   useEffect(() => {
     fetchStorey()
-    const levelHash = getHashParams(location, 'l')
-    if (levelHash && model && viewer) {
-      const level = parseInt(levelHash.split(':')[1])
-      createFloorplanPlane(allStoreys[level] + floorOffset, allStoreys[level + 1] - ceilingOffset, level)
-    }
   }, [model])
 
 
   const fetchStorey = async () => {
     const allStorey = await extractHeight(model)
     setAllStor(allStorey)
+    extractLevelFromHash(allStorey)
+  }
+
+  const extractLevelFromHash = (allStoreyHash) => {
+    const levelHash = getHashParams(location, 'l')
+    if (levelHash && model && viewer && allStoreyHash) {
+      console.log(allStoreyHash)
+      const level = parseInt(levelHash.split(':')[1])
+      createFloorplanPlane(allStoreyHash[level] + floorOffset, allStoreyHash[level + 1] - ceilingOffset, level)
+    }
   }
 
   const floorOffset = 0.2
