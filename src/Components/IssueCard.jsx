@@ -280,6 +280,7 @@ const useStyles = makeStyles((theme) => ({
     'marginBottom': '1em',
     'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
+    'width': '100%',
     '@media (max-width: 900px)': {
       width: '350px',
     },
@@ -318,8 +319,6 @@ const useStyles = makeStyles((theme) => ({
     'height': 'auto',
     'margin': '5px',
     'paddingLeft': '5px',
-    'overflow': 'hidden',
-    'textOverflow': 'ellipsis',
     'fontSize': '1em',
     'lineHeight': '1.3em',
     // Restore link styling for issues and comments
