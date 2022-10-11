@@ -4,6 +4,7 @@ import MenuItem from '@mui/material/MenuItem'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '../Theme'
+import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {getModelCenter} from '../utils/cutPlane'
 import {Vector3} from 'three'
 import {removePlanes} from '../utils/cutPlane'
@@ -19,29 +20,62 @@ import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
  * @return {object} ItemPropertiesDrawer react component
  */
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
+  const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.modelStore)
+  const levelInstance = useStore((state) => state.levelInstance)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const [anchorEl, setAnchorEl] = useState(null)
+  const [allStoreys, setAllStor] = useState([])
   const theme = useTheme()
   const open = Boolean(anchorEl)
 
-  const model = useStore((state) => state.modelStore)
-  const [allStoreys, setAllStor] = useState([])
+  const LEVEL_PREFIX = 'p'
+  const floorOffset = 0.2
+  const ceilingOffset = 0.4
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget)
+  useEffect(() => {
+    fetchStorey()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
+
+  const fetchStorey = async () => {
+    const allStorey = await extractHeight(model)
+    setAllStor(allStorey)
+    extractLevelFromHash(allStorey)
   }
-  const handleClose = () => {
-    setAnchorEl(null)
+
+  const extractLevelFromHash = (allStoreyHash) => {
+    const levelHash = getHashParams(location, 'p')
+    if (levelHash && model && viewer && allStoreyHash) {
+      console.log(allStoreyHash)
+      const level = parseInt(levelHash.split(':')[1])
+      createFloorplanPlane(allStoreyHash[level] + floorOffset, allStoreyHash[level + 1] - ceilingOffset, level)
+    }
   }
-  const viewer = useStore((state) => state.viewerStore)
-  const createFloorplanPlane = (h1, h2) => {
+
+  const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)
-    const modelCenter1 = new Vector3(0, h1, 0)
-    const modelCenter2 = new Vector3(0, h2, 0)
+    setCutPlaneDirection(null)
+    const levelHash = getHashParams(location, 'p')
+    const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
+    const modelCenter2 = new Vector3(0, planeHeightTop, 0)
     const normal1 = new Vector3(0, 1, 0)
     const normal2 = new Vector3(0, -1, 0)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal1, modelCenter1)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
+    if (planeHeightBottom === levelInstance) {
+      removePlanes(viewer)
+      removeHashParams(window.location, LEVEL_PREFIX)
+      setLevelInstance(null)
+      return
+    }
+    if (!levelHash || levelHash !== level ) {
+      addHashParams(window.location, LEVEL_PREFIX, {levelSelected: level})
+    }
+    setLevelInstance(planeHeightBottom)
   }
+
   const planView = () => {
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
@@ -59,26 +93,22 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }
 
-  useEffect(() => {
-    fetchStorey()
-  }, [model])
-
-  const fetchStorey = async () => {
-    const allStorey = await extractHeight(model)
-    setAllStor(allStorey)
-    console.log(allStorey)
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget)
   }
 
-  const floorOffset = 0.2
-  const ceilingOffset = 0.4
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
+
 
   return (
     <div>
       <TooltipIconButton
-        title={'Extract Levels'}
+        title={'Isolate Levels'}
         icon={<LevelsIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null}
+        selected={anchorEl !== null || levelInstance !== null}
       />
       <Menu
         elevation={1}
@@ -110,11 +140,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() =>
-              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset)}
+              createFloorplanPlane(allStoreys[i] + floorOffset, allStoreys[i + 1] - ceilingOffset, i)}
+            selected={levelInstance === (allStoreys[i] + floorOffset)}
           >  L{i}
           </MenuItem>))
         }
-
       </Menu>
     </div>
   )
