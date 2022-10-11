@@ -72,12 +72,17 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
       </ButtonGroup>
       {!isMobile && <Divider />}
       <ButtonGroup orientation="vertical">
-        <TooltipIconButton
+        {
+          // vyzn customization:
+          // Hide the issues control.
+        }
+
+        {/* <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
-        />
+        /> */}
         <TooltipIconButton
           title="Properties"
           onClick={() => toggle('Properties')}
