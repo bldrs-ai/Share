@@ -101,7 +101,7 @@ export default function SearchBar({fileOpen}) {
           sx={{
             ...theme.theme.typography.tree,
             'marginTop': '4px',
-            'marginLeft': '4px',
+            'marginLeft': '8px',
             '& input::placeholder': {
               opacity: .3,
             },

@@ -168,7 +168,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '44px',
       'height': '44px',
-      'border': 'none',
+      'border': `1px solid ${theme.palette.highlight.heavy}`,
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979770',
       },
