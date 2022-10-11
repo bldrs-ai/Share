@@ -11,6 +11,7 @@
     "build-storybook": "shx mkdir -p docs && build-storybook -o docs/sb",
     "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
+    "build-share-extract-vyzn": "shx cp -r node_modules/vyzn-ui docs",
     "husky-init": "husky install",
     "lint": "yarn eslint src",
     "precommit": "yarn lint && yarn test",
