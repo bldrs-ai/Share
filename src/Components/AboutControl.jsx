@@ -80,7 +80,7 @@ function AboutContent({installPrefix}) {
   const privacyLevelFunctional = 0
   const privacyLevelUsage = 10
   const privacyLevelSocial = 20
-  const bulletStyle = {textAlign: 'center'}
+  const bulletStyle = {textAlign: 'center', fontSize: '.9em'}
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(privacyLevelSocial)

@@ -32,7 +32,9 @@ export default function OpenModelControl({fileOpen}) {
         <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
-            onClick={() => setIsDialogDisplayed(true)}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
             color='primary'
             value={'something'}
           >
