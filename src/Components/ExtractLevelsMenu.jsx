@@ -36,11 +36,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
 
-  const LEVEL_PREFIX = 'l'
+  const LEVEL_PREFIX = 'p'
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)
-    const levelHash = getHashParams(location, 'l')
+    const levelHash = getHashParams(location, 'p')
     const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
     const modelCenter2 = new Vector3(0, planeHeightTop, 0)
     const normal1 = new Vector3(0, 1, 0)
@@ -88,7 +88,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
 
   const extractLevelFromHash = (allStoreyHash) => {
-    const levelHash = getHashParams(location, 'l')
+    const levelHash = getHashParams(location, 'p')
     if (levelHash && model && viewer && allStoreyHash) {
       console.log(allStoreyHash)
       const level = parseInt(levelHash.split(':')[1])
