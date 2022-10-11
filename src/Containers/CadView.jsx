@@ -122,6 +122,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
+    resetState()
     setShowNavPanel(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
@@ -342,15 +343,20 @@ export default function CadView({
     }
   }
 
+  /** Reset global state */
+  function resetState() {
+    setSelectedElement(null)
+    setSelectedElements(null)
+    setCutPlaneDirection(null)
+    setLevelInstance(null)
+  }
+
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
-    setSelectedElement(null)
-    setSelectedElements(null)
-    setCutPlaneDirection(null)
-    setLevelInstance(null)
+    resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }
