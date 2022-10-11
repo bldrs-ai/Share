@@ -73,6 +73,7 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -344,11 +345,12 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
+    setSelectedElement(null)
     setSelectedElements(null)
     setCutPlaneDirection(null)
+    setLevelInstance(null)
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }
