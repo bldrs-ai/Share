@@ -100,11 +100,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             select
             size='small'
           >
-            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
             <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
             <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
             <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
           </TextField>
           <p className={classes.bullet}>
