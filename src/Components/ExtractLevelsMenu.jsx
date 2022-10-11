@@ -20,23 +20,38 @@ import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
  * @return {object} ItemPropertiesDrawer react component
  */
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
-  const [anchorEl, setAnchorEl] = useState(null)
-  const theme = useTheme()
-  const open = Boolean(anchorEl)
-  const model = useStore((state) => state.modelStore)
-  const [allStoreys, setAllStor] = useState([])
-
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget)
-  }
-  const handleClose = () => {
-    setAnchorEl(null)
-  }
   const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.modelStore)
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const [anchorEl, setAnchorEl] = useState(null)
+  const [allStoreys, setAllStor] = useState([])
+  const theme = useTheme()
+  const open = Boolean(anchorEl)
 
   const LEVEL_PREFIX = 'p'
+  const floorOffset = 0.2
+  const ceilingOffset = 0.4
+
+  useEffect(() => {
+    fetchStorey()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
+
+  const fetchStorey = async () => {
+    const allStorey = await extractHeight(model)
+    setAllStor(allStorey)
+    extractLevelFromHash(allStorey)
+  }
+
+  const extractLevelFromHash = (allStoreyHash) => {
+    const levelHash = getHashParams(location, 'p')
+    if (levelHash && model && viewer && allStoreyHash) {
+      console.log(allStoreyHash)
+      const level = parseInt(levelHash.split(':')[1])
+      createFloorplanPlane(allStoreyHash[level] + floorOffset, allStoreyHash[level + 1] - ceilingOffset, level)
+    }
+  }
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)
@@ -58,6 +73,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
     setLevelInstance(planeHeightBottom)
   }
+
   const planView = () => {
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
@@ -75,29 +91,14 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }
 
-  useEffect(() => {
-    fetchStorey()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model])
-
-
-  const fetchStorey = async () => {
-    const allStorey = await extractHeight(model)
-    setAllStor(allStorey)
-    extractLevelFromHash(allStorey)
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget)
   }
 
-  const extractLevelFromHash = (allStoreyHash) => {
-    const levelHash = getHashParams(location, 'p')
-    if (levelHash && model && viewer && allStoreyHash) {
-      console.log(allStoreyHash)
-      const level = parseInt(levelHash.split(':')[1])
-      createFloorplanPlane(allStoreyHash[level] + floorOffset, allStoreyHash[level + 1] - ceilingOffset, level)
-    }
+  const handleClose = () => {
+    setAnchorEl(null)
   }
 
-  const floorOffset = 0.2
-  const ceilingOffset = 0.4
 
   return (
     <div>
@@ -105,7 +106,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         title={'Isolate Levels'}
         icon={<LevelsIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null}
+        selected={anchorEl !== null || levelInstance !== null}
       />
       <Menu
         elevation={1}

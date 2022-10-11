@@ -79,7 +79,7 @@ export function getElementBoundingBox(selection) {
 /**
  * toggleClippingPlane turns clipping plane on and off
  *
- * @param {IfcViewerAPI } viewer bouding box
+ * @param {object} viewer bouding box
  */
 export function removePlanes(viewer) {
   viewer?.clipper.deleteAllPlanes()
