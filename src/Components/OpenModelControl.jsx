@@ -176,7 +176,7 @@ const useStyles = makeStyles((theme) => ({
     '& svg': {
       width: '40px',
       height: '40px',
-      fill: theme.palette.highlight.secondary,
+      fill: theme.palette.primary.contrastText,
     },
   },
   dropDown: {
