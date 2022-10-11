@@ -8,7 +8,6 @@ import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
 import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
-import useStore from '../store/useStore'
 import {TooltipIconButton} from '../Components/Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 import ModelsIcon from '../assets/2D_Icons/Model.svg'
@@ -23,8 +22,6 @@ import UploadIcon from '../assets/2D_Icons/Upload.svg'
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const unHighlightOpenControl = useStore((state) => state.unHighlightOpenControl)
-  const isOpenControlHighlighted = useStore((state) => state.isOpenControlHighlighted)
   const classes = useStyles(useTheme())
   const theme = useContext(ColorModeContext)
   return (
@@ -34,12 +31,9 @@ export default function OpenModelControl({fileOpen}) {
       >
         <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
-            selected={isDialogDisplayed || isOpenControlHighlighted }
+            selected={isDialogDisplayed}
             onClick={() => {
               setIsDialogDisplayed(true)
-              if (isOpenControlHighlighted) {
-                unHighlightOpenControl()
-              }
             }}
             color='primary'
             value={'something'}
