@@ -29,7 +29,11 @@ export default function OpenModelControl({fileOpen}) {
       <Paper className={classes.root} elevation={0}
         sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
-        <Tooltip title={'Open IFC'} describeChild placement={'top'}>
+        {
+          // vyzn customization:
+          // Hide the issues control.
+        }
+        {/* <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
             onClick={() => {
@@ -40,7 +44,7 @@ export default function OpenModelControl({fileOpen}) {
           >
             <OpenIcon/>
           </ToggleButton>
-        </Tooltip>
+        </Tooltip> */}
       </Paper>
       {isDialogDisplayed &&
         <OpenModelDialog

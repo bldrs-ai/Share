@@ -197,7 +197,7 @@ const useStyles = makeStyles({
     'maxWidth': '700px',
     'alignItems': 'center',
     'opacity': .8,
-    'padding': '2px 6px 2px 6px',
+    'padding': '2px 12px 2px 12px',
     '@media (max-width: 900px)': {
       minWidth: '300px',
       width: '300px',
