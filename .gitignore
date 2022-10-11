@@ -8,3 +8,6 @@
 .DS_Store
 .vscode
 *.log
+
+cypress/videos
+cypress/screenshots
