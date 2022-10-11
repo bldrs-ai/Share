@@ -96,6 +96,7 @@ export default function CadView({
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
+    console.log('Hello')
   }, [searchParams])
 
 
@@ -127,9 +128,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -181,7 +182,7 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg} />)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -196,7 +197,7 @@ export default function CadView({
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
@@ -217,7 +218,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -323,7 +324,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -467,10 +468,10 @@ export default function CadView({
               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
             }
           />}
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+        <Logo onClick={() => navToDefault(navigate, appPrefix)} />
         <div className={isDrawerOpen ?
-                        classes.operationsGroupOpen :
-                        classes.operationsGroup}
+          classes.operationsGroupOpen :
+          classes.operationsGroup}
         >
           {viewer &&
             <OperationsGroup
