@@ -1,9 +1,11 @@
-import fontJSON from '../../assets/font/droid_sans_bold.typeface.json';
-import { BoxGeometry, Mesh, RingGeometry, Vector3 } from 'three'
-import { FontLoader } from 'three/examples/jsm/loaders/FontLoader.js'
-import { TextGeometry } from 'three/examples/jsm/geometries/TextGeometry.js'
-import { Tween } from '@tweenjs/tween.js'
-import { NavCubeMaterial } from './NaveCubeMaterial';
+import fontJSON from '../../assets/font/droid_sans_bold.typeface.json'
+import {BoxGeometry, Mesh, RingGeometry, Vector3} from 'three'
+import {FontLoader} from 'three/examples/jsm/loaders/FontLoader.js'
+import {TextGeometry} from 'three/examples/jsm/geometries/TextGeometry.js'
+import {Tween} from '@tweenjs/tween.js'
+import {NavCubeMaterial} from './NaveCubeMaterial'
+
+
 export class BoxCube {
   constructor(scene) {
     this.scene = scene
@@ -55,7 +57,7 @@ export class BoxCube {
     // this.floor = this.initFloor("floor", 400, 2, 400, 0, -68, 0)
     this.initRing()
   }
-  initItem (name, x0, y0, z0, x1, y1, z1) {
+  initItem(name, x0, y0, z0, x1, y1, z1) {
     const geometry = new BoxGeometry(x0, y0, z0)
     geometry.translate(x1, y1, z1)
     const mesh = new Mesh(geometry, NavCubeMaterial.normalCube)
@@ -64,7 +66,7 @@ export class BoxCube {
     return mesh
   }
 
-  initRing () {
+  initRing() {
     const geometry = new RingGeometry(80, 130, 30)
     geometry.rotateX(-Math.PI / 2)
     geometry.translate(0, -60, 0)
@@ -79,9 +81,9 @@ export class BoxCube {
 /**
  *
  */
-function initText3D (scene, name, x1, y1, z1) {
+function initText3D(scene, name, x1, y1, z1) {
   const loader = new FontLoader()
-  var font = loader.parse(fontJSON)
+  const font = loader.parse(fontJSON)
   const parameters = {
     font: font,
     size: 36,
@@ -103,9 +105,9 @@ function initText3D (scene, name, x1, y1, z1) {
 /**
  *
  */
-function initTextRing (scene, name, x1, y1, z1) {
+function initTextRing(scene, name, x1, y1, z1) {
   const loader = new FontLoader()
-  var font = loader.parse(fontJSON)
+  const font = loader.parse(fontJSON)
   const parameters = {
     font: font,
     size: 50,
@@ -122,7 +124,7 @@ function initTextRing (scene, name, x1, y1, z1) {
 /**
  *
  */
-function rotateRing (name, textCube) {
+function rotateRing(name, textCube) {
   switch (name) {
     case 'W':
       textCube.rotateX(Math.PI / 2)
@@ -145,7 +147,7 @@ function rotateRing (name, textCube) {
 /**
  *
  */
-function hasRotate (name, textCube) {
+function hasRotate(name, textCube) {
   switch (name) {
     case 'left':
       break
@@ -169,132 +171,179 @@ function hasRotate (name, textCube) {
       break
   }
 }
-const speedTween = 500
 
 /**
  *
+ * because viewer set damping factor, so we don't need to use tween
  */
-export function switchPick (camera0, controls0, name) {
-  const x = camera0.position.x
-  const y = camera0.position.y
-  const z = camera0.position.z
-  const rX = camera0.rotation.x
-  const rY = camera0.rotation.y
-  const rZ = camera0.rotation.z
-  const tween = new Tween({ pos: { x: x, y: y, z: z } })
-  const pos = 40
+export function switchPick(camera0, ifcModel, name) {
+
+  //radius of model
+  const r = ifcModel.geometry.boundingSphere.radius * 2
+  //center of model
+  const c = ifcModel.geometry.boundingSphere.center
+  const coords = new Vector3(0, 0, 0)
   switch (name) {
     case 'left':
-      tween.to({ pos: { x: 0, y: 0, z: pos } }, speedTween)
-
+      coords.x = c.x
+      coords.y = c.y
+      coords.z = r
       break
     case 'right':
-      tween.to({ pos: { x: 0, y: 0, z: -pos } }, speedTween)
+      coords.x = c.x
+      coords.y = c.y
+      coords.z = -r
       break
     case 'top':
-      tween.to({ pos: { x: 0, y: pos, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: 0, y: pos, z: 0}}, speedTween)
+      coords.x = c.x
+      coords.y = r
+      coords.z = c.z
       break
     case 'bottom':
-      tween.to({ pos: { x: 0, y: -pos, z: 0 } }, speedTween)
+      // tween.to({pos: {x: 0, y: -pos, z: 0}}, speedTween)
+      coords.x = c.x
+      coords.y = -r
+      coords.z = c.z
       break
     case 'front':
-      tween.to({ pos: { x: pos, y: 0, z: 0 } }, speedTween)
+      // tween.to({pos: {x: pos, y: 0, z: 0}}, speedTween)
+      coords.x = r
+      coords.y = c.y
+      coords.z = c.z
       break
     case 'back':
-      tween.to({ pos: { x: -pos, y: 0, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: 0, z: 0}}, speedTween)
+      coords.x = -r
+      coords.y = c.y
+      coords.z = c.z
       break
     case 'left_front':
-      tween.to({ pos: { x: pos, y: 0, z: pos } }, speedTween)
+      // tween.to({pos: {x: pos, y: 0, z: pos}}, speedTween)
+      coords.x = r
+      coords.y = c.y
+      coords.z = r
 
       break
     case 'left_back':
-      tween.to({ pos: { x: -pos, y: 0, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: 0, z: pos}}, speedTween)
+      coords.x = -r
+      coords.y = c.y
+      coords.z = r
       break
     case 'right_front':
-      tween.to({ pos: { x: pos, y: 0, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: 0, z: -pos}}, speedTween)
+      coords.x = r
+      coords.y = c.y
+      coords.z = -r
       break
     case 'right_back':
-      tween.to({ pos: { x: -pos, y: 0, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: 0, z: -pos}}, speedTween)
+      coords.x = -r
+      coords.y = c.y
+      coords.z = -r
       break
     case 'top_left':
-      tween.to({ pos: { x: 0, y: pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: 0, y: pos, z: pos}}, speedTween)
+      coords.x = c.x
+      coords.y = r
+      coords.z = r
       break
     case 'top_right':
-      tween.to({ pos: { x: 0, y: pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: 0, y: pos, z: -pos}}, speedTween)
+      coords.x = c.x
+      coords.y = r
+      coords.z = -r
       break
     case 'top_front':
-      tween.to({ pos: { x: pos, y: pos, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: pos, z: 0}}, speedTween)
+      coords.x = r
+      coords.y = r
+      coords.z = c.z
       break
     case 'top_back':
-      tween.to({ pos: { x: -pos, y: pos, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: pos, z: 0}}, speedTween)
+      coords.x = -r
+      coords.y = r
+      coords.z = c.z
       break
     case 'bottom_left':
-      tween.to({ pos: { x: 0, y: -pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: 0, y: -pos, z: pos}}, speedTween)
+      coords.x = c.x
+      coords.y = -r
+      coords.z = r
       break
     case 'bottom_right':
-      tween.to({ pos: { x: 0, y: -pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: 0, y: -pos, z: -pos}}, speedTween)
+      coords.x = c.x
+      coords.y = -r
+      coords.z = -r
       break
     case 'bottom_front':
-      tween.to({ pos: { x: pos, y: -pos, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: -pos, z: 0}}, speedTween)
+      coords.x = r
+      coords.y = -r
+      coords.z = c.z
       break
     case 'bottom_back':
-      tween.to({ pos: { x: -pos, y: -pos, z: 0 } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: -pos, z: 0}}, speedTween)
+      coords.x = -r
+      coords.y = -r
+      coords.z = c.z
       break
 
     case 'top_left_front':
-      tween.to({ pos: { x: pos, y: pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: pos, z: pos}}, speedTween)
+      coords.x = r
+      coords.y = r
+      coords.z = r
       break
     case 'top_left_back':
-      tween.to({ pos: { x: -pos, y: pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: pos, z: pos}}, speedTween)
+      coords.x = -r
+      coords.y = r
+      coords.z = r
       break
     case 'top_right_front':
-      tween.to({ pos: { x: pos, y: pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: pos, z: -pos}}, speedTween)
+      coords.x = r
+      coords.y = r
+      coords.z = -r
       break
     case 'top_right_back':
-      tween.to({ pos: { x: -pos, y: pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: pos, z: -pos}}, speedTween)
+      coords.x = -r
+      coords.y = r
+      coords.z = -r
       break
     case 'bottom_left_front':
-      tween.to({ pos: { x: pos, y: -pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: -pos, z: pos}}, speedTween)
+      coords.x = r
+      coords.y = -r
+      coords.z = r
       break
     case 'bottom_left_back':
-      tween.to({ pos: { x: -pos, y: -pos, z: pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: -pos, z: pos}}, speedTween)
+      coords.x = -r
+      coords.y = -r
+      coords.z = r
       break
     case 'bottom_right_front':
-      tween.to({ pos: { x: pos, y: -pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: pos, y: -pos, z: -pos}}, speedTween)
+      coords.x = r
+      coords.y = -r
+      coords.z = -r
       break
     case 'bottom_right_back':
-      tween.to({ pos: { x: -pos, y: -pos, z: -pos } }, speedTween)
-
+      // tween.to({pos: {x: -pos, y: -pos, z: -pos}}, speedTween)
+      coords.x = -r
+      coords.y = -r
+      coords.z = -r
       break
     default:
       break
   }
-  tween.onUpdate((coords) => {
-    camera0.position.x = coords.pos.x
-    camera0.position.y = coords.pos.y
-    camera0.position.z = coords.pos.z
-  })
-  // camera0.lookAt(0, 0, 0)
-  controls0._target = new Vector3(0, 0, 0)
-  tween.start()
+  camera0.setPosition(coords.x, coords.y, coords.z, true)
+  // camera0.setTarget(c.x, c.y, c.z, true)
+  camera0.setLookAt(coords.x, coords.y, coords.z, c.x, c.y, c.z, true)
 }

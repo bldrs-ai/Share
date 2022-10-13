@@ -7,5 +7,5 @@ import BaseRoutes from './BaseRoutes'
 const root = createRoot(document.getElementById('root'))
 root.render(
     <BrowserRouter>
-      <BaseRoutes/>
+      <BaseRoutes />
     </BrowserRouter>)

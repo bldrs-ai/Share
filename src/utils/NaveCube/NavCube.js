@@ -1,7 +1,7 @@
-import { AmbientLight, DirectionalLight, OrthographicCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer } from 'three'
-import { LightColor, NavCubeMaterial } from './NaveCubeMaterial'
+import {AmbientLight, DirectionalLight, OrthographicCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer} from 'three'
+import {LightColor, NavCubeMaterial} from './NaveCubeMaterial'
 import * as TWEEN from '@tweenjs/tween.js'
-import { BoxCube, switchPick } from './BoxCube'
+import {BoxCube, switchPick} from './BoxCube'
 
 
 export class NavCube {
@@ -14,17 +14,16 @@ export class NavCube {
     this.initRenderer()
     this.initRayCaster()
     this.boxCube = new BoxCube(this.scene)
-    this.onHover();
-    this.onPick()
+    this.onHover()
   }
-  initContainer () {
+  initContainer() {
     this.width = 140
     this.height = 140
     this.container = document.createElement('div')
     this.container.style.position = 'absolute'
     this.container.style.width = `${this.width}px`
     this.container.style.height = `${this.height}px`
-    this.container.style.bottom = 0
+    this.container.style.bottom = '30px'
     this.container.style.right = 0
     this.viewer.container.appendChild(this.container)
     this.canvas = document.createElement('canvas')
@@ -35,20 +34,19 @@ export class NavCube {
     this.canvas.style.left = 0
     this.container.appendChild(this.canvas)
   }
-  initCamera () {
+  initCamera() {
     this.camera = new OrthographicCamera(
-      this.width / -1,
-      this.width / 1,
-      this.height / 1,
-      this.height / -1,
-      -1000,
-      1000,
+        this.width / -1,
+        this.width / 1,
+        this.height / 1,
+        this.height / -1, -1000,
+        1000,
     )
     this.camera.position.z = 100
     this.camera.position.y = 100
     this.camera.position.x = 100
   }
-  initLight () {
+  initLight() {
     this.ambientLight = new AmbientLight(LightColor.light, 2)
     this.scene.add(this.ambientLight)
     this.directionalLight = new DirectionalLight(LightColor.light, 2)
@@ -57,20 +55,20 @@ export class NavCube {
     this.scene.add(this.directionalLight)
     this.scene.add(this.directionalLight.target)
   }
-  initRenderer () {
-    this.renderer = new WebGLRenderer({ canvas: this.canvas, alpha: true, antialias: true })
+  initRenderer() {
+    this.renderer = new WebGLRenderer({canvas: this.canvas, alpha: true, antialias: true})
     this.renderer.setSize(this.width, this.height)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.localClippingEnabled = true
 
     this.renderer.domElement.setAttribute('tabindex', 1)
   }
-  initRayCaster () {
+  initRayCaster() {
     this.rayCaster = new Raycaster()
     this.rayCaster.firstHitOnly = true
     this.mouse = new Vector2()
   }
-  cast (event) {
+  cast(event) {
     const bounds = this.renderer.domElement.getBoundingClientRect()
     const x1 = event.clientX - bounds.left
     const y1 = event.clientY - bounds.top
@@ -79,18 +77,18 @@ export class NavCube {
     const y2 = bounds.bottom - bounds.top
     this.mouse.y = -(y1 / y2) * 2 + 1
   }
-  onHover () {
+  onHover() {
     this.mouseOn = false
     const _this = this
-    _this.renderer.domElement.addEventListener('mousemove', function (event) {
+    _this.renderer.domElement.addEventListener('mousemove', function(event) {
       _this.cast(event)
       _this.mouseOn = true
     })
-    _this.renderer.domElement.addEventListener('mouseout', function (event) {
+    _this.renderer.domElement.addEventListener('mouseout', function(event) {
       _this.mouseOn = false
     })
   }
-  hover () {
+  hover() {
     const _this = this
     if (_this.mouseOn) {
       _this.rayCaster.setFromCamera(_this.mouse, _this.camera)
@@ -106,7 +104,7 @@ export class NavCube {
       }
     }
   }
-  resetMaterial () {
+  resetMaterial() {
     for (let i = 0; i < this.scene.children.length; i++) {
       if (this.scene.children[i].material) {
         if (!this.scene.children[i].textCube) {
@@ -115,31 +113,28 @@ export class NavCube {
       }
     }
   }
-  onPick () {
-    const _this = this
-    const camera = _this.viewer.context.ifcCamera.activeCamera
-    const controls = _this.viewer.context.ifcCamera.cameraControls
-    _this.renderer.domElement.onclick = function (event) {
-      if (_this.mouse.x !== 0 || _this.mouse.y !== 0) {
+  onPick(ifcModel) {
+  var _this = this
+  const camera = _this.viewer.context.ifcCamera.cameraControls
+  _this.renderer.domElement.onclick = function(event) {
+  if (_this.mouse.x !== 0 || _this.mouse.y !== 0) {
         _this.rayCaster.setFromCamera(_this.mouse, _this.camera)
-
         const intersects = _this.rayCaster.intersectObjects(_this.scene.children)
         const found = intersects[0]
         if (found) {
-
-          switchPick(camera, controls, found.object.name.trim());
+          switchPick(camera, ifcModel, found.object.name.trim())
         }
       }
     }
   }
-  animate () {
+  animate() {
     const camera = this.viewer.context.ifcCamera.activeCamera
 
     const controls = this.viewer.context.ifcCamera.cameraControls
     let vector = new Vector3(
-      camera.position.x - controls._target.x,
-      camera.position.y - controls._target.y,
-      camera.position.z - controls._target.z,
+        camera.position.x - controls._target.x,
+        camera.position.y - controls._target.y,
+        camera.position.z - controls._target.z,
     )
     vector = vector.normalize()
     const Vector2 = new Vector3(vector.x * 100, vector.y * 100, vector.z * 100)
@@ -158,7 +153,7 @@ export class NavCube {
 
     this.renderer.render(this.scene, this.camera)
   }
-  onAnimateViewer () {
+  onAnimateViewer() {
     const _this = this
     const animate = () => {
       _this.animate()
@@ -168,4 +163,3 @@ export class NavCube {
     animate()
   }
 }
-
