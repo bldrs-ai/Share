@@ -3,8 +3,13 @@ import {LightColor, NavCubeMaterial} from './NaveCubeMaterial'
 import * as TWEEN from '@tweenjs/tween.js'
 import {BoxCube, switchPick} from './BoxCube'
 
-
+/**
+ * Nav Cube class
+ */
 export class NavCube {
+  /**
+   * Nav Cube constructor
+   */
   constructor(viewer) {
     this.viewer = viewer
     this.scene = new Scene()
@@ -16,6 +21,10 @@ export class NavCube {
     this.boxCube = new BoxCube(this.scene)
     this.onHover()
   }
+
+  /**
+   * Initialize container
+   */
   initContainer() {
     this.width = 140
     this.height = 140
@@ -34,7 +43,12 @@ export class NavCube {
     this.canvas.style.left = 0
     this.container.appendChild(this.canvas)
   }
+
+  /**
+   * Initialize camera
+   */
   initCamera() {
+  /* eslint-disable no-magic-numbers */
     this.camera = new OrthographicCamera(
         this.width / -1,
         this.width / 1,
@@ -46,7 +60,11 @@ export class NavCube {
     this.camera.position.y = 100
     this.camera.position.x = 100
   }
+  /**
+   * Initialize light
+   */
   initLight() {
+    /* eslint-disable no-magic-numbers */
     this.ambientLight = new AmbientLight(LightColor.light, 2)
     this.scene.add(this.ambientLight)
     this.directionalLight = new DirectionalLight(LightColor.light, 2)
@@ -55,6 +73,9 @@ export class NavCube {
     this.scene.add(this.directionalLight)
     this.scene.add(this.directionalLight.target)
   }
+  /**
+   * Initialize render
+   */
   initRenderer() {
     this.renderer = new WebGLRenderer({canvas: this.canvas, alpha: true, antialias: true})
     this.renderer.setSize(this.width, this.height)
@@ -63,20 +84,30 @@ export class NavCube {
 
     this.renderer.domElement.setAttribute('tabindex', 1)
   }
+  /**
+   * Initialize ray caster
+   */
   initRayCaster() {
     this.rayCaster = new Raycaster()
     this.rayCaster.firstHitOnly = true
     this.mouse = new Vector2()
   }
+  /**
+   * cast?
+   */
   cast(event) {
     const bounds = this.renderer.domElement.getBoundingClientRect()
     const x1 = event.clientX - bounds.left
     const y1 = event.clientY - bounds.top
     const x2 = bounds.right - bounds.left
-    this.mouse.x = (x1 / x2) * 2 - 1
+    /* eslint-disable no-magic-numbers */
+    this.mouse.x = ((x1 / x2) * 2) - 1
     const y2 = bounds.bottom - bounds.top
-    this.mouse.y = -(y1 / y2) * 2 + 1
+    this.mouse.y = (-(y1 / y2) * 2) + 1
   }
+  /**
+   * on hover method
+   */
   onHover() {
     this.mouseOn = false
     const _this = this
@@ -88,6 +119,9 @@ export class NavCube {
       _this.mouseOn = false
     })
   }
+  /**
+   * hover
+   */
   hover() {
     const _this = this
     if (_this.mouseOn) {
@@ -104,6 +138,9 @@ export class NavCube {
       }
     }
   }
+  /**
+   * reset material
+   */
   resetMaterial() {
     for (let i = 0; i < this.scene.children.length; i++) {
       if (this.scene.children[i].material) {
@@ -113,11 +150,14 @@ export class NavCube {
       }
     }
   }
+  /**
+   * on pick
+   */
   onPick(ifcModel) {
-  var _this = this
-  const camera = _this.viewer.context.ifcCamera.cameraControls
-  _this.renderer.domElement.onclick = function(event) {
-  if (_this.mouse.x !== 0 || _this.mouse.y !== 0) {
+    const _this = this
+    const camera = _this.viewer.context.ifcCamera.cameraControls
+    _this.renderer.domElement.onclick = function(event) {
+      if (_this.mouse.x !== 0 || _this.mouse.y !== 0) {
         _this.rayCaster.setFromCamera(_this.mouse, _this.camera)
         const intersects = _this.rayCaster.intersectObjects(_this.scene.children)
         const found = intersects[0]
@@ -127,6 +167,9 @@ export class NavCube {
       }
     }
   }
+  /**
+   * animate
+   */
   animate() {
     const camera = this.viewer.context.ifcCamera.activeCamera
 
@@ -137,9 +180,9 @@ export class NavCube {
         camera.position.z - controls._target.z,
     )
     vector = vector.normalize()
-    const Vector2 = new Vector3(vector.x * 100, vector.y * 100, vector.z * 100)
+    const Vector2_ = new Vector3(vector.x * 100, vector.y * 100, vector.z * 100)
     let newV = new Vector3(0, 0, 0)
-    newV = newV.add(Vector2)
+    newV = newV.add(Vector2_)
     this.camera.position.x = newV.x
     this.camera.position.y = newV.y
     this.camera.position.z = newV.z
@@ -153,6 +196,9 @@ export class NavCube {
 
     this.renderer.render(this.scene, this.camera)
   }
+  /**
+   * animate viewer
+   */
   onAnimateViewer() {
     const _this = this
     const animate = () => {

@@ -234,8 +234,8 @@ export default function CadView({
       // load.  That modelID is used in the IFCjs code as [modelID] and
       // leads to undefined refs e.g. in prePickIfcItem.  The id should
       // always be 0.
-      //comput center model, after every time geometry of model change
-      //default
+      // comput center model, after every time geometry of model change
+      // default
       loadedModel.geometry.computeBoundingBox()
       loadedModel.geometry.computeBoundingSphere()
       loadedModel.modelID = 0
