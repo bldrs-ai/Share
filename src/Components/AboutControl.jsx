@@ -116,7 +116,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
 
   return (
     <div className={classes.content}>
-      <Typography variant='h4'>Build Every Thing Together</Typography>
+      <Typography variant='h3'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
@@ -214,7 +214,7 @@ const useStyles = makeStyles((theme) => (
       },
       '& .MuiSlider-markLabel': {
         paddingTop: '4px',
-        fontSize: '.9em',
+        fontSize: '.8em',
       },
     },
     iconContainer: {
