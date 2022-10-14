@@ -49,6 +49,7 @@ export class NavCube {
    */
   initCamera() {
   /* eslint-disable no-magic-numbers */
+
     this.camera = new OrthographicCamera(
         this.width / -1,
         this.width / 1,
