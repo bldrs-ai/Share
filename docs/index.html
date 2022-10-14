@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <meta name="description" content="Build every thing together: Collab and Share 3d models online"/>
+    <meta name="keywords"
+          content="ifc, ifc viewer, cad viewer, share ifc, share model, open source"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="theme-color" content="#000000"/>
+    <meta name="viewport" content="width=device-width, user-scalable=no, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0">
+    <link rel="icon" href="/favicon.ico"/>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&amp;display=swap"/>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"/>
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400&amp;display=swap"/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="./index.css">
+
+    <!-- Global site tag (gtag.js) - Google Analytics snippet -->
+    <script
+      async
+      src="https://www.googletagmanager.com/gtag/js?id=UA-210924287-3"
+    ></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag() {
+        dataLayer.push(arguments);
+      }
+      gtag('js', new Date());
+      gtag('config', 'UA-210924287-3', {
+        test: `random`,
+      });
+    </script>
+    <title>BLDRS</title>
+    <!-- Start Single Page Apps for GitHub Pages -->
+    <script type="text/javascript">
+      // Single Page Apps for GitHub Pages
+      // MIT License
+      // https://github.com/rafgraph/spa-github-pages
+      (function(l) {
+        if (l.search[1] === '/' ) {
+          var decoded = l.search.slice(1).split('&').map(function(s) {
+            return s.replace(/~and~/g, '&')
+          }).join('?');
+          var finalPath = l.pathname.slice(0, -1) + decoded + l.hash
+          window.history.replaceState(null, null, finalPath);
+        }
+      }(window.location))
+    </script>
+    <!-- End Single Page Apps for GitHub Pages -->
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+    <script>
+      const loader = document.createElement('script');
+      const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : '';
+      loader.setAttribute('src', pathPrefix + '/index.js');
+      document.body.appendChild(loader)
+    </script>
+  </body>
+</html>
