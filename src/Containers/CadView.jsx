@@ -235,10 +235,10 @@ export default function CadView({
       return
     }
     console.log('onSceneContext: ', sceneContext)
-    const renderer = sceneContext.getRenderer()
+    const ifcRenderer = sceneContext.getRenderer()
     const scene = sceneContext.getScene()
     const camera = sceneContext.getCamera()
-    console.log('sceneContext parts: ', sceneContext, renderer, scene, camera)
+    console.log('sceneContext parts: ', sceneContext, ifcRenderer, scene, camera)
     const sceneLayer = new THREE.Scene()
     const xFrom = -120
     const xTo = -80
@@ -273,23 +273,27 @@ export default function CadView({
       }
     }
 
+    // This is a custom render pass that allows both IFC.js's scene
+    // and a new Three.js scene to be rendered on the same canvas.
     const renderPatch = () => {
       if (sceneContext.isThisBeingDisposed) return
       if (sceneContext.stats) sceneContext.stats.begin()
       // https://stackoverflow.com/questions/30272190/threejs-rendering-multiple-scenes-in-a-single-webgl-renderer
-      renderer.autoClear = true
+      ifcRenderer.autoClear = true
       sceneContext.updateAllComponents()
-      renderer.autoClear = false
+      ifcRenderer.autoClear = false
       // https://discourse.threejs.org/t/rendering-multiple-scenes-with-renderpass/24648/2
-      // Maybe also? renderer.clearDepth();
+      // Maybe also? ifcRenderer.clearDepth();
       if (doAnim) {
         anim()
       }
-      renderer.render(sceneLayer, camera)
+      ifcRenderer.render(sceneLayer, camera)
       if (sceneContext.stats) sceneContext.stats.end()
       requestAnimationFrame(sceneContext.render)
     }
 
+    // We're replacing the web-ifc-viewer renderer with a locally
+    // patched version.
     sceneContext.render = renderPatch
   }
 
