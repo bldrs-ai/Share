@@ -62,6 +62,7 @@ export function RectangularButton({
   onClick,
 }) {
   assertDefined(title, icon, onClick)
+  const theme = useTheme()
   return (
     <Button
       onClick={onClick}
@@ -69,7 +70,7 @@ export function RectangularButton({
       startIcon={icon}
       sx={{
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+        '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.main},
       }}
     >
       {title}
