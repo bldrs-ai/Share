@@ -1,5 +1,5 @@
 import {AmbientLight, DirectionalLight, OrthographicCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer} from 'three'
-import {LightColor, NavCubeMaterial} from './NaveCubeMaterial'
+import {LightColor, NavCubeMaterial} from './NavCubeMaterial'
 import * as TWEEN from '@tweenjs/tween.js'
 import {BoxCube, switchPick} from './BoxCube'
 
