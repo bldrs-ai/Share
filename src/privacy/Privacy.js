@@ -79,7 +79,7 @@ export function isPrivacySocialEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'social',
-      defaultValue: true,
+      defaultValue: false,
     })
   )
 }
@@ -93,7 +93,7 @@ export function isPrivacyUsageEnabled() {
     getCookieBoolean({
       component: 'privacy',
       name: 'usage',
-      defaultValue: true,
+      defaultValue: false,
     })
   )
 }
