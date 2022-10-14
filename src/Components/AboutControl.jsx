@@ -137,7 +137,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
       </Box>
 
       <div className={classes.settings}>
-        <Typography variant='h4' sx={{marginBottom: '6px'}}>Cookies Settings</Typography>
+        <Typography variant='h4' sx={{marginBottom: '6px'}}>Cookies settings</Typography>
         <Slider
           onChange={setPrivacy}
           marks={marks}
@@ -149,7 +149,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
         />
       </div>
 
-      <RectangularButton title='Accept privacy' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
+      <RectangularButton title='Allow cookies' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
     </div>)
 }
 
