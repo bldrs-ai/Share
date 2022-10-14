@@ -3,9 +3,9 @@ import {MeshLambertMaterial, MeshBasicMaterial, DoubleSide, Color} from 'three'
 
 export const LightColor = {
   light: 0x404040,
-  normalCube: new Color('rgb(255, 255, 255)'),
-  hoverCube: new Color('rgb(14, 237, 51)'),
-  textCube: new Color('rgb(255, 0, 0)'),
+  normalCube: new Color('#C8E8C7'),
+  hoverCube: new Color('#459A47'),
+  textCube: new Color('#459A47'),
   refPlan: new Color('rgb(245, 245, 245)'),
   ring: new Color('rgb(123, 130, 28)'),
 }

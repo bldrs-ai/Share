@@ -20,7 +20,7 @@ import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
-import {NavCube} from '../utils/NaveCube/NavCube'
+import {NavCube} from '../Components/NaveCube/NavCube'
 
 
 /**

@@ -1,5 +1,5 @@
 import fontJSON from '../../assets/font/droid_sans_bold.typeface.json'
-import {BoxGeometry, Mesh, RingGeometry, Vector3} from 'three'
+import {BoxGeometry, Mesh, Vector3} from 'three'
 import {FontLoader} from 'three/examples/jsm/loaders/FontLoader.js'
 import {TextGeometry} from 'three/examples/jsm/geometries/TextGeometry.js'
 import {NavCubeMaterial} from './NaveCubeMaterial'
@@ -17,18 +17,18 @@ export class BoxCube {
     const zero = 0
     const nineSix = 96
     const oneSix = 16
-    const negativeOneSix = -16
+    // const negativeOneSix = -16
     const fiveSix = 56
     const negativeFiveSix = -56
     const negativeFourSix = -46
     const negativeOneEight = -18
     const sixFour = 64
     const negativeFiveEight = -58
-    const negativeThreeTwo = -32
-    const negativeFiveSeven = -57
-    const negativeSevenFive = -75
-    const sevenFive = 75
-    const twoZero = 20
+    // const negativeThreeTwo = -32
+    // const negativeFiveSeven = -57
+    // const negativeSevenFive = -75
+    // const sevenFive = 75
+    // const twoZero = 20
 
     this.left = this.initItem('left', nineSix, nineSix, oneSix, zero, zero, fiveSix)
     initText3D(this.scene, 'left', negativeFourSix, negativeOneEight, sixFour)
@@ -46,10 +46,10 @@ export class BoxCube {
     this.back = this.initItem('back', oneSix, nineSix, nineSix, negativeFiveSix, zero, zero)
     initText3D(this.scene, 'back', negativeFiveEight, negativeOneEight, sixFour)
 
-    initTextRing(this.scene, 'W', negativeThreeTwo, negativeFiveSeven, sevenFive)
-    initTextRing(this.scene, 'E', negativeOneSix, negativeFiveSeven, negativeSevenFive)
-    initTextRing(this.scene, 'N', negativeSevenFive, negativeFiveSeven, twoZero)
-    initTextRing(this.scene, 'S', sevenFive, negativeFiveSeven, twoZero)
+    // initTextRing(this.scene, 'W', negativeThreeTwo, negativeFiveSeven, sevenFive)
+    // initTextRing(this.scene, 'E', negativeOneSix, negativeFiveSeven, negativeSevenFive)
+    // initTextRing(this.scene, 'N', negativeSevenFive, negativeFiveSeven, twoZero)
+    // initTextRing(this.scene, 'S', sevenFive, negativeFiveSeven, twoZero)
 
     this.left_front = this.initItem('left_front', oneSix, nineSix, oneSix, fiveSix, zero, fiveSix)
     this.left_back = this.initItem('left_back', oneSix, nineSix, oneSix, -negativeFiveSix, zero, fiveSix)
@@ -76,7 +76,7 @@ export class BoxCube {
     this.bottom_right_front = this.initItem('bottom_right_front', oneSix, oneSix, oneSix, fiveSix, negativeFiveSix, negativeFiveSix)
     this.bottom_right_back = this.initItem('bottom_right_back', oneSix, oneSix, oneSix, negativeFiveSix, negativeFiveSix, negativeFiveSix)
     // this.floor = this.initFloor("floor", 400, 2, 400, zero, -68, zero)
-    this.initRing()
+    // this.initRing()
   }
 
   /**
@@ -93,24 +93,24 @@ export class BoxCube {
     return mesh
   }
 
-  /**
-   * Box Cube Ring
-   *
-   * @return {object} mesh
-   */
-  initRing() {
-    const zero = 0
-    const two = 2
-    /* eslint-disable no-magic-numbers */
-    const geometry = new RingGeometry(80, 130, 30)
-    geometry.rotateX(-Math.PI / two)
-    geometry.translate(zero, -60, zero)
-    const mesh = new Mesh(geometry, NavCubeMaterial.ring)
-    mesh.name = 'W TextCube'
-    mesh.textCube = 'W'
-    this.scene.add(mesh)
-    return mesh
-  }
+  // /**
+  //  * Box Cube Ring
+  //  *
+  //  * @return {object} mesh
+  //  */
+  // initRing() {
+  //   const zero = 0
+  //   const two = 2
+  //   /* eslint-disable no-magic-numbers */
+  //   const geometry = new RingGeometry(80, 130, 30)
+  //   geometry.rotateX(-Math.PI / two)
+  //   geometry.translate(zero, -60, zero)
+  //   const mesh = new Mesh(geometry, NavCubeMaterial.ring)
+  //   mesh.name = 'W TextCube'
+  //   mesh.textCube = 'W'
+  //   this.scene.add(mesh)
+  //   return mesh
+  // }
 }
 
 /**
@@ -122,7 +122,7 @@ function initText3D(scene, name, x1, y1, z1) {
   let textCube
   const parameters = {
     font: font,
-    size: 36,
+    size: 20,
     height: 2,
   }
   if (name === 'bottom') {
@@ -138,49 +138,49 @@ function initText3D(scene, name, x1, y1, z1) {
   meshCube.textCube = name
   scene.add(meshCube)
 }
-/**
- *
- */
-function initTextRing(scene, name, x1, y1, z1) {
-  const loader = new FontLoader()
-  const font = loader.parse(fontJSON)
-  const parameters = {
-    font: font,
-    size: 50,
-    height: 2,
-  }
-  const textCube = new TextGeometry(name, parameters)
-  rotateRing(name, textCube)
-  textCube.translate(x1, y1, z1)
-  const meshCube = new Mesh(textCube, NavCubeMaterial.textRing)
-  meshCube.name = `${name}TextCube`
-  meshCube.textCube = name
-  scene.add(meshCube)
-}
-/**
- *
- */
-function rotateRing(name, textCube) {
-  const two = 2
-  switch (name) {
-    case 'W':
-      textCube.rotateX(Math.PI / two)
-      break
-    case 'E':
-      textCube.rotateX(-Math.PI / two)
-      break
-    case 'S':
-      textCube.rotateY(Math.PI / two)
-      textCube.rotateZ(-Math.PI / two)
-      break
-    case 'N':
-      textCube.rotateY(Math.PI / two)
-      textCube.rotateZ(Math.PI / two)
-      break
-    default:
-      break
-  }
-}
+// /**
+//  *
+//  */
+// function initTextRing(scene, name, x1, y1, z1) {
+//   const loader = new FontLoader()
+//   const font = loader.parse(fontJSON)
+//   const parameters = {
+//     font: font,
+//     size: 50,
+//     height: 2,
+//   }
+//   const textCube = new TextGeometry(name, parameters)
+//   rotateRing(name, textCube)
+//   textCube.translate(x1, y1, z1)
+//   const meshCube = new Mesh(textCube, NavCubeMaterial.textRing)
+//   meshCube.name = `${name}TextCube`
+//   meshCube.textCube = name
+//   scene.add(meshCube)
+// }
+// /**
+//  *
+//  */
+// function rotateRing(name, textCube) {
+//   const two = 2
+//   switch (name) {
+//     case 'W':
+//       textCube.rotateX(Math.PI / two)
+//       break
+//     case 'E':
+//       textCube.rotateX(-Math.PI / two)
+//       break
+//     case 'S':
+//       textCube.rotateY(Math.PI / two)
+//       textCube.rotateZ(-Math.PI / two)
+//       break
+//     case 'N':
+//       textCube.rotateY(Math.PI / two)
+//       textCube.rotateZ(Math.PI / two)
+//       break
+//     default:
+//       break
+//   }
+// }
 /**
  *
  */

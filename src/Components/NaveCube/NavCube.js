@@ -26,13 +26,13 @@ export class NavCube {
    * Initialize container
    */
   initContainer() {
-    this.width = 140
-    this.height = 140
+    this.width = 120
+    this.height = 120
     this.container = document.createElement('div')
     this.container.style.position = 'absolute'
     this.container.style.width = `${this.width}px`
     this.container.style.height = `${this.height}px`
-    this.container.style.bottom = '30px'
+    this.container.style.bottom = 0
     this.container.style.right = 0
     this.viewer.container.appendChild(this.container)
     this.canvas = document.createElement('canvas')
