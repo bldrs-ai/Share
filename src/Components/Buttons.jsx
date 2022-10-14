@@ -125,7 +125,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '40px',
       'height': '40px',
-      'border': 'none ',
+      'border': 'none',
       'margin': '4px 0px 4px 0px',
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979720',
