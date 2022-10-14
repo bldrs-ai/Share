@@ -1,5 +1,5 @@
 import {AmbientLight, DirectionalLight, OrthographicCamera, Raycaster, Scene, Vector2, Vector3, WebGLRenderer} from 'three'
-import {LightColor, NavCubeMaterial} from './NaveCubeMaterial'
+import {LightColor, NavCubeMaterial} from './NavCubeMaterial'
 import * as TWEEN from '@tweenjs/tween.js'
 import {BoxCube, switchPick} from './BoxCube'
 
@@ -26,13 +26,13 @@ export class NavCube {
    * Initialize container
    */
   initContainer() {
-    this.width = 140
-    this.height = 140
+    this.width = 120
+    this.height = 120
     this.container = document.createElement('div')
     this.container.style.position = 'absolute'
     this.container.style.width = `${this.width}px`
     this.container.style.height = `${this.height}px`
-    this.container.style.bottom = '30px'
+    this.container.style.bottom = 0
     this.container.style.right = 0
     this.viewer.container.appendChild(this.container)
     this.canvas = document.createElement('canvas')
@@ -49,6 +49,7 @@ export class NavCube {
    */
   initCamera() {
   /* eslint-disable no-magic-numbers */
+
     this.camera = new OrthographicCamera(
         this.width / -1,
         this.width / 1,
@@ -68,8 +69,8 @@ export class NavCube {
     this.ambientLight = new AmbientLight(LightColor.light, 2)
     this.scene.add(this.ambientLight)
     this.directionalLight = new DirectionalLight(LightColor.light, 2)
-    this.directionalLight.position.set(0, 10, 0)
-    this.directionalLight.target.position.set(-5, 0, 0)
+    this.directionalLight.position.set(-100, 0, 0)
+    this.directionalLight.target.position.set(-50, 0, 0)
     this.scene.add(this.directionalLight)
     this.scene.add(this.directionalLight.target)
   }

@@ -1,8 +1,9 @@
+/* eslint-disable no-magic-numbers */
 import fontJSON from '../../assets/font/droid_sans_bold.typeface.json'
-import {BoxGeometry, Mesh, RingGeometry, Vector3} from 'three'
+import {BoxGeometry, Mesh, Vector3} from 'three'
 import {FontLoader} from 'three/examples/jsm/loaders/FontLoader.js'
 import {TextGeometry} from 'three/examples/jsm/geometries/TextGeometry.js'
-import {NavCubeMaterial} from './NaveCubeMaterial'
+import {NavCubeMaterial} from './NavCubeMaterial'
 
 
 /**
@@ -14,69 +15,48 @@ export class BoxCube {
    */
   constructor(scene) {
     this.scene = scene
-    const zero = 0
-    const nineSix = 96
-    const oneSix = 16
-    const negativeOneSix = -16
-    const fiveSix = 56
-    const negativeFiveSix = -56
-    const negativeFourSix = -46
-    const negativeOneEight = -18
-    const sixFour = 64
-    const negativeFiveEight = -58
-    const negativeThreeTwo = -32
-    const negativeFiveSeven = -57
-    const negativeSevenFive = -75
-    const sevenFive = 75
-    const twoZero = 20
+    const testPosition = [-30, -10, 64]
+    this.left = this.initItem('left', 96, 96, 16, 0, 0, 56)
+    initText3D(this.scene, 'left', testPosition[0], testPosition[1], testPosition[2])
+    this.right = this.initItem('right', 96, 96, 16, 0, 0, -56)
+    initText3D(this.scene, 'right', testPosition[0], testPosition[1], testPosition[2])
 
-    this.left = this.initItem('left', nineSix, nineSix, oneSix, zero, zero, fiveSix)
-    initText3D(this.scene, 'left', negativeFourSix, negativeOneEight, sixFour)
-    this.right = this.initItem('right', nineSix, nineSix, oneSix, zero, zero, negativeFiveSix)
-    initText3D(this.scene, 'right', negativeFiveSix, negativeOneEight, sixFour)
+    this.top = this.initItem('top', 96, 16, 96, 0, 56, 0)
+    initText3D(this.scene, 'top', testPosition[0], testPosition[1], testPosition[2])
 
-    this.top = this.initItem('top', nineSix, oneSix, nineSix, zero, fiveSix, zero)
-    initText3D(this.scene, 'top', negativeFourSix, negativeOneEight, sixFour)
+    this.bottom = this.initItem('bottom', 96, 16, 96, 0, -56, 0)
+    initText3D(this.scene, 'bottom', testPosition[0], testPosition[1], testPosition[2])
 
-    this.bottom = this.initItem('bottom', nineSix, oneSix, nineSix, zero, negativeFiveSix, zero)
-    initText3D(this.scene, 'bottom', negativeFourSix, negativeOneEight, sixFour)
+    this.front = this.initItem('front', 16, 96, 96, 56, 0, 0)
+    initText3D(this.scene, 'front', testPosition[0], testPosition[1], testPosition[2])
+    this.back = this.initItem('back', 16, 96, 96, -56, 0, 0)
+    initText3D(this.scene, 'back', testPosition[0], testPosition[1], testPosition[2])
 
-    this.front = this.initItem('front', oneSix, nineSix, nineSix, fiveSix, zero, zero)
-    initText3D(this.scene, 'front', negativeFiveEight, negativeOneEight, sixFour)
-    this.back = this.initItem('back', oneSix, nineSix, nineSix, negativeFiveSix, zero, zero)
-    initText3D(this.scene, 'back', negativeFiveEight, negativeOneEight, sixFour)
+    this.left_front = this.initItem('left_front', 16, 96, 16, 56, 0, 56)
+    this.left_back = this.initItem('left_back', 16, 96, 16, -56, 0, 56)
+    this.right_front = this.initItem('right_front', 16, 96, 16, 56, 0, -56)
+    this.right_back = this.initItem('right_back', 16, 96, 16, -56, 0, -56)
 
-    initTextRing(this.scene, 'W', negativeThreeTwo, negativeFiveSeven, sevenFive)
-    initTextRing(this.scene, 'E', negativeOneSix, negativeFiveSeven, negativeSevenFive)
-    initTextRing(this.scene, 'N', negativeSevenFive, negativeFiveSeven, twoZero)
-    initTextRing(this.scene, 'S', sevenFive, negativeFiveSeven, twoZero)
+    this.top_left = this.initItem('top_left', 96, 16, 16, 0, 56, 56)
+    this.top_right = this.initItem('top_right', 96, 16, 16, 0, 56, -56)
+    this.top_front = this.initItem('top_front', 16, 16, 96, 56, 56, 0)
+    this.top_back = this.initItem('top_back', 16, 16, 96, -56, 56, 0)
 
-    this.left_front = this.initItem('left_front', oneSix, nineSix, oneSix, fiveSix, zero, fiveSix)
-    this.left_back = this.initItem('left_back', oneSix, nineSix, oneSix, -negativeFiveSix, zero, fiveSix)
-    this.right_front = this.initItem('right_front', oneSix, nineSix, oneSix, fiveSix, zero, negativeFiveSix)
-    this.right_back = this.initItem('right_back', oneSix, nineSix, oneSix, negativeFiveSix, zero, negativeFiveSix)
+    this.bottom_left = this.initItem('bottom_left', 96, 16, 16, 0, -56, 56)
+    this.bottom_right = this.initItem('bottom_right', 96, 16, 16, 0, -56, -56)
+    this.bottom_front = this.initItem('bottom_front', 16, 16, 96, 56, -56, 0)
+    this.bottom_back = this.initItem('bottom_back', 16, 16, 96, -56, -56, 0)
 
-    this.top_left = this.initItem('top_left', nineSix, oneSix, oneSix, zero, fiveSix, fiveSix)
-    this.top_right = this.initItem('top_right', nineSix, oneSix, oneSix, zero, fiveSix, negativeFiveSix)
-    this.top_front = this.initItem('top_front', oneSix, oneSix, nineSix, fiveSix, fiveSix, zero)
-    this.top_back = this.initItem('top_back', oneSix, oneSix, nineSix, negativeFiveSix, fiveSix, zero)
+    this.top_left_front = this.initItem('top_left_front', 16, 16, 16, 56, 56, 56)
+    this.top_left_back = this.initItem('top_left_back', 16, 16, 16, -56, 56, 56)
+    this.top_right_front = this.initItem('top_right_front', 16, 16, 16, 56, 56, -56)
+    this.top_right_back = this.initItem('top_right_back', 16, 16, 16, -56, 56, -56)
 
-    this.bottom_left = this.initItem('bottom_left', nineSix, oneSix, oneSix, zero, negativeFiveSix, fiveSix)
-    this.bottom_right = this.initItem('bottom_right', nineSix, oneSix, oneSix, zero, negativeFiveSix, negativeFiveSix)
-    this.bottom_front = this.initItem('bottom_front', oneSix, oneSix, nineSix, fiveSix, negativeFiveSix, zero)
-    this.bottom_back = this.initItem('bottom_back', oneSix, oneSix, nineSix, negativeFiveSix, negativeFiveSix, zero)
-
-    this.top_left_front = this.initItem('top_left_front', oneSix, oneSix, oneSix, fiveSix, fiveSix, fiveSix)
-    this.top_left_back = this.initItem('top_left_back', oneSix, oneSix, oneSix, negativeFiveSix, fiveSix, fiveSix)
-    this.top_right_front = this.initItem('top_right_front', oneSix, oneSix, oneSix, fiveSix, fiveSix, negativeFiveSix)
-    this.top_right_back = this.initItem('top_right_back', oneSix, oneSix, oneSix, negativeFiveSix, fiveSix, negativeFiveSix)
-
-    this.bottom_left_front = this.initItem('bottom_left_front', oneSix, oneSix, oneSix, fiveSix, negativeFiveSix, fiveSix)
-    this.bottom_left_back = this.initItem('bottom_left_back', oneSix, oneSix, oneSix, negativeFiveSix, negativeFiveSix, fiveSix)
-    this.bottom_right_front = this.initItem('bottom_right_front', oneSix, oneSix, oneSix, fiveSix, negativeFiveSix, negativeFiveSix)
-    this.bottom_right_back = this.initItem('bottom_right_back', oneSix, oneSix, oneSix, negativeFiveSix, negativeFiveSix, negativeFiveSix)
-    // this.floor = this.initFloor("floor", 400, 2, 400, zero, -68, zero)
-    this.initRing()
+    this.bottom_left_front = this.initItem('bottom_left_front', 16, 16, 16, 56, -56, 56)
+    this.bottom_left_back = this.initItem('bottom_left_back', 16, 16, 16, -56, -56, 56)
+    this.bottom_right_front = this.initItem('bottom_right_front', 16, 16, 16, 56, -56, -56)
+    this.bottom_right_back = this.initItem('bottom_right_back', 16, 16, 16, -56, -56, -56)
+    // this.floor = this.initFloor("floor", 400, 2, 400, 0, -68, 0)
   }
 
   /**
@@ -93,24 +73,24 @@ export class BoxCube {
     return mesh
   }
 
-  /**
-   * Box Cube Ring
-   *
-   * @return {object} mesh
-   */
-  initRing() {
-    const zero = 0
-    const two = 2
-    /* eslint-disable no-magic-numbers */
-    const geometry = new RingGeometry(80, 130, 30)
-    geometry.rotateX(-Math.PI / two)
-    geometry.translate(zero, -60, zero)
-    const mesh = new Mesh(geometry, NavCubeMaterial.ring)
-    mesh.name = 'W TextCube'
-    mesh.textCube = 'W'
-    this.scene.add(mesh)
-    return mesh
-  }
+  // /**
+  //  * Box Cube Ring
+  //  *
+  //  * @return {object} mesh
+  //  */
+  // initRing() {
+  //   const zero = 0
+  //   const two = 2
+  //   /* eslint-disable no-magic-numbers */
+  //   const geometry = new RingGeometry(80, 130, 30)
+  //   geometry.rotateX(-Math.PI / two)
+  //   geometry.translate(zero, -60, zero)
+  //   const mesh = new Mesh(geometry, NavCubeMaterial.ring)
+  //   mesh.name = 'W TextCube'
+  //   mesh.textCube = 'W'
+  //   this.scene.add(mesh)
+  //   return mesh
+  // }
 }
 
 /**
@@ -122,7 +102,7 @@ function initText3D(scene, name, x1, y1, z1) {
   let textCube
   const parameters = {
     font: font,
-    size: 36,
+    size: 20,
     height: 2,
   }
   if (name === 'bottom') {
@@ -138,49 +118,7 @@ function initText3D(scene, name, x1, y1, z1) {
   meshCube.textCube = name
   scene.add(meshCube)
 }
-/**
- *
- */
-function initTextRing(scene, name, x1, y1, z1) {
-  const loader = new FontLoader()
-  const font = loader.parse(fontJSON)
-  const parameters = {
-    font: font,
-    size: 50,
-    height: 2,
-  }
-  const textCube = new TextGeometry(name, parameters)
-  rotateRing(name, textCube)
-  textCube.translate(x1, y1, z1)
-  const meshCube = new Mesh(textCube, NavCubeMaterial.textRing)
-  meshCube.name = `${name}TextCube`
-  meshCube.textCube = name
-  scene.add(meshCube)
-}
-/**
- *
- */
-function rotateRing(name, textCube) {
-  const two = 2
-  switch (name) {
-    case 'W':
-      textCube.rotateX(Math.PI / two)
-      break
-    case 'E':
-      textCube.rotateX(-Math.PI / two)
-      break
-    case 'S':
-      textCube.rotateY(Math.PI / two)
-      textCube.rotateZ(-Math.PI / two)
-      break
-    case 'N':
-      textCube.rotateY(Math.PI / two)
-      textCube.rotateZ(Math.PI / two)
-      break
-    default:
-      break
-  }
-}
+
 /**
  *
  */

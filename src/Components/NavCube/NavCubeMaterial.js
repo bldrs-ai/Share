@@ -3,9 +3,9 @@ import {MeshLambertMaterial, MeshBasicMaterial, DoubleSide, Color} from 'three'
 
 export const LightColor = {
   light: 0x404040,
-  normalCube: new Color('rgb(255, 255, 255)'),
-  hoverCube: new Color('rgb(14, 237, 51)'),
-  textCube: new Color('rgb(255, 0, 0)'),
+  normalCube: new Color('#e0e0e0'),
+  hoverCube: new Color('#e0e0e0'),
+  textCube: new Color('#459A47'),
   refPlan: new Color('rgb(245, 245, 245)'),
   ring: new Color('rgb(123, 130, 28)'),
 }
@@ -14,13 +14,15 @@ export const NavCubeMaterial = {
     return new MeshBasicMaterial({
       color: 'skyblue',
       map: textTex,
+      wireframe: true,
     })
   },
-  normalCube: new MeshLambertMaterial({
+  normalCube: new MeshBasicMaterial({
     transparent: true,
     opacity: 1,
     color: LightColor.normalCube,
     depthTest: true,
+    // wireframe: true,
   }),
   hoverCube: new MeshLambertMaterial({
     transparent: true,
