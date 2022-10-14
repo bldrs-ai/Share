@@ -159,6 +159,7 @@ const useStyles = makeStyles((theme) => (
     content: {
       'minHeight': '300px',
       'maxWidth': '240px',
+      'paddingBottom': '10px',
       '& .MuiTypography-body1': {
         padding: '1em 0',
       },
