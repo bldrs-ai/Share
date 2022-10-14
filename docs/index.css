@@ -19,7 +19,4 @@ a {
 #root > div > div:nth-child(2) > div:nth-child(4) > div > div:nth-child(5) > div:nth-child(2) > div > button {
   display: none !important;
 }
-#root > div > div:nth-child(2) > div:nth-child(3) > button {
-  display: none !important;
-}
 /*# sourceMappingURL=index.css.map */
