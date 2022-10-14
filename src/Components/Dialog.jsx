@@ -21,18 +21,19 @@ export default function Dialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
   content,
+  disableClose = false,
 }) {
   assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
       open={isDialogDisplayed}
-      onClose={close}
+      onClose={!disableClose && close}
       sx={{textAlign: 'center'}}
     >
       <Typography
         variant='h1'
-        sx={{marginTop: '40px'}}
+        sx={{marginTop: '30px'}}
       >
         {headerText}
       </Typography>

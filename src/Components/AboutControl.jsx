@@ -7,7 +7,7 @@ import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import {ColorModeContext} from '../Context/ColorMode'
 import Dialog from './Dialog'
-import {ControlButton} from './Buttons'
+import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB_4.svg'
 
@@ -61,7 +61,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
       headerText={<LogoB style={{width: '50px', height: '50px'}} />}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent installPrefix={installPrefix}/>}
+      disableClose={true}
+      content={<AboutContent installPrefix={installPrefix} acceptPrivacy={setIsDialogDisplayed} />}
       data-testid={'about-dialog'}
     />)
 }
@@ -73,7 +74,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
  * @param {string} installPrefix node
  * @return {object} React component
  */
-function AboutContent({installPrefix}) {
+function AboutContent({installPrefix, acceptPrivacy}) {
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const [privacySlider, setPrivacySlider] = useState(0)
@@ -136,7 +137,7 @@ function AboutContent({installPrefix}) {
       </Box>
 
       <div className={classes.settings}>
-        <Typography variant='p' sx={{marginBottom: '6px'}}>Privacy</Typography>
+        <Typography variant='p' sx={{marginBottom: '6px'}}>Cookies Setting</Typography>
         <Slider
           onChange={setPrivacy}
           marks={marks}
@@ -147,6 +148,8 @@ function AboutContent({installPrefix}) {
           sx={{width: '80%', textAlign: 'center'}}
         />
       </div>
+
+      <RectangularButton title='Accept privacy' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
     </div>)
 }
 
@@ -198,8 +201,8 @@ const useStyles = makeStyles((theme) => (
       },
       '& .MuiSlider-thumb': {
         backgroundColor: theme.palette.highlight.main,
-        width: '18px',
-        height: '18px',
+        width: '14px',
+        height: '14px',
       },
       '& .MuiSlider-track': {
         color: 'lightGray',
@@ -209,7 +212,7 @@ const useStyles = makeStyles((theme) => (
       },
       '& .MuiSlider-markLabel': {
         paddingTop: '4px',
-        fontSize: '1em',
+        fontSize: '.9em',
       },
     },
     iconContainer: {
