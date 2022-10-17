@@ -157,7 +157,7 @@ function loadTheme(mode) {
         {
           props: {variant: 'rectangular'},
           style: {
-            border: `1px solid ${activePalette.highlight.main}`,
+            border: `1px solid ${activePalette.highlight.secondary}`,
             width: '180px',
             height: '40px',
             textTransform: 'none',
