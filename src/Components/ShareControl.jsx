@@ -1,6 +1,6 @@
 import React, {createRef, useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
 import Dialog from './Dialog'
@@ -94,7 +94,7 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText={<Box style={{paddingBottom: '0px', marginTop: '-10px'}}>Share</Box>}
+      headerText={<Typography variant='h2'>Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
@@ -137,6 +137,7 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: '10px',
   },
   iconContainer: {
     width: '20px',
@@ -148,7 +149,7 @@ const useStyles = makeStyles({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: '20px',
-    width: '50%',
+    marginTop: '10px',
+    width: '44%',
   },
 })

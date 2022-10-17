@@ -63,7 +63,7 @@ function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
   const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
-  const fontFamily = 'Helvetica'
+  const fontFamily = 'Roboto'
   const lime = '#4EEF4B'
   const day = {
     primary: {
