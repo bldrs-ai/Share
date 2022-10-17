@@ -32,7 +32,8 @@ export default function CutPlaneMenu() {
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
-    if (planeHash && model && viewer) {
+    const planes = ['x', 'y', 'z'].includes(planeHash)
+    if (planeHash && model && viewer && planes) {
       const planeDirection = planeHash.split(':')[1]
       console.log('plane direction', planeDirection)
       createPlane(planeDirection)
