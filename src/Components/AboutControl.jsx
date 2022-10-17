@@ -116,9 +116,9 @@ function AboutContent({installPrefix, acceptPrivacy}) {
 
   return (
     <div className={classes.content}>
-      <Typography variant='h3'>Build Every Thing Together</Typography>
+      <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
-        <a href='https://github.com/bldrs-ai/Share' target='_new'>
+        <a href='https://github.com/bldrs-ai/Share' target='_new' style={{color: 'lightgrey'}}>
           github.com/bldrs-ai/Share
         </a>
       </Typography>
@@ -129,7 +129,9 @@ function AboutContent({installPrefix, acceptPrivacy}) {
         marginTop: '10px'}}
       >
         <ul>
-          <li><Typography sx={bulletStyle} variant='h4'>Open IFC models from GitHub</Typography></li>
+          <li><Typography sx={bulletStyle} variant='h4'>
+            <a href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' target='_new'>Open IFC models</a>
+          </Typography></li>
           <li><Typography sx={bulletStyle} variant='h4'>View IFC properties</Typography></li>
           <li><Typography sx={bulletStyle} variant='h4'>Search IFC models</Typography></li>
           <li><Typography sx={bulletStyle} variant='h4'>Share IFC models</Typography></li>
@@ -159,7 +161,6 @@ const useStyles = makeStyles((theme) => (
     content: {
       'minHeight': '300px',
       'maxWidth': '240px',
-      'paddingBottom': '10px',
       '& .MuiTypography-body1': {
         padding: '1em 0',
         fontSize: '.9em',
@@ -180,7 +181,7 @@ const useStyles = makeStyles((theme) => (
         listStyleType: 'none',
       },
       '& a': {
-        color: 'grey',
+        color: theme.palette.highlight.main,
         paddingLeft: '4px',
         paddingRight: '4px',
         paddingBottom: '2px',
