@@ -70,13 +70,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
-      0: '/share/v/gh/IFCjs/test-ifc-files/secondary/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
-      1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/secondary/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
-      2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/secondary/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-      3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/secondary/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
-      4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/secondary/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
+      0: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
+      1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
+      2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+      3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
+      4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
-      5: '/share/v/gh/sujal23ks/BCF/secondary/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+      5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
     }
     navigate({
       pathname: modelPath[e.target.value],
@@ -142,6 +142,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 const useStyles = makeStyles((theme) => ({
   content: {
     width: '260px',
+    paddingTop: '6px',
   },
   snippet: {
     textAlign: 'left',
