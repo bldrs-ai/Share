@@ -41,6 +41,8 @@ export default function CutPlaneMenu() {
   }, [model])
 
   const createPlane = (normalDirection) => {
+    console.log('normalDirection in create plane', normalDirection)
+    console.log('normalDirection type', typeof(normalDirection))
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = getModelCenter(model)
