@@ -9,7 +9,7 @@ import {ColorModeContext} from '../Context/ColorMode'
 import Dialog from './Dialog'
 import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
-import LogoB from '../assets/LogoB_4.svg'
+import LogoB from '../assets/LogoB_3.svg'
 
 
 /**
@@ -161,6 +161,7 @@ const useStyles = makeStyles((theme) => (
     content: {
       'minHeight': '300px',
       'maxWidth': '250px',
+      'marginBottom': '10px',
       '& .MuiTypography-body1': {
         padding: '1em 0',
         fontSize: '.9em',
