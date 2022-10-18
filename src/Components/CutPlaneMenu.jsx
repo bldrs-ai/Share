@@ -32,18 +32,17 @@ export default function CutPlaneMenu() {
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
-    const planes = ['x', 'y', 'z'].includes(planeHash)
-    if (planeHash && model && viewer && planes) {
+    if (planeHash && model && viewer) {
       const planeDirection = planeHash.split(':')[1]
-      console.log('plane direction', planeDirection)
-      createPlane(planeDirection)
+      const planes = ['x', 'y', 'z'].includes(planeDirection)
+      if (planes) {
+        createPlane(planeDirection)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
   const createPlane = (normalDirection) => {
-    console.log('normalDirection in create plane', normalDirection)
-    console.log('normalDirection type', typeof(normalDirection))
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = getModelCenter(model)
