@@ -43,6 +43,7 @@ export class NavCube {
 		this.container.style.height = `${this.height}px`;
 		this.container.style.bottom = 0;
 		this.container.style.right = 0;
+		this.container.style.zIndex = 999;
 		this.viewer.container.appendChild(this.container);
 		this.canvas = document.createElement("canvas");
 		this.canvas.style.position = "absolute";
@@ -153,7 +154,7 @@ export class NavCube {
 	 */
 	hover() {
 		const _this = this;
-		var filterElementHover = _this.scene.children.filter((child) => {
+		const filterElementHover = _this.scene.children.filter((child) => {
 			return child.userData.Element;
 		});
 		if (_this.mouseOn) {
@@ -188,10 +189,13 @@ export class NavCube {
 	onPick(ifcModel) {
 		const _this = this;
 		const camera = _this.viewer.context.ifcCamera.cameraControls;
+		const filterElementClick = _this.scene.children.filter((child) => {
+			return child.userData.Element;
+		});
 		_this.renderer.domElement.onclick = function (event) {
 			if (_this.mouse.x !== 0 || _this.mouse.y !== 0) {
 				_this.rayCaster.setFromCamera(_this.mouse, _this.camera);
-				const intersects = _this.rayCaster.intersectObjects(_this.scene.children);
+				const intersects = _this.rayCaster.intersectObjects(filterElementClick);
 				const found = intersects[0];
 				if (found) {
 					switchPick(camera, ifcModel, found.object.name.trim());

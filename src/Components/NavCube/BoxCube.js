@@ -14,17 +14,17 @@ export class BoxCube {
 	 */
 	constructor(scene) {
 		this.scene = scene;
-		const testPosition = [-30, -10, 64];
+		const testPosition = [-45, -10, 64];
 		this.left = this.initItem("left", 96, 96, 16, 0, 0, 56);
-		initText3D(this.scene, "left", testPosition[0], testPosition[1], testPosition[2]);
+		initText3D(this.scene, "left", -40, testPosition[1], testPosition[2]);
 		this.right = this.initItem("right", 96, 96, 16, 0, 0, -56);
 		initText3D(this.scene, "right", testPosition[0], testPosition[1], testPosition[2]);
 
 		this.top = this.initItem("top", 96, 16, 96, 0, 56, 0);
-		initText3D(this.scene, "top", testPosition[0], testPosition[1], testPosition[2]);
+		initText3D(this.scene, "top", -40, testPosition[1], testPosition[2]);
 
 		this.bottom = this.initItem("bottom", 96, 16, 96, 0, -56, 0);
-		initText3D(this.scene, "bottom", testPosition[0], testPosition[1], testPosition[2]);
+		initText3D(this.scene, "bottom", -40, testPosition[1], testPosition[2]);
 
 		this.front = this.initItem("front", 16, 96, 96, 56, 0, 0);
 		initText3D(this.scene, "front", testPosition[0], testPosition[1], testPosition[2]);
@@ -120,8 +120,8 @@ function initText3D(scene, name, x1, y1, z1) {
 	let textCube;
 	const parameters = {
 		font: font,
-		size: 20,
-		height: 2,
+		size: 30,
+		height: 4,
 	};
 	if (name === "bottom") {
 		textCube = new TextGeometry("bot", parameters);
@@ -178,167 +178,167 @@ export function switchPick(camera0, ifcModel, name) {
 	// center of model
 	const c = ifcModel.geometry.boundingSphere.center;
 	const coords = new Vector3(zero, zero, zero);
+	console.log(name);
 	switch (name) {
 		case "left":
 			coords.x = c.x;
 			coords.y = c.y;
-			coords.z = r;
+			coords.z = r + c.z;
 			break;
 		case "right":
 			coords.x = c.x;
 			coords.y = c.y;
-			coords.z = -r;
+			coords.z = -r + c.z;
 			break;
 		case "top":
 			// tween.to({pos: {x: zero, y: pos, z: zero}}, speedTween)
 			coords.x = c.x;
-			coords.y = r;
+			coords.y = r + c.y;
 			coords.z = c.z;
 			break;
 		case "bottom":
 			// tween.to({pos: {x: zero, y: -pos, z: zero}}, speedTween)
 			coords.x = c.x;
-			coords.y = -r;
+			coords.y = -r + c.y;
 			coords.z = c.z;
 			break;
 		case "front":
 			// tween.to({pos: {x: pos, y: zero, z: zero}}, speedTween)
-			coords.x = r;
+			coords.x = r + c.x;
 			coords.y = c.y;
 			coords.z = c.z;
 			break;
 		case "back":
 			// tween.to({pos: {x: -pos, y: zero, z: zero}}, speedTween)
-			coords.x = -r;
+			coords.x = -r + c.x;
 			coords.y = c.y;
 			coords.z = c.z;
 			break;
 		case "left_front":
 			// tween.to({pos: {x: pos, y: zero, z: pos}}, speedTween)
-			coords.x = r;
+			coords.x = r + c.x;
 			coords.y = c.y;
-			coords.z = r;
+			coords.z = r + c.z;
 
 			break;
 		case "left_back":
 			// tween.to({pos: {x: -pos, y: zero, z: pos}}, speedTween)
-			coords.x = -r;
+			coords.x = -r + c.x;
 			coords.y = c.y;
-			coords.z = r;
+			coords.z = r + c.z;
 			break;
 		case "right_front":
 			// tween.to({pos: {x: pos, y: zero, z: -pos}}, speedTween)
-			coords.x = r;
+			coords.x = r + c.x;
 			coords.y = c.y;
-			coords.z = -r;
+			coords.z = -r + c.z;
 			break;
 		case "right_back":
 			// tween.to({pos: {x: -pos, y: zero, z: -pos}}, speedTween)
-			coords.x = -r;
+			coords.x = -r + c.x;
 			coords.y = c.y;
-			coords.z = -r;
+			coords.z = -r + c.z;
 			break;
 		case "top_left":
 			// tween.to({pos: {x: zero, y: pos, z: pos}}, speedTween)
 			coords.x = c.x;
-			coords.y = r;
-			coords.z = r;
+			coords.y = r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "top_right":
 			// tween.to({pos: {x: zero, y: pos, z: -pos}}, speedTween)
 			coords.x = c.x;
-			coords.y = r;
-			coords.z = -r;
+			coords.y = r + c.y;
+			coords.z = -r + c.z;
 			break;
 		case "top_front":
 			// tween.to({pos: {x: pos, y: pos, z: zero}}, speedTween)
-			coords.x = r;
-			coords.y = r;
+			coords.x = r + c.x;
+			coords.y = r + c.y;
 			coords.z = c.z;
 			break;
 		case "top_back":
 			// tween.to({pos: {x: -pos, y: pos, z: zero}}, speedTween)
-			coords.x = -r;
-			coords.y = r;
+			coords.x = -r + c.x;
+			coords.y = r + c.y;
 			coords.z = c.z;
 			break;
 		case "bottom_left":
 			// tween.to({pos: {x: zero, y: -pos, z: pos}}, speedTween)
 			coords.x = c.x;
-			coords.y = -r;
-			coords.z = r;
+			coords.y = -r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "bottom_right":
 			// tween.to({pos: {x: zero, y: -pos, z: -pos}}, speedTween)
 			coords.x = c.x;
-			coords.y = -r;
-			coords.z = -r;
+			coords.y = -r + c.y;
+			coords.z = -r + c.z;
 			break;
 		case "bottom_front":
 			// tween.to({pos: {x: pos, y: -pos, z: zero}}, speedTween)
-			coords.x = r;
-			coords.y = -r;
+			coords.x = r + c.x;
+			coords.y = -r + c.y;
 			coords.z = c.z;
 			break;
 		case "bottom_back":
 			// tween.to({pos: {x: -pos, y: -pos, z: zero}}, speedTween)
-			coords.x = -r;
-			coords.y = -r;
+			coords.x = -r + c.x;
+			coords.y = -r + c.y;
 			coords.z = c.z;
 			break;
 
 		case "top_left_front":
 			// tween.to({pos: {x: pos, y: pos, z: pos}}, speedTween)
-			coords.x = r;
-			coords.y = r;
-			coords.z = r;
+			coords.x = r + c.x;
+			coords.y = r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "top_left_back":
 			// tween.to({pos: {x: -pos, y: pos, z: pos}}, speedTween)
-			coords.x = -r;
-			coords.y = r;
-			coords.z = r;
+			coords.x = -r + c.x;
+			coords.y = r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "top_right_front":
 			// tween.to({pos: {x: pos, y: pos, z: -pos}}, speedTween)
-			coords.x = r;
-			coords.y = r;
-			coords.z = -r;
+			coords.x = r + c.x;
+			coords.y = r + c.y;
+			coords.z = -r + c.z;
 			break;
 		case "top_right_back":
 			// tween.to({pos: {x: -pos, y: pos, z: -pos}}, speedTween)
-			coords.x = -r;
-			coords.y = r;
-			coords.z = -r;
+			coords.x = -r + c.x;
+			coords.y = r + c.y;
+			coords.z = -r + c.z;
 			break;
 		case "bottom_left_front":
 			// tween.to({pos: {x: pos, y: -pos, z: pos}}, speedTween)
-			coords.x = r;
-			coords.y = -r;
-			coords.z = r;
+			coords.x = r + c.x;
+			coords.y = -r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "bottom_left_back":
 			// tween.to({pos: {x: -pos, y: -pos, z: pos}}, speedTween)
-			coords.x = -r;
-			coords.y = -r;
-			coords.z = r;
+			coords.x = -r + c.x;
+			coords.y = -r + c.y;
+			coords.z = r + c.z;
 			break;
 		case "bottom_right_front":
 			// tween.to({pos: {x: pos, y: -pos, z: -pos}}, speedTween)
-			coords.x = r;
-			coords.y = -r;
-			coords.z = -r;
+			coords.x = r + c.x;
+			coords.y = -r + c.y;
+			coords.z = -r + c.z;
 			break;
 		case "bottom_right_back":
 			// tween.to({pos: {x: -pos, y: -pos, z: -pos}}, speedTween)
-			coords.x = -r;
-			coords.y = -r;
-			coords.z = -r;
+			coords.x = -r + c.x;
+			coords.y = -r + c.y;
+			coords.z = -r + c.z;
 			break;
 		default:
 			break;
 	}
 	camera0.setPosition(coords.x, coords.y, coords.z, true);
-	// camera0.setTarget(c.x, c.y, c.z, true)
 	camera0.setLookAt(coords.x, coords.y, coords.z, c.x, c.y, c.z, true);
 }
