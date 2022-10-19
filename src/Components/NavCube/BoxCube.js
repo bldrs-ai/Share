@@ -79,6 +79,7 @@ export class BoxCube {
     }
     return mesh
   }
+<<<<<<< HEAD
   initOutLine() {
     const geometry = new BoxGeometry(128, 128, 128)
     const edges = new EdgesGeometry(geometry)
@@ -109,6 +110,25 @@ export class BoxCube {
   //   this.scene.add(mesh)
   //   return mesh
   // }
+=======
+
+
+  /**
+   * Box outline
+   *
+   */
+  initOutLine() {
+    const geometry = new BoxGeometry(128, 128, 128)
+    const edges = new EdgesGeometry(geometry)
+    const outLine = new LineSegments(edges, NavCubeMaterial.outLine)
+    outLine.textCube = 'OutLine'
+    outLine.userData.OutLine = true
+    outLine.userData.onScale = (scale) => {
+      outLine.scale.set(scale, scale, scale)
+    }
+    this.scene.add(outLine)
+  }
+>>>>>>> 058cde546ab38087fa2d1129af370b81c3f9251d
 }
 
 /**
@@ -178,6 +198,10 @@ export function switchPick(camera0, ifcModel, name) {
   // center of model
   const c = ifcModel.geometry.boundingSphere.center
   const coords = new Vector3(zero, zero, zero)
+<<<<<<< HEAD
+=======
+  console.log(name)
+>>>>>>> 058cde546ab38087fa2d1129af370b81c3f9251d
   switch (name) {
     case 'left':
       coords.x = c.x

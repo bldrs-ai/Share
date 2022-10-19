@@ -13,6 +13,7 @@ export default function createUISlice(set, get) {
     isCommentsOn: false,
     snackMessage: null,
     cutPlaneDirection: null,
+    isCameraPerpective: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -22,5 +23,7 @@ export default function createUISlice(set, get) {
     turnCommentsOff: () => set(() => ({isCommentsOn: false})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setCutPlaneDirection: (direction) => set(() => ({cutPlaneDirection: direction})),
+    switchCameraToPerspective: () => set(() => ({isCameraPerpective: true})),
+    switchCameraToOrtho: () => set(() => ({isCameraPerpective: false})),
   }
 }

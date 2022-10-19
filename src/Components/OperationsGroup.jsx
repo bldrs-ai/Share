@@ -17,7 +17,11 @@ import NotesIcon from '../assets/2D_Icons/Notes.svg'
 import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
+<<<<<<< HEAD
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
+=======
+
+>>>>>>> 058cde546ab38087fa2d1129af370b81c3f9251d
 
 /**
  * OperationsGroup contains tools for cut plane, deselecting items and
@@ -89,7 +93,11 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
         )}
         <CutPlaneMenu />
         <ExtractLevelsMenu />
+<<<<<<< HEAD
         {/* <TooltipIconButton title="Elements Hierarchy" icon={<CameraIcon />} /> */}
+=======
+        {/* <VideocamIcon /> */}
+>>>>>>> 058cde546ab38087fa2d1129af370b81c3f9251d
         <TooltipIconButton title="Clear" onClick={unSelectItem} selected={isSelected()} icon={<ClearIcon />} />
       </ButtonGroup>
       <Divider />

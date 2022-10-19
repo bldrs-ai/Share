@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import {
   AmbientLight,
   DirectionalLight,
@@ -131,9 +132,15 @@ export class NavCube {
     const y1 = event.clientY - bounds.top
     const x2 = bounds.right - bounds.left
     /* eslint-disable no-magic-numbers */
+<<<<<<< HEAD
     this.mouse.x = (x1 / x2) * 2 - 1
     const y2 = bounds.bottom - bounds.top
     this.mouse.y = -(y1 / y2) * 2 + 1
+=======
+    this.mouse.x = ((x1 / x2) * 2) - 1
+    const y2 = bounds.bottom - bounds.top
+    this.mouse.y = (-(y1 / y2) * 2) + 1
+>>>>>>> 058cde546ab38087fa2d1129af370b81c3f9251d
   }
   /**
    * on hover method
