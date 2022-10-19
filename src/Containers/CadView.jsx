@@ -77,6 +77,9 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const isCameraPerpective = useStore((state) => state.isCameraPerpective)
+  const switchCameraToPerspective = useStore((state) => state.switchCameraToPerspective)
+  const switchCameraToOrtho = useStore((state) => state.switchCameraToOrtho)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -450,6 +453,15 @@ export default function CadView({
     })
   }
 
+  const toggleCamera = () => {
+    if (isCameraPerpective) {
+      switchCameraToOrtho()
+    } else {
+      switchCameraToPerspective()
+    }
+  }
+
+  console.log('is camera perspective', isCameraPerpective)
 
   return (
     <div className={classes.root}>
@@ -505,7 +517,7 @@ export default function CadView({
       >
         <TooltipIconButton
           title={`Camera switch`}
-          onClick={() => console.log('switch')}
+          onClick={toggleCamera}
           icon={<CameraIcon/>}
         />
       </ButtonGroup>
