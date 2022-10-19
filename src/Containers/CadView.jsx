@@ -22,13 +22,11 @@ import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import {NavCube} from '../Components/NavCube/NavCube'
 
-
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
 const searchIndex = new SearchIndex()
-
 
 let count = 0
 /**
@@ -37,12 +35,7 @@ let count = 0
  *
  * @return {object}
  */
-export default function CadView({
-  installPrefix,
-  appPrefix,
-  pathPrefix,
-  modelPath,
-}) {
+export default function CadView({installPrefix, appPrefix, pathPrefix, modelPath}) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
   // React router
@@ -75,7 +68,6 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
 
-
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
@@ -84,7 +76,6 @@ export default function CadView({
     onModelPath()
   }, [modelPath])
 
-
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
@@ -92,13 +83,11 @@ export default function CadView({
     })()
   }, [viewer])
 
-
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
-
 
   // Watch for path changes within the model.
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
@@ -116,7 +105,6 @@ export default function CadView({
   }, [location, model])
   /* eslint-enable */
 
-
   /**
    * Begin setup for new model. Turn off nav, search and item and init
    * new viewer.
@@ -127,15 +115,12 @@ export default function CadView({
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
         pathPrefix,
-        (theme &&
-                theme.palette &&
-                theme.palette.background &&
-                theme.palette.background.paper) || '0xabcdef')
+        (theme && theme.palette && theme.palette.background && theme.palette.background.paper) || '0xabcdef',
+    )
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
   }
-
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
@@ -161,12 +146,11 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
     addThemeListener()
-    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const pathToLoad = modelPath.gitpath || installPrefix + modelPath.filepath
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
   }
-
 
   const isMobile = useIsMobile()
   // Shrink the scene viewer when drawer is open.  This recenters the
@@ -180,9 +164,8 @@ export default function CadView({
     }
   }, [isDrawerOpen, isMobile, viewer])
 
-
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)}message={msg}/>)
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg} />)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -219,7 +202,8 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
-        })
+        },
+    )
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
@@ -246,7 +230,6 @@ export default function CadView({
     debug().error('CadView#loadIfc: Model load failed!')
   }
 
-
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
     const viewerContainer = document.getElementById('viewer-container')
@@ -266,7 +249,6 @@ export default function CadView({
     viewerContainer.appendChild(fileInput)
     fileInput.click()
   }
-
 
   /**
    * Analyze loaded IFC model to configure UI elements.
@@ -298,7 +280,6 @@ export default function CadView({
     }
   }
 
-
   /**
    * Index the model starting at the given rootElt, clearing any
    * previous index data and parses any incoming search params in the
@@ -316,7 +297,6 @@ export default function CadView({
     onSearchParams()
     setShowSearchBar(true)
   }
-
 
   /**
    * Search for the query in the index and select matching items in UI elts.
@@ -340,7 +320,6 @@ export default function CadView({
     }
   }
 
-
   /** Clear active search state and unpick active scene elts. */
   function clearSearch() {
     setSelectedElements([])
@@ -348,7 +327,6 @@ export default function CadView({
       viewer.IFC.unpickIfcItems()
     }
   }
-
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
@@ -360,7 +338,6 @@ export default function CadView({
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }
-
 
   /**
    * Pick the given items in the scene.
@@ -378,7 +355,6 @@ export default function CadView({
       debug().log('TODO: no visual element for item ids: ', resultIDs)
     }
   }
-
 
   /**
    * Select the items in the NavTree and update ItemProperties.
@@ -403,7 +379,6 @@ export default function CadView({
     return pathIds
   }
 
-
   /**
    * Extracts the path to the element from the url and selects the element
    *
@@ -420,7 +395,6 @@ export default function CadView({
     }
   }
 
-
   /** Select items in model when they are double-clicked. */
   function setDoubleClickListener() {
     window.ondblclick = async (event) => {
@@ -436,7 +410,6 @@ export default function CadView({
     }
   }
 
-
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
@@ -447,47 +420,37 @@ export default function CadView({
     })
   }
 
-
   return (
     <div className={classes.root}>
-      <div className={classes.view} id='viewer-container'></div>
+      <div className={classes.view} id="viewer-container"></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
-        <div className={classes.search}>
-          {showSearchBar && (
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />
-          )}
-        </div>
-        {showNavPanel &&
+        <div className={classes.search}>{showSearchBar && <SearchBar fileOpen={loadLocalFile} />}</div>
+        {showNavPanel && (
           <NavPanel
             model={model}
             element={rootElement}
             defaultExpandedElements={defaultExpandedElements}
             expandedElements={expandedElements}
             setExpandedElements={setExpandedElements}
-            pathPrefix={
-              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }
-          />}
+            pathPrefix={pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)}
+          />
+        )}
         <Logo onClick={() => navToDefault(navigate, appPrefix)} />
-        <div className={isDrawerOpen ?
-          classes.operationsGroupOpen :
-          classes.operationsGroup}
-        >
-          {viewer &&
+        <div className={isDrawerOpen ? classes.operationsGroupOpen : classes.operationsGroup}>
+          {viewer && (
             <OperationsGroup
               viewer={viewer}
               unSelectItem={unSelectItems}
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
               showNavPanel={showNavPanel}
               installPrefix={installPrefix}
-            />}
+            />
+          )}
         </div>
         {alert}
       </div>
@@ -495,7 +458,6 @@ export default function CadView({
     </div>
   )
 }
-
 
 /**
  * @param {string} pathPrefix E.g. /share/v/p
@@ -545,7 +507,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   return v
 }
 
-
 const useStyles = makeStyles({
   root: {
     'position': 'absolute',
@@ -557,11 +518,8 @@ const useStyles = makeStyles({
       height: ' calc(100vh - calc(100vh - 100%))',
       minHeight: '-webkit-fill-available',
     },
-
   },
-  searchContainer: {
-
-  },
+  searchContainer: {},
   search: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
