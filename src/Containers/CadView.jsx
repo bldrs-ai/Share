@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import ButtonGroup from '@mui/material/ButtonGroup'
 import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
@@ -19,8 +20,10 @@ import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
+import {TooltipIconButton} from '../Components/Buttons'
 import SearchIndex from './SearchIndex'
 import {NavCube} from '../Components/NavCube/NavCube'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
 
 
 /**
@@ -74,6 +77,9 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const isCameraPerpective = useStore((state) => state.isCameraPerpective)
+  const switchCameraToPerspective = useStore((state) => state.switchCameraToPerspective)
+  const switchCameraToOrtho = useStore((state) => state.switchCameraToOrtho)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -447,6 +453,15 @@ export default function CadView({
     })
   }
 
+  const toggleCamera = () => {
+    if (isCameraPerpective) {
+      switchCameraToOrtho()
+    } else {
+      switchCameraToPerspective()
+    }
+  }
+
+  console.log('is camera perspective', isCameraPerpective)
 
   return (
     <div className={classes.root}>
@@ -492,6 +507,20 @@ export default function CadView({
         {alert}
       </div>
       <SideDrawerWrapper />
+      <ButtonGroup
+        orientation="vertical"
+        sx={{
+          position: 'absolute',
+          bottom: '24px',
+          right: '100px',
+        }}
+      >
+        <TooltipIconButton
+          title={`Camera switch`}
+          onClick={toggleCamera}
+          icon={<CameraIcon/>}
+        />
+      </ButtonGroup>
     </div>
   )
 }

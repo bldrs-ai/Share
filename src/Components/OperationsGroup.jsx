@@ -18,6 +18,7 @@ import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
+
 /**
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
