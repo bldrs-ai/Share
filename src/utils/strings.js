@@ -25,6 +25,21 @@ export function toKey(str) {
 
 
 /**
+ * Check if the string is a number
+ *
+ * @param {string} str to check
+ * @return {boolean} true if the string is a number
+ */
+export function isNumeric(str) {
+  if (typeof str !== 'string') {
+    return false
+  }
+  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
+         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+}
+
+
+/**
  * @param {string} str
  * @return {Array} url matches
  */

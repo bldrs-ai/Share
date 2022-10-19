@@ -34,7 +34,10 @@ export default function CutPlaneMenu() {
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
       const planeDirection = planeHash.split(':')[1]
-      createPlane(planeDirection)
+      const planes = ['x', 'y', 'z'].includes(planeDirection)
+      if (planes) {
+        createPlane(planeDirection)
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
