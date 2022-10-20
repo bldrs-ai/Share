@@ -547,7 +547,8 @@ export default function CadView({
  * @return {object} IfcViewerAPI viewer, width a .container property
  *     referencing its container.
  */
-function initViewer(pathPrefix, isCameraPerpective, backgroundColorStr = '#abcdef') {
+// eslint-disable-next-line
+function initViewer(pathPrefix, backgroundColorStr = '#abcdef', isCameraPerpective ) {
   debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.

@@ -113,7 +113,6 @@ export class NavCube {
     this.renderer.setSize(this.width, this.height)
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.localClippingEnabled = true
-
     this.renderer.domElement.setAttribute('tabindex', 1)
   }
   /**
