@@ -93,9 +93,9 @@ function AboutContent({installPrefix, acceptPrivacy}) {
     }
   }, [])
   const marks = [
-    {value: privacyLevelFunctional, label: 'Necessary', info: 'Theme, UI state, cookie preference'},
-    {value: privacyLevelUsage, label: 'Statistics', info: 'Stats from your use of Bldrs'},
-    {value: privacyLevelSocial, label: 'Marketing', info: 'Google\'s guess of your location and demographic'},
+    {value: privacyLevelFunctional, label: 'Functional', info: 'Theme, UI state, cookie preference'},
+    {value: privacyLevelUsage, label: 'Usage', info: 'Stats from your use of Bldrs'},
+    {value: privacyLevelSocial, label: 'Demographics', info: 'Google\'s guess of your location and demographic'},
   ]
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
@@ -149,9 +149,20 @@ function AboutContent({installPrefix, acceptPrivacy}) {
         borderRadius: '10px',
       }}
       >
-        <Typography variant={'h4'}>Privacy Settings</Typography>
-        <RectangularButton title='Accept All' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
-        <RectangularButton title='Define Preference' onClick={() => setDisplayPreferences(!displayPreferences)} icon={<AboutIcon/>}/>
+        <Typography variant={'h4'}>Set your cookie preferences</Typography>
+        <RectangularButton
+          title='Accept All'
+          onClick={() => acceptPrivacy()}
+          icon={<AboutIcon/> }
+          noBorder={false}
+        />
+        <RectangularButton
+          title='More Option'
+          onClick={() => setDisplayPreferences(!displayPreferences)}
+          icon={<AboutIcon/>}
+          noBorder={false}
+          noBackground={true}
+        />
       </Box>
       <div className={classes.settings}
         style={displayPreferences ?
