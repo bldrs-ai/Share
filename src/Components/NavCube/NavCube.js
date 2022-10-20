@@ -1,7 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import {
   AmbientLight,
-  DirectionalLight,
   PerspectiveCamera,
   OrthographicCamera,
   Raycaster,
@@ -99,11 +98,6 @@ export class NavCube {
     /* eslint-disable no-magic-numbers */
     this.ambientLight = new AmbientLight(LightColor.light, 2)
     this.scene.add(this.ambientLight)
-    this.directionalLight = new DirectionalLight(LightColor.light, 2)
-    this.directionalLight.position.set(-100, 0, 0)
-    this.directionalLight.target.position.set(-50, 0, 0)
-    this.scene.add(this.directionalLight)
-    this.scene.add(this.directionalLight.target)
   }
   /**
    * Initialize render
