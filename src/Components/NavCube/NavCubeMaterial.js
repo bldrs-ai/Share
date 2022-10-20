@@ -3,7 +3,7 @@ import {MeshLambertMaterial, MeshBasicMaterial, DoubleSide, Color, LineBasicMate
 
 export const LightColor = {
   light: 0x404040,
-  normalCube: new Color('rgb(255, 255, 255)'),
+  normalCube: new Color('rgb(245,245,245)'),
   hoverCube: new Color('rgb(14, 237, 51)'),
   textCube: new Color('rgb(69,154,71)'),
   refPlan: new Color('rgb(245, 245, 245)'),
