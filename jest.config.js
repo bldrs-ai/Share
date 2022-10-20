@@ -43,6 +43,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [
     'src/Share.test.js',
+    'src/Containers/CadView.test.js',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
