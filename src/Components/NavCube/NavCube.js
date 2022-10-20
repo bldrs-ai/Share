@@ -90,7 +90,13 @@ export class NavCube {
 			}
 		};
 	}
-
+	onChangeCamera(isCameraPerpective) {
+		if (isCameraPerpective) {
+			this.camera = this.perspectiveCamera;
+		} else {
+			this.camera = this.orthographicCamera;
+		}
+	}
 	/**
 	 * Initialize light
 	 */

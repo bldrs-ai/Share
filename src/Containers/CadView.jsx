@@ -425,7 +425,16 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 			}
 		});
 	};
-
+	const toggleCamera = () => {
+		if (isCameraPerpective) {
+			switchCameraToOrtho();
+		} else {
+			switchCameraToPerspective();
+		}
+		if (viewer) {
+			viewer.navCube.onChangeCamera(isCameraPerpective);
+		}
+	};
 	return (
 		<div className={classes.root}>
 			<div className={classes.view} id="viewer-container"></div>
@@ -461,6 +470,16 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 				{alert}
 			</div>
 			<SideDrawerWrapper />
+			<ButtonGroup
+				orientation="vertical"
+				sx={{
+					position: "absolute",
+					bottom: "24px",
+					right: "110px",
+				}}
+			>
+				<TooltipIconButton title={`Camera switch`} onClick={toggleCamera} icon={<CameraIcon />} />
+			</ButtonGroup>
 		</div>
 	);
 }
