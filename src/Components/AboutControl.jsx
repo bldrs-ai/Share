@@ -93,9 +93,9 @@ function AboutContent({installPrefix, acceptPrivacy}) {
     }
   }, [])
   const marks = [
-    {value: privacyLevelFunctional, label: 'Functional', info: 'Theme, UI state, cookie preference'},
-    {value: privacyLevelUsage, label: 'Usage', info: 'Stats from your use of Bldrs'},
-    {value: privacyLevelSocial, label: 'Social', info: 'Google\'s guess of your location and demographic'},
+    {value: privacyLevelFunctional, label: 'Necessary', info: 'Theme, UI state, cookie preference'},
+    {value: privacyLevelUsage, label: 'Statistics', info: 'Stats from your use of Bldrs'},
+    {value: privacyLevelSocial, label: 'Marketing', info: 'Google\'s guess of your location and demographic'},
   ]
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
@@ -220,7 +220,7 @@ const useStyles = makeStyles((theme) => (
         paddingBottom: '30px',
       },
       '& .MuiSlider-thumb': {
-        backgroundColor: theme.palette.highlight.main,
+        backgroundColor: theme.palette.highlight.secondary,
         width: '14px',
         height: '14px',
       },
