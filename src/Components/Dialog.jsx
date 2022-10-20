@@ -37,7 +37,14 @@ export default function Dialog({
       >
         {headerText}
       </Typography>
-      <DialogContent sx={{marginTop: '10px', paddingTop: '0px'}}>
+      <DialogContent sx={{
+        'marginTop': '10px',
+        'paddingTop': '0px',
+        '@media (max-width: 900px)': {
+          paddingTop: '10px',
+        },
+      }}
+      >
         <Typography variant='p'>
           {content}
         </Typography>

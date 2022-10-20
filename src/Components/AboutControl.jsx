@@ -176,7 +176,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
 const useStyles = makeStyles((theme) => (
   {
     content: {
-      'minHeight': '300px',
+      'minHeight': '330px',
       'maxWidth': '250px',
       'marginBottom': '10px',
       '& .MuiTypography-body1': {
