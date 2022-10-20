@@ -19,7 +19,6 @@ import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
-
 /**
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
@@ -42,7 +41,6 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
-
 
   const isSelected = () => {
     const ifSelected = (
@@ -67,17 +65,16 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
     }
   }
 
-
   return (
     <div className={classes.container}>
-      <ButtonGroup orientation="vertical" >
-        <ShareControl viewer={viewer}/>
+      <ButtonGroup orientation="vertical">
+        <ShareControl viewer={viewer} />
       </ButtonGroup>
       {!isMobile && <Divider />}
-      <ButtonGroup orientation="vertical" >
+      <ButtonGroup orientation="vertical">
         <TooltipIconButton
-          title='Notes'
-          icon={<NotesIcon/>}
+          title="Notes"
+          icon={<NotesIcon />}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
@@ -85,15 +82,15 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           title="Properties"
           onClick={() => toggle('Properties')}
           selected={isPropertiesOn}
-          icon={<ListIcon/>}
+          icon={<ListIcon />}
         />
-        {isMobile &&
+        {isMobile && (
           <TooltipIconButton
-            title='Elements Hierarchy'
+            title="Elements Hierarchy"
             selected={showNavPanel}
             onClick={onClickMenuCb}
-            icon={<TreeIcon/>}
-          />
+            icon={<TreeIcon />}
+          />)
         }
         <CutPlaneMenu/>
         <ExtractLevelsMenu/>
@@ -104,22 +101,21 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           icon={<ClearIcon />}
         />
       </ButtonGroup>
-      <Divider/>
+      <Divider />
       <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => theme.toggleColorMode()}
-          icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
+          icon={theme.isDay() ? <MoonIcon /> : <SunIcon />}
         />
         <SettingsControl/>
         <AboutControl installPrefix={installPrefix}/>
       </ButtonGroup>
       {/* Invisible */}
-      <CameraControl viewer={viewer}/>
+      <CameraControl viewer={viewer} />
     </div>
   )
 }
-
 
 const useStyles = makeStyles({
   container: {
@@ -133,4 +129,3 @@ const useStyles = makeStyles({
     },
   },
 })
-
