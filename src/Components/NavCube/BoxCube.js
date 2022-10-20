@@ -14,7 +14,7 @@ export class BoxCube {
    */
   constructor(scene) {
     this.scene = scene
-    const testPosition = [-45, -10, 64]
+    const testPosition = [-50, -10, 64]
     this.left = this.initItem('left', 96, 96, 16, 0, 0, 56)
     initText3D(this.scene, 'left', -40, testPosition[1], testPosition[2])
     this.right = this.initItem('right', 96, 96, 16, 0, 0, -56)
@@ -106,7 +106,7 @@ function initText3D(scene, name, x1, y1, z1) {
   let textCube
   const parameters = {
     font: font,
-    size: 30,
+    size: 20,
     height: 4,
   }
   if (name === 'bottom') {
