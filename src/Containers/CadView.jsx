@@ -73,6 +73,7 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -121,6 +122,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
+    resetState()
     setShowNavPanel(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
@@ -341,14 +343,20 @@ export default function CadView({
     }
   }
 
+  /** Reset global state */
+  function resetState() {
+    setSelectedElement(null)
+    setSelectedElements(null)
+    setCutPlaneDirection(null)
+    setLevelInstance(null)
+  }
+
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
-    setSelectedElements(null)
-    setCutPlaneDirection(null)
+    resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }

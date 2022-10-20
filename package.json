@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r499",
+  "version": "1.0.0-r501",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
@@ -94,8 +94,12 @@
     "jest": "^28.1.3",
     "jest-environment-jsdom": "^28.1.3",
     "jsdom": "^20.0.0",
+    "msw": "^0.47.4",
     "shx": "^0.3.4",
     "storybook-addon-material-ui": "^0.9.0-alpha.24",
     "storybook-addon-turbo-build": "^1.1.0"
+  },
+  "msw": {
+    "workerDirectory": "public"
   }
 }

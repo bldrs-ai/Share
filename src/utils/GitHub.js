@@ -2,7 +2,6 @@ import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
-import {isRunningLocally} from './network'
 
 
 /**
@@ -364,30 +363,6 @@ export const MOCK_COMMENTS = {
 export const MOCK_ISSUES_EMPTY = {data: []}
 
 
-/**
- * Mock of Octokit for locally and unit testing.
- */
-export class MockOctokit {
-  /**
-   * @param {string} path
-   * @param {object} account
-   * @param {object} args
-   * @return {object} Mock response
-   */
-  request(path, account, args) {
-    debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
-    if (path.includes(`/repos/{org}/{repo}/issues/{issue_number}/comments`)) {
-      return MOCK_COMMENTS
-    }
-    if (path.includes('/repos/{org}/{repo}/issues')) {
-      return MOCK_ISSUES
-    }
-  }
-}
-
-// All direct uses of octokit should be private to this file to
-// ensure we setup mocks for local use and unit testing.
-const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+const octokit = new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
-
