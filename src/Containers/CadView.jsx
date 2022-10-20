@@ -426,46 +426,43 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 		});
 	};
 
-  return (
-    <div className={classes.root}>
-      <div className={classes.view} id="viewer-container"></div>
-      <div className={classes.menusWrapper}>
-        <SnackBarMessage
-          message={snackMessage ? snackMessage : loadingMessage}
-          type={'info'}
-          open={isLoading || snackMessage !== null}
-        />
-        <div className={classes.search}>{showSearchBar && <SearchBar fileOpen={loadLocalFile} />}</div>
-        {showNavPanel && (
-          <NavPanel
-            model={model}
-            element={rootElement}
-            defaultExpandedElements={defaultExpandedElements}
-            expandedElements={expandedElements}
-            setExpandedElements={setExpandedElements}
-            pathPrefix={
-              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-            }
-          />}
-        <Logo onClick={() => navToDefault(navigate, appPrefix)} />
-        <div className={isDrawerOpen ?
-          classes.operationsGroupOpen :
-          classes.operationsGroup}
-        >
-          {viewer &&
-            <OperationsGroup
-              viewer={viewer}
-              unSelectItem={unSelectItems}
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              installPrefix={installPrefix}
-            />}
-        </div>
-        {alert}
-      </div>
-      <SideDrawerWrapper />
-    </div>
-  )
+	return (
+		<div className={classes.root}>
+			<div className={classes.view} id="viewer-container"></div>
+			<div className={classes.menusWrapper}>
+				<SnackBarMessage
+					message={snackMessage ? snackMessage : loadingMessage}
+					type={"info"}
+					open={isLoading || snackMessage !== null}
+				/>
+				<div className={classes.search}>{showSearchBar && <SearchBar fileOpen={loadLocalFile} />}</div>
+				{showNavPanel && (
+					<NavPanel
+						model={model}
+						element={rootElement}
+						defaultExpandedElements={defaultExpandedElements}
+						expandedElements={expandedElements}
+						setExpandedElements={setExpandedElements}
+						pathPrefix={pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)}
+					/>
+				)}
+				<Logo onClick={() => navToDefault(navigate, appPrefix)} />
+				<div className={isDrawerOpen ? classes.operationsGroupOpen : classes.operationsGroup}>
+					{viewer && (
+						<OperationsGroup
+							viewer={viewer}
+							unSelectItem={unSelectItems}
+							onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+							showNavPanel={showNavPanel}
+							installPrefix={installPrefix}
+						/>
+					)}
+				</div>
+				{alert}
+			</div>
+			<SideDrawerWrapper />
+		</div>
+	);
 }
 
 /**
