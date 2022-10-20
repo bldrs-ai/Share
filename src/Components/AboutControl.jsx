@@ -61,7 +61,6 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
       headerText={<LogoB style={{width: '50px', height: '50px'}} />}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      disableClose={true}
       content={<AboutContent installPrefix={installPrefix} acceptPrivacy={setIsDialogDisplayed} />}
       data-testid={'about-dialog'}
     />)
@@ -78,10 +77,12 @@ function AboutContent({installPrefix, acceptPrivacy}) {
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const [privacySlider, setPrivacySlider] = useState(0)
+  const [displayPreferences, setDisplayPreferences] = useState(false)
   const privacyLevelFunctional = 0
   const privacyLevelUsage = 10
   const privacyLevelSocial = 20
   const bulletStyle = {textAlign: 'center'}
+
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
       setPrivacySlider(privacyLevelSocial)
@@ -114,6 +115,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
     }
   }
 
+
   return (
     <div className={classes.content}>
       <Typography variant='h3'>Build Every Thing Together</Typography>
@@ -138,7 +140,24 @@ function AboutContent({installPrefix, acceptPrivacy}) {
         </ul>
       </Box>
 
-      <div className={classes.settings}>
+      <Box sx={{
+        height: '140px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        borderRadius: '10px',
+      }}
+      >
+        <Typography variant={'h4'}>Privacy Settings</Typography>
+        <RectangularButton title='Accept All' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
+        <RectangularButton title='Define Preference' onClick={() => setDisplayPreferences(!displayPreferences)} icon={<AboutIcon/>}/>
+      </Box>
+      <div className={classes.settings}
+        style={displayPreferences ?
+        {display: 'flex'} :
+        {display: 'none'}}
+      >
         <Typography variant='h4' sx={{marginBottom: '6px'}}>Cookies settings</Typography>
         <Slider
           onChange={setPrivacy}
@@ -150,8 +169,6 @@ function AboutContent({installPrefix, acceptPrivacy}) {
           sx={{width: '80%', textAlign: 'center'}}
         />
       </div>
-
-      <RectangularButton title='Allow cookies' onClick={() => acceptPrivacy()} icon={<AboutIcon/>}/>
     </div>)
 }
 
@@ -198,7 +215,6 @@ const useStyles = makeStyles((theme) => (
       'alignItems': 'center',
       'textAlign': 'center',
       'paddingTop': '10px',
-      'paddingBottom': '30px',
       '@media (max-width: 900px)': {
         paddingTop: '16px',
         paddingBottom: '30px',

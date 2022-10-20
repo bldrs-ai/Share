@@ -69,6 +69,7 @@ export function RectangularButton({
       variant='rectangular'
       startIcon={icon}
       sx={{
+        'backgroundColor': theme.palette.highlight.heavier,
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
         '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.main},
       }}
