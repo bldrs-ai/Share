@@ -524,7 +524,7 @@ export default function CadView({
         }}
       >
         <TooltipIconButton
-          title={`Camera switch`}
+          title={`${isCameraPerpective ? 'Orthogonal' : 'Perspecitve'}`}
           onClick={toggleCamera}
           icon={<CameraIcon/>}
         />
