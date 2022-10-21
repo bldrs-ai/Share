@@ -528,6 +528,7 @@ export default function CadView({
           position: 'absolute',
           bottom: '24px',
           right: '110px',
+          display: 'none',
         }}
       >
         <TooltipIconButton

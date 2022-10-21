@@ -18,18 +18,18 @@ export class BoxCube {
     this.left = this.initItem('left', 96, 96, 16, 0, 0, 56)
     initText3D(this.scene, 'bldrs', -34, testPosition[1], testPosition[2])
     this.right = this.initItem('right', 96, 96, 16, 0, 0, -56)
-    initText3D(this.scene, 'right', testPosition[0], testPosition[1], testPosition[2])
+    // initText3D(this.scene, 'right', testPosition[0], testPosition[1], testPosition[2])
 
     this.top = this.initItem('top', 96, 16, 96, 0, 56, 0)
-    initText3D(this.scene, 'top', -40, testPosition[1], testPosition[2])
+    // initText3D(this.scene, 'top', -40, testPosition[1], testPosition[2])
 
     this.bottom = this.initItem('bottom', 96, 16, 96, 0, -56, 0)
-    initText3D(this.scene, 'bottom', -40, testPosition[1], testPosition[2])
+    // initText3D(this.scene, 'bottom', -40, testPosition[1], testPosition[2])
 
     this.front = this.initItem('front', 16, 96, 96, 56, 0, 0)
-    initText3D(this.scene, 'front', testPosition[0], testPosition[1], testPosition[2])
+    // initText3D(this.scene, 'front', testPosition[0], testPosition[1], testPosition[2])
     this.back = this.initItem('back', 16, 96, 96, -56, 0, 0)
-    initText3D(this.scene, 'back', testPosition[0], testPosition[1], testPosition[2])
+    // initText3D(this.scene, 'back', testPosition[0], testPosition[1], testPosition[2])
 
     this.left_front = this.initItem('left_front', 16, 96, 16, 56, 0, 56)
     this.left_back = this.initItem('left_back', 16, 96, 16, -56, 0, 56)
