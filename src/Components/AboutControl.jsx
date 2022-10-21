@@ -94,8 +94,8 @@ function AboutContent({installPrefix, acceptPrivacy}) {
   }, [])
   const marks = [
     {value: privacyLevelFunctional, label: 'Functional', info: 'Theme, UI state, cookie preference'},
-    {value: privacyLevelUsage, label: 'Usage', info: 'Stats from your use of Bldrs'},
-    {value: privacyLevelSocial, label: 'Demographics', info: 'Google\'s guess of your location and demographic'},
+    {value: privacyLevelUsage, label: 'Preference', info: 'Stats from your use of Bldrs'},
+    {value: privacyLevelSocial, label: 'Statistics', info: 'Google\'s guess of your location and demographic'},
   ]
   const setPrivacy = (event) => {
     debug().log('AboutContent#setPrivacy: ', event.target.value)
