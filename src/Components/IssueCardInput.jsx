@@ -43,6 +43,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
             width: '100%',
             paddingLeft: '8px',
             color: 'black',
+            paddingTop: '4px',
           }}
           id="outlined-basic"
           label="Title"
@@ -58,6 +59,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'flex-start',
+          borderBottom: `1px solid ${theme.palette.highlight.heavy}`,
           backgroundColor: themeColor.isDay() ? 'white' : '#383838',
         }}
       >
