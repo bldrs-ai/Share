@@ -151,14 +151,14 @@ function AboutContent({installPrefix, acceptPrivacy}) {
       >
         <Typography variant={'h4'}>Set your cookie preferences</Typography>
         <RectangularButton
-          title='Accept All'
+          title='Accept all'
           onClick={() => acceptPrivacy()}
           icon={<AboutIcon/> }
           noBorder={false}
           noBackground={displayPreferences && true}
         />
         <RectangularButton
-          title='More Option'
+          title='More option'
           onClick={() => setDisplayPreferences(!displayPreferences)}
           icon={<AboutIcon/>}
           noBorder={false}
@@ -182,7 +182,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
         />
         <Box sx={{marginTop: '20px'}}>
           <RectangularButton
-            title='Accept'
+            title='Accept selection'
             onClick={() => acceptPrivacy()}
             icon={<AboutIcon/>}
             noBorder={false}
@@ -241,7 +241,7 @@ const useStyles = makeStyles((theme) => (
         paddingBottom: '30px',
       },
       '& .MuiSlider-thumb': {
-        backgroundColor: theme.palette.highlight.secondary,
+        backgroundColor: theme.palette.highlight.main,
         width: '14px',
         height: '14px',
       },
