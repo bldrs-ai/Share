@@ -94,7 +94,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
         }}
       >
         <TooltipIconButton
-          title='Include Camera View'
+          title='Camera View'
           size='small'
           selected={cameraIncluded}
           placement='bottom'
@@ -112,7 +112,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
         />
         <Box
           sx={{
-            width: '300px',
+            width: '320px',
             display: 'flex',
             marginRight: '8px',
             flexDirection: 'row',
@@ -120,6 +120,18 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
             alignItems: 'space-between',
           }}
         >
+          {cameraIncluded &&
+            <Chip
+              sx={{
+                backgroundColor: theme.palette.highlight.heavy,
+                marginRight: '10px',
+              }}
+              label="camera view is attached"
+              size='small'
+            />
+          }
+
+
           <Chip
             sx={{
               backgroundColor: theme.palette.highlight.main,
