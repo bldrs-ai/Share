@@ -16,7 +16,7 @@ export class BoxCube {
     this.scene = scene
     const testPosition = [-50, -10, 64]
     this.left = this.initItem('left', 96, 96, 16, 0, 0, 56)
-    initText3D(this.scene, 'left', -40, testPosition[1], testPosition[2])
+    initText3D(this.scene, 'bldrs', -34, testPosition[1], testPosition[2])
     this.right = this.initItem('right', 96, 96, 16, 0, 0, -56)
     initText3D(this.scene, 'right', testPosition[0], testPosition[1], testPosition[2])
 
