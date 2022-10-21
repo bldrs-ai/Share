@@ -8,6 +8,7 @@ import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../utils/location'
 import {getIssues, getComments} from '../utils/GitHub'
 import IssueCard from './IssueCard'
+import IssueCardInput from './IssueCardInput'
 import Loader from './Loader'
 import NoContent from './NoContent'
 import {TooltipIconButton} from './Buttons'
@@ -259,6 +260,7 @@ export function Issues() {
         </>
         }
       </div>
+      <IssueCardInput/>
     </Paper>
   )
 }
