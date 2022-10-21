@@ -65,7 +65,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.heavier,
     },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.heavy,
+      borderColor: theme.palette.primary.main,
     },
     '&:hover .MuiOutlinedInput-input': {
       color: theme.palette.highlight.heavy,
@@ -74,7 +74,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.secondary,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.heavy,
+      borderColor: theme.palette.primary.main,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
       color: theme.palette.highlight.secondary,
@@ -83,7 +83,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.secondary,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.heavy,
+      borderColor: theme.palette.primary.main,
     },
   },
 }),
