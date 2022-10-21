@@ -2,14 +2,17 @@ import {WidgetApi as MatrixWidgetApi} from "matrix-widget-api";
 
 class WidgetAPI {
 
-    constructor() {
+    navigation = null
+
+    constructor(navigation) {
+        this.navigation = navigation
         if (this.inIframe()) {
             const widgetId = 'bldrs-share';
             const api = new MatrixWidgetApi(widgetId);
             api.requestCapabilities([]);
-            api.on("action:ai.bldrs-share.setSelectedElement", (ev) => {
+            api.on("action:ai.bldrs-share.navigate", (ev) => {
                 ev.preventDefault();
-                window.loacation = '/share/v/p/index.ifc/89/112/139/154/396'
+                navigation(ev.detail.data.to)
                 api.transport.reply(ev.detail, {});
             });
             api.start();

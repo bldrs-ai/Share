@@ -2,6 +2,7 @@ import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import WidgetApi from './utils/widgetAPI'
 
 
 /**
@@ -26,6 +27,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix }/`
 
   useEffect(() => {
+    new WidgetApi(navigation)
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
