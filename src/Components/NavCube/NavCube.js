@@ -60,16 +60,16 @@ export class NavCube {
 	 */
 	initCamera() {
 		this.perspectiveCamera = new PerspectiveCamera(45, this.width / this.height, 1, 2000);
-		this.perspectiveCamera.userData.Radius = 400;
+		this.perspectiveCamera.userData.Radius = 350;
 		this.perspectiveCamera.position.z = this.perspectiveCamera.userData.Radius;
 		this.perspectiveCamera.position.y = this.perspectiveCamera.userData.Radius;
 		this.perspectiveCamera.position.x = this.perspectiveCamera.userData.Radius;
-
+		const aspect = 0.9;
 		this.orthographicCamera = new OrthographicCamera(
-			this.width / -1,
-			this.width / 1,
-			this.height / 1,
-			this.height / -1,
+			this.width / -aspect,
+			this.width / aspect,
+			this.height / aspect,
+			this.height / -aspect,
 			-1000,
 			1000
 		);
