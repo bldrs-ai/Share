@@ -164,8 +164,8 @@ function AboutContent({installPrefix, acceptPrivacy}) {
           noBackground={true}
         />
       </Box>
-      <div className={classes.settings}
-        style={displayPreferences ?
+      <Box className={classes.settings}
+        sx={displayPreferences ?
         {display: 'flex'} :
         {display: 'none'}}
       >
@@ -179,7 +179,16 @@ function AboutContent({installPrefix, acceptPrivacy}) {
           max={20}
           sx={{width: '80%', textAlign: 'center'}}
         />
-      </div>
+        <Box sx={{marginTop: '20px'}}>
+          <RectangularButton
+            title='Accept'
+            onClick={() => acceptPrivacy()}
+            icon={<AboutIcon/>}
+            noBorder={false}
+            noBackground={true}
+          />
+        </Box>
+      </Box>
     </div>)
 }
 

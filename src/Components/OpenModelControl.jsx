@@ -128,6 +128,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             title='Open from local drive'
             icon={<UploadIcon/>}
             onClick={openFile}
+            noBackground={true}
+            noBorder={false}
           />
           <p className={classes.bullet}>
             Models opened from local drive cannot be saved or shared.
