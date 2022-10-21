@@ -3,6 +3,7 @@ import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {makeStyles} from '@mui/styles'
+import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
@@ -20,6 +21,7 @@ import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
+import Branches from '../Components/Branches'
 
 
 /**
@@ -463,6 +465,9 @@ export default function CadView({
               fileOpen={loadLocalFile}
             />
           )}
+          <Box sx={{marginTop: '14px'}}>
+            <Branches />
+          </Box>
         </div>
         {showNavPanel &&
           <NavPanel
@@ -556,9 +561,6 @@ const useStyles = makeStyles({
     },
 
   },
-  searchContainer: {
-
-  },
   search: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
@@ -569,9 +571,10 @@ const useStyles = makeStyles({
     top: `20px`,
     left: '20px',
     display: 'flex',
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    // height: '200px'
   },
   view: {
     position: 'absolute',
