@@ -574,7 +574,6 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    // height: '200px'
   },
   view: {
     position: 'absolute',

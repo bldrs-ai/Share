@@ -59,16 +59,16 @@ const useStyles = makeStyles((theme) => ({
   dropDown: {
     'width': '300px',
     '& .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.heavy,
+      color: theme.palette.highlight.heaviest,
     },
     '& .MuiInputLabel-root': {
-      color: theme.palette.highlight.heavier,
+      color: theme.palette.highlight.heaviest,
     },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
     },
     '&:hover .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.heavy,
+      color: theme.palette.highlight.heaviest,
     },
     '&:hover .MuiInputLabel-root': {
       color: theme.palette.highlight.secondary,
