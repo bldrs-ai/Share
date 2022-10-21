@@ -13,6 +13,7 @@ import Loader from './Loader'
 import NoContent from './NoContent'
 import {TooltipIconButton} from './Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
+import AddNote from '../assets/2D_Icons/AddNote.svg'
 import BackIcon from '../assets/2D_Icons/Back.svg'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import NextIcon from '../assets/2D_Icons/NavNext.svg'
@@ -31,8 +32,8 @@ export function IssuesNavBar() {
   const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
   const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
-
-
+  const isAddNote = useStore((state) => state.isAddNote)
+  const toggleIsAddNote = useStore((state) => state.toggleIsAddNote)
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
     if (index >= 0 && index < issues.length) {
@@ -66,7 +67,7 @@ export function IssuesNavBar() {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
-              icon={<div className={classes.iconContainer}><BackIcon/></div>}
+              icon={<BackIcon/>}
             />
           </Box> : null
         }
@@ -94,14 +95,26 @@ export function IssuesNavBar() {
       </div>
 
       <div className={classes.rightGroup}>
-        <div>
-          <TooltipIconButton
-            title='Close Comments'
-            placement='bottom'
-            onClick={turnCommentsOff}
-            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
-          />
-        </div>
+        {isAddNote ?
+        <TooltipIconButton
+          title='Back to the list'
+          placement='bottom'
+          onClick={toggleIsAddNote}
+          icon={<BackIcon/>}
+        /> :
+        <TooltipIconButton
+          title='Add new note'
+          placement='bottom'
+          onClick={toggleIsAddNote}
+          icon={<AddNote/>}
+        />
+        }
+        <TooltipIconButton
+          title='Close Comments'
+          placement='bottom'
+          onClick={turnCommentsOff}
+          icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+        />
       </div>
     </div>
   )
@@ -117,6 +130,7 @@ export function Issues() {
   const setIssues = useStore((state) => state.setIssues)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const isAddNote = useStore((state) => state.isAddNote)
   const filteredIssue = (issues && selectedIssueId) ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
@@ -201,66 +215,70 @@ export function Issues() {
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
-      <div className={classes.cardsContainer}>
-        {issues === null && <Loader type={'linear'}/> }
-        {issues && issues.length === 0 && <NoContent/> }
-        {issues && !selectedIssueId ?
-          issues.map((issue, index) => {
-            return (
-              <IssueCard
-                embeddedUrl={issue.embeddedUrl}
-                index={issue.index}
-                id={issue.id}
-                key={index}
-                title={issue.title}
-                date={issue.date}
-                body={issue.body}
-                username={issue.username}
-                numberOfComments={issue.numberOfComments}
-                avatarUrl={issue.avatarUrl}
-                imageUrl={issue.imageUrl}
-              />
-            )
-          }) :
-        <>
-          {filteredIssue ?
-           <IssueCard
-             embeddedUrl={filteredIssue.embeddedUrl}
-             index={filteredIssue.index}
-             id={filteredIssue.id}
-             key={filteredIssue.id}
-             title={filteredIssue.title}
-             date={filteredIssue.date}
-             body={filteredIssue.body}
-             username={filteredIssue.username}
-             numberOfComments={filteredIssue.numberOfComments}
-             avatarUrl={filteredIssue.avatarUrl}
-             imageUrl={filteredIssue.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
+      {isAddNote ?
+      <Box sx={{paddingTop: '10px'}}>
+        <IssueCardInput/>
+      </Box> :
+          <div className={classes.cardsContainer}>
+            {issues === null && <Loader type={'linear'}/> }
+            {issues && issues.length === 0 && <NoContent/> }
+            {issues && !selectedIssueId ?
+              issues.map((issue, index) => {
+                return (
+                  <IssueCard
+                    embeddedUrl={issue.embeddedUrl}
+                    index={issue.index}
+                    id={issue.id}
+                    key={index}
+                    title={issue.title}
+                    date={issue.date}
+                    body={issue.body}
+                    username={issue.username}
+                    numberOfComments={issue.numberOfComments}
+                    avatarUrl={issue.avatarUrl}
+                    imageUrl={issue.imageUrl}
+                  />
+                )
+              }) :
+            <>
+              {filteredIssue ?
                <IssueCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
-        }
-      </div>
-      <IssueCardInput/>
+                 embeddedUrl={filteredIssue.embeddedUrl}
+                 index={filteredIssue.index}
+                 id={filteredIssue.id}
+                 key={filteredIssue.id}
+                 title={filteredIssue.title}
+                 date={filteredIssue.date}
+                 body={filteredIssue.body}
+                 username={filteredIssue.username}
+                 numberOfComments={filteredIssue.numberOfComments}
+                 avatarUrl={filteredIssue.avatarUrl}
+                 imageUrl={filteredIssue.imageUrl}
+               /> : null
+              }
+              {comments &&
+               comments.map((comment, index) => {
+                 return (
+                   <IssueCard
+                     embeddedUrl={comment.embeddedUrl}
+                     isComment={true}
+                     index=''
+                     id={comment.id}
+                     key={comment.id}
+                     title={index + 1}
+                     date={comment.date}
+                     body={comment.body}
+                     username={comment.username}
+                     avatarUrl={comment.avatarUrl}
+                     imageUrl={comment.imageUrl}
+                   />
+                 )
+               })
+              }
+            </>
+            }
+          </div>
+      }
     </Paper>
   )
 }

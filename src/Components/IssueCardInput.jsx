@@ -1,8 +1,9 @@
-import React, {useContext} from 'react'
+import React, {useState, useContext} from 'react'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
+import useStore from '../store/useStore'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import useTheme from '../Theme'
 import {ColorModeContext} from '../Context/ColorMode'
@@ -18,7 +19,10 @@ import {TooltipIconButton} from './Buttons'
  */
 export default function IssueCardInput({onSubmit = () => console.log('in the on submit')}) {
   const theme = useTheme().theme
+  const [cameraIncluded, setCameraIncluded] = useState(false)
   const themeColor = useContext(ColorModeContext)
+  const toggleIsAddNote = useStore((state) => state.toggleIsAddNote)
+  console.log('cameraIncluded', cameraIncluded)
   return (
     <Paper elevation={0}
       sx={{
@@ -92,8 +96,9 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
         <TooltipIconButton
           title='Include Camera View'
           size='small'
+          selected={cameraIncluded}
           placement='bottom'
-          onClick={() => console.log('hello')}
+          onClick={() => setCameraIncluded(!cameraIncluded)}
           icon={
             <Box
               sx={{
@@ -122,7 +127,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
             label="Create a note"
             clickable
             size='small'
-            onClick={() => console.log('create a note')}
+            onClick={() => toggleIsAddNote()}
           />
         </Box>
       </Box>
