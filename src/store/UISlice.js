@@ -16,7 +16,6 @@ export default function createUISlice(set, get) {
     levelInstance: null,
     isAddNote: false,
     isCameraPerpective: true,
-    isAddNote: false,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -30,6 +29,5 @@ export default function createUISlice(set, get) {
     toggleIsAddNote: () => set((state) => ({isAddNote: !state.isAddNote})),
     switchCameraToPerspective: () => set(() => ({isCameraPerpective: true})),
     switchCameraToOrtho: () => set(() => ({isCameraPerpective: false})),
-    toggleIsAddNote: (planeHeightBottom) => set((state) => ({isAddNote: !state.isAddNote})),
   }
 }
