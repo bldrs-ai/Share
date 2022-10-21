@@ -1,14 +1,11 @@
 import React from 'react'
-import Paper from '@mui/material/Paper'
-import {grey} from '@mui/material/colors'
-import {makeStyles} from '@mui/styles'
-import Check from '../assets/2D_Icons/Check.svg'
-import Markup from '../assets/2D_Icons/Markup.svg'
-import Camera from '../assets/2D_Icons/Camera.svg'
-import Image from '../assets/2D_Icons/Image.svg'
-import ScreenShot from '../assets/2D_Icons/ScreenShot.svg'
-import {TooltipToggleButton} from './Buttons'
+import Box from '@mui/material/Box'
+import Chip from '@mui/material/Chip'
 import InputBase from '@mui/material/InputBase'
+import Paper from '@mui/material/Paper'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
+import useTheme from '../Theme'
+import {TooltipIconButton} from './Buttons'
 
 
 /**
@@ -19,20 +16,56 @@ import InputBase from '@mui/material/InputBase'
  * @return {object} React component
  */
 export default function IssueCardInput({onSubmit = () => console.log('in the on submit')}) {
-  const classes = useStyles()
+  const theme = useTheme().theme
   return (
-    <Paper elevation={0} className={classes.container}>
-      <div className={classes.title}>
+    <Paper elevation={0}
+      sx={{
+        height: 'auto',
+        width: 'auto',
+        marginBottom: '20px',
+      }}
+    >
+      <Box
+        sx={{
+          height: '40px',
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          cursor: 'pointer',
+          border: '1px solid lightGrey',
+          backgroundColor: '#C8E8C7',
+        }}
+      >
         <InputBase
+          sx={{
+            width: '100%',
+            paddingLeft: '4px',
+            color: 'black',
+          }}
           id="outlined-basic"
           label="Title"
           type="text"
           placeholder='Title'
           size="small"
         />
-      </div>
-      <div className={classes.content}>
+      </Box>
+      <Box
+        sx={{
+          height: '100px',
+          marginTop: '10px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'flex-start',
+          border: '1px solid lightGrey',
+        }}
+      >
         <InputBase
+          sx={{
+            width: '100%',
+            paddingLeft: '4px',
+          }}
           id="outlined-basic"
           label="fkj "
           type="text"
@@ -41,140 +74,55 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           rows={3}
           size="small"
         />
-      </div>
-      <div className={classes.actions}>
-        <TooltipToggleButton
+      </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingLeft: '6px',
+          width: '100%',
+        }}
+      >
+        <TooltipIconButton
           title='Include Camera View'
           size='small'
           placement='bottom'
           onClick={() => console.log('hello')}
-          icon={<Camera/>}
+          icon={
+            <Box
+              sx={{
+                width: '20px',
+                height: '20px',
+                marginBottom: '2px',
+              }}
+            >
+              <CameraIcon/>
+            </Box>}
         />
-        <TooltipToggleButton
-          title='Include Model Screen Shot'
-          size='small'
-          placement='bottom'
-          onClick={() => console.log('hello')}
-          icon={<ScreenShot/>}
-        />
-        <TooltipToggleButton
-          title='Upload Image'
-          size='small'
-          placement='bottom'
-          onClick={() => console.log('hello')}
-          icon={<Image/>}
-        />
-        <TooltipToggleButton
-          title='Mark up mode'
-          size='small'
-          placement='bottom'
-          onClick={() => console.log('hello')}
-          icon={<Markup/>}
-        />
-        <TooltipToggleButton
-          title='Submit'
-          size='small'
-          placement='bottom'
-          onClick={() => onSubmit()}
-          icon={<Check/>}
-        />
-      </div>
+        <Box
+          sx={{
+            width: '300px',
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'flex-end',
+            alignItems: 'space-between',
+          }}
+        >
+          {/* <Chip
+            label="Camera position is included"
+          /> */}
+          <Chip
+            sx={{
+              backgroundColor: theme.palette.highlight.main,
+            }}
+            label="Create a note"
+            clickable
+            onClick={() => console.log('create a note')}
+          />
+        </Box>
+      </Box>
     </Paper>
   )
 }
-
-const useStyles = makeStyles({
-  container: {
-    height: 'auto',
-    width: 'auto',
-    margin: '10px',
-    marginRight: '10px',
-    border: '1px solid transparent',
-  },
-  title: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: '10px',
-    marginBottom: '10px',
-    marginLeft: '5px',
-    marginRight: '5px',
-    paddingLeft: '10px',
-    height: '40px',
-    overflow: 'fix',
-    fontSize: '14px',
-    fontFamily: 'Helvetica',
-    cursor: 'pointer',
-    border: '1px solid lightGrey',
-    borderRadius: '10px',
-  },
-  content: {
-    height: '100px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    marginTop: '10px',
-    marginBottom: '5px',
-    marginLeft: '5px',
-    marginRight: '5px',
-    paddingLeft: '5px',
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    fontSize: '12px',
-    lineHeight: '14px',
-    fontFamily: 'Helvetica',
-    border: '1px solid lightGrey',
-    borderRadius: '10px',
-  },
-  showLess: {
-    cursor: 'pointer',
-    marginTop: '5px',
-    marginBottom: '5px',
-    marginLeft: '5px',
-    marginRight: '5px',
-    paddingLeft: '5px',
-    overflow: 'fix',
-    fontSize: '10px',
-    color: 'blue',
-  },
-  showLessEmpty: {
-    marginTop: '5px',
-    border: `1px solid ${grey[100]}`,
-    height: '12px',
-    widht: '10px',
-    marginBottom: '5px',
-    marginLeft: '5px',
-    marginRight: '5px',
-    paddingLeft: '5px',
-    overflow: 'fix',
-    fontSize: '10px',
-    color: 'blue',
-  },
-  actions: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: '5px',
-    marginLeft: '5px',
-    marginRight: '5px',
-    paddingLeft: '5px',
-    overflow: 'fix',
-    fontSize: '10px',
-  },
-  avatarIconContainer: {
-    width: '50px',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-start',
-    alignItems: 'center',
-  },
-  avatarIcon: {
-    width: 16,
-    height: 16,
-    borderRadius: '50%',
-    backgroundColor: 'blue',
-  },
-})
