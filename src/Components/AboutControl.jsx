@@ -155,6 +155,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
           onClick={() => acceptPrivacy()}
           icon={<AboutIcon/> }
           noBorder={false}
+          noBackground={displayPreferences && true}
         />
         <RectangularButton
           title='More Option'
@@ -185,7 +186,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
             onClick={() => acceptPrivacy()}
             icon={<AboutIcon/>}
             noBorder={false}
-            noBackground={true}
+            noBackground={false}
           />
         </Box>
       </Box>
