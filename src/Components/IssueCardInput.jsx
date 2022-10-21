@@ -1,10 +1,11 @@
-import React from 'react'
+import React, {useContext} from 'react'
 import Box from '@mui/material/Box'
 import Chip from '@mui/material/Chip'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 import useTheme from '../Theme'
+import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
 
 
@@ -17,6 +18,7 @@ import {TooltipIconButton} from './Buttons'
  */
 export default function IssueCardInput({onSubmit = () => console.log('in the on submit')}) {
   const theme = useTheme().theme
+  const themeColor = useContext(ColorModeContext)
   return (
     <Paper elevation={0}
       sx={{
@@ -33,14 +35,13 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           justifyContent: 'space-between',
           alignItems: 'center',
           cursor: 'pointer',
-          border: '1px solid lightGrey',
           backgroundColor: '#C8E8C7',
         }}
       >
         <InputBase
           sx={{
             width: '100%',
-            paddingLeft: '4px',
+            paddingLeft: '8px',
             color: 'black',
           }}
           id="outlined-basic"
@@ -53,18 +54,17 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
       <Box
         sx={{
           height: '100px',
-          marginTop: '10px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
           alignItems: 'flex-start',
-          border: '1px solid lightGrey',
+          backgroundColor: themeColor.isDay() ? 'white' : '#383838',
         }}
       >
         <InputBase
           sx={{
             width: '100%',
-            paddingLeft: '4px',
+            paddingLeft: '8px',
           }}
           id="outlined-basic"
           label="fkj "
@@ -83,6 +83,8 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           alignItems: 'center',
           paddingLeft: '6px',
           width: '100%',
+          borderRadius: '0px 0px 5px 5px',
+          backgroundColor: themeColor.isDay() ? 'white' : '#383838',
         }}
       >
         <TooltipIconButton
@@ -105,20 +107,19 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           sx={{
             width: '300px',
             display: 'flex',
+            marginRight: '8px',
             flexDirection: 'row',
             justifyContent: 'flex-end',
             alignItems: 'space-between',
           }}
         >
-          {/* <Chip
-            label="Camera position is included"
-          /> */}
           <Chip
             sx={{
               backgroundColor: theme.palette.highlight.main,
             }}
             label="Create a note"
             clickable
+            size='small'
             onClick={() => console.log('create a note')}
           />
         </Box>
