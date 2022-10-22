@@ -218,6 +218,24 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 			item_id: filepath,
 		});
 		setIsLoading(false);
+		if (loadedModel) {
+			// Fix for https://github.com/bldrs-ai/Share/issues/91
+			//
+			// TODO(pablo): huge hack. Somehow this is getting incremented to
+			// 1 even though we have a new IfcViewer instance for each file
+			// load.  That modelID is used in the IFCjs code as [modelID] and
+			// leads to undefined refs e.g. in prePickIfcItem.  The id should
+			// always be 0.
+			// comput center model, after every time geometry of model change
+			// default
+			loadedModel.geometry.computeBoundingBox();
+			loadedModel.geometry.computeBoundingSphere();
+			loadedModel.modelID = 0;
+			setModel(loadedModel);
+			setModelStore(loadedModel);
+			return loadedModel;
+		}
+		debug().error("CadView#loadIfc: Model load failed!");
 	}
 	/**
 	 * Pick the given items in the scene.
@@ -280,6 +298,10 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 			setShowNavPanel(false);
 		} else {
 			setShowNavPanel(true);
+		}
+		if (viewer?.navCube) {
+			console.log(viewer?.navCube);
+			viewer?.navCube.onPick(m);
 		}
 	}
 
