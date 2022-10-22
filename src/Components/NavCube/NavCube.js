@@ -82,13 +82,6 @@ export class NavCube {
 		} else {
 			this.camera = this.orthographicCamera;
 		}
-		this.viewer.context.ifcCamera.onChange = function (event) {
-			if (this.viewer.context.ifcCamera.activeCamera.isPerspectiveCamera) {
-				this.camera = this.perspectiveCamera;
-			} else {
-				this.camera = this.orthographicCamera;
-			}
-		};
 	}
 	onChangeCamera(isCameraPerpective) {
 		if (isCameraPerpective) {

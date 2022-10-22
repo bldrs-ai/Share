@@ -430,7 +430,7 @@ export default function CadView({ installPrefix, appPrefix, pathPrefix, modelPat
 			switchCameraToPerspective();
 		}
 		if (viewer) {
-			console.log(viewer);
+			viewer.IFC.context.ifcCamera.toggleProjection();
 			viewer.navCube.onChangeCamera(!isCameraPerpective);
 		}
 	};
