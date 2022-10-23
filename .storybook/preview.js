@@ -13,15 +13,18 @@ export const parameters = {
   },
 }
 
-addDecorator((Story) => {
-  const {theme, colorMode} = useTheme()
-  const ColorModeContext = createContext({toggleColorMode: () => {}})
+export const decorators = [
+  (Story) => {
+    const {theme, colorMode} = useTheme()
+    const ColorModeContext = createContext({toggleColorMode: () => {}})
 
-  return (
-    <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
+    return (
+        <ColorModeContext.Provider value={colorMode}>
+        <ThemeProvider theme={theme}>
         {Story()}
       </ThemeProvider>
-    </ColorModeContext.Provider>
-  )
-})
+        </ColorModeContext.Provider>
+    )
+  }
+]
+
