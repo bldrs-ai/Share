@@ -1,10 +1,10 @@
 import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
-import ShareMock from '../ShareMock'
-import useStore from '../store/useStore'
-import {IssuesNavBar, Issues} from './IssuesControl'
-import {server} from '../__mocks__/server'
-import {MOCK_ISSUES_EMPTY} from '../utils/GitHub'
+import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
+import {server} from '../../__mocks__/server'
+import {MOCK_ISSUES_EMPTY} from '../../utils/GitHub'
+import Issues from './Issues'
 import {rest} from 'msw'
 
 
@@ -14,23 +14,6 @@ describe('IssueControl', () => {
     await act(() => {
       result.current.setIssues(null)
     })
-  })
-
-
-  it('Issues NavBar Issues', () => {
-    const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-    expect(getByText('Notes')).toBeInTheDocument()
-  })
-
-
-  it('NavBar changes to back nav when issue selected', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const testIssueId = 10
-    const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-    await act(() => {
-      result.current.setSelectedIssueId(testIssueId)
-    })
-    expect(await getByTitle('Back to the list')).toBeInTheDocument()
   })
 
 
