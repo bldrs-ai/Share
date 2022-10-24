@@ -460,7 +460,7 @@ export default function CadView({
           open={isLoading || snackMessage !== null}
         />
         {showSearchBar && (
-          <div className={classes.topContainer}>
+          <div className={classes.topLeftContainer}>
             <SearchBar
               fileOpen={loadLocalFile}
             />
@@ -563,7 +563,8 @@ const useStyles = makeStyles({
     },
 
   },
-  topContainer: {
+  topLeftContainer: {
+    height: '500px',
     position: 'absolute',
     top: `20px`,
     left: '20px',
@@ -571,7 +572,6 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
-    height: '300px',
   },
   view: {
     position: 'absolute',
