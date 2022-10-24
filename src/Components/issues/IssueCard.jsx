@@ -1,24 +1,24 @@
 import React, {useState, useEffect, useContext} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {makeStyles} from '@mui/styles'
-import {ColorModeContext} from '../Context/ColorMode'
-import useStore from '../store/useStore'
-import {assertDefined} from '../utils/assert'
-import {addHashParams, getHashParamsFromHashStr} from '../utils/location'
-import {isRunningLocally} from '../utils/network'
-import {findUrls} from '../utils/strings'
-import {TooltipIconButton} from './Buttons'
-import {ISSUE_PREFIX} from './IssuesControl'
+import {ColorModeContext} from '../../Context/ColorMode'
+import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
+import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
+import {isRunningLocally} from '../../utils/network'
+import {findUrls} from '../../utils/strings'
+import {TooltipIconButton} from '../Buttons'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
   setCameraFromParams,
   parseHashParams,
   removeCameraUrlParams,
-} from './CameraControl'
-import {useIsMobile} from './Hooks'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
+} from '../CameraControl'
+import {useIsMobile} from '../Hooks'
+import {ISSUE_PREFIX} from './Issues'
+import CameraIcon from '../../assets/2D_Icons/Camera.svg'
+import ShareIcon from '../../assets/2D_Icons/Share.svg'
 
 
 /**
