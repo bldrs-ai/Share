@@ -6,6 +6,7 @@ import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ExtractLevelsMenu from './ExtractLevelsMenu'
+import SettingsControl from './SettingsControl'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
@@ -110,6 +111,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           onClick={() => theme.toggleColorMode()}
           icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
+        <SettingsControl/>
         <AboutControl installPrefix={installPrefix}/>
       </ButtonGroup>
       {/* Invisible */}
