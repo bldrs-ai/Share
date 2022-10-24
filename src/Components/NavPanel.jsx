@@ -71,9 +71,7 @@ export default function NavPanel({
 
 const useStyles = makeStyles((theme) => ({
   root: {
-    'position': 'absolute',
-    'top': '160px',
-    'left': '20px',
+    'marginTop': '14px',
     'overflow': 'auto',
     'width': '300px',
     'opacity': .8,

@@ -459,27 +459,29 @@ export default function CadView({
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
-        <div className={classes.search}>
-          {showSearchBar && (
+        {showSearchBar && (
+          <div className={classes.topContainer}>
             <SearchBar
               fileOpen={loadLocalFile}
             />
-          )}
-          <Box sx={{marginTop: '14px'}}>
-            <BranchesControl />
-          </Box>
-        </div>
-        {showNavPanel &&
-          <NavPanel
-            model={model}
-            element={rootElement}
-            defaultExpandedElements={defaultExpandedElements}
-            expandedElements={expandedElements}
-            setExpandedElements={setExpandedElements}
-            pathPrefix={
-              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+            <Box sx={{marginTop: '14px'}}>
+              <BranchesControl />
+            </Box>
+            {showNavPanel &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
             }
-          />}
+          </div>
+        )}
+
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
@@ -561,19 +563,15 @@ const useStyles = makeStyles({
     },
 
   },
-  search: {
+  topContainer: {
     position: 'absolute',
-    // TODO(pablo): we were passing this around as it's used in a few
-    // places, but there's now only 1 dialog object that also uses it
-    // and it has multiple callers; passing that variable around seems
-    // overkill. I don't like not having it as a variable, but going
-    // to hardcode for now and look into passing via the theme later.
     top: `20px`,
     left: '20px',
     display: 'flex',
     flexDirection: 'column',
     justifyContent: 'flex-start',
     alignItems: 'flex-start',
+    height: '300px',
   },
   view: {
     position: 'absolute',
