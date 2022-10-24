@@ -8,7 +8,6 @@ import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {ColorModeContext} from '../Context/ColorMode'
-import {useIsMobile} from './Hooks'
 
 
 /**
@@ -33,7 +32,6 @@ export default function NavPanel({
   const theme = useContext(ColorModeContext)
   const classes = useStyles({isDay: theme.isDay()})
   const selectedElements = useStore((state) => state.selectedElements)
-  const isMobile = useIsMobile()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
@@ -41,7 +39,7 @@ export default function NavPanel({
     <Paper
       elevation={0}
       className={classes.root}
-      sx={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
+      sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
     >
       <div className={classes.treeContainer}>
         <TreeView
