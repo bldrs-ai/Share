@@ -2,9 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-
 import {makeStyles} from '@mui/styles'
-
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
@@ -15,8 +13,6 @@ import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
-
-
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {ColorModeContext} from '../Context/ColorMode'
@@ -77,6 +73,7 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -125,6 +122,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
+    resetState()
     setShowNavPanel(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
@@ -345,14 +343,20 @@ export default function CadView({
     }
   }
 
+  /** Reset global state */
+  function resetState() {
+    setSelectedElement(null)
+    setSelectedElements(null)
+    setCutPlaneDirection(null)
+    setLevelInstance(null)
+  }
+
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    setSelectedElement(null)
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
-    setSelectedElements(null)
-    setCutPlaneDirection(null)
+    resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }

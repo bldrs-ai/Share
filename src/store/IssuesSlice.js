@@ -7,8 +7,8 @@
  */
 export default function createIssuesSlice(set, get) {
   return {
-    issues: [],
-    comments: [],
+    issues: null,
+    comments: null,
     selectedIssueId: null,
     selectedIssueIndex: null,
     setIssues: (issues) => set(() => ({issues: issues})),

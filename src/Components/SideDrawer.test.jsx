@@ -48,7 +48,7 @@ describe('SideDrawer', () => {
     })
     expect(await findByText('Local issue - some text is here to test - Id:1257156364')).toBeVisible()
     // reset the store
-    act(() => {
+    await act(() => {
       result.current.setSelectedIssueId(null)
       result.current.turnCommentsOff()
     })

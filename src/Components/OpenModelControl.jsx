@@ -32,7 +32,9 @@ export default function OpenModelControl({fileOpen}) {
         <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
-            onClick={() => setIsDialogDisplayed(true)}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
             color='primary'
             value={'something'}
           >
@@ -100,11 +102,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             select
             size='small'
           >
-            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
             <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
             <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
             <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
           </TextField>
           <p className={classes.bullet}>
@@ -166,7 +168,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '44px',
       'height': '44px',
-      'border': 'none',
+      'border': `1px solid ${theme.palette.highlight.heavy}`,
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979770',
       },

@@ -19,30 +19,39 @@ import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const open = Boolean(anchorEl)
   const model = useStore((state) => state.modelStore)
-  const theme = useTheme()
-  const PLANE_PREFIX = 'p'
-
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget)
-  }
-  const handleClose = () => {
-    setAnchorEl(null)
-  }
   const viewer = useStore((state) => state.viewerStore)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const open = Boolean(anchorEl)
+  const theme = useTheme()
   const location = useLocation()
+
+  const PLANE_PREFIX = 'p'
+
+  useEffect(() => {
+    const planeHash = getHashParams(location, 'p')
+    if (planeHash && model && viewer) {
+      const planeDirection = planeHash.split(':')[1]
+      const planes = ['x', 'y', 'z'].includes(planeDirection)
+      if (planes) {
+        createPlane(planeDirection)
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model])
 
   const createPlane = (normalDirection) => {
     viewer.clipper.deleteAllPlanes()
+    setLevelInstance(null)
     const modelCenter = getModelCenter(model)
     const planeHash = getHashParams(location, 'p')
+    setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
       viewer.clipper.deleteAllPlanes()
       removeHashParams(window.location, PLANE_PREFIX)
-      setCutPlaneDirection('')
+      setCutPlaneDirection(null)
       return
     }
     let normal
@@ -67,14 +76,14 @@ export default function CutPlaneMenu() {
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
   }
 
-  useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
-    if (planeHash && model && viewer) {
-      const planeDirection = planeHash.split(':')[1]
-      createPlane(planeDirection)
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model])
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
+
 
   return (
     <div>
@@ -82,7 +91,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null}
+        selected={anchorEl !== null || cutPlaneDirection !== null}
       />
       <Menu
         elevation={1}

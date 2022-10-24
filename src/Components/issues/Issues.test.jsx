@@ -1,25 +1,21 @@
 import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
-import ShareMock from '../ShareMock'
-import useStore from '../store/useStore'
-import {IssuesNavBar, Issues} from './IssuesControl'
+import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
+import {server} from '../../__mocks__/server'
+import {MOCK_ISSUES_EMPTY} from '../../utils/GitHub'
+import Issues from './Issues'
+import {rest} from 'msw'
 
 
 describe('IssueControl', () => {
-  it('Issues NavBar Issues', () => {
-    const {getByText} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-    expect(getByText('Notes')).toBeInTheDocument()
+  beforeEach(async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setIssues(null)
+    })
   })
 
-  it('NavBar changes to back nav when issue selected', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const testIssueId = 10
-    const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
-    await act(() => {
-      result.current.setSelectedIssueId(testIssueId)
-    })
-    expect(await getByTitle('Back to the list')).toBeInTheDocument()
-  })
 
   it('Setting issues in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -33,23 +29,45 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeInTheDocument()
     expect(await getByText('closed_system')).toBeInTheDocument()
   })
-})
-test('Setting comments in zustand ', async () => {
-  const {result} = renderHook(() => useStore((state) => state))
-  const testIssueId = 10
-  const {getByText} = render(<ShareMock><Issues/></ShareMock>)
-  await act(() => {
-    result.current.setSelectedIssueId(testIssueId)
+
+
+  it('Setting comments in zustand ', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const testIssueId = 10
+    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(testIssueId)
+    })
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+      result.current.setComments(MOCK_COMMENTS)
+    })
+    expect(await getByText('open_workspace')).toBeVisible()
   })
-  await act(() => {
-    result.current.setIssues(MOCK_ISSUES)
+
+  // XXX: Should this be split into two different tests?
+  it('test Loader is present if issues are null, and removed when issues set', async () => {
+    // Set up handler to return an empty set of issues
+    server.use(
+        rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+          return res(
+              ctx.json(MOCK_ISSUES_EMPTY),
+          )
+        }),
+    )
+
+    const {getByRole, queryByRole} = render(<ShareMock><Issues/></ShareMock>)
+    expect(getByRole('progressbar')).toBeInTheDocument()
+
+    // Restore the original set of HTTP handlers that return issues
+    server.restoreHandlers()
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setIssues(MOCK_ISSUES)
+    })
+    // queryByRole is used to not throw an error is the element is missing.
+    expect(queryByRole('progressbar')).not.toBeInTheDocument()
   })
-  await act(() => {
-    result.current.setComments(MOCK_COMMENTS)
-  })
-  expect(await getByText('open_workspace')).toBeVisible()
-  // expect(await getByText('The Architecture, Engineering and Construction')).toBeVisible()
-  // expect(await getByText('Email is the medium that still facilitates major portion of communication')).toBeVisible()
 })
 
 
