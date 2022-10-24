@@ -107,7 +107,7 @@ function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
             rows={5}
             InputProps={{
               readOnly: true,
-              className: classes.input}}
+            }}
           />
           <div className={classes.buttonsContainer}>
             <TooltipIconButton
