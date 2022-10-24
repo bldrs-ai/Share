@@ -63,27 +63,39 @@ describe('IssueControl', () => {
   })
 
   // XXX: Should this be split into two different tests?
-  it('test Loader is present if issues are null, and removed when issues set', async () => {
-    // Set up handler to return an empty set of issues
-    server.use(
-        rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-          return res(
-              ctx.json(MOCK_ISSUES_EMPTY),
-          )
-        }),
-    )
-
-    const {getByRole, queryByRole} = render(<ShareMock><Issues/></ShareMock>)
-    expect(getByRole('progressbar')).toBeInTheDocument()
-
-    // Restore the original set of HTTP handlers that return issues
-    server.restoreHandlers()
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setIssues(MOCK_ISSUES)
+  describe('when issues are null', () => {
+    beforeEach(() => {
+      // Set up handler to return an empty set of issues
+      server.use(
+          rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+            return res(
+                ctx.json(MOCK_ISSUES_EMPTY),
+            )
+          }),
+      )
     })
-    // queryByRole is used to not throw an error is the element is missing.
-    expect(queryByRole('progressbar')).not.toBeInTheDocument()
+
+    afterEach(() => {
+      // Restore the original set of HTTP handlers that return issues
+      server.restoreHandlers()
+    })
+
+    it('progress bar is present during loading of issues', () => {
+      const {getByRole} = render(<ShareMock><Issues/></ShareMock>)
+      expect(getByRole('progressbar')).toBeInTheDocument()
+    })
+
+    it('progress bar is no longer visible when issues are not-null', async () => {
+      const {queryByRole} = render(<ShareMock><Issues/></ShareMock>)
+
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        result.current.setIssues(MOCK_ISSUES)
+      })
+
+      // queryByRole is used to not throw an error is the element is missing.
+      expect(queryByRole('progressbar')).not.toBeInTheDocument()
+    })
   })
 })
 
