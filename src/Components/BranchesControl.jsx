@@ -72,18 +72,18 @@ const useStyles = makeStyles((theme) => ({
     },
     // TODO(oleg): connect to props
     '&:hover .MuiInputLabel-root': {
-      color: theme.palette.highlight.grey,
+      color: theme.palette.highlight.maximum,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
     },
     // TODO(oleg): connect to props
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.grey,
+      color: theme.palette.highlight.maximum,
     },
     // TODO(oleg): connect to props
     '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.highlight.grey,
+      color: theme.palette.highlight.maximum,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
