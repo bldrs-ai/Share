@@ -70,17 +70,20 @@ const useStyles = makeStyles((theme) => ({
     '&:hover .MuiOutlinedInput-input': {
       color: theme.palette.highlight.heaviest,
     },
+    // TODO(oleg): connect to props
     '&:hover .MuiInputLabel-root': {
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.highlight.grey,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
     },
+    // TODO(oleg): connect to props
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.highlight.grey,
     },
+    // TODO(oleg): connect to props
     '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.highlight.grey,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,

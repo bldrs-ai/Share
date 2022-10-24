@@ -21,7 +21,7 @@ import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
-import Branches from '../Components/Branches'
+import BranchesControl from '../Components/BranchesControl'
 
 
 /**
@@ -466,7 +466,7 @@ export default function CadView({
             />
           )}
           <Box sx={{marginTop: '14px'}}>
-            <Branches />
+            <BranchesControl />
           </Box>
         </div>
         {showNavPanel &&
