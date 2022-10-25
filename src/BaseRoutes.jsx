@@ -2,8 +2,7 @@ import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
-import WidgetApi from './utils/widgetAPI'
-
+import useStore from './store/useStore'
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -25,15 +24,19 @@ export default function BaseRoutes({testElt = null}) {
   const navigation = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix }/`
+  const widgetApiUri = useStore((state) => state.widgetApiUri)
 
   useEffect(() => {
-    new WidgetApi(navigation)
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
       navigation(`${installPrefix }/share`)
     }
-  }, [basePath, installPrefix, location, navigation])
+    if (widgetApiUri) {
+      navigation(widgetApiUri)
+    }
+
+  }, [basePath, installPrefix, location, navigation, widgetApiUri])
 
   return (
     <Routes>

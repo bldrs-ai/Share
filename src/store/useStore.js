@@ -6,6 +6,7 @@ import createRepositorySlice from './RepositorySlice'
 
 
 const useStore = create((set, get) => ({
+  widgetApiUri: null,
   ...createIFCSlice(set, get),
   ...createIssuesSlice(set, get),
   ...createRepositorySlice(set, get),
