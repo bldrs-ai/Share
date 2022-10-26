@@ -23,7 +23,6 @@ export default function Branches() {
     const modelPath = {
       0: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       1: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/Version-1/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
-      2: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
     }
     navigate({
       pathname: modelPath[e.target.value],
@@ -43,12 +42,11 @@ export default function Branches() {
         value={selected}
         onChange={(e) => handleSelect(e)}
         variant='outlined'
-        label='IFC Branches'
+        label='Versions'
         select
       >
-        <MenuItem value={0}><Typography variant='p'>Version_1</Typography></MenuItem>
-        <MenuItem value={2}><Typography variant='p'>Version_2</Typography></MenuItem>
-        <MenuItem value={1}><Typography variant='p'>Version_3 + Context</Typography></MenuItem>
+        <MenuItem value={0}><Typography variant='p'>Main</Typography></MenuItem>
+        <MenuItem value={2}><Typography variant='p'>Version_1 + Context</Typography></MenuItem>
       </TextField>
     </Paper>
   )
