@@ -75,7 +75,7 @@ export default function IssueCardInput({onSubmit = () => console.log('in the on 
           id="outlined-basic"
           label="fkj "
           type="text"
-          placeholder='Comment body'
+          placeholder='Content'
           multiline
           rows={3}
           size="small"

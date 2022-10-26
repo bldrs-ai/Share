@@ -84,14 +84,12 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           selected={isPropertiesOn}
           icon={<ListIcon />}
         />
-        {isMobile && (
-          <TooltipIconButton
-            title="Elements Hierarchy"
-            selected={showNavPanel}
-            onClick={onClickMenuCb}
-            icon={<TreeIcon />}
-          />)
-        }
+        <TooltipIconButton
+          title="Elements Hierarchy"
+          selected={showNavPanel}
+          onClick={onClickMenuCb}
+          icon={<TreeIcon />}
+        />
         <CutPlaneMenu/>
         <ExtractLevelsMenu/>
         <TooltipIconButton
