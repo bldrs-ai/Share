@@ -46,7 +46,7 @@ export default function Branches() {
         select
       >
         <MenuItem value={0}><Typography variant='p'>Main</Typography></MenuItem>
-        <MenuItem value={2}><Typography variant='p'>Version_1 + Context</Typography></MenuItem>
+        <MenuItem value={1}><Typography variant='p'>Version_1 + Context</Typography></MenuItem>
       </TextField>
     </Paper>
   )
