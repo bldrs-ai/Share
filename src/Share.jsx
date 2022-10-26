@@ -100,7 +100,7 @@ export function navToDefault(navigate, appPrefix) {
   if (window.innerWidth <= mediaSizeTabletWith) {
     navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
   } else {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
+    navigate(`${appPrefix}/v/p/index.ifc#c:-38.24,24.06,140.79,-38.24,24.06,-5.61`)
   }
 }
 
