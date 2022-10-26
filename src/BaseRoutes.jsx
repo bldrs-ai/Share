@@ -2,6 +2,8 @@ import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import {useAuth0} from '@auth0/auth0-react'
+import useStore from './store/useStore'
 
 
 /**
@@ -24,6 +26,8 @@ export default function BaseRoutes({testElt = null}) {
   const navigation = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix }/`
+  const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
+  const setAccessToken = useStore((state) => state.setAccessToken)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
@@ -41,7 +45,23 @@ export default function BaseRoutes({testElt = null}) {
 
       navigation(targetURL)
     }
-  }, [basePath, installPrefix, location, navigation])
+
+    if (!isLoading && isAuthenticated) {
+      console.log('attempting to get token')
+      getAccessTokenSilently({
+        audience: 'https://api.github.com/',
+        scope: 'repo',
+      }).then((token) => {
+        console.log('new access token', token)
+        setAccessToken(token)
+      }).catch((err) => {
+        if (err.error !== 'login_required') {
+          throw err
+        }
+        console.log(err.error)
+      })
+    }
+  }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading])
 
   return (
     <Routes>
