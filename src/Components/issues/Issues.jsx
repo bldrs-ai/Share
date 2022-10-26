@@ -1,6 +1,5 @@
 import React, {useEffect} from 'react'
 import Paper from '@mui/material/Paper'
-import {useAuth0} from '@auth0/auth0-react'
 import {makeStyles} from '@mui/styles'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
@@ -25,7 +24,7 @@ export default function Issues() {
   const filteredIssue = (issues && selectedIssueId) ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
-  const {getAccessTokenSilently} = useAuth0()
+  const {accessToken} = useStore((state) => state.accessToken)
 
   useEffect(() => {
     if (!repository) {
@@ -35,11 +34,6 @@ export default function Issues() {
     const fetchIssues = async () => {
       try {
         const issuesArr = []
-        const accessToken = await getAccessTokenSilently({
-          audience: 'https://api.github.com/',
-          scope: 'repo',
-        })
-
         const issuesData = await getIssues(repository, accessToken)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
@@ -68,7 +62,7 @@ export default function Issues() {
       }
     }
     fetchIssues()
-  }, [setIssues, repository, getAccessTokenSilently])
+  }, [setIssues, repository, accessToken])
 
   useEffect(() => {
     if (!repository) {
@@ -79,7 +73,7 @@ export default function Issues() {
       try {
         const commentsArr = []
 
-        const commentsData = await getComments(repository, selectedIssue.number)
+        const commentsData = await getComments(repository, selectedIssue.number, accessToken)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -109,7 +103,7 @@ export default function Issues() {
     // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredIssue, repository, setComments])
+  }, [filteredIssue, repository, setComments, accessToken])
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
