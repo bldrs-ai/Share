@@ -7,12 +7,12 @@ import ShareMock from '../ShareMock'
 describe('ExtractLevel', () => {
   it('ExtractLeve Button', () => {
     const {getByTitle} = render(<ShareMock><ExtractLevelsMenu/></ShareMock>)
-    expect(getByTitle('Extract Levels')).toBeInTheDocument()
+    expect(getByTitle('Isolate Levels')).toBeInTheDocument()
   })
 
   it('ExtractLevel Menu', () => {
     const {getByTitle} = render(<ShareMock><ExtractLevelsMenu/></ShareMock>)
-    const exLevButton = getByTitle('Extract Levels')
+    const exLevButton = getByTitle('Isolate Levels')
     fireEvent.click(exLevButton)
     expect(getByTitle('Toggle Plan View')).toBeInTheDocument()
   })

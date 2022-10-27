@@ -32,7 +32,9 @@ export default function OpenModelControl({fileOpen}) {
         <Tooltip title={'Open IFC'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
-            onClick={() => setIsDialogDisplayed(true)}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
             color='primary'
             value={'something'}
           >
@@ -166,7 +168,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '44px',
       'height': '44px',
-      'border': 'none',
+      'border': `1px solid ${theme.palette.highlight.heavy}`,
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979770',
       },

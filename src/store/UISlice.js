@@ -8,11 +8,14 @@
 export default function createUISlice(set, get) {
   return {
     isDrawerOpen: false,
+    isOpenControlHighlighted: true,
     isPropertiesOn: false,
     isCommentsOn: false,
     snackMessage: null,
     cutPlaneDirection: null,
+    levelInstance: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
+    unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
@@ -20,5 +23,6 @@ export default function createUISlice(set, get) {
     turnCommentsOff: () => set(() => ({isCommentsOn: false})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setCutPlaneDirection: (direction) => set(() => ({cutPlaneDirection: direction})),
+    setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
   }
 }
