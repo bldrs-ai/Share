@@ -118,7 +118,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
 
   return (
     <div className={classes.content}>
-      <Typography variant='h3'>Build Every Thing Together</Typography>
+      <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
@@ -126,7 +126,7 @@ function AboutContent({installPrefix, acceptPrivacy}) {
       </Typography>
       <Box sx={{
         backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C',
-        borderRadius: '5px',
+        borderRadius: '3px',
         opacity: .8,
         marginTop: '10px'}}
       >
@@ -210,7 +210,7 @@ const useStyles = makeStyles((theme) => (
         marginBottom: '15px',
         padding: '4px 6px',
         textAlign: 'left',
-        borderRadius: '8px',
+        borderRadius: '2px',
       },
       '& li': {
         display: 'flex',
