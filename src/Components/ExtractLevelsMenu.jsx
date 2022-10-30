@@ -32,8 +32,8 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const open = Boolean(anchorEl)
 
   const LEVEL_PREFIX = 'p'
-  const floorOffset = 0.2
-  const ceilingOffset = 0.4
+  const floorOffsetCoefficient = 0.1
+  const ceilingOffsetCoefficient = 0.1
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
@@ -44,6 +44,10 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         const levelHash = planeHash.split(':')[1]
         if (isNumeric(levelHash)) {
           const level = parseInt(levelHash)
+          const levelHeight = allLevels[level + 1] - allLevels[level]
+          console.log(levelHeight)
+          const floorOffset = levelHeight * floorOffsetCoefficient
+          const ceilingOffset = levelHeight * ceilingOffsetCoefficient
           createFloorplanPlane(allLevels[level] + floorOffset, allLevels[level + 1] - ceilingOffset, level)
         }
       }
@@ -76,6 +80,10 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
 
   const isolateFloor = (level) => {
+    const levelHeight = allLevelsState[level + 1] - allLevelsState[level]
+    console.log(levelHeight)
+    const floorOffset = levelHeight * floorOffsetCoefficient
+    const ceilingOffset = levelHeight * ceilingOffsetCoefficient
     createFloorplanPlane(allLevelsState[level] + floorOffset, allLevelsState[level + 1] - ceilingOffset, level)
   }
 
@@ -143,7 +151,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           <MenuItem
             key={i}
             onClick={() => isolateFloor(i)}
-            selected={levelInstance === (allLevelsState[i] + floorOffset)}
+            selected={levelInstance === (allLevelsState[i])}
           >
           L{i}
           </MenuItem>))
