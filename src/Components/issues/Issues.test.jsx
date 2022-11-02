@@ -45,28 +45,63 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeVisible()
   })
 
-  // XXX: Should this be split into two different tests?
-  it('test Loader is present if issues are null, and removed when issues set', async () => {
-    // Set up handler to return an empty set of issues
-    server.use(
-        rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-          return res(
-              ctx.json(MOCK_ISSUES_EMPTY),
-          )
-        }),
-    )
-
-    const {getByRole, queryByRole} = render(<ShareMock><Issues/></ShareMock>)
-    expect(getByRole('progressbar')).toBeInTheDocument()
-
-    // Restore the original set of HTTP handlers that return issues
-    server.restoreHandlers()
+  it('Issue rendered based on selected issue ID', async () => {
     const {result} = renderHook(() => useStore((state) => state))
+    const extractedIssueId = '1257156364'
+    const {findByText} = render(<ShareMock><Issues/></ShareMock>)
+
     await act(() => {
-      result.current.setIssues(MOCK_ISSUES)
+      result.current.setSelectedIssueId(Number(extractedIssueId))
     })
-    // queryByRole is used to not throw an error is the element is missing.
-    expect(queryByRole('progressbar')).not.toBeInTheDocument()
+
+    const expectedText = 'Local issue - some text is here to test - Id:1257156364'
+    expect(await findByText(expectedText)).toBeVisible()
+  })
+
+  it('Issue rendered based on issue ID in URL', async () => {
+    const {findByText} = render(
+        <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
+          <Issues/>
+        </ShareMock>)
+
+    const expectedText = 'Local issue 2'
+    expect(await findByText(expectedText)).toBeVisible()
+  })
+
+  // XXX: Should this be split into two different tests?
+  describe('when issues are null', () => {
+    beforeEach(() => {
+      // Set up handler to return an empty set of issues
+      server.use(
+          rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+            return res(
+                ctx.json(MOCK_ISSUES_EMPTY),
+            )
+          }),
+      )
+    })
+
+    afterEach(() => {
+      // Restore the original set of HTTP handlers that return issues
+      server.restoreHandlers()
+    })
+
+    it('progress bar is present during loading of issues', () => {
+      const {getByRole} = render(<ShareMock><Issues/></ShareMock>)
+      expect(getByRole('progressbar')).toBeInTheDocument()
+    })
+
+    it('progress bar is no longer visible when issues are not-null', async () => {
+      const {queryByRole} = render(<ShareMock><Issues/></ShareMock>)
+
+      const {result} = renderHook(() => useStore((state) => state))
+      await act(() => {
+        result.current.setIssues(MOCK_ISSUES)
+      })
+
+      // queryByRole is used to not throw an error is the element is missing.
+      expect(queryByRole('progressbar')).not.toBeInTheDocument()
+    })
   })
 })
 
