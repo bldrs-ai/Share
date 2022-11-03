@@ -47,17 +47,16 @@ export default function BaseRoutes({testElt = null}) {
     }
 
     if (!isLoading && isAuthenticated) {
-      console.log('attempting to get token')
       getAccessTokenSilently({
         audience: 'https://api.github.com/',
         scope: 'repo',
       }).then((token) => {
-        console.log('new access token', token)
         setAccessToken(token)
       }).catch((err) => {
         if (err.error !== 'login_required') {
           throw err
         }
+
         console.log(err.error)
       })
     }
