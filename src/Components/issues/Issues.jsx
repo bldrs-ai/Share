@@ -24,7 +24,7 @@ export default function Issues() {
   const filteredIssue = (issues && selectedIssueId) ?
         issues.filter((issue) => issue.id === selectedIssueId)[0] : null
   const repository = useStore((state) => state.repository)
-  const {accessToken} = useStore((state) => state.accessToken)
+  const accessToken = useStore((state) => state.accessToken)
 
   useEffect(() => {
     if (!repository) {
