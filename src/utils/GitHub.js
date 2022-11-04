@@ -33,6 +33,20 @@ export async function getIssue(repository, issueId) {
 
 
 /**
+ * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @return {object} the branches.
+ */
+export async function getBranches(repository) {
+  const branches = await getGitHub(repository, 'branches')
+  debug().log('GitHub: branches: ', branches)
+  return branches
+}
+
+
+/**
  * The comments should have the following structure:
  *
  * @param {object} repository
@@ -360,7 +374,55 @@ export const MOCK_COMMENTS = {
   ],
 }
 
+export const MOCK_BRANCHES = {
+  data: [
+    {
+      name: 'Version-1',
+      commit: {
+        sha: 'f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+      },
+      protected: false,
+    },
+    {
+      name: 'main',
+      commit: {
+        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+      },
+      protected: false,
+    },
+  ],
+}
+
+export const MOCK_ONE_BRANCH = {
+  data: [
+    {
+      name: 'main',
+      commit: {
+        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+      },
+      protected: false,
+    },
+  ],
+}
+
 export const MOCK_ISSUES_EMPTY = {data: []}
+
+export const MOCK_MODEL_PATH_GIT = {
+  org: 'Swiss-Property-AG',
+  repo: 'Schneestock-Public',
+  branch: 'main',
+  filepath: '/ZGRAGGEN.ifc',
+  eltPath: '',
+  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+}
+
+export const MOCK_MODEL_PATH_LOCAL = {
+  filepath: '/4f080237-b4e4-4ede-8885-d498647f15e6.ifc',
+  eltPath: '',
+}
 
 
 const octokit = new Octokit({

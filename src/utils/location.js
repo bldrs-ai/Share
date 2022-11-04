@@ -119,3 +119,16 @@ export function removeHashParams(location, name) {
         '', document.title, window.location.pathname + window.location.search)
   }
 }
+
+/**
+ * Removes the given named hash param.
+ *
+ * @param {string} org
+ * @param {string} repo
+ * @param {string} branchName
+ * @param {string} filePath
+ * @return {string} path to the model
+ */
+export function navigateBaseOnModelPath(org, repo, branchName, filePath) {
+  return `/share/v/gh/${org}/${repo}/${branchName}${filePath}`
+}
