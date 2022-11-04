@@ -80,7 +80,6 @@ function loadTheme(mode) {
       heavy: grey[300],
       heavier: grey[400],
       heaviest: grey[500],
-      maximum: 'black',
       lime,
     },
   }
@@ -99,7 +98,6 @@ function loadTheme(mode) {
       heavy: grey[700],
       heavier: grey[600],
       heaviest: grey[500],
-      maximum: 'white',
       lime,
     },
   }
