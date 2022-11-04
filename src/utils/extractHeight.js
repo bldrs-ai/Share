@@ -21,9 +21,9 @@ export async function extractHeight(ifcModel) {
 
   for (let i = 0; i < siUnits.length; i++) {
     if (siUnits[i].UnitType.value === 'LENGTHUNIT') {
-      if (siUnits[i].Prefix.value) {
+      try {
         const prefix = siUnits[i].Prefix.value
-        switch (prefix) {
+        switch (siUnits[i].Prefix.value) {
           case 'MILLI': unitScale = SI_PREFIX_VALUE_MILLI; break
           case 'CENTI': unitScale = SI_PREFIX_VALUE_CENTI; break
           default: {
@@ -31,6 +31,9 @@ export async function extractHeight(ifcModel) {
             unitScale = 1
           }
         }
+      }
+      catch {
+        console.warn('No length unit found')
       }
     }
   }
