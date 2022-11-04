@@ -1,3 +1,9 @@
+import * as IfcTypesMap from './IfcTypesMap.js'
+
+
+const SI_PREFIX_VALUE_MILLI = 0.001
+const SI_PREFIX_VALUE_CENTI = 0.01
+
 /**
  * Extract related elements.
  *
@@ -5,44 +11,38 @@
  * @return {Array} elevation values
  */
 export async function extractHeight(ifcModel) {
-  try {
-    const ifcBuildingStoreyID = 3124254112
-    const ifcBuildingStorey = ifcModel.getAllItemsOfType(ifcBuildingStoreyID, true)
+  const elevValues = []
+  const storeys = await ifcModel.getAllItemsOfType(IfcTypesMap.getId('IFCBUILDINGSTOREY', false), true)
+  const siUnits = await ifcModel.getAllItemsOfType(IfcTypesMap.getId('IFCSIUNIT', false), true)
 
-    const ifcSIUnitID = 448429030
-    const ifcSIUnit = ifcModel.getAllItemsOfType(ifcSIUnitID, true)
+  let unitScale = 1
 
-    let unitScale = 1
+  console.log(siUnits)
 
-    const printStorey = async () => {
-      const allUnits = await ifcSIUnit
-      for (let i = 0; i < allUnits.length; i++) {
-        if (allUnits[i].UnitType.value === 'LENGTHUNIT') {
-          if (allUnits[i].Prefix.value === 'MILLI') {
-            const milliValue = 0.001
-            unitScale = milliValue
-          }
-          if (allUnits[i].Prefix.value === 'CENTI') {
-            const centiValue = 0.01
-            unitScale = centiValue
+  for (let i = 0; i < siUnits.length; i++) {
+    if (siUnits[i].UnitType.value === 'LENGTHUNIT') {
+      if (siUnits[i].Prefix.value) {
+        const prefix = siUnits[i].Prefix.value
+        switch (prefix) {
+          case 'MILLI': unitScale = SI_PREFIX_VALUE_MILLI; break
+          case 'CENTI': unitScale = SI_PREFIX_VALUE_CENTI; break
+          default: {
+            console.warn('Unhandled length unit: ', prefix)
+            unitScale = 1
           }
         }
       }
-
-      const allStor = await ifcBuildingStorey
-      const elevValues = []
-      for (let i = 0; i < allStor.length; i++) {
-        elevValues[i] = allStor[i].Elevation.value * unitScale
-      }
-
-      return elevValues
     }
-    const elevValues = []
-    for (let i = 0; i < ifcBuildingStorey.length; i++) {
-      elevValues[i] = ifcBuildingStorey[i].Elevation.value
-    }
-    return await printStorey()
-  } catch {
-    console.log('No Levels detected')
   }
+
+  for (let i = 0; i < storeys.length; i++) {
+    const elevation = storeys[i].Elevation.value
+    if (!isFinite(elevation)) {
+      console.warn('Found invalid elevation value: ', elevation)
+      continue
+    }
+    elevValues[i] = elevation * unitScale
+  }
+
+  return elevValues
 }
