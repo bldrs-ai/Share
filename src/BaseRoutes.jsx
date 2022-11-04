@@ -60,7 +60,7 @@ export default function BaseRoutes({testElt = null}) {
         console.log(err.error)
       })
     }
-  }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading])
+  }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
 
   return (
     <Routes>
