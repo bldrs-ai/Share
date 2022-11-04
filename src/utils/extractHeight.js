@@ -47,6 +47,6 @@ export async function extractHeight(ifcModel) {
 
     return elevValues
   } catch {
-    console.warn('No levels found')
+    console.log('No levels found')
   }
 }
