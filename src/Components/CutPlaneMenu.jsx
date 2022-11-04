@@ -46,6 +46,12 @@ export default function CutPlaneMenu() {
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = getModelCenter(model)
+    console.log('model Center', modelCenter)
+    const offsetX = 10
+    const offsetY = 10
+    const offsetZ = 10
+    const modelCenterOffset = new Vector3(modelCenter.x + offsetX, modelCenter.y + offsetY, modelCenter.z + offsetZ)
+    console.log('model Center Edited', modelCenterOffset)
     const planeHash = getHashParams(location, 'p')
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
@@ -73,7 +79,7 @@ export default function CutPlaneMenu() {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
     setCutPlaneDirection(normalDirection)
-    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
+    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
   const handleClick = (event) => {
@@ -84,7 +90,7 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
-
+  console.log('viewer', viewer.clipper)
   return (
     <div>
       <TooltipIconButton
