@@ -7,12 +7,16 @@
  */
 export default function createRepositorySlice(set, get) {
   return {
+    branches: [],
     repository: null,
+    modelPath: null,
     setRepository: (orgName, repoName) => set(() => ({
       repository: {
         orgName: orgName,
         name: repoName,
       },
     })),
+    setBranches: (branches) => set(() => ({issues: branches})),
+    setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
   }
 }
