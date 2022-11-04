@@ -2,9 +2,11 @@ import React, {useState} from 'react'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 import useStore from '../store/useStore'
+
 import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
+
 import CadView from './CadView'
 
 
@@ -40,7 +42,6 @@ describe('CadView', () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
-
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
