@@ -74,7 +74,7 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
-
+  const accessToken = useStore((state) => state.accessToken)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -203,6 +203,13 @@ export default function CadView({
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
+
+    if (accessToken !== '') {
+      viewer.IFC.loader.requestHeader = {
+        Authorization: `Bearer ${accessToken}`,
+      }
+    }
+
     const loadedModel = await viewer.IFC.loadIfcUrl(
         filepath,
         !urlHasCameraParams(), // fitToFrame
