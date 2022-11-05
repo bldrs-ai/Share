@@ -564,7 +564,6 @@ const useStyles = makeStyles({
 
   },
   topLeftContainer: {
-    height: '500px',
     position: 'absolute',
     top: `30px`,
     left: '20px',
