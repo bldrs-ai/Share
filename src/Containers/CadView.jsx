@@ -61,7 +61,7 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
-  const [showNavPanel, setShowNavPanel] = useState(true)
+  const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
