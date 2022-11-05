@@ -20,6 +20,7 @@ import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
+import BranchesControl from '../Components/BranchesControl'
 
 
 /**
@@ -457,24 +458,30 @@ export default function CadView({
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
-        <div className={classes.search}>
-          {showSearchBar && (
+        {showSearchBar && (
+          <div className={classes.topLeftContainer}>
             <SearchBar
               fileOpen={loadLocalFile}
             />
-          )}
-        </div>
-        {showNavPanel &&
-          <NavPanel
-            model={model}
-            element={rootElement}
-            defaultExpandedElements={defaultExpandedElements}
-            expandedElements={expandedElements}
-            setExpandedElements={setExpandedElements}
-            pathPrefix={
-              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+            {
+              modelPath.repo !== undefined &&
+              <BranchesControl location={location}/>
             }
-          />}
+            {showNavPanel &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
+            }
+          </div>
+        )}
+
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
@@ -556,22 +563,15 @@ const useStyles = makeStyles({
     },
 
   },
-  searchContainer: {
-
-  },
-  search: {
+  topLeftContainer: {
+    height: '500px',
     position: 'absolute',
-    // TODO(pablo): we were passing this around as it's used in a few
-    // places, but there's now only 1 dialog object that also uses it
-    // and it has multiple callers; passing that variable around seems
-    // overkill. I don't like not having it as a variable, but going
-    // to hardcode for now and look into passing via the theme later.
-    top: `20px`,
+    top: `30px`,
     left: '20px',
     display: 'flex',
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'flex-start',
   },
   view: {
     position: 'absolute',

@@ -1,6 +1,6 @@
 import React from 'react'
 import {render, screen, fireEvent} from '@testing-library/react'
-import ShareMock from '../ShareMock'
+import ShareMock from '../../ShareMock'
 import IssueCard from './IssueCard'
 
 
