@@ -61,7 +61,7 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
-  const [showNavPanel, setShowNavPanel] = useState(false)
+  const [showNavPanel, setShowNavPanel] = useState(true)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -285,12 +285,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-
-    if (isMobile) {
-      setShowNavPanel(false)
-    } else {
-      setShowNavPanel(true)
-    }
+    setShowNavPanel(true)
   }
 
 
