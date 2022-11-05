@@ -24,7 +24,7 @@ export default function BaseRoutes({testElt = null}) {
   const navigation = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix }/`
-  const widgetApiUri = useStore((state) => state.widgetApiUri)
+  const uri = useStore((state) => state.uri)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
@@ -32,11 +32,10 @@ export default function BaseRoutes({testElt = null}) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
       navigation(`${installPrefix }/share`)
     }
-    if (widgetApiUri) {
-      navigation(widgetApiUri)
+    if (uri) {
+      navigation(uri)
     }
-
-  }, [basePath, installPrefix, location, navigation, widgetApiUri])
+  }, [basePath, installPrefix, location, navigation, uri])
 
   return (
     <Routes>

@@ -1,26 +1,56 @@
+/**
+ * Abstract ApiConnection
+ */
 class AbstractApiConnection {
+  /**
+   * event resolver.
+   *
+   * @param {string} eventName
+   * @param {Function} callable
+   */
+  on(eventName, callable) {
+    // do something on event.
+  }
 
-    on(event, callable) {
-    }
+  /**
+   * starts the api.
+   */
+  start() {
+    console.warn('start() is not implemented')
+  }
 
-    start() {
-    }
+  /**
+   * stops the api.
+   */
+  stop() {
+    console.warn('stop() is not implemented')
+  }
 
-    stop() {
+  /**
+   * returns a missing argument response.
+   *
+   * @param {string} argumentName
+   * @return {object} missing argument response.
+   */
+  missingArgumentResponse = function(argumentName) {
+    return {
+      error: true,
+      reason: `Missing argument ${argumentName}`,
     }
+  }
 
-    missingArgumentResponse = function (argumentName) {
-        return {
-            'error': true,
-            'reason': `Missing argument ${argumentName}`
-        }
+  /**
+   * returns a successful response.
+   *
+   * @param {object} data
+   * @return {object} successful response.
+   */
+  successfulResponse = function(data) {
+    return {
+      error: false,
+      ...data,
     }
-    successfulResponse = function (data) {
-        return {
-            'error': false,
-            ...data
-        }
-    }
+  }
 }
 
 export default AbstractApiConnection

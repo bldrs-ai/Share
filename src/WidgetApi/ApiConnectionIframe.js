@@ -1,34 +1,53 @@
-import {WidgetApi as MatrixWidgetApi} from "matrix-widget-api/lib/WidgetApi"
-import AbstractApiConnection from "./ApiConnection";
+import {WidgetApi as MatrixWidgetApi} from 'matrix-widget-api/lib/WidgetApi'
+import AbstractApiConnection from './ApiConnection'
 
-class ApiConnectionIframe extends AbstractApiConnection{
-    widgetId = 'bldrs-share'
-    matrixWidgetApi = null
 
-    constructor() {
-        super();
-        this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId)
-        this.matrixWidgetApi.requestCapabilities([])
-    }
+/**
+ * ApiConnection to Iframed bldrs instance
+ */
+class ApiConnectionIframe extends AbstractApiConnection {
+  widgetId = 'bldrs-share'
+  matrixWidgetApi = null
 
-    on(eventName, callable) {
-        this.matrixWidgetApi.on(
-            eventName,
-            (event) => {
-                event.preventDefault();
-                let response = callable(event.detail.data)
-                this.matrixWidgetApi.transport.reply(event.detail, response)
-            }
-        )
-    }
+  /**
+   * constructor
+   */
+  constructor() {
+    super()
+    this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId)
+    this.matrixWidgetApi.requestCapabilities([])
+  }
 
-    start() {
-        this.matrixWidgetApi.start()
-    }
+  /**
+   * event resolver.
+   *
+   * @param {string} eventName
+   * @param {Function} callable
+   */
+  on(eventName, callable) {
+    this.matrixWidgetApi.on(
+        eventName,
+        (event) => {
+          event.preventDefault()
+          const response = callable(event.detail.data)
+          this.matrixWidgetApi.transport.reply(event.detail, response)
+        },
+    )
+  }
 
-    stop() {
-        this.matrixWidgetApi.stop()
-    }
+  /**
+   * starts the api.
+   */
+  start() {
+    this.matrixWidgetApi.start()
+  }
+
+  /**
+   * stops the api.
+   */
+  stop() {
+    this.matrixWidgetApi.stop()
+  }
 }
 
 export default ApiConnectionIframe
