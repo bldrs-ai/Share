@@ -52,6 +52,7 @@ export default function CutPlaneMenu() {
     const offsetZ = 10
     const modelCenterOffset = new Vector3(modelCenter.x + offsetX, modelCenter.y + offsetY, modelCenter.z + offsetZ)
     console.log('model Center Edited', modelCenterOffset)
+    console.log('viewer', viewer)
     const planeHash = getHashParams(location, 'p')
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
@@ -79,6 +80,10 @@ export default function CutPlaneMenu() {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
     setCutPlaneDirection(normalDirection)
+    // console.log('planes', viewer.clipper.planes[0].plane.normal)
+    // console.log('planes', viewer.clipper.planes[0].plane.constant)
+    // do in the separate handler --
+    // use the same trip as camera --precision - put into global
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
