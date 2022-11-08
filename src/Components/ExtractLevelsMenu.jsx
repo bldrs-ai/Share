@@ -44,7 +44,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         const levelHash = planeHash.split(':')[1]
         if (isNumeric(levelHash)) {
           const level = parseInt(levelHash)
-          createFloorplanPlane(allLevels[level] + floorOffset, allLevels[level + 1] - ceilingOffset, level)
+          createFloorplanPlane(allLevels[level][0] + floorOffset, allLevels[level + 1][0] - ceilingOffset, level)
         }
       }
     }
@@ -76,7 +76,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }
 
   const isolateFloor = (level) => {
-    createFloorplanPlane(allLevelsState[level] + floorOffset, allLevelsState[level + 1] - ceilingOffset, level)
+    createFloorplanPlane(allLevelsState[level][0] + floorOffset, allLevelsState[level + 1][0] - ceilingOffset, level)
   }
 
   const planView = () => {
@@ -145,7 +145,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
             onClick={() => isolateFloor(i)}
             selected={levelInstance === (allLevelsState[i] + floorOffset)}
           >
-          L{i}
+          L{i} - {allLevelsState[i][1]}
           </MenuItem>))
         }
       </Menu>

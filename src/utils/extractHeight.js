@@ -36,13 +36,20 @@ export async function extractHeight(ifcModel) {
       }
     }
 
+    console.log(storeys)
+
     for (let i = 0; i < storeys.length; i++) {
+      const elevInstance = []
       const elevation = storeys[i].Elevation.value
+      const elevName = storeys[i].Name.value
+
       if (!isFinite(elevation)) {
         console.warn('Found invalid elevation value: ', elevation)
         continue
       }
-      elevValues[i] = elevation * unitScale
+      elevInstance[0] = elevation * unitScale
+      elevInstance[1] = elevName
+      elevValues[i] = elevInstance
     }
 
     return elevValues
