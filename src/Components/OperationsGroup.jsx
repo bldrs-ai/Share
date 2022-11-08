@@ -10,6 +10,7 @@ import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
 import {useIsMobile} from './Hooks'
+import BranchesIcon from '../assets/2D_Icons/Branches.svg'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
@@ -27,7 +28,16 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
+export default function OperationsGroup({
+  unSelectItem,
+  installPrefix,
+  fileOpen,
+  showNavPanel,
+  showBranchControl,
+  isGitHubRepo,
+  onClickMenuCb,
+  onCLickBranchControlCb,
+}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
@@ -80,6 +90,14 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
+        {isGitHubRepo &&
+          <TooltipIconButton
+            title='Project Versions'
+            selected={showBranchControl}
+            onClick={onCLickBranchControlCb}
+            icon={<BranchesIcon/>}
+          />
+        }
         <TooltipIconButton
           title="Properties"
           onClick={() => toggle('Properties')}

@@ -62,6 +62,7 @@ export default function CadView({
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
   const [showNavPanel, setShowNavPanel] = useState(false)
+  const [showBranchControl, setShowBranchControl] = useState(true)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -75,6 +76,7 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const isGuthubRepo = modelPath.repo !== undefined
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -459,7 +461,7 @@ export default function CadView({
               fileOpen={loadLocalFile}
             />
             {
-              modelPath.repo !== undefined &&
+              isGuthubRepo && showBranchControl &&
               <BranchesControl location={location}/>
             }
             {showNavPanel &&
@@ -487,8 +489,11 @@ export default function CadView({
               viewer={viewer}
               unSelectItem={unSelectItems}
               onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              onCLickBranchControlCb={() => setShowBranchControl(!showBranchControl)}
               showNavPanel={showNavPanel}
+              showBranchControl={showBranchControl}
               installPrefix={installPrefix}
+              isGitHubRepo={isGuthubRepo}
             />}
         </div>
         {alert}

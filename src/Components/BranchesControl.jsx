@@ -1,8 +1,8 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
-import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import {ColorModeContext} from '../Context/ColorMode'
@@ -10,6 +10,8 @@ import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
+import {TooltipIconButton} from './Buttons'
+import AboutIcon from '../assets/2D_Icons/Information.svg'
 
 
 /**
@@ -69,14 +71,31 @@ export default function Branches() {
 
   return (
     <>
-      {branches.length > 1 && modelPath.repo !== undefined &&
+      {modelPath.repo !== undefined &&
         <Paper elevation={0}
           sx={{
             backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
-            marginTop: '34px',
+            marginTop: '21px',
             opacity: .8,
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'flex-start',
+            alignItems: 'center',
           }}
         >
+          <div style={{
+            marginLeft: '7px',
+            marginRight: '0px',
+          }}
+          >
+            <TooltipIconButton
+              title='Branch Guide'
+              selected={false}
+              placement={'bottom'}
+              onClick={() => console.log('click')}
+              icon={<AboutIcon/>}
+            />
+          </div>
           <TextField
             className={classes.dropDown}
             onChange={(e) => handleSelect(e)}
@@ -108,7 +127,7 @@ export default function Branches() {
 
 const useStyles = makeStyles((theme) => ({
   dropDown: {
-    'width': '300px',
+    'width': '250px',
     '& .MuiOutlinedInput-input': {
       color: theme.palette.highlight.grey,
     },
@@ -116,7 +135,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.heaviest,
     },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
+      borderColor: theme.palette.highlight.background,
     },
     '&:hover .MuiOutlinedInput-input': {
       color: theme.palette.highlight.heaviest,
@@ -126,7 +145,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.heaviest,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
+      borderColor: theme.palette.highlight.background,
     },
     // TODO(oleg): connect to props
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
@@ -137,7 +156,7 @@ const useStyles = makeStyles((theme) => ({
       color: theme.palette.highlight.heaviest,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
+      borderColor: theme.palette.highlight.background,
     },
   },
 }),
