@@ -36,10 +36,30 @@ class ApiConnectionIframe extends AbstractApiConnection {
   }
 
   /**
+   * send event.
+   *
+   * @param {string} eventName
+   * @param {object} data
+   */
+  send(eventName, data) {
+    this.matrixWidgetApi.transport.send(eventName, data)
+  }
+
+  /**
+   * requests capabilities.
+   *
+   * @param {string[]} capabilities
+   */
+  requestCapabilities(capabilities) {
+    this.matrixWidgetApi.requestCapabilities(capabilities)
+  }
+
+  /**
    * starts the api.
    */
   start() {
     this.matrixWidgetApi.start()
+    this.matrixWidgetApi.sendContentLoaded()
   }
 
   /**

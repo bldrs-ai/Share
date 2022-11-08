@@ -27,6 +27,25 @@ class AbstractApiConnection {
   }
 
   /**
+   * send event.
+   *
+   * @param {string} eventName
+   * @param {object} data
+   */
+  send(eventName, data) {
+    console.warn('send() is not implemented')
+  }
+
+  /**
+   * requests capabilities.
+   *
+   * @param {string[]} capabilities
+   */
+  requestCapabilities(capabilities) {
+    console.warn('requestCapabilities() is not implemented')
+  }
+
+  /**
    * returns a missing argument response.
    *
    * @param {string} argumentName

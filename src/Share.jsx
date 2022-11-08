@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react'
+import React, {useEffect, useMemo, useRef, useState} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
@@ -12,6 +12,7 @@ import './index.css'
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
+import WidgetApi from "./WidgetApi/WidgetApi";
 /* eslint-enable */
 
 
@@ -29,6 +30,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
 
+  useMemo(() => {
+    new WidgetApi(navigation.current)
+  }, [navigation])
 
   /**
    * On a change to urlParams, setting a new model path will clear the

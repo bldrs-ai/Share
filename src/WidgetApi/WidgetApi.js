@@ -9,11 +9,10 @@ class WidgetApi {
   /**
    * constructor
    */
-  constructor() {
+  constructor(navigation) {
     if (this.detectIframe()) {
       const apiConnection = new ApiConnectionIframe()
-      new ApiEventsRegistry(apiConnection)
-      apiConnection.start()
+      new ApiEventsRegistry(apiConnection, navigation)
     }
   }
 
