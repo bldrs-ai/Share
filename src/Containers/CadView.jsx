@@ -556,10 +556,7 @@ const useStyles = makeStyles({
     },
 
   },
-  searchContainer: {
-
-  },
-  search: {
+  topLeftContainer: {
     position: 'absolute',
     // TODO(pablo): we were passing this around as it's used in a few
     // places, but there's now only 1 dialog object that also uses it
