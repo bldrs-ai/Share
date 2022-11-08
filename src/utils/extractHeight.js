@@ -36,8 +36,6 @@ export async function extractHeight(ifcModel) {
       }
     }
 
-    console.log(storeys)
-
     for (let i = 0; i < storeys.length; i++) {
       const elevInstance = []
       const elevation = storeys[i].Elevation.value
