@@ -1,6 +1,8 @@
 import React from 'react'
-import {render, screen} from '@testing-library/react'
+import {act, render, screen, renderHook} from '@testing-library/react'
+import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
+import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 import CameraControl, {
   onHash,
   parseHashParams,
@@ -18,9 +20,13 @@ describe('CameraControl', () => {
     expect(parseHashParams('c:1,2,3,4,5,6')).toStrictEqual([1, 2, 3, 4, 5, 6])
   })
 
-  it('CameraControl', () => {
-    const viewer = {IFC: {context: {ifcCamera: {cameraControls: {}}}}}
-    render(<ShareMock><CameraControl viewer={viewer}/></ShareMock>)
+  it('CameraControl', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+    })
+    render(<ShareMock><CameraControl/></ShareMock>)
     expect(screen.getByText('Camera')).toBeInTheDocument()
   })
 
