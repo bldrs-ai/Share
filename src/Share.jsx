@@ -59,7 +59,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = urlParams
     if (org && repo) {
-      console.log(`Setting GH repo ${org}/${repo}`)
       setRepository(org, repo)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')

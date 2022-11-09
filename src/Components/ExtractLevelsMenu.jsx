@@ -36,19 +36,21 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const ceilingOffset = 0.4
 
   useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
-    const fetchFloors = async () => {
-      const allLevels = await extractHeight(model)
-      setAllLevelsState(allLevels)
-      if (planeHash && model && viewer ) {
-        const levelHash = planeHash.split(':')[1]
-        if (isNumeric(levelHash)) {
-          const level = parseInt(levelHash)
-          createFloorplanPlane(allLevels[level] + floorOffset, allLevels[level + 1] - ceilingOffset, level)
+    if (model) {
+      const planeHash = getHashParams(location, 'p')
+      const fetchFloors = async () => {
+        const allLevels = await extractHeight(model)
+        setAllLevelsState(allLevels)
+        if (planeHash && model && viewer ) {
+          const levelHash = planeHash.split(':')[1]
+          if (isNumeric(levelHash)) {
+            const level = parseInt(levelHash)
+            createFloorplanPlane(allLevels[level] + floorOffset, allLevels[level + 1] - ceilingOffset, level)
+          }
         }
       }
+      fetchFloors()
     }
-    fetchFloors()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 

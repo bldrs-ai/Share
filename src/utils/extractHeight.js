@@ -22,7 +22,7 @@ export async function extractHeight(ifcModel) {
       elevValues[i] = ifcBuildingStorey[i].Elevation.value
     }
     return await printStorey()
-  } catch {
-    console.log('No Levels detected')
+  } catch (e) {
+    console.log('No Levels detected', e)
   }
 }
