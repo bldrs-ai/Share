@@ -85,6 +85,7 @@ export default function Branches() {
           <div style={{
             marginLeft: '7px',
             marginRight: '-3px',
+            zIndex: 10,
           }}
           >
             <BranchInfoControl/>

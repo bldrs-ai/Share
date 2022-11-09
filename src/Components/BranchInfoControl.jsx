@@ -22,7 +22,7 @@ export default function BranchInfoControl() {
       <Paper className={classes.root} elevation={0}
         sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
-        <Tooltip title={'Open IFC'} describeChild placement={'top'}>
+        <Tooltip title={'Versioning Info'} describeChild placement={'top'}>
           <ToggleButton
             selected={isDialogDisplayed}
             onClick={() => {
@@ -63,10 +63,10 @@ function BranchInfoDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={
         <div className={classes.content}>
           <p className={classes.bullet}>
-            Different project versions can be stored in Github as seprate branches.
+            Project versions are stored in Github as seprate branches.
           </p>
           <p className={classes.bullet}>
-            Example of a project with multiple branches is here:
+            Example of a project with multiple branches:
             <br/>
             <a
               className={classes.link}
@@ -100,6 +100,7 @@ function BranchInfoDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 const useStyles = makeStyles((theme) => ({
   content: {
     width: '270px',
+    paddingBottom: '10px',
   },
   snippet: {
     textAlign: 'left',
