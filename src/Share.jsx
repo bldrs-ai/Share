@@ -66,7 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       console.warn('No repository set for project!', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams])
+  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
   const {theme, colorMode} = useTheme()
