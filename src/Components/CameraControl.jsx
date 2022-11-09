@@ -2,7 +2,6 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import {assertDefined} from '../utils/assert'
 import {
   addHashListener,
   addHashParams,
@@ -21,12 +20,10 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @param {object} viewer The IFC viewer, which contains the
- *   cameraControls
  * @return {object} React component
  */
-export default function CameraControl({viewer}) {
-  assertDefined(viewer, viewer.IFC, viewer.IFC.context, viewer.IFC.context.ifcCamera)
+export default function CameraControl() {
+  const viewer = useStore((state) => state.viewerStore)
   const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
   const setCameraControls = useStore((state) => state.setCameraControls)
   const location = useLocation()

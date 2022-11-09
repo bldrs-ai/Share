@@ -61,20 +61,21 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
-  const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
+  const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const setSelectedElements = useStore((state) => state.setSelectedElements)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -124,7 +125,7 @@ export default function CadView({
    */
   function onModelPath() {
     resetState()
-    setShowNavPanel(false)
+    setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
@@ -287,9 +288,9 @@ export default function CadView({
     setRootElement(rootElt)
 
     if (isMobile) {
-      setShowNavPanel(false)
+      setIsNavPanelOpen(false)
     } else {
-      setShowNavPanel(true)
+      setIsNavPanelOpen(true)
     }
   }
 
@@ -467,7 +468,7 @@ export default function CadView({
               modelPath.repo !== undefined &&
               <BranchesControl location={location}/>
             }
-            {showNavPanel &&
+            {isNavPanelOpen &&
               <NavPanel
                 model={model}
                 element={rootElement}
@@ -489,11 +490,7 @@ export default function CadView({
         >
           {viewer &&
             <OperationsGroup
-              viewer={viewer}
               unSelectItem={unSelectItems}
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              installPrefix={installPrefix}
             />}
         </div>
         {alert}
