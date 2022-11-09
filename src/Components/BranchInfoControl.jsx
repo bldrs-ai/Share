@@ -66,7 +66,7 @@ function BranchInfoDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             Different project versions can be stored in Github as seprate branches.
           </p>
           <p className={classes.bullet}>
-            Example of a file with multiple branches is here:
+            Example of a project with multiple branches is here:
             <br/>
             <a
               className={classes.link}
