@@ -10,8 +10,7 @@ import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
-import {TooltipIconButton} from './Buttons'
-import AboutIcon from '../assets/2D_Icons/Information.svg'
+import BranchInfoControl from './BranchInfoControl'
 
 
 /**
@@ -75,7 +74,7 @@ export default function Branches() {
         <Paper elevation={0}
           sx={{
             backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
-            marginTop: '21px',
+            marginTop: '18px',
             opacity: .8,
             display: 'flex',
             flexDirection: 'row',
@@ -85,16 +84,10 @@ export default function Branches() {
         >
           <div style={{
             marginLeft: '7px',
-            marginRight: '0px',
+            marginRight: '-3px',
           }}
           >
-            <TooltipIconButton
-              title='Branch Guide'
-              selected={false}
-              placement={'bottom'}
-              onClick={() => console.log('click')}
-              icon={<AboutIcon/>}
-            />
+            <BranchInfoControl/>
           </div>
           <TextField
             className={classes.dropDown}

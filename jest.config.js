@@ -44,6 +44,8 @@ module.exports = {
   testPathIgnorePatterns: [
     'src/Share.test.js',
     'src/Components/BranchesControl.test.js',
+    'src/Containers/CadView.test.jsx',
+    'src/Components/CutPlaneMenu.test.jsx',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
