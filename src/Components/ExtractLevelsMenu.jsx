@@ -1,4 +1,5 @@
-import React, {useState, useEffect} from 'react'
+import React, {useEffect, useState} from 'react'
+import {useLocation} from 'react-router-dom'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import {TooltipIconButton} from './Buttons'
@@ -24,6 +25,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const [allLevelsState, setAllLevelsState] = useState([])
   const model = useStore((state) => state.modelStore)
+  const location = useLocation()
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
@@ -36,12 +38,14 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const ceilingOffset = 0.4
 
   useEffect(() => {
-    if (model) {
+    // TODO(pablo): need to test getAllItemsOfType since it's null in
+    // our mock.  Don't know how to mock the async function correctly.
+    if (model && model.getAllItemsOfType) {
       const planeHash = getHashParams(location, 'p')
       const fetchFloors = async () => {
         const allLevels = await extractHeight(model)
         setAllLevelsState(allLevels)
-        if (planeHash && model && viewer ) {
+        if (planeHash && model && viewer) {
           const levelHash = planeHash.split(':')[1]
           if (isNumeric(levelHash)) {
             const level = parseInt(levelHash)
@@ -53,7 +57,6 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
-
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     removePlanes(viewer)

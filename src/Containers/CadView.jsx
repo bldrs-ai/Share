@@ -393,7 +393,7 @@ export default function CadView({
   async function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
     await selectItemsInScene([expressId])
