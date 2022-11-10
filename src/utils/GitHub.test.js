@@ -1,4 +1,4 @@
-import {parseGitHubRepositoryURL} from './GitHub'
+import {getDownloadURL, parseGitHubRepositoryURL} from './GitHub'
 
 
 describe('GitHub', () => {
@@ -24,6 +24,23 @@ describe('GitHub', () => {
       expect(actual.repository).toEqual('private')
       expect(actual.ref).toEqual('main')
       expect(actual.path).toEqual('haus.ifc')
+    })
+  })
+
+  describe('getContentsURL', () => {
+    it('returns a valid download URL', async () => {
+      const downloadURL = await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'README.md')
+      expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md')
+    })
+
+    it('returns expected download URL for a valid object within main branch', async () => {
+      const downloadURL = await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'README.md', 'main')
+      expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md?token=MAINBRANCHCONTENT')
+    })
+
+    it('returns a valid download URL when given a different Git ref', async () => {
+      const downloadURL = await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'README.md', 'a-new-branch')
+      expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md?token=TESTTOKENFORNEWBRANCH')
     })
   })
 })

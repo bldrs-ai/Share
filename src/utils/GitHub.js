@@ -120,6 +120,36 @@ export async function getComment(repository, issueId, commentId, accessToken = '
 }
 
 /**
+ * Retrieves the contents download URL for a GitHub repository path
+ *
+ * @param {object} repository
+ * @param {string} path
+ * @param {string} [ref]
+ * @param {string} [accessToken]
+ * @return {Promise} Promise URL to the contents
+ */
+export async function getDownloadURL(repository, path, ref = '', accessToken = '') {
+  const args = {
+    path: path,
+    ref: ref,
+  }
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args)
+  if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
+    throw new Error('No contents returned from GitHub')
+  }
+
+  return contents.data.download_url
+}
+
+/**
  * Parses a GitHub repository URL and returns a structure
  *
  * @param {string} githubURL
