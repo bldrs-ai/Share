@@ -23,7 +23,7 @@ describe('GitHub', () => {
       expect(actual.owner).toEqual('pablo-mayrgundter')
       expect(actual.repository).toEqual('private')
       expect(actual.ref).toEqual('main')
-      expect(actual.path).toEqual('/haus.ifc')
+      expect(actual.path).toEqual('haus.ifc')
     })
   })
 })

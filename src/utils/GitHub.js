@@ -154,7 +154,7 @@ export const parseGitHubRepositoryURL = (githubURL) => {
     owner: owner,
     repository: repository,
     ref: ref,
-    path: `/${path}`,
+    path: path,
   }
 }
 
