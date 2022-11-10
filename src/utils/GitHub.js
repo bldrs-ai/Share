@@ -119,6 +119,44 @@ export async function getComment(repository, issueId, commentId, accessToken = '
   }
 }
 
+/**
+ * Parses a GitHub repository URL and returns a structure
+ *
+ * @param {string} githubURL
+ * @return {object} A repository path object.
+ */
+export const parseGitHubRepositoryURL = (githubURL) => {
+  if (githubURL.indexOf('://') === -1) {
+    throw new Error('URL must be fully qualified and contain scheme')
+  }
+
+  const url = new URL(githubURL)
+
+  const host = url.host.toLowerCase()
+  if (host !== 'github.com' && host !== 'raw.githubusercontent.com') {
+    throw new Error('Not a valid GitHub repository URL')
+  }
+
+  const pathParts = [
+    '(?<owner>[^/]+)',
+    '(?<repository>[^/]+)',
+    '(?:(?<isBlob>blob)/)?(?<ref>[^/]+)',
+    '(?<path>.+)',
+  ]
+  const match = url.pathname.match(`^/${pathParts.join('/')}$`)
+  if (match === null) {
+    throw new Error('Could not match GitHub repository URL')
+  }
+
+  const {groups: {owner, repository, ref, path}} = match
+  return {
+    url: url,
+    owner: owner,
+    repository: repository,
+    ref: ref,
+    path: `/${path}`,
+  }
+}
 
 // DO NOT EXPORT ANY BELOW //
 /**
