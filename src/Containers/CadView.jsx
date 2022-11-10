@@ -191,8 +191,10 @@ export default function CadView({
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
+    const uploadedFile = pathPrefix.endsWith('new')
+
     debug().log(`CadView#loadIfc: `, filepath)
-    if (pathPrefix.endsWith('new')) {
+    if (uploadedFile) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
