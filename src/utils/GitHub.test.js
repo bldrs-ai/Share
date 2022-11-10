@@ -28,6 +28,14 @@ describe('GitHub', () => {
   })
 
   describe('getContentsURL', () => {
+    it('bubbles up an exception for a non-existent object', async () => {
+      try {
+        await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'a-file-that-does-not-exists.txt')
+      } catch (e) {
+        expect(e.toString()).toMatch('Not Found')
+      }
+    })
+
     it('returns a valid download URL', async () => {
       const downloadURL = await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'README.md')
       expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md')
