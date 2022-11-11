@@ -91,7 +91,7 @@ export default function CadView({
     (async () => {
       await onViewer()
     })()
-  }, [viewer])
+  }, [viewer, accessToken])
 
 
   // searchParams changes in parent (ShareRoutes) from user and
