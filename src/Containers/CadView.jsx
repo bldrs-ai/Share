@@ -563,7 +563,7 @@ const getFinalURL = async (url, accessToken) => {
         return u.toString()
       }
 
-      return await getGitHubDownloadURL(url)
+      return await getGitHubDownloadURL(url, accessToken)
 
     default:
       return url
