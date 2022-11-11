@@ -186,29 +186,6 @@ export default function CadView({
   const setAlertMessage = (msg) =>
     setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
-  const getGitHubDownloadURL = async (url) => {
-    const repo = parseGitHubRepositoryURL(url)
-    const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
-    return downloadURL
-  }
-
-  const getFinalURL = async (url) => {
-    const u = new URL(url)
-
-    switch (u.host.toLowerCase()) {
-      case 'github.com':
-        if (accessToken === '') {
-          u.host = 'raw.githubusercontent.com'
-          return u.toString()
-        }
-
-        return await getGitHubDownloadURL(url)
-
-      default:
-        return url
-    }
-  }
-
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
    *
@@ -576,6 +553,28 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   return v
 }
 
+const getGitHubDownloadURL = async (url, accessToken) => {
+  const repo = parseGitHubRepositoryURL(url)
+  const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
+  return downloadURL
+}
+
+const getFinalURL = async (url, accessToken) => {
+  const u = new URL(url)
+
+  switch (u.host.toLowerCase()) {
+    case 'github.com':
+      if (accessToken === '') {
+        u.host = 'raw.githubusercontent.com'
+        return u.toString()
+      }
+
+      return await getGitHubDownloadURL(url)
+
+    default:
+      return url
+  }
+}
 
 const useStyles = makeStyles({
   root: {
