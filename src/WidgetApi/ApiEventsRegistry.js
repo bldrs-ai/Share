@@ -1,9 +1,10 @@
 import useStore from '../store/useStore'
 
 
-const EVENT_LOAD_MODEL = 'ai.bldrs-share.loadModel'
-const EVENT_HIGHLIGHT_ELEMENTS = 'ai.bldrs-share.highlightElements'
-const EVENT_CLIENT_HIGHLIGHT_ELEMENTS = 'ai.bldrs-share.client.setHighlightedElements'
+const EVENT_VIEWER_LOAD_MODEL = 'ai.bldrs-share.LoadModel'
+const EVENT_VIEWER_SELECT_ELEMENTS = 'ai.bldrs-share.SelectElements'
+const EVENT_CLIENT_SELECT_ELEMENTS = 'ai.bldrs-share.ElementsSelected'
+const EVENT_CLIENT_DESELECT_ELEMENTS = 'ai.bldrs-share.ElementsDeSelected'
 
 /**
  * Api Events are defined here
@@ -31,7 +32,7 @@ class ApiEventsRegistry {
     return this.apiConnection.successfulResponse({})
   }
 
-  EVENT_HANDLER_HIGHLIGHT_ELEMENTS = (data) => {
+  EVENT_HANDLER_SELECT_ELEMENTS = (data) => {
     if (!('githubIfcPath' in data)) {
       return this.apiConnection.missingArgumentResponse('githubIfcPath')
     }
@@ -48,25 +49,63 @@ class ApiEventsRegistry {
   }
 
   EVENT_HANDLER_MAP = {
-    [EVENT_LOAD_MODEL]: this.EVENT_HANDLER_LOAD_MODEL,
-    [EVENT_HIGHLIGHT_ELEMENTS]: this.EVENT_HANDLER_HIGHLIGHT_ELEMENTS,
+    [EVENT_VIEWER_LOAD_MODEL]: this.EVENT_HANDLER_LOAD_MODEL,
+    [EVENT_VIEWER_SELECT_ELEMENTS]: this.EVENT_HANDLER_SELECT_ELEMENTS,
   }
 
-  EVENT_DISPATCHER_HIGHLIGHT_ELEMENTS = () => {
-    let lastSelectedElements = []
+  /**
+   * get ids of selected elements.
+   *
+   * @param {object} state
+   * @return {string[]} array of GlobalIds.
+   */
+  getSelectedElementIds(state) {
+    return [state.selectedElement.GlobalId.value]
+  }
+
+  /**
+   * check if state has changed.
+   *
+   * @param {object} state
+   * @param {string[]} lastSelectedElementIds
+   * @return {boolean}
+   */
+  selectedElementIdsHasChanged(state, lastSelectedElementIds) {
+    if (state.selectedElement && Object.prototype.hasOwnProperty.call(state.selectedElement, 'GlobalId')) {
+      return JSON.stringify(lastSelectedElementIds) !== JSON.stringify(this.getSelectedElementIds(state))
+    }
+  }
+
+  EVENT_DISPATCHER_ELEMENT_SELECTION = () => {
+    let lastSelectedElementIds = []
     useStore.subscribe((state) => {
-      if (state.selectedElement && Object.prototype.hasOwnProperty.call(state.selectedElement, 'GlobalId')) {
-        const newSelectedElements = [state.selectedElement.GlobalId.value]
-        if (JSON.stringify(lastSelectedElements) !== JSON.stringify(newSelectedElements)) {
-          lastSelectedElements = newSelectedElements
-          this.apiConnection.send(EVENT_CLIENT_HIGHLIGHT_ELEMENTS, lastSelectedElements)
+      if (this.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
+        const newSelectedElementIds = this.getSelectedElementIds(state)
+        if (newSelectedElementIds.length > 0) {
+          this.apiConnection.send(EVENT_CLIENT_SELECT_ELEMENTS, newSelectedElementIds)
         }
+        lastSelectedElementIds = newSelectedElementIds
+      }
+    })
+  }
+
+  EVENT_DISPATCHER_ELEMENT_DESELECTION = () => {
+    let lastSelectedElementIds = []
+    useStore.subscribe((state) => {
+      if (this.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
+        const newSelectedElementIds = this.getSelectedElementIds(state)
+        const deSelectedElementIds = lastSelectedElementIds.filter((x) => !newSelectedElementIds.includes(x))
+        if (deSelectedElementIds && deSelectedElementIds.length > 0) {
+          this.apiConnection.send(EVENT_CLIENT_DESELECT_ELEMENTS, deSelectedElementIds)
+        }
+        lastSelectedElementIds = newSelectedElementIds
       }
     })
   }
 
   EVENT_DISPATCHER_MAP = {
-    [EVENT_CLIENT_HIGHLIGHT_ELEMENTS]: this.EVENT_DISPATCHER_HIGHLIGHT_ELEMENTS,
+    [EVENT_CLIENT_SELECT_ELEMENTS]: this.EVENT_DISPATCHER_ELEMENT_SELECTION,
+    [EVENT_CLIENT_DESELECT_ELEMENTS]: this.EVENT_DISPATCHER_ELEMENT_DESELECTION,
   }
 
   registerEventHandlers = () => {
