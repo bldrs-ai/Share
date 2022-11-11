@@ -207,13 +207,7 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
-    let ifcURL
-    if (!uploadedFile && accessToken !== '') {
-      ifcURL = await getFinalURL(filepath)
-    } else {
-      ifcURL = filepath
-    }
-
+    const ifcURL = uploadedFile ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.IFC.loadIfcUrl(
         ifcURL,
         !urlHasCameraParams(), // fitToFrame
