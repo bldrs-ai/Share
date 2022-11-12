@@ -13,6 +13,7 @@ import './index.css'
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
 import WidgetApi from "./WidgetApi/WidgetApi";
+import {searchIndex} from './Containers/CadView';
 /* eslint-enable */
 
 
@@ -31,7 +32,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
 
   useMemo(() => {
-    new WidgetApi(navigation.current)
+    new WidgetApi(navigation.current, searchIndex)
   }, [navigation])
 
   /**

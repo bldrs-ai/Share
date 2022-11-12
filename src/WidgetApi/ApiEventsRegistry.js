@@ -12,11 +12,15 @@ const EVENT_CLIENT_DESELECT_ELEMENTS = 'ai.bldrs-share.ElementsDeSelected'
 class ApiEventsRegistry {
   apiConnection = null
   navigation = null
+  searchIndex = null
+  selectElementsDebounce = false
+  deselectElementsDebounce = false
 
   /**
    * constructor
    */
-  constructor(apiConnection, navigation) {
+  constructor(apiConnection, navigation, searchIndex) {
+    this.searchIndex = searchIndex
     this.apiConnection = apiConnection
     this.navigation = navigation
     this.registerEventHandlers()
@@ -33,17 +37,33 @@ class ApiEventsRegistry {
   }
 
   EVENT_HANDLER_SELECT_ELEMENTS = (data) => {
-    if (!('githubIfcPath' in data)) {
-      return this.apiConnection.missingArgumentResponse('githubIfcPath')
-    }
+    let expressIds = []
+
+    // if (!('githubIfcPath' in data)) {
+    //   return this.apiConnection.missingArgumentResponse('githubIfcPath')
+    // }
     if (!('globalIds' in data)) {
       return this.apiConnection.missingArgumentResponse('globalIds')
     }
+
     if (data.globalIds.length) {
-      this.navigation(`/share/v/gh/${ data.githubIfcPath }?q=${ data.globalIds[0]}`)
-    } else {
-      this.navigation( `/share/v/gh/${ data.githubIfcPath}`)
+      for (const globalId of data.globalIds) {
+        const expressId = this.searchIndex.getExpressIdByGlobalId(globalId)
+        if (expressId) {
+          expressIds.push(expressId)
+        }
+      }
     }
+    this.selectElementsDebounce = true
+    this.deselectElementsDebounce = true
+    useStore.setState({selectedElements: expressIds})
+
+
+    // if (data.globalIds.length) {
+    //   this.navigation(`/share/v/gh/${ data.githubIfcPath }?q=${ data.globalIds[0]}`)
+    // } else {
+    //   this.navigation( `/share/v/gh/${ data.githubIfcPath}`)
+    // }
 
     return this.apiConnection.successfulResponse({})
   }
@@ -60,7 +80,14 @@ class ApiEventsRegistry {
    * @return {string[]} array of GlobalIds.
    */
   getSelectedElementIds(state) {
-    return [state.selectedElement.GlobalId.value]
+    let elementIds = []
+    for (const expressId of state.selectedElements) {
+      const globalId = this.searchIndex.getGlobalIdByExpressId(expressId)
+      if (globalId) {
+        elementIds.push(globalId)
+      }
+    }
+    return elementIds
   }
 
   /**
@@ -71,7 +98,7 @@ class ApiEventsRegistry {
    * @return {boolean}
    */
   selectedElementIdsHasChanged(state, lastSelectedElementIds) {
-    if (state.selectedElement && Object.prototype.hasOwnProperty.call(state.selectedElement, 'GlobalId')) {
+    if (Array.isArray(state.selectedElements)) {
       return JSON.stringify(lastSelectedElementIds) !== JSON.stringify(this.getSelectedElementIds(state))
     }
   }
@@ -81,10 +108,13 @@ class ApiEventsRegistry {
     useStore.subscribe((state) => {
       if (this.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
         const newSelectedElementIds = this.getSelectedElementIds(state)
-        if (newSelectedElementIds.length > 0) {
-          this.apiConnection.send(EVENT_CLIENT_SELECT_ELEMENTS, newSelectedElementIds)
+        if (!this.selectElementsDebounce) {
+          if (newSelectedElementIds.length > 0) {
+            this.apiConnection.send(EVENT_CLIENT_SELECT_ELEMENTS, newSelectedElementIds)
+          }
         }
         lastSelectedElementIds = newSelectedElementIds
+        this.selectElementsDebounce = false
       }
     })
   }
@@ -94,11 +124,14 @@ class ApiEventsRegistry {
     useStore.subscribe((state) => {
       if (this.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
         const newSelectedElementIds = this.getSelectedElementIds(state)
-        const deSelectedElementIds = lastSelectedElementIds.filter((x) => !newSelectedElementIds.includes(x))
-        if (deSelectedElementIds && deSelectedElementIds.length > 0) {
-          this.apiConnection.send(EVENT_CLIENT_DESELECT_ELEMENTS, deSelectedElementIds)
+        if (!this.deselectElementsDebounce) {
+          const deSelectedElementIds = lastSelectedElementIds.filter((x) => !newSelectedElementIds.includes(x))
+          if (deSelectedElementIds && deSelectedElementIds.length > 0) {
+            this.apiConnection.send(EVENT_CLIENT_DESELECT_ELEMENTS, deSelectedElementIds)
+          }
         }
         lastSelectedElementIds = newSelectedElementIds
+        this.deselectElementsDebounce = false
       }
     })
   }

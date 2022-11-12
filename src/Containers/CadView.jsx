@@ -26,7 +26,7 @@ import SearchIndex from './SearchIndex'
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
-const searchIndex = new SearchIndex()
+export const searchIndex = new SearchIndex()
 
 
 let count = 0
@@ -74,6 +74,7 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const selectedElements = useStore((state) => state.selectedElements)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -98,6 +99,17 @@ export default function CadView({
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  useEffect(() => {
+    if (Array.isArray(selectedElements)) {
+      if (selectedElements.length > 0) {
+        selectItemsInScene(selectedElements.map((id) => parseInt(id)))
+      } else {
+        unSelectItems()
+      }
+    }
+  }, [selectedElements])
 
 
   // Watch for path changes within the model.
@@ -324,7 +336,7 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs)
+      setSelectedElements(resultIDs.map((id) => `${id}`))
       setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
@@ -354,8 +366,10 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.IFC.unpickIfcItems()
-    viewer.clipper.deleteAllPlanes()
+    if (viewer) {
+      viewer.IFC.unpickIfcItems()
+      viewer.clipper.deleteAllPlanes()
+    }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
@@ -368,7 +382,6 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
@@ -397,7 +410,7 @@ export default function CadView({
     await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
-    setSelectedElements(`${expressId}`)
+    setSelectedElements([`${expressId}`])
     const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
     return pathIds
