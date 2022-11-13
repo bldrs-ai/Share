@@ -23,18 +23,20 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
  *
- * @param {object} viewer The IFC viewer
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
+export default function OperationsGroup({
+  unSelectItem,
+}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const viewer = useStore((state) => state.viewerStore)
+  const toggleIsNavPanelOpen = useStore((state) => state.toggleIsNavPanelOpen)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
@@ -70,7 +72,7 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   return (
     <div className={classes.container}>
       <ButtonGroup orientation="vertical" >
-        <ShareControl viewer={viewer}/>
+        <ShareControl/>
       </ButtonGroup>
       {!isMobile && <Divider />}
       <ButtonGroup orientation="vertical" >
@@ -89,8 +91,8 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
         {isMobile &&
           <TooltipIconButton
             title='Elements Hierarchy'
-            selected={showNavPanel}
-            onClick={onClickMenuCb}
+            selected={isNavPanelOpen}
+            onClick={toggleIsNavPanelOpen}
             icon={<TreeIcon/>}
           />
         }
@@ -110,10 +112,10 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           onClick={() => theme.toggleColorMode()}
           icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
-        <AboutControl installPrefix={installPrefix}/>
+        <AboutControl/>
       </ButtonGroup>
       {/* Invisible */}
-      <CameraControl viewer={viewer}/>
+      <CameraControl/>
     </div>
   )
 }

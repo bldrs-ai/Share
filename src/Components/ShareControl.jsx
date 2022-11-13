@@ -17,11 +17,10 @@ import {ControlButton, TooltipIconButton} from './Buttons'
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * @param {object} viewer ifc viewer
  * @return {object} The button react component, with a hosted
  *   ShareDialog component
  */
-export default function ShareControl({viewer}) {
+export default function ShareControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const classes = useStyles()
   return (
@@ -32,7 +31,6 @@ export default function ShareControl({viewer}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
         <ShareDialog
-          viewer={viewer}
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
         />
@@ -47,12 +45,12 @@ export default function ShareControl({viewer}) {
  * included in the shared URL and assists in copying the URL to
  * clipboard.
  *
- * @param {object} viewer IFC viewer
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
  * @return {React.Component} The react component
  */
-function ShareDialog({viewer, isDialogDisplayed, setIsDialogDisplayed}) {
+function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+  const viewer = useStore((state) => state.viewerStore)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
