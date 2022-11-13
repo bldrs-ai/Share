@@ -29,31 +29,29 @@ export default function CutPlaneMenu() {
   const location = useLocation()
 
   const PLANE_PREFIX = 'p'
+  let planeOffsetX = 0
+  let planeOffsetY = 0
+  let planeOffsetZ = 0
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
-      const planeDirection = planeHash.split(':')[1]
-      const planes = ['x', 'y', 'z'].includes(planeDirection)
+      const planeInfo = planeHash.split(':')[1]
+      const planeNormal = planeInfo[0]
+      const normalOffset = planeInfo[2]
+      const planes = ['x', 'y', 'z'].includes(planeNormal)
       if (planes) {
-        createPlane(planeDirection)
+        createPlane(planeNormal, normalOffset)
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
-  const createPlane = (normalDirection) => {
+  const createPlane = (normalDirection, offset = 0) => {
+    console.log('normalDirection', normalDirection, 'offset', offset)
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = getModelCenter(model)
-    console.log('model Center', modelCenter)
-    const offsetX = 10
-    const offsetY = 10
-    const offsetZ = 10
-    const modelCenterOffset = new Vector3(modelCenter.x + offsetX, modelCenter.y + offsetY, modelCenter.z + offsetZ)
-    console.log('model Center Edited', modelCenterOffset)
-    console.log('viewer', viewer)
-    const planeHash = getHashParams(location, 'p')
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
       viewer.clipper.deleteAllPlanes()
@@ -65,25 +63,29 @@ export default function CutPlaneMenu() {
     switch (normalDirection) {
       case 'x':
         normal = new Vector3(-1, 0, 0)
+        planeOffsetX = offset
         break
       case 'y':
         normal = new Vector3(0, -1, 0)
+        planeOffsetY = offset
         break
       case 'z':
         normal = new Vector3(0, 0, -1)
+        planeOffsetZ = offset
         break
       default:
         normal = new Vector3(0, 1, 0)
         break
     }
+    const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
+    const planeHash = getHashParams(location, 'p')
     if (!planeHash || planeHash !== normalDirection ) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
+    console.log('modelCenterOffset', modelCenterOffset)
     setCutPlaneDirection(normalDirection)
-    // console.log('planes', viewer.clipper.planes[0].plane.normal)
-    // console.log('planes', viewer.clipper.planes[0].plane.constant)
     // do in the separate handler --
-    // use the same trip as camera --precision - put into global
+    // use the same trim as camera --precision - put into global
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
@@ -95,7 +97,6 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
-  console.log('viewer', viewer.clipper)
   return (
     <div>
       <TooltipIconButton

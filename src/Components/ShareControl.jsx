@@ -3,15 +3,18 @@ import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
+import {getPlanesLocation} from '../utils/cutPlane'
 import Dialog from './Dialog'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
-import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
 import {ControlButton, TooltipIconButton} from './Buttons'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
+import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import CopyIcon from '../assets/2D_Icons/Copy.svg'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
+
 
 /**
  * This button hosts the ShareDialog component and toggles it open and
@@ -50,12 +53,14 @@ export default function ShareControl() {
  * @return {React.Component} The react component
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const viewer = useStore((state) => state.viewerStore)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
+  const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.modelStore)
   const urlTextFieldRef = createRef()
   const classes = useStyles()
+  const isPlanesOn = viewer.clipper.planes.length > 0
 
   useEffect(() => {
     if (viewer) {
@@ -89,6 +94,10 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }
 
+  const togglePlaneIncluded = () => {
+    getPlanesLocation(viewer, model)
+  }
+
   return (
     <Dialog
       icon={<ShareIcon/>}
@@ -108,6 +117,14 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               className: classes.input}}
           />
           <div className={classes.buttonsContainer}>
+            {isPlanesOn &&
+            <TooltipIconButton
+              title='Include plane position'
+              selected={isCameraInUrl}
+              placement={'bottom'}
+              onClick={togglePlaneIncluded}
+              icon={<CutPlaneIcon />}
+            />}
             <TooltipIconButton
               title='Include camera position'
               selected={isCameraInUrl}

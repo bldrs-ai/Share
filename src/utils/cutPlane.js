@@ -1,4 +1,5 @@
 import {Box3, BufferAttribute, BufferGeometry, Mesh, Vector3} from 'three'
+import {addHashParams} from './location'
 
 
 /* eslint-disable no-magic-numbers */
@@ -86,6 +87,40 @@ export function removePlanes(viewer) {
   const clippingPlanes = viewer?.clipper['context'].clippingPlanes
   for (const plane of clippingPlanes) {
     viewer?.clipper['context'].removeClippingPlane(plane)
+  }
+}
+
+
+/**
+ * helper method to get the location of all of the planes currently in the scene
+ *
+ * @param {object} viewer
+ * @param {object} model
+ */
+export function getPlanesLocation(viewer, ifcModel) {
+  const PLANE_PREFIX = 'p'
+  if (viewer.clipper.planes.length > 0) {
+    let planeNormal
+    let planeAxisCenter
+    let planeOffsetFromCenter
+    let planeHash
+    const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
+    const modelCenter = getModelCenter(ifcModel)
+    for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
+      if (value !== 0 ) {
+        planeNormal = key
+        planeAxisCenter = modelCenter[planeNormal]
+        planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
+        const planeOffsetFromCenterTrim = Math.floor(planeOffsetFromCenter)
+        planeHash = `${planeNormal},${planeOffsetFromCenterTrim}`
+      }
+    }
+    // console.log('planeDirection', planeNormal )
+    // console.log('planeAxisCenter', planeAxisCenter)
+    // console.log('planeOffsetFromModelBottom', planeOffsetFromModelBoundary)
+    // console.log('planeOffsetFromCenter', planeOffsetFromCenter)
+
+    addHashParams(window.location, PLANE_PREFIX, {planeAxis: planeHash})
   }
 }
 
