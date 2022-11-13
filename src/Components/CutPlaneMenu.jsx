@@ -36,9 +36,9 @@ export default function CutPlaneMenu() {
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
-      const planeInfo = planeHash.split(':')[1]
+      const planeInfo = planeHash.split(':')[1].split(',')
       const planeNormal = planeInfo[0]
-      const normalOffset = planeInfo[2]
+      const normalOffset = planeInfo[1]
       const planes = ['x', 'y', 'z'].includes(planeNormal)
       if (planes) {
         createPlane(planeNormal, normalOffset)
@@ -64,14 +64,17 @@ export default function CutPlaneMenu() {
       case 'x':
         normal = new Vector3(-1, 0, 0)
         planeOffsetX = offset
+        console.log('planeOffsetX', planeOffsetX)
         break
       case 'y':
         normal = new Vector3(0, -1, 0)
         planeOffsetY = offset
+        console.log('planeOffsetY', planeOffsetY)
         break
       case 'z':
         normal = new Vector3(0, 0, -1)
         planeOffsetZ = offset
+        console.log('planeOffsetZ', planeOffsetZ)
         break
       default:
         normal = new Vector3(0, 1, 0)
