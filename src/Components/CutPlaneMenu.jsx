@@ -48,7 +48,6 @@ export default function CutPlaneMenu() {
   }, [model])
 
   const createPlane = (normalDirection, offset = 0) => {
-    console.log('normalDirection', normalDirection, 'offset', offset)
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = getModelCenter(model)
@@ -63,18 +62,15 @@ export default function CutPlaneMenu() {
     switch (normalDirection) {
       case 'x':
         normal = new Vector3(-1, 0, 0)
-        planeOffsetX = offset
-        console.log('planeOffsetX', planeOffsetX)
+        planeOffsetX = parseInt(offset)
         break
       case 'y':
         normal = new Vector3(0, -1, 0)
-        planeOffsetY = offset
-        console.log('planeOffsetY', planeOffsetY)
+        planeOffsetY = parseInt(offset)
         break
       case 'z':
         normal = new Vector3(0, 0, -1)
-        planeOffsetZ = offset
-        console.log('planeOffsetZ', planeOffsetZ)
+        planeOffsetZ = parseInt(offset)
         break
       default:
         normal = new Vector3(0, 1, 0)
@@ -85,10 +81,7 @@ export default function CutPlaneMenu() {
     if (!planeHash || planeHash !== normalDirection ) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
-    console.log('modelCenterOffset', modelCenterOffset)
     setCutPlaneDirection(normalDirection)
-    // do in the separate handler --
-    // use the same trim as camera --precision - put into global
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
@@ -129,9 +122,9 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => createPlane('x')} selected={cutPlaneDirection === 'x'}> X</MenuItem>
-        <MenuItem onClick={() => createPlane('y')} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
-        <MenuItem onClick={() => createPlane('z')} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
+        <MenuItem onClick={() => createPlane('x', 0)} selected={cutPlaneDirection === 'x'}> X</MenuItem>
+        <MenuItem onClick={() => createPlane('y', 0)} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
+        <MenuItem onClick={() => createPlane('z', 0)} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
       </Menu>
     </div>
   )

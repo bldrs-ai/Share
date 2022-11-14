@@ -97,7 +97,7 @@ export function removePlanes(viewer) {
  * @param {object} viewer
  * @param {object} model
  */
-export function getPlanesLocation(viewer, ifcModel) {
+export function addPlaneLocationToUrl(viewer, ifcModel) {
   const PLANE_PREFIX = 'p'
   if (viewer.clipper.planes.length > 0) {
     let planeNormal
@@ -115,11 +115,6 @@ export function getPlanesLocation(viewer, ifcModel) {
         planeHash = `${planeNormal},${planeOffsetFromCenterTrim}`
       }
     }
-    // console.log('planeDirection', planeNormal )
-    // console.log('planeAxisCenter', planeAxisCenter)
-    // console.log('planeOffsetFromModelBottom', planeOffsetFromModelBoundary)
-    // console.log('planeOffsetFromCenter', planeOffsetFromCenter)
-
     addHashParams(window.location, PLANE_PREFIX, {planeAxis: planeHash})
   }
 }

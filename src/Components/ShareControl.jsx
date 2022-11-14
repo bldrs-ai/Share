@@ -1,17 +1,18 @@
 import React, {createRef, useEffect, useState} from 'react'
 import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
-import {getPlanesLocation} from '../utils/cutPlane'
+import {addPlaneLocationToUrl} from '../utils/cutPlane'
+import {removeHashParams} from '../utils/location'
 import Dialog from './Dialog'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import {ControlButton, TooltipIconButton} from './Buttons'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import {ControlButton, RectangularButton} from './Buttons'
+import Toggle from './Toggle'
 import CopyIcon from '../assets/2D_Icons/Copy.svg'
 import ShareIcon from '../assets/2D_Icons/Share.svg'
 
@@ -54,7 +55,8 @@ export default function ShareControl() {
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
-  const [isCameraInUrl, setIsCameraInUrl] = useState(false)
+  const [isCameraInUrl, setIsCameraInUrl] = useState(true)
+  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
   const viewer = useStore((state) => state.viewerStore)
   const model = useStore((state) => state.modelStore)
@@ -70,7 +72,11 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         removeCameraUrlParams()
       }
     }
-  }, [viewer, isCameraInUrl, cameraControls])
+    if (isPlanesOn) {
+      setIsPlaneInUrl(true)
+      addPlaneLocationToUrl(viewer, model)
+    }
+  }, [viewer, isCameraInUrl, cameraControls, isPlanesOn, model])
 
   const closeDialog = () => {
     setIsDialogDisplayed(false)
@@ -95,7 +101,19 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   }
 
   const togglePlaneIncluded = () => {
-    getPlanesLocation(viewer, model)
+    if (isPlaneInUrl) {
+      removeHashParams(window.location, 'p')
+    } else {
+      addPlaneLocationToUrl(viewer, model)
+    }
+    setIsPlaneInUrl(!isPlaneInUrl)
+  }
+
+  const rowStyle = {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   }
 
   return (
@@ -116,30 +134,38 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               readOnly: true,
               className: classes.input}}
           />
-          <div className={classes.buttonsContainer}>
+          <Box sx={{
+            width: '100%',
+            marginTop: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            paddingLeft: '10px',
+          }}
+          >
             {isPlanesOn &&
-            <TooltipIconButton
-              title='Include plane position'
-              selected={isCameraInUrl}
-              placement={'bottom'}
-              onClick={togglePlaneIncluded}
-              icon={<CutPlaneIcon />}
-            />}
-            <TooltipIconButton
-              title='Include camera position'
-              selected={isCameraInUrl}
-              placement={'bottom'}
-              onClick={toggleCameraIncluded}
-              icon={<CameraIcon />}
-            />
-            <TooltipIconButton
-              title='Copy Link'
-              selected={isLinkCopied}
-              placement={'bottom'}
-              onClick={onCopy}
-              icon={<CopyIcon />}
-            />
-          </div>
+              <Box sx={rowStyle}>
+                <Typography>Cutplane position</Typography>
+                <Toggle
+                  onChange={togglePlaneIncluded}
+                  checked={isPlaneInUrl}
+                />
+              </Box>
+            }
+            <Box sx={rowStyle}>
+              <Typography>Camera position</Typography>
+              <Toggle
+                onChange={toggleCameraIncluded}
+                checked={isCameraInUrl}
+              />
+            </Box>
+          </Box>
+          <Box sx={{
+            marginTop: '20px',
+            marginBottom: '10px',
+          }}
+          >
+            <RectangularButton title={'Copy Link'} icon={<CopyIcon/>} onClick={onCopy} />
+          </Box>
         </div>
       }
     />)
@@ -157,13 +183,5 @@ const useStyles = makeStyles({
     width: '20px',
     height: '20px',
     marginBottom: '2px',
-  },
-  buttonsContainer: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: '20px',
-    width: '50%',
   },
 })

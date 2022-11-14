@@ -60,16 +60,24 @@ export function RectangularButton({
   title,
   icon,
   onClick,
+  noBackground = false,
 }) {
   assertDefined(title, icon, onClick)
+  const theme = useTheme()
   return (
     <Button
       onClick={onClick}
       variant='rectangular'
       startIcon={icon}
       sx={{
+        'width': '140px',
+        'height': '40px',
+        'fontWeight': 'normal',
+        'border': 'none',
+        'color': theme.palette.highlight.maximum,
+        'backgroundColor': noBackground ? 'none' : theme.palette.highlight.main,
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+        '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.secondary},
       }}
     >
       {title}
@@ -124,7 +132,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '40px',
       'height': '40px',
-      'border': 'none ',
+      'border': 'none',
       'margin': '4px 0px 4px 0px',
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979720',
