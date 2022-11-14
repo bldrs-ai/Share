@@ -151,12 +151,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.main,
+      color: theme.palette.highlight.secondary,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.secondary.main,
+      color: theme.palette.highlight.lime,
       depthTest: true,
     })
     if (viewer.IFC.selector) {
