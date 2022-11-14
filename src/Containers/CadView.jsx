@@ -21,6 +21,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {useAuth0} from '@auth0/auth0-react'
 
 
 /**
@@ -76,6 +77,7 @@ export default function CadView({
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const accessToken = useStore((state) => state.accessToken)
+  const {isLoading: isAuthing} = useAuth0()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -88,10 +90,12 @@ export default function CadView({
 
   // Viewer changes in onModelPath (above)
   useEffect(() => {
-    (async () => {
-      await onViewer()
-    })()
-  }, [viewer, accessToken])
+    if (!isAuthing) {
+      (async () => {
+        await onViewer()
+      })()
+    }
+  }, [viewer, accessToken, isAuthing])
 
 
   // searchParams changes in parent (ShareRoutes) from user and
