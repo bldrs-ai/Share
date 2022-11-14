@@ -136,7 +136,9 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
   if (accessToken.length > 0) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
       ...args.headers,
     }
   }
