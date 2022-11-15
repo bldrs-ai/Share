@@ -156,7 +156,7 @@ export default function CadView({
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.highlight.lime,
+      color: theme.palette.highlight.main,
       depthTest: true,
     })
     if (viewer.IFC.selector) {

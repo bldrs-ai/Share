@@ -61,10 +61,10 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const brightGreen = '#C8E8C7'
+  const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
   const fontFamily = 'Helvetica'
-  const lime = '#d8f8c7'
+  const lime = '#4EEF4B'
   const day = {
     primary: {
       main: grey[100],
@@ -75,7 +75,7 @@ function loadTheme(mode) {
       background: grey[300],
     },
     highlight: {
-      main: brightGreen,
+      main: lightGreen,
       secondary: darkGreen,
       heavy: grey[300],
       heavier: grey[400],
