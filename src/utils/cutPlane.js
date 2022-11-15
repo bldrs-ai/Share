@@ -105,6 +105,7 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
     let planeOffsetFromCenter
     let planeHash
     const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
+    console.log('viewer.clipper', viewer.clipper)
     const modelCenter = getModelCenter(ifcModel)
     for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
       if (value !== 0 ) {

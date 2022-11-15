@@ -32,6 +32,12 @@ const impl = {
     createFromNormalAndCoplanarPoint: jest.fn(() => {
       return 'createFromNormalAndCoplanarPoint'
     }),
+    planes: [
+      {plane: {
+        constant: 4,
+      },
+      },
+    ],
   },
   container: {
     style: {},
