@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useState} from 'react'
+import React, {useContext, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
@@ -6,11 +6,9 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import {ColorModeContext} from '../Context/ColorMode'
-import debug from '../utils/debug'
-import {getBranches} from '../utils/GitHub'
-import useStore from '../store/useStore'
-import {navigateBaseOnModelPath} from '../utils/location'
 import OpenModelControl from './OpenModelControl'
+
+// TODO Oleg:  obtain the name of the model from the permalink - if a model form the GIthub is currently loaded
 
 
 /**
@@ -22,49 +20,21 @@ export default function Files({fileOpen}) {
   const classes = useStyles()
   const navigate = useNavigate()
   const colorMode = useContext(ColorModeContext)
-  const repository = useStore((state) => state.repository)
-  const [branches, setBranches] = useState([])
-  const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
-  const modelPath = useStore((state) => state.modelPath)
 
-  useEffect(() => {
-    if (!repository) {
-      debug().warn('IssuesControl#Issues: 1, no repo defined')
-      return
+  const handleSelect = (e) => {
+    setSelected(e.target.value)
+    const modelPath = {
+      0: '',
+      1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
+      2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+      3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
+      4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
+      // eslint-disable-next-line max-len
+      5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
     }
-    const fetchBranches = async () => {
-      try {
-        const branchesData = await getBranches(repository)
-        const versionPathsTemp = []
-        if (branchesData.data.length > 0) {
-          setBranches(branchesData.data)
-        }
-        branchesData.data.map((branch, i) => {
-          if (branch.name === modelPath.branch) {
-            // select the current branch
-            setSelected(i)
-          }
-          const versionPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, branch.name, modelPath.filepath)
-          versionPathsTemp.push(versionPath)
-        })
-        setVersionPaths(versionPathsTemp)
-      } catch (e) {
-        debug().warn('failed to fetch branches', e)
-      }
-    }
-
-    if (branches.length === 0 && modelPath.repo !== undefined) {
-      fetchBranches()
-    }
-  }, [repository])
-
-
-  const handleSelect = (event) => {
-    const versionNumber = event.target.value
-    setSelected(versionNumber)
     navigate({
-      pathname: versionPaths[versionNumber],
+      pathname: modelPath[e.target.value],
     })
   }
 
@@ -97,7 +67,8 @@ export default function Files({fileOpen}) {
           label='Project File'
           select
         >
-          <MenuItem value={0}><Typography variant='p'>Momentum.ifc</Typography></MenuItem>
+          <MenuItem value={0}><Typography variant='p'>../../Blrds.ifc</Typography></MenuItem>
+          <MenuItem value={1}><Typography variant='p'>Momentum.ifc</Typography></MenuItem>
           <MenuItem value={2}><Typography variant='p'>Schneestock.ifc</Typography></MenuItem>
           <MenuItem value={3}><Typography variant='p'>Eisvogel.ifc</Typography></MenuItem>
           <MenuItem value={4}><Typography variant='p'>Seestrasse.ifc</Typography></MenuItem>
