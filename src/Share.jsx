@@ -59,7 +59,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = urlParams
     if (org && repo) {
-      console.log(`Setting GH repo ${org}/${repo}`)
       setRepository(org, repo)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
@@ -67,7 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       console.warn('No repository set for project!', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams])
+  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
   const {theme, colorMode} = useTheme()

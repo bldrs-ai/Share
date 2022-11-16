@@ -1,7 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
-import {makeStyles} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {getHashParams} from '../utils/location'
 import {preprocessMediaQuery} from '../utils/mediaQuery'
@@ -29,6 +29,7 @@ export function SideDrawer({
     isPropertiesOn: isPropertiesOn,
   })
   const isMobile = useIsMobile()
+  const theme = useTheme()
 
 
   useEffect(() => {
@@ -61,7 +62,15 @@ export function SideDrawer({
           className={classes.drawer}
         >
           <div className={classes.content}>
-            <div className={classes.containerNotes}>
+            <div
+              sx={{
+                overflow: 'hidden',
+                height: isPropertiesOn ? '50%' : '1200px',
+                display: isCommentsOn ? '' : 'none',
+                borderRadius: '0px',
+                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+              }}
+            >
               {isCommentsOn ? <NotesPanel/> : null}
             </div>
             <div className={classes.divider}/>
@@ -175,13 +184,6 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
   container: {
     borderRadius: '5px',
     overflow: 'hidden',
-  },
-  containerNotes: {
-    overflow: 'hidden ',
-    height: (p) => p.isPropertiesOn ? '50%' : '1200px',
-    display: (p) => p.isCommentsOn ? '' : 'none',
-    borderRadius: '0px',
-    borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
   },
   containerProperties: {
     borderRadius: '5px',

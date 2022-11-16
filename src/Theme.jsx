@@ -95,7 +95,7 @@ function loadTheme(mode) {
     },
     highlight: {
       main: darkGreen,
-      secondary: lightGreen,
+      secondary: darkGreen,
       heavy: grey[700],
       heavier: grey[600],
       heaviest: grey[500],
