@@ -67,7 +67,7 @@ export default function Files({fileOpen}) {
           label='Project File'
           select
         >
-          <MenuItem value={0}><Typography variant='p'>../../Blrds.ifc</Typography></MenuItem>
+          <MenuItem value={0}><Typography variant='p'>../../blrds.ifc</Typography></MenuItem>
           <MenuItem value={1}><Typography variant='p'>Momentum.ifc</Typography></MenuItem>
           <MenuItem value={2}><Typography variant='p'>Schneestock.ifc</Typography></MenuItem>
           <MenuItem value={3}><Typography variant='p'>Eisvogel.ifc</Typography></MenuItem>

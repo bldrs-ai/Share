@@ -8,7 +8,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
 import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
-import {TooltipIconButton} from '../Components/Buttons'
+import {RectangularButton} from '../Components/Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 import ModelsIcon from '../assets/2D_Icons/Model.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -93,57 +93,29 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         <div className={classes.content}>
-          <TextField
-            sx={{marginTop: '10px'}}
-            className={classes.dropDown}
-            value={3}
-            // onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='Service'
-            select
-            size='small'
-          >
-            <MenuItem value={0}><Typography variant='p'>GDrive</Typography></MenuItem>
-            <MenuItem value={1}><Typography variant='p'>DropBox</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Box</Typography></MenuItem>
-            <MenuItem value={3}><Typography variant='p'>GitHub</Typography></MenuItem>
-          </TextField>
-          <TextField
-            sx={{marginTop: '10px'}}
-            className={classes.dropDown}
-            value={2}
-            onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='Folder / Repo'
-            select
-            size='small'
-          >
-            <MenuItem value={1}><Typography variant='p'>Project 1</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Project 2</Typography></MenuItem>
-            <MenuItem value={3}><Typography variant='p'>Project 3</Typography></MenuItem>
-            <MenuItem value={4}><Typography variant='p'>Project 4</Typography></MenuItem>
-          </TextField>
-          <TextField
-            sx={{marginTop: '10px'}}
-            className={classes.dropDown}
-            value={selected}
-            onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='File'
-            select
-            size='small'
-          >
-            <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-            <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-            <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-            <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-          </TextField>
+          {/* Sample models control */}
+          <div>
+            <TextField
+              className={classes.dropDown}
+              sx={{marginTop: '10px'}}
+              value={selected}
+              onChange={(e) => handleSelect(e)}
+              variant='outlined'
+              label='Sample Projects'
+              select
+              size='small'
+            >
+              <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+              <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+              <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+              <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+              <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+              <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+            </TextField>
+          </div>
+
           <p className={classes.bullet}>
-            We at BLDRS aim to simplify the fundumentals of the workflow.
-            Our vision is to connect storage with a viewing environment and make access to the project data into an effortless endevour.
-            <br/>
+            Open File from connected cloud provider.
             Visit our {' '}
             <span>
               <a
@@ -154,33 +126,69 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               >
                 wiki
               </a>
-            </span> to learn more.
+            </span> to learn how to connect to the cloud.
           </p>
-          <TooltipIconButton
-            title='Open IFC file'
-            icon={<UploadIcon/>}
-            onClick={openFile}
-          />
+          {/* Cloud models control */}
+          <div>
+            <TextField
+              sx={{marginTop: '10px'}}
+              className={classes.dropDown}
+              value={3}
+              // onChange={(e) => handleSelect(e)}
+              variant='outlined'
+              label='Service'
+              select
+              size='small'
+            >
+              <MenuItem value={0}><Typography variant='p'>GDrive</Typography></MenuItem>
+              <MenuItem value={1}><Typography variant='p'>DropBox</Typography></MenuItem>
+              <MenuItem value={2}><Typography variant='p'>Box</Typography></MenuItem>
+              <MenuItem value={3}><Typography variant='p'>GitHub</Typography></MenuItem>
+            </TextField>
+            <TextField
+              sx={{marginTop: '10px'}}
+              className={classes.dropDown}
+              value={2}
+              // onChange={(e) => handleSelect(e)}
+              variant='outlined'
+              label='Folder / Repo'
+              select
+              size='small'
+            >
+              <MenuItem value={1}><Typography variant='p'>Project 1</Typography></MenuItem>
+              <MenuItem value={2}><Typography variant='p'>Project 2</Typography></MenuItem>
+              <MenuItem value={3}><Typography variant='p'>Project 3</Typography></MenuItem>
+              <MenuItem value={4}><Typography variant='p'>Project 4</Typography></MenuItem>
+            </TextField>
+            <TextField
+              sx={{marginTop: '10px'}}
+              className={classes.dropDown}
+              value={selected}
+              onChange={(e) => handleSelect(e)}
+              variant='outlined'
+              label='File'
+              select
+              size='small'
+            >
+              <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+              <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+              <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+              <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+              <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+              <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+            </TextField>
+          </div>
           <p className={classes.bullet}>
             Models opened from local drive cannot be saved or shared.
           </p>
-          <TextField
-            className={classes.dropDown}
-            sx={{marginTop: '10px'}}
-            value={selected}
-            onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='Sample Projects'
-            select
-            size='small'
-          >
-            <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-            <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-            <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-            <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-          </TextField>
+          <RectangularButton
+            title='Open local IFC files'
+            icon={<UploadIcon/>}
+            onClick={openFile}
+            noBackground={true}
+            width={'260px'}
+          />
+
         </div>
       }
     />
