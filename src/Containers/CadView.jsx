@@ -473,37 +473,39 @@ export default function CadView({
             />
           </div>
         )}
-        <Box sx={{
-          position: 'absolute',
-          top: `86px`,
-          left: '20px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          alignItems: 'flex-start',
-        }}
-        >
-          {
-            showOpenControl &&
-            <FilesControl location={location} fileOpen={loadLocalFile}/>
-          }
-          {
-            isGuthubRepo && showBranchControl &&
-            <BranchesControl location={location}/>
-          }
-          {showNavPanel &&
-            <NavPanel
-              model={model}
-              element={rootElement}
-              defaultExpandedElements={defaultExpandedElements}
-              expandedElements={expandedElements}
-              setExpandedElements={setExpandedElements}
-              pathPrefix={
-                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-              }
-            />
-          }
-        </Box>
+        {showSearchBar && (
+          <Box sx={{
+            position: 'absolute',
+            top: `86px`,
+            left: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
+          }}
+          >
+            {
+              showOpenControl &&
+              <FilesControl location={location} fileOpen={loadLocalFile}/>
+            }
+            {
+              isGuthubRepo && showBranchControl &&
+              <BranchesControl location={location}/>
+            }
+            {showNavPanel &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
+            }
+          </Box>
+        )}
         {viewer &&
         <Box sx={{
           position: 'absolute',

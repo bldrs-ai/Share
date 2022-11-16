@@ -1,5 +1,5 @@
 const VERBOSE = 3
-
+/* eslint-disable */
 const DEBUG = 2
 const INFO = 1
 const OFF = 0
