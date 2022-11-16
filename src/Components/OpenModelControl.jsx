@@ -29,7 +29,7 @@ export default function OpenModelControl({fileOpen}) {
       <Paper className={classes.root} elevation={0}
         sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
-        <Tooltip title={'Open IFC'} describeChild placement={'top'}>
+        <Tooltip title={'Open Project'} describeChild placement={'bottom'}>
           <ToggleButton
             selected={isDialogDisplayed}
             onClick={() => {
@@ -38,7 +38,7 @@ export default function OpenModelControl({fileOpen}) {
             color='primary'
             value={'something'}
           >
-            <OpenIcon/>
+            <OpenIcon style={{width: '18px'}}/>
           </ToggleButton>
         </Tooltip>
       </Paper>
@@ -94,11 +94,42 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
       content={
         <div className={classes.content}>
           <TextField
+            sx={{marginTop: '10px'}}
+            className={classes.dropDown}
+            value={3}
+            // onChange={(e) => handleSelect(e)}
+            variant='outlined'
+            label='Service'
+            select
+            size='small'
+          >
+            <MenuItem value={0}><Typography variant='p'>GDrive</Typography></MenuItem>
+            <MenuItem value={1}><Typography variant='p'>DropBox</Typography></MenuItem>
+            <MenuItem value={2}><Typography variant='p'>Box</Typography></MenuItem>
+            <MenuItem value={3}><Typography variant='p'>GitHub</Typography></MenuItem>
+          </TextField>
+          <TextField
+            sx={{marginTop: '10px'}}
+            className={classes.dropDown}
+            value={2}
+            onChange={(e) => handleSelect(e)}
+            variant='outlined'
+            label='Folder / Repo'
+            select
+            size='small'
+          >
+            <MenuItem value={1}><Typography variant='p'>Project 1</Typography></MenuItem>
+            <MenuItem value={2}><Typography variant='p'>Project 2</Typography></MenuItem>
+            <MenuItem value={3}><Typography variant='p'>Project 3</Typography></MenuItem>
+            <MenuItem value={4}><Typography variant='p'>Project 4</Typography></MenuItem>
+          </TextField>
+          <TextField
+            sx={{marginTop: '10px'}}
             className={classes.dropDown}
             value={selected}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label='Sample Projects'
+            label='File'
             select
             size='small'
           >
@@ -110,7 +141,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
           </TextField>
           <p className={classes.bullet}>
-            Models hosted on GitHub are opened by inserting the link to the file into the Search.
+            We at BLDRS aim to simplify the fundumentals of the workflow.
+            Our vision is to connect storage with a viewing environment and make access to the project data into an effortless endevour.
             <br/>
             Visit our {' '}
             <span>
@@ -132,6 +164,23 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
           <p className={classes.bullet}>
             Models opened from local drive cannot be saved or shared.
           </p>
+          <TextField
+            className={classes.dropDown}
+            sx={{marginTop: '10px'}}
+            value={selected}
+            onChange={(e) => handleSelect(e)}
+            variant='outlined'
+            label='Sample Projects'
+            select
+            size='small'
+          >
+            <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+            <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+            <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+            <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+            <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+          </TextField>
         </div>
       }
     />

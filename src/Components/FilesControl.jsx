@@ -10,7 +10,7 @@ import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
-import BranchInfoControl from './BranchesInfoControl'
+import OpenModelControl from './OpenModelControl'
 
 
 /**
@@ -18,7 +18,7 @@ import BranchInfoControl from './BranchesInfoControl'
  * @param {Function} setIsDialogDisplayed
  * @return {object} React component
  */
-export default function Branches() {
+export default function Files({fileOpen}) {
   const classes = useStyles()
   const navigate = useNavigate()
   const colorMode = useContext(ColorModeContext)
@@ -70,49 +70,40 @@ export default function Branches() {
 
   return (
     <>
-      {modelPath.repo !== undefined &&
-        <Paper elevation={0}
-          sx={{
-            backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
-            marginTop: '18px',
-            opacity: .8,
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'flex-start',
-            alignItems: 'center',
-          }}
+      <Paper elevation={0}
+        sx={{
+          backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+          marginTop: '18px',
+          opacity: .8,
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'flex-start',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{
+          marginLeft: '7px',
+          marginRight: '-3px',
+          zIndex: 10,
+        }}
         >
-          <div style={{
-            marginLeft: '7px',
-            marginRight: '-3px',
-            zIndex: 10,
-          }}
-          >
-            <BranchInfoControl/>
-          </div>
-          <TextField
-            className={classes.dropDown}
-            onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='File Versions / Git Branch'
-            value={selected}
-            select
-            role="button"
-          >
-            {branches.map((branch, i) => {
-              return (
-                <MenuItem
-                  key={i}
-                  value={i}
-                >
-                  <Typography variant='p'>{branch.name}</Typography>
-                </MenuItem>
-              )
-            })
-            }
-          </TextField>
-        </Paper>
-      }
+          <OpenModelControl fileOpen={fileOpen}/>
+        </div>
+        <TextField
+          className={classes.dropDown}
+          value={selected}
+          onChange={(e) => handleSelect(e)}
+          variant='outlined'
+          label='Project File'
+          select
+        >
+          <MenuItem value={0}><Typography variant='p'>Momentum.ifc</Typography></MenuItem>
+          <MenuItem value={2}><Typography variant='p'>Schneestock.ifc</Typography></MenuItem>
+          <MenuItem value={3}><Typography variant='p'>Eisvogel.ifc</Typography></MenuItem>
+          <MenuItem value={4}><Typography variant='p'>Seestrasse.ifc</Typography></MenuItem>
+          <MenuItem value={5}><Typography variant='p'>Structural_Detail.ifc</Typography></MenuItem>
+        </TextField>
+      </Paper>
     </>
 
   )

@@ -9,14 +9,12 @@ import ExtractLevelsMenu from './ExtractLevelsMenu'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
-import {useIsMobile} from './Hooks'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
 import NotesIcon from '../assets/2D_Icons/Notes.svg'
 import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
@@ -28,19 +26,25 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  */
 export default function OperationsGroup({
   unSelectItem,
+  installPrefix,
+  fileOpen,
+  showNavPanel,
+  showBranchControl,
+  showOpenControl,
+  isGitHubRepo,
+  onClickMenuCb,
+  onCLickBranchControlCb,
+  onCLickOpenControlCb,
 }) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
   const openDrawer = useStore((state) => state.openDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
-  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const toggleIsNavPanelOpen = useStore((state) => state.toggleIsNavPanelOpen)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
-  const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
 
@@ -72,32 +76,25 @@ export default function OperationsGroup({
   return (
     <div className={classes.container}>
       <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-      </ButtonGroup>
-      {!isMobile && <Divider />}
-      <ButtonGroup orientation="vertical" >
+        <ShareControl />
+        <Divider />
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
+      </ButtonGroup>
+      <Divider />
+      <CutPlaneMenu/>
+      <ExtractLevelsMenu/>
+      <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title="Properties"
           onClick={() => toggle('Properties')}
           selected={isPropertiesOn}
           icon={<ListIcon/>}
         />
-        {isMobile &&
-          <TooltipIconButton
-            title='Elements Hierarchy'
-            selected={isNavPanelOpen}
-            onClick={toggleIsNavPanelOpen}
-            icon={<TreeIcon/>}
-          />
-        }
-        <CutPlaneMenu/>
-        <ExtractLevelsMenu/>
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
@@ -112,7 +109,8 @@ export default function OperationsGroup({
           onClick={() => theme.toggleColorMode()}
           icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
-        <AboutControl/>
+        <Divider />
+        <AboutControl installPrefix={installPrefix}/>
       </ButtonGroup>
       {/* Invisible */}
       <CameraControl/>
@@ -127,7 +125,7 @@ const useStyles = makeStyles({
     'display': 'flex',
     'flexDirection': 'column',
     'height': 'calc(100vh - 40px)',
-    'margin': '20px 20px 0 0',
+    'margin': '20px 16px 0 0',
     '@media (max-width: 900px)': {
       margin: '20px 10px 0 0',
     },

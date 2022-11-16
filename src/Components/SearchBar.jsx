@@ -7,7 +7,7 @@ import debug from '../utils/debug'
 import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import useTheme from '../Theme'
-import OpenModelControl from './OpenModelControl'
+import OpenInfoControl from './OpenInfoControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 
@@ -91,7 +91,7 @@ export default function SearchBar({fileOpen}) {
         elevation={0}
         sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
-        <OpenModelControl fileOpen={fileOpen}/>
+        <OpenInfoControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}

@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import Box from '@mui/material/Box'
 import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
@@ -9,6 +10,7 @@ import debug from '../utils/debug'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
+import ControlsGroup from '../Components/ControlsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
@@ -21,6 +23,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
+import FilesControl from '../Components/FilesControl'
 
 
 /**
@@ -61,12 +64,14 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
+  const [showNavPanel, setShowNavPanel] = useState(false)
+  const [showBranchControl, setShowBranchControl] = useState(true)
+  const [showOpenControl, setShowOpenControl] = useState(true)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
-  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
@@ -76,6 +81,7 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const isGuthubRepo = modelPath.repo !== undefined
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -194,6 +200,7 @@ export default function CadView({
    */
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath)
+    console.log('in the loadIFC')
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
@@ -464,24 +471,60 @@ export default function CadView({
             <SearchBar
               fileOpen={loadLocalFile}
             />
-            {
-              modelPath.repo !== undefined &&
-              <BranchesControl location={location}/>
-            }
-            {isNavPanelOpen &&
-              <NavPanel
-                model={model}
-                element={rootElement}
-                defaultExpandedElements={defaultExpandedElements}
-                expandedElements={expandedElements}
-                setExpandedElements={setExpandedElements}
-                pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-                }
-              />
-            }
           </div>
         )}
+        <Box sx={{
+          position: 'absolute',
+          top: `86px`,
+          left: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          alignItems: 'flex-start',
+        }}
+        >
+          {
+            showOpenControl &&
+            <FilesControl location={location} fileOpen={loadLocalFile}/>
+          }
+          {
+            isGuthubRepo && showBranchControl &&
+            <BranchesControl location={location}/>
+          }
+          {showNavPanel &&
+            <NavPanel
+              model={model}
+              element={rootElement}
+              defaultExpandedElements={defaultExpandedElements}
+              expandedElements={expandedElements}
+              setExpandedElements={setExpandedElements}
+              pathPrefix={
+                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+              }
+            />
+          }
+        </Box>
+        {viewer &&
+        <Box sx={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '80px',
+        }}
+        >
+          <ControlsGroup
+            viewer={viewer}
+            unSelectItem={unSelectItems}
+            onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+            onCLickBranchControlCb={() => setShowBranchControl(!showBranchControl)}
+            onCLickOpenControlCb={() => setShowOpenControl(!showOpenControl)}
+            showNavPanel={showNavPanel}
+            showBranchControl={showBranchControl}
+            showOpenControl={showOpenControl}
+            installPrefix={installPrefix}
+            isGitHubRepo={isGuthubRepo}
+          />
+        </Box>
+        }
 
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
@@ -491,6 +534,14 @@ export default function CadView({
           {viewer &&
             <OperationsGroup
               unSelectItem={unSelectItems}
+              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+              onCLickBranchControlCb={() => setShowBranchControl(!showBranchControl)}
+              onCLickOpenControlCb={() => setShowOpenControl(!showOpenControl)}
+              showNavPanel={showNavPanel}
+              showBranchControl={showBranchControl}
+              showOpenControl={showOpenControl}
+              installPrefix={installPrefix}
+              isGitHubRepo={isGuthubRepo}
             />}
         </div>
         {alert}
