@@ -64,8 +64,7 @@ export function SideDrawer({
           <div className={classes.content}>
             <div
               sx={{
-                overflow: 'hidden',
-                height: isPropertiesOn ? '50%' : '1200px',
+                height: isPropertiesOn ? '50%' : '100%',
                 display: isCommentsOn ? '' : 'none',
                 borderRadius: '0px',
                 borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
@@ -171,8 +170,6 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
     },
   },
   content: {
-    'overflow': 'hidden',
-    'height': '95%',
     'marginTop': '20px',
     'display': 'flex',
     'flexDirection': 'column',
@@ -187,7 +184,6 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
   },
   containerProperties: {
     borderRadius: '5px',
-    overflow: 'hidden',
     display: (p) => p.isPropertiesOn ? '' : 'none',
     height: (p) => p.isCommentsOn ? '50%' : '98%',
   },
