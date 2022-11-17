@@ -11,7 +11,7 @@ import debug from '../utils/debug'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
-// import ControlsGroup from '../Components/ControlsGroup'
+import ControlsGroup from '../Components/ControlsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
@@ -25,6 +25,7 @@ import {useIsMobile} from '../Components/Hooks'
 import {TooltipIconButton} from '../Components/Buttons'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
+import FilesControl from '../Components/FilesControl'
 import {NavCube} from '../Components/NavCube/NavCube'
 import CameraIcon from '../assets/2D_Icons/Camera.svg'
 
@@ -87,6 +88,7 @@ export default function CadView({
   const isCameraPerpective = useStore((state) => state.isCameraPerpective)
   const switchCameraToPerspective = useStore((state) => state.switchCameraToPerspective)
   const switchCameraToOrtho = useStore((state) => state.switchCameraToOrtho)
+  const isGuthubRepo = modelPath.repo !== undefined
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -490,9 +492,27 @@ export default function CadView({
             <SearchBar
               fileOpen={loadLocalFile}
             />
-            <Box sx={{marginTop: '14px'}}>
-              <BranchesControl />
-            </Box>
+          </div>
+        )}
+        {showSearchBar && (
+          <Box sx={{
+            position: 'absolute',
+            top: `86px`,
+            left: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
+          }}
+          >
+            {
+              showOpenControl &&
+              <FilesControl location={location} fileOpen={loadLocalFile}/>
+            }
+            {
+              isGuthubRepo && showBranchControl &&
+              <BranchesControl location={location}/>
+            }
             {showNavPanel &&
               <NavPanel
                 model={model}
@@ -505,8 +525,29 @@ export default function CadView({
                 }
               />
             }
-          </div>
+          </Box>
         )}
+        {viewer &&
+        <Box sx={{
+          position: 'absolute',
+          bottom: '20px',
+          left: '80px',
+        }}
+        >
+          <ControlsGroup
+            viewer={viewer}
+            unSelectItem={unSelectItems}
+            onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
+            onCLickBranchControlCb={() => setShowBranchControl(!showBranchControl)}
+            onCLickOpenControlCb={() => setShowOpenControl(!showOpenControl)}
+            showNavPanel={showNavPanel}
+            showBranchControl={showBranchControl}
+            showOpenControl={showOpenControl}
+            installPrefix={installPrefix}
+            isGitHubRepo={isGuthubRepo}
+          />
+        </Box>
+        }
 
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?

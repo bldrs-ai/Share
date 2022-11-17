@@ -43,7 +43,7 @@ export default function Files({fileOpen}) {
       <Paper elevation={0}
         sx={{
           backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
-          marginTop: '18px',
+          marginTop: '8px',
           opacity: .8,
           display: 'flex',
           flexDirection: 'row',
