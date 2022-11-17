@@ -1,10 +1,10 @@
 import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
-import ShareMock from '../../ShareMock'
-import useStore from '../../store/useStore'
-import {server} from '../../__mocks__/server'
-import {MOCK_ISSUES_EMPTY} from '../../utils/GitHub'
-import Issues from './Issues'
+import ShareMock from '../ShareMock'
+import useStore from '../store/useStore'
+import {Issues} from './IssuesControl'
+import {server} from '../__mocks__/server'
+import {MOCK_ISSUES_EMPTY} from '../utils/GitHub'
 import {rest} from 'msw'
 
 
@@ -45,7 +45,22 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeVisible()
   })
 
-  it('Issue rendered based on selected issue ID', async () => {
+  // XXX: Should this be split into two different tests?
+  it('test Loader is present if issues are null, and removed when issues set', async () => {
+    // Set up handler to return an empty set of issues
+    server.use(
+        rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+          return res(
+              ctx.json(MOCK_ISSUES_EMPTY),
+          )
+        }),
+    )
+
+    const {getByRole} = render(<ShareMock><Issues/></ShareMock>)
+    expect(getByRole('progressbar')).toBeInTheDocument()
+
+    // Restore the original set of HTTP handlers that return issues
+    server.restoreHandlers()
     const {result} = renderHook(() => useStore((state) => state))
     const extractedIssueId = '1257156364'
     const {findByText} = render(<ShareMock><Issues/></ShareMock>)

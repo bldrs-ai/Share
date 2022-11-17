@@ -1,6 +1,6 @@
 import React, {createRef, useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
+import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
@@ -119,7 +119,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText={<Box style={{paddingBottom: '0px', marginTop: '-10px'}}>Share</Box>}
+      headerText={<Typography variant='h2'>Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
@@ -132,7 +132,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             rows={5}
             InputProps={{
               readOnly: true,
-              className: classes.input}}
+            }}
           />
           <Box sx={{
             width: '100%',
@@ -178,10 +178,19 @@ const useStyles = makeStyles({
     flexDirection: 'column',
     justifyContent: 'center',
     alignItems: 'center',
+    marginTop: '10px',
   },
   iconContainer: {
     width: '20px',
     height: '20px',
     marginBottom: '2px',
+  },
+  buttonsContainer: {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: '10px',
+    width: '44%',
   },
 })

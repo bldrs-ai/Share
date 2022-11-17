@@ -36,4 +36,38 @@ describe('SideDrawer', () => {
       result.current.toggleIsPropertiesOn()
     })
   })
+
+  it('issues id in url', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const extractedIssueId = '1257156364'
+    const {findByText} = render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedIssueId(Number(extractedIssueId))
+      result.current.turnCommentsOn()
+      result.current.openDrawer()
+    })
+    expect(await findByText('Local issue - some text is here to test - Id:1257156364')).toBeVisible()
+    // reset the store
+    await act(() => {
+      result.current.setSelectedIssueId(null)
+      result.current.turnCommentsOff()
+    })
+  })
+
+  it('opened via URL', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByText} = render(
+        <ShareMock
+          initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}
+        >
+          <SideDrawerWrapper/>
+        </ShareMock>)
+    expect(await getByText('Local issue 2')).toBeInTheDocument()
+
+    // reset the store
+    await act(() => {
+      result.current.setSelectedElement({})
+      result.current.turnCommentsOff()
+    })
+  })
 })

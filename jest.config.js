@@ -46,6 +46,8 @@ module.exports = {
     'src/Components/BranchesControl.test.js',
     'src/Containers/CadView.test.jsx',
     'src/Components/CutPlaneMenu.test.jsx',
+    'src/Components/CameraControl.test.jsx',
+    'src/Components/issues/Issues.test.jsx',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',

@@ -2,15 +2,16 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-import Box from '@mui/material/Box'
+import ButtonGroup from '@mui/material/ButtonGroup'
 import {makeStyles} from '@mui/styles'
+import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
-import ControlsGroup from '../Components/ControlsGroup'
+// import ControlsGroup from '../Components/ControlsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
@@ -21,9 +22,11 @@ import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
+import {TooltipIconButton} from '../Components/Buttons'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
-import FilesControl from '../Components/FilesControl'
+import {NavCube} from '../Components/NavCube/NavCube'
+import CameraIcon from '../assets/2D_Icons/Camera.svg'
 
 
 /**
@@ -73,15 +76,17 @@ export default function CadView({
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
-  const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const isGuthubRepo = modelPath.repo !== undefined
+  const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const isCameraPerpective = useStore((state) => state.isCameraPerpective)
+  const switchCameraToPerspective = useStore((state) => state.switchCameraToPerspective)
+  const switchCameraToOrtho = useStore((state) => state.switchCameraToOrtho)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -137,9 +142,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+                theme.palette &&
+                theme.palette.background &&
+                theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -191,7 +196,7 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)}message={msg}/>)
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -207,7 +212,7 @@ export default function CadView({
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
@@ -228,7 +233,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -244,6 +249,10 @@ export default function CadView({
       // load.  That modelID is used in the IFCjs code as [modelID] and
       // leads to undefined refs e.g. in prePickIfcItem.  The id should
       // always be 0.
+      // comput center model, after every time geometry of model change
+      // default
+      loadedModel.geometry.computeBoundingBox()
+      loadedModel.geometry.computeBoundingSphere()
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
@@ -299,6 +308,9 @@ export default function CadView({
     } else {
       setIsNavPanelOpen(true)
     }
+    if (viewer?.navCube) {
+      viewer?.navCube.onPick(m)
+    }
   }
 
 
@@ -334,7 +346,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -456,6 +468,13 @@ export default function CadView({
     })
   }
 
+  const toggleCamera = () => {
+    if (isCameraPerpective) {
+      switchCameraToOrtho()
+    } else {
+      switchCameraToPerspective()
+    }
+  }
 
   return (
     <div className={classes.root}>
@@ -471,27 +490,9 @@ export default function CadView({
             <SearchBar
               fileOpen={loadLocalFile}
             />
-          </div>
-        )}
-        {showSearchBar && (
-          <Box sx={{
-            position: 'absolute',
-            top: `86px`,
-            left: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-          }}
-          >
-            {
-              showOpenControl &&
-              <FilesControl location={location} fileOpen={loadLocalFile}/>
-            }
-            {
-              isGuthubRepo && showBranchControl &&
-              <BranchesControl location={location}/>
-            }
+            <Box sx={{marginTop: '14px'}}>
+              <BranchesControl />
+            </Box>
             {showNavPanel &&
               <NavPanel
                 model={model}
@@ -504,34 +505,13 @@ export default function CadView({
                 }
               />
             }
-          </Box>
+          </div>
         )}
-        {viewer &&
-        <Box sx={{
-          position: 'absolute',
-          bottom: '20px',
-          left: '80px',
-        }}
-        >
-          <ControlsGroup
-            viewer={viewer}
-            unSelectItem={unSelectItems}
-            onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-            onCLickBranchControlCb={() => setShowBranchControl(!showBranchControl)}
-            onCLickOpenControlCb={() => setShowOpenControl(!showOpenControl)}
-            showNavPanel={showNavPanel}
-            showBranchControl={showBranchControl}
-            showOpenControl={showOpenControl}
-            installPrefix={installPrefix}
-            isGitHubRepo={isGuthubRepo}
-          />
-        </Box>
-        }
 
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
-                        classes.operationsGroupOpen :
-                        classes.operationsGroup}
+          classes.operationsGroupOpen :
+          classes.operationsGroup}
         >
           {viewer &&
             <OperationsGroup
@@ -543,12 +523,26 @@ export default function CadView({
               showBranchControl={showBranchControl}
               showOpenControl={showOpenControl}
               installPrefix={installPrefix}
-              isGitHubRepo={isGuthubRepo}
             />}
         </div>
         {alert}
       </div>
       <SideDrawerWrapper />
+      <ButtonGroup
+        orientation="vertical"
+        sx={{
+          position: 'absolute',
+          bottom: '24px',
+          right: '110px',
+          display: 'none',
+        }}
+      >
+        <TooltipIconButton
+          title={`${isCameraPerpective ? 'Orthogonal' : 'Perspecitve'}`}
+          onClick={toggleCamera}
+          icon={<CameraIcon/>}
+        />
+      </ButtonGroup>
     </div>
   )
 }
@@ -560,7 +554,8 @@ export default function CadView({
  * @return {object} IfcViewerAPI viewer, width a .container property
  *     referencing its container.
  */
-function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
+// eslint-disable-next-line
+function initViewer(pathPrefix, backgroundColorStr = '#abcdef', isCameraPerpective ) {
   debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
@@ -591,11 +586,14 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     if (event.code === 'KeyA') {
       v.IFC.unpickIfcItems()
     }
+    console.log(event.code)
   }
 
   // window.addEventListener('resize', () => {v.context.resize()})
 
   v.container = container
+  v.navCube = new NavCube(v, isCameraPerpective)
+  v.navCube.onAnimateViewer()
   return v
 }
 
@@ -614,8 +612,9 @@ const useStyles = makeStyles({
 
   },
   topLeftContainer: {
+    height: '500px',
     position: 'absolute',
-    top: `30px`,
+    top: `20px`,
     left: '20px',
     display: 'flex',
     flexDirection: 'column',

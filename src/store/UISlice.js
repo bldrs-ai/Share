@@ -15,6 +15,8 @@ export default function createUISlice(set, get) {
     snackMessage: null,
     cutPlaneDirection: null,
     levelInstance: null,
+    isAddNote: false,
+    isCameraPerpective: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -27,5 +29,8 @@ export default function createUISlice(set, get) {
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
+    toggleIsAddNote: () => set((state) => ({isAddNote: !state.isAddNote})),
+    switchCameraToPerspective: () => set(() => ({isCameraPerpective: true})),
+    switchCameraToOrtho: () => set(() => ({isCameraPerpective: false})),
   }
 }

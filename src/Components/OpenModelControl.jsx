@@ -88,7 +88,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   return (
     <Dialog
       icon={<ModelsIcon/>}
-      headerText='Open'
+      headerText={<Typography variant='h2' sx={{margin: '10px 10px'}}>Open</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
@@ -198,8 +198,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 
 const useStyles = makeStyles((theme) => ({
   content: {
-    width: '270px',
-    marginTop: '6px',
+    width: '260px',
+    paddingTop: '6px',
   },
   snippet: {
     textAlign: 'left',
@@ -214,12 +214,6 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.highlight.secondary,
     cursor: 'pointer',
     borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
-  },
-  openIcon: {
-    textAlign: 'center',
-  },
-  iconContainer: {
-    textTransform: 'Capitalize',
   },
   root: {
     '& button': {
