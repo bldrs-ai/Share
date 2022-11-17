@@ -11,6 +11,7 @@ import BackIcon from '../../assets/2D_Icons/Back.svg'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 import NextIcon from '../../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
+import AddNote from '../../assets/2D_Icons/AddNote.svg'
 
 
 /** @return {object} React component. */
@@ -22,8 +23,8 @@ export default function IssuesNavBar() {
   const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
   const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
-
-
+  const isAddNote = useStore((state) => state.isAddNote)
+  const toggleIsAddNote = useStore((state) => state.toggleIsAddNote)
   const selectIssue = (direction) => {
     const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
     if (index >= 0 && index < issues.length) {
@@ -57,7 +58,7 @@ export default function IssuesNavBar() {
                 removeHashParams(window.location, ISSUE_PREFIX)
                 setSelectedIssueId(null)
               }}
-              icon={<div className={classes.iconContainer}><BackIcon/></div>}
+              icon={<BackIcon/>}
             />
           </Box> : null
         }
@@ -85,14 +86,26 @@ export default function IssuesNavBar() {
       </div>
 
       <div className={classes.rightGroup}>
-        <div>
-          <TooltipIconButton
-            title='Close Comments'
-            placement='bottom'
-            onClick={turnCommentsOff}
-            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
-          />
-        </div>
+        {isAddNote ?
+        <TooltipIconButton
+          title='Back to the list'
+          placement='bottom'
+          onClick={toggleIsAddNote}
+          icon={<BackIcon/>}
+        /> :
+        <TooltipIconButton
+          title='Add new note'
+          placement='bottom'
+          onClick={toggleIsAddNote}
+          icon={<AddNote/>}
+        />
+        }
+        <TooltipIconButton
+          title='Close Comments'
+          placement='bottom'
+          onClick={turnCommentsOff}
+          icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+        />
       </div>
     </div>
   )
