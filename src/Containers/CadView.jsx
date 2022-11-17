@@ -151,7 +151,7 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.light,
+      color: theme.palette.highlight.secondary,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
@@ -393,7 +393,7 @@ export default function CadView({
   async function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
     await selectItemsInScene([expressId])
