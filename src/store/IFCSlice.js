@@ -8,12 +8,14 @@
 export default function createIFCSlice(set, get) {
   return {
     viewerStore: {},
+    rootElt: null,
     modelPath: null,
     modelStore: null,
     selectedElement: null,
     selectedElements: [],
     cameraControls: null,
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
+    setRootElt: (elt) => set(() => ({rootElt: elt})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
     setModelStore: (model) => set(() => ({modelStore: model})),
     setSelectedElement: (element) => set(() => ({selectedElement: element})),

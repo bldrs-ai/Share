@@ -66,6 +66,7 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const setRootElt = useStore((state) => state.setRootElt)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
@@ -285,6 +286,8 @@ export default function CadView({
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
+    setRootElt(rootElt)
+    // TODO(pablo): remove in preference for store ref above.
     setRootElement(rootElt)
 
     if (isMobile) {

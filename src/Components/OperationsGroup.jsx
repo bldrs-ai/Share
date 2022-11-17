@@ -6,6 +6,7 @@ import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ExtractLevelsMenu from './ExtractLevelsMenu'
+import ExportSpreadsheet from './ExportSpreadsheet'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
@@ -104,6 +105,7 @@ export default function OperationsGroup({
           selected={isSelected()}
           icon={<ClearIcon />}
         />
+        <ExportSpreadsheet/>
       </ButtonGroup>
       <Divider/>
       <ButtonGroup orientation="vertical">
