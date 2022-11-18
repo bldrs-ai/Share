@@ -39,9 +39,6 @@ class ApiEventsRegistry {
   EVENT_HANDLER_SELECT_ELEMENTS = (data) => {
     let expressIds = []
 
-    // if (!('githubIfcPath' in data)) {
-    //   return this.apiConnection.missingArgumentResponse('githubIfcPath')
-    // }
     if (!('globalIds' in data)) {
       return this.apiConnection.missingArgumentResponse('globalIds')
     }
@@ -57,13 +54,6 @@ class ApiEventsRegistry {
     this.selectElementsDebounce = true
     this.deselectElementsDebounce = true
     useStore.setState({selectedElements: expressIds})
-
-
-    // if (data.globalIds.length) {
-    //   this.navigation(`/share/v/gh/${ data.githubIfcPath }?q=${ data.globalIds[0]}`)
-    // } else {
-    //   this.navigation( `/share/v/gh/${ data.githubIfcPath}`)
-    // }
 
     return this.apiConnection.successfulResponse({})
   }
