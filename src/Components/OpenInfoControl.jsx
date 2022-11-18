@@ -98,7 +98,6 @@ function BranchInfoDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 const useStyles = makeStyles((theme) => ({
   content: {
     width: '270px',
-    paddingBottom: '10px',
   },
   snippet: {
     textAlign: 'left',

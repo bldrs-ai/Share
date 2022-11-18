@@ -2,7 +2,6 @@ import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import {TooltipIconButton} from './Buttons'
 import BranchesIcon from '../assets/2D_Icons/Branches.svg'
-import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
@@ -25,14 +24,6 @@ export default function ControlsGroup({
   onCLickBranchControlCb,
   onCLickOpenControlCb,
 }) {
-  const clear = () => {
-    console.log('clear')
-    onClickMenuCb()
-    onCLickBranchControlCb()
-    onCLickOpenControlCb()
-  }
-
-
   return (
     <ButtonGroup orientation="hoizontal">
       <TooltipIconButton
@@ -57,12 +48,6 @@ export default function ControlsGroup({
         selected={showNavPanel}
         onClick={onClickMenuCb}
         icon={<TreeIcon/>}
-      />
-      <TooltipIconButton
-        title="Clear Controls"
-        placement='bottom'
-        onClick={clear}
-        icon={<ClearIcon />}
       />
     </ButtonGroup>
   )
