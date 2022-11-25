@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
+import {Box} from '@mui/system'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {getHashParams} from '../utils/location'
@@ -62,17 +63,22 @@ export function SideDrawer({
           className={classes.drawer}
         >
           <div className={classes.content}>
-            <div
-              sx={{
-                height: isPropertiesOn ? '50%' : '100%',
-                display: isCommentsOn ? '' : 'none',
-                borderRadius: '0px',
-                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-              }}
-            >
-              {isCommentsOn ? <NotesPanel/> : null}
-            </div>
-            <div className={classes.divider}/>
+            {isCommentsOn ?
+             (
+               <Box
+                 sx={{
+                   height: isPropertiesOn ? '50%' : '100%',
+                   display: isCommentsOn ? 'block' : 'none',
+                   borderRadius: '0px',
+                   borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                   overflowY: 'scroll',
+                 }}
+               >
+                 <NotesPanel/>
+               </Box>
+             ) : null
+            }
+            {(isCommentsOn && isPropertiesOn) ? <div className={classes.divider}/> : null}
             <div className={classes.containerProperties}>
               {isPropertiesOn ? <PropertiesPanel/> : null}
             </div>
@@ -170,6 +176,7 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
     },
   },
   content: {
+    'height': '100%',
     'marginTop': '20px',
     'display': 'flex',
     'flexDirection': 'column',
