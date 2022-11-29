@@ -76,6 +76,7 @@ export default function CadView({
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const [modelReady, setModelReady] = useState(false)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -147,6 +148,9 @@ export default function CadView({
       debug().warn('CadView#onViewer, viewer is null')
       return
     }
+
+    setModelReady(false)
+
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
@@ -168,6 +172,8 @@ export default function CadView({
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
+
+    setModelReady(true)
   }
 
 
@@ -451,7 +457,7 @@ export default function CadView({
 
 
   return (
-    <div className={classes.root}>
+    <div className={classes.root} data-model-ready={modelReady}>
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
