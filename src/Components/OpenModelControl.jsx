@@ -36,7 +36,7 @@ export default function OpenModelControl({fileOpen}) {
               setIsDialogDisplayed(true)
             }}
             color='primary'
-            value={'something'}
+            value={'Open IFC'}
           >
             <OpenIcon/>
           </ToggleButton>
