@@ -18,6 +18,10 @@ class ApiEventsRegistry {
 
   /**
    * constructor
+   *
+   * @param {object} apiConnection AbstractApiConnection
+   * @param {object} navigation NavigationFunction
+   * @param {object} searchIndex SearchIndex
    */
   constructor(apiConnection, navigation, searchIndex) {
     this.searchIndex = searchIndex
@@ -37,7 +41,7 @@ class ApiEventsRegistry {
   }
 
   EVENT_HANDLER_SELECT_ELEMENTS = (data) => {
-    let expressIds = []
+    const expressIds = []
 
     if (!('globalIds' in data)) {
       return this.apiConnection.missingArgumentResponse('globalIds')
@@ -70,7 +74,7 @@ class ApiEventsRegistry {
    * @return {string[]} array of GlobalIds.
    */
   getSelectedElementIds(state) {
-    let elementIds = []
+    const elementIds = []
     for (const expressId of state.selectedElements) {
       const globalId = this.searchIndex.getGlobalIdByExpressId(expressId)
       if (globalId) {
@@ -88,8 +92,24 @@ class ApiEventsRegistry {
    * @return {boolean}
    */
   selectedElementIdsHasChanged(state, lastSelectedElementIds) {
+    // @source https://github.com/30-seconds/30-seconds-blog/blob/master/blog_posts/javascript-array-comparison.md
+    const equals = (a, b) => {
+      if (a.length !== b.length) {
+        return false
+      }
+      const uniqueValues = new Set([...a, ...b])
+      for (const v of uniqueValues) {
+        const aCount = a.filter((e) => e === v).length
+        const bCount = b.filter((e) => e === v).length
+        if (aCount !== bCount) {
+          return false
+        }
+      }
+      return true
+    }
+
     if (Array.isArray(state.selectedElements)) {
-      return JSON.stringify(lastSelectedElementIds) !== JSON.stringify(this.getSelectedElementIds(state))
+      return !equals(lastSelectedElementIds, this.getSelectedElementIds(state))
     }
   }
 

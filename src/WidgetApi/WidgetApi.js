@@ -5,9 +5,12 @@ import ApiEventsRegistry from './ApiEventsRegistry'
 /**
  * WidgetApi main class
  */
-class WidgetApi {
+export default class WidgetApi {
   /**
    * constructor
+   *
+   * @param {object} navigation NavigationFunction
+   * @param {object} searchIndex SearchIndex
    */
   constructor(navigation, searchIndex) {
     if (this.detectIframe()) {
@@ -29,5 +32,3 @@ class WidgetApi {
     }
   }
 }
-
-export default WidgetApi

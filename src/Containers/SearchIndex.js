@@ -177,8 +177,7 @@ export default class SearchIndex {
 
   /**
    *
-   *
-   * @param {string} expressId.
+   * @param {string} expressId
    * @return {string} globalId
    */
   getGlobalIdByExpressId(expressId) {
@@ -194,7 +193,7 @@ export default class SearchIndex {
   /**
    *
    *
-   * @param {string} globalId.
+   * @param {string} globalId
    * @return {string} expressId
    */
   getExpressIdByGlobalId(globalId) {
