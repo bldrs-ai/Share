@@ -8,37 +8,37 @@ import Loader from '../Loader'
 import NoContent from '../NoContent'
 import IssueCard from './IssueCard'
 
-/** The prefix to use for issue id in the Url hash. */
-export const ISSUE_PREFIX = 'i'
+/** The prefix to use for the note ID within the URL hash. */
+export const NOTE_PREFIX = 'i'
 
 
 /** @return {object} List of issues and comments as react component. */
 export default function Issues() {
   const classes = useStyles()
-  const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
-  const issues = useStore((state) => state.issues)
-  const setIssues = useStore((state) => state.setIssues)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = (issues && selectedIssueId) ?
-        issues.filter((issue) => issue.id === selectedIssueId)[0] : null
+  const filteredIssue = (notes && selectedNoteId) ?
+        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 1, no repo defined')
       return
     }
-    const fetchIssues = async () => {
+    const fetchNotes = async () => {
       try {
-        const issuesArr = []
+        const fetchedNotes = []
         const issuesData = await getIssues(repository)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
-          issuesArr.push({
+          fetchedNotes.push({
             index: index,
             id: issue.id,
             number: issue.number,
@@ -50,28 +50,28 @@ export default function Issues() {
             numberOfComments: issue.comments,
           })
         })
-        if (issuesArr.length > 0) {
-          setIssues(issuesArr)
+        if (fetchedNotes.length > 0) {
+          setNotes(fetchedNotes)
         } else {
-          setIssues([])
+          setNotes([])
         }
       } catch (e) {
-        debug().warn('failed to fetch issues', e)
+        debug().warn('failed to fetch notes', e)
       }
     }
-    fetchIssues()
-  }, [setIssues, repository])
+    fetchNotes()
+  }, [setNotes, repository])
 
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Issues: 2, no repo defined')
       return
     }
-    const fetchComments = async (selectedIssue) => {
+    const fetchComments = async (selectedNote) => {
       try {
         const commentsArr = []
 
-        const commentsData = await getComments(repository, selectedIssue.number)
+        const commentsData = await getComments(repository, selectedNote.number)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -91,14 +91,14 @@ export default function Issues() {
       }
     }
 
-    if (selectedIssueId !== null) {
+    if (selectedNoteId !== null) {
       fetchComments(filteredIssue)
     }
     // This address bug #314 by clearing selected issue when new model is loaded
     if (!filteredIssue) {
-      setSelectedIssueId(null)
+      setSelectedNoteId(null)
     }
-    // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredIssue, repository, setComments])
@@ -106,10 +106,10 @@ export default function Issues() {
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
       <div className={classes.cardsContainer}>
-        {issues === null && <Loader type={'linear'}/> }
-        {issues && issues.length === 0 && <NoContent/> }
-        {issues && !selectedIssueId ?
-          issues.map((issue, index) => {
+        {notes === null && <Loader type={'linear'}/> }
+        {notes && notes.length === 0 && <NoContent/> }
+        {notes && !selectedNoteId ?
+          notes.map((issue, index) => {
             return (
               <IssueCard
                 embeddedUrl={issue.embeddedUrl}

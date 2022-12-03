@@ -16,7 +16,7 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {useIsMobile} from '../Hooks'
-import {ISSUE_PREFIX} from './Issues'
+import {NOTE_PREFIX} from './Issues'
 import CameraIcon from '../../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../../assets/2D_Icons/Share.svg'
 
@@ -51,12 +51,12 @@ export default function IssueCard({
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
-  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
   const cameraControls = useStore((state) => state.cameraControls)
-  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const selected = selectedIssueId === id
+  const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
   const theme = useContext(ColorModeContext)
@@ -90,12 +90,12 @@ export default function IssueCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
-    setSelectedIssueIndex(index)
-    setSelectedIssueId(id)
+    setSelectedNoteIndex(index)
+    setSelectedNoteId(id)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
-    addHashParams(window.location, ISSUE_PREFIX, {id: id})
+    addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
 

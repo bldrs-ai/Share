@@ -12,7 +12,7 @@ describe('IssueControl', () => {
   beforeEach(async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.setIssues(null)
+      result.current.setNotes(null)
     })
   })
 
@@ -21,10 +21,10 @@ describe('IssueControl', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(<ShareMock><Issues/></ShareMock>)
     await act(() => {
-      result.current.setSelectedIssueId(null)
+      result.current.setSelectedNoteId(null)
     })
     await act(() => {
-      result.current.setIssues(MOCK_ISSUES)
+      result.current.setNotes(MOCK_NOTES)
     })
     expect(await getByText('open_workspace')).toBeInTheDocument()
     expect(await getByText('closed_system')).toBeInTheDocument()
@@ -36,10 +36,10 @@ describe('IssueControl', () => {
     const testIssueId = 10
     const {getByText} = render(<ShareMock><Issues/></ShareMock>)
     await act(() => {
-      result.current.setSelectedIssueId(testIssueId)
+      result.current.setSelectedNoteId(testIssueId)
     })
     await act(() => {
-      result.current.setIssues(MOCK_ISSUES)
+      result.current.setNotes(MOCK_NOTES)
       result.current.setComments(MOCK_COMMENTS)
     })
     expect(await getByText('open_workspace')).toBeVisible()
@@ -47,11 +47,11 @@ describe('IssueControl', () => {
 
   it('Issue rendered based on selected issue ID', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const extractedIssueId = '1257156364'
+    const extractedNoteId = '1257156364'
     const {findByText} = render(<ShareMock><Issues/></ShareMock>)
 
     await act(() => {
-      result.current.setSelectedIssueId(Number(extractedIssueId))
+      result.current.setSelectedNoteId(Number(extractedNoteId))
     })
 
     const expectedText = 'Local issue - some text is here to test - Id:1257156364'
@@ -96,7 +96,7 @@ describe('IssueControl', () => {
 
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => {
-        result.current.setIssues(MOCK_ISSUES)
+        result.current.setNotes(MOCK_NOTES)
       })
 
       // queryByRole is used to not throw an error is the element is missing.
@@ -106,7 +106,7 @@ describe('IssueControl', () => {
 })
 
 
-const MOCK_ISSUES = [
+const MOCK_NOTES = [
   {
     embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,

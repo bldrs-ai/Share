@@ -6,7 +6,7 @@ import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
-import {ISSUE_PREFIX} from './Issues'
+import {NOTE_PREFIX} from './Issues'
 import BackIcon from '../../assets/2D_Icons/Back.svg'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 import NextIcon from '../../assets/2D_Icons/NavNext.svg'
@@ -16,23 +16,23 @@ import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 /** @return {object} React component. */
 export default function IssuesNavBar() {
   const classes = useStyles(useTheme())
-  const issues = useStore((state) => state.issues)
-  const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
-  const selectedIssueIndex = useStore((state) => state.selectedIssueIndex)
-  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
+  const notes = useStore((state) => state.notes)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
+  const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
 
 
-  const selectIssue = (direction) => {
-    const index = direction === 'next' ? selectedIssueIndex + 1 : selectedIssueIndex - 1
-    if (index >= 0 && index < issues.length) {
-      const issue = issues.filter((i) => i.index === index)[0]
-      setSelectedIssueId(issue.id)
-      setSelectedIssueIndex(issue.index)
-      addHashParams(window.location, ISSUE_PREFIX, {id: issue.id})
-      if (issue.url) {
-        setCameraFromParams(issue.url)
+  const selectNote = (direction) => {
+    const index = direction === 'next' ? selectedNoteIndex + 1 : selectedNoteIndex - 1
+    if (index >= 0 && index < notes.length) {
+      const note = notes.filter((n) => n.index === index)[0]
+      setSelectedNoteId(note.id)
+      setSelectedNoteIndex(note.index)
+      addHashParams(window.location, NOTE_PREFIX, {id: note.id})
+      if (note.url) {
+        setCameraFromParams(note.url)
         addCameraUrlParams()
       } else {
         removeCameraUrlParams()
@@ -45,17 +45,17 @@ export default function IssuesNavBar() {
     <div className={classes.titleContainer}>
       <div className={classes.leftGroup}>
         <Typography variant='h2'>
-          {!selectedIssueId && 'Notes' }
+          {!selectedNoteId && 'Notes' }
         </Typography>
 
-        {selectedIssueId ?
+        {selectedNoteId ?
           <Box>
             <TooltipIconButton
               title='Back to the list'
               placement='bottom'
               onClick={() => {
-                removeHashParams(window.location, ISSUE_PREFIX)
-                setSelectedIssueId(null)
+                removeHashParams(window.location, NOTE_PREFIX)
+                setSelectedNoteId(null)
               }}
               icon={<div className={classes.iconContainer}><BackIcon/></div>}
             />
@@ -64,20 +64,20 @@ export default function IssuesNavBar() {
       </div>
 
       <div className={classes.middleGroup} >
-        {(issues && selectedIssueId) && issues.length > 1 &&
+        {(notes && selectedNoteId) && notes.length > 1 &&
           <>
             <TooltipIconButton
               title='Previous Note'
               placement='bottom'
               size='small'
-              onClick={() => selectIssue('previous')}
+              onClick={() => selectNote('previous')}
               icon={<PreviousIcon/>}
             />
             <TooltipIconButton
               title='Next Note'
               size='small'
               placement='bottom'
-              onClick={() => selectIssue('next')}
+              onClick={() => selectNote('next')}
               icon={<NextIcon/>}
             />
           </>

@@ -9,7 +9,7 @@ describe('IssueControl', () => {
   beforeEach(async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.setIssues(null)
+      result.current.setNotes(null)
     })
   })
 
@@ -25,7 +25,7 @@ describe('IssueControl', () => {
     const testIssueId = 10
     const {getByTitle} = render(<ShareMock><IssuesNavBar/></ShareMock>)
     await act(() => {
-      result.current.setSelectedIssueId(testIssueId)
+      result.current.setSelectedNoteId(testIssueId)
     })
     expect(await getByTitle('Back to the list')).toBeInTheDocument()
   })
