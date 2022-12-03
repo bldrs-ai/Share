@@ -6,7 +6,7 @@ import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
-import {NOTE_PREFIX} from './Issues'
+import {NOTE_PREFIX} from './Notes'
 import BackIcon from '../../assets/2D_Icons/Back.svg'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 import NextIcon from '../../assets/2D_Icons/NavNext.svg'
@@ -14,7 +14,7 @@ import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
 
 /** @return {object} React component. */
-export default function IssuesNavBar() {
+export default function NotesNavBar() {
   const classes = useStyles(useTheme())
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)

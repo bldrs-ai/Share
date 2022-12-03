@@ -4,7 +4,7 @@ import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
 import {server} from '../../__mocks__/server'
 import {MOCK_ISSUES_EMPTY} from '../../utils/GitHub'
-import Issues from './Issues'
+import Notes from './Notes'
 import {rest} from 'msw'
 
 
@@ -17,9 +17,9 @@ describe('IssueControl', () => {
   })
 
 
-  it('Setting issues in zustand', async () => {
+  it('Setting notes in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    const {getByText} = render(<ShareMock><Notes/></ShareMock>)
     await act(() => {
       result.current.setSelectedNoteId(null)
     })
@@ -34,7 +34,7 @@ describe('IssueControl', () => {
   it('Setting comments in zustand ', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const testIssueId = 10
-    const {getByText} = render(<ShareMock><Issues/></ShareMock>)
+    const {getByText} = render(<ShareMock><Notes/></ShareMock>)
     await act(() => {
       result.current.setSelectedNoteId(testIssueId)
     })
@@ -48,7 +48,7 @@ describe('IssueControl', () => {
   it('Issue rendered based on selected issue ID', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const extractedNoteId = '1257156364'
-    const {findByText} = render(<ShareMock><Issues/></ShareMock>)
+    const {findByText} = render(<ShareMock><Notes/></ShareMock>)
 
     await act(() => {
       result.current.setSelectedNoteId(Number(extractedNoteId))
@@ -61,7 +61,7 @@ describe('IssueControl', () => {
   it('Issue rendered based on issue ID in URL', async () => {
     const {findByText} = render(
         <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
-          <Issues/>
+          <Notes/>
         </ShareMock>)
 
     const expectedText = 'Local issue 2'
@@ -69,9 +69,9 @@ describe('IssueControl', () => {
   })
 
   // XXX: Should this be split into two different tests?
-  describe('when issues are null', () => {
+  describe('when notes are null', () => {
     beforeEach(() => {
-      // Set up handler to return an empty set of issues
+      // Set up handler to return an empty set of notes
       server.use(
           rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
             return res(
@@ -82,17 +82,17 @@ describe('IssueControl', () => {
     })
 
     afterEach(() => {
-      // Restore the original set of HTTP handlers that return issues
+      // Restore the original set of HTTP handlers that return notes
       server.restoreHandlers()
     })
 
-    it('progress bar is present during loading of issues', () => {
-      const {getByRole} = render(<ShareMock><Issues/></ShareMock>)
+    it('progress bar is present during loading of notes', () => {
+      const {getByRole} = render(<ShareMock><Notes/></ShareMock>)
       expect(getByRole('progressbar')).toBeInTheDocument()
     })
 
-    it('progress bar is no longer visible when issues are not-null', async () => {
-      const {queryByRole} = render(<ShareMock><Issues/></ShareMock>)
+    it('progress bar is no longer visible when notes are not-null', async () => {
+      const {queryByRole} = render(<ShareMock><Notes/></ShareMock>)
 
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => {

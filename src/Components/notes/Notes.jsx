@@ -6,14 +6,14 @@ import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import IssueCard from './IssueCard'
+import NoteCard from './NoteCard'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
 
 
-/** @return {object} List of issues and comments as react component. */
-export default function Issues() {
+/** @return {object} List of notes and comments as react component. */
+export default function Notes() {
   const classes = useStyles()
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
@@ -21,12 +21,12 @@ export default function Issues() {
   const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = (notes && selectedNoteId) ?
+  const filteredNote = (notes && selectedNoteId) ?
         notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   useEffect(() => {
     if (!repository) {
-      debug().warn('IssuesControl#Issues: 1, no repo defined')
+      debug().warn('IssuesControl#Notes: 1, no repo defined')
       return
     }
     const fetchNotes = async () => {
@@ -64,7 +64,7 @@ export default function Issues() {
 
   useEffect(() => {
     if (!repository) {
-      debug().warn('IssuesControl#Issues: 2, no repo defined')
+      debug().warn('IssuesControl#Notes: 2, no repo defined')
       return
     }
     const fetchComments = async (selectedNote) => {
@@ -92,16 +92,16 @@ export default function Issues() {
     }
 
     if (selectedNoteId !== null) {
-      fetchComments(filteredIssue)
+      fetchComments(filteredNote)
     }
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredIssue) {
+    if (!filteredNote) {
       setSelectedNoteId(null)
     }
     // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredIssue, repository, setComments])
+  }, [filteredNote, repository, setComments])
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
@@ -111,7 +111,7 @@ export default function Issues() {
         {notes && !selectedNoteId ?
           notes.map((issue, index) => {
             return (
-              <IssueCard
+              <NoteCard
                 embeddedUrl={issue.embeddedUrl}
                 index={issue.index}
                 id={issue.id}
@@ -127,25 +127,25 @@ export default function Issues() {
             )
           }) :
         <>
-          {filteredIssue ?
-           <IssueCard
-             embeddedUrl={filteredIssue.embeddedUrl}
-             index={filteredIssue.index}
-             id={filteredIssue.id}
-             key={filteredIssue.id}
-             title={filteredIssue.title}
-             date={filteredIssue.date}
-             body={filteredIssue.body}
-             username={filteredIssue.username}
-             numberOfComments={filteredIssue.numberOfComments}
-             avatarUrl={filteredIssue.avatarUrl}
-             imageUrl={filteredIssue.imageUrl}
+          {filteredNote ?
+           <NoteCard
+             embeddedUrl={filteredNote.embeddedUrl}
+             index={filteredNote.index}
+             id={filteredNote.id}
+             key={filteredNote.id}
+             title={filteredNote.title}
+             date={filteredNote.date}
+             body={filteredNote.body}
+             username={filteredNote.username}
+             numberOfComments={filteredNote.numberOfComments}
+             avatarUrl={filteredNote.avatarUrl}
+             imageUrl={filteredNote.imageUrl}
            /> : null
           }
           {comments &&
            comments.map((comment, index) => {
              return (
-               <IssueCard
+               <NoteCard
                  embeddedUrl={comment.embeddedUrl}
                  isComment={true}
                  index=''

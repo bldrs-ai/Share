@@ -109,9 +109,9 @@ export default function SideDrawerWrapper() {
 
 
   useEffect(() => {
-    const issueHash = getHashParams(location, 'i')
-    if (issueHash !== undefined) {
-      const extractedCommentId = issueHash.split(':')[1]
+    const noteHash = getHashParams(location, 'i')
+    if (noteHash !== undefined) {
+      const extractedCommentId = noteHash.split(':')[1]
       setSelectedNoteId(Number(extractedCommentId))
       if (!isDrawerOpen) {
         openDrawer()
@@ -119,7 +119,7 @@ export default function SideDrawerWrapper() {
       }
     }
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (issueHash === undefined && isDrawerOpen) {
+    if (noteHash === undefined && isDrawerOpen) {
       setSelectedNoteId(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
