@@ -11,9 +11,9 @@ test('mockRoutes', () => {
 
 
 /**
- * @param {Array} initialEntries For react-router MemoryRouter.
- * @param {object} contentElt React component for Route.
- * @return {React.Component} React component
+ * @property {Array} initialEntries For react-router MemoryRouter.
+ * @property {React.ReactElement} contentElt React component for Route.
+ * @return {React.ReactElement} React component
  */
 export default function MockRoutes({initialEntries = ['/'], contentElt} = {}) {
   // TODO(pablo): would be better to not include the initialEntries

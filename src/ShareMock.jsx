@@ -9,7 +9,7 @@ import BaseRoutesMock from './BaseRoutesMock.test'
 /**
  * Mocks the root Share react component.
  *
- * @return {React.Component} React component.
+ * @return {React.ReactElement} React component.
  */
 export default function ShareMock({initialEntries, children} = {}) {
   const {theme, colorMode} = useTheme()
