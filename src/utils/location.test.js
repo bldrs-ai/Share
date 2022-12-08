@@ -5,6 +5,24 @@ import {
 } from './location'
 
 
+const newTestLocation = () => ({
+  host: 'localhost',
+  protocol: 'http:',
+  ancestorOrigins: [],
+  hash: '',
+  href: 'http://localhost/#',
+  hostname: 'localhost',
+  origin: 'http://localhost',
+  pathname: '/',
+  port: '',
+  search: '',
+  assign: () => undefined,
+  reload: () => undefined,
+  replace: () => undefined,
+  state: null,
+  key: '',
+})
+
 test('addHashParams', () => {
   let loc
 
