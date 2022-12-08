@@ -11,7 +11,7 @@ window.onhashchange = () => {
 }
 
 
-// TODO(pablo): Ideally this would be hanled by react-router
+// TODO(pablo): Ideally this would be handled by react-router
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
 /**
