@@ -48,7 +48,7 @@ export default function Dialog({
 /**
  * Content for the open Dialog
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export function OpenDialogBodyContent() {
   const classes = useStyles(useTheme())
@@ -82,7 +82,7 @@ export function OpenDialogBodyContent() {
 /**
  * Title for the open Dialog
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export function OpenDialogHeaderContent() {
   const classes = useStyles(useTheme())
