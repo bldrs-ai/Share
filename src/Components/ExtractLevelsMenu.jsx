@@ -20,7 +20,7 @@ import {isNumeric} from '../utils/strings'
  *
  * @return {React.ReactElement} ItemPropertiesDrawer react component
  */
-export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
+export default function ExtractLevelsMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const [allLevelsState, setAllLevelsState] = useState([])
   const model = useStore((state) => state.modelStore)
@@ -156,4 +156,3 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     </div>
   )
 }
-
