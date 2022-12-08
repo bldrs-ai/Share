@@ -21,6 +21,10 @@ const useStyles = makeStyles({
   },
 })
 
+/**
+ * @property {Function} onClick
+ * @return {React.ReactElement}
+ */
 const MenuButton = ({onClick}) => {
   const classes = useStyles()
   return (

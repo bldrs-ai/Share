@@ -18,6 +18,7 @@ import UploadIcon from '../assets/2D_Icons/Upload.svg'
 /**
  * Displays open warning.
  *
+ * @property {Function} fileOpen
  * @return {React.ReactElement} React component
  */
 export default function OpenModelControl({fileOpen}) {

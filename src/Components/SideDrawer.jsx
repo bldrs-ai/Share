@@ -16,6 +16,10 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
  * show/hide from the right of the screen.
  * it is connected to the global store and controlled by isDrawerOpen property.
  *
+ * @property {boolean} isDrawerOpen
+ * @property {Function} closeDrawer
+ * @property {boolean} isCommentsOn
+ * @property {boolean} isPropertiesOn
  * @return {React.ReactElement} SideDrawer react component
  */
 export function SideDrawer({

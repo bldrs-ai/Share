@@ -180,6 +180,16 @@ export default function IssueCard({
 }
 
 
+/**
+ * @property {string} avatarUrl
+ * @property {string} title
+ * @property {string} username
+ * @property {boolean} selected
+ * @property {boolean} isComment
+ * @property {string} date
+ * @property {Function} onClickSelect
+ * @return {React.ReactElement}
+ */
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
   const classes = useStyles({isComment: isComment})
   const dateParts = date.split('T')
@@ -210,6 +220,11 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
 }
 
 
+/**
+ * @property {Function} onClick
+ * @property {boolean} expandText
+ * @return {React.ReactElement}
+ */
 const ShowMore = ({onClick, expandText}) => {
   const classes = useStyles()
   return (
@@ -225,6 +240,15 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
+/**
+ * @property {Function} onClickCamera
+ * @property {Function} onClickShare
+ * @property {number} numberOfComments
+ * @property {Function} selectCard
+ * @property {Array} embeddedCameras
+ * @property {boolean} selected
+ * @return {React.ReactElement}
+ */
 const CardActions = ({
   onClickCamera,
   onClickShare,

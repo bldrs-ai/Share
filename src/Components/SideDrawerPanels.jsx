@@ -75,6 +75,9 @@ export function PropertiesPanel() {
 }
 
 
+/**
+ * @return {React.ReactElement}
+ */
 export const NotesPanel = () => {
   const classes = useStyles(useTheme())
   return (
