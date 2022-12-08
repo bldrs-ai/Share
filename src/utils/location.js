@@ -1,4 +1,6 @@
+/** @type {Object<string, Function>} */
 const hashListeners = {}
+
 window.onhashchange = () => {
   for (const name in hashListeners) {
     if (Object.prototype.hasOwnProperty.call(hashListeners, name)) {
@@ -44,6 +46,7 @@ export function addHashParams(location, name, params, includeNames = false) {
     encodedParams += `${separator}${encodedParam}`
   }
   const sets = location.hash.substring(1).split('::')
+  /** @type {Object<string, string>} */
   const setMap = {}
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
