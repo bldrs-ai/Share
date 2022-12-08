@@ -28,9 +28,9 @@ export function addHashListener(name, onHashCb) {
  * Serialize the given paramObj and add it to the current
  * location.hash
  *
- * @param {object} location The window.location object
+ * @param {import('history').Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {object} params The parameters to encode
+ * @param {Object<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
@@ -71,7 +71,7 @@ export function addHashParams(location, name, params, includeNames = false) {
 
 
 /**
- * @param {object} location
+ * @param {import('history').Location} location
  * @param {string} name prefix of the params to fetch
  * @return {string|undefined} The encoded params
  */
@@ -101,7 +101,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
 /**
  * Removes the given named hash param.
  *
- * @param {object} location
+ * @param {import('history').Location} location
  * @param {string} name prefix of the params to fetch
  */
 export function removeHashParams(location, name) {
