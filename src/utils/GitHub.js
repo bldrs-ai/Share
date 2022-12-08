@@ -103,7 +103,7 @@ export async function getComment(repository, issueId, commentId) {
  * the given args.
  *
  * @param {object} repository
- * @param {object} path The resource path with arg substitution markers
+ * @param {string} path The resource path with arg substitution markers
  * @param {object} args The args to substitute
  * @return {object} The object at the resource
  */
