@@ -15,8 +15,7 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
 /**
  * Search bar component
  *
- * @param {Function} onClickMenuCb callback
- * @param {boolean} showNavPanel toggle
+ * @property {Function} fileOpen
  * @return {React.ReactElement} The SearchBar react component
  */
 export default function SearchBar({fileOpen}) {
@@ -138,7 +137,7 @@ export default function SearchBar({fileOpen}) {
  *
  *   /share/v/p/index.ifc
  *
- * @param {object} location React router location object.
+ * @param {import('history').Location} location React router location object.
  * @return {boolean}
  */
 export function containsIfcPath(location) {
@@ -149,7 +148,7 @@ export function containsIfcPath(location) {
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
- * @param {object} searchParams Object with a 'q' parameter and optional string value.
+ * @param {URLSearchParams} searchParams Object with a 'q' parameter and optional string value.
  * @return {boolean}
  */
 export function validSearchQuery(searchParams) {
@@ -167,7 +166,7 @@ export function validSearchQuery(searchParams) {
  *
  *   /share/v/p/index.ifc?q=foo
  *
- * @param {object} location React router location object.
+ * @param {import('history').Location} location React router location object.
  * @param {string} fileExtension defaults to '.ifc' for now.
  * @return {string}
  */
