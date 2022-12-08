@@ -107,7 +107,7 @@ export async function getComment(repository, issueId, commentId) {
  * @param {object} args The args to substitute
  * @return {object} The object at the resource
  */
-async function getGitHub(repository, path, args) {
+async function getGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
 
