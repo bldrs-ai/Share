@@ -24,7 +24,7 @@ import TreeIcon from '../assets/2D_Icons/Tree.svg'
  * toggling shortcut visibility
  *
  * @param {Function} unSelectItem deselects currently selected element
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export default function OperationsGroup({
   unSelectItem,
@@ -96,8 +96,8 @@ export default function OperationsGroup({
             icon={<TreeIcon/>}
           />
         }
-        <CutPlaneMenu/>
-        <ExtractLevelsMenu/>
+        <CutPlaneMenu />
+        <ExtractLevelsMenu />
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
@@ -133,4 +133,3 @@ const useStyles = makeStyles({
     },
   },
 })
-

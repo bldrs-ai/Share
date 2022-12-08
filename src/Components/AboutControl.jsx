@@ -15,7 +15,7 @@ import LogoB from '../assets/LogoB_4.svg'
 /**
  * Button to toggle About panel on and off
  *
- * @return {object} The AboutControl react component.
+ * @return {React.ReactElement} The AboutControl react component.
  */
 export default function AboutControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] =
@@ -47,9 +47,9 @@ export default function AboutControl() {
 /**
  * The AboutDialog component
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {React.Component} React component
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @return {React.ReactElement} React component
  */
 function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
@@ -67,7 +67,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 /**
  * The content portion of the AboutDialog
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 function AboutContent() {
   const classes = useStyles()

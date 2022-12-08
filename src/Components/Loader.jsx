@@ -7,8 +7,8 @@ import CircularProgress from '@mui/material/CircularProgress'
 /**
  * Linear loader component
  *
- * @param  {string} type
- * @return {object} React component.
+ * @property {string} type
+ * @return {React.ReactElement} React component.
  */
 export default function Loader({type = 'linear'}) {
   return (

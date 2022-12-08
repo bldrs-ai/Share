@@ -8,13 +8,13 @@ import {useIsMobile} from './Hooks'
 
 
 /**
- * @param {string} title Tooltip text
- * @param {Function} onClick
- * @param {object} icon
- * @param {string} placement
- * @param {boolean} selected
- * @param {string} dataTestId Internal attribute for component testing
- * @return {React.Component} React component
+ * @property {string} title Tooltip text
+ * @property {Function} onClick
+ * @property {object} icon
+ * @property {string} placement
+ * @property {boolean} selected
+ * @property {string} dataTestId Internal attribute for component testing
+ * @return {React.ReactElement} React component
  */
 export function TooltipIconButton({title, onClick, icon, placement = 'left', selected = false}) {
   assertDefined(icon, onClick, title)
@@ -49,12 +49,10 @@ export function TooltipIconButton({title, onClick, icon, placement = 'left', sel
 /**
  * A RectangularButton is used in dialogs
  *
- * @param {string} title
- * @param {object} icon
- * @param {string} type Type of button (and icon to render)
- * @param {string} placement Placement of tooltip
- * @param {string} size Size of button component
- * @return {object} React component
+ * @property {string} title
+ * @property {object} icon
+ * property {Function} onClick
+ * @return {React.ReactElement} React component
  */
 export function RectangularButton({
   title,
@@ -78,14 +76,14 @@ export function RectangularButton({
 }
 
 /**
- * @param {string} title The text for tooltip
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {object} icon The header icon
- * @param {string} placement Default: left
- * @param {string} size Size of button component
- * @param {object} dialog The controlled dialog
- * @return {React.Component} React component
+ * @property {string} title The text for tooltip
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @property {object} icon The header icon
+ * @property [string] placement Default: left
+ * @property {string} size Size of button component
+ * @property {object} dialog The controlled dialog
+ * @return {React.ReactElement} React component
  */
 export function ControlButton({
   title,
@@ -141,4 +139,3 @@ const useStyles = makeStyles((theme) => ({
     height: '20px',
   },
 }))
-

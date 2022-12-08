@@ -11,14 +11,14 @@ import {ColorModeContext} from '../Context/ColorMode'
 
 
 /**
- * @param {object} model
- * @param {object} element
- * @param {Array} selectedElements
- * @param {Array} defaultExpandedElements
- * @param {Array} expandedElements
- * @param {Function} setExpandedElements
- * @param {string} pathPrefix
- * @return {object}
+ * @property {object} model
+ * @property {object} element
+ * @property {Array} selectedElements
+ * @property {Array} defaultExpandedElements
+ * @property {Array} expandedElements
+ * @property {Function} setExpandedElements
+ * @property {string} pathPrefix
+ * @return {React.ReactElement}
  */
 export default function NavPanel({
   model,

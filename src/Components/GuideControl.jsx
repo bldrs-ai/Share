@@ -9,8 +9,8 @@ import Question from '../assets/2D_Icons/Question.svg'
 /**
  * A UI control to toggle Guide panel on and off
  *
- * @param {number} offsetTop position of the panel
- * @return {object} The GuidePanelControl react component.
+ * @property {number} offsetTop position of the panel
+ * @return {React.ReactElement} The GuidePanelControl react component.
  */
 export default function GuidePanelControl({offsetTop}) {
   const [open, setOpen] = useState(false)
@@ -35,9 +35,9 @@ export default function GuidePanelControl({offsetTop}) {
 /**
  * Guide Panel component
  *
- * @param {boolean} openToggle React state toggle.
- * @param {string} offset Distance from from the top of the page in css.
- * @return {object} Guide panel react component.
+ * @property {boolean} openToggle React state toggle.
+ * @property {string} offset Distance from from the top of the page in css.
+ * @return {React.ReactElement} Guide panel react component.
  */
 function GuidePanel({openToggle, offsetTop}) {
   const classes = useStyles({offsetTop: offsetTop})

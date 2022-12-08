@@ -10,8 +10,8 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 
 /**
- * @param {object} content React component to be wrapped
- * @return {object} React component
+ * @property {React.ReactElement} content React component to be wrapped
+ * @return {React.ReactElement} React component
  */
 export default function MobileDrawer({content}) {
   const [open, setOpen] = useState(true)

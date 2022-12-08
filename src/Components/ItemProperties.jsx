@@ -11,7 +11,7 @@ import ExpansionPanel from './ExpansionPanel'
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
  *
- * @return {object} The ItemProperties react component
+ * @return {React.ReactElement} The ItemProperties react component
  */
 export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
@@ -27,6 +27,7 @@ export default function ItemProperties() {
       setPsetsList(await createPsetsList(model, element, classes, expandAll))
     })()
   }, [model, element, classes, expandAll])
+
   return (
     <div className={classes.propsContainer}>
       {propTable}
@@ -52,7 +53,7 @@ export default function ItemProperties() {
  * @param {object} element IFC element
  * @param {object} classes Styles
  * @param {boolean} expandAll React state expansion toggle
- * @return {object} A list of property sets react component
+ * @return {React.ReactElement} A list of property sets react component
  */
 async function createPsetsList(model, element, classes, expandAll) {
   const psets = await model.getPropertySets(element.expressID)

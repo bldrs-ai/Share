@@ -24,17 +24,17 @@ import ShareIcon from '../../assets/2D_Icons/Share.svg'
 /**
  * Issue card
  *
- * @param {number} id issue id
- * @param {number} index issue index
- * @param {string} username username of the issue author
- * @param {string} title issue title
- * @param {string} avatarUrl user avatarUrl
- * @param {string} body issue body
- * @param {string} date issue date
- * @param {number} numberOfComments number of replies to the issue - refered to as comments in GH
- * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
- * @param {boolean} isComment Comments/replies are formated differently
- * @return {object} React component
+ * @property [number] id issue id
+ * @property [number] index issue index
+ * @property [string] username username of the issue author
+ * @property [string] title issue title
+ * @property [string] avatarUrl user avatarUrl
+ * @property [string] body issue body
+ * @property [string] date issue date
+ * @property [number] numberOfComments number of replies to the issue - refered to as comments in GH
+ * @property [boolean] expandedImage governs the size of the image, small proportions on mobile to start
+ * @property [boolean] isComment Comments/replies are formated differently
+ * @return {React.ReactElement} React component
  */
 export default function IssueCard({
   id = null,

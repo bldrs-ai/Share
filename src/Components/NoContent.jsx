@@ -9,7 +9,7 @@ import AttentionIcon from '../assets/2D_Icons/Attention.svg'
  * Loader contains the ItemPanel and allows for
  * show/hide from the right of the screen.
  *
- * @return {object} React component.
+ * @return {React.ReactElement} React component.
  */
 export default function NoContent() {
   const theme = useContext(ColorModeContext).getTheme()

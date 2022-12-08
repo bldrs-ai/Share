@@ -11,10 +11,10 @@ export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
 
 
 /**
- * @param {string} component
- * @param {string} name
- * @param {string} defaultValue
- * @return {boolean} value of the setting
+ * @property {string} component
+ * @property {string} name
+ * @property {string} defaultValue
+ * @return {string} value of the setting
  */
 export function getCookie({component, name, defaultValue}) {
   return getCookiePrivate(name, defaultValue)
@@ -22,9 +22,9 @@ export function getCookie({component, name, defaultValue}) {
 
 
 /**
- * @param {string} component
- * @param {string} name
- * @param {boolean} defaultValue
+ * @property {string} component
+ * @property {string} name
+ * @property {boolean} defaultValue
  * @return {boolean} value of the setting
  */
 export function getCookieBoolean({component, name, defaultValue}) {
@@ -39,9 +39,9 @@ export function getCookieBoolean({component, name, defaultValue}) {
 
 
 /**
- * @param {string} component
- * @param {string} name
- * @param {string} value
+ * @property {string} component
+ * @property {string} name
+ * @property {string} value
  */
 export function setCookie({component, name, value}) {
   setCookiePrivate(name, value)
@@ -49,9 +49,9 @@ export function setCookie({component, name, value}) {
 
 
 /**
- * @param {string} component
- * @param {string} name
- * @param {boolean} value
+ * @property {string} component
+ * @property {string} name
+ * @property {boolean} value
  */
 export function setCookieBoolean({component, name, value}) {
   assertDefined(component, name, value)

@@ -15,7 +15,7 @@ import {stoi} from './strings'
  * Recursive calls will pass children
  * @param {boolean} isPset Is property set
  * @param {number} serial
- * @return {object} A property table react component
+ * @return {React.ReactElement} A property table react component
  */
 export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
   const ROWS = []
@@ -55,7 +55,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
  * @param {object | string} propValue Property value
  * @param {boolean} isPset
  * @param {number} serial
- * @return {object}
+ * @return {(React.ReactElement|null)}
  */
 async function prettyProps(model, propName, propValue, isPset, serial = 0) {
   let label = `${propName}`
@@ -149,7 +149,7 @@ export async function quantities(model, quantitiesObj, serial) {
  * @param {Array} eltArr Array of IFC elements
  * @param {number} serial
  * @param {Function} ifcToRowCb Callback to convert an IFC elt to a table row
- * @return {object} The react component or null if fail
+ * @return {(React.ReactElement|null)} The react component or null if fail
  */
 export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
   // HasProperties behaves a little special.
@@ -213,7 +213,7 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
  * @param {object} d1 Table cell data 1
  * @param {object} d2 Table cell data 2
  * @param {number} serial
- * @return {object} The react component
+ * @return {React.ReactElement} The react component
  */
 function Row({d1, d2}) {
   const [isActive, setIsActive] = useState(false)

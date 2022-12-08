@@ -18,8 +18,7 @@ import {isNumeric} from '../utils/strings'
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.
  *
- * @param {Array} listOfOptions Title for the drawer
- * @return {object} ItemPropertiesDrawer react component
+ * @return {React.ReactElement} ItemPropertiesDrawer react component
  */
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)

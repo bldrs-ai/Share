@@ -8,12 +8,12 @@ import {assertDefined} from '../utils/assert'
 /**
  * A generic base dialog component.
  *
- * @param {object} icon Leading icon above header description
- * @param {string} headerText Short message describing the operation
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {object} content node
- * @return {object} React component
+ * @property {object} icon Leading icon above header description
+ * @property {string} headerText Short message describing the operation
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @property {object} content node
+ * @return {React.ReactElement} React component
  */
 export default function Dialog({
   icon,

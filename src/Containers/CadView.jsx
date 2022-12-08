@@ -35,7 +35,11 @@ let count = 0
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
  *
- * @return {object}
+ * @property {string} installPrefix
+ * @property {string} appPrefix
+ * @property {string} pathPrefix
+ * @property {string} modelPath
+ * @return {React.ReactElement}
  */
 export default function CadView({
   installPrefix,

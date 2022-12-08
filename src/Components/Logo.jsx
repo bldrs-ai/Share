@@ -7,8 +7,8 @@ import PkgJson from '../../package.json'
 
 
 /**
- * @param {Function} onClick function triggered when logo is cliked
- * @return {object} React component
+ * @property {Function} onClick function triggered when logo is cliked
+ * @return {React.ReactElement} React component
  */
 export default function Logo({onClick}) {
   const classes = useStyles(useTheme())

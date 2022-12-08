@@ -13,9 +13,7 @@ import {navigateBaseOnModelPath} from '../utils/location'
 
 
 /**
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function Branches() {
   const classes = useStyles()

@@ -16,7 +16,7 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
  * show/hide from the right of the screen.
  * it is connected to the global store and controlled by isDrawerOpen property.
  *
- * @return {object} SideDrawer react component
+ * @return {React.ReactElement} SideDrawer react component
  */
 export function SideDrawer({
   isDrawerOpen,
@@ -95,7 +95,7 @@ export function SideDrawer({
  * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
  * It makes it is possible to test Side Drawer outside of the cad view.
  *
- * @return {object} SideDrawer react component
+ * @return {React.ReactElement} SideDrawer react component
  */
 export default function SideDrawerWrapper() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)

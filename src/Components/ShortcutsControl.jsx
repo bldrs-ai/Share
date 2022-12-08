@@ -10,7 +10,7 @@ import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
 /**
  * Displays keyboard shortcuts like how to add a cut plane.
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function ShortcutsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -31,9 +31,9 @@ export default function ShortcutsControl() {
 
 
 /**
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @return {React.ReactElement} React component
  */
 function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const classes = useStyles()

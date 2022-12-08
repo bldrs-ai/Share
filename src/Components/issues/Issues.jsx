@@ -12,7 +12,7 @@ import IssueCard from './IssueCard'
 export const ISSUE_PREFIX = 'i'
 
 
-/** @return {object} List of issues and comments as react component. */
+/** @return {React.ReactElement} List of issues and comments as react component. */
 export default function Issues() {
   const classes = useStyles()
   const selectedIssueId = useStore((state) => state.selectedIssueId)

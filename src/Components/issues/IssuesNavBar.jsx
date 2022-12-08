@@ -13,7 +13,7 @@ import NextIcon from '../../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
 
-/** @return {object} React component. */
+/** @return {React.ReactElement} React component. */
 export default function IssuesNavBar() {
   const classes = useStyles(useTheme())
   const issues = useStore((state) => state.issues)

@@ -14,8 +14,7 @@ import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.
  *
- * @param {Array} listOfOptions Title for the drawer
- * @return {object} ItemPropertiesDrawer react component
+ * @return {React.ReactElement} ItemPropertiesDrawer react component
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)

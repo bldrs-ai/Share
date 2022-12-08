@@ -4,8 +4,8 @@ import React from 'react'
 import {ColorModeContext} from '../Context/ColorMode'
 
 /**
- * @param {object} children React component(s)
- * @return {React.Component} React component
+ * @property {object} children React component(s)
+ * @return {React.ReactElement} React component
  */
 export const MockComponent = ({children}) => {
   const {theme, colorMode} = useTheme()

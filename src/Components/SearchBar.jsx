@@ -17,7 +17,7 @@ import ClearIcon from '../assets/2D_Icons/Clear.svg'
  *
  * @param {Function} onClickMenuCb callback
  * @param {boolean} showNavPanel toggle
- * @return {React.Component} The SearchBar react component
+ * @return {React.ReactElement} The SearchBar react component
  */
 export default function SearchBar({fileOpen}) {
   const location = useLocation()

@@ -18,7 +18,7 @@ import UploadIcon from '../assets/2D_Icons/Upload.svg'
 /**
  * Displays open warning.
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -55,9 +55,10 @@ export default function OpenModelControl({fileOpen}) {
 
 
 /**
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @property {Function} fileOpen
+ * @return {React.ReactElement} React component
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   const classes = useStyles()

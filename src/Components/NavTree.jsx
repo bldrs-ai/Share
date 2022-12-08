@@ -42,11 +42,11 @@ const NavTreePropTypes = {
 
 
 /**
- * @param {object} model IFC model
- * @param {object} element IFC element of the model
- * @param {string} pathPrefix URL prefix for constructing links to
+ * @property {object} model IFC model
+ * @property {object} element IFC element of the model
+ * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function NavTree({
   model,

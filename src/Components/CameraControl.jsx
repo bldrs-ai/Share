@@ -20,7 +20,7 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function CameraControl() {
   const viewer = useStore((state) => state.viewerStore)

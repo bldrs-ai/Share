@@ -14,11 +14,11 @@ import InputBar from './InputBar'
 /**
  * A generic base dialog component.
  *
- * @param {string} headerContent Short message describing the operation
- * @param {string} bodyContent
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
+ * @property {string} headerContent Short message describing the operation
+ * @property {string} bodyContent
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @return {React.ReactElement} React component
  */
 export default function Dialog({
   headerContent,
@@ -188,4 +188,3 @@ const useStyles = makeStyles((theme) => ({
     height: '13px',
   },
 }))
-

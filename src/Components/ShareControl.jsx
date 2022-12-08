@@ -17,7 +17,7 @@ import {ControlButton, TooltipIconButton} from './Buttons'
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * @return {object} The button react component, with a hosted
+ * @return {React.ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
 export default function ShareControl() {
@@ -45,9 +45,9 @@ export default function ShareControl() {
  * included in the shared URL and assists in copying the URL to
  * clipboard.
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {React.Component} The react component
+ * @property {boolean} isDialogDisplayed
+ * @property {Function} setIsDialogDisplayed
+ * @return {React.ReactElement} The react component
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const viewer = useStore((state) => state.viewerStore)

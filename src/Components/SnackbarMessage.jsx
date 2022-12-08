@@ -5,10 +5,10 @@ import {ColorModeContext} from '../Context/ColorMode'
 
 
 /**
- * @param {string} message
- * @param {string} type
- * @param {Function} open
- * @return {object}
+ * @property {string} message
+ * @property {string} type
+ * @property {Function} open
+ * @return {React.ReactElement}
  */
 export default function SnackBarMessage({message, type, open}) {
   const theme = useContext(ColorModeContext)
@@ -47,4 +47,3 @@ export default function SnackBarMessage({message, type, open}) {
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={1} ref={ref} variant='filled' {...props} />
 })
-
