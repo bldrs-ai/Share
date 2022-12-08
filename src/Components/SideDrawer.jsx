@@ -104,26 +104,26 @@ export default function SideDrawerWrapper() {
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const location = useLocation()
 
 
   useEffect(() => {
-    const issueHash = getHashParams(location, 'i')
-    if (issueHash !== undefined) {
-      const extractedCommentId = issueHash.split(':')[1]
-      setSelectedIssueId(Number(extractedCommentId))
+    const noteHash = getHashParams(location, 'i')
+    if (noteHash !== undefined) {
+      const extractedCommentId = noteHash.split(':')[1]
+      setSelectedNoteId(Number(extractedCommentId))
       if (!isDrawerOpen) {
         openDrawer()
         turnCommentsOn()
       }
     }
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (issueHash === undefined && isDrawerOpen) {
-      setSelectedIssueId(null)
+    if (noteHash === undefined && isDrawerOpen) {
+      setSelectedNoteId(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, openDrawer, setSelectedIssueId])
+  }, [location, openDrawer, setSelectedNoteId])
 
 
   return (
