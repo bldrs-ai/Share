@@ -16,27 +16,27 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {useIsMobile} from '../Hooks'
-import {ISSUE_PREFIX} from './Issues'
+import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../../assets/2D_Icons/Share.svg'
 
 
 /**
- * Issue card
+ * Note card
  *
- * @property [number] id issue id
- * @property [number] index issue index
- * @property [string] username username of the issue author
- * @property [string] title issue title
+ * @property [number] id note id
+ * @property [number] index note index
+ * @property [string] username username of the note author
+ * @property [string] title note title
  * @property [string] avatarUrl user avatarUrl
- * @property [string] body issue body
- * @property [string] date issue date
- * @property [number] numberOfComments number of replies to the issue - refered to as comments in GH
+ * @property [string] body note body
+ * @property [string] date note date
+ * @property [number] numberOfComments number of replies to the note - refered to as comments in GH
  * @property [boolean] expandedImage governs the size of the image, small proportions on mobile to start
- * @property [boolean] isComment Comments/replies are formated differently
+ * @property [boolean] isComment Comments/replies are formatted differently
  * @return {React.ReactElement} React component
  */
-export default function IssueCard({
+export default function NoteCard({
   id = null,
   index = null,
   username = '',
@@ -51,12 +51,12 @@ export default function IssueCard({
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
   const [expandImage, setExpandImage] = useState(expandedImage)
-  const selectedIssueId = useStore((state) => state.selectedIssueId)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
   const cameraControls = useStore((state) => state.cameraControls)
-  const setSelectedIssueIndex = useStore((state) => state.setSelectedIssueIndex)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const selected = selectedIssueId === id
+  const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
   const theme = useContext(ColorModeContext)
@@ -90,12 +90,12 @@ export default function IssueCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
-    setSelectedIssueIndex(index)
-    setSelectedIssueId(id)
+    setSelectedNoteIndex(index)
+    setSelectedNoteId(id)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
-    addHashParams(window.location, ISSUE_PREFIX, {id: id})
+    addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
 
@@ -345,7 +345,7 @@ const useStyles = makeStyles((theme) => ({
     'paddingLeft': '5px',
     'fontSize': '1em',
     'lineHeight': '1.3em',
-    // Restore link styling for issues and comments
+    // Restore link styling for notes and comments
     '& a': {
       color: (props) => props.isDay ? 'black' : 'lightGrey',
       textDecoration: 'underline',

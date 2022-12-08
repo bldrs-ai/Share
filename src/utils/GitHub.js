@@ -107,7 +107,7 @@ export async function getComment(repository, issueId, commentId) {
  * @param {object} args The args to substitute
  * @return {object} The object at the resource
  */
-async function getGitHub(repository, path, args) {
+async function getGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
 
@@ -123,7 +123,7 @@ async function getGitHub(repository, path, args) {
   return res
 }
 
-export const MOCK_ISSUE = {
+export const MOCK_NOTE = {
   embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
   index: 0,
   id: 10,
