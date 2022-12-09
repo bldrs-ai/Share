@@ -1,16 +1,16 @@
 import React from 'react'
 import {render, screen, fireEvent} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
-import IssueCard from './IssueCard'
+import NoteCard from './NoteCard'
 
 
-describe('IssueCard', () => {
-  it('IssueCard', () => {
+describe('NoteCard', () => {
+  it('NoteCard', () => {
     const id = 123
     const index = 123
     render(
         <ShareMock>
-          <IssueCard
+          <NoteCard
             id={id}
             date='2000-01-01T00:00:00Z'
             username='bob'
@@ -27,20 +27,20 @@ describe('IssueCard', () => {
     const id = 123
     const index = 123
     const commentCount = 10
-    render(<ShareMock><IssueCard id={id} index={index} numberOfComments={commentCount}/></ShareMock>)
+    render(<ShareMock><NoteCard id={id} index={index} numberOfComments={commentCount}/></ShareMock>)
     expect(screen.getByText(commentCount)).toBeInTheDocument()
   })
 
-  it('Select the issue card', () => {
+  it('Select the note card', () => {
     const id = 123
     const index = 123
     const rendered = render(
         <ShareMock>
-          <IssueCard id={id} index={index} title="Select the issue card - title"/>
+          <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>)
     const selectIssueButton = rendered.getByTestId('selectionContainer')
     fireEvent.click(selectIssueButton)
-    expect(screen.getByText('Select the issue card - title')).toBeInTheDocument()
+    expect(screen.getByText('Select the note card - title')).toBeInTheDocument()
   })
 
   it('Camera Position control', () => {
@@ -48,7 +48,7 @@ describe('IssueCard', () => {
     const index = 123
     const rendered = render(
         <ShareMock>
-          <IssueCard
+          <NoteCard
             id={id}
             index={index}
             body="Test body [test link](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34)"

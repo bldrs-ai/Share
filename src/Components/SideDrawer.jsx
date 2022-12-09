@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import Drawer from '@mui/material/Drawer'
+import {Box} from '@mui/system'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {getHashParams} from '../utils/location'
@@ -62,18 +63,22 @@ export function SideDrawer({
           className={classes.drawer}
         >
           <div className={classes.content}>
-            <div
-              sx={{
-                overflow: 'hidden',
-                height: isPropertiesOn ? '50%' : '1200px',
-                display: isCommentsOn ? '' : 'none',
-                borderRadius: '0px',
-                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-              }}
-            >
-              {isCommentsOn ? <NotesPanel/> : null}
-            </div>
-            <div className={classes.divider}/>
+            {isCommentsOn ?
+             (
+               <Box
+                 sx={{
+                   height: isPropertiesOn ? '50%' : '100%',
+                   display: isCommentsOn ? 'block' : 'none',
+                   borderRadius: '0px',
+                   borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                   overflowY: 'scroll',
+                 }}
+               >
+                 <NotesPanel/>
+               </Box>
+             ) : null
+            }
+            {(isCommentsOn && isPropertiesOn) ? <div className={classes.divider}/> : null}
             <div className={classes.containerProperties}>
               {isPropertiesOn ? <PropertiesPanel/> : null}
             </div>
@@ -99,26 +104,26 @@ export default function SideDrawerWrapper() {
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const location = useLocation()
 
 
   useEffect(() => {
-    const issueHash = getHashParams(location, 'i')
-    if (issueHash !== undefined) {
-      const extractedCommentId = issueHash.split(':')[1]
-      setSelectedIssueId(Number(extractedCommentId))
+    const noteHash = getHashParams(location, 'i')
+    if (noteHash !== undefined) {
+      const extractedCommentId = noteHash.split(':')[1]
+      setSelectedNoteId(Number(extractedCommentId))
       if (!isDrawerOpen) {
         openDrawer()
         turnCommentsOn()
       }
     }
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (issueHash === undefined && isDrawerOpen) {
-      setSelectedIssueId(null)
+    if (noteHash === undefined && isDrawerOpen) {
+      setSelectedNoteId(null)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, openDrawer, setSelectedIssueId])
+  }, [location, openDrawer, setSelectedNoteId])
 
 
   return (
@@ -171,8 +176,7 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
     },
   },
   content: {
-    'overflow': 'hidden',
-    'height': '95%',
+    'height': '100%',
     'marginTop': '20px',
     'display': 'flex',
     'flexDirection': 'column',
@@ -187,7 +191,6 @@ const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDT
   },
   containerProperties: {
     borderRadius: '5px',
-    overflow: 'hidden',
     display: (p) => p.isPropertiesOn ? '' : 'none',
     height: (p) => p.isCommentsOn ? '50%' : '98%',
   },
