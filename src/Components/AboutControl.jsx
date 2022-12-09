@@ -57,7 +57,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={<LogoB style={{width: '50px', height: '50px'}} />}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent/>}
+      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
       data-testid={'about-dialog'}
     />)
 }
@@ -68,7 +68,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  *
  * @return {object} React component
  */
-function AboutContent() {
+function AboutContent({setIsDialogDisplayed}) {
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const [acceptCookies, setAcceptCookies] = useState(true)
@@ -138,7 +138,7 @@ function AboutContent() {
         </Box>
         <RectangularButton
           title='OK'
-          onClick={() => console.log('accepted')}
+          onClick={() => setIsDialogDisplayed(false)}
           icon={<AboutIcon/> }
           noBorder={false}
         />
