@@ -22,10 +22,10 @@ describe('About control tests', () => {
   })
 
   test('sets privacy settings correctly', () => {
-    // Test setting privacy to enabled
+    // Test setting privacy to disabled
     setPrivacy(true)
     expect(Privacy.isPrivacySocialEnabled()).toBe(false)
-    // Test setting privacy to disabled
+    // Test setting privacy to enabled
     setPrivacy(false)
     expect(Privacy.isPrivacySocialEnabled()).toBe(true)
   })
