@@ -526,7 +526,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
-  v.clipper.orthogonalY = false;
+  v.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

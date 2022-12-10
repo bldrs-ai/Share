@@ -10,7 +10,7 @@ describe('SideDrawerPanels', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)
     await act(() => {
-      result.current.setSelectedIssueId(null)
+      result.current.setSelectedNoteId(null)
     })
     expect(getByText('Notes')).toBeInTheDocument()
   })
