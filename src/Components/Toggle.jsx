@@ -16,19 +16,14 @@ export default function Toggle({onChange, checked}) {
       checked={checked}
       onChange={onChange}
       sx={{
-        '& .MuiSwitch-root': {
-          float: 'right',
-        },
-        '& .MuiSwitch-track': {
-          backgroundColor: theme.palette.highlight.heavy,
-          border: 'solid 1px grey',
-        },
         '& .MuiSwitch-thumb': {
           backgroundColor: theme.palette.highlight.main,
         },
-        '&$checked': {
-          backgroundColor: 'green',
+        '& .MuiSwitch-track': {
+          backgroundColor: theme.palette.highlight.heavy,
+          opacity: 1,
         },
+
       }}
     />
   )
