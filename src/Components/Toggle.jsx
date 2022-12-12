@@ -20,10 +20,11 @@ export default function Toggle({onChange, checked}) {
           backgroundColor: theme.palette.highlight.main,
         },
         '& .MuiSwitch-track': {
-          backgroundColor: theme.palette.highlight.heavy,
-          opacity: 1,
+          backgroundColor: theme.palette.highlight.heavier,
         },
-
+        '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': {
+          backgroundColor: theme.palette.highlight.secondary,
+        },
       }}
     />
   )
