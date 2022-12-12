@@ -20,12 +20,14 @@ export default function Toggle({onChange, checked}) {
           float: 'right',
         },
         '& .MuiSwitch-track': {
-          backgroundColor: theme.palette.highlight.secondary,
-          opacity: 0.8,
+          backgroundColor: theme.palette.highlight.heavy,
           border: 'solid 1px grey',
         },
         '& .MuiSwitch-thumb': {
           backgroundColor: theme.palette.highlight.main,
+        },
+        '&$checked': {
+          backgroundColor: 'green',
         },
       }}
     />

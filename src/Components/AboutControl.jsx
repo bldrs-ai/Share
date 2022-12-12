@@ -128,12 +128,28 @@ function AboutContent({setIsDialogDisplayed}) {
           alignItems: 'center',
         }}
         >
-          <Typography
+          <Box
             variant={'h4'}
-            sx={{marginLeft: '10px'}}
+            sx={{
+              marginLeft: '10px',
+              textAlign: 'left',
+              marginTop: '6px',
+              marginBottom: '6px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+            }}
           >
-            Third Party cookies
-          </Typography>
+            <Typography variant={'h4'}>
+              Analytics cookies
+            </Typography>
+            <Typography variant={'h4'}>
+              <a href='https://github.com/bldrs-ai/Share/wiki/Design#privacy' target='_new'>
+                read more
+              </a>
+            </Typography>
+          </Box>
           <Toggle checked={acceptCookies} onChange={changePrivacy}/>
         </Box>
         <RectangularButton
@@ -173,10 +189,10 @@ const useStyles = makeStyles((theme) => (
         listStyleType: 'none',
       },
       '& a': {
-        color: theme.palette.highlight.secondary,
-        paddingLeft: '4px',
         paddingRight: '4px',
         paddingBottom: '2px',
+        color: theme.palette.highlight.secondary,
+        borderBottom: `0.5px solid ${theme.palette.highlight.secondary}`,
       },
       '@media (max-width: 900px)': {
         marginTop: '-10px',
@@ -192,21 +208,6 @@ const useStyles = makeStyles((theme) => (
       '@media (max-width: 900px)': {
         paddingTop: '16px',
         paddingBottom: '30px',
-      },
-      '& .MuiSlider-thumb': {
-        backgroundColor: theme.palette.highlight.main,
-        width: '14px',
-        height: '14px',
-      },
-      '& .MuiSlider-track': {
-        color: 'lightGray',
-      },
-      '& .MuiSlider-rail': {
-        color: 'lightGray',
-      },
-      '& .MuiSlider-markLabel': {
-        paddingTop: '4px',
-        fontSize: '.8em',
       },
     },
     iconContainer: {
