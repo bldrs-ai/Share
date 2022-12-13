@@ -1,14 +1,14 @@
-import React, {useState, useEffect, useContext} from 'react'
+import React, {useState, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Toggle from '../Components/Toggle'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Context/ColorMode'
 import Dialog from './Dialog'
 import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB_3.svg'
+import useTheme from '../Theme'
 
 
 /**
@@ -70,9 +70,9 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({setIsDialogDisplayed}) {
   const classes = useStyles()
-  const theme = useContext(ColorModeContext)
+  const {theme} = useTheme()
   const [acceptCookies, setAcceptCookies] = useState(true)
-  const bulletStyle = {textAlign: 'center'}
+  // const bulletStyle = {textAlign: 'center'}
 
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
@@ -96,19 +96,17 @@ function AboutContent({setIsDialogDisplayed}) {
         </a>
       </Typography>
       <Box sx={{
-        backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C',
-        borderRadius: '10px',
-        opacity: .8,
+        width: '240px',
         marginTop: '10px'}}
       >
-        <ul>
-          <li><Typography sx={bulletStyle} variant='h4'>
-            <a href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' target='_new'>Open IFC models from Github</a>
-          </Typography></li>
-          <li><Typography sx={bulletStyle} variant='h4'>View IFC properties</Typography></li>
-          <li><Typography sx={bulletStyle} variant='h4'>Search IFC models</Typography></li>
-          <li><Typography sx={bulletStyle} variant='h4'>Share IFC models</Typography></li>
-        </ul>
+        <img
+          alt='guide'
+          style={{
+            width: '240px',
+            border: `1px solid ${theme.palette.highlight.secondary}`,
+            borderRadius: '4px'}}
+          src='https://user-images.githubusercontent.com/3433606/207263222-c9908821-308a-4dfb-8177-8681754f764b.png'
+        />
       </Box>
 
       <Box sx={{
