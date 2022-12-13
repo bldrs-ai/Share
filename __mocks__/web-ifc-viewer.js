@@ -1,3 +1,6 @@
+import {Vector3} from 'three'
+
+
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
@@ -17,7 +20,24 @@ const impl = {
   IFC: {
     context: {
       ifcCamera: {
-        cameraControls: {},
+        cameraControls: {
+          setPosition: (x, y, z) => {
+            return {}
+          },
+          getPosition: (x, y, z) => {
+            // eslint-disable-next-line no-magic-numbers
+            const position = [0, 0, 0]
+            return position
+          },
+          setTarget: (x, y, z) => {
+            return {}
+          },
+          getTarget: (x, y, z) => {
+            // eslint-disable-next-line no-magic-numbers
+            const target = [0, 0, 0]
+            return target
+          },
+        },
       },
     },
     loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
@@ -32,6 +52,10 @@ const impl = {
     createFromNormalAndCoplanarPoint: jest.fn(() => {
       return 'createFromNormalAndCoplanarPoint'
     }),
+    planes: [{
+      normal: new Vector3(1, 0, 0),
+      constant: 10,
+    }],
   },
   container: {
     style: {},
