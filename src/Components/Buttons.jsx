@@ -110,7 +110,9 @@ export function ControlButton({
           <ToggleButton
             className={classes.root}
             selected={isDialogDisplayed}
-            onClick={setIsDialogDisplayed}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
             color='primary'
             value={''}
           >

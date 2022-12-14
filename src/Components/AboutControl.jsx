@@ -28,9 +28,7 @@ export default function AboutControl() {
       title='About BLDRS'
       icon={<div className={classes.iconContainer}><AboutIcon /></div>}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={() => {
-        setIsDialogDisplayed(true)
-      }}
+      setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
         <AboutDialog
           isDialogDisplayed={isDialogDisplayed}
