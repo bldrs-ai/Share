@@ -15,10 +15,9 @@ import LogoB from '../assets/LogoB_4.svg'
 /**
  * Button to toggle About panel on and off
  *
- * @param {string} installPrefix For use in static asset links.
  * @return {object} The AboutControl react component.
  */
-export default function AboutControl({installPrefix}) {
+export default function AboutControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] =
         useState(Privacy.getCookieBoolean({
           component: 'about',
@@ -38,7 +37,6 @@ export default function AboutControl({installPrefix}) {
             setIsDialogDisplayed(false)
             Privacy.setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
           }}
-          installPrefix={installPrefix}
         />
       }
     />
@@ -51,17 +49,16 @@ export default function AboutControl({installPrefix}) {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
- * @param {string} installPrefix node
  * @return {React.Component} React component
  */
-function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
+function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<LogoB/>}
       headerText={<LogoB style={{width: '50px', height: '50px'}} />}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent installPrefix={installPrefix}/>}
+      content={<AboutContent/>}
       data-testid={'about-dialog'}
     />)
 }
@@ -70,10 +67,9 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, installPrefix}) {
 /**
  * The content portion of the AboutDialog
  *
- * @param {string} installPrefix node
  * @return {object} React component
  */
-function AboutContent({installPrefix}) {
+function AboutContent() {
   const classes = useStyles()
   const theme = useContext(ColorModeContext)
   const [privacySlider, setPrivacySlider] = useState(0)

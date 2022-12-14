@@ -21,6 +21,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import BranchesControl from '../Components/BranchesControl'
 import {useAuth0} from '@auth0/auth0-react'
 
 
@@ -62,13 +63,14 @@ export default function CadView({
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
   const classes = useStyles()
-  const [showNavPanel, setShowNavPanel] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setViewerStore = useStore((state) => state.setViewerStore)
@@ -78,6 +80,7 @@ export default function CadView({
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const accessToken = useStore((state) => state.accessToken)
   const {isLoading: isAuthing} = useAuth0()
+  const [modelReady, setModelReady] = useState(false)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -128,7 +131,7 @@ export default function CadView({
    */
   function onModelPath() {
     resetState()
-    setShowNavPanel(false)
+    setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
@@ -150,11 +153,14 @@ export default function CadView({
       debug().warn('CadView#onViewer, viewer is null')
       return
     }
+
+    setModelReady(false)
+
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.light,
+      color: theme.palette.highlight.secondary,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
@@ -171,6 +177,8 @@ export default function CadView({
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
+
+    setModelReady(true)
   }
 
 
@@ -295,9 +303,9 @@ export default function CadView({
     setRootElement(rootElt)
 
     if (isMobile) {
-      setShowNavPanel(false)
+      setIsNavPanelOpen(false)
     } else {
-      setShowNavPanel(true)
+      setIsNavPanelOpen(true)
     }
   }
 
@@ -400,7 +408,7 @@ export default function CadView({
   async function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      console.error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
     await selectItemsInScene([expressId])
@@ -458,7 +466,7 @@ export default function CadView({
 
 
   return (
-    <div className={classes.root}>
+    <div className={classes.root} data-model-ready={modelReady}>
       <div className={classes.view} id='viewer-container'></div>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
@@ -466,24 +474,30 @@ export default function CadView({
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
-        <div className={classes.search}>
-          {showSearchBar && (
+        {showSearchBar && (
+          <div className={classes.topLeftContainer}>
             <SearchBar
               fileOpen={loadLocalFile}
             />
-          )}
-        </div>
-        {showNavPanel &&
-          <NavPanel
-            model={model}
-            element={rootElement}
-            defaultExpandedElements={defaultExpandedElements}
-            expandedElements={expandedElements}
-            setExpandedElements={setExpandedElements}
-            pathPrefix={
-              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+            {
+              modelPath.repo !== undefined &&
+              <BranchesControl location={location}/>
             }
-          />}
+            {isNavPanelOpen &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
+            }
+          </div>
+        )}
+
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
@@ -491,11 +505,7 @@ export default function CadView({
         >
           {viewer &&
             <OperationsGroup
-              viewer={viewer}
               unSelectItem={unSelectItems}
-              onClickMenuCb={() => setShowNavPanel(!showNavPanel)}
-              showNavPanel={showNavPanel}
-              installPrefix={installPrefix}
             />}
         </div>
         {alert}
@@ -525,6 +535,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
+  v.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
@@ -587,22 +598,15 @@ const useStyles = makeStyles({
     },
 
   },
-  searchContainer: {
-
-  },
-  search: {
+  topLeftContainer: {
     position: 'absolute',
-    // TODO(pablo): we were passing this around as it's used in a few
-    // places, but there's now only 1 dialog object that also uses it
-    // and it has multiple callers; passing that variable around seems
-    // overkill. I don't like not having it as a variable, but going
-    // to hardcode for now and look into passing via the theme later.
-    top: `20px`,
+    top: `30px`,
     left: '20px',
     display: 'flex',
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'flex-start',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    maxHeight: '95%',
   },
   view: {
     position: 'absolute',

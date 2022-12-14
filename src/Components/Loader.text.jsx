@@ -11,7 +11,7 @@ describe('Loader', () => {
     const index = 123
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.setIssues([])
+      result.current.setNotes([])
     })
     render(
         <ShareMock>

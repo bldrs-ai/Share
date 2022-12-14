@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react'
+import React, {useEffect, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
@@ -26,8 +26,9 @@ import AccountCircle from '@mui/icons-material/AccountCircle'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
   const urlParams = useParams()
-  const [modelPath, setModelPath] = useState(null)
   const setRepository = useStore((state) => state.setRepository)
+  const modelPath = useStore((state) => state.modelPath)
+  const setModelPath = useStore((state) => state.setModelPath)
 
 
   /**
@@ -58,7 +59,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     // TODO(pablo): currently expect these to both be defined.
     const {org, repo} = urlParams
     if (org && repo) {
-      console.log(`Setting GH repo ${org}/${repo}`)
       setRepository(org, repo)
     } else if (pathPrefix.startsWith('/share/v/p')) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
@@ -66,7 +66,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       console.warn('No repository set for project!', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams])
+  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
   const {theme, colorMode} = useTheme()

@@ -6,41 +6,41 @@ import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import IssueCard from './IssueCard'
+import NoteCard from './NoteCard'
 
-/** The prefix to use for issue id in the Url hash. */
-export const ISSUE_PREFIX = 'i'
+/** The prefix to use for the note ID within the URL hash. */
+export const NOTE_PREFIX = 'i'
 
 
-/** @return {object} List of issues and comments as react component. */
-export default function Issues() {
+/** @return {object} List of notes and comments as react component. */
+export default function Notes() {
   const classes = useStyles()
-  const selectedIssueId = useStore((state) => state.selectedIssueId)
-  const setSelectedIssueId = useStore((state) => state.setSelectedIssueId)
-  const issues = useStore((state) => state.issues)
-  const setIssues = useStore((state) => state.setIssues)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredIssue = (issues && selectedIssueId) ?
-        issues.filter((issue) => issue.id === selectedIssueId)[0] : null
+  const filteredNote = (notes && selectedNoteId) ?
+        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
 
   useEffect(() => {
     if (!repository) {
-      debug().warn('IssuesControl#Issues: 1, no repo defined')
+      debug().warn('IssuesControl#Notes: 1, no repo defined')
       return
     }
-    const fetchIssues = async () => {
+    const fetchNotes = async () => {
       try {
-        const issuesArr = []
+        const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
-          issuesArr.push({
+          fetchedNotes.push({
             index: index,
             id: issue.id,
             number: issue.number,
@@ -52,28 +52,28 @@ export default function Issues() {
             numberOfComments: issue.comments,
           })
         })
-        if (issuesArr.length > 0) {
-          setIssues(issuesArr)
+        if (fetchedNotes.length > 0) {
+          setNotes(fetchedNotes)
         } else {
-          setIssues([])
+          setNotes([])
         }
       } catch (e) {
-        debug().warn('failed to fetch issues', e)
+        debug().warn('failed to fetch notes', e)
       }
     }
-    fetchIssues()
-  }, [setIssues, repository, accessToken])
+    fetchNotes()
+  }, [setNotes, repository, accessToken])
 
   useEffect(() => {
     if (!repository) {
-      debug().warn('IssuesControl#Issues: 2, no repo defined')
+      debug().warn('IssuesControl#Notes: 2, no repo defined')
       return
     }
-    const fetchComments = async (selectedIssue) => {
+    const fetchComments = async (selectedNote) => {
       try {
         const commentsArr = []
 
-        const commentsData = await getComments(repository, selectedIssue.number, accessToken)
+        const commentsData = await getComments(repository, selectedNote.number, accessToken)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -93,27 +93,27 @@ export default function Issues() {
       }
     }
 
-    if (selectedIssueId !== null) {
-      fetchComments(filteredIssue)
+    if (selectedNoteId !== null) {
+      fetchComments(filteredNote)
     }
     // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredIssue) {
-      setSelectedIssueId(null)
+    if (!filteredNote) {
+      setSelectedNoteId(null)
     }
-    // this useEffect runs everytime issues are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredIssue, repository, setComments, accessToken])
+  }, [filteredNote, repository, setComments, accessToken])
 
   return (
     <Paper className={classes.commentsContainer} elevation={0}>
       <div className={classes.cardsContainer}>
-        {issues === null && <Loader type={'linear'}/> }
-        {issues && issues.length === 0 && <NoContent/> }
-        {issues && !selectedIssueId ?
-          issues.map((issue, index) => {
+        {notes === null && <Loader type={'linear'}/> }
+        {notes && notes.length === 0 && <NoContent/> }
+        {notes && !selectedNoteId ?
+          notes.map((issue, index) => {
             return (
-              <IssueCard
+              <NoteCard
                 embeddedUrl={issue.embeddedUrl}
                 index={issue.index}
                 id={issue.id}
@@ -129,25 +129,25 @@ export default function Issues() {
             )
           }) :
         <>
-          {filteredIssue ?
-           <IssueCard
-             embeddedUrl={filteredIssue.embeddedUrl}
-             index={filteredIssue.index}
-             id={filteredIssue.id}
-             key={filteredIssue.id}
-             title={filteredIssue.title}
-             date={filteredIssue.date}
-             body={filteredIssue.body}
-             username={filteredIssue.username}
-             numberOfComments={filteredIssue.numberOfComments}
-             avatarUrl={filteredIssue.avatarUrl}
-             imageUrl={filteredIssue.imageUrl}
+          {filteredNote ?
+           <NoteCard
+             embeddedUrl={filteredNote.embeddedUrl}
+             index={filteredNote.index}
+             id={filteredNote.id}
+             key={filteredNote.id}
+             title={filteredNote.title}
+             date={filteredNote.date}
+             body={filteredNote.body}
+             username={filteredNote.username}
+             numberOfComments={filteredNote.numberOfComments}
+             avatarUrl={filteredNote.avatarUrl}
+             imageUrl={filteredNote.imageUrl}
            /> : null
           }
           {comments &&
            comments.map((comment, index) => {
              return (
-               <IssueCard
+               <NoteCard
                  embeddedUrl={comment.embeddedUrl}
                  isComment={true}
                  index=''

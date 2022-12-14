@@ -1,8 +1,10 @@
 import React from 'react'
 import {createRoot} from 'react-dom/client'
 import {BrowserRouter} from 'react-router-dom'
+import {FlagsProvider} from 'react-feature-flags'
 import {Auth0ProviderWithHistory} from './Components/Auth0ProviderWithHistory'
 import BaseRoutes from './BaseRoutes'
+import {flags} from './FeatureFlags'
 
 
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
@@ -18,9 +20,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 const root = createRoot(document.getElementById('root'))
 root.render(
-    <BrowserRouter>
-      <Auth0ProviderWithHistory>
-        <BaseRoutes/>
-      </Auth0ProviderWithHistory>,
-    </BrowserRouter>,
+    <FlagsProvider value={flags}>
+      <BrowserRouter>
+        <Auth0ProviderWithHistory>
+          <BaseRoutes/>
+        </Auth0ProviderWithHistory>
+      </BrowserRouter>
+    </FlagsProvider>,
 )
