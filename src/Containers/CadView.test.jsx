@@ -8,7 +8,13 @@ import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
 
 
+let viewerMock
+
 describe('CadView', () => {
+  beforeEach(() => {
+    viewerMock = __getIfcViewerAPIMockSingleton()
+  })
+
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -34,9 +40,11 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `index.ifc`,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
+
+    // Set up mocks
+    viewerMock._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+
     render(
         <ShareMock>
           <CadView
@@ -61,8 +69,7 @@ describe('CadView', () => {
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewerMock._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -75,7 +82,7 @@ describe('CadView', () => {
         </ShareMock>)
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
-    const getPropsCalls = viewer.getProperties.mock.calls
+    const getPropsCalls = viewerMock.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
@@ -92,8 +99,7 @@ describe('CadView', () => {
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewerMock._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
@@ -114,7 +120,7 @@ describe('CadView', () => {
     act(() => {
       fireEvent.click(clearSelection)
     })
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    const callDeletePlanes = viewerMock.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toBe(null)
     expect(result.current.selectedElement).toBe(null)
