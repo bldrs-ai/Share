@@ -13,6 +13,23 @@ describe('CadView', () => {
     jest.clearAllMocks()
   })
 
+  it('renders correctly', () => {
+    const modelPath = {
+      filepath: `index.ifc`,
+    }
+
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix={''}
+            appPrefix={''}
+            pathPrefix={''}
+            modelPath={modelPath}
+          />
+        </ShareMock>,
+    )
+  })
+
   it('renders with mock IfcViewerAPI', async () => {
     const modelPath = {
       filepath: `index.ifc`,
