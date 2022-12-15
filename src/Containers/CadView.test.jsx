@@ -55,8 +55,8 @@ describe('CadView', () => {
         </ShareMock>,
     )
 
-    // Necessary to wait for some of the component to render to avoid
-    // act() warningings from testing-library.
+    // Necessary to wait for some components to render to avoid act()
+    // warnings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
 
