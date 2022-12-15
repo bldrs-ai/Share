@@ -103,7 +103,7 @@ export default function CadView({
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
-    onSearchParams()
+    (async () => await onSearchParams())()
   }, [searchParams])
 
 
@@ -327,7 +327,7 @@ export default function CadView({
   /**
    * Search for the query in the index and select matching items in UI elts.
    */
-  function onSearchParams() {
+  async function onSearchParams() {
     const sp = new URLSearchParams(window.location.search)
     let query = sp.get('q')
     if (query) {
@@ -336,8 +336,8 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      await selectItemsInScene(resultIDs)
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
