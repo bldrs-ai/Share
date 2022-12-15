@@ -40,7 +40,6 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `index.ifc`,
     }
-    const {result} = renderHook(() => useState(modelPath))
 
     // Set up mocks
     viewerMock._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
@@ -51,9 +50,11 @@ describe('CadView', () => {
             installPrefix={''}
             appPrefix={''}
             pathPrefix={''}
-            modelPath={result.current[0]}
+            modelPath={modelPath}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
+
     // Necessary to wait for some of the component to render to avoid
     // act() warningings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
