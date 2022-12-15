@@ -59,6 +59,11 @@ describe('CadView', () => {
     // act() warningings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
+
+    // Assert mocks were executed as expected
+    const expectedNumOfCalls = 1
+    const calls = viewerMock._loadedModel.ifcManager.getSpatialStructure.mock.calls
+    expect(calls.length).toBe(expectedNumOfCalls)
   })
 
 
