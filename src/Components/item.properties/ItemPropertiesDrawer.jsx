@@ -1,9 +1,9 @@
 import React from 'react'
 import Drawer from '@mui/material/Drawer'
 import {makeStyles} from '@mui/styles'
-import {TooltipIconButton} from './Buttons'
-import {MOBILE_WIDTH} from './Hooks'
-import {preprocessMediaQuery} from '../utils/mediaQuery'
+import {TooltipIconButton} from '../Buttons'
+import {MOBILE_WIDTH} from '../Hooks'
+import {preprocessMediaQuery} from '../../utils/mediaQuery'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
