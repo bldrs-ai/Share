@@ -68,7 +68,7 @@ export default function CadView({
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState()
+  const [loadingMessage, setLoadingMessage] = useState('')
   const [model, setModel] = useState(null)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
