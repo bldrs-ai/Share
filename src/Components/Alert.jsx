@@ -1,12 +1,13 @@
-import React, {useState} from 'react'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
-import IconButton from '@mui/material/IconButton'
-import CheckIcon from '@mui/icons-material/Check'
-
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+} from "@mui/material";
+import CheckIcon from "@mui/icons-material/Check";
 
 /**
  * @param {Function} onCloseCb
@@ -14,12 +15,12 @@ import CheckIcon from '@mui/icons-material/Check'
  * @param {string} message
  * @return {object} React component
  */
-export default function Alert({onCloseCb, title = 'Oops', message}) {
-  const [isOpen, setIsOpen] = useState(true)
+export default function Alert({ onCloseCb, title = "Oops", message }) {
+  const [isOpen, setIsOpen] = useState(true);
   const handleClose = () => {
-    setIsOpen(false)
-    onCloseCb()
-  }
+    setIsOpen(false);
+    onCloseCb();
+  };
   return (
     <Dialog
       open={isOpen}
@@ -29,11 +30,15 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
     >
       <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="alert-dialog-description">{message}</DialogContentText>
+        <DialogContentText id="alert-dialog-description">
+          {message}
+        </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <IconButton onClick={handleClose}><CheckIcon/></IconButton>
+        <IconButton onClick={handleClose}>
+          <CheckIcon />
+        </IconButton>
       </DialogActions>
     </Dialog>
-  )
+  );
 }
