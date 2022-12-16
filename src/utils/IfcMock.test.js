@@ -1,46 +1,44 @@
-test('MockViewer getProperties', () => {
-  const testLabel = 'test label'
+test("MockViewer getProperties", () => {
+  const testLabel = "test label";
   const mv = new MockViewer({
     0: {
       type: 1,
       value: testLabel,
     },
-  })
-  const props = mv.getProperties(undefined, 0)
-  expect(props.type).toEqual(1)
-  expect(props.value).toEqual(testLabel)
-})
+  });
+  const props = mv.getProperties(undefined, 0);
+  expect(props.type).toEqual(1);
+  expect(props.value).toEqual(testLabel);
+});
 
+test("MockViewer getIfcType", () => {
+  expect(
+    new MockViewer().IFC.loader.ifcManager.getIfcType(undefined, undefined)
+  ).toEqual("IFCELEMENT");
+});
 
-test('MockViewer getIfcType', () => {
-  expect(new MockViewer().IFC.loader.ifcManager
-      .getIfcType(undefined, undefined))
-      .toEqual('IFCELEMENT')
-})
-
-
-test('MockViewer getPropertySets', async () => {
-  const val = await new MockViewer().IFC.loader.ifcManager.getPropertySets(undefined, undefined)
-  expect(val).toEqual([])
-})
-
+test("MockViewer getPropertySets", async () => {
+  const val = await new MockViewer().IFC.loader.ifcManager.getPropertySets(
+    undefined,
+    undefined
+  );
+  expect(val).toEqual([]);
+});
 
 /** Create a mock IFC model */
 export class MockModel {
   /** @param {object} propsById Mock IFC properties. */
   constructor(propsById = {}) {
-    this.propsById = propsById
+    this.propsById = propsById;
   }
-
 
   /**
    * @param {number} expressId
    * @return {object}
    */
   getItemProperties(expressId) {
-    return this.propsById[expressId]
+    return this.propsById[expressId];
   }
-
 
   /**
    * @param {number} expressId
@@ -48,10 +46,9 @@ export class MockModel {
    */
   getPropertySets(expressId) {
     return new Promise((resolve, reject) => {
-      resolve([])
-    })
+      resolve([]);
+    });
   }
-
 
   /**
    * @param {object} elt IFC element
@@ -59,28 +56,27 @@ export class MockModel {
    * @return {string}
    */
   getIfcType(elt, viewer) {
-    return 'IFCELEMENT'
+    return "IFCELEMENT";
   }
 }
-
 
 /** Create a mock IFC viewer */
 export class MockViewer {
   /** @param {object} propsById Mock IFC properties. */
   constructor(propsById = {}) {
-    this.propsById = propsById
+    this.propsById = propsById;
     this.IFC = {
       loader: {
         ifcManager: {
           getPropertySets: (modelId, expressId) => {
             return new Promise((resolve, reject) => {
-              resolve([])
-            })
+              resolve([]);
+            });
           },
-          getIfcType: (elt, viewer) => 'IFCELEMENT',
+          getIfcType: (elt, viewer) => "IFCELEMENT",
         },
       },
-    }
+    };
   }
 
   /**
@@ -91,7 +87,7 @@ export class MockViewer {
    * @return {object} returns property object
    */
   getProperties(modelId, id) {
-    return this.propsById[id]
+    return this.propsById[id];
   }
 }
 
@@ -110,5 +106,5 @@ export function newMockStringValueElt(label, id = 1) {
       type: 1,
       value: label,
     },
-  }
+  };
 }

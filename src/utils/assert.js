@@ -7,11 +7,10 @@
  */
 export function assert(cond, msg) {
   if (cond) {
-    return
+    return;
   }
-  throw new Error(msg)
+  throw new Error(msg);
 }
-
 
 /**
  * Equivalent to calling assertDefined on each parameter.
@@ -23,16 +22,15 @@ export function assert(cond, msg) {
 export function assertDefined(...args) {
   for (const ndx in args) {
     if (Object.prototype.hasOwnProperty.call(args, ndx)) {
-      const arg = args[ndx]
-      assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`)
+      const arg = args[ndx];
+      assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`);
     }
   }
   if (args.length === 1) {
-    return args[0]
+    return args[0];
   }
-  return args
+  return args;
 }
-
 
 /**
  * @param {boolean} arg Value to test
@@ -40,7 +38,7 @@ export function assertDefined(...args) {
  */
 export function assertDefinedBoolean(arg) {
   if (arg) {
-    return true
+    return true;
   }
-  return false
+  return false;
 }

@@ -1,27 +1,24 @@
-import {getModelPath} from './Share'
+import { getModelPath } from "./Share";
 
+describe("Share", () => {
+  it("getModelPath parses ifc filepaths", () => {
+    const urlParams = { "*": "as_Ifcdf.ifc/1234" };
+    expect(getModelPath("/share", "/share/v/p", urlParams)).toStrictEqual({
+      filepath: "/as_Ifcdf.ifc",
+      eltPath: "/1234",
+    });
+  });
 
-describe('Share', () => {
-  it('getModelPath parses ifc filepaths', () => {
-    const urlParams = {'*': 'as_Ifcdf.ifc/1234'}
-    expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
-      filepath: '/as_Ifcdf.ifc',
-      eltPath: '/1234',
-    })
-  })
-
-
-  it('getModelPath parses mixed-case ifc filepaths', () => {
-    ['ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc'].forEach((ext) => {
-      const urlParams = {'*': `as_Ifcdf.${ext}/1234`}
-      expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
+  it("getModelPath parses mixed-case ifc filepaths", () => {
+    ["ifc", "Ifc", "IFC", "IfC", "iFc", "IFc"].forEach((ext) => {
+      const urlParams = { "*": `as_Ifcdf.${ext}/1234` };
+      expect(getModelPath("/share", "/share/v/p", urlParams)).toStrictEqual({
         filepath: `/as_Ifcdf.${ext}`,
-        eltPath: '/1234',
-      })
-    })
-  })
-})
-
+        eltPath: "/1234",
+      });
+    });
+  });
+});
 
 // TODO(88): Testing: headless screenshot regression testing
 /*

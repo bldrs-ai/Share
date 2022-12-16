@@ -1,39 +1,38 @@
-import React from 'react'
-import {UilBuilding, UilUpload} from '@iconscout/react-unicons'
-import {RectangularButton} from '../../Components/Buttons'
-
+import React from "react";
+import { UilBuilding, UilUpload } from "@iconscout/react-unicons";
+import { RectangularButton } from "../../Components/Buttons";
 
 export default {
-  title: 'BLDRS UI/Buttons/RectangularButton',
+  title: "BLDRS UI/Buttons/RectangularButton",
   component: RectangularButton,
   argTypes: {
     icon: {
-      options: ['github', 'building', 'upload'],
+      options: ["github", "building", "upload"],
       mapping: {
-        building: <UilBuilding/>,
-        upload: <UilUpload/>,
+        building: <UilBuilding />,
+        upload: <UilUpload />,
       },
       control: {
-        type: 'select',
+        type: "select",
       },
-      defaultValue: 'upload',
+      defaultValue: "upload",
     },
     onClick: {
-      action: 'clicked',
+      action: "clicked",
     },
   },
   args: {
-    title: 'Upload from device',
+    title: "Upload from device",
   },
   parameters: {
     backgrounds: {
-      default: 'light',
+      default: "light",
     },
   },
-}
+};
 
 const Template = (args) => {
-  return <RectangularButton type='contained' {...args}/>
-}
+  return <RectangularButton type="contained" {...args} />;
+};
 
-export const Button = Template.bind({})
+export const Button = Template.bind({});

@@ -1,41 +1,35 @@
-import {
-  assert,
-  assertDefined,
-} from './assert'
+import { assert, assertDefined } from "./assert";
 
-
-test('assert', () => {
-  assert(true, 'Should validate')
+test("assert", () => {
+  assert(true, "Should validate");
   try {
-    assert(false, 'Should fail')
-    throw new Error('False assert test should have thrown')
+    assert(false, "Should fail");
+    throw new Error("False assert test should have thrown");
   } catch (e) {
     // Expected
   }
-})
+});
 
-
-test('assert', () => {
-  assertDefined(1)
+test("assert", () => {
+  assertDefined(1);
   expectFailure(() => {
-    assertDefined(undefined)
-  })
+    assertDefined(undefined);
+  });
   expectFailure(() => {
-    assertDefined(undefined, 1)
-  })
+    assertDefined(undefined, 1);
+  });
   expectFailure(() => {
-    assertDefined(1, undefined)
-  })
-  const a = undefined
-  const b = 1
+    assertDefined(1, undefined);
+  });
+  const a = undefined;
+  const b = 1;
   expectFailure(() => {
-    new TestArgsCtor({a, b})
-  })
+    new TestArgsCtor({ a, b });
+  });
   expectFailure(() => {
-    new TestVarargs({a, b})
-  })
-})
-
+    new TestVarargs({ a, b });
+  });
+});
 
 /**
  * Catches expected failures or throws if no failure.
@@ -44,8 +38,8 @@ test('assert', () => {
  */
 function expectFailure(assertCb) {
   try {
-    assertCb()
-    throw new Error('Assert should have failed')
+    assertCb();
+    throw new Error("Assert should have failed");
   } catch {
     // Expected
   }
@@ -57,11 +51,10 @@ class TestArgsCtor {
    * @param {any} a test arg, possibly undefined
    * @param {any} b test arg, possibly undefined
    */
-  constructor({a, b}) {
-    assertDefined(a, b)
+  constructor({ a, b }) {
+    assertDefined(a, b);
   }
 }
-
 
 /** Dummy class which asserts is ctor args. */
 class TestVarargs {
@@ -69,7 +62,7 @@ class TestVarargs {
    * @param {any} a test arg, possibly undefined
    * @param {any} b test arg, possibly undefined
    */
-  constructor({a, b}) {
-    assertDefined(...arguments)
+  constructor({ a, b }) {
+    assertDefined(...arguments);
   }
 }

@@ -3,9 +3,8 @@
  * @return {number} The number as a float
  */
 export function numToFloat(num) {
-  return parseFloat(num)
+  return parseFloat(num);
 }
-
 
 /**
  * @param {number} num Number to round
@@ -13,9 +12,8 @@ export function numToFloat(num) {
  * @return {number} The rounded number
  */
 export function round(num, numDigits = 0) {
-  return numToFloat(numToFloat(num).toFixed(numDigits))
+  return numToFloat(numToFloat(num).toFixed(numDigits));
 }
-
 
 /**
  * @param {number} x X coordinate
@@ -25,5 +23,5 @@ export function round(num, numDigits = 0) {
  * @return {Array} Array of [x, y, z]
  */
 export function roundCoord(x, y, z, numDigits = 0) {
-  return [x, y, z].map((n) => round(n, numDigits))
+  return [x, y, z].map((n) => round(n, numDigits));
 }

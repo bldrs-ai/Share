@@ -1,6 +1,5 @@
-import {execSync} from 'child_process'
-import fs from 'fs'
-
+import { execSync } from "child_process";
+import fs from "fs";
 
 /**
  * This is a script meant to be used as a command-line tool by the
@@ -13,14 +12,16 @@ import fs from 'fs'
  * ...
  */
 
-const rawFileData = fs.readFileSync('package.json')
-const pkgJson = JSON.parse(rawFileData)
+const rawFileData = fs.readFileSync("package.json");
+const pkgJson = JSON.parse(rawFileData);
 
 // https://stackoverflow.com/questions/24663175/how-can-i-inject-a-build-number-with-webpack
-const __versionString__ = execSync('git rev-list HEAD --count').toString().trim()
-const version = pkgJson.version.toString().replace(/-.*/, '')
-pkgJson.version = `${version}-r${__versionString__}`
-const pkgJsonStr = JSON.stringify(pkgJson, null, '  ')
+const __versionString__ = execSync("git rev-list HEAD --count")
+  .toString()
+  .trim();
+const version = pkgJson.version.toString().replace(/-.*/, "");
+pkgJson.version = `${version}-r${__versionString__}`;
+const pkgJsonStr = JSON.stringify(pkgJson, null, "  ");
 
 // Outputs to console for capture by file redirect in the calling script.
-console.log(pkgJsonStr)
+console.log(pkgJsonStr);

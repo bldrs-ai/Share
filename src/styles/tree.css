@@ -15,12 +15,12 @@
   overflow: auto;
 }
 
-.treeview > .toggle {
+.treeview>.toggle {
   pointer-events: all;
   cursor: pointer;
 }
 
-.treeview > .toggle:hover {
+.treeview>.toggle:hover {
   color: lime;
   fill: lime;
 }

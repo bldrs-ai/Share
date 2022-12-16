@@ -1,5 +1,4 @@
-import {isObject} from './objects'
-
+import { isObject } from "./objects";
 
 /**
  * Recursively replace MOBILE_WIDTH in object with its given value.
@@ -11,18 +10,18 @@ import {isObject} from './objects'
 export function preprocessMediaQuery(mobileWidth, obj) {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      let val = obj[key]
+      let val = obj[key];
       if (isObject(val)) {
         // Depth-first recursion
-        val = preprocessMediaQuery(mobileWidth, val)
+        val = preprocessMediaQuery(mobileWidth, val);
       }
-      const keyStr = `${key }`
-      if (keyStr.includes('MOBILE_WIDTH')) {
-        delete obj[key]
-        const newKey = key.replace('MOBILE_WIDTH', `${mobileWidth }px`)
-        obj[newKey] = val
+      const keyStr = `${key}`;
+      if (keyStr.includes("MOBILE_WIDTH")) {
+        delete obj[key];
+        const newKey = key.replace("MOBILE_WIDTH", `${mobileWidth}px`);
+        obj[newKey] = val;
       }
     }
   }
-  return obj
+  return obj;
 }

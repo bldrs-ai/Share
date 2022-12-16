@@ -1,25 +1,24 @@
-import {createTheme} from '@mui/material/styles'
-import {grey} from '@mui/material/colors'
-import {useEffect, useMemo, useState} from 'react'
-import * as Privacy from './privacy/Privacy'
-
+import { createTheme } from "@mui/material/styles";
+import { grey } from "@mui/material/colors";
+import { useEffect, useMemo, useState } from "react";
+import * as Privacy from "./privacy/Privacy";
 
 /**
  * @return {object} {theme, colorMode}
  */
 export default function useTheme() {
-  const [themeChangeListeners] = useState({})
-  const [mode, setMode] = useState(Privacy.getCookie({
-    component: 'theme',
-    name: 'mode',
-    defaultValue: getSystemCurrentLightDark(),
-  }))
-
+  const [themeChangeListeners] = useState({});
+  const [mode, setMode] = useState(
+    Privacy.getCookie({
+      component: "theme",
+      name: "mode",
+      defaultValue: getSystemCurrentLightDark(),
+    })
+  );
 
   const theme = useMemo(() => {
-    return loadTheme(mode)
-  }, [mode])
-
+    return loadTheme(mode);
+  }, [mode]);
 
   const colorMode = useMemo(() => {
     return {
@@ -27,33 +26,36 @@ export default function useTheme() {
       getTheme: () => theme,
       toggleColorMode: () => {
         setMode((prevMode) => {
-          const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-          Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
-          return newMode
-        })
+          const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day;
+          Privacy.setCookie({
+            component: "theme",
+            name: "mode",
+            value: newMode,
+          });
+          return newMode;
+        });
       },
       addThemeChangeListener: (onChangeCb) => {
-        themeChangeListeners[onChangeCb] = onChangeCb
+        themeChangeListeners[onChangeCb] = onChangeCb;
       },
-    }
-  }, [mode, theme, themeChangeListeners])
-
+    };
+  }, [mode, theme, themeChangeListeners]);
 
   useEffect(() => {
     if (mode && theme) {
-      Object.values(themeChangeListeners).map((onChangeCb) => onChangeCb(mode, theme))
+      Object.values(themeChangeListeners).map((onChangeCb) =>
+        onChangeCb(mode, theme)
+      );
     }
-  }, [mode, theme, themeChangeListeners])
+  }, [mode, theme, themeChangeListeners]);
 
-  return {theme, colorMode}
+  return { theme, colorMode };
 }
-
 
 export const Themes = {
-  Day: 'Day',
-  Night: 'Night',
-}
-
+  Day: "Day",
+  Night: "Night",
+};
 
 /**
  * @param {string} mode
@@ -61,10 +63,10 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const lightGreen = '#C8E8C7'
-  const darkGreen = '#459A47'
-  const fontFamily = 'Roboto'
-  const lime = '#4EEF4B'
+  const lightGreen = "#C8E8C7";
+  const darkGreen = "#459A47";
+  const fontFamily = "Roboto";
+  const lime = "#4EEF4B";
   const day = {
     primary: {
       main: grey[100],
@@ -80,10 +82,10 @@ function loadTheme(mode) {
       heavy: grey[300],
       heavier: grey[400],
       heaviest: grey[500],
-      maximum: 'black',
+      maximum: "black",
       lime,
     },
-  }
+  };
   const night = {
     primary: {
       main: grey[800],
@@ -101,54 +103,82 @@ function loadTheme(mode) {
       heaviest: grey[400],
       lime,
     },
-  }
-  const fontSize = '1rem'
-  const lineHeight = '1.5em'
-  const letterSpacing = 'normal'
-  const fontWeight = '400'
-  const fontWeightBold = '400'
+  };
+  const fontSize = "1rem";
+  const lineHeight = "1.5em";
+  const letterSpacing = "normal";
+  const fontWeight = "400";
+  const fontWeightBold = "400";
   const typography = {
     fontWeightRegular: fontWeight,
     fontWeightBold,
     fontWeightMedium: fontWeight,
-    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h4: {fontSize: '0.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    h1: {
+      fontSize: "1.3rem",
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
+    },
+    h2: {
+      fontSize: "1.2rem",
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
+    },
+    h3: {
+      fontSize: "1.1rem",
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
+    },
+    h4: {
+      fontSize: "0.9rem",
+      lineHeight,
+      letterSpacing,
+      fontWeight,
+      fontFamily,
+    },
+    h5: { fontSize, lineHeight, letterSpacing, fontWeight, fontFamily },
+    p: { fontSize, lineHeight, letterSpacing, fontWeight, fontFamily },
+    tree: { fontSize, lineHeight, letterSpacing, fontWeight, fontFamily },
+    propTitle: { fontSize, lineHeight, letterSpacing, fontWeight, fontFamily },
     propValue: {
       fontSize,
       lineHeight,
       letterSpacing,
-      fontWeight: '100',
-      fontFamily},
-  }
+      fontWeight: "100",
+      fontFamily,
+    },
+  };
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
-  let activePalette = mode === Themes.Day ? day : night
-  activePalette = {...activePalette, ...{
-    mode: mode === Themes.Day ? 'light' : 'dark',
-    background: {
-      paper: activePalette.primary.main,
+  let activePalette = mode === Themes.Day ? day : night;
+  activePalette = {
+    ...activePalette,
+    ...{
+      mode: mode === Themes.Day ? "light" : "dark",
+      background: {
+        paper: activePalette.primary.main,
+      },
     },
-  }}
+  };
   const components = {
     MuiTreeItem: {
       styleOverrides: {
         root: {
-          '& > div.Mui-selected, & > div.Mui-selected:hover': {
+          "& > div.Mui-selected, & > div.Mui-selected:hover": {
             color: activePalette.secondary.main,
             backgroundColor: activePalette.secondary.background,
-            borderRadius: '5px',
+            borderRadius: "5px",
           },
-          '& > div.MuiTreeItem-content': {
-            borderRadius: '5px',
+          "& > div.MuiTreeItem-content": {
+            borderRadius: "5px",
           },
         },
       },
@@ -156,11 +186,11 @@ function loadTheme(mode) {
     MuiButton: {
       variants: [
         {
-          props: {variant: 'rectangular'},
+          props: { variant: "rectangular" },
           style: {
-            width: '180px',
-            height: '40px',
-            textTransform: 'none',
+            width: "180px",
+            height: "40px",
+            textTransform: "none",
             color: activePalette.secondary.main,
           },
         },
@@ -171,17 +201,16 @@ function loadTheme(mode) {
         disableRipple: true,
       },
     },
-  }
+  };
   const theme = {
     components: components,
     typography: typography,
-    shape: {borderRadius: 8},
+    shape: { borderRadius: 8 },
     palette: activePalette,
     button: {},
-  }
-  return createTheme(theme)
+  };
+  return createTheme(theme);
 }
-
 
 /**
  * Look for explicit night, otherwise day
@@ -193,7 +222,9 @@ function loadTheme(mode) {
  */
 export function getSystemCurrentLightDark() {
   if (window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
+    return window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? Themes.Night
+      : Themes.Day;
   }
-  return Themes.Day
+  return Themes.Day;
 }

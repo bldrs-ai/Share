@@ -1,16 +1,16 @@
-import React from 'react'
-import Dialog, {OpenDialogBodyContent} from '../../Components/Dialog_redesign'
-
+import React from "react";
+import Dialog, {
+  OpenDialogBodyContent,
+} from "../../Components/Dialog_redesign";
 
 export default {
-  title: 'BLDRS UI/Dialogs',
+  title: "BLDRS UI/Dialogs",
   component: Dialog,
-  argTypes: {
-  },
-}
+  argTypes: {},
+};
 
 const Template = (args) => {
-  return <OpenDialogBodyContent/>
-}
+  return <OpenDialogBodyContent />;
+};
 
-export const OpenDialogBody = Template.bind({})
+export const OpenDialogBody = Template.bind({});

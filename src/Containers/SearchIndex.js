@@ -1,16 +1,15 @@
-import * as Ifc from '@bldrs-ai/ifclib'
-import debug from '../utils/debug'
-import {deleteProperties} from '../utils/objects'
-
+import * as Ifc from "@bldrs-ai/ifclib";
+import debug from "../utils/debug";
+import { deleteProperties } from "../utils/objects";
 
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
   /** Initializes all the index lookup objects. */
   constructor() {
-    this.eltsByType = {}
-    this.eltsByName = {}
-    this.eltsByGlobalId = {}
-    this.eltsByText = {}
+    this.eltsByType = {};
+    this.eltsByName = {};
+    this.eltsByGlobalId = {};
+    this.eltsByText = {};
   }
 
   /**
@@ -20,44 +19,53 @@ export default class SearchIndex {
    * @param {object} elt async callback for rendering sub-object
    */
   indexElement(model, elt) {
-    const type = Ifc.getType(model, elt)
+    const type = Ifc.getType(model, elt);
     if (type) {
-      this.indexElementByString(this.eltsByType, type, elt)
-      const ifcPrefix = 'IFC'
+      this.indexElementByString(this.eltsByType, type, elt);
+      const ifcPrefix = "IFC";
       if (type.startsWith(ifcPrefix)) {
-        this.indexElementByString(this.eltsByType, type.substring(ifcPrefix.length), elt)
+        this.indexElementByString(
+          this.eltsByType,
+          type.substring(ifcPrefix.length),
+          elt
+        );
       }
     }
 
-    const name = Ifc.getName(elt)
+    const name = Ifc.getName(elt);
     if (name) {
-      this.indexElementByString(this.eltsByName, name, elt)
-      this.indexElementByStringSet(this.eltsByName, this.tokenize(name), elt)
+      this.indexElementByString(this.eltsByName, name, elt);
+      this.indexElementByStringSet(this.eltsByName, this.tokenize(name), elt);
     }
 
-    const reifiedName = Ifc.reifyName(model, elt)
+    const reifiedName = Ifc.reifyName(model, elt);
     if (reifiedName) {
-      this.indexElementByString(this.eltsByName, reifiedName, elt)
-      this.indexElementByStringSet(this.eltsByName, this.tokenize(reifiedName), elt)
+      this.indexElementByString(this.eltsByName, reifiedName, elt);
+      this.indexElementByStringSet(
+        this.eltsByName,
+        this.tokenize(reifiedName),
+        elt
+      );
     }
 
     if (elt.GlobalId && elt.GlobalId.value) {
-      this.indexElementByString(this.eltsByGlobalId, elt.GlobalId.value, elt)
+      this.indexElementByString(this.eltsByGlobalId, elt.GlobalId.value, elt);
     }
 
-    const description = Ifc.getDescription(elt)
+    const description = Ifc.getDescription(elt);
     if (description) {
-      this.indexElementByStringSet(this.eltsByGlobalId,
-          this.tokenize(description),
-          elt)
+      this.indexElementByStringSet(
+        this.eltsByGlobalId,
+        this.tokenize(description),
+        elt
+      );
     }
 
     // Recurse.
     for (const child of elt.children) {
-      this.indexElement(model, child)
+      this.indexElement(model, child);
     }
   }
-
 
   /**
    * Returns a set of word tokens from the string.
@@ -66,7 +74,7 @@ export default class SearchIndex {
    * @return {Set} token
    */
   tokenize(str) {
-    return new Set(str.match(/(\w+)/g))
+    return new Set(str.match(/(\w+)/g));
   }
 
   /**
@@ -77,11 +85,11 @@ export default class SearchIndex {
    * @return {object} The index set.
    */
   findCreateIndexSet(index, key) {
-    let set = index[key]
+    let set = index[key];
     if (set === undefined) {
-      set = index[key] = new Set()
+      set = index[key] = new Set();
     }
-    return set
+    return set;
   }
 
   /**
@@ -92,8 +100,8 @@ export default class SearchIndex {
    * @param {object} elt
    */
   indexElementByString(index, key, elt) {
-    this.findCreateIndexSet(index, key).add(elt)
-    this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
+    this.findCreateIndexSet(index, key).add(elt);
+    this.findCreateIndexSet(index, key.toLowerCase()).add(elt);
   }
 
   /**
@@ -105,16 +113,16 @@ export default class SearchIndex {
    */
   indexElementByStringSet(index, strSet, elt) {
     for (const str of strSet) {
-      this.indexElementByString(index, str, elt)
+      this.indexElementByString(index, str, elt);
     }
   }
 
   /** Clear all entries in the search index. */
   clearIndex() {
-    deleteProperties(this.eltsByType)
-    deleteProperties(this.eltsByName)
-    deleteProperties(this.eltsByGlobalId)
-    deleteProperties(this.eltsByText)
+    deleteProperties(this.eltsByType);
+    deleteProperties(this.eltsByName);
+    deleteProperties(this.eltsByGlobalId);
+    deleteProperties(this.eltsByText);
   }
 
   /**
@@ -126,45 +134,47 @@ export default class SearchIndex {
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {
-      results = results.filter((elt) => elt !== null &&
-                               elt !== undefined &&
-                               typeof elt.expressID === 'number' &&
-                               !isNaN(elt.expressID))
-      return results.map((elt) => elt.expressID)
-    }
+      results = results.filter(
+        (elt) =>
+          elt !== null &&
+          elt !== undefined &&
+          typeof elt.expressID === "number" &&
+          !isNaN(elt.expressID)
+      );
+      return results.map((elt) => elt.expressID);
+    };
 
-    const resultSet = new Set()
+    const resultSet = new Set();
     const addAll = (other) => {
       if (other) {
         for (const o of other) {
-          resultSet.add(o)
+          resultSet.add(o);
         }
       }
+    };
+
+    if (query.startsWith(":") && !query.startsWith("::")) {
+      query = `::**[${query.substring(1)}]`;
     }
 
-    if (query.startsWith(':') && !query.startsWith('::')) {
-      query = `::**[${query.substring(1)}]`
-    }
+    debug().log(`SearchIndex#search: query rewrite: ${query}`);
 
-    debug().log(`SearchIndex#search: query rewrite: ${query}`)
+    const token = query; // TODO(pablo): tokenization
+    debug().log("SearchIndex#search: this: ", this);
 
-    const token = query // TODO(pablo): tokenization
-    debug().log('SearchIndex#search: this: ', this)
+    addAll(this.eltsByName[token]);
+    addAll(this.eltsByType[token]);
 
-    addAll(this.eltsByName[token])
-    addAll(this.eltsByType[token])
+    const lowerToken = token.toLowerCase();
+    addAll(this.eltsByName[lowerToken]);
+    addAll(this.eltsByType[lowerToken]);
 
-    const lowerToken = token.toLowerCase()
-    addAll(this.eltsByName[lowerToken])
-    addAll(this.eltsByType[lowerToken])
+    addAll(this.eltsByGlobalId[token]);
 
-    addAll(this.eltsByGlobalId[token])
+    addAll(this.eltsByText[token]);
 
-    addAll(this.eltsByText[token])
-
-
-    const resultIDs = toExpressIds(Array.from(resultSet))
-    debug().log('result IDs: ', resultIDs)
-    return resultIDs
+    const resultIDs = toExpressIds(Array.from(resultSet));
+    debug().log("result IDs: ", resultIDs);
+    return resultIDs;
   }
 }

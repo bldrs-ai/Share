@@ -89,7 +89,6 @@ function AboutContent({ setIsDialogDisplayed }) {
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-    // margin: "5px 6px",
     listStyleType: "none",
   };
   const linkStyle = {
@@ -227,11 +226,6 @@ function AboutContent({ setIsDialogDisplayed }) {
     </Box>
   );
 }
-
-// TODO
-// "@media (max-width: 900px)": {
-//   marginTop: "-10px",
-// },
 
 export const setPrivacy = (acceptCookies) => {
   if (acceptCookies) {

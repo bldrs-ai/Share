@@ -5,13 +5,12 @@
  * @return {number} integer.
  */
 export function stoi(s) {
-  const i = parseInt(s)
+  const i = parseInt(s);
   if (!isFinite(i)) {
-    throw new Error(`Expected integer, got: ${s}`)
+    throw new Error(`Expected integer, got: ${s}`);
   }
-  return i
+  return i;
 }
-
 
 /**
  * Create a simple key by removing any non alpha-numeric character
@@ -20,9 +19,8 @@ export function stoi(s) {
  * @return {string} The converted result
  */
 export function toKey(str) {
-  return str.replace(/[^a-zA-Z0-9]+/, '')
+  return str.replace(/[^a-zA-Z0-9]+/, "");
 }
-
 
 /**
  * Check if the string is a number
@@ -31,13 +29,14 @@ export function toKey(str) {
  * @return {boolean} true if the string is a number
  */
 export function isNumeric(str) {
-  if (typeof str !== 'string') {
-    return false
+  if (typeof str !== "string") {
+    return false;
   }
-  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
-         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+  return (
+    !isNaN(str) && // use type coercion to parse the _entirety_ of the string
+    !isNaN(parseFloat(str))
+  ); // ...and ensure strings of whitespace fail
 }
-
 
 /**
  * @param {string} str
@@ -45,17 +44,17 @@ export function isNumeric(str) {
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
-  const urlRegex = new RegExp(/https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
-  const urls = str.match(urlRegex)
+  const urlRegex = new RegExp(/https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi);
+  const urls = str.match(urlRegex);
   if (urls === null) {
-    return []
+    return [];
   }
   return urls.filter((url) => {
     try {
-      new URL(url)
-      return true
+      new URL(url);
+      return true;
     } catch {
-      return false
+      return false;
     }
-  })
+  });
 }

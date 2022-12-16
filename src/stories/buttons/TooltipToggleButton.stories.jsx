@@ -1,14 +1,13 @@
-import React from 'react'
-import {TooltipToggleButton} from '../../Components/Buttons'
-import {AddCircle, ArrowBack, ArrowForward, Check} from '@mui/icons-material'
-
+import React from "react";
+import { TooltipToggleButton } from "../../Components/Buttons";
+import { AddCircle, ArrowBack, ArrowForward, Check } from "@mui/icons-material";
 
 export default {
-  title: 'BLDRS UI/Buttons/TooltipToggleButton',
+  title: "BLDRS UI/Buttons/TooltipToggleButton",
   component: TooltipToggleButton,
   argTypes: {
     icon: {
-      options: ['add', 'back', 'check', 'forward'],
+      options: ["add", "back", "check", "forward"],
       mapping: {
         add: <AddCircle />,
         back: <ArrowBack />,
@@ -16,64 +15,60 @@ export default {
         forward: <ArrowForward />,
       },
       control: {
-        type: 'select',
+        type: "select",
       },
-      defaultValue: 'check',
+      defaultValue: "check",
     },
 
     onClick: {
-      action: 'clicked',
+      action: "clicked",
     },
 
     placement: {
       control: {
-        type: 'select',
+        type: "select",
       },
       options: {
-        'bottom-end': 'bottom-end',
-        'bottom-start': 'bottom-start',
-        'bottom': 'bottom',
-        'left-end': 'left-end',
-        'left-start': 'left-start',
-        'left': 'left',
-        'right-end': 'right-end',
-        'right-start': 'right-start',
-        'right': 'right',
-        'top-end': 'top-end',
-        'top-start': 'top-start',
-        'top': 'top',
+        "bottom-end": "bottom-end",
+        "bottom-start": "bottom-start",
+        bottom: "bottom",
+        "left-end": "left-end",
+        "left-start": "left-start",
+        left: "left",
+        "right-end": "right-end",
+        "right-start": "right-start",
+        right: "right",
+        "top-end": "top-end",
+        "top-start": "top-start",
+        top: "top",
       },
-      defaultValue: 'left',
+      defaultValue: "left",
     },
 
     size: {
       control: {
-        type: 'select',
+        type: "select",
       },
       options: {
-        small: 'small',
-        medium: 'medium',
-        large: 'large',
+        small: "small",
+        medium: "medium",
+        large: "large",
       },
-      defaultValue: 'medium',
+      defaultValue: "medium",
     },
   },
   args: {
-    title: 'Only Appears on Hover',
+    title: "Only Appears on Hover",
   },
   parameters: {
     backgrounds: {
-      default: 'dark',
+      default: "dark",
     },
   },
-}
+};
 
 const Template = (args) => {
-  return (
-    <TooltipToggleButton
-      {...args}
-    />
-  )
-}
+  return <TooltipToggleButton {...args} />;
+};
 
-export const Button = Template.bind({})
+export const Button = Template.bind({});

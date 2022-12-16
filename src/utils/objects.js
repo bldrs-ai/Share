@@ -6,11 +6,10 @@
 export function deleteProperties(obj) {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      delete obj[key]
+      delete obj[key];
     }
   }
 }
-
 
 /**
  * @param {object} obj
@@ -19,5 +18,8 @@ export function deleteProperties(obj) {
 export function isObject(obj) {
   // Search for Daan in:
   // https://stackoverflow.com/questions/8511281/check-if-a-value-is-an-object-in-javascript
-  return obj === Object(obj) && Object.prototype.toString.call(obj) !== '[object Array]'
+  return (
+    obj === Object(obj) &&
+    Object.prototype.toString.call(obj) !== "[object Array]"
+  );
 }
