@@ -18,7 +18,7 @@ import { useIsMobile } from "../Hooks";
 import { NOTE_PREFIX } from "./Notes";
 import CameraIcon from "../../assets/2D_Icons/Camera.svg";
 import ShareIcon from "../../assets/2D_Icons/Share.svg";
-import { Box } from "@mui/material";
+import { Box, useTheme } from "@mui/material";
 
 /**
  * Note card
@@ -58,7 +58,7 @@ export default function NoteCard({
   const selected = selectedNoteId === id;
   const bodyWidthChars = 80;
   const textOverflow = body.length > bodyWidthChars;
-  const theme = useContext(ColorModeContext);
+  const colorTheme = useContext(ColorModeContext);
   const embeddedCameraParams = findUrls(body).filter((url) => {
     if (url.indexOf("#") === -1) {
       return false;
@@ -117,11 +117,14 @@ export default function NoteCard({
     setTimeout(() => setSnackMessage(null), pauseTimeMs);
   }
 
+  const tempTheme = useTheme();
+  console.log("tempTheme: ", tempTheme);
+
   return (
     <Box
       sx={(theme) => ({
         marginBottom: "1em",
-        backgroundColor: theme.isDay() ? "white" : "#383838",
+        backgroundColor: colorTheme.isDay() ? "white" : "#383838",
         borderRadius: "5px",
         width: "100%",
         "@media (max-width: 900px)": {
@@ -158,7 +161,7 @@ export default function NoteCard({
           lineHeight: "1.3em",
           // Restore link styling for notes and comments
           "& a": {
-            color: theme.isDay() ? "black" : "lightGrey",
+            color: colorTheme.isDay() ? "black" : "lightGrey",
             textDecoration: "underline",
           },
           "& img": {
