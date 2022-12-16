@@ -1,13 +1,12 @@
-import React, {useEffect, useState} from 'react'
-import clsx from 'clsx'
-import PropTypes from 'prop-types'
-import {useNavigate} from 'react-router-dom'
-import {reifyName} from '@bldrs-ai/ifclib'
-import Box from '@mui/material/Box'
-import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
-import Typography from '@mui/material/Typography'
-import {computeElementPathIds} from '../utils/TreeUtils'
-
+import React, { useEffect, useState } from "react";
+import clsx from "clsx";
+import PropTypes from "prop-types";
+import { useNavigate } from "react-router-dom";
+import { reifyName } from "@bldrs-ai/ifclib";
+import Box from "@mui/material/Box";
+import TreeItem, { useTreeItem } from "@mui/lab/TreeItem";
+import Typography from "@mui/material/Typography";
+import { computeElementPathIds } from "../utils/TreeUtils";
 
 const NavTreePropTypes = {
   /**
@@ -38,8 +37,7 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
-}
-
+};
 
 /**
  * @param {object} model IFC model
@@ -48,11 +46,7 @@ const NavTreePropTypes = {
  *   elements, recursively grown as passed down the tree
  * @return {object} React component
  */
-export default function NavTree({
-  model,
-  element,
-  pathPrefix,
-}) {
+export default function NavTree({ model, element, pathPrefix }) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
       classes,
@@ -62,7 +56,7 @@ export default function NavTree({
       icon: iconProp,
       expansionIcon,
       displayIcon,
-    } = props
+    } = props;
 
     const {
       disabled,
@@ -72,30 +66,32 @@ export default function NavTree({
       handleExpansion,
       handleSelection,
       preventSelection,
-    } = useTreeItem(nodeId)
+    } = useTreeItem(nodeId);
 
-    const icon = iconProp || expansionIcon || displayIcon
+    const icon = iconProp || expansionIcon || displayIcon;
 
-    const handleMouseDown = (event) => preventSelection(event)
+    const handleMouseDown = (event) => preventSelection(event);
 
-    const handleExpansionClick = (event) => handleExpansion(event)
+    const handleExpansionClick = (event) => handleExpansion(event);
 
-    const [selectedElement, setSelectedElement] = useState(null)
+    const [selectedElement, setSelectedElement] = useState(null);
 
     const handleSelectionClick = (event) => {
-      handleSelection(event)
-      setSelectedElement(element)
-    }
+      handleSelection(event);
+      setSelectedElement(element);
+    };
 
-    const navigate = useNavigate()
+    const navigate = useNavigate();
 
     useEffect(() => {
       if (selectedElement) {
-        const newPath =
-              `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
-        navigate(newPath)
+        const newPath = `${pathPrefix}/${computeElementPathIds(
+          element,
+          (elt) => elt.expressID
+        ).join("/")}`;
+        navigate(newPath);
       }
-    }, [selectedElement, navigate])
+    }, [selectedElement, navigate]);
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -111,48 +107,45 @@ export default function NavTree({
       >
         <Box
           onClick={handleExpansionClick}
-          sx={{margin: '0px 14px 0px 14px'}}
+          sx={{ margin: "0px 14px 0px 14px" }}
         >
           {icon}
         </Box>
-        <Typography
-          variant='tree'
-          onClick={handleSelectionClick}
-        >
+        <Typography variant="tree" onClick={handleSelectionClick}>
           {label}
         </Typography>
       </div>
-    )
-  })
+    );
+  });
 
-  CustomContent.propTypes = NavTreePropTypes
+  CustomContent.propTypes = NavTreePropTypes;
 
   const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={CustomContent} {...props} />
-  }
+    return <TreeItem ContentComponent={CustomContent} {...props} />;
+  };
 
-  let i = 0
+  let i = 0;
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
-      label={reifyName({properties: model}, element)}
+      label={reifyName({ properties: model }, element)}
     >
-      {element.children && element.children.length > 0 ?
-        element.children.map((child) => {
-          const childKey = `${pathPrefix}-${i++}`
-          return (
-            <React.Fragment key={childKey}>
-              <NavTree
-                model={model}
-                element={child}
-                pathPrefix={pathPrefix}
-              />
-            </React.Fragment>
-          )
-        }) :
-        null}
+      {element.children && element.children.length > 0
+        ? element.children.map((child) => {
+            const childKey = `${pathPrefix}-${i++}`;
+            return (
+              <React.Fragment key={childKey}>
+                <NavTree
+                  model={model}
+                  element={child}
+                  pathPrefix={pathPrefix}
+                />
+              </React.Fragment>
+            );
+          })
+        : null}
     </CustomTreeItem>
-  )
+  );
 }
