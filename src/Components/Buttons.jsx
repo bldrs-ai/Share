@@ -31,7 +31,7 @@ export function TooltipIconButton({title, onClick, icon, placement = 'left', sel
         >
           {icon}
         </ToggleButton> :
-        <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
+        <Tooltip title={title} describeChild placement={placement} data-test-id="test-button">
           <ToggleButton
             selected={selected}
             onClick={onClick}

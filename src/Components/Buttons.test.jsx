@@ -11,7 +11,7 @@ describe('<TooltipIconButton />', () => {
     /* eslint-disable no-empty-function */
     const rendered = render(<MockComponent>
       <TooltipIconButton
-        data-testid={'test-button'}
+        data-test-id={'test-button'}
         title={'Hello. Is it me you\'re looking for?'}
         onClick={() => {}}
         icon={<QuestionIcon/>}

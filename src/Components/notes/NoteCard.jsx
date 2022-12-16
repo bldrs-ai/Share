@@ -141,7 +141,7 @@ export default function NoteCard({
         tabIndex={0}
         onClick={() => isComment ? null : selectCard()}
         onKeyPress={() => isComment ? null : selectCard()}
-        data-testid="selectionContainer"
+        data-test-id="selectionContainer"
       >
         <CardTitle
           title={title}
