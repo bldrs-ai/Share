@@ -2,7 +2,6 @@ import React, { useContext, useEffect, useState } from "react";
 import { Color, MeshLambertMaterial } from "three";
 import { IfcViewerAPI } from "web-ifc-viewer";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
-import { makeStyles } from "@mui/styles";
 import * as Privacy from "../privacy/Privacy";
 import Alert from "../Components/Alert";
 import debug from "../utils/debug";
@@ -26,6 +25,7 @@ import { hasValidUrlParams as urlHasCameraParams } from "../Components/CameraCon
 import { useIsMobile } from "../Components/Hooks";
 import SearchIndex from "./SearchIndex";
 import BranchesControl from "../Components/BranchesControl";
+import { Box } from "@mui/material";
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -34,6 +34,7 @@ import BranchesControl from "../Components/BranchesControl";
 const searchIndex = new SearchIndex();
 
 let count = 0;
+
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
@@ -63,7 +64,6 @@ export default function CadView({
 
   // UI elts
   const colorModeContext = useContext(ColorModeContext);
-  const classes = useStyles();
   const [showSearchBar, setShowSearchBar] = useState(false);
   const [alert, setAlert] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -467,16 +467,51 @@ export default function CadView({
   };
 
   return (
-    <div className={classes.root} data-model-ready={modelReady}>
-      <div className={classes.view} id="viewer-container"></div>
-      <div className={classes.menusWrapper}>
+    <Box
+      sx={{
+        position: "absolute",
+        top: "0px",
+        left: "0px",
+        minWidth: "100vw",
+        minHeight: "100vh",
+        "@media (max-width: 900px)": {
+          height: " calc(100vh - calc(100vh - 100%))",
+          minHeight: "-webkit-fill-available",
+        },
+      }}
+      data-model-ready={modelReady}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: "0px",
+          left: "0px",
+          textAlign: "center",
+          width: "100vw",
+          height: "100vh",
+          margin: "auto",
+        }}
+        id="viewer-container"
+      ></Box>
+      <Box>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={"info"}
           open={isLoading || snackMessage !== null}
         />
         {showSearchBar && (
-          <div className={classes.topLeftContainer}>
+          <Box
+            sx={{
+              position: "absolute",
+              top: `30px`,
+              left: "20px",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "flex-start",
+              alignItems: "flex-start",
+              maxHeight: "95%",
+            }}
+          >
             <SearchBar fileOpen={loadLocalFile} />
             {modelPath.repo !== undefined && (
               <BranchesControl location={location} />
@@ -496,21 +531,51 @@ export default function CadView({
                 }
               />
             )}
-          </div>
+          </Box>
         )}
 
         <Logo onClick={() => navToDefault(navigate, appPrefix)} />
-        <div
-          className={
-            isDrawerOpen ? classes.operationsGroupOpen : classes.operationsGroup
+        <Box
+          sx={
+            isDrawerOpen
+              ? {
+                  position: "fixed",
+                  top: 0,
+                  right: "31em",
+                  border: "none",
+                  zIndex: 0,
+                  "@media (max-width: 900px)": {
+                    right: 0,
+                    height: "50%",
+                  },
+                  "@media (max-width: 350px)": {
+                    top: "120px",
+                    height: "50%",
+                  },
+                }
+              : {
+                  position: "fixed",
+                  top: 0,
+                  right: 0,
+                  border: "none",
+                  zIndex: 0,
+                  "@media (max-width: 900px)": {
+                    right: 0,
+                    height: "50%",
+                  },
+                  "@media (max-width: 350px)": {
+                    top: "75px",
+                    height: "50%",
+                  },
+                }
           }
         >
           {viewer && <OperationsGroup unSelectItem={unSelectItems} />}
-        </div>
+        </Box>
         {alert}
-      </div>
+      </Box>
       <SideDrawerWrapper />
-    </div>
+    </Box>
   );
 }
 
@@ -563,79 +628,3 @@ function initViewer(pathPrefix, backgroundColorStr = "#abcdef") {
   v.container = container;
   return v;
 }
-
-const useStyles = makeStyles({
-  root: {
-    position: "absolute",
-    top: "0px",
-    left: "0px",
-    minWidth: "100vw",
-    minHeight: "100vh",
-    "@media (max-width: 900px)": {
-      height: " calc(100vh - calc(100vh - 100%))",
-      minHeight: "-webkit-fill-available",
-    },
-  },
-  topLeftContainer: {
-    position: "absolute",
-    top: `30px`,
-    left: "20px",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "flex-start",
-    alignItems: "flex-start",
-    maxHeight: "95%",
-  },
-  view: {
-    position: "absolute",
-    top: "0px",
-    left: "0px",
-    textAlign: "center",
-    width: "100vw",
-    height: "100vh",
-    margin: "auto",
-  },
-  operationsGroup: {
-    position: "fixed",
-    top: 0,
-    right: 0,
-    border: "none",
-    zIndex: 0,
-    "@media (max-width: 900px)": {
-      right: 0,
-      height: "50%",
-    },
-    "@media (max-width: 350px)": {
-      top: "75px",
-      height: "50%",
-    },
-  },
-  operationsGroupOpen: {
-    position: "fixed",
-    top: 0,
-    right: "31em",
-    border: "none",
-    zIndex: 0,
-    "@media (max-width: 900px)": {
-      right: 0,
-      height: "50%",
-    },
-    "@media (max-width: 350px)": {
-      top: "120px",
-      height: "50%",
-    },
-  },
-  baseGroup: {
-    position: "fixed",
-    bottom: "20px",
-    right: "20px",
-  },
-  baseGroupOpen: {
-    position: "fixed",
-    bottom: "20px",
-    right: "32em",
-    "@media (max-width: 900px)": {
-      display: "none",
-    },
-  },
-});
