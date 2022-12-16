@@ -57,8 +57,9 @@ class ApiEventsRegistry {
     }
     this.selectElementsDebounce = true
     this.deselectElementsDebounce = true
-    useStore.setState({selectedElements: expressIds})
-
+    useStore.setState({ selectedElements: expressIds}) 
+    useStore.setState({ selectedElement: expressIds.length == 1 ? expressIds[0] : null }) 
+    
     return this.apiConnection.successfulResponse({})
   }
 
@@ -74,6 +75,7 @@ class ApiEventsRegistry {
    * @return {string[]} array of GlobalIds.
    */
   getSelectedElementIds(state) {
+    if(state.selectedElements == null) return [];
     const elementIds = []
     for (const expressId of state.selectedElements) {
       const globalId = this.searchIndex.getGlobalIdByExpressId(expressId)
@@ -92,6 +94,10 @@ class ApiEventsRegistry {
    * @return {boolean}
    */
   selectedElementIdsHasChanged(state, lastSelectedElementIds) {
+    if((state.selectedElements == null) != (lastSelectedElementIds == null)) {
+      return true;
+    }
+
     // @source https://github.com/30-seconds/30-seconds-blog/blob/master/blog_posts/javascript-array-comparison.md
     const equals = (a, b) => {
       if (a.length !== b.length) {
