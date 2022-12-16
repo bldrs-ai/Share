@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { decodeIFCString } from "@bldrs-ai/ifclib";
-import { Box, Switch, Typography } from "@mui/material";
+import Switch from "@mui/material/Switch";
+import Typography from "@mui/material/Typography";
+import { makeStyles, useTheme } from "@mui/styles";
 import useStore from "../../store/useStore";
 import { createPropertyTable } from "../../utils/itemProperties";
 import ExpansionPanel from "../ExpansionPanel";
@@ -14,17 +16,18 @@ export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null);
   const [psetsList, setPsetsList] = useState(null);
   const [expandAll, setExpandAll] = useState(false);
+  const classes = useStyles(useTheme());
   const model = useStore((state) => state.modelStore);
   const element = useStore((state) => state.selectedElement);
 
   useEffect(() => {
     (async () => {
       setPropTable(await createPropertyTable(model, element));
-      setPsetsList(await createPsetsList(model, element, expandAll));
+      setPsetsList(await createPsetsList(model, element, classes, expandAll));
     })();
-  }, [model, element, expandAll]);
+  }, [model, element, classes, expandAll]);
   return (
-    <Box>
+    <div className={classes.propsContainer}>
       {propTable}
       <div className={classes.psetContainer}>
         {psetsList && psetsList.props.children.length > 0 && (
@@ -38,7 +41,7 @@ export default function ItemProperties() {
         )}
         {psetsList}
       </div>
-    </Box>
+    </div>
   );
 }
 
@@ -49,7 +52,7 @@ export default function ItemProperties() {
  * @param {boolean} expandAll React state expansion toggle
  * @return {object} A list of property sets react component
  */
-async function createPsetsList(model, element, expandAll) {
+async function createPsetsList(model, element, classes, expandAll) {
   const psets = await model.getPropertySets(element.expressID);
   return (
     <ul className={classes.psetsList}>
