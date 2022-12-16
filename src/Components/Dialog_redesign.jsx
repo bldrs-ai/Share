@@ -98,7 +98,7 @@ export function OpenDialogBodyContent() {
         >
           Recommended Method
         </Box>
-        <InputBar startAdorment={<UilGithub />} />
+        <InputBar startAdornment={<UilGithub />} />
         <Box
           sx={{
             marginTop: "10px",
