@@ -1,15 +1,14 @@
-import React, {useEffect} from 'react'
-import {useLocation} from 'react-router-dom'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
+import React, { useEffect } from "react";
+import { useLocation } from "react-router-dom";
+import useStore from "../store/useStore";
+import debug from "../utils/debug";
 import {
   addHashListener,
   addHashParams,
   getHashParams,
   removeHashParams,
-} from '../utils/location'
-import {roundCoord} from '../utils/math'
-
+} from "../utils/location";
+import { roundCoord } from "../utils/math";
 
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
 // handlers below to function, but we also decided not to display it
@@ -23,29 +22,23 @@ import {roundCoord} from '../utils/math'
  * @return {object} React component
  */
 export default function CameraControl() {
-  const viewer = useStore((state) => state.viewerStore)
-  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
-  const setCameraControls = useStore((state) => state.setCameraControls)
-  const location = useLocation()
-
+  const viewer = useStore((state) => state.viewerStore);
+  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls;
+  const setCameraControls = useStore((state) => state.setCameraControls);
+  const location = useLocation();
 
   useEffect(() => {
-    setCameraControls(cameraControls)
-    onHash(location, cameraControls)
-    onLoad(location, cameraControls)
-  }, [location, cameraControls, setCameraControls])
-
+    setCameraControls(cameraControls);
+    onHash(location, cameraControls);
+    onLoad(location, cameraControls);
+  }, [location, cameraControls, setCameraControls]);
 
   // NOTE: NOT DISPLAYED
-  return (
-    <div style={{display: 'none'}}>Camera</div>
-  )
+  return <div style={{ display: "none" }}>Camera</div>;
 }
 
-
 /** The prefix to use for camera coordinate in the URL hash. */
-export const CAMERA_PREFIX = 'c'
-
+export const CAMERA_PREFIX = "c";
 
 /**
  * Set camera position from window location hash and add listener for
@@ -55,10 +48,9 @@ export const CAMERA_PREFIX = 'c'
  * @param {object} cameraControls obtained from the viewer
  */
 function onLoad(location, cameraControls) {
-  debug().log('CameraControl#onLoad')
-  addHashListener('camera', () => onHash(location, cameraControls))
+  debug().log("CameraControl#onLoad");
+  addHashListener("camera", () => onHash(location, cameraControls));
 }
-
 
 // exported for testing only
 /**
@@ -69,13 +61,12 @@ function onLoad(location, cameraControls) {
  * @param {object} cameraControls obtained from the viewer
  */
 export function onHash(location, cameraControls) {
-  const encodedParams = getHashParams(location, CAMERA_PREFIX)
+  const encodedParams = getHashParams(location, CAMERA_PREFIX);
   if (encodedParams === undefined) {
-    return
+    return;
   }
-  setCameraFromParams(encodedParams, cameraControls)
+  setCameraFromParams(encodedParams, cameraControls);
 }
-
 
 /**
  * Set the camera position
@@ -86,25 +77,23 @@ export function onHash(location, cameraControls) {
 export function setCameraFromParams(encodedParams, cameraControls) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
   if (!cameraControls) {
-    return
+    return;
   }
-  const coords = parseHashParams(encodedParams)
+  const coords = parseHashParams(encodedParams);
   if (coords) {
-    cameraControls.setPosition(coords[0], coords[1], coords[2], true)
-    const extendedCoordsSize = 6
+    cameraControls.setPosition(coords[0], coords[1], coords[2], true);
+    const extendedCoordsSize = 6;
     if (coords.length === extendedCoordsSize) {
-      cameraControls.setTarget(coords[3], coords[4], coords[5], true)
+      cameraControls.setTarget(coords[3], coords[4], coords[5], true);
     }
   }
-  addCameraUrlParams(cameraControls)
+  addCameraUrlParams(cameraControls);
 }
 
-
-const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
-const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
-const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
-const paramRegex = new RegExp(paramPattern)
-
+const floatPattern = "(-?\\d+(?:\\.\\d+)?)";
+const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`;
+const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`;
+const paramRegex = new RegExp(paramPattern);
 
 // Exported for testing
 /**
@@ -112,42 +101,52 @@ const paramRegex = new RegExp(paramPattern)
  * @return {object|undefined} The coordinates if present and valid else undefined
  */
 export function parseHashParams(encodedParams) {
-  const match = encodedParams.match(paramRegex)
+  const match = encodedParams.match(paramRegex);
   const stof = (str) => {
-    const floatDigits = 2
-    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
+    const floatDigits = 2;
+    const val = parseFloat(parseFloat(str).toFixed(floatDigits));
     if (isFinite(val)) {
-      const rounded = parseFloat(val.toFixed(0))
-      return rounded === val ? rounded : val
+      const rounded = parseFloat(val.toFixed(0));
+      return rounded === val ? rounded : val;
     } else {
-      console.warn('Invalid coordinate: ', str)
+      console.warn("Invalid coordinate: ", str);
     }
-  }
-  debug().log('CameraControl#onHash: match: ', match)
-  if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
-    const x = stof(match[1])
-    const y = stof(match[2])
-    const z = stof(match[3])
-    if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
-      return [x, y, z]
+  };
+  debug().log("CameraControl#onHash: match: ", match);
+  if (
+    match &&
+    match[1] !== undefined &&
+    match[2] !== undefined &&
+    match[3] !== undefined
+  ) {
+    const x = stof(match[1]);
+    const y = stof(match[2]);
+    const z = stof(match[3]);
+    if (
+      match[4] === undefined &&
+      match[5] === undefined &&
+      match[6] === undefined
+    ) {
+      return [x, y, z];
     } else {
-      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])]
+      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])];
     }
   } else {
-    debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)
+    debug().warn(
+      "CameraControl#onHash, no camera coordinate present in hash: ",
+      location.hash
+    );
   }
 }
-
 
 /** @return {boolean} True iff the camera hash params are present. */
 export function hasValidUrlParams() {
-  const encoded = getHashParams(window.location, CAMERA_PREFIX)
+  const encoded = getHashParams(window.location, CAMERA_PREFIX);
   if (encoded && parseHashParams(encoded)) {
-    return true
+    return true;
   }
-  return false
+  return false;
 }
-
 
 /**
  * Adds camera coords to url.
@@ -157,22 +156,21 @@ export function hasValidUrlParams() {
 export function addCameraUrlParams(cameraControls) {
   // addCameraUrlParams is accessed from the issue card and it is undefined on the first render
   if (!cameraControls) {
-    return
+    return;
   }
-  const position = cameraControls.getPosition()
-  const floatDigits = 2
-  let camArr = roundCoord(...position, floatDigits)
-  const target = cameraControls.getTarget()
+  const position = cameraControls.getPosition();
+  const floatDigits = 2;
+  let camArr = roundCoord(...position, floatDigits);
+  const target = cameraControls.getTarget();
   if (target.x === 0 && target.y === 0 && target.z === 0) {
-    camArr = camArr.concat(0)
+    camArr = camArr.concat(0);
   } else {
-    camArr = camArr.concat(roundCoord(...target, floatDigits))
+    camArr = camArr.concat(roundCoord(...target, floatDigits));
   }
-  addHashParams(window.location, CAMERA_PREFIX, camArr)
+  addHashParams(window.location, CAMERA_PREFIX, camArr);
 }
-
 
 /** Removes camera params from the URL if present */
 export function removeCameraUrlParams() {
-  removeHashParams(window.location, CAMERA_PREFIX)
+  removeHashParams(window.location, CAMERA_PREFIX);
 }
