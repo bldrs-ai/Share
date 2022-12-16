@@ -2,7 +2,6 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
@@ -11,17 +10,22 @@ import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/side.drawer/SideDrawer'
+import SideDrawerWrapper, {
+  SIDE_DRAWER_WIDTH,
+} from '../Components/side.drawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {assertDefined} from '../utils/assert'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {
+  computeElementPathIds,
+  setupLookupAndParentLinks,
+} from '../utils/TreeUtils'
 import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
-
+import {Box} from '@mui/material'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -29,8 +33,8 @@ import BranchesControl from '../Components/BranchesControl'
  */
 const searchIndex = new SearchIndex()
 
-
 let count = 0
+
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
@@ -60,7 +64,6 @@ export default function CadView({
 
   // UI elts
   const colorModeContext = useContext(ColorModeContext)
-  const classes = useStyles()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -78,7 +81,6 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const [modelReady, setModelReady] = useState(false)
 
-
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
   // programmatic navigation (e.g. clicking element links).
@@ -87,7 +89,6 @@ export default function CadView({
     onModelPath()
   }, [modelPath])
 
-
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
@@ -95,13 +96,11 @@ export default function CadView({
     })()
   }, [viewer])
 
-
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
-
 
   // Watch for path changes within the model.
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
@@ -119,7 +118,6 @@ export default function CadView({
   }, [location, model])
   /* eslint-enable */
 
-
   /**
    * Begin setup for new model. Turn off nav, search and item and init
    * new viewer.
@@ -132,14 +130,15 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) ||
+        '0xabcdef',
+    )
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
   }
-
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
@@ -168,14 +167,13 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
     addThemeListener()
-    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    const pathToLoad = modelPath.gitpath || installPrefix + modelPath.filepath
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
 
     setModelReady(true)
   }
-
 
   const isMobile = useIsMobile()
   // Shrink the scene viewer when drawer is open.  This recenters the
@@ -184,14 +182,20 @@ export default function CadView({
   // TODO(pablo): add render testing
   useEffect(() => {
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
+      viewer.container.style.width = isDrawerOpen ?
+        `calc(100% - ${SIDE_DRAWER_WIDTH})` :
+        '100%'
       viewer.context.resize()
     }
   }, [isDrawerOpen, isMobile, viewer])
 
-
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(
+        <Alert
+          onCloseCb={() => navToDefault(navigate, appPrefix)}
+          message={msg}
+        />,
+    )
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -206,7 +210,9 @@ export default function CadView({
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      filepath = `blob:${l.protocol}//${
+        l.hostname + (l.port ? `:${l.port}` : '')
+      }/${filepath}`
     }
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
@@ -227,8 +233,9 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
-        })
+          setAlertMessage(`Could not load file: ${filepath}`)
+        },
+    )
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
@@ -251,7 +258,6 @@ export default function CadView({
     debug().error('CadView#loadIfc: Model load failed!')
   }
 
-
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
     const viewerContainer = document.getElementById('viewer-container')
@@ -271,7 +277,6 @@ export default function CadView({
     viewerContainer.appendChild(fileInput)
     fileInput.click()
   }
-
 
   /**
    * Analyze loaded IFC model to configure UI elements.
@@ -300,7 +305,6 @@ export default function CadView({
     }
   }
 
-
   /**
    * Index the model starting at the given rootElt, clearing any
    * previous index data and parses any incoming search params in the
@@ -319,7 +323,6 @@ export default function CadView({
     setShowSearchBar(true)
   }
 
-
   /**
    * Search for the query in the index and select matching items in UI elts.
    */
@@ -333,7 +336,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -341,7 +344,6 @@ export default function CadView({
       clearSearch()
     }
   }
-
 
   /** Clear active search state and unpick active scene elts. */
   function clearSearch() {
@@ -359,16 +361,16 @@ export default function CadView({
     setLevelInstance(null)
   }
 
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
     resetState()
-    const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    const repoFilePath = modelPath.gitpath ?
+      modelPath.getRepoPath() :
+      modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }
-
 
   /**
    * Pick the given items in the scene.
@@ -387,7 +389,6 @@ export default function CadView({
     }
   }
 
-
   /**
    * Select the items in the NavTree and update ItemProperties.
    * Returns the ids of path parts from root to this elt in spatial
@@ -399,7 +400,10 @@ export default function CadView({
   async function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(
+          `CadView#onElementSelect(${expressId}) missing in table:`,
+          elementsById,
+      )
       return
     }
     await selectItemsInScene([expressId])
@@ -410,7 +414,6 @@ export default function CadView({
     setSelectedElement(props)
     return pathIds
   }
-
 
   /**
    * Extracts the path to the element from the url and selects the element
@@ -428,7 +431,6 @@ export default function CadView({
     }
   }
 
-
   /** Select items in model when they are double-clicked. */
   function setDoubleClickListener() {
     window.ondblclick = async (event) => {
@@ -436,7 +438,9 @@ export default function CadView({
         const item = await viewer.IFC.pickIfcItem(true)
         if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
           const pathIds = await onElementSelect(item.id)
-          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const repoFilePath = modelPath.gitpath ?
+            modelPath.getRepoPath() :
+            modelPath.filepath
           const path = pathIds.join('/')
           navigate(`${pathPrefix}${repoFilePath}/${path}`)
         }
@@ -444,37 +448,75 @@ export default function CadView({
     }
   }
 
-
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
+      if (
+        theme &&
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper
+      ) {
+        const initializedViewer = initViewer(
+            pathPrefix,
+            theme.palette.background.paper,
+        )
+        setViewer(initializedViewer)
+        setViewerStore(initializedViewer)
       }
     })
   }
 
-
   return (
-    <div className={classes.root} data-model-ready={modelReady}>
-      <div className={classes.view} id='viewer-container'></div>
-      <div className={classes.menusWrapper}>
+    <Box
+      sx={{
+        'position': 'absolute',
+        'top': '0px',
+        'left': '0px',
+        'minWidth': '100vw',
+        'minHeight': '100vh',
+        '@media (max-width: 900px)': {
+          height: ' calc(100vh - calc(100vh - 100%))',
+          minHeight: '-webkit-fill-available',
+        },
+      }}
+      data-model-ready={modelReady}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          textAlign: 'center',
+          width: '100vw',
+          height: '100vh',
+          margin: 'auto',
+        }}
+        id="viewer-container"
+      ></Box>
+      <Box>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
         {showSearchBar && (
-          <div className={classes.topLeftContainer}>
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />
-            {
-              modelPath.repo !== undefined &&
-              <BranchesControl location={location}/>
-            }
-            {isNavPanelOpen &&
+          <Box
+            sx={{
+              position: 'absolute',
+              top: `30px`,
+              left: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+              maxHeight: '95%',
+            }}
+          >
+            <SearchBar fileOpen={loadLocalFile} />
+            {modelPath.repo !== undefined && (
+              <BranchesControl location={location} />
+            )}
+            {isNavPanelOpen && (
               <NavPanel
                 model={model}
                 element={rootElement}
@@ -482,30 +524,60 @@ export default function CadView({
                 expandedElements={expandedElements}
                 setExpandedElements={setExpandedElements}
                 pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                  pathPrefix +
+                  (modelPath.gitpath ?
+                    modelPath.getRepoPath() :
+                    modelPath.filepath)
                 }
               />
-            }
-          </div>
+            )}
+          </Box>
         )}
 
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
-        <div className={isDrawerOpen ?
-                        classes.operationsGroupOpen :
-                        classes.operationsGroup}
+        <Logo onClick={() => navToDefault(navigate, appPrefix)} />
+        <Box
+          sx={
+            isDrawerOpen ?
+              {
+                'position': 'fixed',
+                'top': 0,
+                'right': '31em',
+                'border': 'none',
+                'zIndex': 0,
+                '@media (max-width: 900px)': {
+                  right: 0,
+                  height: '50%',
+                },
+                '@media (max-width: 350px)': {
+                  top: '120px',
+                  height: '50%',
+                },
+              } :
+              {
+                'position': 'fixed',
+                'top': 0,
+                'right': 0,
+                'border': 'none',
+                'zIndex': 0,
+                '@media (max-width: 900px)': {
+                  right: 0,
+                  height: '50%',
+                },
+                '@media (max-width: 350px)': {
+                  top: '75px',
+                  height: '50%',
+                },
+              }
+          }
         >
-          {viewer &&
-            <OperationsGroup
-              unSelectItem={unSelectItems}
-            />}
-        </div>
+          {viewer && <OperationsGroup unSelectItem={unSelectItems} />}
+        </Box>
         {alert}
-      </div>
+      </Box>
       <SideDrawerWrapper />
-    </div>
+    </Box>
   )
 }
-
 
 /**
  * @param {string} pathPrefix E.g. /share/v/p
@@ -514,7 +586,11 @@ export default function CadView({
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
-  debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
+  debug().log(
+      'CadView#initViewer: pathPrefix: ',
+      pathPrefix,
+      backgroundColorStr,
+  )
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
@@ -552,81 +628,3 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.container = container
   return v
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'position': 'absolute',
-    'top': '0px',
-    'left': '0px',
-    'minWidth': '100vw',
-    'minHeight': '100vh',
-    '@media (max-width: 900px)': {
-      height: ' calc(100vh - calc(100vh - 100%))',
-      minHeight: '-webkit-fill-available',
-    },
-
-  },
-  topLeftContainer: {
-    position: 'absolute',
-    top: `30px`,
-    left: '20px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-    maxHeight: '95%',
-  },
-  view: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    textAlign: 'center',
-    width: '100vw',
-    height: '100vh',
-    margin: 'auto',
-  },
-  operationsGroup: {
-    'position': 'fixed',
-    'top': 0,
-    'right': 0,
-    'border': 'none',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      right: 0,
-      height: '50%',
-    },
-    '@media (max-width: 350px)': {
-      top: '75px',
-      height: '50%',
-    },
-  },
-  operationsGroupOpen: {
-    'position': 'fixed',
-    'top': 0,
-    'right': '31em',
-    'border': 'none',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      right: 0,
-      height: '50%',
-    },
-    '@media (max-width: 350px)': {
-      top: '120px',
-      height: '50%',
-    },
-  },
-  baseGroup: {
-    position: 'fixed',
-    bottom: '20px',
-    right: '20px',
-  },
-  baseGroupOpen: {
-    'position': 'fixed',
-    'bottom': '20px',
-    'right': '32em',
-    '@media (max-width: 900px)': {
-      display: 'none',
-    },
-  },
-})

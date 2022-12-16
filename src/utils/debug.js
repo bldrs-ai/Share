@@ -7,7 +7,6 @@ const DEBUG = 0
 /* eslint-enable no-unused-vars */
 let DEBUG_LEVEL = OFF
 
-
 /**
  * Create debug statement.
  *
@@ -17,7 +16,6 @@ let DEBUG_LEVEL = OFF
 export default function debug(level = INFO) {
   return level >= DEBUG_LEVEL ? console : mockLog
 }
-
 
 /**
  * @param {number} level One of OFF, INFO, DEBUG, ALL.
@@ -29,12 +27,10 @@ export function setDebugLevel(level) {
   DEBUG_LEVEL = level
 }
 
-
 /** Equivalent to setDebugLevel(OFF) */
 export function disableDebug() {
   setDebugLevel(OFF)
 }
-
 
 /**
  * When debugging is turned off, use this mock log object to throw

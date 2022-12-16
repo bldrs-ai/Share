@@ -8,7 +8,6 @@ import {decodeIFCString} from '../utils/Ifc'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 
-
 /**
  * Container for ItemProperties. ItemProperties is wrapped in an
  * ItemPropertiesDrawer to toggle hiding.
@@ -29,26 +28,29 @@ export default function ItemPanelControl({model, element, isOpenState}) {
     }
   }
   const isMobile = useIsMobile()
-  const itemProps = <ItemProperties model={model} element={element}/>
+  const itemProps = <ItemProperties model={model} element={element} />
   if (element) {
     return (
       <>
-        {Object.keys(element).length > 0 &&
-         <TooltipIconButton
-           title='Properties'
-           icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
-           onClick={() => isOpenState.set(!isOpenState.value)}
-         />}
+        {Object.keys(element).length > 0 && (
+          <TooltipIconButton
+            title="Properties"
+            icon={isOpenState.value ? <CloseIcon /> : <ListIcon />}
+            onClick={() => isOpenState.set(!isOpenState.value)}
+          />
+        )}
         {isOpenState.value &&
-         (isMobile ? <MobileDrawer content={itemProps}/> :
-         <ItemPropertiesDrawer
-           content={itemProps}
-           title={titleStr}
-           onClose={() => isOpenState.set(false)}
-         />)}
+          (isMobile ? (
+            <MobileDrawer content={itemProps} />
+          ) : (
+            <ItemPropertiesDrawer
+              content={itemProps}
+              title={titleStr}
+              onClose={() => isOpenState.set(false)}
+            />
+          ))}
       </>
     )
   }
   return null
 }
-

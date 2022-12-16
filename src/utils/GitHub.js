@@ -3,7 +3,6 @@ import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
 
-
 /**
  * Fetch all of the issues from GitHub.
  *
@@ -16,7 +15,6 @@ export async function getIssues(repository) {
   return issues
 }
 
-
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
@@ -26,11 +24,12 @@ export async function getIssues(repository) {
  * @return {object} The issue object.
  */
 export async function getIssue(repository, issueId) {
-  const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
+  const issue = await getGitHub(repository, 'issues/{issue_number}', {
+    issue_number: issueId,
+  })
   debug().log('GitHub: issue: ', issue)
   return issue
 }
-
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
@@ -45,7 +44,6 @@ export async function getBranches(repository) {
   return branches
 }
 
-
 /**
  * The comments should have the following structure:
  *
@@ -59,7 +57,8 @@ export async function getComments(repository, issueId) {
       'issues/{issue_number}/comments',
       {
         issue_number: issueId,
-      })
+      },
+  )
   debug().log('GitHub: comments: ', comments)
   if (comments && comments.data && comments.data.length > 0) {
     return comments.data
@@ -67,7 +66,6 @@ export async function getComments(repository, issueId) {
     debug().log('Empty comments!')
   }
 }
-
 
 /**
  * The comments should have the following structure:
@@ -83,11 +81,14 @@ export async function getComment(repository, issueId, commentId) {
       'issues/{issue_number}/comments',
       {
         issue_number: issueId,
-      })
+      },
+  )
   debug().log('GitHub: comments: ', comments)
   if (comments && comments.data && comments.data.length > 0) {
     if (commentId > comments.data.length) {
-      console.error(`Given commentId(${commentId}) is out of range(${comments.data.length}): `)
+      console.error(
+          `Given commentId(${commentId}) is out of range(${comments.data.length}): `,
+      )
       return
     }
     return comments.data[commentId]
@@ -95,7 +96,6 @@ export async function getComment(repository, issueId, commentId) {
     console.warn('Empty comments!')
   }
 }
-
 
 // DO NOT EXPORT ANY BELOW //
 /**
@@ -124,7 +124,8 @@ async function getGitHub(repository, path, args = {}) {
 }
 
 export const MOCK_NOTE = {
-  embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+  embeddedUrl:
+    'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
   index: 0,
   id: 10,
   number: 1,
@@ -134,7 +135,8 @@ export const MOCK_NOTE = {
   username: 'TEST_ISSUE_USERNAME',
   avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
   numberOfComments: 2,
-  imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  imageUrl:
+    'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
 }
 
 export const MOCK_ISSUES = {
@@ -142,9 +144,12 @@ export const MOCK_ISSUES = {
     {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
       repository_url: 'https://api.github.com/repos/pablo-mayrgundter/Share',
-      labels_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/labels{/name}',
-      comments_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/comments',
-      events_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/events',
+      labels_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/labels{/name}',
+      comments_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/comments',
+      events_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/events',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17',
       id: 1257156364,
       node_id: 'I_kwDOFwgxOc5K7q8M',
@@ -159,14 +164,20 @@ export const MOCK_ISSUES = {
         url: 'https://api.github.com/users/OlegMoshkovich',
         html_url: 'https://github.com/OlegMoshkovich',
         followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        following_url:
+          'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url:
+          'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url:
+          'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url:
+          'https://api.github.com/users/OlegMoshkovich/subscriptions',
         organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
         repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        events_url:
+          'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url:
+          'https://api.github.com/users/OlegMoshkovich/received_events',
         type: 'User',
         site_admin: false,
       },
@@ -197,16 +208,20 @@ export const MOCK_ISSUES = {
         'rocket': 0,
         'eyes': 0,
       },
-      timeline_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/timeline',
+      timeline_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/timeline',
       performed_via_github_app: null,
       state_reason: null,
     },
     {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
       repository_url: 'https://api.github.com/repos/pablo-mayrgundter/Share',
-      labels_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/labels{/name}',
-      comments_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/comments',
-      events_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/events',
+      labels_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/labels{/name}',
+      comments_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/comments',
+      events_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/events',
       html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17',
       id: 2,
       node_id: 'I_kwDOFwgxOc5K7q8M',
@@ -221,14 +236,20 @@ export const MOCK_ISSUES = {
         url: 'https://api.github.com/users/OlegMoshkovich',
         html_url: 'https://github.com/OlegMoshkovich',
         followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        following_url:
+          'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url:
+          'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url:
+          'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url:
+          'https://api.github.com/users/OlegMoshkovich/subscriptions',
         organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
         repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        events_url:
+          'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url:
+          'https://api.github.com/users/OlegMoshkovich/received_events',
         type: 'User',
         site_admin: false,
       },
@@ -260,7 +281,8 @@ export const MOCK_ISSUES = {
         'rocket': 0,
         'eyes': 0,
       },
-      timeline_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/timeline',
+      timeline_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17/timeline',
       performed_via_github_app: null,
       state_reason: null,
     },
@@ -271,8 +293,10 @@ export const MOCK_COMMENTS = {
   data: [
     {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
-      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
-      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
+      html_url:
+        'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
+      issue_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
       id: 1144935480,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
       number: 1,
@@ -285,14 +309,20 @@ export const MOCK_COMMENTS = {
         url: 'https://api.github.com/users/OlegMoshkovich',
         html_url: 'https://github.com/OlegMoshkovich',
         followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        following_url:
+          'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url:
+          'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url:
+          'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url:
+          'https://api.github.com/users/OlegMoshkovich/subscriptions',
         organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
         repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        events_url:
+          'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url:
+          'https://api.github.com/users/OlegMoshkovich/received_events',
         type: 'User',
         site_admin: false,
       },
@@ -325,8 +355,10 @@ export const MOCK_COMMENTS = {
     },
     {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
-      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
-      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
+      html_url:
+        'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
+      issue_url:
+        'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
       id: 1144935481,
       number: 2,
       node_id: 'IC_kwDOFwgxOc5EPlQ3',
@@ -339,14 +371,20 @@ export const MOCK_COMMENTS = {
         url: 'https://api.github.com/users/OlegMoshkovich',
         html_url: 'https://github.com/OlegMoshkovich',
         followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        following_url:
+          'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url:
+          'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url:
+          'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url:
+          'https://api.github.com/users/OlegMoshkovich/subscriptions',
         organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
         repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        events_url:
+          'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url:
+          'https://api.github.com/users/OlegMoshkovich/received_events',
         type: 'User',
         site_admin: false,
       },
@@ -416,14 +454,14 @@ export const MOCK_MODEL_PATH_GIT = {
   branch: 'main',
   filepath: '/ZGRAGGEN.ifc',
   eltPath: '',
-  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+  gitpath:
+    'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
 }
 
 export const MOCK_MODEL_PATH_LOCAL = {
   filepath: '/4f080237-b4e4-4ede-8885-d498647f15e6.ifc',
   eltPath: '',
 }
-
 
 const octokit = new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,

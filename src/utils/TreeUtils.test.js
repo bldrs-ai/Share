@@ -1,8 +1,4 @@
-import {
-  computeElementPathIds,
-  setupLookupAndParentLinks,
-} from './TreeUtils'
-
+import {computeElementPathIds, setupLookupAndParentLinks} from './TreeUtils'
 
 /**
  *Helper to create a mock IFC doc object tree.
@@ -13,18 +9,21 @@ export function makeTestTree() {
   return {
     name: 'a',
     expressID: 0,
-    children: [{
-      name: 'b',
-      expressID: 1,
-      children: [{
-        name: 'c',
-        expressID: 2,
-        children: [],
-      }],
-    }],
+    children: [
+      {
+        name: 'b',
+        expressID: 1,
+        children: [
+          {
+            name: 'c',
+            expressID: 2,
+            children: [],
+          },
+        ],
+      },
+    ],
   }
 }
-
 
 test('Test setupLookupAndParentLinks', () => {
   const tree = makeTestTree()
@@ -40,7 +39,6 @@ test('Test setupLookupAndParentLinks', () => {
   expect(b).toEqual(eltsById[1])
   expect(c).toEqual(eltsById[2])
 })
-
 
 test('Test computeElementPathIds', () => {
   const tree = makeTestTree()

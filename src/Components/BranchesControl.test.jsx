@@ -1,5 +1,11 @@
 import React from 'react'
-import {act, render, renderHook, waitFor, screen} from '@testing-library/react'
+import {
+  act,
+  render,
+  renderHook,
+  waitFor,
+  screen,
+} from '@testing-library/react'
 import {rest} from 'msw'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
@@ -17,12 +23,12 @@ describe('BranchControl', () => {
   beforeEach(() => {
     const httpOk = 200
     server.use(
-        rest.get('https://api.github.com/repos/:org/:repo/branches', (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json(MOCK_BRANCHES.data),
-          )
-        }),
+        rest.get(
+            'https://api.github.com/repos/:org/:repo/branches',
+            (req, res, ctx) => {
+              return res(ctx.status(httpOk), ctx.json(MOCK_BRANCHES.data))
+            },
+        ),
     )
   })
 
@@ -31,7 +37,11 @@ describe('BranchControl', () => {
     await act(() => {
       result.current.setModelPath(MOCK_MODEL_PATH_GIT)
     })
-    const {getByText} = render(<ShareMock><BranchesControl/></ShareMock>)
+    const {getByText} = render(
+        <ShareMock>
+          <BranchesControl />
+        </ShareMock>,
+    )
     await waitFor(() => {
       expect(getByText('main')).toBeInTheDocument()
     })
@@ -42,8 +52,14 @@ describe('BranchControl', () => {
     await act(() => {
       result.current.setModelPath(MOCK_MODEL_PATH_LOCAL)
     })
-    render(<ShareMock><BranchesControl/></ShareMock>)
-    const branchDropDown = screen.queryByText('Git Branches / Project Versions')
+    render(
+        <ShareMock>
+          <BranchesControl />
+        </ShareMock>,
+    )
+    const branchDropDown = screen.queryByText(
+        'Git Branches / Project Versions',
+    )
     await waitFor(() => {
       expect(branchDropDown).toBeNull()
     })
@@ -54,18 +70,24 @@ describe('BranchControl', () => {
     await act(() => {
       result.current.setModelPath(MOCK_MODEL_PATH_GIT)
     })
-    render(<ShareMock><BranchesControl/></ShareMock>)
-    server.use(
-        rest.get('https://api.github.com/repos/:org/:repo/branches', (req, res, ctx) => {
-          return res(
-              ctx.json(MOCK_ONE_BRANCH),
-          )
-        }),
+    render(
+        <ShareMock>
+          <BranchesControl />
+        </ShareMock>,
     )
-    const branchDropDown = screen.queryByText('Git Branches / Project Versions')
+    server.use(
+        rest.get(
+            'https://api.github.com/repos/:org/:repo/branches',
+            (req, res, ctx) => {
+              return res(ctx.json(MOCK_ONE_BRANCH))
+            },
+        ),
+    )
+    const branchDropDown = screen.queryByText(
+        'Git Branches / Project Versions',
+    )
     await waitFor(() => {
       expect(branchDropDown).toBeNull()
     })
   })
 })
-

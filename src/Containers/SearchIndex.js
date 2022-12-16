@@ -2,7 +2,6 @@ import * as Ifc from '@bldrs-ai/ifclib'
 import debug from '../utils/debug'
 import {deleteProperties} from '../utils/objects'
 
-
 /** TODO(pablo): maybe refactor into {IfcSearchIndex extends SearchIndex}. */
 export default class SearchIndex {
   /** Initializes all the index lookup objects. */
@@ -25,7 +24,11 @@ export default class SearchIndex {
       this.indexElementByString(this.eltsByType, type, elt)
       const ifcPrefix = 'IFC'
       if (type.startsWith(ifcPrefix)) {
-        this.indexElementByString(this.eltsByType, type.substring(ifcPrefix.length), elt)
+        this.indexElementByString(
+            this.eltsByType,
+            type.substring(ifcPrefix.length),
+            elt,
+        )
       }
     }
 
@@ -38,7 +41,11 @@ export default class SearchIndex {
     const reifiedName = Ifc.reifyName(model, elt)
     if (reifiedName) {
       this.indexElementByString(this.eltsByName, reifiedName, elt)
-      this.indexElementByStringSet(this.eltsByName, this.tokenize(reifiedName), elt)
+      this.indexElementByStringSet(
+          this.eltsByName,
+          this.tokenize(reifiedName),
+          elt,
+      )
     }
 
     if (elt.GlobalId && elt.GlobalId.value) {
@@ -47,9 +54,11 @@ export default class SearchIndex {
 
     const description = Ifc.getDescription(elt)
     if (description) {
-      this.indexElementByStringSet(this.eltsByGlobalId,
+      this.indexElementByStringSet(
+          this.eltsByGlobalId,
           this.tokenize(description),
-          elt)
+          elt,
+      )
     }
 
     // Recurse.
@@ -57,7 +66,6 @@ export default class SearchIndex {
       this.indexElement(model, child)
     }
   }
-
 
   /**
    * Returns a set of word tokens from the string.
@@ -126,10 +134,13 @@ export default class SearchIndex {
   search(query) {
     // Need to ensure only expressID strings
     const toExpressIds = (results) => {
-      results = results.filter((elt) => elt !== null &&
-                               elt !== undefined &&
-                               typeof elt.expressID === 'number' &&
-                               !isNaN(elt.expressID))
+      results = results.filter(
+          (elt) =>
+            elt !== null &&
+          elt !== undefined &&
+          typeof elt.expressID === 'number' &&
+          !isNaN(elt.expressID),
+      )
       return results.map((elt) => elt.expressID)
     }
 
@@ -161,7 +172,6 @@ export default class SearchIndex {
     addAll(this.eltsByGlobalId[token])
 
     addAll(this.eltsByText[token])
-
 
     const resultIDs = toExpressIds(Array.from(resultSet))
     debug().log('result IDs: ', resultIDs)

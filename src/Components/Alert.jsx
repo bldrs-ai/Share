@@ -1,12 +1,13 @@
 import React, {useState} from 'react'
-import Dialog from '@mui/material/Dialog'
-import DialogActions from '@mui/material/DialogActions'
-import DialogContent from '@mui/material/DialogContent'
-import DialogContentText from '@mui/material/DialogContentText'
-import DialogTitle from '@mui/material/DialogTitle'
-import IconButton from '@mui/material/IconButton'
+import {
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  IconButton,
+} from '@mui/material'
 import CheckIcon from '@mui/icons-material/Check'
-
 
 /**
  * @param {Function} onCloseCb
@@ -29,10 +30,14 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
     >
       <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="alert-dialog-description">{message}</DialogContentText>
+        <DialogContentText id="alert-dialog-description">
+          {message}
+        </DialogContentText>
       </DialogContent>
       <DialogActions>
-        <IconButton onClick={handleClose}><CheckIcon/></IconButton>
+        <IconButton onClick={handleClose}>
+          <CheckIcon />
+        </IconButton>
       </DialogActions>
     </Dialog>
   )

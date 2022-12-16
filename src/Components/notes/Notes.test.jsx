@@ -16,10 +16,13 @@ describe('IssueControl', () => {
     })
   })
 
-
   it('Setting notes in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {getByText} = render(<ShareMock><Notes/></ShareMock>)
+    const {getByText} = render(
+        <ShareMock>
+          <Notes />
+        </ShareMock>,
+    )
     await act(() => {
       result.current.setSelectedNoteId(null)
     })
@@ -30,11 +33,14 @@ describe('IssueControl', () => {
     expect(await getByText('closed_system')).toBeInTheDocument()
   })
 
-
   it('Setting comments in zustand ', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const testIssueId = 10
-    const {getByText} = render(<ShareMock><Notes/></ShareMock>)
+    const {getByText} = render(
+        <ShareMock>
+          <Notes />
+        </ShareMock>,
+    )
     await act(() => {
       result.current.setSelectedNoteId(testIssueId)
     })
@@ -48,21 +54,31 @@ describe('IssueControl', () => {
   it('Issue rendered based on selected issue ID', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const extractedNoteId = '1257156364'
-    const {findByText} = render(<ShareMock><Notes/></ShareMock>)
+    const {findByText} = render(
+        <ShareMock>
+          <Notes />
+        </ShareMock>,
+    )
 
     await act(() => {
       result.current.setSelectedNoteId(Number(extractedNoteId))
     })
 
-    const expectedText = 'Local issue - some text is here to test - Id:1257156364'
+    const expectedText =
+      'Local issue - some text is here to test - Id:1257156364'
     expect(await findByText(expectedText)).toBeVisible()
   })
 
   it('Issue rendered based on issue ID in URL', async () => {
     const {findByText} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
-          <Notes/>
-        </ShareMock>)
+        <ShareMock
+          initialEntries={[
+            '/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48',
+          ]}
+        >
+          <Notes />
+        </ShareMock>,
+    )
 
     const expectedText = 'Local issue 2'
     expect(await findByText(expectedText)).toBeVisible()
@@ -73,11 +89,12 @@ describe('IssueControl', () => {
     beforeEach(() => {
       // Set up handler to return an empty set of notes
       server.use(
-          rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-            return res(
-                ctx.json(MOCK_ISSUES_EMPTY),
-            )
-          }),
+          rest.get(
+              'https://api.github.com/repos/:org/:repo/issues',
+              (req, res, ctx) => {
+                return res(ctx.json(MOCK_ISSUES_EMPTY))
+              },
+          ),
       )
     })
 
@@ -87,12 +104,20 @@ describe('IssueControl', () => {
     })
 
     it('progress bar is present during loading of notes', () => {
-      const {getByRole} = render(<ShareMock><Notes/></ShareMock>)
+      const {getByRole} = render(
+          <ShareMock>
+            <Notes />
+          </ShareMock>,
+      )
       expect(getByRole('progressbar')).toBeInTheDocument()
     })
 
     it('progress bar is no longer visible when notes are not-null', async () => {
-      const {queryByRole} = render(<ShareMock><Notes/></ShareMock>)
+      const {queryByRole} = render(
+          <ShareMock>
+            <Notes />
+          </ShareMock>,
+      )
 
       const {result} = renderHook(() => useStore((state) => state))
       await act(() => {
@@ -105,10 +130,10 @@ describe('IssueControl', () => {
   })
 })
 
-
 const MOCK_NOTES = [
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    embeddedUrl:
+      'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,
     id: 10,
     number: 1,
@@ -118,10 +143,12 @@ const MOCK_NOTES = [
     username: 'TEST_ISSUE_USERNAME',
     avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
     numberOfComments: 2,
-    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+    imageUrl:
+      'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    embeddedUrl:
+      'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,
     id: 11,
     number: 2,
@@ -131,13 +158,15 @@ const MOCK_NOTES = [
     username: 'TEST_ISSUE_USERNAME',
     avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
     numberOfComments: 2,
-    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+    imageUrl:
+      'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
 ]
 
 const MOCK_COMMENTS = [
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    embeddedUrl:
+      'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,
     id: 10,
     number: 1,
@@ -146,10 +175,12 @@ const MOCK_COMMENTS = [
     username: 'TEST_COMMENT_USERNAME',
     avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
     numberOfComments: 2,
-    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+    imageUrl:
+      'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
   {
-    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    embeddedUrl:
+      'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,
     id: 11,
     number: 2,
@@ -158,6 +189,7 @@ const MOCK_COMMENTS = [
     username: 'TEST_COMMENT_USERNAME',
     avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
     numberOfComments: 2,
-    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+    imageUrl:
+      'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
   },
 ]

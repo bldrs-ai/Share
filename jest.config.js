@@ -37,20 +37,15 @@ const esModules = [
   'web-ifc-viewer',
 ].join('|')
 
-
 module.exports = {
   verbose: false,
   testEnvironment: 'jsdom',
-  testPathIgnorePatterns: [
-    'src/Share.test.js',
-  ],
+  testPathIgnorePatterns: ['src/Share.test.js'],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/svgTransform.js',
   },
-  transformIgnorePatterns: [
-    `/node_modules/(?!${esModules}/)`,
-  ],
+  transformIgnorePatterns: [`/node_modules/(?!${esModules}/)`],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
   },

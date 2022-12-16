@@ -8,7 +8,7 @@ import SearchBar, {
 } from './SearchBar'
 
 
-describe( 'SearchBar', () => {
+describe('SearchBar', () => {
   it('containsIfcPath', () => {
     const testPairs = {
       '/share/v/p/index.ifc': false,
@@ -40,29 +40,44 @@ describe( 'SearchBar', () => {
     for (const paramStr in testPairs) {
       if (Object.prototype.hasOwnProperty.call(testPairs, paramStr)) {
         const isValid = testPairs[paramStr]
-        expect(validSearchQuery(new URLSearchParams(paramStr))).toEqual(isValid)
+        expect(validSearchQuery(new URLSearchParams(paramStr))).toEqual(
+            isValid,
+        )
       }
     }
   })
 
   it('stripIfcPathFromLocation', () => {
-    expect(stripIfcPathFromLocation({
-      pathname: '/share/v/p/index.ifc',
-    })).toBe('/share/v/p/index.ifc')
-    expect(stripIfcPathFromLocation({
-      pathname: '/share/v/p/index.ifc?q=foo',
-    })).toBe('/share/v/p/index.ifc?q=foo')
-    expect(stripIfcPathFromLocation({
-      pathname: '/share/v/p/index.ifc/84/103',
-    })).toBe('/share/v/p/index.ifc')
-    expect(stripIfcPathFromLocation({
-      pathname: '/share/v/p/index.ifc/84/103?q=foo',
-    })).toBe('/share/v/p/index.ifc?q=foo')
+    expect(
+        stripIfcPathFromLocation({
+          pathname: '/share/v/p/index.ifc',
+        }),
+    ).toBe('/share/v/p/index.ifc')
+    expect(
+        stripIfcPathFromLocation({
+          pathname: '/share/v/p/index.ifc?q=foo',
+        }),
+    ).toBe('/share/v/p/index.ifc?q=foo')
+    expect(
+        stripIfcPathFromLocation({
+          pathname: '/share/v/p/index.ifc/84/103',
+        }),
+    ).toBe('/share/v/p/index.ifc')
+    expect(
+        stripIfcPathFromLocation({
+          pathname: '/share/v/p/index.ifc/84/103?q=foo',
+        }),
+    ).toBe('/share/v/p/index.ifc?q=foo')
   })
 
   it('SeachBar', () => {
-    // eslint-disable-next-line no-empty-function
-    render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
-    expect(screen.getByPlaceholderText('Search / Insert GitHub link')).toBeInTheDocument()
+    render(
+        <ShareMock>
+          <SearchBar isOpen={true} />
+        </ShareMock>,
+    )
+    expect(
+        screen.getByPlaceholderText('Search / Insert GitHub link'),
+    ).toBeInTheDocument()
   })
 })

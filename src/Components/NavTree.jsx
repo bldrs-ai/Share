@@ -40,7 +40,6 @@ const NavTreePropTypes = {
   nodeId: PropTypes.string.isRequired,
 }
 
-
 /**
  * @param {object} model IFC model
  * @param {object} element IFC element of the model
@@ -48,11 +47,7 @@ const NavTreePropTypes = {
  *   elements, recursively grown as passed down the tree
  * @return {object} React component
  */
-export default function NavTree({
-  model,
-  element,
-  pathPrefix,
-}) {
+export default function NavTree({model, element, pathPrefix}) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
       classes,
@@ -91,8 +86,10 @@ export default function NavTree({
 
     useEffect(() => {
       if (selectedElement) {
-        const newPath =
-              `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
+        const newPath = `${pathPrefix}/${computeElementPathIds(
+            element,
+            (elt) => elt.expressID,
+        ).join('/')}`
         navigate(newPath)
       }
     }, [selectedElement, navigate])
@@ -115,10 +112,7 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <Typography
-          variant='tree'
-          onClick={handleSelectionClick}
-        >
+        <Typography variant="tree" onClick={handleSelectionClick}>
           {label}
         </Typography>
       </div>

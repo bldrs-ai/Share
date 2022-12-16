@@ -3,10 +3,7 @@ import {act, render, screen, renderHook} from '@testing-library/react'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
-import CameraControl, {
-  onHash,
-  parseHashParams,
-} from './CameraControl'
+import CameraControl, {onHash, parseHashParams} from './CameraControl'
 
 
 describe('CameraControl', () => {
@@ -26,7 +23,11 @@ describe('CameraControl', () => {
     await act(() => {
       result.current.setViewerStore(viewer)
     })
-    render(<ShareMock><CameraControl/></ShareMock>)
+    render(
+        <ShareMock>
+          <CameraControl />
+        </ShareMock>,
+    )
     expect(screen.getByText('Camera')).toBeInTheDocument()
   })
 
@@ -51,7 +52,6 @@ describe('CameraControl', () => {
   })
 })
 
-
 /** Mocks the IFCjs camera. */
 class MockCamera {
   /**
@@ -73,7 +73,6 @@ class MockCamera {
     this.doTween = doTween
   }
 
-
   /**
    * @param {number} x
    * @param {number} y
@@ -87,7 +86,6 @@ class MockCamera {
     this.doTween = doTween
   }
 
-
   /**
    * @return {Array} camera position
    */
@@ -95,14 +93,12 @@ class MockCamera {
     return [this.x, this.y, this.z]
   }
 
-
   /**
    * @return {Array} camera target
    */
   getTarget() {
     return [this.x, this.y, this.z]
   }
-
 
   /**
    * @param {number} tx
@@ -116,7 +112,6 @@ class MockCamera {
     this.tz = tz
     this.doTween = doTween
   }
-
 
   /**
    * @param {boolean} doTween

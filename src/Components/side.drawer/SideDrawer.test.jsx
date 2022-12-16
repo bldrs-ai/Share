@@ -8,7 +8,11 @@ import SideDrawerWrapper from './SideDrawer'
 describe('SideDrawer', () => {
   it('notes', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {findByText} = render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+    const {findByText} = render(
+        <ShareMock>
+          <SideDrawerWrapper />
+        </ShareMock>,
+    )
     await act(() => {
       result.current.turnCommentsOn()
       result.current.openDrawer()
@@ -23,7 +27,11 @@ describe('SideDrawer', () => {
 
   it('properties', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {findByText} = render(<ShareMock><SideDrawerWrapper/></ShareMock>)
+    const {findByText} = render(
+        <ShareMock>
+          <SideDrawerWrapper />
+        </ShareMock>,
+    )
     await act(() => {
       result.current.toggleIsPropertiesOn()
       result.current.openDrawer()

@@ -3,7 +3,6 @@ import MuiAlert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import {ColorModeContext} from '../Context/ColorMode'
 
-
 /**
  * @param {string} message
  * @param {string} type
@@ -23,7 +22,7 @@ export default function SnackBarMessage({message, type, open}) {
         elevation={0}
         sx={{
           'backgroundColor': theme.isDay() ? '#A9A9A9' : '#4C4C4C',
-          'opacity': .8,
+          'opacity': 0.8,
           'position': 'relative',
           'bottom': '60px',
           'left': '6px',
@@ -45,6 +44,5 @@ export default function SnackBarMessage({message, type, open}) {
 }
 
 const Alert = React.forwardRef(function Alert(props, ref) {
-  return <MuiAlert elevation={1} ref={ref} variant='filled' {...props} />
+  return <MuiAlert elevation={1} ref={ref} variant="filled" {...props} />
 })
-

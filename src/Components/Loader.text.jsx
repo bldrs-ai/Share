@@ -17,12 +17,13 @@ describe('Loader', () => {
         <ShareMock>
           <Loader
             id={id}
-            date='2000-01-01T00:00:00Z'
-            username='bob'
+            date="2000-01-01T00:00:00Z"
+            username="bob"
             index={index}
             title="new_title"
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     expect(screen.getByText('new_title')).toBeInTheDocument()
     expect(screen.getByText('2000-01-01 00:00:00Z')).toBeInTheDocument()
     expect(screen.getByText('bob')).toBeInTheDocument()

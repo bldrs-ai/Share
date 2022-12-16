@@ -8,12 +8,20 @@ import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 describe('CutPlane', () => {
   it('Section Button', () => {
-    const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const {getByTitle} = render(
+        <ShareMock>
+          <CutPlaneMenu />
+        </ShareMock>,
+    )
     expect(getByTitle('Section')).toBeInTheDocument()
   })
 
   it('Section Menu', () => {
-    const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const {getByTitle, getByText} = render(
+        <ShareMock>
+          <CutPlaneMenu />
+        </ShareMock>,
+    )
     const sectionButton = getByTitle('Section')
     fireEvent.click(sectionButton)
     expect(getByText('X')).toBeInTheDocument()
@@ -22,7 +30,11 @@ describe('CutPlane', () => {
   })
 
   it('X Section', async () => {
-    const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const {getByTitle, getByText} = render(
+        <ShareMock>
+          <CutPlaneMenu />
+        </ShareMock>,
+    )
     const sectionButton = getByTitle('Section')
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIMockSingleton()
@@ -40,11 +52,10 @@ describe('CutPlane', () => {
 
   it('X Section in URL', async () => {
     render(
-        <ShareMock
-          initialEntries={['/v/p/index.ifc#p:x']}
-        >
-          <CutPlaneMenu/>
-        </ShareMock>)
+        <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
+          <CutPlaneMenu />
+        </ShareMock>,
+    )
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIMockSingleton()
     await act(() => {
@@ -56,4 +67,3 @@ describe('CutPlane', () => {
     expect(callCreatePlanes.length).toBe(1)
   })
 })
-

@@ -1,5 +1,8 @@
 import React from 'react'
-import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from '../../Components/Dialog_redesign'
+import Dialog, {
+  OpenDialogHeaderContent,
+  OpenDialogBodyContent,
+} from '../../Components/Dialog_redesign'
 
 
 export default {
@@ -10,10 +13,10 @@ export default {
 const Template = (args) => {
   return (
     <Dialog
-      headerContent={<OpenDialogHeaderContent/>}
-      bodyContent={<OpenDialogBodyContent/>}
+      headerContent={<OpenDialogHeaderContent />}
+      bodyContent={<OpenDialogBodyContent />}
       headerText={'Open file'}
-      isDialogDisplayed={ true }
+      isDialogDisplayed={true}
       setIsDialogDisplayed={() => console.log('setIsDialogDisplayed')}
     />
   )

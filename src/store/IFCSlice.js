@@ -17,7 +17,9 @@ export default function createIFCSlice(set, get) {
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
     setModelStore: (model) => set(() => ({modelStore: model})),
     setSelectedElement: (element) => set(() => ({selectedElement: element})),
-    setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
-    setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
+    setSelectedElements: (elements) =>
+      set(() => ({selectedElements: elements})),
+    setCameraControls: (cameraControls) =>
+      set(() => ({cameraControls: cameraControls})),
   }
 }

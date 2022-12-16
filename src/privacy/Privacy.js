@@ -1,14 +1,18 @@
 import {
   getCookie as getCookiePrivate,
   getCookieBoolean as getCookieBooleanPrivate,
-  setCookie as setCookiePrivate} from './functional'
-import {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed} from './analytics'
+  setCookie as setCookiePrivate,
+} from './functional'
+import {
+  recordEvent,
+  isAnalyticsAllowed,
+  setIsAnalyticsAllowed,
+} from './analytics'
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
 
 
 export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
-
 
 /**
  * @param {string} component
@@ -19,7 +23,6 @@ export {recordEvent, isAnalyticsAllowed, setIsAnalyticsAllowed}
 export function getCookie({component, name, defaultValue}) {
   return getCookiePrivate(name, defaultValue)
 }
-
 
 /**
  * @param {string} component
@@ -37,7 +40,6 @@ export function getCookieBoolean({component, name, defaultValue}) {
   return value
 }
 
-
 /**
  * @param {string} component
  * @param {string} name
@@ -46,7 +48,6 @@ export function getCookieBoolean({component, name, defaultValue}) {
 export function setCookie({component, name, value}) {
   setCookiePrivate(name, value)
 }
-
 
 /**
  * @param {string} component
@@ -58,42 +59,47 @@ export function setCookieBoolean({component, name, value}) {
   setCookiePrivate(name, value)
 }
 
-
 /**
  * @param {boolean} isUsageEnabled
  * @param {boolean} isSocialEnabled
  */
 export function setUsageAndSocialEnabled(isUsageEnabled, isSocialEnabled) {
   assertDefined(isUsageEnabled, isSocialEnabled)
-  debug().log('Privacy#setUsageAndSocialEnabled: ', isUsageEnabled, isSocialEnabled)
-  setCookieBoolean({component: 'cookies', name: 'usage', value: isUsageEnabled})
-  setCookieBoolean({component: 'cookies', name: 'social', value: isSocialEnabled})
+  debug().log(
+      'Privacy#setUsageAndSocialEnabled: ',
+      isUsageEnabled,
+      isSocialEnabled,
+  )
+  setCookieBoolean({
+    component: 'cookies',
+    name: 'usage',
+    value: isUsageEnabled,
+  })
+  setCookieBoolean({
+    component: 'cookies',
+    name: 'social',
+    value: isSocialEnabled,
+  })
 }
-
 
 /**
  * @return {boolean} for social privacy level
  */
 export function isPrivacySocialEnabled() {
-  return (
-    getCookieBoolean({
-      component: 'privacy',
-      name: 'social',
-      defaultValue: true,
-    })
-  )
+  return getCookieBoolean({
+    component: 'privacy',
+    name: 'social',
+    defaultValue: true,
+  })
 }
-
 
 /**
  * @return {boolean} for usage privacy level
  */
 export function isPrivacyUsageEnabled() {
-  return (
-    getCookieBoolean({
-      component: 'privacy',
-      name: 'usage',
-      defaultValue: true,
-    })
-  )
+  return getCookieBoolean({
+    component: 'privacy',
+    name: 'usage',
+    defaultValue: true,
+  })
 }

@@ -1,11 +1,7 @@
 import React, {useRef, useState} from 'react'
-import Divider from '@mui/material/Divider'
-import InputBase from '@mui/material/InputBase'
-import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
+import {Box, Divider, InputBase, Paper} from '@mui/material'
 import {UilMinusSquare, UilSearch} from '@iconscout/react-unicons'
 import {TooltipToggleButton} from './Buttons'
-
 
 /**
  * Search bar
@@ -14,18 +10,53 @@ import {TooltipToggleButton} from './Buttons'
  * @param {Function} onSubmit
  * @return {object} The SearchBar react component
  */
-export default function InputBar({startAdorment, onSubmit}) {
+export default function InputBar({startAdornment, onSubmit}) {
   const [inputText, setInputText] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles({inputWidth: '288px'})
+
   return (
-    <div>
-      <Paper component='form' className={classes.root}>
-        <div className={classes.iconContainer}>
-          {startAdorment}
-        </div>
-        <Divider orientation="vertical" flexItem className={classes.divider}/>
+    <Box>
+      <Paper
+        component="form"
+        sx={{
+          'display': 'flex',
+          'minWidth': '200px',
+          'width': '288px',
+          'maxWidth': '400px',
+          'alignItems': 'center',
+          'padding': '2px 2px 2px 2px',
+          '@media (max-width: 900px)': {
+            minWidth: '300px',
+            width: '300px',
+            maxWidth: '300px',
+          },
+          '& .MuiInputBase-root': {
+            flex: 1,
+          },
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            width: '30px',
+            height: '30px',
+            margin: '5px',
+          }}
+        >
+          {startAdornment}
+        </Box>
+        <Divider
+          orientation="vertical"
+          flexItem
+          sx={{
+            height: '36px',
+            alignSelf: 'center',
+            margin: '0px 10px 0px 0px',
+          }}
+        />
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -33,66 +64,27 @@ export default function InputBar({startAdorment, onSubmit}) {
           error={true}
           placeholder={'Paste GitHub link here'}
         />
-        {inputText.length > 0 ?
+        {inputText.length > 0 ? (
           <TooltipToggleButton
-            title='clear'
-            size='small'
-            placement='bottom'
+            title="clear"
+            size="small"
+            placement="bottom"
             onClick={() => {
               setInputText('')
             }}
-            icon={<UilMinusSquare/>}
-          /> : null
-        }
-        {inputText.length > 0 ?
+            icon={<UilMinusSquare />}
+          />
+        ) : null}
+        {inputText.length > 0 ? (
           <TooltipToggleButton
-            title='search'
-            size='small'
-            placement='bottom'
+            title="search"
+            size="small"
+            placement="bottom"
             onClick={() => onSubmit()}
-            icon={<UilSearch/>}
-          /> : null
-        }
+            icon={<UilSearch />}
+          />
+        ) : null}
       </Paper>
-    </div>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'display': 'flex',
-    'minWidth': '200px',
-    'width': (props) => props.inputWidth,
-    'maxWidth': '400px',
-    'alignItems': 'center',
-    'padding': '2px 2px 2px 2px',
-    '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
-      maxWidth: '300px',
-    },
-    '& .MuiInputBase-root': {
-      flex: 1,
-    },
-  },
-  error: {
-    marginLeft: '10px',
-    marginTop: '3px',
-    fontSize: '10px',
-    color: 'red',
-  },
-  divider: {
-    height: '36px',
-    alignSelf: 'center',
-    margin: '0px 10px 0px 0px',
-  },
-  iconContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '30px',
-    height: '30px',
-    margin: '5px',
-  },
-})

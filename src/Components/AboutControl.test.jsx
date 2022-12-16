@@ -8,13 +8,21 @@ import {setPrivacy} from './AboutControl'
 
 describe('About control tests', () => {
   test('renders the AboutControl button', () => {
-    const {getByTitle} = render(<MockComponent><AboutControl/></MockComponent>)
+    const {getByTitle} = render(
+        <MockComponent>
+          <AboutControl />
+        </MockComponent>,
+    )
     const aboutControl = getByTitle('About BLDRS')
     expect(aboutControl).toBeInTheDocument()
   })
 
-  test('renders AbotDialog when control is pressed', () => {
-    const {getByTitle, getByText} = render(<MockComponent><AboutControl/></MockComponent>)
+  test('renders AboutDialog when control is pressed', () => {
+    const {getByTitle, getByText} = render(
+        <MockComponent>
+          <AboutControl />
+        </MockComponent>,
+    )
     const aboutControl = getByTitle('About BLDRS')
     fireEvent.click(aboutControl)
     const dialogTitle = getByText('Build Every Thing Together')

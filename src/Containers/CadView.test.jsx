@@ -1,5 +1,12 @@
 import React, {useState} from 'react'
-import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
+import {
+  render,
+  renderHook,
+  act,
+  fireEvent,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
@@ -18,7 +25,9 @@ describe('CadView', () => {
       filepath: `index.ifc`,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(
+        makeTestTree(),
+    )
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -28,24 +37,25 @@ describe('CadView', () => {
             pathPrefix={''}
             modelPath={result.current[0]}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     // Necessary to wait for some of the component to render to avoid
     // act() warningings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
   })
 
-
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
-
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(
+        testTree,
+    )
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -55,7 +65,8 @@ describe('CadView', () => {
             pathPrefix={'/'}
             modelPath={result.current[0]}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
     const getPropsCalls = viewer.getProperties.mock.calls
@@ -76,7 +87,9 @@ describe('CadView', () => {
       gitpath: undefined,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(
+        testTree,
+    )
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
@@ -91,7 +104,8 @@ describe('CadView', () => {
             pathPrefix={'/'}
             modelPath={modelPath}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
     act(() => {

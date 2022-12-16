@@ -10,10 +10,10 @@ export default {
     icon: {
       options: ['add', 'back', 'check', 'forward'],
       mapping: {
-        add: <AddCircle/>,
-        back: <ArrowBack/>,
-        check: <Check/>,
-        forward: <ArrowForward/>,
+        add: <AddCircle />,
+        back: <ArrowBack />,
+        check: <Check />,
+        forward: <ArrowForward />,
       },
       control: {
         type: 'select',
@@ -75,11 +75,7 @@ export default {
 }
 
 const Template = (args) => {
-  return (
-    <TooltipIconButton
-      {...args}
-    />
-  )
+  return <TooltipIconButton {...args} />
 }
 
 export const Button = Template.bind({})

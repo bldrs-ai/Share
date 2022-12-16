@@ -7,13 +7,11 @@ import useStore from './store/useStore'
 import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
-import './index.css'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
-import AccountCircle from '@mui/icons-material/AccountCircle'
+import AccountCircle from "@mui/icons-material/AccountCircle";
 /* eslint-enable */
-
 
 /**
  * Handles path demuxing to pass to CadView.
@@ -30,7 +28,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
 
-
   /**
    * On a change to urlParams, setting a new model path will clear the
    * scene and load the new model IFC.  If there's not a valid IFC,
@@ -41,19 +38,21 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    */
   useEffect(() => {
     /** A demux to help forward to the index file, load a new model or do nothing. */
-    const onChangeUrlParams = (() => {
+    const onChangeUrlParams = () => {
       const mp = getModelPath(installPrefix, pathPrefix, urlParams)
       if (mp === null) {
         navToDefault(navigation.current, appPrefix)
         return
       }
-      if (modelPath === null ||
+      if (
+        modelPath === null ||
         (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
-        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
+        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)
+      ) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
-    })
+    }
     onChangeUrlParams()
 
     // TODO(pablo): currently expect these to both be defined.
@@ -66,13 +65,20 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       console.warn('No repository set for project!', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
-
+  }, [
+    appPrefix,
+    installPrefix,
+    modelPath,
+    pathPrefix,
+    setRepository,
+    urlParams,
+    setModelPath,
+  ])
 
   const {theme, colorMode} = useTheme()
 
   return (
-    modelPath &&
+    modelPath && (
       <CssBaseline>
         <ColorModeContext.Provider value={colorMode}>
           <ThemeProvider theme={theme}>
@@ -84,9 +90,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
             />
           </ThemeProvider>
         </ColorModeContext.Provider>
-      </CssBaseline>)
+      </CssBaseline>
+    )
+  )
 }
-
 
 /**
  * Navigate to index.ifc with nice camera setting.
@@ -98,12 +105,15 @@ export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
   if (window.innerWidth <= mediaSizeTabletWith) {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
+    navigate(
+        `${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`,
+    )
   } else {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
+    navigate(
+        `${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`,
+    )
   }
 }
-
 
 /**
  * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
@@ -142,7 +152,11 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
       filepath: filepath,
       eltPath: parts[1],
     }
-    debug().log('Share#getModelPath: is a project file: ', m, window.location.hash)
+    debug().log(
+        'Share#getModelPath: is a project file: ',
+        m,
+        window.location.hash,
+    )
   } else if (pathPrefix.endsWith('/gh')) {
     m = {
       org: urlParams['org'],

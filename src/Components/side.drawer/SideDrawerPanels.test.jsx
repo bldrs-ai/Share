@@ -8,7 +8,11 @@ import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
 describe('SideDrawerPanels', () => {
   it('Notes', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const {getByText} = render(<ShareMock><NotesPanel/></ShareMock>)
+    const {getByText} = render(
+        <ShareMock>
+          <NotesPanel />
+        </ShareMock>,
+    )
     await act(() => {
       result.current.setSelectedNoteId(null)
     })
@@ -16,7 +20,11 @@ describe('SideDrawerPanels', () => {
   })
 
   it('Properties', () => {
-    const {getByText} = render(<ShareMock><PropertiesPanel/></ShareMock>)
+    const {getByText} = render(
+        <ShareMock>
+          <PropertiesPanel />
+        </ShareMock>,
+    )
     expect(getByText('Properties')).toBeInTheDocument()
   })
 })

@@ -1,11 +1,7 @@
 import React from 'react'
-import Button from '@mui/material/Button'
-import ToggleButton from '@mui/material/ToggleButton'
-import Tooltip from '@mui/material/Tooltip'
-import {makeStyles, useTheme} from '@mui/styles'
+import {Box, Button, ToggleButton, Tooltip} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
-
 
 /**
  * @param {string} title Tooltip text
@@ -16,33 +12,61 @@ import {useIsMobile} from './Hooks'
  * @param {string} dataTestId Internal attribute for component testing
  * @return {React.Component} React component
  */
-export function TooltipIconButton({title, onClick, icon, placement = 'left', selected = false}) {
+export function TooltipIconButton({
+  title,
+  onClick,
+  icon,
+  placement = 'left',
+  selected = false,
+}) {
   assertDefined(icon, onClick, title)
-  const classes = useStyles(useTheme())
   const isMobile = useIsMobile()
   return (
-    <div className={classes.root}>
-      {isMobile ?
+    <Box
+      sx={(theme) => ({
+        '& button': {
+          'width': '40px',
+          'height': '40px',
+          'border': 'none',
+          'margin': '4px 0px 4px 0px',
+          '&.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: '#97979720',
+          },
+        },
+        '& svg': {
+          width: '22px',
+          height: '22px',
+          fill: theme.palette.primary.contrastText,
+        },
+      })}
+    >
+      {isMobile ? (
         <ToggleButton
           selected={selected}
           onClick={onClick}
-          color='primary'
+          color="primary"
           value={''}
         >
           {icon}
-        </ToggleButton> :
-        <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
+        </ToggleButton>
+      ) : (
+        <Tooltip
+          title={title}
+          describeChild
+          placement={placement}
+          data-test-id="test-button"
+        >
           <ToggleButton
             selected={selected}
             onClick={onClick}
-            color='primary'
+            color="primary"
             value={''}
           >
             {icon}
           </ToggleButton>
         </Tooltip>
-      }
-    </div>
+      )}
+    </Box>
   )
 }
 
@@ -64,18 +88,20 @@ export function RectangularButton({
   noBackground = false,
 }) {
   assertDefined(title, icon, onClick)
-  const theme = useTheme()
   return (
     <Button
       onClick={onClick}
-      variant='rectangular'
+      variant="rectangular"
       startIcon={icon}
-      sx={{
-        'border': `1px solid ${noBorder ? 'none' : theme.palette.highlight.heavy }`,
+      sx={(theme) => ({
+        'border': `1px solid ${noBorder ? 'none' : theme.palette.highlight.heavy
+        }`,
         'backgroundColor': noBackground ? 'none' : theme.palette.highlight.main,
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.secondary},
-      }}
+        '&.MuiButtonBase-root:hover': {
+          bgcolor: theme.palette.highlight.secondary,
+        },
+      })}
     >
       {title}
     </Button>
@@ -101,33 +127,7 @@ export function ControlButton({
   dialog,
   state = false,
 }) {
-  assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
-  const classes = useStyles(useTheme())
-  return (
-    <div>
-      <div className={classes.root}>
-        <Tooltip title={title} describeChild placement={placement}>
-          <ToggleButton
-            className={classes.root}
-            selected={isDialogDisplayed}
-            onClick={() => {
-              setIsDialogDisplayed(true)
-            }}
-            color='primary'
-            value={''}
-          >
-            {icon}
-          </ToggleButton>
-        </Tooltip>
-      </div>
-      {isDialogDisplayed && dialog}
-    </div>
-  )
-}
-
-
-const useStyles = makeStyles((theme) => ({
-  root: {
+  const rootStyle = (theme) => ({
     '& button': {
       'width': '40px',
       'height': '40px',
@@ -142,10 +142,28 @@ const useStyles = makeStyles((theme) => ({
       height: '22px',
       fill: theme.palette.primary.contrastText,
     },
-  },
-  iconContainer: {
-    width: '20px',
-    height: '20px',
-  },
-}))
+  })
 
+  assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
+
+  return (
+    <Box>
+      <Box sx={rootStyle}>
+        <Tooltip title={title} describeChild placement={placement}>
+          <ToggleButton
+            sx={rootStyle}
+            selected={isDialogDisplayed}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
+            color="primary"
+            value={''}
+          >
+            {icon}
+          </ToggleButton>
+        </Tooltip>
+      </Box>
+      {isDialogDisplayed && dialog}
+    </Box>
+  )
+}

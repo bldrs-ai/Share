@@ -1,28 +1,27 @@
 import React, {useEffect} from 'react'
-import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
+import {Box, Paper} from '@mui/material'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
 
-
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
-  const classes = useStyles()
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredNote = (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+  const filteredNote =
+    notes && selectedNoteId ?
+      notes.filter((issue) => issue.id === selectedNoteId)[0] :
+      null
   const repository = useStore((state) => state.repository)
   useEffect(() => {
     if (!repository) {
@@ -33,23 +32,26 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository)
-        issuesData.data.slice(0).reverse().map((issue, index) => {
-          if (issue.body === null) {
-            debug().warn(`issue ${index} has no body: `, issue)
-            return null
-          }
-          fetchedNotes.push({
-            index: index,
-            id: issue.id,
-            number: issue.number,
-            title: issue.title,
-            body: issue.body,
-            date: issue.created_at,
-            username: issue.user.login,
-            avatarUrl: issue.user.avatar_url,
-            numberOfComments: issue.comments,
-          })
-        })
+        issuesData.data
+            .slice(0)
+            .reverse()
+            .map((issue, index) => {
+              if (issue.body === null) {
+                debug().warn(`issue ${index} has no body: `, issue)
+                return null
+              }
+              fetchedNotes.push({
+                index: index,
+                id: issue.id,
+                number: issue.number,
+                title: issue.title,
+                body: issue.body,
+                date: issue.created_at,
+                username: issue.user.login,
+                avatarUrl: issue.user.avatar_url,
+                numberOfComments: issue.comments,
+              })
+            })
         if (fetchedNotes.length > 0) {
           setNotes(fetchedNotes)
         } else {
@@ -104,11 +106,29 @@ export default function Notes() {
   }, [filteredNote, repository, setComments])
 
   return (
-    <Paper className={classes.commentsContainer} elevation={0}>
-      <div className={classes.cardsContainer}>
-        {notes === null && <Loader type={'linear'}/> }
-        {notes && notes.length === 0 && <NoContent/> }
-        {notes && !selectedNoteId ?
+    <Paper
+      sx={(theme) => ({
+        width: '100%',
+      })}
+      elevation={0}
+    >
+      <Box
+        sx={(theme) => ({
+          'display': 'flex',
+          'flexDirection': 'column',
+          'alignItems': 'center',
+          'resizeMode': 'contain',
+          'width': '100%',
+          'paddingTop': '10px',
+          'paddingBottom': '30px',
+          '@media (max-width: 900px)': {
+            paddingTop: '0px',
+          },
+        })}
+      >
+        {notes === null && <Loader type={'linear'} />}
+        {notes && notes.length === 0 && <NoContent />}
+        {notes && !selectedNoteId ? (
           notes.map((issue, index) => {
             return (
               <NoteCard
@@ -125,64 +145,45 @@ export default function Notes() {
                 imageUrl={issue.imageUrl}
               />
             )
-          }) :
-        <>
-          {filteredNote ?
-           <NoteCard
-             embeddedUrl={filteredNote.embeddedUrl}
-             index={filteredNote.index}
-             id={filteredNote.id}
-             key={filteredNote.id}
-             title={filteredNote.title}
-             date={filteredNote.date}
-             body={filteredNote.body}
-             username={filteredNote.username}
-             numberOfComments={filteredNote.numberOfComments}
-             avatarUrl={filteredNote.avatarUrl}
-             imageUrl={filteredNote.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
-               <NoteCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
-        }
-      </div>
+          })
+        ) : (
+          <>
+            {filteredNote ? (
+              <NoteCard
+                embeddedUrl={filteredNote.embeddedUrl}
+                index={filteredNote.index}
+                id={filteredNote.id}
+                key={filteredNote.id}
+                title={filteredNote.title}
+                date={filteredNote.date}
+                body={filteredNote.body}
+                username={filteredNote.username}
+                numberOfComments={filteredNote.numberOfComments}
+                avatarUrl={filteredNote.avatarUrl}
+                imageUrl={filteredNote.imageUrl}
+              />
+            ) : null}
+            {comments &&
+              comments.map((comment, index) => {
+                return (
+                  <NoteCard
+                    embeddedUrl={comment.embeddedUrl}
+                    isComment={true}
+                    index=""
+                    id={comment.id}
+                    key={comment.id}
+                    title={index + 1}
+                    date={comment.date}
+                    body={comment.body}
+                    username={comment.username}
+                    avatarUrl={comment.avatarUrl}
+                    imageUrl={comment.imageUrl}
+                  />
+                )
+              })}
+          </>
+        )}
+      </Box>
     </Paper>
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  commentsContainer: {
-    width: '100%',
-  },
-  cardsContainer: {
-    'display': 'flex',
-    'flexDirection': 'column',
-    'alignItems': 'center',
-    'resizeMode': 'contain',
-    'width': '100%',
-    'paddingTop': '10px',
-    'paddingBottom': '30px',
-    '@media (max-width: 900px)': {
-      paddingTop: '0px',
-    },
-  },
-}))

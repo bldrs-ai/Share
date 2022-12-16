@@ -12,7 +12,6 @@ export function assert(cond, msg) {
   throw new Error(msg)
 }
 
-
 /**
  * Equivalent to calling assertDefined on each parameter.
  *
@@ -32,7 +31,6 @@ export function assertDefined(...args) {
   }
   return args
 }
-
 
 /**
  * @param {boolean} arg Value to test

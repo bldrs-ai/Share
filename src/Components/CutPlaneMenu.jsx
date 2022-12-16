@@ -5,7 +5,11 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import useStore from '../store/useStore'
 import useTheme from '../Theme'
-import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
+import {
+  addHashParams,
+  getHashParams,
+  removeHashParams,
+} from '../utils/location'
 import {getModelCenter} from '../utils/cutPlane'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
@@ -39,7 +43,7 @@ export default function CutPlaneMenu() {
         createPlane(planeDirection)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
   const createPlane = (normalDirection) => {
@@ -69,8 +73,10 @@ export default function CutPlaneMenu() {
         normal = new Vector3(0, 1, 0)
         break
     }
-    if (!planeHash || planeHash !== normalDirection ) {
-      addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
+    if (!planeHash || planeHash !== normalDirection) {
+      addHashParams(window.location, PLANE_PREFIX, {
+        planeAxis: normalDirection,
+      })
     }
     setCutPlaneDirection(normalDirection)
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenter)
@@ -84,29 +90,26 @@ export default function CutPlaneMenu() {
     setAnchorEl(null)
   }
 
-
   return (
     <div>
       <TooltipIconButton
         title={'Section'}
-        icon={<CutPlaneIcon/>}
+        icon={<CutPlaneIcon />}
         onClick={handleClick}
         selected={anchorEl !== null || cutPlaneDirection !== null}
       />
       <Menu
         elevation={1}
-        id='basic-menu'
+        id="basic-menu"
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
         anchorOrigin={{vertical: 'top', horizontal: 'center'}}
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
-          style: {
-            left: '300px',
-            transform: 'translateX(-50px)',
-          },
           sx: {
+            'left': '300px',
+            'transform': 'translateX(-50px)',
             '& .Mui-selected': {
               color: theme.theme.palette.highlight.main,
               fontWeight: 600,
@@ -114,9 +117,25 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => createPlane('x')} selected={cutPlaneDirection === 'x'}> X</MenuItem>
-        <MenuItem onClick={() => createPlane('y')} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
-        <MenuItem onClick={() => createPlane('z')} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
+        <MenuItem
+          onClick={() => createPlane('x')}
+          selected={cutPlaneDirection === 'x'}
+        >
+          {' '}
+          X
+        </MenuItem>
+        <MenuItem
+          onClick={() => createPlane('y')}
+          selected={cutPlaneDirection === 'y'}
+        >
+          Y
+        </MenuItem>
+        <MenuItem
+          onClick={() => createPlane('z')}
+          selected={cutPlaneDirection === 'z'}
+        >
+          Z
+        </MenuItem>
       </Menu>
     </div>
   )

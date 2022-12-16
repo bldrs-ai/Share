@@ -1,8 +1,6 @@
+/* eslint-disable no-mixed-operators */
 import React, {useRef, useEffect, useState, useContext} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import InputBase from '@mui/material/InputBase'
-import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
 import debug from '../utils/debug'
 import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
@@ -10,7 +8,7 @@ import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
-
+import {Box, InputBase, Paper} from '@mui/material'
 
 /**
  * Search bar component
@@ -30,10 +28,10 @@ export default function SearchBar({fileOpen}) {
   // input length is dynamically calculated in order to fit the input string into the Text input
   const widthPerChar = 6.5
   const padding = 130
-  const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
+  const calculatedInputWidth =
+    Number(inputText.length) * widthPerChar + padding
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
-  const classes = useStyles({inputWidth: calculatedInputWidth})
   const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
@@ -65,7 +63,9 @@ export default function SearchBar({fileOpen}) {
         navigate(modelPath, {replace: true})
       } catch (e) {
         console.error(e)
-        setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
+        setError(
+            `Please enter a valid url. Click on the LINK icon to learn more.`,
+        )
       }
       return
     }
@@ -83,15 +83,32 @@ export default function SearchBar({fileOpen}) {
     searchInputRef.current.blur()
   }
   return (
-    <div>
+    <>
       <Paper
-        component='form'
-        className={classes.root}
+        sx={{
+          'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+          'display': 'flex',
+          'minWidth': '300px',
+          'width': `${calculatedInputWidth}px`,
+          'height': '56px',
+          'maxWidth': '700px',
+          'alignItems': 'center',
+          'opacity': 0.8,
+          'padding': '2px 6px 2px 6px',
+          '@media (max-width: 900px)': {
+            minWidth: '300px',
+            width: '300px',
+            maxWidth: '300px',
+          },
+          '& .MuiInputBase-root': {
+            flex: 1,
+          },
+        }}
+        component="form"
         onSubmit={onSubmit}
         elevation={0}
-        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
-        <OpenModelControl fileOpen={fileOpen}/>
+        <OpenModelControl fileOpen={fileOpen} />
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -103,29 +120,36 @@ export default function SearchBar({fileOpen}) {
             'marginTop': '4px',
             'marginLeft': '8px',
             '& input::placeholder': {
-              opacity: .3,
+              opacity: 0.3,
             },
           }}
         />
-        {inputText.length > 0 &&
+        {inputText.length > 0 && (
           <TooltipIconButton
-            title='clear'
+            title="clear"
             onClick={() => {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon/>}
+            icon={<ClearIcon />}
           />
-        }
+        )}
       </Paper>
-      { inputText.length > 0 &&
-        error.length > 0 &&
-        <div className={classes.error}>{error}</div>
-      }
-    </div>
+      {inputText.length > 0 && error.length > 0 && (
+        <Box
+          sx={{
+            marginLeft: '10px',
+            marginTop: '3px',
+            fontSize: '10px',
+            color: 'red',
+          }}
+        >
+          {error}
+        </Box>
+      )}
+    </>
   )
 }
-
 
 /**
  * Return true for paths like
@@ -145,7 +169,6 @@ export function containsIfcPath(location) {
   return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) !== null
 }
 
-
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
@@ -156,7 +179,6 @@ export function validSearchQuery(searchParams) {
   const value = searchParams.get('q')
   return value !== null && value.length > 0
 }
-
 
 /**
  * Converts a path like:
@@ -172,45 +194,17 @@ export function validSearchQuery(searchParams) {
  * @return {string}
  */
 export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
-  const baseAndPathquery = location.pathname.split(fileExtension)
+  const baseAndPathQuery = location.pathname.split(fileExtension)
   const expectedPartsCount = 2
-  if (baseAndPathquery.length === expectedPartsCount) {
-    const base = baseAndPathquery[0]
+  if (baseAndPathQuery.length === expectedPartsCount) {
+    const base = baseAndPathQuery[0]
     let newPath = base + fileExtension
-    const pathAndQuery = baseAndPathquery[1].split('?')
+    const pathAndQuery = baseAndPathQuery[1].split('?')
     if (pathAndQuery.length === expectedPartsCount) {
       const query = pathAndQuery[1]
-      newPath += `?${ query}`
+      newPath += `?${query}`
     }
     return newPath
   }
   throw new Error('Expected URL of the form <base>/file.ifc<path>[?query]')
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'display': 'flex',
-    'minWidth': '300px',
-    'width': (props) => props.inputWidth,
-    'height': '56px',
-    'maxWidth': '700px',
-    'alignItems': 'center',
-    'opacity': .8,
-    'padding': '2px 6px 2px 6px',
-    '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
-      maxWidth: '300px',
-    },
-    '& .MuiInputBase-root': {
-      flex: 1,
-    },
-  },
-  error: {
-    marginLeft: '10px',
-    marginTop: '3px',
-    fontSize: '10px',
-    color: 'red',
-  },
-})

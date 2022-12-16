@@ -1,5 +1,11 @@
 import React from 'react'
-import {act, render, screen, waitFor, renderHook} from '@testing-library/react'
+import {
+  act,
+  render,
+  screen,
+  waitFor,
+  renderHook,
+} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import {MockModel} from '../../utils/IfcMock.test'
 import useStore from '../../store/useStore'
@@ -11,17 +17,17 @@ test('ItemProperties for single element', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setSelectedElement({expressID: 10})
-    result.current.setModelStore(new MockModel)
+    result.current.setModelStore(new MockModel())
   })
 
   const {getByText} = render(
       <ShareMock>
-        <ItemProperties/>
-      </ShareMock>)
+        <ItemProperties />
+      </ShareMock>,
+  )
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
 })
-
 
 // TODO(pablo):
 /*

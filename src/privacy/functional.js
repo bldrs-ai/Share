@@ -1,5 +1,5 @@
+/* eslint-disable no-mixed-operators */
 import {assertDefined} from '../utils/assert'
-
 
 // TODO(pablo): I copied this code in
 // from @pablo-mayrgundter/cookies.js since its NPM was broken.
@@ -18,19 +18,17 @@ export function getCookieBoolean(name, defaultValue) {
   return value.toLowerCase() === 'true'
 }
 
-
 /**
  * @param {string} name Name of the cookie
  * @return {boolean} True iff the cookie is set
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name, '')
-  if (cookie && (typeof cookie === 'string')) {
+  if (cookie && typeof cookie === 'string') {
     return true
   }
   return false
 }
-
 
 /**
  * @param {string} name Name of the cookie
@@ -49,9 +47,8 @@ export function getCookie(name, defaultValue) {
       return propValue
     }
   }
-  return `${defaultValue }`
+  return `${defaultValue}`
 }
-
 
 /**
  * @param {string} name Name of the cookie
@@ -62,7 +59,7 @@ export function setCookie(name, value, exdays = 7) {
   const d = new Date()
   // eslint-disable-next-line no-magic-numbers
   const msInDay = 24 * 60 * 60 * 1000
-  d.setTime(d.getTime() + (exdays * msInDay))
-  const expires = `expires=${ d.toUTCString()}`
+  d.setTime(d.getTime() + exdays * msInDay)
+  const expires = `expires=${d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }

@@ -10,8 +10,8 @@ export default {
     icon: {
       options: ['github', 'building', 'upload'],
       mapping: {
-        building: <UilBuilding/>,
-        upload: <UilUpload/>,
+        building: <UilBuilding />,
+        upload: <UilUpload />,
       },
       control: {
         type: 'select',
@@ -33,7 +33,7 @@ export default {
 }
 
 const Template = (args) => {
-  return <RectangularButton type='contained' {...args}/>
+  return <RectangularButton type="contained" {...args} />
 }
 
 export const Button = Template.bind({})

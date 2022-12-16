@@ -10,7 +10,6 @@ describe('Share', () => {
     })
   })
 
-
   it('getModelPath parses mixed-case ifc filepaths', () => {
     ['ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc'].forEach((ext) => {
       const urlParams = {'*': `as_Ifcdf.${ext}/1234`}
@@ -21,7 +20,6 @@ describe('Share', () => {
     })
   })
 })
-
 
 // TODO(88): Testing: headless screenshot regression testing
 /*

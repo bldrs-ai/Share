@@ -8,7 +8,6 @@ window.onhashchange = () => {
   }
 }
 
-
 // TODO(pablo): Ideally this would be hanled by react-router
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
@@ -20,7 +19,6 @@ window.onhashchange = () => {
 export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
 }
-
 
 /**
  * Serialize the given paramObj and add it to the current
@@ -40,7 +38,9 @@ export function addHashParams(location, name, params, includeNames = false) {
     }
     const paramValue = params[paramName]
     const separator = encodedParams === '' ? '' : ','
-    const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
+    const encodedParam = includeNames ?
+      `${paramName}=${paramValue}` :
+      paramValue
     encodedParams += `${separator}${encodedParam}`
   }
   const sets = location.hash.substring(1).split('::')
@@ -60,12 +60,11 @@ export function addHashParams(location, name, params, includeNames = false) {
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += `${newHash.length === 0 ? '' : '::' }${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : '::'}${setKey}:${setValue}`
     }
   }
   location.hash = newHash
 }
-
 
 /**
  * @param {object} location
@@ -75,7 +74,6 @@ export function addHashParams(location, name, params, includeNames = false) {
 export function getHashParams(location, name) {
   return getHashParamsFromHashStr(location.hash.substring(1), name)
 }
-
 
 /**
  * @param {string} hashStr
@@ -94,7 +92,6 @@ export function getHashParamsFromHashStr(hashStr, name) {
   return undefined
 }
 
-
 /**
  * Removes the given named hash param.
  *
@@ -103,7 +100,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')
-  const prefix = `${name }:`
+  const prefix = `${name}:`
   let newParamsEncoded = ''
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
@@ -116,7 +113,10 @@ export function removeHashParams(location, name) {
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(
-        '', document.title, window.location.pathname + window.location.search)
+        '',
+        document.title,
+        window.location.pathname + window.location.search,
+    )
   }
 }
 

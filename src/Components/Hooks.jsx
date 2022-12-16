@@ -3,7 +3,6 @@ import {useState, useEffect} from 'react'
 
 export const MOBILE_WIDTH = 500
 
-
 /**
  * @return {boolean} True iff window width <= MOBILE_WIDTH.
  */
@@ -11,12 +10,13 @@ export function useIsMobile() {
   return useWindowDimensions().width <= MOBILE_WIDTH
 }
 
-
 /**
  * @return {object} {width, height}
  */
 export function useWindowDimensions() {
-  const [windowDimensions, setWindowDimensions] = useState(getWindowDimensions())
+  const [windowDimensions, setWindowDimensions] = useState(
+      getWindowDimensions(),
+  )
 
   useEffect(() => {
     /** Handle resize. */
@@ -30,7 +30,6 @@ export function useWindowDimensions() {
 
   return windowDimensions
 }
-
 
 /**
  * @return {object} {width, height}

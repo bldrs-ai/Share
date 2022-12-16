@@ -5,7 +5,11 @@ import MenuItem from '@mui/material/MenuItem'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '../Theme'
-import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
+import {
+  addHashParams,
+  getHashParams,
+  removeHashParams,
+} from '../utils/location'
 import {getModelCenter} from '../utils/cutPlane'
 import {Vector3} from 'three'
 import {removePlanes} from '../utils/cutPlane'
@@ -49,7 +53,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           const levelHash = planeHash.split(':')[1]
           if (isNumeric(levelHash)) {
             const level = parseInt(levelHash)
-            createFloorplanPlane(allLevels[level] + floorOffset, allLevels[level + 1] - ceilingOffset, level)
+            createFloorplanPlane(
+                allLevels[level] + floorOffset,
+                allLevels[level + 1] - ceilingOffset,
+                level,
+            )
           }
         }
       }
@@ -74,14 +82,18 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       setLevelInstance(null)
       return
     }
-    if (!levelHash || levelHash !== level ) {
+    if (!levelHash || levelHash !== level) {
       addHashParams(window.location, LEVEL_PREFIX, {levelSelected: level})
     }
     setLevelInstance(planeHeightBottom)
   }
 
   const isolateFloor = (level) => {
-    createFloorplanPlane(allLevelsState[level] + floorOffset, allLevelsState[level + 1] - ceilingOffset, level)
+    createFloorplanPlane(
+        allLevelsState[level] + floorOffset,
+        allLevelsState[level + 1] - ceilingOffset,
+        level,
+    )
   }
 
   const planView = () => {
@@ -92,12 +104,27 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     const modelCenterY = getModelCenter(model).y
     const modelCenterZ = getModelCenter(model).z
     const camera = viewer.context.ifcCamera
-    camera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
+    camera.cameraControls.setLookAt(
+        modelCenterX,
+        yConst,
+        modelCenterZ,
+        modelCenterX,
+        0,
+        modelCenterZ,
+        true,
+    )
     const currentProjection = camera.projectionManager.currentProjection
     const camFac = 5
     if (currentProjection === 0) {
       camera.cameraControls.setLookAt(
-          modelCenterX * camFac, modelCenterY * camFac, -modelCenterZ * camFac, modelCenterX, modelCenterY, modelCenterZ, true)
+          modelCenterX * camFac,
+          modelCenterY * camFac,
+          -modelCenterZ * camFac,
+          modelCenterX,
+          modelCenterY,
+          modelCenterZ,
+          true,
+      )
     }
   }
 
@@ -109,18 +136,17 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     setAnchorEl(null)
   }
 
-
   return (
     <div>
       <TooltipIconButton
         title={'Isolate Levels'}
-        icon={<LevelsIcon/>}
+        icon={<LevelsIcon />}
         onClick={handleClick}
         selected={anchorEl !== null || levelInstance !== null}
       />
       <Menu
         elevation={1}
-        id='basic-menu'
+        id="basic-menu"
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
@@ -141,20 +167,20 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       >
         <TooltipIconButton
           title={'Toggle Plan View'}
-          icon={<PlanViewIcon/>}
+          icon={<PlanViewIcon />}
           onClick={planView}
         />
-        {allLevelsState && allLevelsState.map((level, i) => (
-          <MenuItem
-            key={i}
-            onClick={() => isolateFloor(i)}
-            selected={levelInstance === (allLevelsState[i] + floorOffset)}
-          >
-          L{i}
-          </MenuItem>))
-        }
+        {allLevelsState &&
+          allLevelsState.map((level, i) => (
+            <MenuItem
+              key={i}
+              onClick={() => isolateFloor(i)}
+              selected={levelInstance === allLevelsState[i] + floorOffset}
+            >
+              L{i}
+            </MenuItem>
+          ))}
       </Menu>
     </div>
   )
 }
-

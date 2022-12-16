@@ -10,9 +10,10 @@ test('NavTree for single element', () => {
   const {getByText} = render(
       <ShareMock>
         <NavTree
-          viewer={new MockViewer}
+          viewer={new MockViewer()}
           element={newMockStringValueElt(testLabel)}
         />
-      </ShareMock>)
+      </ShareMock>,
+  )
   expect(getByText(testLabel)).toBeInTheDocument()
 })

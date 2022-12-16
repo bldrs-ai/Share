@@ -1,7 +1,7 @@
+/* eslint-disable no-mixed-operators */
 // TOOD: I copied this code in from @pablo-mayrgundter/cookies.js
 // since its NPM was broken.
 import gtag from '../utils/gtag'
-
 
 // FUNCTIONAL COOKIES FIRST, GTAGS AFTER
 /**
@@ -10,19 +10,18 @@ import gtag from '../utils/gtag'
  */
 export function isCookieSet(name) {
   const cookie = getCookie(name)
-  if (cookie && (typeof cookie === 'string')) {
+  if (cookie && typeof cookie === 'string') {
     return true
   }
   return false
 }
-
 
 /**
  * @param {string} name Name of the cookie
  * @return {string} The cookie
  */
 export function getCookie(name) {
-  const namePrefix = `${name }=`
+  const namePrefix = `${name}=`
   const decodedCookie = decodeURIComponent(document.cookie)
   const ca = decodedCookie.split(';')
   for (let i = 0; i < ca.length; i++) {
@@ -37,7 +36,6 @@ export function getCookie(name) {
   return ''
 }
 
-
 /**
  * @param {string} name Name of the cookie
  * @param {string} value Value of the cookie
@@ -47,11 +45,10 @@ export function setCookie(name, value, exdays = 1) {
   const d = new Date()
   // eslint-disable-next-line no-magic-numbers
   const msPerDay = 24 * 60 * 60 * 1000
-  d.setTime(d.getTime() + (exdays * msPerDay))
-  const expires = `expires=${ d.toUTCString()}`
+  d.setTime(d.getTime() + exdays * msPerDay)
+  const expires = `expires=${d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
 }
-
 
 // GTAGS
 /**
@@ -63,10 +60,16 @@ export function setCookie(name, value, exdays = 1) {
  * @param {object} commandParameters
  * @param {object} additionalConfigInfo
  */
-export function setGtagCookie(command, commandParameters, additionalConfigInfo) {
+export function setGtagCookie(
+    command,
+    commandParameters,
+    additionalConfigInfo,
+) {
   if (command !== 'config') {
     // TODO: not sure all gtags should be passed through, so err for now.
-    throw new Error(`gtags cookie with non-config command being used: ${ command}`)
+    throw new Error(
+        `gtags cookie with non-config command being used: ${command}`,
+    )
   }
   gtag(command, commandParameters, additionalConfigInfo)
 }
