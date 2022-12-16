@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useContext } from "react";
 import ReactMarkdown from "react-markdown";
-import { makeStyles } from "@mui/styles";
 import { ColorModeContext } from "../../Context/ColorMode";
 import useStore from "../../store/useStore";
 import { assertDefined } from "../../utils/assert";
@@ -193,7 +192,6 @@ export default function NoteCard({
 }
 
 const CardTitle = ({ avatarUrl, title, username, isComment, date }) => {
-  const classes = useStyles({ isComment: isComment });
   const dateParts = date.split("T");
   return (
     <Box
@@ -232,7 +230,7 @@ const CardTitle = ({ avatarUrl, title, username, isComment, date }) => {
           <Box sx={(theme) => ({ fontSize: "10px", color: "black" })}>
             {username}
           </Box>
-          <Box sx={(theme) => ({})} className={classes.username}>
+          <Box sx={(theme) => ({ fontSize: "10px", color: "black" })}>
             {dateParts[0]} {dateParts[1]}
           </Box>
         </Box>
@@ -269,7 +267,6 @@ const CardTitle = ({ avatarUrl, title, username, isComment, date }) => {
 };
 
 const ShowMore = ({ onClick, expandText }) => {
-  const classes = useStyles();
   return (
     <Box
       sx={(theme) => ({
@@ -299,7 +296,6 @@ const CardActions = ({
 }) => {
   const [shareIssue, setShareIssue] = useState(false);
   const hasCameras = embeddedCameras.length > 0;
-  const classes = useStyles({ embeddedCameras: hasCameras });
   return (
     <Box
       sx={(theme) => ({
@@ -350,7 +346,13 @@ const CardActions = ({
               setShareIssue(!shareIssue);
             }}
             icon={
-              <Box sx={(theme) => ({})} className={classes.iconContainer}>
+              <Box
+                sx={(theme) => ({
+                  width: "20px",
+                  height: "20px",
+                  marginBottom: "2px",
+                })}
+              >
                 <ShareIcon />
               </Box>
             }

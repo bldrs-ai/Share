@@ -1,6 +1,5 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
-import { makeStyles, useTheme } from "@mui/styles";
 import { addHashParams, removeHashParams } from "../../utils/location";
 import useStore from "../../store/useStore";
 import { TooltipIconButton } from "../Buttons";
@@ -17,7 +16,6 @@ import PreviousIcon from "../../assets/2D_Icons/NavPrev.svg";
 
 /** @return {object} React component. */
 export default function NotesNavBar() {
-  const classes = useStyles(useTheme());
   const notes = useStore((state) => state.notes);
   const selectedNoteId = useStore((state) => state.selectedNoteId);
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId);

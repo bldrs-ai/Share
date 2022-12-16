@@ -1,5 +1,4 @@
 import React, { useEffect } from "react";
-import { makeStyles } from "@mui/styles";
 import debug from "../../utils/debug";
 import useStore from "../../store/useStore";
 import { getIssues, getComments } from "../../utils/GitHub";
