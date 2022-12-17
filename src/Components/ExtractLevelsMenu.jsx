@@ -141,7 +141,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     <div>
       <TooltipIconButton
         title={'Isolate Levels'}
-        icon={<LevelsIcon />}
+        icon={<LevelsIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null || levelInstance !== null}
       />
@@ -168,7 +168,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       >
         <TooltipIconButton
           title={'Toggle Plan View'}
-          icon={<PlanViewIcon />}
+          icon={<PlanViewIcon/>}
           onClick={planView}
         />
         {allLevelsState &&

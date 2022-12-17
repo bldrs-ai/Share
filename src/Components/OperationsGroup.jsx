@@ -75,13 +75,13 @@ export default function OperationsGroup({unSelectItem}) {
       }}
     >
       <ButtonGroup orientation="vertical">
-        <ShareControl />
+        <ShareControl/>
       </ButtonGroup>
-      {!isMobile && <Divider />}
+      {!isMobile && <Divider/>}
       <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title="Notes"
-          icon={<NotesIcon />}
+          icon={<NotesIcon/>}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
@@ -89,36 +89,36 @@ export default function OperationsGroup({unSelectItem}) {
           title="Properties"
           onClick={() => toggle('Properties')}
           selected={isPropertiesOn}
-          icon={<ListIcon />}
+          icon={<ListIcon/>}
         />
         {isMobile && (
           <TooltipIconButton
             title="Elements Hierarchy"
             selected={isNavPanelOpen}
             onClick={toggleIsNavPanelOpen}
-            icon={<TreeIcon />}
+            icon={<TreeIcon/>}
           />
         )}
-        <CutPlaneMenu />
-        <ExtractLevelsMenu />
+        <CutPlaneMenu/>
+        <ExtractLevelsMenu/>
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
           selected={isSelected()}
-          icon={<ClearIcon />}
+          icon={<ClearIcon/>}
         />
       </ButtonGroup>
-      <Divider />
+      <Divider/>
       <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => theme.toggleColorMode()}
-          icon={theme.isDay() ? <MoonIcon /> : <SunIcon />}
+          icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
-        <AboutControl />
+        <AboutControl/>
       </ButtonGroup>
       {/* Invisible */}
-      <CameraControl />
+      <CameraControl/>
     </Box>
   )
 }

@@ -23,7 +23,7 @@ export async function createPropertyTable(model, ifcProps, isPset = false, seria
   if (ifcProps.constructor &&
     ifcProps.constructor.name &&
     ifcProps.constructor.name !== 'IfcPropertySet') {
-    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`} />)
+    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`}/>)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
@@ -96,7 +96,7 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
         key={serial}
       />
     )
-    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial} />
+    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial}/>
     case 'Quantities': return await quantities(model, propValue, serial)
     case 'HasProperties': return await hasProperties(model, propValue, serial)
     default: {
@@ -137,7 +137,7 @@ export async function quantities(model, quantitiesObj, serial) {
       }
     }
     val = decodeIFCString(val)
-    rows.push(<Row d1={name} d2={val} key={serial++} />)
+    rows.push(<Row d1={name} d2={val} key={serial++}/>)
   })
 }
 
@@ -202,7 +202,7 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
     const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
       '<error>' :
       decodeIFCString(dObj.NominalValue.value)
-    rows.push(<Row d1={name} d2={value} key={serial++} />)
+    rows.push(<Row d1={name} d2={value} key={serial++}/>)
   })
 }
 

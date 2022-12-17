@@ -16,7 +16,7 @@ describe('IssueControl', () => {
   it('Notes NavBar Notes', () => {
     const {getByText} = render(
         <ShareMock>
-          <NotesNavBar />
+          <NotesNavBar/>
         </ShareMock>,
     )
     expect(getByText('Notes')).toBeInTheDocument()
@@ -26,7 +26,7 @@ describe('IssueControl', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByTitle} = render(
         <ShareMock>
-          <NotesNavBar />
+          <NotesNavBar/>
         </ShareMock>,
     )
     const testNoteId = 10

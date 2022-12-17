@@ -110,7 +110,7 @@ export default function SearchBar({fileOpen}) {
         onSubmit={onSubmit}
         elevation={0}
       >
-        <OpenModelControl fileOpen={fileOpen} />
+        <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -133,7 +133,7 @@ export default function SearchBar({fileOpen}) {
               setInputText('')
               setError('')
             }}
-            icon={<ClearIcon />}
+            icon={<ClearIcon/>}
           />
         )}
       </Paper>

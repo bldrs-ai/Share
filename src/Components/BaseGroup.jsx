@@ -21,7 +21,7 @@ export default function BaseGroup({installPrefix, fileOpen}) {
         justifyContent: 'space-between',
       })}
     >
-      <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen} />
+      <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen}/>
     </Box>
   )
 }

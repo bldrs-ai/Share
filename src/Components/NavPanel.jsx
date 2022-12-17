@@ -91,7 +91,7 @@ export default function NavPanel({
           }}
           key="tree"
         >
-          {<NavTree model={model} element={element} pathPrefix={pathPrefix} />}
+          {<NavTree model={model} element={element} pathPrefix={pathPrefix}/>}
         </TreeView>
       </Box>
     </Paper>

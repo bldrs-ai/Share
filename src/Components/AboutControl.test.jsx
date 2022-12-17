@@ -10,7 +10,7 @@ describe('About control tests', () => {
   test('renders the AboutControl button', () => {
     const {getByTitle} = render(
         <MockComponent>
-          <AboutControl />
+          <AboutControl/>
         </MockComponent>,
     )
     const aboutControl = getByTitle('About BLDRS')
@@ -20,7 +20,7 @@ describe('About control tests', () => {
   test('renders AboutDialog when control is pressed', () => {
     const {getByTitle, getByText} = render(
         <MockComponent>
-          <AboutControl />
+          <AboutControl/>
         </MockComponent>,
     )
     const aboutControl = getByTitle('About BLDRS')

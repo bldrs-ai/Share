@@ -345,7 +345,7 @@ const CardActions = ({
                   marginBottom: '2px',
                 })}
               >
-                <CameraIcon />
+                <CameraIcon/>
               </Box>
             }
           />
@@ -367,7 +367,7 @@ const CardActions = ({
                   marginBottom: '2px',
                 })}
               >
-                <ShareIcon />
+                <ShareIcon/>
               </Box>
             }
           />

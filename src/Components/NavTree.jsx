@@ -123,7 +123,7 @@ export default function NavTree({model, element, pathPrefix}) {
   CustomContent.propTypes = NavTreePropTypes
 
   const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={CustomContent} {...props} />
+    return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
   let i = 0

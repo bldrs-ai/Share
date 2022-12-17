@@ -56,7 +56,7 @@ export function SideDrawer({
               })}
             >
               <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {})}>
-                {isCommentsOn ? <NotesPanel /> : null}
+                {isCommentsOn ? <NotesPanel/> : null}
               </Box>
               <Box
                 sx={preprocessMediaQuery(MOBILE_WIDTH, {
@@ -68,7 +68,7 @@ export function SideDrawer({
                 })}
               />
               <Box sx={preprocessMediaQuery(MOBILE_WIDTH, containerProperties)}>
-                {isPropertiesOn ? <PropertiesPanel /> : null}
+                {isPropertiesOn ? <PropertiesPanel/> : null}
               </Box>
             </Box>
           }
@@ -122,7 +122,7 @@ export function SideDrawer({
                   overflowY: 'scroll',
                 })}
               >
-                <NotesPanel />
+                <NotesPanel/>
               </Box>
             ) : null}
             {isCommentsOn && isPropertiesOn ? (
@@ -137,7 +137,7 @@ export function SideDrawer({
               />
             ) : null}
             <Box sx={preprocessMediaQuery(MOBILE_WIDTH, containerProperties)}>
-              {isPropertiesOn ? <PropertiesPanel /> : null}
+              {isPropertiesOn ? <PropertiesPanel/> : null}
             </Box>
           </Box>
         </Drawer>

@@ -12,11 +12,11 @@ export default {
     icon: {
       options: ['add', 'back', 'check', 'forward', 'help'],
       mapping: {
-        add: <AddCircle />,
-        back: <ArrowBack />,
-        check: <Check />,
-        forward: <ArrowForward />,
-        help: <Help />,
+        add: <AddCircle/>,
+        back: <ArrowBack/>,
+        check: <Check/>,
+        forward: <ArrowForward/>,
+        help: <Help/>,
       },
       control: {
         type: 'select',
@@ -77,7 +77,7 @@ const Template = (args) => {
   const setIsDialogDisplayed = (v) => updateArgs({isDialogDisplayed: v})
   const dialog = (
     <Dialog
-      icon={<Announcement />}
+      icon={<Announcement/>}
       headerText={'Example Dialog'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}

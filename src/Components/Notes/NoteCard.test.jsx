@@ -30,7 +30,7 @@ describe('NoteCard', () => {
     const commentCount = 10
     render(
         <ShareMock>
-          <NoteCard id={id} index={index} numberOfComments={commentCount} />
+          <NoteCard id={id} index={index} numberOfComments={commentCount}/>
         </ShareMock>,
     )
     expect(screen.getByText(commentCount)).toBeInTheDocument()
@@ -41,7 +41,7 @@ describe('NoteCard', () => {
     const index = 123
     const rendered = render(
         <ShareMock>
-          <NoteCard id={id} index={index} title="Select the note card - title" />
+          <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>,
     )
     const selectIssueButton = rendered.getByTestId('selectionContainer')

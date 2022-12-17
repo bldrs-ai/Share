@@ -10,11 +10,11 @@ export default {
     icon: {
       options: ['add', 'back', 'check', 'forward', 'search'],
       mapping: {
-        add: <AddCircle />,
-        back: <ArrowBack />,
-        check: <Check />,
-        forward: <ArrowForward />,
-        search: <Search />,
+        add: <AddCircle/>,
+        back: <ArrowBack/>,
+        check: <Check/>,
+        forward: <ArrowForward/>,
+        search: <Search/>,
       },
       control: {
         type: 'select',

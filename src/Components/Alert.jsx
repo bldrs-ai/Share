@@ -38,7 +38,7 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
       </DialogContent>
       <DialogActions>
         <IconButton onClick={handleClose}>
-          <CheckIcon />
+          <CheckIcon/>
         </IconButton>
       </DialogActions>
     </Dialog>

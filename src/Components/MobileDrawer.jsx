@@ -74,7 +74,7 @@ export default function MobileDrawer({content}) {
             <TooltipIconButton
               title="Expand"
               onClick={toggleDrawer}
-              icon={<CaretIcon />}
+              icon={<CaretIcon/>}
             />
           </Box>
           {content}

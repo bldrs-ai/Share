@@ -65,7 +65,7 @@ export function PropertiesPanel() {
                     height: '14px',
                   })}
                 >
-                  <CloseIcon />
+                  <CloseIcon/>
                 </Box>
               }
             />
@@ -83,7 +83,7 @@ export function PropertiesPanel() {
         })}
       >
         {selectedElement ? (
-          <ItemProperties />
+          <ItemProperties/>
         ) : (
           <Box sx={{width: '100%'}}>
             <Typography variant="h4" sx={{textAlign: 'left'}}>
@@ -100,7 +100,7 @@ export function PropertiesPanel() {
 export const NotesPanel = () => {
   return (
     <>
-      <NotesNavBar />
+      <NotesNavBar/>
       <Box
         sx={(theme) => ({
           marginTop: '4px',
@@ -111,7 +111,7 @@ export const NotesPanel = () => {
           overflow: 'auto',
         })}
       >
-        <Notes />
+        <Notes/>
       </Box>
     </>
   )

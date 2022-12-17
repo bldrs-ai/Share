@@ -10,7 +10,7 @@ export default {
 }
 
 const Template = (args) => {
-  return <OpenDialogBodyContent />
+  return <OpenDialogBodyContent/>
 }
 
 export const OpenDialogBody = Template.bind({})

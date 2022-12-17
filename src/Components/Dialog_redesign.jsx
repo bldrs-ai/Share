@@ -101,7 +101,7 @@ export function OpenDialogBodyContent() {
         >
           Recommended Method
         </Box>
-        <InputBar startAdornment={<UilGithub />} />
+        <InputBar startAdornment={<UilGithub/>}/>
         <Box
           sx={{
             marginTop: '10px',
@@ -136,7 +136,7 @@ export function OpenDialogBodyContent() {
           alignContent: 'center',
         }}
       >
-        <Divider />
+        <Divider/>
         <Box
           sx={{
             fontFamily: 'Helvetica',
@@ -154,7 +154,7 @@ export function OpenDialogBodyContent() {
       <RectangularButton
         title="Upload from device"
         onClick={() => console.log('clicked')}
-        icon={<UilUpload />}
+        icon={<UilUpload/>}
       />
       <Box
         sx={{
@@ -164,7 +164,7 @@ export function OpenDialogBodyContent() {
           alignContent: 'center',
         }}
       >
-        <Divider />
+        <Divider/>
         <Box
           sx={{
             fontFamily: 'Helvetica',
@@ -182,7 +182,7 @@ export function OpenDialogBodyContent() {
       <RectangularButton
         title="Load Sample Model"
         onClick={() => console.log('clicked')}
-        icon={<UilBuilding />}
+        icon={<UilBuilding/>}
       />
     </Box>
   )
@@ -227,7 +227,7 @@ export function OpenDialogHeaderContent() {
         </Box>
       </Box>
       <Box>
-        <UilMultiply style={{color: '#505050'}} />
+        <UilMultiply style={{color: '#505050'}}/>
       </Box>
     </Box>
   )

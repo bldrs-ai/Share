@@ -73,7 +73,7 @@ describe('SearchBar', () => {
   it('SeachBar', () => {
     render(
         <ShareMock>
-          <SearchBar isOpen={true} />
+          <SearchBar isOpen={true}/>
         </ShareMock>,
     )
     expect(

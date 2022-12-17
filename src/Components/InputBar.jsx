@@ -73,7 +73,7 @@ export default function InputBar({startAdornment, onSubmit}) {
             onClick={() => {
               setInputText('')
             }}
-            icon={<UilMinusSquare />}
+            icon={<UilMinusSquare/>}
           />
         ) : null}
         {inputText.length > 0 ? (
@@ -82,7 +82,7 @@ export default function InputBar({startAdornment, onSubmit}) {
             size="small"
             placement="bottom"
             onClick={() => onSubmit()}
-            icon={<UilSearch />}
+            icon={<UilSearch/>}
           />
         ) : null}
       </Paper>

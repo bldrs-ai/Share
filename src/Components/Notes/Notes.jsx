@@ -133,8 +133,8 @@ export default function Notes() {
           },
         })}
       >
-        {notes === null && <Loader type={'linear'} />}
-        {notes && notes.length === 0 && <NoContent />}
+        {notes === null && <Loader type={'linear'}/>}
+        {notes && notes.length === 0 && <NoContent/>}
         {notes && !selectedNoteId ? (
           notes.map((issue, index) => {
             return (

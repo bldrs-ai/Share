@@ -10,7 +10,7 @@ describe('SideDrawerPanels', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(
         <ShareMock>
-          <NotesPanel />
+          <NotesPanel/>
         </ShareMock>,
     )
     await act(() => {
@@ -22,7 +22,7 @@ describe('SideDrawerPanels', () => {
   it('Properties', () => {
     const {getByText} = render(
         <ShareMock>
-          <PropertiesPanel />
+          <PropertiesPanel/>
         </ShareMock>,
     )
     expect(getByText('Properties')).toBeInTheDocument()

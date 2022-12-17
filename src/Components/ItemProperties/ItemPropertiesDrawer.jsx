@@ -56,7 +56,7 @@ export default function ItemPropertiesDrawer({title, content, onClose}) {
         <TooltipIconButton
           title="Close properties"
           onClick={onClose}
-          icon={<CloseIcon />}
+          icon={<CloseIcon/>}
         />
       </Box>
       <Box

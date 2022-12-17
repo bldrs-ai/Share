@@ -10,8 +10,8 @@ export default {
 const Template = (args) => {
   return (
     <Dialog
-      headerContent={<OpenDialogHeaderContent />}
-      bodyContent={<OpenDialogBodyContent />}
+      headerContent={<OpenDialogHeaderContent/>}
+      bodyContent={<OpenDialogBodyContent/>}
       headerText={'Open file'}
       isDialogDisplayed={true}
       setIsDialogDisplayed={() => console.log('setIsDialogDisplayed')}

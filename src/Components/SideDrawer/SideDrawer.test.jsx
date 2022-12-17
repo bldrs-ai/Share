@@ -10,7 +10,7 @@ describe('SideDrawer', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {findByText} = render(
         <ShareMock>
-          <SideDrawerWrapper />
+          <SideDrawerWrapper/>
         </ShareMock>,
     )
     await act(() => {
@@ -29,7 +29,7 @@ describe('SideDrawer', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {findByText} = render(
         <ShareMock>
-          <SideDrawerWrapper />
+          <SideDrawerWrapper/>
         </ShareMock>,
     )
     await act(() => {

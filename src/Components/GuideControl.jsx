@@ -91,7 +91,7 @@ function GuidePanel({openToggle, offsetTop}) {
             },
           }}
         >
-          <Close onClick={openToggle} />
+          <Close onClick={openToggle}/>
         </Box>
         <h1>Guide</h1>
         <p>To select an element:</p>

@@ -8,7 +8,7 @@ describe('ExtractLevel', () => {
   it('ExtractLevel Button', () => {
     const {getByTitle} = render(
         <ShareMock>
-          <ExtractLevelsMenu />
+          <ExtractLevelsMenu/>
         </ShareMock>,
     )
     expect(getByTitle('Isolate Levels')).toBeInTheDocument()
@@ -17,7 +17,7 @@ describe('ExtractLevel', () => {
   it('ExtractLevel Menu', () => {
     const {getByTitle} = render(
         <ShareMock>
-          <ExtractLevelsMenu />
+          <ExtractLevelsMenu/>
         </ShareMock>,
     )
     const exLevButton = getByTitle('Isolate Levels')

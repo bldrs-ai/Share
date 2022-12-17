@@ -29,20 +29,20 @@ export default function ItemPanelControl({model, element, isOpenState}) {
     }
   }
   const isMobile = useIsMobile()
-  const itemProps = <ItemProperties model={model} element={element} />
+  const itemProps = <ItemProperties model={model} element={element}/>
   if (element) {
     return (
       <>
         {Object.keys(element).length > 0 && (
           <TooltipIconButton
             title="Properties"
-            icon={isOpenState.value ? <CloseIcon /> : <ListIcon />}
+            icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
             onClick={() => isOpenState.set(!isOpenState.value)}
           />
         )}
         {isOpenState.value &&
           (isMobile ? (
-            <MobileDrawer content={itemProps} />
+            <MobileDrawer content={itemProps}/>
           ) : (
             <ItemPropertiesDrawer
               content={itemProps}

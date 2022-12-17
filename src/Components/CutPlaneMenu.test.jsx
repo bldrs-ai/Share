@@ -10,7 +10,7 @@ describe('CutPlane', () => {
   it('Section Button', () => {
     const {getByTitle} = render(
         <ShareMock>
-          <CutPlaneMenu />
+          <CutPlaneMenu/>
         </ShareMock>,
     )
     expect(getByTitle('Section')).toBeInTheDocument()
@@ -19,7 +19,7 @@ describe('CutPlane', () => {
   it('Section Menu', () => {
     const {getByTitle, getByText} = render(
         <ShareMock>
-          <CutPlaneMenu />
+          <CutPlaneMenu/>
         </ShareMock>,
     )
     const sectionButton = getByTitle('Section')
@@ -32,7 +32,7 @@ describe('CutPlane', () => {
   it('X Section', async () => {
     const {getByTitle, getByText} = render(
         <ShareMock>
-          <CutPlaneMenu />
+          <CutPlaneMenu/>
         </ShareMock>,
     )
     const sectionButton = getByTitle('Section')
@@ -53,7 +53,7 @@ describe('CutPlane', () => {
   it('X Section in URL', async () => {
     render(
         <ShareMock initialEntries={['/v/p/index.ifc#p:x']}>
-          <CutPlaneMenu />
+          <CutPlaneMenu/>
         </ShareMock>,
     )
     const {result} = renderHook(() => useStore((state) => state))

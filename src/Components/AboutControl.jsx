@@ -35,7 +35,7 @@ export default function AboutControl() {
             marginBottom: '2px',
           }}
         >
-          <AboutIcon />
+          <AboutIcon/>
         </Box>
       }
       isDialogDisplayed={isDialogDisplayed}
@@ -68,11 +68,11 @@ export default function AboutControl() {
 function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
-      icon={<LogoB />}
-      headerText={<LogoB style={{width: '50px', height: '50px'}} />}
+      icon={<LogoB/>}
+      headerText={<LogoB style={{width: '50px', height: '50px'}}/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed} />}
+      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
       data-test-id={'about-dialog'}
     />
   )
@@ -125,7 +125,7 @@ function AboutContent({setIsDialogDisplayed}) {
       <Typography variant="h4">Build Every Thing Together</Typography>
       <Typography gutterBottom={false}>
         We are open source
-        <br />
+        <br/>
         <Link
           sx={linkStyle}
           href="https://github.com/bldrs-ai/Share"
@@ -218,12 +218,12 @@ function AboutContent({setIsDialogDisplayed}) {
               </Link>
             </Typography>
           </Box>
-          <Toggle checked={acceptCookies} onChange={changePrivacy} />
+          <Toggle checked={acceptCookies} onChange={changePrivacy}/>
         </Box>
         <RectangularButton
           title="OK"
           onClick={() => setIsDialogDisplayed(false)}
-          icon={<AboutIcon />}
+          icon={<AboutIcon/>}
           noBorder={false}
         />
       </Box>

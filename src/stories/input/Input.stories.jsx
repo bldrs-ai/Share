@@ -25,7 +25,7 @@ export default {
 }
 
 const Template = (args) => {
-  return <InputBar {...args} />
+  return <InputBar {...args}/>
 }
 
 export const Input = Template.bind({})

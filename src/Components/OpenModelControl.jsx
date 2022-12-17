@@ -58,7 +58,7 @@ export default function OpenModelControl({fileOpen}) {
             color="primary"
             value={'Open IFC'}
           >
-            <OpenIcon />
+            <OpenIcon/>
           </ToggleButton>
         </Tooltip>
       </Paper>
@@ -110,7 +110,7 @@ function OpenModelDialog({
 
   return (
     <Dialog
-      icon={<ModelsIcon />}
+      icon={<ModelsIcon/>}
       headerText={
         <Typography variant="h2" sx={{margin: '10px 10px'}}>
           Open
@@ -194,7 +194,7 @@ function OpenModelDialog({
           >
             Models hosted on GitHub are opened by inserting the link to the file
             into the Search.
-            <br />
+            <br/>
             Visit our{' '}
             <span>
               <Box
@@ -216,7 +216,7 @@ function OpenModelDialog({
           </Box>
           <RectangularButton
             title="Open from local drive"
-            icon={<UploadIcon />}
+            icon={<UploadIcon/>}
             onClick={openFile}
             noBackground={true}
             noBorder={false}

@@ -13,7 +13,7 @@ test('BaseRoutes', () => {
   const testLabel = 'Test node label'
   const {getByText} = render(
       <MockRoutes
-        contentElt={<BaseRoutes testElt={<>{testLabel}</>} />}
+        contentElt={<BaseRoutes testElt={<>{testLabel}</>}/>}
       />)
   expect(getByText(testLabel)).toBeInTheDocument()
 })

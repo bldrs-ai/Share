@@ -29,7 +29,7 @@ export default function ShareControl() {
             marginBottom: '2px',
           }}
         >
-          <ShareIcon />
+          <ShareIcon/>
         </Box>
       }
       isDialogDisplayed={isDialogDisplayed}
@@ -95,7 +95,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<ShareIcon />}
+      icon={<ShareIcon/>}
       headerText={<Typography variant="h2">Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
@@ -134,14 +134,14 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               selected={isCameraInUrl}
               placement={'bottom'}
               onClick={toggleCameraIncluded}
-              icon={<CameraIcon />}
+              icon={<CameraIcon/>}
             />
             <TooltipIconButton
               title="Copy Link"
               selected={isLinkCopied}
               placement={'bottom'}
               onClick={onCopy}
-              icon={<CopyIcon />}
+              icon={<CopyIcon/>}
             />
           </Box>
         </Box>

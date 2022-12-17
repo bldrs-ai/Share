@@ -50,7 +50,7 @@ export default function Property({detail, summary, expandState}) {
       onChange={() => setExpand(!expand)}
     >
       <AccordionSummary
-        expandIcon={<CaretIcon />}
+        expandIcon={<CaretIcon/>}
         aria-controls="panel1a-content"
         id="panel1a-header"
       >

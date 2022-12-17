@@ -38,7 +38,7 @@ export default function Logo({onClick}) {
         placement="right"
       >
         <IconButton disableRipple onClick={onClick}>
-          <LogoIcon />
+          <LogoIcon/>
         </IconButton>
       </Tooltip>
     </Box>

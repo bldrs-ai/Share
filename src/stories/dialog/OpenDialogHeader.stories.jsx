@@ -10,7 +10,7 @@ export default {
 }
 
 const Template = (args) => {
-  return <OpenDialogHeaderContent />
+  return <OpenDialogHeaderContent/>
 }
 
 export const OpenDialogHeaders = Template.bind({})

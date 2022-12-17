@@ -20,7 +20,7 @@ describe('IssueControl', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(
         <ShareMock>
-          <Notes />
+          <Notes/>
         </ShareMock>,
     )
     await act(() => {
@@ -38,7 +38,7 @@ describe('IssueControl', () => {
     const testIssueId = 10
     const {getByText} = render(
         <ShareMock>
-          <Notes />
+          <Notes/>
         </ShareMock>,
     )
     await act(() => {
@@ -56,7 +56,7 @@ describe('IssueControl', () => {
     const extractedNoteId = '1257156364'
     const {findByText} = render(
         <ShareMock>
-          <Notes />
+          <Notes/>
         </ShareMock>,
     )
 
@@ -76,7 +76,7 @@ describe('IssueControl', () => {
             '/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48',
           ]}
         >
-          <Notes />
+          <Notes/>
         </ShareMock>,
     )
 
@@ -106,7 +106,7 @@ describe('IssueControl', () => {
     it('progress bar is present during loading of notes', () => {
       const {getByRole} = render(
           <ShareMock>
-            <Notes />
+            <Notes/>
           </ShareMock>,
       )
       expect(getByRole('progressbar')).toBeInTheDocument()
@@ -115,7 +115,7 @@ describe('IssueControl', () => {
     it('progress bar is no longer visible when notes are not-null', async () => {
       const {queryByRole} = render(
           <ShareMock>
-            <Notes />
+            <Notes/>
           </ShareMock>,
       )
 

@@ -39,7 +39,7 @@ describe('BranchControl', () => {
     })
     const {getByText} = render(
         <ShareMock>
-          <BranchesControl />
+          <BranchesControl/>
         </ShareMock>,
     )
     await waitFor(() => {
@@ -54,7 +54,7 @@ describe('BranchControl', () => {
     })
     render(
         <ShareMock>
-          <BranchesControl />
+          <BranchesControl/>
         </ShareMock>,
     )
     const branchDropDown = screen.queryByText(
@@ -72,7 +72,7 @@ describe('BranchControl', () => {
     })
     render(
         <ShareMock>
-          <BranchesControl />
+          <BranchesControl/>
         </ShareMock>,
     )
     server.use(

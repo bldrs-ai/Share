@@ -190,7 +190,7 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg} />)
+    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
 
   /**
@@ -478,7 +478,7 @@ export default function CadView({
         height: '100vh',
         margin: 'auto',
       }} id='viewer-container'
-      ></Box>
+      />
       <Box sx={{}} >
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
@@ -502,7 +502,7 @@ export default function CadView({
             />
             {
               modelPath.repo !== undefined &&
-              <BranchesControl location={location} />
+              <BranchesControl location={location}/>
             }
             {isNavPanelOpen &&
               <NavPanel
@@ -519,7 +519,7 @@ export default function CadView({
           </Box>
         )}
 
-        <Logo onClick={() => navToDefault(navigate, appPrefix)} />
+        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
         <Box sx={isDrawerOpen ? {
           'position': 'fixed',
           'top': 0,
@@ -557,7 +557,7 @@ export default function CadView({
         </Box>
         {alert}
       </Box>
-      <SideDrawerWrapper />
+      <SideDrawerWrapper/>
     </Box>
   )
 }

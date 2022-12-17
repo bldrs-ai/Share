@@ -25,7 +25,7 @@ describe('CameraControl', () => {
     })
     render(
         <ShareMock>
-          <CameraControl />
+          <CameraControl/>
         </ShareMock>,
     )
     expect(screen.getByText('Camera')).toBeInTheDocument()

@@ -15,7 +15,7 @@ describe('<TooltipIconButton />', () => {
             data-test-id={'test-button'}
             title={'Hello. Is it me you\'re looking for?'}
             onClick={() => { }}
-            icon={<QuestionIcon />}
+            icon={<QuestionIcon/>}
           />
         </MockComponent>,
     )

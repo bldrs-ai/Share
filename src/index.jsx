@@ -21,6 +21,6 @@ const root = createRoot(document.getElementById('root'))
 root.render(
     <FlagsProvider value={flags}>
       <BrowserRouter>
-        <BaseRoutes />
+        <BaseRoutes/>
       </BrowserRouter>
     </FlagsProvider>)

@@ -20,7 +20,7 @@ export default function ShortcutsControl() {
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={
         <Box sx={{width: '20px', height: '20px', marginBottom: '4px'}}>
-          <KnowledgeIcon />
+          <KnowledgeIcon/>
         </Box>
       }
       dialog={
@@ -44,7 +44,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<KnowledgeIcon />}
+      icon={<KnowledgeIcon/>}
       headerText="Guides"
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}

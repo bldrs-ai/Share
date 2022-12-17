@@ -22,7 +22,7 @@ test('ItemProperties for single element', async () => {
 
   const {getByText} = render(
       <ShareMock>
-        <ItemProperties />
+        <ItemProperties/>
       </ShareMock>,
   )
   await waitFor(() => screen.getByText(testLabel))

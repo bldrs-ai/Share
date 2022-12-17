@@ -28,7 +28,7 @@ export default function NoContent() {
         }}
       >
         <Box>
-          <AttentionIcon />
+          <AttentionIcon/>
         </Box>
         <Typography variant={'h4'}>no content</Typography>
       </Box>

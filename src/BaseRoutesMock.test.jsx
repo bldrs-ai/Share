@@ -5,7 +5,7 @@ import {render} from '@testing-library/react'
 
 test('mockRoutes', () => {
   const testLabel = 'Test node label'
-  const {getByText} = render(<MockRoutes contentElt={testLabel} />)
+  const {getByText} = render(<MockRoutes contentElt={testLabel}/>)
   expect(getByText(testLabel)).toBeInTheDocument()
 })
 
@@ -23,7 +23,7 @@ export default function MockRoutes({initialEntries = ['/'], contentElt} = {}) {
   return (
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
-        <Route path="/*" element={contentElt} />
+        <Route path="/*" element={contentElt}/>
       </Routes>
     </MemoryRouter>
   )

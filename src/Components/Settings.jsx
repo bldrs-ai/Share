@@ -22,7 +22,7 @@ export default function Settings() {
       <TooltipToggleButton
         title="Settings"
         onClick={(event) => handleMenu(event)}
-        icon={<SettingsIcon />}
+        icon={<SettingsIcon/>}
         placement="left-start"
       />
       {isOpen && (

@@ -40,7 +40,7 @@ import debug from './utils/debug'
 export default function ShareRoutes({installPrefix, appPrefix}) {
   return (
     <Routes>
-      <Route path='/' element={<Forward appPrefix={appPrefix} />}>
+      <Route path='/' element={<Forward appPrefix={appPrefix}/>}>
         <Route
           path='v/new/*'
           element={
@@ -96,7 +96,7 @@ function Forward({appPrefix}) {
     }
   }, [location, appPrefix, navigate])
 
-  return <Outlet />
+  return <Outlet/>
 }
 
 
