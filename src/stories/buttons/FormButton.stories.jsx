@@ -1,12 +1,6 @@
 import React from 'react'
 import {FormButton} from '../../Components/Buttons'
-import {
-  AddCircle,
-  ArrowBack,
-  ArrowForward,
-  Check,
-  Search,
-} from '@mui/icons-material'
+import {AddCircle, ArrowBack, ArrowForward, Check, Search} from '@mui/icons-material'
 
 
 export default {
@@ -85,7 +79,11 @@ export default {
 }
 
 const Template = (args) => {
-  return <FormButton {...args} />
+  return (
+    <FormButton
+      {...args}
+    />
+  )
 }
 
 export const Button = Template.bind({})

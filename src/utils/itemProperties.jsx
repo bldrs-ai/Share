@@ -1,8 +1,9 @@
 import React, {useState} from 'react'
 import debug from './debug'
-import {Typography} from '@mui/material'
+import Typography from '@mui/material/Typography'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
 import {stoi} from './strings'
+
 
 /**
  * Recursive display of tables.  The recursion is:
@@ -16,26 +17,13 @@ import {stoi} from './strings'
  * @param {number} serial
  * @return {object} A property table react component
  */
-export async function createPropertyTable(
-    model,
-    ifcProps,
-    isPset = false,
-    serial = 0,
-) {
+export async function createPropertyTable(model, ifcProps, isPset = false, serial = 0) {
   const ROWS = []
   let rowKey = 0
-  if (
-    ifcProps.constructor &&
+  if (ifcProps.constructor &&
     ifcProps.constructor.name &&
-    ifcProps.constructor.name !== 'IfcPropertySet'
-  ) {
-    ROWS.push(
-        <Row
-          d1={'IFC Type'}
-          d2={ifcProps.constructor.name}
-          key={`type-${serial}`}
-        />,
-    )
+    ifcProps.constructor.name !== 'IfcPropertySet') {
+    ROWS.push(<Row d1={'IFC Type'} d2={ifcProps.constructor.name} key={`type-${serial}`} />)
   }
   for (const key in ifcProps) {
     if (isPset && (key === 'expressID' || key === 'Name')) {
@@ -51,11 +39,12 @@ export async function createPropertyTable(
     }
   }
   return (
-    <table key={`table-${serial++}`}>
+    <table key={`table-${serial++}`} >
       <tbody>{ROWS}</tbody>
     </table>
   )
 }
+
 
 /**
  * The keys are defined here:
@@ -75,9 +64,7 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
     label = label.substring(refPrefix.length)
   }
   if (propValue === null || propValue === undefined || propValue === '') {
-    debug().warn(
-        `prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`,
-    )
+    debug().warn(`prettyProps: skipping propName(${propName}) invalid propValue(${propValue})`)
     return null
   }
   switch (propName) {
@@ -97,24 +84,21 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
       return null
     case 'Coordinates':
     case 'RefLatitude':
-    case 'RefLongitude':
-      return (
-        <Row
-          d1={label}
-          d2={dms(
+    case 'RefLongitude': return (
+      <Row
+        d1={label}
+        d2={
+          dms(
               await deref(propValue[0]),
               await deref(propValue[1]),
-              await deref(propValue[2]),
-          )}
-          key={serial}
-        />
-      )
-    case 'expressID':
-      return <Row d1={'Express Id'} d2={propValue} key={serial} />
-    case 'Quantities':
-      return await quantities(model, propValue, serial)
-    case 'HasProperties':
-      return await hasProperties(model, propValue, serial)
+              await deref(propValue[2]))
+        }
+        key={serial}
+      />
+    )
+    case 'expressID': return <Row d1={'Express Id'} d2={propValue} key={serial} />
+    case 'Quantities': return await quantities(model, propValue, serial)
+    case 'HasProperties': return await hasProperties(model, propValue, serial)
     default: {
       // Not sure where else to put this.. but seems better than handling in deref.
       if (propValue.type === 0) {
@@ -125,11 +109,8 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
           d1={label}
           d2={
             await deref(
-                propValue,
-                model,
-                serial,
-                async (v, mdl, srl) => await createPropertyTable(mdl, v, srl),
-            )
+                propValue, model, serial,
+                async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
           }
           key={serial}
         />
@@ -137,6 +118,7 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
     }
   }
 }
+
 
 /**
  * @param {object} model IFC model
@@ -158,6 +140,7 @@ export async function quantities(model, quantitiesObj, serial) {
     rows.push(<Row d1={name} d2={val} key={serial++} />)
   })
 }
+
 
 /**
  * Convert a HasProperties to react component
@@ -203,6 +186,7 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
   return null
 }
 
+
 /**
  * @param {object} model IFC model
  * @param {Array} hasPropertiesArr Array of HasProperties elements
@@ -215,13 +199,13 @@ export async function hasProperties(model, hasPropertiesArr, serial) {
   }
   return await unpackHelper(model, hasPropertiesArr, serial, (dObj, rows) => {
     const name = decodeIFCString(dObj.Name.value)
-    const value =
-      dObj.NominalValue === undefined || dObj.NominalValue === null ?
-        '<error>' :
-        decodeIFCString(dObj.NominalValue.value)
+    const value = (dObj.NominalValue === undefined || dObj.NominalValue === null) ?
+      '<error>' :
+      decodeIFCString(dObj.NominalValue.value)
     rows.push(<Row d1={name} d2={value} key={serial++} />)
   })
 }
+
 
 /**
  * HTML table row
@@ -245,32 +229,25 @@ function Row({d1, d2}) {
     debug().warn('Row with invalid data: ', d1, d2)
   }
   if (d2 === null) {
-    return (
+    return <tr onDoubleClick={toggleActive}><td colSpan='2'>{d1}</td></tr>
+  }
+  return (
+    isActive ? (
       <tr onDoubleClick={toggleActive}>
-        <td colSpan="2">{d1}</td>
+        <td colSpan={2}>
+          <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
+          <Typography variant='propValue'>{d2}</Typography>
+        </td>
+      </tr>
+    ) : (
+      <tr onDoubleClick={toggleActive}>
+        <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
+        <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
       </tr>
     )
-  }
-  return isActive ? (
-    <tr onDoubleClick={toggleActive}>
-      <td colSpan={2}>
-        <Typography variant="propTitle" sx={{display: 'block'}}>
-          {d1}
-        </Typography>
-        <Typography variant="propValue">{d2}</Typography>
-      </td>
-    </tr>
-  ) : (
-    <tr onDoubleClick={toggleActive}>
-      <td style={rowStyleInactive}>
-        <Typography variant="propTitle">{d1}</Typography>
-      </td>
-      <td style={rowStyleInactive}>
-        <Typography variant="propValue">{d2}</Typography>
-      </td>
-    </tr>
   )
 }
+
 
 /**
  * A coordinate in Degree-Minutes-Seconds (DMS) syntax, e..g. 1° 2' 3''

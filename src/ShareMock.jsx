@@ -5,6 +5,7 @@ import {ColorModeContext} from './Context/ColorMode'
 import useTheme from './Theme'
 import BaseRoutesMock from './BaseRoutesMock.test'
 
+
 /**
  * Mocks the root Share react component.
  *
@@ -22,7 +23,9 @@ export default function ShareMock({initialEntries, children} = {}) {
       initialEntries={initialEntries}
       contentElt={
         <ColorModeContext.Provider value={colorMode}>
-          <ThemeProvider theme={theme}>{children}</ThemeProvider>
+          <ThemeProvider theme={theme}>
+            {children}
+          </ThemeProvider>
         </ColorModeContext.Provider>
       }
     />

@@ -1,5 +1,6 @@
 import {isObject} from './objects'
 
+
 /**
  * Recursively replace MOBILE_WIDTH in object with its given value.
  *

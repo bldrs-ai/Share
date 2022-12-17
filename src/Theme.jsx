@@ -3,22 +3,23 @@ import {grey} from '@mui/material/colors'
 import {useEffect, useMemo, useState} from 'react'
 import * as Privacy from './privacy/Privacy'
 
+
 /**
  * @return {object} {theme, colorMode}
  */
 export default function useTheme() {
   const [themeChangeListeners] = useState({})
-  const [mode, setMode] = useState(
-      Privacy.getCookie({
-        component: 'theme',
-        name: 'mode',
-        defaultValue: getSystemCurrentLightDark(),
-      }),
-  )
+  const [mode, setMode] = useState(Privacy.getCookie({
+    component: 'theme',
+    name: 'mode',
+    defaultValue: getSystemCurrentLightDark(),
+  }))
+
 
   const theme = useMemo(() => {
     return loadTheme(mode)
   }, [mode])
+
 
   const colorMode = useMemo(() => {
     return {
@@ -27,11 +28,7 @@ export default function useTheme() {
       toggleColorMode: () => {
         setMode((prevMode) => {
           const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-          Privacy.setCookie({
-            component: 'theme',
-            name: 'mode',
-            value: newMode,
-          })
+          Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
           return newMode
         })
       },
@@ -41,21 +38,22 @@ export default function useTheme() {
     }
   }, [mode, theme, themeChangeListeners])
 
+
   useEffect(() => {
     if (mode && theme) {
-      Object.values(themeChangeListeners).map((onChangeCb) =>
-        onChangeCb(mode, theme),
-      )
+      Object.values(themeChangeListeners).map((onChangeCb) => onChangeCb(mode, theme))
     }
   }, [mode, theme, themeChangeListeners])
 
   return {theme, colorMode}
 }
 
+
 export const Themes = {
   Day: 'Day',
   Night: 'Night',
 }
+
 
 /**
  * @param {string} mode
@@ -113,34 +111,10 @@ function loadTheme(mode) {
     fontWeightRegular: fontWeight,
     fontWeightBold,
     fontWeightMedium: fontWeight,
-    h1: {
-      fontSize: '1.3rem',
-      lineHeight,
-      letterSpacing,
-      fontWeight,
-      fontFamily,
-    },
-    h2: {
-      fontSize: '1.2rem',
-      lineHeight,
-      letterSpacing,
-      fontWeight,
-      fontFamily,
-    },
-    h3: {
-      fontSize: '1.1rem',
-      lineHeight,
-      letterSpacing,
-      fontWeight,
-      fontFamily,
-    },
-    h4: {
-      fontSize: '0.9rem',
-      lineHeight,
-      letterSpacing,
-      fontWeight,
-      fontFamily,
-    },
+    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
+    h4: {fontSize: '0.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
@@ -160,8 +134,7 @@ function loadTheme(mode) {
   // https://mui.com/customization/dark-mode/
   let activePalette = mode === Themes.Day ? day : night
   activePalette = {
-    ...activePalette,
-    ...{
+    ...activePalette, ...{
       mode: mode === Themes.Day ? 'light' : 'dark',
       background: {
         paper: activePalette.primary.main,
@@ -212,6 +185,7 @@ function loadTheme(mode) {
   return createTheme(theme)
 }
 
+
 /**
  * Look for explicit night, otherwise day
  *
@@ -222,9 +196,7 @@ function loadTheme(mode) {
  */
 export function getSystemCurrentLightDark() {
   if (window.matchMedia) {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ?
-      Themes.Night :
-      Themes.Day
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? Themes.Night : Themes.Day
   }
   return Themes.Day
 }

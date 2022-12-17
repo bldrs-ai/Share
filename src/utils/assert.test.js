@@ -1,4 +1,7 @@
-import {assert, assertDefined} from './assert'
+import {
+  assert,
+  assertDefined,
+} from './assert'
 
 
 test('assert', () => {
@@ -10,6 +13,7 @@ test('assert', () => {
     // Expected
   }
 })
+
 
 test('assert', () => {
   assertDefined(1)
@@ -31,6 +35,7 @@ test('assert', () => {
     new TestVarargs({a, b})
   })
 })
+
 
 /**
  * Catches expected failures or throws if no failure.
@@ -56,6 +61,7 @@ class TestArgsCtor {
     assertDefined(a, b)
   }
 }
+
 
 /** Dummy class which asserts is ctor args. */
 class TestVarargs {

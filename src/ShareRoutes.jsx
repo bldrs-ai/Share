@@ -10,6 +10,7 @@ import {assertDefined} from './utils/assert'
 import Share from './Share'
 import debug from './utils/debug'
 
+
 /**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
@@ -39,9 +40,9 @@ import debug from './utils/debug'
 export default function ShareRoutes({installPrefix, appPrefix}) {
   return (
     <Routes>
-      <Route path="/" element={<Forward appPrefix={appPrefix} />}>
+      <Route path='/' element={<Forward appPrefix={appPrefix} />}>
         <Route
-          path="v/new/*"
+          path='v/new/*'
           element={
             <Share
               installPrefix={installPrefix}
@@ -51,7 +52,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
           }
         />
         <Route
-          path="v/p/*"
+          path='v/p/*'
           element={
             <Share
               installPrefix={installPrefix}
@@ -61,7 +62,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
           }
         />
         <Route
-          path="v/gh/:org/:repo/:branch/*"
+          path='v/gh/:org/:repo/:branch/*'
           element={
             <Share
               installPrefix={installPrefix}
@@ -74,6 +75,7 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
     </Routes>
   )
 }
+
 
 /**
  * Forward page from /share to /share/v/p per spect at:
@@ -97,6 +99,7 @@ function Forward({appPrefix}) {
   return <Outlet />
 }
 
+
 /**
  * Check if input is a url
  *
@@ -105,15 +108,14 @@ function Forward({appPrefix}) {
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return (
-    input.toLowerCase().endsWith('.ifc') &&
-    (input.startsWith('http') ||
-      input.startsWith('/') ||
-      input.startsWith('bldrs') ||
-      input.startsWith('github') ||
-      input.startsWith('localhost'))
-  )
+  return input.toLowerCase().endsWith('.ifc') && (
+    input.startsWith('http') ||
+    input.startsWith('/') ||
+    input.startsWith('bldrs') ||
+    input.startsWith('github') ||
+    input.startsWith('localhost'))
 }
+
 
 /**
  * @param {string} urlWithPath
@@ -124,6 +126,7 @@ export function githubUrlOrPathToSharePath(urlWithPath) {
   const orgRepoPath = extractOrgPrefixedPath(trimToPath(urlWithPath))
   return `/share/v/gh${orgRepoPath}`
 }
+
 
 // Functions below exported only for testing.
 /**
@@ -155,6 +158,7 @@ export function trimToPath(urlStr) {
   return s.substring(firstSlashNdx)
 }
 
+
 /** Named capture groups for a GitHub URL's path parts. */
 const pathParts = [
   '(?<org>[^/]+)',
@@ -163,11 +167,13 @@ const pathParts = [
   '(?<file>.+)',
 ]
 
+
 /**
  * Matches strings like '/org/repo/branch/dir1/dir2/file.ifc' with
  * an optional host prefix.
  */
 const re = new RegExp(`^/${pathParts.join('/')}$`)
+
 
 /**
  * Convert a Github repository URL or partial path to a Share path
@@ -181,9 +187,7 @@ const re = new RegExp(`^/${pathParts.join('/')}$`)
 export function extractOrgPrefixedPath(urlWithPath) {
   const match = re.exec(urlWithPath) // TODO actually handle
   if (match) {
-    const {
-      groups: {org, repo, branch, file},
-    } = match
+    const {groups: {org, repo, branch, file}} = match
     return `/${org}/${repo}/${branch}/${file}`
   }
   throw new Error(`Expected a multi-part file path: ${urlWithPath}`)

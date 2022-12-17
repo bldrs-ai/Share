@@ -1,5 +1,6 @@
 import {Themes, getSystemCurrentLightDark} from './Theme'
 
+
 // https://stackoverflow.com/questions/41885841/how-can-i-mock-the-javascript-window-object-using-jest
 let windowSpy
 
@@ -7,9 +8,11 @@ beforeEach(() => {
   windowSpy = jest.spyOn(window, 'window', 'get')
 })
 
+
 afterEach(() => {
   windowSpy.mockRestore()
 })
+
 
 describe('Theme', () => {
   test('getSystemCurrentLightDark is day when system is day', () => {

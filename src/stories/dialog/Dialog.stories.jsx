@@ -1,8 +1,5 @@
 import React from 'react'
-import Dialog, {
-  OpenDialogHeaderContent,
-  OpenDialogBodyContent,
-} from '../../Components/Dialog_redesign'
+import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from '../../Components/Dialog_redesign'
 
 
 export default {

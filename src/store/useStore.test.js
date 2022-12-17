@@ -26,12 +26,13 @@ describe('IFC slice', () => {
   it('select an IFC element', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
-      result.current.setSelectedElement({
-        Name: {
-          type: 1,
-          value: 'Together',
-        },
-      })
+      result.current.setSelectedElement(
+          {
+            Name: {
+              type: 1,
+              value: 'Together',
+            },
+          })
     })
     expect(result.current.selectedElement).toEqual({
       Name: {
@@ -48,7 +49,9 @@ describe('IFC slice', () => {
     act(() => {
       result.current.setModelStore({castShadow: false})
     })
-    expect(result.current.modelStore).toEqual({castShadow: false})
+    expect(result.current.modelStore).toEqual(
+        {castShadow: false},
+    )
   })
 })
 
@@ -58,6 +61,8 @@ describe('IFC slice', () => {
     act(() => {
       result.current.setViewerStore({GLTF: {GLTFModels: {}}})
     })
-    expect(result.current.viewerStore).toEqual({GLTF: {GLTFModels: {}}})
+    expect(result.current.viewerStore).toEqual(
+        {GLTF: {GLTFModels: {}}},
+    )
   })
 })

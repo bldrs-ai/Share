@@ -23,5 +23,4 @@ root.render(
       <BrowserRouter>
         <BaseRoutes />
       </BrowserRouter>
-    </FlagsProvider>,
-)
+    </FlagsProvider>)

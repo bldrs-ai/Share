@@ -1,5 +1,6 @@
 import {Box3, BufferAttribute, BufferGeometry, Mesh, Vector3} from 'three'
 
+
 /* eslint-disable no-magic-numbers */
 /**
  * getSelectionAxisFromBoundingBox is the helper method for the cutplane logic
@@ -24,6 +25,7 @@ export function getSelectionAxisFromBoundingBox(boundingBox) {
   }
 }
 
+
 /**
  * getModelCenter return the center of the model based on bounding box
  *
@@ -34,15 +36,16 @@ export function getModelCenter(ifcModel) {
   return new Vector3(
       (ifcModel?.geometry.boundingBox.max.x +
       ifcModel?.geometry.boundingBox.min.x) /
-      2,
+    2,
       (ifcModel?.geometry.boundingBox.max.y +
       ifcModel?.geometry.boundingBox.min.y) /
-      2,
+    2,
       (ifcModel?.geometry.boundingBox.max.z +
       ifcModel?.geometry.boundingBox.min.z) /
-      2,
+    2,
   )
 }
+
 
 /**
  * getElementBoundingBox creates a bounding box around the model
@@ -58,10 +61,7 @@ export function getElementBoundingBox(selection) {
   const vertices = Float32Array.from(coordinates)
   const mesh = new Mesh(geometry)
   const boundingBox = new Box3()
-  geometry.setAttribute(
-      'position',
-      new BufferAttribute(vertices, selection.geometry.index.count),
-  )
+  geometry.setAttribute('position', new BufferAttribute(vertices, selection.geometry.index.count))
   boundingBox.setFromObject(mesh)
 
   for (let i = 0; i < selection.geometry.index.array.length; i++) {
@@ -88,3 +88,4 @@ export function removePlanes(viewer) {
     viewer?.clipper['context'].removeClippingPlane(plane)
   }
 }
+

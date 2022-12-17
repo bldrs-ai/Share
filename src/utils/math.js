@@ -6,6 +6,7 @@ export function numToFloat(num) {
   return parseFloat(num)
 }
 
+
 /**
  * @param {number} num Number to round
  * @param {number} numDigits Number of digits to round to, default = 0
@@ -14,6 +15,7 @@ export function numToFloat(num) {
 export function round(num, numDigits = 0) {
   return numToFloat(numToFloat(num).toFixed(numDigits))
 }
+
 
 /**
  * @param {number} x X coordinate

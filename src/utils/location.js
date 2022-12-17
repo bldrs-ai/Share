@@ -8,6 +8,7 @@ window.onhashchange = () => {
   }
 }
 
+
 // TODO(pablo): Ideally this would be hanled by react-router
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
@@ -19,6 +20,7 @@ window.onhashchange = () => {
 export function addHashListener(name, onHashCb) {
   hashListeners[name] = onHashCb
 }
+
 
 /**
  * Serialize the given paramObj and add it to the current
@@ -38,9 +40,7 @@ export function addHashParams(location, name, params, includeNames = false) {
     }
     const paramValue = params[paramName]
     const separator = encodedParams === '' ? '' : ','
-    const encodedParam = includeNames ?
-      `${paramName}=${paramValue}` :
-      paramValue
+    const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
     encodedParams += `${separator}${encodedParam}`
   }
   const sets = location.hash.substring(1).split('::')
@@ -66,6 +66,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   location.hash = newHash
 }
 
+
 /**
  * @param {object} location
  * @param {string} name prefix of the params to fetch
@@ -74,6 +75,7 @@ export function addHashParams(location, name, params, includeNames = false) {
 export function getHashParams(location, name) {
   return getHashParamsFromHashStr(location.hash.substring(1), name)
 }
+
 
 /**
  * @param {string} hashStr
@@ -91,6 +93,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
   }
   return undefined
 }
+
 
 /**
  * Removes the given named hash param.
@@ -113,9 +116,7 @@ export function removeHashParams(location, name) {
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(
-        '',
-        document.title,
-        window.location.pathname + window.location.search,
+        '', document.title, window.location.pathname + window.location.search,
     )
   }
 }

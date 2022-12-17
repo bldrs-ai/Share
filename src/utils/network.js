@@ -10,6 +10,7 @@ export function restoreRegularNetworkingForUnitTests() {
   disabledForUnitTests = true
 }
 
+
 /**
  * @return {boolean} True if running locally
  */

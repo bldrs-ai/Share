@@ -1,5 +1,6 @@
 window.dataLayer = window['dataLayer'] || []
 
+
 /** Create google analytics tag. */
 export default function gtag() {
   const dataLayer = window.dataLayer

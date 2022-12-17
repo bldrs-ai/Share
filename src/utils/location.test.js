@@ -1,4 +1,8 @@
-import {addHashParams, getHashParams, removeHashParams} from './location'
+import {
+  addHashParams,
+  getHashParams,
+  removeHashParams,
+} from './location'
 
 
 test('addHashParams', () => {
@@ -25,6 +29,7 @@ test('addHashParams', () => {
   expect(loc.hash).toBe('test:a=1')
 })
 
+
 test('addHashParamsMultiple', () => {
   let loc
   loc = {hash: '#other:a=0::otter:b=3'}
@@ -36,11 +41,13 @@ test('addHashParamsMultiple', () => {
   expect(loc.hash).toBe('other:a=0::test:a=1::otter:b=3')
 })
 
+
 test('addHashParams with tilde', () => {
   const loc = {hash: '#other:a=0::otter:b=3'}
   addHashParams(loc, 'test', {a: 1}, true)
   expect(loc.hash).toBe('other:a=0::otter:b=3::test:a=1')
 })
+
 
 test('getHashParams', () => {
   let loc
@@ -53,6 +60,7 @@ test('getHashParams', () => {
   expect(getHashParams(loc, 'b')).toBe('b:2')
   expect(getHashParams(loc, 'c')).toBe(undefined)
 })
+
 
 test('removeHashParams', () => {
   let loc

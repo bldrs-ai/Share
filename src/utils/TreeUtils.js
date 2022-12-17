@@ -14,6 +14,7 @@ export function visitTree(elt, observeCb) {
   }
 }
 
+
 /**
  * Visits an element tree and sets parent links for each element.
  *
@@ -31,6 +32,7 @@ export function setupLookupAndParentLinks(rootElt, elementsById) {
   })
 }
 
+
 /**
  * Generate a URL address fragment for the element.
  *
@@ -46,7 +48,5 @@ export function computeElementPathIds(elt, getIdCb) {
     throw new Error('Illegal argument: getIdCb undefined')
   }
   const id = getIdCb(elt)
-  return elt.parent ?
-    computeElementPathIds(elt.parent, getIdCb).concat(id) :
-    [id]
+  return elt.parent ? computeElementPathIds(elt.parent, getIdCb).concat(id) : [id]
 }

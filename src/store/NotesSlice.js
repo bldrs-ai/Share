@@ -14,7 +14,6 @@ export default function createNotesSlice(set, get) {
     setNotes: (notes) => set(() => ({notes: notes})),
     setComments: (comments) => set(() => ({comments: comments})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
-    setSelectedNoteIndex: (noteIndex) =>
-      set(() => ({selectedNoteIndex: noteIndex})),
+    setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
   }
 }

@@ -3,6 +3,7 @@ import * as Functional from './functional'
 import * as Privacy from './Privacy'
 import {assertDefined} from '../utils/assert'
 
+
 /**
  * A passthrough to GTags that can be toggled by user preference.
  *
@@ -18,12 +19,14 @@ export function recordEvent(commandParameters, additionalConfigInfo) {
   }
 }
 
+
 /**
  * @return {boolean} is social level of privacy enabled
  */
 export function isAnalyticsAllowed() {
   return Privacy.isPrivacySocialEnabled()
 }
+
 
 /**
  * Enable or disable analytics cookies
@@ -32,9 +35,5 @@ export function isAnalyticsAllowed() {
  */
 export function setIsAnalyticsAllowed(isAllowed) {
   assertDefined(isAllowed)
-  Functional.setBoolean({
-    component: 'cookies',
-    name: 'isAnalyticsAllowed',
-    value: isAllowed,
-  })
+  Functional.setBoolean({component: 'cookies', name: 'isAnalyticsAllowed', value: isAllowed})
 }

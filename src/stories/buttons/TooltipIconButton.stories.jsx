@@ -75,7 +75,11 @@ export default {
 }
 
 const Template = (args) => {
-  return <TooltipIconButton {...args} />
+  return (
+    <TooltipIconButton
+      {...args}
+    />
+  )
 }
 
 export const Button = Template.bind({})

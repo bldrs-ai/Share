@@ -33,7 +33,7 @@ export default {
 }
 
 const Template = (args) => {
-  return <RectangularButton type="contained" {...args} />
+  return <RectangularButton type='contained' {...args} />
 }
 
 export const Button = Template.bind({})

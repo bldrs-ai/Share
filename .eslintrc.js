@@ -97,7 +97,6 @@ module.exports = {
     'jsdoc/require-param': 'off',
     'jsdoc/require-param-type': 'off',
     'require-await': 'error',
-    'linebreak-style': ['error', 'windows'],
   },
   settings: {
     react: {

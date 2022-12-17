@@ -1,13 +1,8 @@
 import React, {useEffect} from 'react'
-import {
-  Outlet,
-  Route,
-  Routes,
-  useLocation,
-  useNavigate,
-} from 'react-router-dom'
+import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -27,17 +22,13 @@ import debug from './utils/debug'
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigation = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ?
-    '/Share' :
-    ''
+  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix}/`
 
   useEffect(() => {
-    if (location.pathname === installPrefix || location.pathname === basePath) {
-      debug().log(
-          'BaseRoutes#useEffect[], forwarding to: ',
-          `${installPrefix}/share`,
-      )
+    if (location.pathname === installPrefix ||
+      location.pathname === basePath) {
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix}/share`)
       navigation(`${installPrefix}/share`)
     }
   }, [basePath, installPrefix, location, navigation])
@@ -48,12 +39,11 @@ export default function BaseRoutes({testElt = null}) {
         <Route
           path="share/*"
           element={
-            testElt || (
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={`${installPrefix}/share`}
-              />
-            )
+            testElt ||
+            <ShareRoutes
+              installPrefix={installPrefix}
+              appPrefix={`${installPrefix}/share`}
+            />
           }
         />
       </Route>

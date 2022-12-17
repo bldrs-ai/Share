@@ -1,6 +1,7 @@
 import {execSync} from 'child_process'
 import fs from 'fs'
 
+
 /**
  * This is a script meant to be used as a command-line tool by the
  * build tool in package.json.  It reads package.json, and updates the
@@ -16,9 +17,7 @@ const rawFileData = fs.readFileSync('package.json')
 const pkgJson = JSON.parse(rawFileData)
 
 // https://stackoverflow.com/questions/24663175/how-can-i-inject-a-build-number-with-webpack
-const __versionString__ = execSync('git rev-list HEAD --count')
-    .toString()
-    .trim()
+const __versionString__ = execSync('git rev-list HEAD --count').toString().trim()
 const version = pkgJson.version.toString().replace(/-.*/, '')
 pkgJson.version = `${version}-r${__versionString__}`
 const pkgJsonStr = JSON.stringify(pkgJson, null, '  ')

@@ -11,19 +11,19 @@ test('MockViewer getProperties', () => {
   expect(props.value).toEqual(testLabel)
 })
 
+
 test('MockViewer getIfcType', () => {
-  expect(
-      new MockViewer().IFC.loader.ifcManager.getIfcType(undefined, undefined),
-  ).toEqual('IFCELEMENT')
+  expect(new MockViewer().IFC.loader.ifcManager
+      .getIfcType(undefined, undefined))
+      .toEqual('IFCELEMENT')
 })
 
+
 test('MockViewer getPropertySets', async () => {
-  const val = await new MockViewer().IFC.loader.ifcManager.getPropertySets(
-      undefined,
-      undefined,
-  )
+  const val = await new MockViewer().IFC.loader.ifcManager.getPropertySets(undefined, undefined)
   expect(val).toEqual([])
 })
+
 
 /** Create a mock IFC model */
 export class MockModel {
@@ -32,6 +32,7 @@ export class MockModel {
     this.propsById = propsById
   }
 
+
   /**
    * @param {number} expressId
    * @return {object}
@@ -39,6 +40,7 @@ export class MockModel {
   getItemProperties(expressId) {
     return this.propsById[expressId]
   }
+
 
   /**
    * @param {number} expressId
@@ -50,6 +52,7 @@ export class MockModel {
     })
   }
 
+
   /**
    * @param {object} elt IFC element
    * @param {object} viewer IfcViewerApi instance
@@ -59,6 +62,7 @@ export class MockModel {
     return 'IFCELEMENT'
   }
 }
+
 
 /** Create a mock IFC viewer */
 export class MockViewer {

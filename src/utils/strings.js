@@ -12,6 +12,7 @@ export function stoi(s) {
   return i
 }
 
+
 /**
  * Create a simple key by removing any non alpha-numeric character
  *
@@ -21,6 +22,7 @@ export function stoi(s) {
 export function toKey(str) {
   return str.replace(/[^a-zA-Z0-9]+/, '')
 }
+
 
 /**
  * Check if the string is a number
@@ -32,11 +34,10 @@ export function isNumeric(str) {
   if (typeof str !== 'string') {
     return false
   }
-  return (
-    !isNaN(str) && // use type coercion to parse the _entirety_ of the string
-    !isNaN(parseFloat(str))
-  ) // ...and ensure strings of whitespace fail
+  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
+    !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
 }
+
 
 /**
  * @param {string} str
