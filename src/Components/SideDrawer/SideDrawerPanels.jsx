@@ -3,8 +3,8 @@ import {Box, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import {TooltipIconButton} from '../Buttons'
-import Notes from '../notess/Notes'
-import NotesNavBar from '../notess/NotesNavBar'
+import Notes from '../Notes/Notes'
+import NotesNavBar from '../Notes/NotesNavBar'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 
 /**
