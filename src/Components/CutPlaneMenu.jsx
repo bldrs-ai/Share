@@ -152,7 +152,6 @@ export function getPlaneOffset(viewer, ifcModel) {
     let planeHash
     const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
     const modelCenter = getModelCenter(ifcModel)
-    console.log('model center', modelCenter)
     for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
       if (value !== 0 ) {
         planeNormal = key

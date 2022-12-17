@@ -1,6 +1,5 @@
 import React from 'react'
 import {render} from '@testing-library/react'
-// import {ifcModel} from '../__mocks__/MockModel.js'
 import CutPlaneMenu from './CutPlaneMenu'
 import ShareMock from '../ShareMock'
 
@@ -16,6 +15,12 @@ describe('CutPlane', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     expect(getByTitle('Plan')).toBeInTheDocument()
   })
+
+  // it('test plane offset', () => {
+  //   const viewer = __getIfcViewerAPIMockSingleton()
+  //   const planeOffsetObj = getPlaneOffset(ifcModel, viewer)
+  //   console.log('planeOffsetObj', planeOffsetObj)
+  // })
 
   // it('Section Menu', () => {
   //   const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
