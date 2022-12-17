@@ -10,6 +10,7 @@ import {
 } from '../utils/location'
 import {roundCoord} from '../utils/math'
 
+
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
 // handlers below to function, but we also decided not to display it
 // as its own button.  So for now it's hidden.
@@ -37,8 +38,10 @@ export default function CameraControl() {
   return <div style={{display: 'none'}}>Camera</div>
 }
 
+
 /** The prefix to use for camera coordinate in the URL hash. */
 export const CAMERA_PREFIX = 'c'
+
 
 /**
  * Set camera position from window location hash and add listener for
@@ -51,6 +54,7 @@ function onLoad(location, cameraControls) {
   debug().log('CameraControl#onLoad')
   addHashListener('camera', () => onHash(location, cameraControls))
 }
+
 
 // exported for testing only
 /**
@@ -67,6 +71,7 @@ export function onHash(location, cameraControls) {
   }
   setCameraFromParams(encodedParams, cameraControls)
 }
+
 
 /**
  * Set the camera position
@@ -90,10 +95,12 @@ export function setCameraFromParams(encodedParams, cameraControls) {
   addCameraUrlParams(cameraControls)
 }
 
+
 const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
 const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
 const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
 const paramRegex = new RegExp(paramPattern)
+
 
 // Exported for testing
 /**
@@ -139,6 +146,7 @@ export function parseHashParams(encodedParams) {
   }
 }
 
+
 /** @return {boolean} True iff the camera hash params are present. */
 export function hasValidUrlParams() {
   const encoded = getHashParams(window.location, CAMERA_PREFIX)
@@ -147,6 +155,7 @@ export function hasValidUrlParams() {
   }
   return false
 }
+
 
 /**
  * Adds camera coords to url.
@@ -169,6 +178,7 @@ export function addCameraUrlParams(cameraControls) {
   }
   addHashParams(window.location, CAMERA_PREFIX, camArr)
 }
+
 
 /** Removes camera params from the URL if present */
 export function removeCameraUrlParams() {

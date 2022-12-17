@@ -130,6 +130,7 @@ describe('IssueControl', () => {
   })
 })
 
+
 const MOCK_NOTES = [
   {
     embeddedUrl:

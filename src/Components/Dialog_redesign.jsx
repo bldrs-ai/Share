@@ -18,6 +18,7 @@ import {assertDefined} from '../utils/assert'
 import {RectangularButton} from './Buttons'
 import InputBar from './InputBar'
 
+
 /**
  * A generic base dialog component.
  *
@@ -58,6 +59,7 @@ export default function Dialog({
     </MuiDialog>
   )
 }
+
 
 /**
  * Content for the open Dialog
@@ -185,6 +187,7 @@ export function OpenDialogBodyContent() {
     </Box>
   )
 }
+
 
 /**
  * Title for the open Dialog

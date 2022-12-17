@@ -10,6 +10,7 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 const drawerBleeding = 300
 
+
 /**
  * @param {object} content React component to be wrapped
  * @return {object} React component

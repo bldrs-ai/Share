@@ -40,6 +40,7 @@ const NavTreePropTypes = {
   nodeId: PropTypes.string.isRequired,
 }
 
+
 /**
  * @param {object} model IFC model
  * @param {object} element IFC element of the model

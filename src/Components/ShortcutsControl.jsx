@@ -5,6 +5,7 @@ import {useIsMobile} from './Hooks'
 import {ControlButton} from './Buttons'
 import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
 
+
 /**
  * Displays keyboard shortcuts like how to add a cut plane.
  *
@@ -31,6 +32,7 @@ export default function ShortcutsControl() {
     />
   )
 }
+
 
 /**
  * @param {boolean} isDialogDisplayed

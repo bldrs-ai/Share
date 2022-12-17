@@ -20,6 +20,7 @@ import CameraIcon from '../../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../../assets/2D_Icons/Share.svg'
 import {Box, useTheme} from '@mui/material'
 
+
 /**
  * Note card
  *
@@ -85,6 +86,7 @@ export default function NoteCard({
     }
   }, [selected, firstCamera, cameraControls])
 
+
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
     setSelectedNoteIndex(index)
@@ -94,6 +96,7 @@ export default function NoteCard({
     }
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
+
 
   /**
    * Moves the camera to the position specified in the url attached to
@@ -107,6 +110,7 @@ export default function NoteCard({
     }
   }
 
+
   /**
    * Copies the issue url which contains the issue id, camera position
    * and selected element path.
@@ -117,6 +121,7 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+
 
   const tempTheme = useTheme()
   console.log('tempTheme: ', tempTheme)
@@ -195,8 +200,10 @@ export default function NoteCard({
   )
 }
 
+
 const CardTitle = ({avatarUrl, title, username, isComment, date}) => {
   const dateParts = date.split('T')
+
   return (
     <Box
       sx={(theme) => ({
@@ -270,6 +277,7 @@ const CardTitle = ({avatarUrl, title, username, isComment, date}) => {
   )
 }
 
+
 const ShowMore = ({onClick, expandText}) => {
   return (
     <Box
@@ -290,6 +298,7 @@ const ShowMore = ({onClick, expandText}) => {
   )
 }
 
+
 const CardActions = ({
   onClickCamera,
   onClickShare,
@@ -300,6 +309,7 @@ const CardActions = ({
 }) => {
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
+
   return (
     <Box
       sx={(theme) => ({

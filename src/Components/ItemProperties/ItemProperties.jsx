@@ -5,6 +5,7 @@ import useStore from '../../store/useStore'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
 
+
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
  *
@@ -92,6 +93,7 @@ export default function ItemProperties() {
   )
 }
 
+
 /**
  * @param {object} model IFC model
  * @param {object} element IFC element
@@ -101,6 +103,7 @@ export default function ItemProperties() {
  */
 async function createPsetsList(model, element, expandAll) {
   const psets = await model.getPropertySets(element.expressID)
+
   return (
     <List
       sx={{

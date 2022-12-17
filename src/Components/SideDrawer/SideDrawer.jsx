@@ -11,6 +11,7 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 
 export const SIDE_DRAWER_WIDTH = '31em'
 
+
 /**
  * SideDrawer contains the ItemPanel and CommentPanel and allows for
  * show/hide from the right of the screen.
@@ -144,6 +145,7 @@ export function SideDrawer({
     </>
   )
 }
+
 
 /**
  * SideDrawerWrapper is the container for the SideDrawer component.

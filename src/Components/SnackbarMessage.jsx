@@ -3,6 +3,7 @@ import MuiAlert from '@mui/material/Alert'
 import Snackbar from '@mui/material/Snackbar'
 import {ColorModeContext} from '../Context/ColorMode'
 
+
 /**
  * @param {string} message
  * @param {string} type
@@ -42,6 +43,7 @@ export default function SnackBarMessage({message, type, open}) {
     </Snackbar>
   )
 }
+
 
 const Alert = React.forwardRef(function Alert(props, ref) {
   return <MuiAlert elevation={1} ref={ref} variant="filled" {...props} />

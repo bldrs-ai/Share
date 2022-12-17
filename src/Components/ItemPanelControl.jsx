@@ -8,6 +8,7 @@ import {decodeIFCString} from '../utils/Ifc'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 
+
 /**
  * Container for ItemProperties. ItemProperties is wrapped in an
  * ItemPropertiesDrawer to toggle hiding.

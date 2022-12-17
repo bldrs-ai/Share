@@ -7,6 +7,7 @@ import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
 
+
 /**
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed

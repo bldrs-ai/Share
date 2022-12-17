@@ -5,6 +5,7 @@ import Close from '../assets/2D_Icons/Clear.svg'
 import Question from '../assets/2D_Icons/Question.svg'
 import {Box} from '@mui/material'
 
+
 /**
  * A UI control to toggle Guide panel on and off
  *
@@ -34,6 +35,7 @@ export default function GuidePanelControl({offsetTop}) {
     </IconButton>
   )
 }
+
 
 /**
  * Guide Panel component

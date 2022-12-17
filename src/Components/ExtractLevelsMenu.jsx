@@ -18,6 +18,7 @@ import LevelsIcon from '../assets/2D_Icons/Levels.svg'
 import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
 import {isNumeric} from '../utils/strings'
 
+
 /**
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.

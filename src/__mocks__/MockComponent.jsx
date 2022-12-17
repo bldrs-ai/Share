@@ -3,6 +3,7 @@ import {ThemeProvider} from '@mui/material/styles'
 import React from 'react'
 import {ColorModeContext} from '../Context/ColorMode'
 
+
 /**
  * @param {object} children React component(s)
  * @return {React.Component} React component
@@ -18,6 +19,7 @@ export const MockComponent = ({children}) => {
     </ColorModeContext.Provider>
   )
 }
+
 
 export const MOCK_SELECTED_ELEMENT = {
   expressID: 396,

@@ -14,6 +14,7 @@ import CloseIcon from '../../assets/2D_Icons/Close.svg'
 import NextIcon from '../../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
+
 /** @return {object} React component. */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)

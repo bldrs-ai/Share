@@ -4,6 +4,7 @@ import MuiDialog from '@mui/material/Dialog'
 import {Typography} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 
+
 /**
  * A generic base dialog component.
  *
@@ -29,6 +30,7 @@ export default function Dialog({
       content,
   )
   const close = () => setIsDialogDisplayed(false)
+
   return (
     <MuiDialog
       open={isDialogDisplayed}

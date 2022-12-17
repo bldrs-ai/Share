@@ -8,6 +8,7 @@ import {
 import {useTheme} from '@mui/styles'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
+
 /**
  * Expansion panels are used to package property sets
  *

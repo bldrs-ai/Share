@@ -7,6 +7,7 @@ import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 
+
 /**
  * Panel Title
  *
@@ -31,6 +32,7 @@ function PanelTitle({title, controlsGroup}) {
   )
 }
 
+
 /**
  * PropertiesPanel is a wrapper for the item properties component.
  * It contains the title with additional controls, and the item properties styled container.
@@ -40,6 +42,7 @@ function PanelTitle({title, controlsGroup}) {
 export function PropertiesPanel() {
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const selectedElement = useStore((state) => state.selectedElement)
+
   // TODO(pablo): this render was sometimes coming up with a react
   // error where createElement is undefined.  I've refactored a little
   // and now can't reproduce.
@@ -92,6 +95,7 @@ export function PropertiesPanel() {
     </>
   )
 }
+
 
 export const NotesPanel = () => {
   return (

@@ -10,6 +10,7 @@ import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import {Box, InputBase, Paper} from '@mui/material'
 
+
 /**
  * Search bar component
  *
@@ -82,6 +83,7 @@ export default function SearchBar({fileOpen}) {
     }
     searchInputRef.current.blur()
   }
+
   return (
     <>
       <Paper
@@ -151,6 +153,7 @@ export default function SearchBar({fileOpen}) {
   )
 }
 
+
 /**
  * Return true for paths like
  *
@@ -169,6 +172,7 @@ export function containsIfcPath(location) {
   return location.pathname.match(/.*\.ifc(?:\/[0-9])+(?:.*)/) !== null
 }
 
+
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
@@ -179,6 +183,7 @@ export function validSearchQuery(searchParams) {
   const value = searchParams.get('q')
   return value !== null && value.length > 0
 }
+
 
 /**
  * Converts a path like:

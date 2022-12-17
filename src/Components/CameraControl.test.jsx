@@ -52,6 +52,7 @@ describe('CameraControl', () => {
   })
 })
 
+
 /** Mocks the IFCjs camera. */
 class MockCamera {
   /**

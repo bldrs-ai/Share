@@ -3,6 +3,7 @@ import {Box, Button, ToggleButton, Tooltip} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 
+
 /**
  * @param {string} title Tooltip text
  * @param {Function} onClick
@@ -70,6 +71,7 @@ export function TooltipIconButton({
   )
 }
 
+
 /**
  * A RectangularButton is used in dialogs
  *
@@ -107,6 +109,7 @@ export function RectangularButton({
     </Button>
   )
 }
+
 
 /**
  * @param {string} title The text for tooltip

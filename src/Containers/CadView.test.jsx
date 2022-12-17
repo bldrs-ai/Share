@@ -35,7 +35,6 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID

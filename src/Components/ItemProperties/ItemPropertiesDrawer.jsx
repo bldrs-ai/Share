@@ -5,6 +5,7 @@ import {preprocessMediaQuery} from '../../utils/mediaQuery'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 import {Box, Drawer} from '@mui/material'
 
+
 /**
  * ItemPropertiesDrawer contains the ItemPanel and allows for
  * show/hide from the right of the screen.

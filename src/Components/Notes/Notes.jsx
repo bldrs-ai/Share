@@ -7,8 +7,10 @@ import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import {Box, Paper} from '@mui/material'
 
+
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
+
 
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
@@ -23,6 +25,7 @@ export default function Notes() {
       notes.filter((issue) => issue.id === selectedNoteId)[0] :
       null
   const repository = useStore((state) => state.repository)
+
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Notes: 1, no repo defined')
@@ -69,11 +72,12 @@ export default function Notes() {
       debug().warn('IssuesControl#Notes: 2, no repo defined')
       return
     }
+
     const fetchComments = async (selectedNote) => {
       try {
         const commentsArr = []
-
         const commentsData = await getComments(repository, selectedNote.number)
+
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -87,6 +91,7 @@ export default function Notes() {
             })
           })
         }
+
         setComments(commentsArr)
       } catch {
         debug().log('failed to fetch comments')
@@ -96,10 +101,12 @@ export default function Notes() {
     if (selectedNoteId !== null) {
       fetchComments(filteredNote)
     }
+
     // This address bug #314 by clearing selected issue when new model is loaded
     if (!filteredNote) {
       setSelectedNoteId(null)
     }
+
     // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps

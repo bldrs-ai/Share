@@ -3,6 +3,7 @@ import {Box, Typography} from '@mui/material'
 import {ColorModeContext} from '../Context/ColorMode'
 import AttentionIcon from '../assets/2D_Icons/Attention.svg'
 
+
 /**
  * Loader contains the ItemPanel and allows for
  * show/hide from the right of the screen.

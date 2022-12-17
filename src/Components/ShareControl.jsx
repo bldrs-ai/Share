@@ -8,6 +8,7 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
 import {addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {ControlButton, TooltipIconButton} from './Buttons'
 
+
 /**
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
@@ -42,6 +43,7 @@ export default function ShareControl() {
     />
   )
 }
+
 
 /**
  * The ShareDialog component lets the user control what state is

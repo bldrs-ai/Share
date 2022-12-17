@@ -58,7 +58,6 @@ export default class SearchIndex {
     }
   }
 
-
   /**
    * Returns a set of word tokens from the string.
    *

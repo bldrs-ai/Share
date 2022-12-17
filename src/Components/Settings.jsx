@@ -6,6 +6,7 @@ import {ColorModeContext} from '../Context/ColorMode'
 import PkgJson from '../../package.json'
 import SettingsIcon from '../assets/2D_Icons/Settings.svg'
 
+
 /**
  * @return {React.Component} React component
  */

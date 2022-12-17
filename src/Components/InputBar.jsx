@@ -3,6 +3,7 @@ import {Box, Divider, InputBase, Paper} from '@mui/material'
 import {UilMinusSquare, UilSearch} from '@iconscout/react-unicons'
 import {TooltipToggleButton} from './Buttons'
 
+
 /**
  * Search bar
  *

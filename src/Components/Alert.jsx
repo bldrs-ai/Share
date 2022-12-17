@@ -9,6 +9,7 @@ import {
 } from '@mui/material'
 import CheckIcon from '@mui/icons-material/Check'
 
+
 /**
  * @param {Function} onCloseCb
  * @param {string} title
@@ -21,6 +22,7 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
     setIsOpen(false)
     onCloseCb()
   }
+
   return (
     <Dialog
       open={isOpen}

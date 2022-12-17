@@ -3,6 +3,7 @@ import LogoIcon from '../assets/LogoB_4.svg'
 import PkgJson from '../../package.json'
 import {Box, Tooltip, IconButton} from '@mui/material'
 
+
 /**
  * @param {Function} onClick function triggered when logo is clicked
  * @return {object} React component

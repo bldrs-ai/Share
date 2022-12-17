@@ -14,6 +14,7 @@ import {getModelCenter} from '../utils/cutPlane'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
 
+
 /**
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.

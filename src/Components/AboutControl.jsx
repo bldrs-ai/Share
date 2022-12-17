@@ -9,6 +9,7 @@ import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB_3.svg'
 import {Link, List, ListItem, Box, Typography} from '@mui/material'
 
+
 /**
  * Button to toggle About panel on and off
  *
@@ -22,6 +23,7 @@ export default function AboutControl() {
         defaultValue: true,
       }),
   )
+
   return (
     <ControlButton
       title="About BLDRS"
@@ -55,6 +57,7 @@ export default function AboutControl() {
   )
 }
 
+
 /**
  * The AboutDialog component
  *
@@ -74,6 +77,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     />
   )
 }
+
 
 /**
  * The content portion of the AboutDialog
@@ -226,6 +230,7 @@ function AboutContent({setIsDialogDisplayed}) {
     </Box>
   )
 }
+
 
 export const setPrivacy = (acceptCookies) => {
   if (acceptCookies) {
