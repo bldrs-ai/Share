@@ -108,7 +108,7 @@ export const NotesPanel = () => {
           flexDirection: 'column',
           alignItems: 'center',
           height: '100%',
-          overflow: 'auto',
+          overflow: 'scroll',
         })}
       >
         <Notes/>

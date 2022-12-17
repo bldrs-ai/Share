@@ -45,14 +45,12 @@ export function SideDrawer({
           content={
             <Box
               sx={preprocessMediaQuery(MOBILE_WIDTH, {
-                'height': '100%',
-                'marginTop': '20px',
-                'display': 'flex',
-                'flexDirection': 'column',
-                'justifyContent': 'space-between',
-                '@media (max-width: MOBILE_WIDTH)': {
-                  overflow: 'auto',
-                },
+                height: '100%',
+                marginTop: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                overflow: 'hidden',
               })}
             >
               <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {})}>
@@ -76,7 +74,7 @@ export function SideDrawer({
       ) : (
         <Drawer
           sx={preprocessMediaQuery(MOBILE_WIDTH, {
-            '::-webkit-scrollbar': {
+            '&::-webkit-scrollbar': {
               display: 'none',
             },
             '& > .MuiPaper-root': {
@@ -102,14 +100,12 @@ export function SideDrawer({
         >
           <Box
             sx={preprocessMediaQuery(MOBILE_WIDTH, {
-              'height': '100%',
-              'marginTop': '20px',
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'space-between',
-              '@media (max-width: MOBILE_WIDTH)': {
-                overflow: 'auto',
-              },
+              height: '100%',
+              marginTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              overflow: 'hidden',
             })}
           >
             {isCommentsOn ? (
@@ -119,7 +115,7 @@ export function SideDrawer({
                   display: isCommentsOn ? 'block' : 'none',
                   borderRadius: '0px',
                   borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                  overflowY: 'scroll',
+                  overflow: 'hidden',
                 })}
               >
                 <NotesPanel/>
