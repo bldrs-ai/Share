@@ -1,10 +1,10 @@
 import React from 'react'
 import {Box, Typography} from '@mui/material'
 import useStore from '../../store/useStore'
-import ItemProperties from '../item.properties/ItemProperties'
+import ItemProperties from '../ItemProperties/ItemProperties'
 import {TooltipIconButton} from '../Buttons'
-import Notes from '../notes/Notes'
-import NotesNavBar from '../notes/NotesNavBar'
+import Notes from '../notess/Notes'
+import NotesNavBar from '../notess/NotesNavBar'
 import CloseIcon from '../../assets/2D_Icons/Close.svg'
 
 /**
