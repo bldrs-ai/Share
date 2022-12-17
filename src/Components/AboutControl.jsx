@@ -26,7 +26,7 @@ export default function AboutControl() {
 
   return (
     <ControlButton
-      title="About BLDRS"
+      title='About BLDRS'
       icon={
         <Box
           sx={{
@@ -122,14 +122,14 @@ function AboutContent({setIsDialogDisplayed}) {
         marginBottom: '10px',
       }}
     >
-      <Typography variant="h4">Build Every Thing Together</Typography>
+      <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false}>
         We are open source
         <br/>
         <Link
           sx={linkStyle}
-          href="https://github.com/bldrs-ai/Share"
-          target="_new"
+          href='https://github.com/bldrs-ai/Share'
+          target='_new'
         >
           github.com/bldrs-ai/Share
         </Link>
@@ -153,24 +153,24 @@ function AboutContent({setIsDialogDisplayed}) {
           }}
         >
           <ListItem sx={bulletStyle}>
-            <Typography variant="h4">
+            <Typography variant='h4'>
               <Link
                 sx={linkStyle}
-                href="https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting"
-                target="_new"
+                href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+                target='_new'
               >
                 Open IFC models from Github
               </Link>
             </Typography>
           </ListItem>
           <ListItem sx={bulletStyle}>
-            <Typography variant="h4">View IFC properties</Typography>
+            <Typography variant='h4'>View IFC properties</Typography>
           </ListItem>
           <ListItem sx={bulletStyle}>
-            <Typography variant="h4">Search IFC models</Typography>
+            <Typography variant='h4'>Search IFC models</Typography>
           </ListItem>
           <ListItem sx={bulletStyle}>
-            <Typography variant="h4">Share IFC models</Typography>
+            <Typography variant='h4'>Share IFC models</Typography>
           </ListItem>
         </List>
       </Box>
@@ -211,8 +211,8 @@ function AboutContent({setIsDialogDisplayed}) {
             <Typography variant={'h4'}>
               <Link
                 sx={linkStyle}
-                href="https://github.com/bldrs-ai/Share/wiki/Design#privacy"
-                target="_new"
+                href='https://github.com/bldrs-ai/Share/wiki/Design#privacy'
+                target='_new'
               >
                 read more
               </Link>
@@ -221,7 +221,7 @@ function AboutContent({setIsDialogDisplayed}) {
           <Toggle checked={acceptCookies} onChange={changePrivacy}/>
         </Box>
         <RectangularButton
-          title="OK"
+          title='OK'
           onClick={() => setIsDialogDisplayed(false)}
           icon={<AboutIcon/>}
           noBorder={false}

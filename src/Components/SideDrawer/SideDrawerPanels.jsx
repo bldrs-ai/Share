@@ -26,7 +26,7 @@ function PanelTitle({title, controlsGroup}) {
         borderRadius: '5px',
       })}
     >
-      <Typography variant="h2">{title}</Typography>
+      <Typography variant='h2'>{title}</Typography>
       {controlsGroup}
     </Box>
   )
@@ -49,11 +49,11 @@ export function PropertiesPanel() {
   return (
     <>
       <PanelTitle
-        title="Properties"
+        title='Properties'
         controlsGroup={
           <Box>
             <TooltipIconButton
-              title="toggle drawer"
+              title='toggle drawer'
               onClick={toggleIsPropertiesOn}
               icon={
                 <Box
@@ -86,7 +86,7 @@ export function PropertiesPanel() {
           <ItemProperties/>
         ) : (
           <Box sx={{width: '100%'}}>
-            <Typography variant="h4" sx={{textAlign: 'left'}}>
+            <Typography variant='h4' sx={{textAlign: 'left'}}>
               Please select an element
             </Typography>
           </Box>

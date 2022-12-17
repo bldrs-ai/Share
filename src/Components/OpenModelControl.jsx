@@ -55,7 +55,7 @@ export default function OpenModelControl({fileOpen}) {
             onClick={() => {
               setIsDialogDisplayed(true)
             }}
-            color="primary"
+            color='primary'
             value={'Open IFC'}
           >
             <OpenIcon/>
@@ -112,7 +112,7 @@ function OpenModelDialog({
     <Dialog
       icon={<ModelsIcon/>}
       headerText={
-        <Typography variant="h2" sx={{margin: '10px 10px'}}>
+        <Typography variant='h2' sx={{margin: '10px 10px'}}>
           Open
         </Typography>
       }
@@ -160,28 +160,28 @@ function OpenModelDialog({
             }}
             value={selected}
             onChange={(e) => handleSelect(e)}
-            variant="outlined"
-            label="Sample Projects"
+            variant='outlined'
+            label='Sample Projects'
             select
-            size="small"
+            size='small'
           >
             <MenuItem value={1}>
-              <Typography variant="p">Momentum</Typography>
+              <Typography variant='p'>Momentum</Typography>
             </MenuItem>
             <MenuItem value={2}>
-              <Typography variant="p">Schneestock</Typography>
+              <Typography variant='p'>Schneestock</Typography>
             </MenuItem>
             <MenuItem value={3}>
-              <Typography variant="p">Eisvogel</Typography>
+              <Typography variant='p'>Eisvogel</Typography>
             </MenuItem>
             <MenuItem value={4}>
-              <Typography variant="p">Seestrasse</Typography>
+              <Typography variant='p'>Seestrasse</Typography>
             </MenuItem>
             <MenuItem value={0}>
-              <Typography variant="p">Schependomlaan</Typography>
+              <Typography variant='p'>Schependomlaan</Typography>
             </MenuItem>
             <MenuItem value={5}>
-              <Typography variant="p">Structural Detail</Typography>
+              <Typography variant='p'>Structural Detail</Typography>
             </MenuItem>
           </TextField>
           <Box
@@ -190,7 +190,7 @@ function OpenModelDialog({
               paddingLeft: '10px',
               paddingRight: '10px',
             }}
-            component="p"
+            component='p'
           >
             Models hosted on GitHub are opened by inserting the link to the file
             into the Search.
@@ -204,10 +204,10 @@ function OpenModelDialog({
                   cursor: 'pointer',
                   borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
                 }}
-                component="a"
-                target="_blank"
-                href="https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub"
-                rel="noreferrer"
+                component='a'
+                target='_blank'
+                href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+                rel='noreferrer'
               >
                 wiki
               </Box>
@@ -215,7 +215,7 @@ function OpenModelDialog({
             to learn more.
           </Box>
           <RectangularButton
-            title="Open from local drive"
+            title='Open from local drive'
             icon={<UploadIcon/>}
             onClick={openFile}
             noBackground={true}
@@ -227,7 +227,7 @@ function OpenModelDialog({
               paddingLeft: '10px',
               paddingRight: '10px',
             }}
-            component="p"
+            component='p'
           >
             Models opened from local drive cannot be saved or shared.
           </Box>

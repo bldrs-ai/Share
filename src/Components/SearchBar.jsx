@@ -106,7 +106,7 @@ export default function SearchBar({fileOpen}) {
             flex: 1,
           },
         }}
-        component="form"
+        component='form'
         onSubmit={onSubmit}
         elevation={0}
       >
@@ -128,7 +128,7 @@ export default function SearchBar({fileOpen}) {
         />
         {inputText.length > 0 && (
           <TooltipIconButton
-            title="clear"
+            title='clear'
             onClick={() => {
               setInputText('')
               setError('')

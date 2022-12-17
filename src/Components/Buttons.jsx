@@ -45,7 +45,7 @@ export function TooltipIconButton({
         <ToggleButton
           selected={selected}
           onClick={onClick}
-          color="primary"
+          color='primary'
           value={''}
         >
           {icon}
@@ -55,12 +55,12 @@ export function TooltipIconButton({
           title={title}
           describeChild
           placement={placement}
-          data-test-id="test-button"
+          data-test-id='test-button'
         >
           <ToggleButton
             selected={selected}
             onClick={onClick}
-            color="primary"
+            color='primary'
             value={''}
           >
             {icon}
@@ -93,7 +93,7 @@ export function RectangularButton({
   return (
     <Button
       onClick={onClick}
-      variant="rectangular"
+      variant='rectangular'
       startIcon={icon}
       sx={(theme) => ({
         'border': `1px solid ${noBorder ? 'none' : theme.palette.highlight.heavy
@@ -159,7 +159,7 @@ export function ControlButton({
             onClick={() => {
               setIsDialogDisplayed(true)
             }}
-            color="primary"
+            color='primary'
             value={''}
           >
             {icon}

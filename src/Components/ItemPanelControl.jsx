@@ -35,7 +35,7 @@ export default function ItemPanelControl({model, element, isOpenState}) {
       <>
         {Object.keys(element).length > 0 && (
           <TooltipIconButton
-            title="Properties"
+            title='Properties'
             icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
             onClick={() => isOpenState.set(!isOpenState.value)}
           />

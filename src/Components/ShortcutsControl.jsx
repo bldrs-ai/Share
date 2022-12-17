@@ -15,7 +15,7 @@ export default function ShortcutsControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
     <ControlButton
-      title="Guides"
+      title='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={
@@ -45,13 +45,13 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<KnowledgeIcon/>}
-      headerText="Guides"
+      headerText='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
         isMobile ? (
           <Box>
-            <Typography variant="h2">Guide</Typography>
+            <Typography variant='h2'>Guide</Typography>
             <p>To select an element:</p>
             <ul>
               <li>Double tap an element</li>
@@ -71,7 +71,7 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             sx={{
               textAlign: 'left',
             }}
-            component="ul"
+            component='ul'
           >
             <p>To attach a section plane:</p>
             <li>Hover over an element</li>

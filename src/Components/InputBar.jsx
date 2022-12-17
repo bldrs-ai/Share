@@ -19,7 +19,7 @@ export default function InputBar({startAdornment, onSubmit}) {
   return (
     <Box>
       <Paper
-        component="form"
+        component='form'
         sx={{
           'display': 'flex',
           'minWidth': '200px',
@@ -50,7 +50,7 @@ export default function InputBar({startAdornment, onSubmit}) {
           {startAdornment}
         </Box>
         <Divider
-          orientation="vertical"
+          orientation='vertical'
           flexItem
           sx={{
             height: '36px',
@@ -67,9 +67,9 @@ export default function InputBar({startAdornment, onSubmit}) {
         />
         {inputText.length > 0 ? (
           <TooltipToggleButton
-            title="clear"
-            size="small"
-            placement="bottom"
+            title='clear'
+            size='small'
+            placement='bottom'
             onClick={() => {
               setInputText('')
             }}
@@ -78,9 +78,9 @@ export default function InputBar({startAdornment, onSubmit}) {
         ) : null}
         {inputText.length > 0 ? (
           <TooltipToggleButton
-            title="search"
-            size="small"
-            placement="bottom"
+            title='search'
+            size='small'
+            placement='bottom'
             onClick={() => onSubmit()}
             icon={<UilSearch/>}
           />

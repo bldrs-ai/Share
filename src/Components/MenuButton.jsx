@@ -5,11 +5,11 @@ import {Box, Tooltip, IconButton} from '@mui/material'
 
 const MenuButton = ({onClick}) => {
   return (
-    <Tooltip title="Properties" placement="left">
+    <Tooltip title='Properties' placement='left'>
       <IconButton
-        edge="start"
-        color="secondary"
-        aria-label="menu"
+        edge='start'
+        color='secondary'
+        aria-label='menu'
         onClick={onClick}
       >
         <Box

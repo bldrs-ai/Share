@@ -101,7 +101,7 @@ export default function CutPlaneMenu() {
       />
       <Menu
         elevation={1}
-        id="basic-menu"
+        id='basic-menu'
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}

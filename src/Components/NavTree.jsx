@@ -113,7 +113,7 @@ export default function NavTree({model, element, pathPrefix}) {
         >
           {icon}
         </Box>
-        <Typography variant="tree" onClick={handleSelectionClick}>
+        <Typography variant='tree' onClick={handleSelectionClick}>
           {label}
         </Typography>
       </div>

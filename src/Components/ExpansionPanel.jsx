@@ -51,8 +51,8 @@ export default function Property({detail, summary, expandState}) {
     >
       <AccordionSummary
         expandIcon={<CaretIcon/>}
-        aria-controls="panel1a-content"
-        id="panel1a-header"
+        aria-controls='panel1a-content'
+        id='panel1a-header'
       >
         <Typography
           sx={{
@@ -64,7 +64,7 @@ export default function Property({detail, summary, expandState}) {
               maxWidth: '320px',
             },
           }}
-          variant="h3"
+          variant='h3'
         >
           <div>{summary}</div>
         </Typography>

@@ -147,7 +147,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       />
       <Menu
         elevation={1}
-        id="basic-menu"
+        id='basic-menu'
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}

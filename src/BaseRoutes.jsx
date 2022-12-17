@@ -37,7 +37,7 @@ export default function BaseRoutes({testElt = null}) {
     <Routes>
       <Route path={basePath} element={<Outlet/>}>
         <Route
-          path="share/*"
+          path='share/*'
           element={
             testElt ||
             <ShareRoutes

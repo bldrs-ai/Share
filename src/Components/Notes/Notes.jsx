@@ -176,7 +176,7 @@ export default function Notes() {
                   <NoteCard
                     embeddedUrl={comment.embeddedUrl}
                     isComment={true}
-                    index=""
+                    index=''
                     id={comment.id}
                     key={comment.id}
                     title={index + 1}

@@ -97,7 +97,7 @@ export function SideDrawer({
           })}
           open={isDrawerOpen}
           anchor={'right'}
-          variant="persistent"
+          variant='persistent'
           elevation={4}
         >
           <Box

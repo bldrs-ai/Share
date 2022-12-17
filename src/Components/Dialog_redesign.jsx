@@ -152,7 +152,7 @@ export function OpenDialogBodyContent() {
         </Box>
       </Box>
       <RectangularButton
-        title="Upload from device"
+        title='Upload from device'
         onClick={() => console.log('clicked')}
         icon={<UilUpload/>}
       />
@@ -180,7 +180,7 @@ export function OpenDialogBodyContent() {
         </Box>
       </Box>
       <RectangularButton
-        title="Load Sample Model"
+        title='Load Sample Model'
         onClick={() => console.log('clicked')}
         icon={<UilBuilding/>}
       />

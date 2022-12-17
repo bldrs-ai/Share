@@ -121,16 +121,16 @@ export default function Branches() {
                 },
             })}
             onChange={(e) => handleSelect(e)}
-            variant="outlined"
-            label="Git Branches / Project Versions"
+            variant='outlined'
+            label='Git Branches / Project Versions'
             value={selected}
             select
-            role="button"
+            role='button'
           >
             {branches.map((branch, i) => {
               return (
                 <MenuItem key={i} value={i}>
-                  <Typography variant="p">{branch.name}</Typography>
+                  <Typography variant='p'>{branch.name}</Typography>
                 </MenuItem>
               )
             })}

@@ -39,8 +39,8 @@ export default function MobileDrawer({content}) {
       }}
     >
       <SwipeableDrawer
-        anchor="bottom"
-        variant="persistent"
+        anchor='bottom'
+        variant='persistent'
         open={open}
         onClose={closeDrawer}
         onOpen={openDrawer}
@@ -72,7 +72,7 @@ export default function MobileDrawer({content}) {
             }}
           >
             <TooltipIconButton
-              title="Expand"
+              title='Expand'
               onClick={toggleDrawer}
               icon={<CaretIcon/>}
             />

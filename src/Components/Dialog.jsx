@@ -37,7 +37,7 @@ export default function Dialog({
       onClose={close}
       sx={{textAlign: 'center'}}
     >
-      <Typography variant="h1" sx={{marginTop: '24px'}}>
+      <Typography variant='h1' sx={{marginTop: '24px'}}>
         {headerText}
       </Typography>
       <DialogContent
@@ -49,7 +49,7 @@ export default function Dialog({
           },
         }}
       >
-        <Typography variant="p">{content}</Typography>
+        <Typography variant='p'>{content}</Typography>
       </DialogContent>
     </MuiDialog>
   )

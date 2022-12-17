@@ -17,10 +17,10 @@ describe('Loader', () => {
         <ShareMock>
           <Loader
             id={id}
-            date="2000-01-01T00:00:00Z"
-            username="bob"
+            date='2000-01-01T00:00:00Z'
+            username='bob'
             index={index}
-            title="new_title"
+            title='new_title'
           />
         </ShareMock>,
     )

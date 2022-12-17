@@ -61,7 +61,7 @@ export default function NavPanel({
         }}
       >
         <TreeView
-          aria-label="IFC Navigator"
+          aria-label='IFC Navigator'
           defaultCollapseIcon={
             <Box
               sx={{width: '0.8em', height: '0.8em'}}
@@ -89,7 +89,7 @@ export default function NavPanel({
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key="tree"
+          key='tree'
         >
           {<NavTree model={model} element={element} pathPrefix={pathPrefix}/>}
         </TreeView>

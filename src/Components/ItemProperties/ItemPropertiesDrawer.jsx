@@ -37,7 +37,7 @@ export default function ItemPropertiesDrawer({title, content, onClose}) {
       })}
       open={true}
       anchor={'right'}
-      variant="persistent"
+      variant='persistent'
       elevation={4}
     >
       <Box
@@ -54,7 +54,7 @@ export default function ItemPropertiesDrawer({title, content, onClose}) {
       >
         <h1>{title}</h1>
         <TooltipIconButton
-          title="Close properties"
+          title='Close properties'
           onClick={onClose}
           icon={<CloseIcon/>}
         />

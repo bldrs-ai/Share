@@ -15,13 +15,13 @@ export default function Loader({type = 'linear'}) {
     <Box sx={{width: '100%', textAlign: 'center'}}>
       {type === 'linear' && (
         <LinearProgress
-          color="success"
+          color='success'
           sx={{height: '8px', width: '100%', borderRadius: '5px'}}
         />
       )}
       {type === 'circular' && (
         <CircularProgress
-          color="success"
+          color='success'
           sx={{height: '12px', width: '12px'}}
         />
       )}

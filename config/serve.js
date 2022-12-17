@@ -12,9 +12,9 @@ const serveNotFound = ((res) => {
       `<!DOCTYPE html>
 <html>
   <head>
-    <meta charset="utf-8">
+    <meta charset='utf-8'>
     <title>BLDRS - Redirect</title>
-    <script type="text/javascript">
+    <script type='text/javascript'>
       // Single Page Apps for GitHub Pages
       // MIT License
       // https://github.com/rafgraph/spa-github-pages
@@ -37,7 +37,7 @@ const serveNotFound = ((res) => {
 })
 
 const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) => {
-  // If esbuild returns "not found", send a custom 404 page
+  // If esbuild returns 'not found', send a custom 404 page
   if (proxyRes.statusCode === HTTP_NOT_FOUND) {
     serveNotFound(res)
   }
@@ -50,9 +50,9 @@ const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) 
 
 
 /**
- * "It's not possible to hook into esbuild's local server to customize
+ * 'It's not possible to hook into esbuild's local server to customize
  * the behavior of the server itself. Instead, behavior should be
- * customized by putting a proxy in front of esbuild."
+ * customized by putting a proxy in front of esbuild.'
  *
  * We intend to serve on the SERVE_PORT defined above, so run esbuild
  * on the port below it, and use the SERVE_PORT for a proxy.  The

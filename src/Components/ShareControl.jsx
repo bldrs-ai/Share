@@ -20,7 +20,7 @@ export default function ShareControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   return (
     <ControlButton
-      title="Share"
+      title='Share'
       icon={
         <Box
           sx={{
@@ -96,7 +96,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText={<Typography variant="h2">Share</Typography>}
+      headerText={<Typography variant='h2'>Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
@@ -112,7 +112,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           <TextField
             value={window.location}
             inputRef={urlTextFieldRef}
-            variant="outlined"
+            variant='outlined'
             multiline
             rows={5}
             InputProps={{
@@ -130,14 +130,14 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             }}
           >
             <TooltipIconButton
-              title="Include camera position"
+              title='Include camera position'
               selected={isCameraInUrl}
               placement={'bottom'}
               onClick={toggleCameraIncluded}
               icon={<CameraIcon/>}
             />
             <TooltipIconButton
-              title="Copy Link"
+              title='Copy Link'
               selected={isLinkCopied}
               placement={'bottom'}
               onClick={onCopy}

@@ -20,14 +20,14 @@ export default function Settings() {
   return (
     <>
       <TooltipToggleButton
-        title="Settings"
+        title='Settings'
         onClick={(event) => handleMenu(event)}
         icon={<SettingsIcon/>}
-        placement="left-start"
+        placement='left-start'
       />
       {isOpen && (
         <Menu
-          id="menu-appbar"
+          id='menu-appbar'
           elevation={2}
           anchorEl={anchorEl}
           anchorOrigin={{

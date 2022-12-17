@@ -23,7 +23,7 @@ export default function MockRoutes({initialEntries = ['/'], contentElt} = {}) {
   return (
     <MemoryRouter initialEntries={initialEntries}>
       <Routes>
-        <Route path="/*" element={contentElt}/>
+        <Route path='/*' element={contentElt}/>
       </Routes>
     </MemoryRouter>
   )

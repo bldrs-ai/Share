@@ -62,13 +62,13 @@ export default function NotesNavBar() {
           },
         })}
       >
-        <Typography variant="h2">{!selectedNoteId && 'Notes'}</Typography>
+        <Typography variant='h2'>{!selectedNoteId && 'Notes'}</Typography>
 
         {selectedNoteId ? (
           <Box>
             <TooltipIconButton
-              title="Back to the list"
-              placement="bottom"
+              title='Back to the list'
+              placement='bottom'
               onClick={() => {
                 removeHashParams(window.location, NOTE_PREFIX)
                 setSelectedNoteId(null)
@@ -103,16 +103,16 @@ export default function NotesNavBar() {
         {notes && selectedNoteId && notes.length > 1 && (
           <>
             <TooltipIconButton
-              title="Previous Note"
-              placement="bottom"
-              size="small"
+              title='Previous Note'
+              placement='bottom'
+              size='small'
               onClick={() => selectNote('previous')}
               icon={<PreviousIcon/>}
             />
             <TooltipIconButton
-              title="Next Note"
-              size="small"
-              placement="bottom"
+              title='Next Note'
+              size='small'
+              placement='bottom'
               onClick={() => selectNote('next')}
               icon={<NextIcon/>}
             />
@@ -130,8 +130,8 @@ export default function NotesNavBar() {
       >
         <Box>
           <TooltipIconButton
-            title="Close Comments"
-            placement="bottom"
+            title='Close Comments'
+            placement='bottom'
             onClick={turnCommentsOff}
             icon={
               <Box

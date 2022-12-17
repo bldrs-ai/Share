@@ -35,7 +35,7 @@ export default function Logo({onClick}) {
       <Tooltip
         title={`Bldrs: ${PkgJson.version}`}
         describeChild
-        placement="right"
+        placement='right'
       >
         <IconButton disableRipple onClick={onClick}>
           <LogoIcon/>

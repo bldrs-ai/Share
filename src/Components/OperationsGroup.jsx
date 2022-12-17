@@ -74,26 +74,26 @@ export default function OperationsGroup({unSelectItem}) {
         },
       }}
     >
-      <ButtonGroup orientation="vertical">
+      <ButtonGroup orientation='vertical'>
         <ShareControl/>
       </ButtonGroup>
       {!isMobile && <Divider/>}
-      <ButtonGroup orientation="vertical">
+      <ButtonGroup orientation='vertical'>
         <TooltipIconButton
-          title="Notes"
+          title='Notes'
           icon={<NotesIcon/>}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
         />
         <TooltipIconButton
-          title="Properties"
+          title='Properties'
           onClick={() => toggle('Properties')}
           selected={isPropertiesOn}
           icon={<ListIcon/>}
         />
         {isMobile && (
           <TooltipIconButton
-            title="Elements Hierarchy"
+            title='Elements Hierarchy'
             selected={isNavPanelOpen}
             onClick={toggleIsNavPanelOpen}
             icon={<TreeIcon/>}
@@ -102,14 +102,14 @@ export default function OperationsGroup({unSelectItem}) {
         <CutPlaneMenu/>
         <ExtractLevelsMenu/>
         <TooltipIconButton
-          title="Clear"
+          title='Clear'
           onClick={unSelectItem}
           selected={isSelected()}
           icon={<ClearIcon/>}
         />
       </ButtonGroup>
       <Divider/>
-      <ButtonGroup orientation="vertical">
+      <ButtonGroup orientation='vertical'>
         <TooltipIconButton
           title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => theme.toggleColorMode()}

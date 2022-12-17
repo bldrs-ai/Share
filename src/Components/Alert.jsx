@@ -27,12 +27,12 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
     <Dialog
       open={isOpen}
       onClose={onCloseCb}
-      aria-labelledby="alert-dialog-title"
-      aria-describedby="alert-dialog-description"
+      aria-labelledby='alert-dialog-title'
+      aria-describedby='alert-dialog-description'
     >
-      <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
+      <DialogTitle id='alert-dialog-title'>{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="alert-dialog-description">
+        <DialogContentText id='alert-dialog-description'>
           {message}
         </DialogContentText>
       </DialogContent>

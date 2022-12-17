@@ -142,11 +142,11 @@ export default function NoteCard({
         sx={(theme) => ({
           cursor: isComment ? null : 'pointer',
         })}
-        role="button"
+        role='button'
         tabIndex={0}
         onClick={() => (isComment ? null : selectCard())}
         onKeyPress={() => (isComment ? null : selectCard())}
-        data-test-id="selectionContainer"
+        data-test-id='selectionContainer'
       >
         <CardTitle
           title={title}
@@ -289,7 +289,7 @@ const ShowMore = ({onClick, expandText}) => {
         color: theme.palette.highlight.main,
       })}
       onClick={onClick}
-      role="button"
+      role='button'
       tabIndex={0}
       onKeyPress={onClick}
     >
@@ -333,9 +333,9 @@ const CardActions = ({
         {hasCameras && (
           <TooltipIconButton
             disabled={hasCameras}
-            title="Show the camera view"
-            size="small"
-            placement="bottom"
+            title='Show the camera view'
+            size='small'
+            placement='bottom'
             onClick={onClickCamera}
             icon={
               <Box
@@ -352,9 +352,9 @@ const CardActions = ({
         )}
         {selected && (
           <TooltipIconButton
-            title="Share"
-            size="small"
-            placement="bottom"
+            title='Share'
+            size='small'
+            placement='bottom'
             onClick={() => {
               onClickShare()
               setShareIssue(!shareIssue)
@@ -381,7 +381,7 @@ const CardActions = ({
           alignItems: 'center',
           marginRight: '4px',
         })}
-        role="button"
+        role='button'
         tabIndex={0}
         onClick={selectCard}
         onKeyPress={selectCard}

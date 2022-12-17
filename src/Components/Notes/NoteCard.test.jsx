@@ -12,10 +12,10 @@ describe('NoteCard', () => {
         <ShareMock>
           <NoteCard
             id={id}
-            date="2000-01-01T00:00:00Z"
-            username="bob"
+            date='2000-01-01T00:00:00Z'
+            username='bob'
             index={index}
-            title="new_title"
+            title='new_title'
           />
         </ShareMock>,
     )
@@ -41,7 +41,7 @@ describe('NoteCard', () => {
     const index = 123
     const rendered = render(
         <ShareMock>
-          <NoteCard id={id} index={index} title="Select the note card - title"/>
+          <NoteCard id={id} index={index} title='Select the note card - title'/>
         </ShareMock>,
     )
     const selectIssueButton = rendered.getByTestId('selectionContainer')
@@ -59,7 +59,7 @@ describe('NoteCard', () => {
           <NoteCard
             id={id}
             index={index}
-            body="Test body [test link](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34)"
+            body='Test body [test link](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34)'
           />
         </ShareMock>,
     )

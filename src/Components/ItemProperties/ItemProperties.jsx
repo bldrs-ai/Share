@@ -65,7 +65,7 @@ export default function ItemProperties() {
               background: theme.palette.primary.main,
               zIndex: 1000,
             })}
-            variant="h2"
+            variant='h2'
           >
             Property Sets
             <Switch
