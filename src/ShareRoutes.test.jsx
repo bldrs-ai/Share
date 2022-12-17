@@ -61,12 +61,11 @@ describe('ShareRoutes', () => {
   test('githubUrlOrPathToSharePath', () => {
     const errPrefix = 'Expected a multi-part file path: '
     const errPrefix2 = 'Expected at least one slash for file path: ';
-    [
-      {s: 'a/b/c', err: `${errPrefix}/b/c`},
+
+    [{s: 'a/b/c', err: `${errPrefix}/b/c`},
       {s: 'www.google.com', err: `${errPrefix2}www.google.com`},
       {s: 'http://www.google.com', err: `${errPrefix2}http://www.google.com`},
-      {s: 'http://www.google.com/', err: `${errPrefix}/`},
-    ].concat(tests).forEach((pair) => {
+      {s: 'http://www.google.com/', err: `${errPrefix}/`}].concat(tests).forEach((pair) => {
       if (pair.out !== undefined) {
         const out = pair.out.replace(/blob\//, '')
         expect(githubUrlOrPathToSharePath(pair.s), `With input ${pair.s}`)
