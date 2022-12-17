@@ -73,7 +73,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
-      data-test-id={'about-dialog'}
+      data-testid={'about-dialog'}
     />
   )
 }

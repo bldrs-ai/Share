@@ -1,6 +1,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import Dialog, {
+import Dialog from '../Components/Dialog_redesign'
+import {
   OpenDialogHeaderContent,
   OpenDialogBodyContent,
 } from '../Components/Dialog_redesign'

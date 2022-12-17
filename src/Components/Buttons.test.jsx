@@ -12,7 +12,7 @@ describe('<TooltipIconButton />', () => {
     const rendered = render(
         <MockComponent>
           <TooltipIconButton
-            data-test-id={'test-button'}
+            data-testid={'test-button'}
             title={'Hello. Is it me you\'re looking for?'}
             onClick={() => { }}
             icon={<QuestionIcon/>}

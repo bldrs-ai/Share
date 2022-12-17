@@ -55,7 +55,7 @@ export function TooltipIconButton({
           title={title}
           describeChild
           placement={placement}
-          data-test-id='test-button'
+          data-testid='test-button'
         >
           <ToggleButton
             selected={selected}

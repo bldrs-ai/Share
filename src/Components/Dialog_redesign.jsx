@@ -1,64 +1,14 @@
 import React from 'react'
-import {
-  Box,
-  MuiDialog,
-  DialogContent,
-  DialogTitle,
-  Divider,
-} from '@mui/material/Dialog'
+import MuiDialog from '@mui/material/Dialog'
+import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
+import Divider from '@mui/material/Divider'
 import {grey} from '@mui/material/colors'
-import {
-  UilBuilding,
-  UilUpload,
-  UilMultiply,
-  UilGraduationCap,
-  UilGithub,
-} from '@iconscout/react-unicons'
+import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
 import {assertDefined} from '../utils/assert'
 import {RectangularButton} from './Buttons'
 import InputBar from './InputBar'
-
-
-/**
- * A generic base dialog component.
- *
- * @param {string} headerContent Short message describing the operation
- * @param {string} bodyContent
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
- */
-export default function Dialog({
-  headerContent,
-  bodyContent,
-  isDialogDisplayed,
-  setIsDialogDisplayed,
-}) {
-  assertDefined(
-      headerContent,
-      bodyContent,
-      isDialogDisplayed,
-      setIsDialogDisplayed,
-  )
-  const close = () => setIsDialogDisplayed(false)
-  return (
-    <MuiDialog open={isDialogDisplayed} onClose={close} maxWidth={'sm'}>
-      <DialogTitle>{headerContent}</DialogTitle>
-      <DialogContent
-        sx={(theme) => ({
-          height: '400px',
-          maxWidth: '300px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-around',
-          alignContent: 'center',
-        })}
-      >
-        {bodyContent}
-      </DialogContent>
-    </MuiDialog>
-  )
-}
+import Box from '@mui/material/Box'
 
 
 /**
@@ -230,5 +180,47 @@ export function OpenDialogHeaderContent() {
         <UilMultiply style={{color: '#505050'}}/>
       </Box>
     </Box>
+  )
+}
+
+
+/**
+ * A generic base dialog component.
+ *
+ * @param {string} headerContent Short message describing the operation
+ * @param {string} bodyContent
+ * @param {boolean} isDialogDisplayed
+ * @param {Function} setIsDialogDisplayed
+ * @return {object} React component
+ */
+export default function Dialog({
+  headerContent,
+  bodyContent,
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+}) {
+  assertDefined(
+      headerContent,
+      bodyContent,
+      isDialogDisplayed,
+      setIsDialogDisplayed,
+  )
+  const close = () => setIsDialogDisplayed(false)
+  return (
+    <MuiDialog open={isDialogDisplayed} onClose={close} maxWidth={'sm'}>
+      <DialogTitle>{headerContent}</DialogTitle>
+      <DialogContent
+        sx={(theme) => ({
+          height: '400px',
+          maxWidth: '300px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-around',
+          alignContent: 'center',
+        })}
+      >
+        {bodyContent}
+      </DialogContent>
+    </MuiDialog>
   )
 }
