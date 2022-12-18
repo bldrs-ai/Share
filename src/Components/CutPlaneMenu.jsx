@@ -45,7 +45,8 @@ export default function CutPlaneMenu() {
   const createPlane = (normalDirection) => {
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
-    const modelCenter = model?.geometry.boundingBox.getCenter()
+    const modelCenter = new Vector3
+    model?.geometry.boundingBox.getCenter(modelCenter)
     const planeHash = getHashParams(location, 'p')
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
