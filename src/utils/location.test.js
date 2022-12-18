@@ -1,3 +1,6 @@
+// TODO(pablo): The type for loc is really verbose below.  Gotta be a
+// simpler way.
+// @ts-nocheck
 import {
   addHashParams,
   getHashParams,
@@ -6,8 +9,8 @@ import {
 
 
 test('addHashParams', () => {
+  /** @type {Location} */
   let loc
-
   loc = {hash: ''}
   addHashParams(loc, 'test', {a: 1})
   expect(loc.hash).toBe('test:1')

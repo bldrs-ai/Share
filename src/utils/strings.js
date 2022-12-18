@@ -34,14 +34,13 @@ export function isNumeric(str) {
   if (typeof str !== 'string') {
     return false
   }
-  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
-         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+  return !isNaN(parseFloat(str))
 }
 
 
 /**
  * @param {string} str
- * @return {Array} url matches
+ * @return {Array<string>} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
