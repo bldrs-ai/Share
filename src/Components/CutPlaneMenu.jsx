@@ -1,14 +1,14 @@
 import React, {useState, useEffect} from 'react'
-import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
+import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import useStore from '../store/useStore'
 import useTheme from '../Theme'
+import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
-import {getModelCenter} from '../utils/cutPlane'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -45,7 +45,7 @@ export default function CutPlaneMenu() {
   const createPlane = (normalDirection) => {
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
-    const modelCenter = getModelCenter(model)
+    const modelCenter = model?.geometry.boundingBox.getCenter()
     const planeHash = getHashParams(location, 'p')
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
