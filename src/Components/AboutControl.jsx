@@ -91,7 +91,7 @@ function AboutContent({setIsDialogDisplayed}) {
     <div className={classes.content}>
       <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
-        <a href='https://github.com/bldrs-ai/Share' target='_new'>
+        <a href='https://github.com/bldrs-ai/Share'>
           github.com/bldrs-ai/Share
         </a>
       </Typography>
