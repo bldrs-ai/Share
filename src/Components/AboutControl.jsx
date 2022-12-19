@@ -99,14 +99,16 @@ function AboutContent({setIsDialogDisplayed}) {
         width: '240px',
         marginTop: '10px'}}
       >
-        <img
-          alt='guide'
-          style={{
-            width: '240px',
-            border: `1px solid ${theme.palette.highlight.secondary}`,
-            borderRadius: '4px'}}
-          src='https://user-images.githubusercontent.com/3433606/207263222-c9908821-308a-4dfb-8177-8681754f764b.png'
-        />
+        <a href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' target='_new'>
+          <img
+            alt='guide'
+            style={{
+              width: '240px',
+              border: `1px solid ${theme.palette.highlight.secondary}`,
+              borderRadius: '4px'}}
+            src='https://user-images.githubusercontent.com/3433606/208431854-ac4f3b75-3c33-40a8-9e62-2f82bf792da6.png'
+          />
+        </a>
       </Box>
 
       <Box sx={{
@@ -190,7 +192,6 @@ const useStyles = makeStyles((theme) => (
         paddingRight: '4px',
         paddingBottom: '2px',
         color: theme.palette.highlight.secondary,
-        borderBottom: `0.5px solid ${theme.palette.highlight.secondary}`,
       },
       '@media (max-width: 900px)': {
         marginTop: '-10px',
