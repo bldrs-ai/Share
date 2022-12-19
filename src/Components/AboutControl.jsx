@@ -91,7 +91,7 @@ function AboutContent({setIsDialogDisplayed}) {
     <div className={classes.content}>
       <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
-        <a href='https://github.com/bldrs-ai/Share'>
+        <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
         </a>
       </Typography>
@@ -99,7 +99,7 @@ function AboutContent({setIsDialogDisplayed}) {
         width: '240px',
         marginTop: '10px'}}
       >
-        <a href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' target='_new'>
+        <a href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' >
           <img
             alt='guide'
             style={{
