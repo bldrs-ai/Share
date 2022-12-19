@@ -13,7 +13,7 @@
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T png > deps.png ; open deps.png",
     "husky-init": "husky install",
-    "lint": "yarn eslint src && tsc ; rm -rf built",
+    "lint": "yarn eslint src && tsc",
     "precommit": "yarn lint && yarn test",
     "serve": "yarn serve-share",
     "serve-share": "yarn build-share && node config/serve.js",
