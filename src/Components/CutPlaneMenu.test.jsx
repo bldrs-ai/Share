@@ -83,7 +83,7 @@ describe('CutPlane', () => {
     })
     render(
         <ShareMock
-          initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y,14']}
+          initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y=14']}
         >
           <CutPlaneMenu/>
         </ShareMock>)

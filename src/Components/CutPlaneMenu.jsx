@@ -45,7 +45,7 @@ export default function CutPlaneMenu() {
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
-      const planeInfo = planeHash.split(':')[1].split(',')
+      const planeInfo = planeHash.split(':')[1].split('=')
       const planeNormal = planeInfo[0]
       const normalOffset = planeInfo[1]
       const planes = ['x', 'y', 'z'].includes(planeNormal)
@@ -169,7 +169,7 @@ export function getPlaneOffset(viewer, ifcModel) {
         planeNormal = key
         planeAxisCenter = modelCenter[planeNormal]
         planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
-        planeHash = `${planeNormal},${planeOffsetFromCenter}`
+        planeHash = `${planeNormal}=${planeOffsetFromCenter}`
       }
     }
     const planeOffsetObj = {planeAxis: planeHash}
