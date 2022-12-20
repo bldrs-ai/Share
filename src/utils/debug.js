@@ -19,9 +19,7 @@ export default function debug(level = INFO) {
 }
 
 
-/**
- * @param {number} level One of OFF, INFO, DEBUG, ALL.
- */
+/** @param {number} level One of OFF, INFO, DEBUG, ALL. */
 export function setDebugLevel(level) {
   if (!Number.isFinite(level) || level < DEBUG || level > OFF) {
     throw new Error(`Debug level must be a number from ${DEBUG}-${OFF}`)
