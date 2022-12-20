@@ -77,7 +77,7 @@ const useStyles = makeStyles((theme) => ({
     'opacity': .8,
     'justifyContent': 'space-around',
     'alignItems': 'center',
-    'maxHeight': '450px',
+    'maxHeight': '100%',
     '@media (max-width: 900px)': {
       maxHeight: '150px',
       width: '300px',
