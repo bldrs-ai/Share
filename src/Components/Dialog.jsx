@@ -32,7 +32,7 @@ export default function Dialog({
     >
       <Typography
         variant='h1'
-        sx={{marginTop: '30px'}}
+        sx={{marginTop: '24px'}}
       >
         {headerText}
       </Typography>
