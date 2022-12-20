@@ -12,12 +12,11 @@
     "./src/utils/strings.test.js",
   ],
   "compilerOptions": {
-    "incremental": true, /* Save .tsbuildinfo files to allow for incremental compilation */
-    "outDir": "./built",
     "allowJs": true,
     "checkJs": true,
     "module": "es6",
     "jsx": "react-jsx",
     "pretty": false,
+    "noEmit": true,
   },
 }
