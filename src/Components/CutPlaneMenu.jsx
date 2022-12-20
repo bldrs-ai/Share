@@ -183,12 +183,11 @@ export function getPlaneOffset(viewer, ifcModel) {
  *
  * @param {object} viewer
  * @param {object} ifcModel
- * @return {object} add plane to url
  */
 export function addPlaneLocationToUrl(viewer, ifcModel) {
   const PLANE_PREFIX = 'p'
   if (viewer.clipper.planes.length > 0) {
     const planeOffset = getPlaneOffset(viewer, ifcModel)
-    return addHashParams(window.location, PLANE_PREFIX, planeOffset)
+    addHashParams(window.location, PLANE_PREFIX, planeOffset)
   }
 }
