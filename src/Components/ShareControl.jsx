@@ -1,17 +1,21 @@
 import React, {createRef, useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import {makeStyles} from '@mui/styles'
 import useStore from '../store/useStore'
+import {addPlaneLocationToUrl} from './CutPlaneMenu'
+import {removeHashParams} from '../utils/location'
 import Dialog from './Dialog'
-import CameraIcon from '../assets/2D_Icons/Camera.svg'
-import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import {ControlButton, RectangularButton} from './Buttons'
+import Toggle from './Toggle'
+import CopyIcon from '../assets/2D_Icons/Copy.svg'
+import ShareIcon from '../assets/2D_Icons/Share.svg'
+
 
 /**
  * This button hosts the ShareDialog component and toggles it open and
@@ -22,16 +26,17 @@ import {ControlButton, TooltipIconButton} from './Buttons'
  */
 export default function ShareControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const openedDialog = !!isDialogDisplayed
   const classes = useStyles()
   return (
     <ControlButton
       title='Share'
       icon={<div className={classes.iconContainer}><ShareIcon/></div>}
-      isDialogDisplayed={isDialogDisplayed}
+      isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
         <ShareDialog
-          isDialogDisplayed={isDialogDisplayed}
+          isDialogDisplayed={openedDialog}
           setIsDialogDisplayed={setIsDialogDisplayed}
         />
       }
@@ -50,12 +55,15 @@ export default function ShareControl() {
  * @return {React.Component} The react component
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const viewer = useStore((state) => state.viewerStore)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
-  const [isCameraInUrl, setIsCameraInUrl] = useState(false)
+  const [isCameraInUrl, setIsCameraInUrl] = useState(true)
+  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
+  const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.modelStore)
   const urlTextFieldRef = createRef()
   const classes = useStyles()
+  const isPlanesOn = viewer.clipper.planes.length > 0
 
   useEffect(() => {
     if (viewer) {
@@ -65,7 +73,12 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         removeCameraUrlParams()
       }
     }
-  }, [viewer, isCameraInUrl, cameraControls])
+    if (isPlanesOn) {
+      setIsPlaneInUrl(true)
+      addPlaneLocationToUrl(viewer, model)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewer, model])
 
   const closeDialog = () => {
     setIsDialogDisplayed(false)
@@ -81,24 +94,42 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const toggleCameraIncluded = () => {
     if (isCameraInUrl) {
       setIsCameraInUrl(false)
+      removeCameraUrlParams()
     } else {
       setIsCameraInUrl(true)
+      addCameraUrlParams(cameraControls)
     }
     if (isLinkCopied) {
       setIsLinkCopied(false)
     }
   }
 
+  const togglePlaneIncluded = () => {
+    if (isPlaneInUrl) {
+      removeHashParams(window.location, 'p')
+    } else {
+      addPlaneLocationToUrl(viewer, model)
+    }
+    setIsPlaneInUrl(!isPlaneInUrl)
+  }
+
+  const rowStyle = {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  }
+
   return (
     <Dialog
       icon={<ShareIcon/>}
-      headerText={<Typography variant='h2'>Share</Typography>}
+      headerText='Share'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       content={
         <div className={classes.content}>
           <TextField
-            value={window.location}
+            value={String(window.location)}
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
@@ -107,22 +138,38 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               readOnly: true,
               className: classes.input}}
           />
-          <div className={classes.buttonsContainer}>
-            <TooltipIconButton
-              title='Include camera position'
-              selected={isCameraInUrl}
-              placement={'bottom'}
-              onClick={toggleCameraIncluded}
-              icon={<CameraIcon />}
-            />
-            <TooltipIconButton
-              title='Copy Link'
-              selected={isLinkCopied}
-              placement={'bottom'}
-              onClick={onCopy}
-              icon={<CopyIcon />}
-            />
-          </div>
+          <Box sx={{
+            width: '100%',
+            marginTop: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            paddingLeft: '10px',
+          }}
+          >
+            {isPlanesOn &&
+              <Box sx={rowStyle}>
+                <Typography>Cutplane position</Typography>
+                <Toggle
+                  onChange={togglePlaneIncluded}
+                  checked={isPlaneInUrl}
+                />
+              </Box>
+            }
+            <Box sx={rowStyle}>
+              <Typography>Camera position</Typography>
+              <Toggle
+                onChange={toggleCameraIncluded}
+                checked={isCameraInUrl}
+              />
+            </Box>
+          </Box>
+          <Box sx={{
+            marginTop: '20px',
+            marginBottom: '10px',
+          }}
+          >
+            <RectangularButton title={'Copy Link'} icon={<CopyIcon/>} onClick={onCopy} />
+          </Box>
         </div>
       }
     />)
