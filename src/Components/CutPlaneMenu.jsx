@@ -1,12 +1,12 @@
 import React, {useState, useEffect} from 'react'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
 import {Vector3} from 'three'
 import {useLocation} from 'react-router-dom'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
 import useTheme from '../Theme'
 
 /**
@@ -125,9 +125,9 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => createPlane('x', 0)} selected={cutPlaneDirection === 'x'}> X</MenuItem>
-        <MenuItem onClick={() => createPlane('y', 0)} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
-        <MenuItem onClick={() => createPlane('z', 0)} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
+        <MenuItem onClick={() => createPlane('x')} selected={cutPlaneDirection === 'x'}> X</MenuItem>
+        <MenuItem onClick={() => createPlane('y')} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
+        <MenuItem onClick={() => createPlane('z')} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
       </Menu>
     </div>
   )
