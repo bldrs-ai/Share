@@ -27,7 +27,7 @@ import BranchesControl from '../Components/BranchesControl'
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
-const searchIndex = new SearchIndex()
+export const searchIndex = new SearchIndex()
 
 
 let count = 0
@@ -77,7 +77,12 @@ export default function CadView({
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const [modelReady, setModelReady] = useState(false)
+  const selectedElements = useStore((state) => state.selectedElements)
 
+  // Granular visibility controls for the UI compononets
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const isBranchesControlVisible = useStore((state) => state.isBranchesControlVisible)
+  const isNavPanelVisible = useStore((state) => state.isNavPanelVisible)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -101,6 +106,23 @@ export default function CadView({
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  useEffect(() => {
+    /**
+     * wrapping in async
+     */
+    async function effect() {
+      if (Array.isArray(selectedElements)) {
+        selectItemsInScene(selectedElements.map((id) => parseInt(id)))
+        if (selectedElements.length === 1) {
+          const props = await viewer.getProperties(0, parseInt(selectedElements[0]))
+          setSelectedElement(props)
+        }
+      }
+    }
+    effect()
+  }, [selectedElements])
 
 
   // Watch for path changes within the model.
@@ -332,7 +354,6 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs)
       setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
@@ -354,7 +375,7 @@ export default function CadView({
   /** Reset global state */
   function resetState() {
     setSelectedElement(null)
-    setSelectedElements(null)
+    setSelectedElements([])
     setCutPlaneDirection(null)
     setLevelInstance(null)
   }
@@ -362,8 +383,10 @@ export default function CadView({
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.IFC.unpickIfcItems()
-    viewer.clipper.deleteAllPlanes()
+    if (viewer) {
+      viewer.IFC.unpickIfcItems()
+      viewer.clipper.deleteAllPlanes()
+    }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
@@ -376,7 +399,6 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
       await viewer.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
@@ -402,10 +424,9 @@ export default function CadView({
       debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
-    await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
-    setSelectedElements(`${expressId}`)
+    setSelectedElements([`${expressId}`])
     const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
     return pathIds
@@ -438,6 +459,7 @@ export default function CadView({
           const pathIds = await onElementSelect(item.id)
           const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
           const path = pathIds.join('/')
+          console.log(`${pathPrefix}${repoFilePath}/${path}`)
           navigate(`${pathPrefix}${repoFilePath}/${path}`)
         }
       }
@@ -467,14 +489,16 @@ export default function CadView({
         />
         {showSearchBar && (
           <div className={classes.topLeftContainer}>
+            {isSearchBarVisible &&
             <SearchBar
               fileOpen={loadLocalFile}
-            />
+            />}
             {
-              modelPath.repo !== undefined &&
+              modelPath.repo !== undefined && isBranchesControlVisible &&
               <BranchesControl location={location}/>
             }
             {isNavPanelOpen &&
+             isNavPanelVisible &&
               <NavPanel
                 model={model}
                 element={rootElement}

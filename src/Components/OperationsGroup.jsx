@@ -44,6 +44,18 @@ export default function OperationsGroup({
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
 
+  const isShareControlVisible = useStore((state) => state.isShareControlVisible)
+  const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
+  const isCutPlaneMenuVisible = useStore((state) => state.isCutPlaneMenuVisible)
+  const isExtractLevelsMenuVisible = useStore((state) => state.isExtractLevelsMenuVisible)
+  const isClearButtonVisible = useStore((state) => state.isClearButtonVisible)
+  const isThemeButtonVisible = useStore((state) => state.isThemeButtonVisible)
+  const isAboutControlVisible = useStore((state) => state.isAboutControlVisible)
+  const isNavPanelVisible = useStore((state) => state.isNavPanelVisible)
+
+  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
+  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -68,27 +80,29 @@ export default function OperationsGroup({
     }
   }
 
-
   return (
     <div className={classes.container}>
+      {isShareControlVisible &&
+        <ButtonGroup orientation="vertical" >
+          <ShareControl/>
+        </ButtonGroup>}
+      {!isMobile && isFirstDividerVisible() && <Divider />}
       <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-      </ButtonGroup>
-      {!isMobile && <Divider />}
-      <ButtonGroup orientation="vertical" >
+        {isNotesVisible &&
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
           selected={isCommentsOn}
           onClick={() => toggle('Notes')}
-        />
+        />}
+        {isPropertiesVisible &&
         <TooltipIconButton
           title="Properties"
           onClick={() => toggle('Properties')}
           selected={isPropertiesOn}
           icon={<ListIcon/>}
-        />
-        {isMobile &&
+        />}
+        {isMobile && isNavPanelVisible &&
           <TooltipIconButton
             title='Elements Hierarchy'
             selected={isNavPanelOpen}
@@ -96,23 +110,25 @@ export default function OperationsGroup({
             icon={<TreeIcon/>}
           />
         }
-        <CutPlaneMenu/>
-        <ExtractLevelsMenu/>
+        {isCutPlaneMenuVisible && <CutPlaneMenu/>}
+        {isExtractLevelsMenuVisible && <ExtractLevelsMenu/>}
+        {isClearButtonVisible &&
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
           selected={isSelected()}
           icon={<ClearIcon />}
-        />
+        />}
       </ButtonGroup>
-      <Divider/>
+      {isSecondDividerVisible() && <Divider/>}
       <ButtonGroup orientation="vertical">
+        {isThemeButtonVisible &&
         <TooltipIconButton
           title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => theme.toggleColorMode()}
           icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
-        />
-        <AboutControl/>
+        />}
+        {isAboutControlVisible && <AboutControl/>}
       </ButtonGroup>
       {/* Invisible */}
       <CameraControl/>

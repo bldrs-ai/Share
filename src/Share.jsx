@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react'
+import React, {useEffect, useMemo, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
@@ -7,6 +7,8 @@ import useStore from './store/useStore'
 import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
+import WidgetApi from './WidgetApi/WidgetApi'
+import {searchIndex} from './Containers/CadView'
 import './index.css'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
@@ -29,6 +31,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
+
+  useMemo(() => {
+    new WidgetApi(navigation.current, searchIndex)
+  }, [navigation])
 
 
   /**
