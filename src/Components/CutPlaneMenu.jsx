@@ -5,6 +5,9 @@ import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
+import useTheme from '../Theme'
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -28,6 +31,16 @@ export default function CutPlaneMenu() {
   let planeOffsetY = 0
   let planeOffsetZ = 0
 
+  const open = Boolean(anchorEl)
+  const theme = useTheme()
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget)
+  }
+
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
@@ -92,9 +105,34 @@ export default function CutPlaneMenu() {
       <TooltipIconButton
         title={'Section'}
         icon={<CutPlaneIcon/>}
-        onClick={() => createPlane('y')}
+        onClick={handleClick}
         selected={anchorEl !== null || cutPlaneDirection !== null}
       />
+      <Menu
+        elevation={1}
+        id='basic-menu'
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleClose}
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        PaperProps={{
+          style: {
+            left: '300px',
+            transform: 'translateX(-50px)',
+          },
+          sx: {
+            '& .Mui-selected': {
+              color: theme.theme.palette.highlight.main,
+              fontWeight: 600,
+            },
+          },
+        }}
+      >
+        <MenuItem onClick={() => createPlane('x', 0)} selected={cutPlaneDirection === 'x'}> X</MenuItem>
+        <MenuItem onClick={() => createPlane('y', 0)} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
+        <MenuItem onClick={() => createPlane('z', 0)} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
+      </Menu>
     </div>
   )
 }

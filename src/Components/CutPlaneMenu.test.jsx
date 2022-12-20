@@ -14,8 +14,17 @@ describe('CutPlane', () => {
     expect(getByTitle('Section')).toBeInTheDocument()
   })
 
+  it('Section Menu', () => {
+    const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const sectionButton = getByTitle('Section')
+    fireEvent.click(sectionButton)
+    expect(getByText('X')).toBeInTheDocument()
+    expect(getByText('Y')).toBeInTheDocument()
+    expect(getByText('Z')).toBeInTheDocument()
+  })
+
   it('X Section', async () => {
-    const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIMockSingleton()
@@ -23,6 +32,8 @@ describe('CutPlane', () => {
       result.current.setViewerStore(viewer)
     })
     fireEvent.click(sectionButton)
+    const xDirection = getByText('X')
+    fireEvent.click(xDirection)
     const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
