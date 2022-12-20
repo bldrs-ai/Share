@@ -92,7 +92,7 @@ describe('CadView', () => {
             modelPath={modelPath}
           />
         </ShareMock>)
-    expect(getByTitle('Plan')).toBeInTheDocument()
+    expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
     act(() => {
       fireEvent.click(clearSelection)
