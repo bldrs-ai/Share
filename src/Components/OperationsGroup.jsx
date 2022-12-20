@@ -33,21 +33,21 @@ export default function OperationsGroup({
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  // const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
-  // const levelInstance = useStore((state) => state.levelInstance)
-  // const selectedElement = useStore((state) => state.selectedElement)
+  const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
+  const levelInstance = useStore((state) => state.levelInstance)
+  const selectedElement = useStore((state) => state.selectedElement)
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
 
 
-  // const isSelected = () => {
-  //   const ifSelected = (
-  //     selectedElement !== null ||
-  //     cutPlaneDirection !== null ||
-  //     levelInstance !== null
-  //   )
-  //   return ifSelected
-  // }
+  const isSelected = () => {
+    const ifSelected = (
+      selectedElement !== null ||
+      cutPlaneDirection !== null ||
+      levelInstance !== null
+    )
+    return ifSelected
+  }
 
   const toggle = (panel) => {
     openDrawer()
@@ -88,7 +88,7 @@ export default function OperationsGroup({
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
-          // selected={isSelected()}
+          selected={isSelected()}
           icon={<ClearIcon />}
         />
       </ButtonGroup>
