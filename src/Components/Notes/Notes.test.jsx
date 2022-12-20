@@ -16,7 +16,6 @@ describe('IssueControl', () => {
     })
   })
 
-
   it('Setting notes in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByText} = render(<ShareMock><Notes/></ShareMock>)
@@ -29,7 +28,6 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeInTheDocument()
     expect(await getByText('closed_system')).toBeInTheDocument()
   })
-
 
   it('Setting comments in zustand ', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -67,6 +65,7 @@ describe('IssueControl', () => {
     const expectedText = 'Local issue 2'
     expect(await findByText(expectedText)).toBeVisible()
   })
+
 
   // XXX: Should this be split into two different tests?
   describe('when notes are null', () => {
