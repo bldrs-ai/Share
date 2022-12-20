@@ -32,7 +32,7 @@ export function toKey(str) {
  */
 export function isNumeric(str) {
   if (typeof str !== 'string') {
-    return false
+    throw new Error('Expected a string')
   }
   return !isNaN(parseFloat(str))
 }

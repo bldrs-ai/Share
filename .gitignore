@@ -4,9 +4,6 @@
 # no longer check-in docs for builds.  This is handled by Netlify
 /docs
 
-# tsc checks build here
-built
-
 # misc
 .DS_Store
 .vscode

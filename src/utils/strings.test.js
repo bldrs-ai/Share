@@ -37,14 +37,6 @@ describe('strings', () => {
 
 
   it('isNumeric recognizes common cases', () => {
-    // @ts-expect-error TS2345
-    expect(isNumeric(-1)).toBeFalsy()
-    // @ts-expect-error TS2345
-    expect(isNumeric(0)).toBeFalsy()
-    // @ts-expect-error TS2345
-    expect(isNumeric(1)).toBeFalsy()
-    // @ts-expect-error TS2345
-    expect(isNumeric(NaN)).toBeFalsy()
     expect(isNumeric('-1')).toBeTruthy()
     expect(isNumeric('0')).toBeTruthy()
     expect(isNumeric('1')).toBeTruthy()
