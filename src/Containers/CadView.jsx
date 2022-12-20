@@ -314,12 +314,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
-
-    if (isMobile) {
-      setIsNavPanelOpen(false)
-    } else {
-      setIsNavPanelOpen(true)
-    }
+    setIsNavPanelOpen(true)
   }
 
 
