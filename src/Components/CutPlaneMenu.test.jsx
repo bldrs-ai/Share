@@ -1,8 +1,10 @@
 import React from 'react'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import CutPlaneMenu from './CutPlaneMenu'
+import ShareControl from './ShareControl'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
+import model from '../__mocks__/MockModel.js'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
@@ -54,6 +56,39 @@ describe('CutPlane', () => {
     const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
     expect(callCreatePlanes.length).toBe(1)
+  })
+
+  it('Plane in the scene', async () => {
+    const {getByTitle, getByText} = render(
+        <ShareMock>
+          <ShareControl/>
+        </ShareMock>)
+    const {result} = renderHook(() => useStore((state) => state))
+    // mock contains one plane
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+    })
+    const shareButton = getByTitle('Share')
+    fireEvent.click(shareButton)
+    expect(getByText('Cutplane position')).toBeInTheDocument()
+  })
+
+  it('Plane Offset is correct', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+      result.current.setModelStore(model)
+    })
+    render(
+        <ShareMock
+          initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y=14']}
+        >
+          <CutPlaneMenu/>
+        </ShareMock>)
+
+    expect(result.current.cutPlaneOffset).toBe('14')
   })
 })
 
