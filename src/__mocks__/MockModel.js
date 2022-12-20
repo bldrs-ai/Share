@@ -1,7 +1,7 @@
 import {Vector3} from 'three'
 
 /* eslint-disable no-magic-numbers */
-export const ifcModel = {
+const ifcModel = {
   geometry: {
     boundingBox: {
       min: new Vector3(2, 2, 2),
@@ -12,3 +12,5 @@ export const ifcModel = {
     },
   },
 }
+
+export default ifcModel

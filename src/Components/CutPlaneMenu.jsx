@@ -19,6 +19,7 @@ export default function CutPlaneMenu() {
   const viewer = useStore((state) => state.viewerStore)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setCutPlaneOffset = useStore((state) => state.setCutPlaneOffset)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const location = useLocation()
 
@@ -27,13 +28,19 @@ export default function CutPlaneMenu() {
   let planeOffsetY = 0
   let planeOffsetZ = 0
 
+
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
+    console.log('plane hash', planeHash)
+    console.log('model', model)
+    // console.log('viewer', viewer)
     if (planeHash && model && viewer) {
       const planeInfo = planeHash.split(':')[1].split(',')
       const planeNormal = planeInfo[0]
       const normalOffset = planeInfo[1]
       const planes = ['x', 'y', 'z'].includes(planeNormal)
+      console.log('normalOffset', normalOffset)
+      setCutPlaneOffset(normalOffset)
       if (planes) {
         createPlane(planeNormal, normalOffset)
       }
