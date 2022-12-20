@@ -5,7 +5,6 @@ import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
-import {assertDefined} from '../utils/assert'
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -45,7 +44,8 @@ export default function CutPlaneMenu() {
   const createPlane = (normalDirection, offset = 0) => {
     viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
-    const modelCenter = getModelCenter(model)
+    const modelCenter = new Vector3
+    model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
     if (normalDirection === cutPlaneDirection) {
       viewer.clipper.deleteAllPlanes()
@@ -80,46 +80,16 @@ export default function CutPlaneMenu() {
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
-  const handleClick = (event) => {
-    createPlane('y')
-  }
-
   return (
     <div>
       <TooltipIconButton
         title={'Plan'}
         icon={<CutPlaneIcon/>}
-        onClick={handleClick}
+        onClick={() => createPlane('y')}
         selected={anchorEl !== null || cutPlaneDirection !== null}
       />
     </div>
   )
-}
-
-
-/* eslint-disable no-magic-numbers */
-/**
- * getModelCenter returns the center of the model based on bounding box
- *
- * @param {object} ifcModel current model
- * @return {object} centerCoordinates
- */
-export function getModelCenter(ifcModel) {
-  assertDefined(ifcModel, ifcModel.geometry, ifcModel.geometry.boundingBox,
-      ifcModel.geometry.boundingBox.max, ifcModel.geometry.boundingBox.min)
-  const modelCenter = new Vector3(
-      (ifcModel.geometry.boundingBox.max.x +
-      ifcModel.geometry.boundingBox.min.x) /
-    2,
-      (ifcModel.geometry.boundingBox.max.y +
-      ifcModel.geometry.boundingBox.min.y) /
-    2,
-      (ifcModel.geometry.boundingBox.max.z +
-      ifcModel.geometry.boundingBox.min.z) /
-    2,
-  )
-  console.log('model center', modelCenter.getComponent)
-  return modelCenter
 }
 
 
@@ -151,7 +121,8 @@ export function getPlaneOffset(viewer, ifcModel) {
     let planeOffsetFromCenter
     let planeHash
     const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
-    const modelCenter = getModelCenter(ifcModel)
+    const modelCenter = new Vector3
+    ifcModel?.geometry.boundingBox.getCenter(modelCenter)
     for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
       if (value !== 0 ) {
         planeNormal = key
