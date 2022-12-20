@@ -83,7 +83,7 @@ export default function CutPlaneMenu() {
   return (
     <div>
       <TooltipIconButton
-        title={'Plan'}
+        title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={() => createPlane('y')}
         selected={anchorEl !== null || cutPlaneDirection !== null}
@@ -128,14 +128,12 @@ export function getPlaneOffset(viewer, ifcModel) {
         planeNormal = key
         planeAxisCenter = modelCenter[planeNormal]
         planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
-        const planeOffsetFromCenterTrim = planeOffsetFromCenter
-        planeHash = `${planeNormal},${planeOffsetFromCenterTrim}`
+        planeHash = `${planeNormal},${planeOffsetFromCenter}`
       }
     }
     const planeOffsetObj = {planeAxis: planeHash}
     return planeOffsetObj
   }
-  return null
 }
 
 

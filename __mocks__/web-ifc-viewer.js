@@ -53,8 +53,10 @@ const impl = {
       return 'createFromNormalAndCoplanarPoint'
     }),
     planes: [{
-      normal: new Vector3(1, 0, 0),
-      constant: 10,
+      plane: {
+        normal: new Vector3(1, 0, 0),
+        constant: 10,
+      },
     }],
   },
   container: {

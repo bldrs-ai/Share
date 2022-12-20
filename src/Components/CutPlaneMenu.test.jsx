@@ -1,80 +1,57 @@
 import React from 'react'
-import {render} from '@testing-library/react'
+import {act, fireEvent, render, renderHook} from '@testing-library/react'
 import CutPlaneMenu from './CutPlaneMenu'
+// import CadView from '../Containers/CadView'
 import ShareMock from '../ShareMock'
+import useStore from '../store/useStore'
+import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
 describe('CutPlane', () => {
-  // it('model center', () => {
-  //   const modelCenter = getModelCenter(ifcModel)
-  //   console.log('model center', modelCenter.x)
-  // })
-
-
   it('Section Button', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
-    expect(getByTitle('Plan')).toBeInTheDocument()
+    expect(getByTitle('Section')).toBeInTheDocument()
   })
 
-  // it('test plane offset', () => {
-  //   const viewer = __getIfcViewerAPIMockSingleton()
-  //   const planeOffsetObj = getPlaneOffset(ifcModel, viewer)
-  //   console.log('planeOffsetObj', planeOffsetObj)
-  // })
+  it('X Section', async () => {
+    const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
+    const sectionButton = getByTitle('Section')
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+    })
+    fireEvent.click(sectionButton)
+    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    expect(callDeletePlanes.length).toBe(1)
+    expect(callCreatePlanes.length).toBe(1)
+  })
 
-  // it('Section Menu', () => {
-  //   const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
-  //   const planeButton = getByTitle('Plan')
-  //   fireEvent.click(planeButton)
-  //   expect(getByText('X')).toBeInTheDocument()
-  //   expect(getByText('Y')).toBeInTheDocument()
-  //   expect(getByText('Z')).toBeInTheDocument()
-  // })
-
-  // it('should add the plane offset to the URL hash params if the viewer has planes', () => {
-  //   // mock the viewer object with a planes property
-  //   const viewer = {
-  //     clipper: {
-  //       planes: [{}],
-  //     },
-  //   }
-  //   const ifcModel = {}
-  //   const planeOffset = {}
-  //   // mock the getPlaneOffset function to return a plane offset
-  //   getPlaneOffset.mockImplementation(() => planeOffset)
-  //   // mock the addHashParams function to return a modified URL
-  //   addHashParams.mockImplementation((url, prefix, offset) => `${url}?${prefix}=${offset}`)
-
-  //   const result = addPlaneLocationToUrl(viewer, ifcModel)
-
-  //   expect(result).toBe('?p=${planeOffset}')
-  //   expect(getPlaneOffset).toHaveBeenCalledWith(viewer, ifcModel)
-  //   expect(addHashParams).toHaveBeenCalledWith(window.location, 'p', planeOffset)
-  // })
-
-
-  // it('X Section in URL', async () => {
-  //   render(
-  //       <ShareMock
-  //         initialEntries={['/v/p/index.ifc#p:x']}
-  //       >
-  //         <CutPlaneMenu/>
-  //       </ShareMock>)
-  //   const {result} = renderHook(() => useStore((state) => state))
-  //   const viewer = __getIfcViewerAPIMockSingleton()
-  //   await act(() => {
-  //     result.current.setViewerStore(viewer)
-  //   })
-  //   const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-  //   const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-  //   expect(callDeletePlanes.length).toBe(1)
-  //   expect(callCreatePlanes.length).toBe(1)
-  // })
+  it('X Section in URL', async () => {
+    render(
+        <ShareMock
+          initialEntries={['/v/p/index.ifc#p:x']}
+        >
+          <CutPlaneMenu/>
+        </ShareMock>)
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+    })
+    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    expect(callDeletePlanes.length).toBe(1)
+    expect(callCreatePlanes.length).toBe(1)
+  })
 
   // it('Plane offset', async () => {
   //   const {getByTitle, getByText} = render(
-  //       <ShareMock>
-  //         <ShareControl/>
+  //       <ShareMock
+  //         initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y,14']}
+  //       >
+  //         <CadView/>
   //       </ShareMock>)
   //   const {result} = renderHook(() => useStore((state) => state))
   //   const viewer = __getIfcViewerAPIMockSingleton()
@@ -83,7 +60,7 @@ describe('CutPlane', () => {
   //   })
   //   const shareButton = getByTitle('Share')
   //   fireEvent.click(shareButton)
-  //   expect(getByText('Cutplane position')).toBeInTheDocument()
+  //   expect(getByText('Camera position')).toBeInTheDocument()
   // })
 })
 
