@@ -20,12 +20,15 @@ export default function ItemProperties() {
   const element = useStore((state) => state.selectedElement)
   const theme = useTheme()
 
+
   useEffect(() => {
     (async () => {
       setPropTable(await createPropertyTable(model, element))
       setPsetsList(await createPsetsList(model, element, expandAll))
     })()
   }, [model, element, expandAll])
+
+
   return (
     <Box sx={{
       '& td': {
@@ -61,7 +64,6 @@ export default function ItemProperties() {
       {propTable}
       <Box sx={{
         marginTop: '20px',
-
       }}
       >
         {psetsList && psetsList.props.children.length > 0 &&
@@ -123,4 +125,3 @@ async function createPsetsList(model, element, expandAll) {
     </Box>
   )
 }
-

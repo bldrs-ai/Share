@@ -1,5 +1,5 @@
 import React from 'react'
-import {Box, Drawer} from '@mui/material'
+import {Box, Drawer, Typography} from '@mui/material'
 import {TooltipIconButton} from '../Buttons'
 import {MOBILE_WIDTH} from '../Hooks'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
@@ -25,8 +25,7 @@ export default function ItemPropertiesDrawer({
       sx={preprocessMediaQuery(MOBILE_WIDTH, {
         '& > .MuiPaper-root': {
           'width': '20em',
-          // This lets the h1 in ItemProperties use 1em padding but have
-          // its mid-line align with the text in SearchBar
+          // This lets the h1 in ItemProperties use 1em padding but have its mid-line align with the text in SearchBar
           'padding': '4px 1em',
           '@media (max-width: MOBILE_WIDTH)': {
             width: 'auto',
@@ -55,7 +54,7 @@ export default function ItemPropertiesDrawer({
         },
       })}
       >
-        <h1>{title}</h1>
+        <Typography variant='h1'>{title}</Typography>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
@@ -69,7 +68,9 @@ export default function ItemPropertiesDrawer({
           overflow: 'auto',
         },
       })}
-      >{content}</Box>
+      >
+        {content}
+      </Box>
     </Drawer>
   )
 }
