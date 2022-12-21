@@ -1,17 +1,17 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
+import {IFCBUILDINGSTOREY} from 'web-ifc'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import {TooltipIconButton} from './Buttons'
-import useStore from '../store/useStore'
 import useTheme from '../Theme'
+import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
-import {extractHeight} from '../utils/extractHeight'
+import {isNumeric} from '../utils/strings'
+import {TooltipIconButton} from './Buttons'
 import LevelsIcon from '../assets/2D_Icons/Levels.svg'
 import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
-import {isNumeric} from '../utils/strings'
-import {removePlanes, getModelCenter} from './CutPlaneMenu'
+
 
 /**
  * BasicMenu used when there are several option behind UI button
@@ -58,7 +58,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   }, [model])
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
-    removePlanes(viewer)
+    viewer.clipper.deleteAllPlanes()
     setCutPlaneDirection(null)
     const levelHash = getHashParams(location, 'p')
     const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
@@ -68,7 +68,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     viewer.clipper.createFromNormalAndCoplanarPoint(normal1, modelCenter1)
     viewer.clipper.createFromNormalAndCoplanarPoint(normal2, modelCenter2)
     if (planeHeightBottom === levelInstance) {
-      removePlanes(viewer)
+      viewer.clipper.deleteAllPlanes()
       removeHashParams(window.location, LEVEL_PREFIX)
       setLevelInstance(null)
       return
@@ -87,16 +87,14 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     viewer.context.ifcCamera.toggleProjection()
     viewer.plans.moveCameraTo2DPlanPosition(true)
     const yConst = 100 // value used in moveCameraTo2DPlanPosition in web-ifc
-    const modelCenterX = getModelCenter(model).x
-    const modelCenterY = getModelCenter(model).y
-    const modelCenterZ = getModelCenter(model).z
+    const center = model.geometry.boundingBox.getCenter()
     const camera = viewer.context.ifcCamera
-    camera.cameraControls.setLookAt(modelCenterX, yConst, modelCenterZ, modelCenterX, 0, modelCenterZ, true)
+    camera.cameraControls.setLookAt(center.x, yConst, center.z, center.x, 0, center.z, true)
     const currentProjection = camera.projectionManager.currentProjection
     const camFac = 5
     if (currentProjection === 0) {
       camera.cameraControls.setLookAt(
-          modelCenterX * camFac, modelCenterY * camFac, -modelCenterZ * camFac, modelCenterX, modelCenterY, modelCenterZ, true)
+          center.x * camFac, center.y * camFac, -center.z * camFac, center.x, center.y, center.z, true)
     }
   }
 
@@ -157,3 +155,18 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   )
 }
 
+
+/**
+ * Extract related elements.
+ *
+ * @param {object} ifcModel
+ * @return {Array<number>} elevation values
+ */
+async function extractHeight(ifcModel) {
+  const storeys = await ifcModel.getAllItemsOfType(IFCBUILDINGSTOREY, true)
+  const elevValues = []
+  for (let i = 0; i < storeys.length; i++) {
+    elevValues[i] = storeys[i].Elevation.value
+  }
+  return elevValues
+}
