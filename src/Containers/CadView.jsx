@@ -453,7 +453,7 @@ export default function CadView({
 
   return (
     <div className={classes.root} data-model-ready={modelReady}>
-      <div className={classes.view} id='viewer-container'></div>
+      <div className={classes.view} id='viewer-container'/>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
@@ -496,7 +496,7 @@ export default function CadView({
         </div>
         {alert}
       </div>
-      <SideDrawerWrapper />
+      <SideDrawerWrapper/>
     </div>
   )
 }

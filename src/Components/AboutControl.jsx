@@ -26,7 +26,7 @@ export default function AboutControl() {
   return (
     <ControlButton
       title='About BLDRS'
-      icon={<div className={classes.iconContainer}><AboutIcon /></div>}
+      icon={<div className={classes.iconContainer}><AboutIcon/></div>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -54,7 +54,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<LogoB/>}
-      headerText={<LogoB style={{width: '50px', height: '50px'}} />}
+      headerText={<LogoB style={{width: '50px', height: '50px'}}/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
@@ -102,9 +102,11 @@ function AboutContent({setIsDialogDisplayed}) {
         marginTop: '10px'}}
       >
         <ul>
-          <li><Typography sx={bulletStyle} variant='h4'>
-            <a href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' target='_new'>Open IFC models from Github</a>
-          </Typography></li>
+          <li>
+            <Typography sx={bulletStyle} variant='h4'>
+              <a href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' target='_new'>Open IFC models from Github</a>
+            </Typography>
+          </li>
           <li><Typography sx={bulletStyle} variant='h4'>View IFC properties</Typography></li>
           <li><Typography sx={bulletStyle} variant='h4'>Search IFC models</Typography></li>
           <li><Typography sx={bulletStyle} variant='h4'>Share IFC models</Typography></li>
