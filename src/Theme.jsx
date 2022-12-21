@@ -63,7 +63,7 @@ function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
   const lightGreen = '#C8E8C7'
   const darkGreen = '#459A47'
-  const fontFamily = 'Helvetica'
+  const fontFamily = 'Roboto'
   const lime = '#4EEF4B'
   const day = {
     primary: {
@@ -80,6 +80,7 @@ function loadTheme(mode) {
       heavy: grey[300],
       heavier: grey[400],
       heaviest: grey[500],
+      maximum: 'black',
       lime,
     },
   }
@@ -95,9 +96,9 @@ function loadTheme(mode) {
     highlight: {
       main: darkGreen,
       secondary: lightGreen,
-      heavy: grey[700],
-      heavier: grey[600],
-      heaviest: grey[500],
+      heavy: grey[600],
+      heavier: grey[500],
+      heaviest: grey[400],
       lime,
     },
   }
@@ -113,7 +114,7 @@ function loadTheme(mode) {
     h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h4: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
+    h4: {fontSize: '0.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
     h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
@@ -157,15 +158,10 @@ function loadTheme(mode) {
         {
           props: {variant: 'rectangular'},
           style: {
-            border: '1px solid grey',
-            width: '288px',
-            height: '50px',
-            color: '#000000',
-            background: 'none',
+            width: '180px',
+            height: '40px',
             textTransform: 'none',
-            font: 'Inter',
-            fontWeight: 600,
-            fontSize: '16px',
+            color: activePalette.secondary.main,
           },
         },
       ],

@@ -1,14 +1,10 @@
 /**
  * Delete all properties defined in the given object.
  *
- * @param {object} obj The object whose properties to delete.
+ * @param {Object<any, any>} obj The object whose properties to delete.
  */
 export function deleteProperties(obj) {
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      delete obj[key]
-    }
-  }
+  Object.keys(obj).forEach((key) => delete obj[key])
 }
 
 

@@ -2,7 +2,6 @@ import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
-import {isRunningLocally} from './network'
 
 
 /**
@@ -30,6 +29,20 @@ export async function getIssue(repository, issueId) {
   const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
   debug().log('GitHub: issue: ', issue)
   return issue
+}
+
+
+/**
+ * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @return {object} the branches.
+ */
+export async function getBranches(repository) {
+  const branches = await getGitHub(repository, 'branches')
+  debug().log('GitHub: branches: ', branches)
+  return branches
 }
 
 
@@ -94,7 +107,7 @@ export async function getComment(repository, issueId, commentId) {
  * @param {object} args The args to substitute
  * @return {object} The object at the resource
  */
-async function getGitHub(repository, path, args) {
+async function getGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
 
@@ -110,7 +123,7 @@ async function getGitHub(repository, path, args) {
   return res
 }
 
-export const MOCK_ISSUE = {
+export const MOCK_NOTE = {
   embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
   index: 0,
   id: 10,
@@ -361,33 +374,57 @@ export const MOCK_COMMENTS = {
   ],
 }
 
-export const MOCK_ISSUES_EMPTY = {data: []}
-
-
-/**
- * Mock of Octokit for locally and unit testing.
- */
-export class MockOctokit {
-  /**
-   * @param {string} path
-   * @param {object} account
-   * @param {object} args
-   * @return {object} Mock response
-   */
-  request(path, account, args) {
-    debug().log(`GitHub: MockOctokit: request: ${path}, args: `, args)
-    if (path.includes(`/repos/{org}/{repo}/issues/{issue_number}/comments`)) {
-      return MOCK_COMMENTS
-    }
-    if (path.includes('/repos/{org}/{repo}/issues')) {
-      return MOCK_ISSUES
-    }
-  }
+export const MOCK_BRANCHES = {
+  data: [
+    {
+      name: 'Version-1',
+      commit: {
+        sha: 'f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+      },
+      protected: false,
+    },
+    {
+      name: 'main',
+      commit: {
+        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+      },
+      protected: false,
+    },
+  ],
 }
 
-// All direct uses of octokit should be private to this file to
-// ensure we setup mocks for local use and unit testing.
-const octokit = isRunningLocally() ? new MockOctokit() : new Octokit({
+export const MOCK_ONE_BRANCH = {
+  data: [
+    {
+      name: 'main',
+      commit: {
+        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+      },
+      protected: false,
+    },
+  ],
+}
+
+export const MOCK_ISSUES_EMPTY = {data: []}
+
+export const MOCK_MODEL_PATH_GIT = {
+  org: 'Swiss-Property-AG',
+  repo: 'Schneestock-Public',
+  branch: 'main',
+  filepath: '/ZGRAGGEN.ifc',
+  eltPath: '',
+  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+}
+
+export const MOCK_MODEL_PATH_LOCAL = {
+  filepath: '/4f080237-b4e4-4ede-8885-d498647f15e6.ifc',
+  eltPath: '',
+}
+
+
+const octokit = new Octokit({
   userAgent: `bldrs/${PkgJson.version}`,
 })
-

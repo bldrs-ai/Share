@@ -5,40 +5,37 @@ import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
-import ExtractLevelsMenu from './ExtractLevelsMenu'
+// import ExtractLevelsMenu from './ExtractLevelsMenu'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
-import {useIsMobile} from './Hooks'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
 import NotesIcon from '../assets/2D_Icons/Notes.svg'
 import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
-import TreeIcon from '../assets/2D_Icons/Tree.svg'
 
 
 /**
  * OperationsGroup contains tools for cut plane, deselecting items and
  * toggling shortcut visibility
  *
- * @param {object} viewer The IFC viewer
  * @param {Function} unSelectItem deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, showNavPanel, onClickMenuCb}) {
+export default function OperationsGroup({
+  unSelectItem,
+}) {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const turnCommentsOff = useStore((state) => state.turnCommentsOff)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const viewer = useStore((state) => state.viewerStore)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
-  const isMobile = useIsMobile()
   const classes = useStyles({isCommentsOn: isCommentsOn})
   const theme = useContext(ColorModeContext)
 
@@ -70,9 +67,9 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
   return (
     <div className={classes.container}>
       <ButtonGroup orientation="vertical" >
-        <ShareControl viewer={viewer}/>
+        <ShareControl/>
       </ButtonGroup>
-      {!isMobile && <Divider />}
+      <Divider />
       <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
@@ -86,16 +83,8 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           selected={isPropertiesOn}
           icon={<ListIcon/>}
         />
-        {isMobile &&
-          <TooltipIconButton
-            title='Elements Hierarchy'
-            selected={showNavPanel}
-            onClick={onClickMenuCb}
-            icon={<TreeIcon/>}
-          />
-        }
         <CutPlaneMenu/>
-        <ExtractLevelsMenu/>
+        {/* <ExtractLevelsMenu/> */}
         <TooltipIconButton
           title="Clear"
           onClick={unSelectItem}
@@ -110,10 +99,10 @@ export default function OperationsGroup({unSelectItem, installPrefix, fileOpen, 
           onClick={() => theme.toggleColorMode()}
           icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
-        <AboutControl installPrefix={installPrefix}/>
+        <AboutControl/>
       </ButtonGroup>
       {/* Invisible */}
-      <CameraControl viewer={viewer}/>
+      <CameraControl/>
     </div>
   )
 }

@@ -1,4 +1,4 @@
-import {findUrls} from './strings'
+import {findUrls, isNumeric} from './strings'
 
 
 describe('strings', () => {
@@ -33,5 +33,13 @@ describe('strings', () => {
       'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48',
       'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48',
     ])
+  })
+
+
+  it('isNumeric recognizes common cases', () => {
+    expect(isNumeric('-1')).toBeTruthy()
+    expect(isNumeric('0')).toBeTruthy()
+    expect(isNumeric('1')).toBeTruthy()
+    expect(isNumeric('NaN')).toBeFalsy()
   })
 })

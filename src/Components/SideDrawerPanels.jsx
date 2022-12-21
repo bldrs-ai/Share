@@ -4,8 +4,9 @@ import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import ItemProperties from './ItemProperties'
-import {IssuesNavBar, Issues} from './IssuesControl'
 import {TooltipIconButton} from './Buttons'
+import Notes from './notes/Notes'
+import NotesNavBar from './notes/NotesNavBar'
 import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
@@ -78,9 +79,9 @@ export const NotesPanel = () => {
   const classes = useStyles(useTheme())
   return (
     <>
-      <IssuesNavBar/>
+      <NotesNavBar/>
       <div className={classes.contentContainerNotes}>
-        <Issues/>
+        <Notes/>
       </div>
     </>
   )

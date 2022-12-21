@@ -17,6 +17,9 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   build:
+    env:
+      NODE_ENV: test
+
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -24,6 +27,10 @@ jobs:
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v3
+
+      - uses: actions/setup-node@v1
+        with:
+          node-version: 16
 
       # Runs a set of commands using the runners shell
       - name: Run a multi-line script

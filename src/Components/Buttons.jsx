@@ -60,16 +60,21 @@ export function RectangularButton({
   title,
   icon,
   onClick,
+  noBorder = true,
+  noBackground = false,
 }) {
   assertDefined(title, icon, onClick)
+  const theme = useTheme()
   return (
     <Button
       onClick={onClick}
       variant='rectangular'
       startIcon={icon}
       sx={{
+        'border': `1px solid ${noBorder ? 'none' : theme.palette.highlight.heavy }`,
+        'backgroundColor': noBackground ? 'none' : theme.palette.highlight.main,
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: 'none'},
+        '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.secondary},
       }}
     >
       {title}
@@ -105,7 +110,9 @@ export function ControlButton({
           <ToggleButton
             className={classes.root}
             selected={isDialogDisplayed}
-            onClick={setIsDialogDisplayed}
+            onClick={() => {
+              setIsDialogDisplayed(true)
+            }}
             color='primary'
             value={''}
           >
@@ -124,7 +131,7 @@ const useStyles = makeStyles((theme) => ({
     '& button': {
       'width': '40px',
       'height': '40px',
-      'border': 'none ',
+      'border': 'none',
       'margin': '4px 0px 4px 0px',
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979720',

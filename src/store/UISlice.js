@@ -7,22 +7,27 @@
  */
 export default function createUISlice(set, get) {
   return {
+    isCommentsOn: false,
     isDrawerOpen: false,
+    isNavPanelOpen: true,
     isOpenControlHighlighted: true,
     isPropertiesOn: false,
-    isCommentsOn: false,
     snackMessage: null,
     cutPlaneDirection: null,
+    cutPlaneOffset: 0,
     levelInstance: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
-    toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
+    toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
+    toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     turnCommentsOn: () => set(() => ({isCommentsOn: true})),
     turnCommentsOff: () => set(() => ({isCommentsOn: false})),
-    setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setCutPlaneDirection: (direction) => set(() => ({cutPlaneDirection: direction})),
+    setCutPlaneOffset: (offset) => set(() => ({cutPlaneOffset: offset})),
+    setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
+    setSnackMessage: (message) => set(() => ({snackMessage: message})),
   }
 }

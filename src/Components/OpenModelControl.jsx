@@ -8,7 +8,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
 import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
-import {TooltipIconButton} from '../Components/Buttons'
+import {RectangularButton} from '../Components/Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 import ModelsIcon from '../assets/2D_Icons/Model.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -36,7 +36,7 @@ export default function OpenModelControl({fileOpen}) {
               setIsDialogDisplayed(true)
             }}
             color='primary'
-            value={'something'}
+            value={'Open IFC'}
           >
             <OpenIcon/>
           </ToggleButton>
@@ -88,7 +88,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   return (
     <Dialog
       icon={<ModelsIcon/>}
-      headerText='Open'
+      headerText={<Typography variant='h2' sx={{margin: '10px 10px'}}>Open</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
@@ -124,10 +124,12 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               </a>
             </span> to learn more.
           </p>
-          <TooltipIconButton
-            title='Open IFC file'
+          <RectangularButton
+            title='Open from local drive'
             icon={<UploadIcon/>}
             onClick={openFile}
+            noBackground={true}
+            noBorder={false}
           />
           <p className={classes.bullet}>
             Models opened from local drive cannot be saved or shared.
@@ -141,8 +143,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 
 const useStyles = makeStyles((theme) => ({
   content: {
-    width: '270px',
-    marginTop: '6px',
+    width: '260px',
+    paddingTop: '6px',
   },
   snippet: {
     textAlign: 'left',
@@ -157,12 +159,6 @@ const useStyles = makeStyles((theme) => ({
     color: theme.palette.highlight.secondary,
     cursor: 'pointer',
     borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
-  },
-  openIcon: {
-    textAlign: 'center',
-  },
-  iconContainer: {
-    textTransform: 'Capitalize',
   },
   root: {
     '& button': {
