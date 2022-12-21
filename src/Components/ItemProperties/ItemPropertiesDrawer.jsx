@@ -58,7 +58,7 @@ export default function ItemPropertiesDrawer({
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
-          icon={<CloseIcon />}
+          icon={<CloseIcon/>}
         />
       </Box>
       <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
