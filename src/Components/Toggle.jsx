@@ -1,5 +1,5 @@
 import React, {useContext} from 'react'
-import Switch from '@mui/material/Switch'
+import {Switch} from '@mui/material'
 import {ColorModeContext} from '../Context/ColorMode'
 
 
@@ -11,6 +11,8 @@ import {ColorModeContext} from '../Context/ColorMode'
  */
 export default function Toggle({onChange, checked}) {
   const theme = useContext(ColorModeContext).getTheme()
+
+
   return (
     <Switch
       checked={checked}

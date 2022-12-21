@@ -1,8 +1,7 @@
 import React, {useState, useEffect, useContext} from 'react'
-import Box from '@mui/material/Box'
+import {Box, Typography} from '@mui/material'
+import {useTheme} from '@mui/styles'
 import Toggle from '../Components/Toggle'
-import Typography from '@mui/material/Typography'
-import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
 import {ColorModeContext} from '../Context/ColorMode'
 import Dialog from './Dialog'
@@ -18,15 +17,25 @@ import LogoB from '../assets/LogoB_3.svg'
  */
 export default function AboutControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] =
-        useState(Privacy.getCookieBoolean({
-          component: 'about',
-          name: 'isFirstTime',
-          defaultValue: true}))
-  const classes = useStyles()
+    useState(Privacy.getCookieBoolean({
+      component: 'about',
+      name: 'isFirstTime',
+      defaultValue: true,
+    }))
+
+
   return (
     <ControlButton
       title='About BLDRS'
-      icon={<div className={classes.iconContainer}><AboutIcon/></div>}
+      icon={
+        <Box sx={{
+          width: '20px',
+          height: '20px',
+          marginBottom: '2px',
+        }}
+        >
+          <AboutIcon/>
+        </Box>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -69,10 +78,11 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  * @return {object} React component
  */
 function AboutContent({setIsDialogDisplayed}) {
-  const classes = useStyles()
-  const theme = useContext(ColorModeContext)
+  const theme = useTheme()
+  const colorMode = useContext(ColorModeContext)
   const [acceptCookies, setAcceptCookies] = useState(true)
   const bulletStyle = {textAlign: 'center'}
+
 
   useEffect(() => {
     if (Privacy.isPrivacySocialEnabled()) {
@@ -82,13 +92,48 @@ function AboutContent({setIsDialogDisplayed}) {
     }
   }, [])
 
+
   const changePrivacy = () => {
     setPrivacy(acceptCookies)
     setAcceptCookies(!acceptCookies)
   }
 
+
   return (
-    <div className={classes.content}>
+    <Box sx={{
+      'minHeight': '330px',
+      'maxWidth': '250px',
+      'marginBottom': '10px',
+      '& .MuiTypography-body1': {
+        padding: '1em 0',
+        fontSize: '.9em',
+      },
+      '& ul': {
+        width: '100%',
+        marginTop: '-2px',
+        marginBottom: '15px',
+        padding: '4px 6px',
+        textAlign: 'left',
+        borderRadius: '2px',
+      },
+      '& li': {
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        margin: '5px 6px',
+        listStyleType: 'none',
+      },
+      '& a': {
+        paddingRight: '4px',
+        paddingBottom: '2px',
+        color: theme.palette.highlight.secondary,
+        borderBottom: `0.5px solid ${theme.palette.highlight.secondary}`,
+      },
+      '@media (max-width: 900px)': {
+        marginTop: '-10px',
+      },
+    }}
+    >
       <Typography variant='h4'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
@@ -96,10 +141,11 @@ function AboutContent({setIsDialogDisplayed}) {
         </a>
       </Typography>
       <Box sx={{
-        backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C',
+        backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
         borderRadius: '10px',
         opacity: .8,
-        marginTop: '10px'}}
+        marginTop: '10px',
+      }}
       >
         <ul>
           <li>
@@ -157,68 +203,12 @@ function AboutContent({setIsDialogDisplayed}) {
         <RectangularButton
           title='OK'
           onClick={() => setIsDialogDisplayed(false)}
-          icon={<AboutIcon/> }
+          icon={<AboutIcon/>}
           noBorder={false}
         />
       </Box>
-    </div>)
+    </Box>)
 }
-
-
-const useStyles = makeStyles((theme) => (
-  {
-    content: {
-      'minHeight': '330px',
-      'maxWidth': '250px',
-      'marginBottom': '10px',
-      '& .MuiTypography-body1': {
-        padding: '1em 0',
-        fontSize: '.9em',
-      },
-      '& ul': {
-        width: '100%',
-        marginTop: '-2px',
-        marginBottom: '15px',
-        padding: '4px 6px',
-        textAlign: 'left',
-        borderRadius: '2px',
-      },
-      '& li': {
-        display: 'flex',
-        justifyContent: 'center',
-        alignItems: 'center',
-        margin: '5px 6px',
-        listStyleType: 'none',
-      },
-      '& a': {
-        paddingRight: '4px',
-        paddingBottom: '2px',
-        color: theme.palette.highlight.secondary,
-        borderBottom: `0.5px solid ${theme.palette.highlight.secondary}`,
-      },
-      '@media (max-width: 900px)': {
-        marginTop: '-10px',
-      },
-    },
-    settings: {
-      'display': 'flex',
-      'flexDirection': 'column',
-      'justifyContent': 'center',
-      'alignItems': 'center',
-      'textAlign': 'center',
-      'paddingTop': '10px',
-      '@media (max-width: 900px)': {
-        paddingTop: '16px',
-        paddingBottom: '30px',
-      },
-    },
-    iconContainer: {
-      width: '20px',
-      height: '20px',
-      marginBottom: '2px',
-    },
-  }
-))
 
 
 export const setPrivacy = (acceptCookies) => {

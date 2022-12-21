@@ -3,9 +3,8 @@ import clsx from 'clsx'
 import PropTypes from 'prop-types'
 import {useNavigate} from 'react-router-dom'
 import {reifyName} from '@bldrs-ai/ifclib'
-import Box from '@mui/material/Box'
+import {Box, Typography} from '@mui/material'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
-import Typography from '@mui/material/Typography'
 import {computeElementPathIds} from '../utils/TreeUtils'
 
 
@@ -125,13 +124,18 @@ export default function NavTree({
     )
   })
 
+
   CustomContent.propTypes = NavTreePropTypes
+
 
   const CustomTreeItem = (props) => {
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
+
   let i = 0
+
+
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (

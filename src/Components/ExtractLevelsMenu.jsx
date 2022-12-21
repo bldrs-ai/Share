@@ -2,8 +2,7 @@ import React, {useEffect, useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import {IFCBUILDINGSTOREY} from 'web-ifc'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
+import {Menu, MenuItem} from '@mui/material'
 import useTheme from '../Theme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
@@ -36,6 +35,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const floorOffset = 0.2
   const ceilingOffset = 0.4
 
+
   useEffect(() => {
     // TODO(pablo): need to test getAllItemsOfType since it's null in
     // our mock.  Don't know how to mock the async function correctly.
@@ -57,6 +57,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
+
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     viewer.clipper.deleteAllPlanes()
     setCutPlaneDirection(null)
@@ -73,15 +74,17 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       setLevelInstance(null)
       return
     }
-    if (!levelHash || levelHash !== level ) {
+    if (!levelHash || levelHash !== level) {
       addHashParams(window.location, LEVEL_PREFIX, {levelSelected: level})
     }
     setLevelInstance(planeHeightBottom)
   }
 
+
   const isolateFloor = (level) => {
     createFloorplanPlane(allLevelsState[level] + floorOffset, allLevelsState[level + 1] - ceilingOffset, level)
   }
+
 
   const planView = () => {
     viewer.context.ifcCamera.toggleProjection()
@@ -98,9 +101,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
     }
   }
 
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
   }
+
 
   const handleClose = () => {
     setAnchorEl(null)
@@ -108,7 +113,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
 
   return (
-    <div>
+    <>
       <TooltipIconButton
         title={'Isolate Levels'}
         icon={<LevelsIcon/>}
@@ -147,11 +152,11 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
             onClick={() => isolateFloor(i)}
             selected={levelInstance === (allLevelsState[i] + floorOffset)}
           >
-          L{i}
+            L{i}
           </MenuItem>))
         }
       </Menu>
-    </div>
+    </>
   )
 }
 

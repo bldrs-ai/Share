@@ -1,8 +1,6 @@
 import React, {useRef, useEffect, useState, useContext} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import InputBase from '@mui/material/InputBase'
-import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
+import {Box, InputBase, Paper} from '@mui/material'
 import debug from '../utils/debug'
 import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
@@ -31,11 +29,11 @@ export default function SearchBar({fileOpen}) {
   const widthPerChar = 6.5
   const padding = 130
   const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
-  // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
+  // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
-  const classes = useStyles({inputWidth: calculatedInputWidth})
   const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
+
 
   useEffect(() => {
     debug().log('SearchBar#useEffect[searchParams]')
@@ -52,12 +50,14 @@ export default function SearchBar({fileOpen}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
 
+
   const onSubmit = (event) => {
     // Prevent form event bubbling and causing page reload.
     event.preventDefault()
     if (error.length > 0) {
       setError('')
     }
+
     // if url is typed into the search bar open the model
     if (looksLikeLink(inputText)) {
       try {
@@ -82,14 +82,33 @@ export default function SearchBar({fileOpen}) {
     }
     searchInputRef.current.blur()
   }
+
+
   return (
-    <div>
+    <Box>
       <Paper
         component='form'
-        className={classes.root}
+        sx={{
+          'display': 'flex',
+          'minWidth': '300px',
+          'width': `${calculatedInputWidth}px`,
+          'height': '56px',
+          'maxWidth': '700px',
+          'alignItems': 'center',
+          'opacity': .8,
+          'padding': '2px 6px 2px 6px',
+          '@media (max-width: 900px)': {
+            minWidth: '300px',
+            width: '300px',
+            maxWidth: '300px',
+          },
+          '& .MuiInputBase-root': {
+            flex: 1,
+          },
+          'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        }}
         onSubmit={onSubmit}
         elevation={0}
-        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
       >
         <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
@@ -120,9 +139,16 @@ export default function SearchBar({fileOpen}) {
       </Paper>
       { inputText.length > 0 &&
         error.length > 0 &&
-        <div className={classes.error}>{error}</div>
+        <Box sx={{
+          marginLeft: '10px',
+          marginTop: '3px',
+          fontSize: '10px',
+          color: 'red',
+        }}
+        >{error}
+        </Box>
       }
-    </div>
+    </Box>
   )
 }
 
@@ -186,31 +212,3 @@ export function stripIfcPathFromLocation(location, fileExtension = '.ifc') {
   }
   throw new Error('Expected URL of the form <base>/file.ifc<path>[?query]')
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'display': 'flex',
-    'minWidth': '300px',
-    'width': (props) => props.inputWidth,
-    'height': '56px',
-    'maxWidth': '700px',
-    'alignItems': 'center',
-    'opacity': .8,
-    'padding': '2px 6px 2px 6px',
-    '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
-      maxWidth: '300px',
-    },
-    '& .MuiInputBase-root': {
-      flex: 1,
-    },
-  },
-  error: {
-    marginLeft: '10px',
-    marginTop: '3px',
-    fontSize: '10px',
-    color: 'red',
-  },
-})

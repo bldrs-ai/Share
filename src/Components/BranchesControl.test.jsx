@@ -37,7 +37,7 @@ describe('BranchControl', () => {
     })
   })
 
-  it('do not show the compoenent if the model is not loaded from github', async () => {
+  it('do not show the component if the model is not loaded from github', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setModelPath(MOCK_MODEL_PATH_LOCAL)

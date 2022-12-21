@@ -1,6 +1,5 @@
 import React, {useContext} from 'react'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
+import {Box, Typography} from '@mui/material'
 import {ColorModeContext} from '../Context/ColorMode'
 import AttentionIcon from '../assets/2D_Icons/Attention.svg'
 
@@ -13,6 +12,8 @@ import AttentionIcon from '../assets/2D_Icons/Attention.svg'
  */
 export default function NoContent() {
   const theme = useContext(ColorModeContext).getTheme()
+
+
   return (
     <Box sx={{width: '100%'}}>
       <Box sx={{

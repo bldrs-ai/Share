@@ -1,6 +1,5 @@
 import React from 'react'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
+import {Box, Typography} from '@mui/material'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'

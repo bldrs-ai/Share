@@ -1,8 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
-import Menu from '@mui/material/Menu'
-import MenuItem from '@mui/material/MenuItem'
+import {Menu, MenuItem} from '@mui/material'
 import useTheme from '../Theme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
@@ -35,13 +34,16 @@ export default function CutPlaneMenu() {
   const open = Boolean(anchorEl)
   const theme = useTheme()
 
+
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
   }
 
+
   const handleClose = () => {
     setAnchorEl(null)
   }
+
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
@@ -57,6 +59,7 @@ export default function CutPlaneMenu() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
+
 
   const createPlane = (normalDirection, offset = 0) => {
     viewer.clipper.deleteAllPlanes()
@@ -96,6 +99,7 @@ export default function CutPlaneMenu() {
     setCutPlaneDirection(normalDirection)
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
+
 
   return (
     <div>
