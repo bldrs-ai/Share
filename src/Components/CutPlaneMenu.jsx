@@ -1,13 +1,14 @@
 import React, {useState, useEffect} from 'react'
+import {useLocation} from 'react-router-dom'
+import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import {Vector3} from 'three'
-import {useLocation} from 'react-router-dom'
+import useTheme from '../Theme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
-import useTheme from '../Theme'
+
 
 /**
  * BasicMenu used when there are several option behind UI button
