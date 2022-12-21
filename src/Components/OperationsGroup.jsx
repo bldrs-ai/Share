@@ -69,7 +69,7 @@ export default function OperationsGroup({
       <ButtonGroup orientation="vertical" >
         <ShareControl/>
       </ButtonGroup>
-      <Divider />
+      <Divider/>
       <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
@@ -89,7 +89,7 @@ export default function OperationsGroup({
           title="Clear"
           onClick={unSelectItem}
           selected={isSelected()}
-          icon={<ClearIcon />}
+          icon={<ClearIcon/>}
         />
       </ButtonGroup>
       <Divider/>

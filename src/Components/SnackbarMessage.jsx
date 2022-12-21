@@ -45,6 +45,6 @@ export default function SnackBarMessage({message, type, open}) {
 }
 
 const Alert = React.forwardRef(function Alert(props, ref) {
-  return <MuiAlert elevation={1} ref={ref} variant='filled' {...props} />
+  return <MuiAlert elevation={1} ref={ref} variant='filled' {...props}/>
 })
 
