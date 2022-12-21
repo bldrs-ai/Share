@@ -32,16 +32,15 @@ export function toKey(str) {
  */
 export function isNumeric(str) {
   if (typeof str !== 'string') {
-    return false
+    throw new Error('Expected a string')
   }
-  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
-         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+  return !isNaN(parseFloat(str))
 }
 
 
 /**
  * @param {string} str
- * @return {Array} url matches
+ * @return {Array<string>} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf

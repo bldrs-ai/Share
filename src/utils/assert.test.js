@@ -29,10 +29,10 @@ test('assert', () => {
   const a = undefined
   const b = 1
   expectFailure(() => {
-    new TestArgsCtor({a, b})
+    new TestArgsCtor(a, b)
   })
   expectFailure(() => {
-    new TestVarargs({a, b})
+    new TestVarargs(a, b)
   })
 })
 
@@ -57,7 +57,7 @@ class TestArgsCtor {
    * @param {any} a test arg, possibly undefined
    * @param {any} b test arg, possibly undefined
    */
-  constructor({a, b}) {
+  constructor(a, b) {
     assertDefined(a, b)
   }
 }
@@ -69,7 +69,7 @@ class TestVarargs {
    * @param {any} a test arg, possibly undefined
    * @param {any} b test arg, possibly undefined
    */
-  constructor({a, b}) {
+  constructor(a, b) {
     assertDefined(...arguments)
   }
 }
