@@ -80,7 +80,7 @@ export default function NotesNavBar() {
                   height: '14px',
                 }}
                 >
-                  <BackIcon />
+                  <BackIcon/>
                 </Box>}
             />
           </Box> : null
@@ -102,14 +102,14 @@ export default function NotesNavBar() {
               placement='bottom'
               size='small'
               onClick={() => selectNote('previous')}
-              icon={<PreviousIcon />}
+              icon={<PreviousIcon/>}
             />
             <TooltipIconButton
               title='Next Note'
               size='small'
               placement='bottom'
               onClick={() => selectNote('next')}
-              icon={<NextIcon />}
+              icon={<NextIcon/>}
             />
           </>
         }
@@ -136,7 +136,7 @@ export default function NotesNavBar() {
                 height: '14px',
               }}
               >
-                <CloseIcon />
+                <CloseIcon/>
               </Box>}
           />
         </Box>

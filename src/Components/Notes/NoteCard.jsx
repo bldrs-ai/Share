@@ -239,12 +239,14 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
             fontSize: '10px',
             color: 'black',
           }}
-          >{username}</Box>
+          >{username}
+          </Box>
           <Box sx={{
             fontSize: '10px',
             color: 'black',
           }}
-          >{dateParts[0]} {dateParts[1]}</Box>
+          >{dateParts[0]} {dateParts[1]}
+          </Box>
         </Box>
         {!isRunningLocally() ?
           <img alt={'avatarImage'}
@@ -341,7 +343,7 @@ const CardActions = ({
                 marginBottom: '2px',
               }}
               >
-                <CameraIcon />
+                <CameraIcon/>
               </Box>
             }
           />}
@@ -361,7 +363,7 @@ const CardActions = ({
                 marginBottom: '2px',
               }}
               >
-                <ShareIcon />
+                <ShareIcon/>
               </Box>
             }
           />
@@ -394,7 +396,8 @@ const CardActions = ({
             color: 'black',
             cursor: 'pointer',
           }}
-          >{numberOfComments}</Box>
+          >{numberOfComments}
+          </Box>
         }
       </Box>
     </Box>
