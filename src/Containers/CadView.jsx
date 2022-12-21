@@ -115,7 +115,7 @@ export default function CadView({
     async function effect() {
       if (Array.isArray(selectedElements)) {
         selectItemsInScene(selectedElements.map((id) => parseInt(id)))
-        if (selectedElements.length === 1) {
+        if (selectedElements.length === 1 && viewer) {
           const props = await viewer.getProperties(0, parseInt(selectedElements[0]))
           setSelectedElement(props)
         }
