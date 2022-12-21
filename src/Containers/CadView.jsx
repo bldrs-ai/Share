@@ -116,8 +116,7 @@ export default function CadView({
       if (Array.isArray(selectedElements)) {
         selectItemsInScene(selectedElements.map((id) => parseInt(id)))
         if (selectedElements.length === 1 && viewer) {
-          const props = await viewer.getProperties(0, parseInt(selectedElements[0]))
-          setSelectedElement(props)
+          await updateSelectedElementProps(parseInt(selectedElements[0]))
         }
       }
     }
@@ -130,11 +129,11 @@ export default function CadView({
   const location = useLocation()
   useEffect(() => {
     if (model) {
-      (async () => {
+      (() => {
         const parts = location.pathname.split(/\.ifc/i)
         const expectedPartCount = 2
         if (parts.length === expectedPartCount) {
-          await selectElementBasedOnFilepath(parts[1])
+          selectElementBasedOnFilepath(parts[1])
         }
       })()
     }
@@ -406,14 +405,14 @@ export default function CadView({
 
 
   /**
-   * Select the items in the NavTree and update ItemProperties.
+   * Select the items in the NavTree
    * Returns the ids of path parts from root to this elt in spatial
    * structure.
    *
    * @param {number} expressId
    * @return {Array} pathIds
    */
-  async function onElementSelect(expressId) {
+  function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
       debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
@@ -422,11 +421,18 @@ export default function CadView({
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
     setSelectedElements([`${expressId}`])
-    const props = await viewer.getProperties(0, expressId)
-    setSelectedElement(props)
     return pathIds
   }
 
+  /**
+   * Update ItemProperties for the selected element.
+   *
+   * @param {number} expressId
+   */
+  async function updateSelectedElementProps(expressId) {
+    const props = await viewer.getProperties(0, expressId)
+    setSelectedElement(props)
+  }
 
   /**
    * Extracts the path to the element from the url and selects the element
@@ -451,7 +457,7 @@ export default function CadView({
       if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
         if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const pathIds = await onElementSelect(item.id)
+          const pathIds = onElementSelect(item.id)
           const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
           const path = pathIds.join('/')
           console.log(`${pathPrefix}${repoFilePath}/${path}`)

@@ -99,7 +99,7 @@ describe('CadView', () => {
     })
     const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
-    expect(result.current.selectedElements).toBe(null)
+    expect(result.current.selectedElements.length).toBe(0)
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlaneDirection).toBe(null)
     await actAsyncFlush()
