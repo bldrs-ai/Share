@@ -1,5 +1,5 @@
 import React from 'react'
-import {Box, Drawer} from '@mui/material'
+import {Box, Drawer, Typography} from '@mui/material'
 import {TooltipIconButton} from '../Buttons'
 import {MOBILE_WIDTH} from '../Hooks'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
@@ -54,11 +54,11 @@ export default function ItemPropertiesDrawer({
         },
       })}
       >
-        <h1>{title}</h1>
+        <Typography variant='h1'>{title}</Typography>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
-          icon={<CloseIcon/>}
+          icon={<CloseIcon />}
         />
       </Box>
       <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
@@ -68,7 +68,9 @@ export default function ItemPropertiesDrawer({
           overflow: 'auto',
         },
       })}
-      >{content}</Box>
+      >
+        {content}
+      </Box>
     </Drawer>
   )
 }
