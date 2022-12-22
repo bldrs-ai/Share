@@ -88,7 +88,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
   return (
     <Dialog
       icon={<ModelsIcon/>}
-      headerText={<Typography variant='h2' sx={{margin: '10px 10px'}}>Open</Typography>}
+      headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={
