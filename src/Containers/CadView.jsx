@@ -375,7 +375,7 @@ export default function CadView({
   /** Reset global state */
   function resetState() {
     setSelectedElement(null)
-    setSelectedElements(null)
+    setSelectedElements([])
     setCutPlaneDirection(null)
     setLevelInstance(null)
   }
