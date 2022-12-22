@@ -427,7 +427,7 @@ export default function CadView({
     await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
-    setSelectedElements(`${expressId}`)
+    setSelectedElements([`${expressId}`])
     const props = await viewer.getProperties(0, expressId)
     setSelectedElement(props)
     return pathIds
