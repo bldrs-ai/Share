@@ -15,6 +15,7 @@ const esModules = [
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
+  'nanoid',
   'property-information',
   'space-separated-tokens',
   'remark-rehype',
@@ -45,13 +46,14 @@ module.exports = {
     'src/Share.test.js',
   ],
   transform: {
-    '\\.[jt]sx?$': 'babel-jest',
+    '^.+\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/svgTransform.js',
   },
   transformIgnorePatterns: [
     `/node_modules/(?!${esModules}/)`,
   ],
   moduleNameMapper: {
+    'nanoid': require.resolve('nanoid'),
     '^.+\\.css$': 'identity-obj-proxy',
   },
   setupFilesAfterEnv: [
