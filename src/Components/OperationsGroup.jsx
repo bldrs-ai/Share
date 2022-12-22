@@ -46,19 +46,18 @@ export default function OperationsGroup({
 
 
   const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null ||
+    return selectedElement !== null ||
       cutPlaneDirection !== null ||
       levelInstance !== null
-    )
-    return ifSelected
   }
 
   const toggle = (panel) => {
     openDrawer()
+
     if (panel === 'Properties') {
       toggleIsPropertiesOn()
     }
+
     if (panel === 'Notes') {
       if (isCommentsOn) {
         turnCommentsOff()
