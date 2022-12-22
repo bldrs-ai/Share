@@ -106,7 +106,7 @@ function AboutContent({setIsDialogDisplayed}) {
               width: '240px',
               border: `.5px solid ${theme.palette.highlight.secondary}`,
               borderRadius: '4px'}}
-            src='https://user-images.githubusercontent.com/3433606/208431854-ac4f3b75-3c33-40a8-9e62-2f82bf792da6.png'
+            src='https://user-images.githubusercontent.com/3433606/209232358-6598369d-2977-4f81-9265-cb840bef2b42.png'
           />
         </a>
       </Box>
