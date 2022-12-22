@@ -136,7 +136,7 @@ export default function CadView({
    */
   function onModelPath() {
     resetState()
-    setIsNavPanelOpen(false)
+    // setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
@@ -386,8 +386,9 @@ export default function CadView({
     viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
     resetState()
+
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-    navigate(`${pathPrefix}${repoFilePath}`)
+    // navigate(`${pathPrefix}${repoFilePath}`)
   }
 
 
