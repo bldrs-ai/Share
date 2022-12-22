@@ -106,7 +106,7 @@ function AboutContent({setIsDialogDisplayed}) {
               width: '240px',
               border: `.5px solid ${theme.palette.highlight.secondary}`,
               borderRadius: '4px'}}
-            src='https://user-images.githubusercontent.com/3433606/209233898-1aa12129-e76c-437e-832c-24b8c5490fef.png'
+            src='https://user-images.githubusercontent.com/3433606/209236584-11a77d27-7e77-4419-9848-6fb0a094dd19.png'
           />
         </a>
       </Box>
@@ -171,7 +171,7 @@ const useStyles = makeStyles((theme) => (
       'marginBottom': '10px',
       '& .MuiTypography-body1': {
         padding: '1em 0',
-        fontSize: '.9em',
+        fontSize: '1em',
       },
       '& ul': {
         width: '100%',
