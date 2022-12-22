@@ -6,28 +6,28 @@ describe('sample models', () => {
       cy.get('#viewer-container').get('canvas').should('be.visible')
 
       // Wait up to 15 seconds for IFC to finish loading
-      cy.get('[data-model-ready="true"]', {timeout: 15000}).should('exist')
+      cy.get('[data-model-ready="true"]', {timeout: 20000}).should('exist')
     })
 
     it('should display tooltip when hovering', () => {
-      cy.findByRole('button', {name: 'Open IFC'}).realHover()
-      cy.findByRole('tooltip').contains('Open IFC')
+      cy.findByRole('button', {name: 'Open IFC', timeout: 20000}).realHover()
+      cy.findByRole('tooltip', {timeout: 20000}).contains('Open IFC')
     })
 
     it('should display the sample models dialog', () => {
-      cy.findByRole('button', {name: 'Open IFC'}).realClick()
-      cy.findByRole('dialog').contains('Sample Projects')
+      cy.findByRole('button', {name: 'Open IFC', timeout: 20000}).realClick()
+      cy.findByRole('dialog', {timeout: 20000}).contains('Sample Projects')
     })
 
     it('should load the Momentum model when selected', () => {
-      cy.findByRole('button', {name: 'Open IFC'}).realClick()
+      cy.findByRole('button', {name: 'Open IFC', timeout: 20000}).realClick()
       cy.findByLabelText('Sample Projects').realClick()
-      cy.findByRole('listbox').within(() => {
-        cy.findByRole('option', {name: 'Momentum'}).realClick()
+      cy.findByRole('listbox', {timeout: 20000}).within(() => {
+        cy.findByRole('option', {name: 'Momentum', timeout: 20000}).realClick()
       })
-      cy.findByRole('listbox').should('not.exist')
-      cy.findByRole('tree', {label: 'IFC Navigator'})
-      cy.findByText('Momentum / KNIK v3', {timeout: 5000})
+      cy.findByRole('listbox', {timeout: 20000}).should('not.exist')
+      cy.findByRole('tree', {label: 'IFC Navigator', timeout: 20000})
+      cy.findByText('Momentum / KNIK v3', {timeout: 20000})
     })
   })
 })
