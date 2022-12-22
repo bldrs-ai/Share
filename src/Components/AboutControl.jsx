@@ -8,7 +8,8 @@ import Dialog from './Dialog'
 import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB_3.svg'
-import useTheme from '../Theme'
+import Guide from '../assets/Guide.svg'
+// import useTheme from '../Theme'
 
 
 /**
@@ -70,7 +71,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({setIsDialogDisplayed}) {
   const classes = useStyles()
-  const {theme} = useTheme()
+  // const {theme} = useTheme()
   const [acceptCookies, setAcceptCookies] = useState(true)
   // const bulletStyle = {textAlign: 'center'}
 
@@ -89,7 +90,7 @@ function AboutContent({setIsDialogDisplayed}) {
 
   return (
     <div className={classes.content}>
-      <Typography variant='h4'>Build Every Thing Together</Typography>
+      <Typography variant='h3'>Build Every Thing Together</Typography>
       <Typography gutterBottom={false} >We are open source<br/>
         <a href='https://github.com/bldrs-ai/Share' target='_new'>
           github.com/bldrs-ai/Share
@@ -100,14 +101,15 @@ function AboutContent({setIsDialogDisplayed}) {
         marginTop: '10px'}}
       >
         <a href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' >
-          <img
+          {/* <img
             alt='guide'
             style={{
               width: '240px',
               border: `.5px solid ${theme.palette.highlight.secondary}`,
               borderRadius: '4px'}}
             src='https://user-images.githubusercontent.com/3433606/209236584-11a77d27-7e77-4419-9848-6fb0a094dd19.png'
-          />
+          /> */}
+          <Guide style={{width: '240px'}}/>
         </a>
       </Box>
 
