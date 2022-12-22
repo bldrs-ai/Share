@@ -74,13 +74,16 @@ const fakeElement = {
  */
 export function makeTestTree() {
   return {
-    name: 'a',
+    type: 'IFCBUILDING',
+    Name: 'aRootElement',
     expressID: 0,
     children: [{
-      name: 'b',
+      type: 'IFCBUILDINGSTOREY',
+      Name: 'b',
       expressID: 1,
       children: [{
-        name: 'c',
+        type: 'IFCBUILDINGSTOREY',
+        Name: 'c',
         expressID: 2,
         children: [],
       }],
