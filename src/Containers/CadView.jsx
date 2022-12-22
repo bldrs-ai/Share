@@ -159,8 +159,6 @@ export default function CadView({
       return
     }
 
-    setModelReady(false)
-
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
