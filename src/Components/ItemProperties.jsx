@@ -1,11 +1,11 @@
 import React, {useEffect, useState} from 'react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
-import Switch from '@mui/material/Switch'
 import Typography from '@mui/material/Typography'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {createPropertyTable} from '../utils/itemProperties'
 import ExpansionPanel from './ExpansionPanel'
+import Toggle from './Toggle'
 
 
 /**
@@ -34,7 +34,7 @@ export default function ItemProperties() {
         {psetsList && psetsList.props.children.length > 0 &&
         <Typography variant='h2' className={classes.psetTitle}>
           Property Sets
-          <Switch
+          <Toggle
             checked={expandAll}
             onChange={() => setExpandAll(!expandAll)}
           />
@@ -94,17 +94,6 @@ const useStyles = makeStyles((theme) => ({
       width: '100%',
       overflow: 'hidden',
       borderSpacing: 0,
-    },
-    '& .MuiSwitch-root': {
-      float: 'right',
-    },
-    '& .MuiSwitch-track': {
-      backgroundColor: theme.palette.highlight.secondary,
-      opacity: 0.8,
-      border: 'solid 2px grey',
-    },
-    '& .MuiSwitch-thumb': {
-      backgroundColor: theme.palette.highlight.main,
     },
   },
   psetsList: {
