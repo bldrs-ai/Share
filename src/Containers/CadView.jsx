@@ -94,9 +94,15 @@ export default function CadView({
 
   // Viewer changes in onModelPath (above)
   useEffect(() => {
-    (async () => {
+    const prepareViewer = async () => {
       await onViewer()
-    })()
+    }
+
+    setModelReady(false)
+
+    prepareViewer().then(() => {
+      setModelReady(true)
+    })
   }, [viewer])
 
 
@@ -162,22 +168,23 @@ export default function CadView({
       color: theme.palette.highlight.secondary,
       depthTest: true,
     })
+
     const selectMat = new MeshLambertMaterial({
       transparent: true,
       color: theme.palette.highlight.main,
       depthTest: true,
     })
+
     if (viewer.IFC.selector) {
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
+
     addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
-    await onModel(tmpModelRef)
+    onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
-
-    setModelReady(true)
   }
 
 
@@ -282,20 +289,32 @@ export default function CadView({
    *
    * @param {object} m IFCjs loaded model.
    */
-  async function onModel(m) {
-    assertDefined(m)
+  function onModel(m) {
     debug().log('CadView#onModel', m)
-    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
-    if (rootElt.expressID === undefined) {
-      throw new Error('Model has undefined root express ID')
+    if (m === undefined || m === null) {
+      throw new Error('No model provided')
     }
-    setupLookupAndParentLinks(rootElt, elementsById)
-    setDoubleClickListener()
-    initSearch(m, rootElt)
-    const rootProps = await viewer.getProperties(0, rootElt.expressID)
-    rootElt.Name = rootProps.Name
-    rootElt.LongName = rootProps.LongName
-    setRootElement(rootElt)
+
+    m.ifcManager.getSpatialStructure(0, true).then((root) => {
+      if (root === undefined) {
+        throw new Error('Root element could not be found in model')
+      }
+
+      if (root.expressID === undefined) {
+        throw new Error('Model has undefined root express ID')
+      }
+
+      setupLookupAndParentLinks(root, elementsById)
+      setDoubleClickListener()
+      initSearch(m, root)
+
+      viewer.getProperties(0, root.expressID).then((props) => {
+        root.Name = props.Name
+        root.LongName = props.LongName
+      })
+
+      setRootElement(root)
+    })
 
     if (isMobile) {
       setIsNavPanelOpen(false)
