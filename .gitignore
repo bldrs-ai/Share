@@ -6,8 +6,9 @@
 
 # misc
 .DS_Store
+.idea/
 .vscode
 *.log
-
+coverage/
 cypress/videos
 cypress/screenshots
