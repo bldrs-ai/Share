@@ -3,10 +3,12 @@ import {MemoryRouter, Routes, Route} from 'react-router-dom'
 import {render} from '@testing-library/react'
 
 
-test('mockRoutes', () => {
-  const testLabel = 'Test node label'
-  const {getByText} = render(<MockRoutes contentElt={testLabel}/>)
-  expect(getByText(testLabel)).toBeInTheDocument()
+describe('BaseRoutesMock', () => {
+  test('mockRoutes', () => {
+    const testLabel = 'Test node label'
+    const {getByText} = render(<MockRoutes contentElt={testLabel}/>)
+    expect(getByText(testLabel)).toBeInTheDocument()
+  })
 })
 
 
