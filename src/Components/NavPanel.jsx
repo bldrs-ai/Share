@@ -11,13 +11,13 @@ import {ColorModeContext} from '../Context/ColorMode'
 
 
 /**
- * @param {object} model
- * @param {object} element
- * @param {Array} selectedElements
- * @param {Array} defaultExpandedElements
- * @param {Array} expandedElements
- * @param {Function} setExpandedElements
- * @param {string} pathPrefix
+ * @property {object} model
+ * @property {object} element
+ * @property {Array} selectedElements
+ * @property {Array} defaultExpandedElements
+ * @property {Array} expandedElements
+ * @property {Function} setExpandedElements
+ * @property {string} pathPrefix
  * @return {object}
  */
 export default function NavPanel({
@@ -53,15 +53,12 @@ export default function NavPanel({
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}
-          key='tree'
         >
-          {
-            <NavTree
-              model={model}
-              element={element}
-              pathPrefix={pathPrefix}
-            />
-          }
+          <NavTree
+            model={model}
+            element={element}
+            pathPrefix={pathPrefix}
+          />
         </TreeView>
       </div>
     </Paper>

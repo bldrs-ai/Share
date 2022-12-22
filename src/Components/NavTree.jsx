@@ -42,11 +42,11 @@ const NavTreePropTypes = {
 
 
 /**
- * @param {object} model IFC model
- * @param {object} element IFC element of the model
- * @param {string} pathPrefix URL prefix for constructing links to
+ * @property {object} model IFC model
+ * @property {object} element IFC element of the model
+ * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function NavTree({
   model,
@@ -132,27 +132,24 @@ export default function NavTree({
   }
 
   let i = 0
-  // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
-  // warning about missing a unique key foreach item.  Don't really understand it.
+  let items = <></>
+  if (element.children && element.children.length > 0) {
+    items = element.children.map((child) => (
+      <NavTree
+        key={`${pathPrefix}-${i++}`}
+        model={model}
+        element={child}
+        pathPrefix={pathPrefix}
+      />
+    ))
+  }
+
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName({properties: model}, element)}
     >
-      {element.children && element.children.length > 0 ?
-        element.children.map((child) => {
-          const childKey = `${pathPrefix}-${i++}`
-          return (
-            <React.Fragment key={childKey}>
-              <NavTree
-                model={model}
-                element={child}
-                pathPrefix={pathPrefix}
-              />
-            </React.Fragment>
-          )
-        }) :
-        null}
+      {items}
     </CustomTreeItem>
   )
 }
