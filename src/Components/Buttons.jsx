@@ -51,19 +51,19 @@ export function TooltipIconButton({title, onClick, icon, placement = 'left', sel
  *
  * @param {string} title
  * @param {object} icon
- * @param {string} type Type of button (and icon to render)
- * @param {string} placement Placement of tooltip
- * @param {string} size Size of button component
+ * @param {Function} onClick
+ * @param {boolean} border Default: false
+ * @param {boolean} background Default: true
  * @return {object} React component
  */
 export function RectangularButton({
   title,
-  icon,
   onClick,
-  noBorder = true,
-  noBackground = false,
+  icon = null,
+  border = false,
+  background = true,
 }) {
-  assertDefined(title, icon, onClick)
+  assertDefined(title, onClick)
   const theme = useTheme()
   return (
     <Button
@@ -71,10 +71,14 @@ export function RectangularButton({
       variant='rectangular'
       startIcon={icon}
       sx={{
-        'border': `1px solid ${noBorder ? 'none' : theme.palette.highlight.heavy }`,
-        'backgroundColor': noBackground ? 'none' : theme.palette.highlight.main,
+        'border': `1px solid ${border ? theme.palette.highlight.heavy : 'none'}`,
+        'backgroundColor': background ? theme.palette.highlight.main : 'none',
         '& .MuiButton-startIcon': {position: 'absolute', left: '20px'},
-        '&.MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.secondary},
+        '& .MuiButtonBase-root:hover': {bgcolor: theme.palette.highlight.secondary},
+        '& svg': {
+          width: '20px',
+          height: '20px',
+        },
       }}
     >
       {title}

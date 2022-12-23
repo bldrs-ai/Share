@@ -8,17 +8,15 @@ import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
 import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
-import {RectangularButton} from '../Components/Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 import ModelsIcon from '../assets/2D_Icons/Model.svg'
-import OpenIcon from '../assets/2D_Icons/Open.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
 
 
 /**
  * Displays open warning.
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -38,7 +36,7 @@ export default function OpenModelControl({fileOpen}) {
             color='primary'
             value={'Open IFC'}
           >
-            <OpenIcon/>
+            <ModelsIcon/>
           </ToggleButton>
         </Tooltip>
       </Paper>
@@ -87,10 +85,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 
   return (
     <Dialog
-      icon={<ModelsIcon/>}
+      icon={<UploadIcon/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle={'Open local file'}
+      actionIcon={<UploadIcon/>}
+      actionCb={openFile}
       content={
         <div className={classes.content}>
           <TextField
@@ -109,31 +110,17 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
             <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
           </TextField>
-          <p className={classes.bullet}>
-            Models hosted on GitHub are opened by inserting the link to the file into the Search.
-            <br/>
-            Visit our {' '}
-            <span>
-              <a
-                className={classes.link}
-                target="_blank"
-                href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
-                rel="noreferrer"
-              >
-                wiki
-              </a>
-            </span> to learn more.
+          <p>Models hosted on GitHub are opened by inserting the link to the file into the Search.</p>
+          <p>Visit our {' '}
+            <a
+              target="_blank"
+              href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+              rel="noreferrer"
+            >
+              wiki
+            </a> to learn more.
           </p>
-          <RectangularButton
-            title='Open from local drive'
-            icon={<UploadIcon/>}
-            onClick={openFile}
-            noBackground={true}
-            noBorder={false}
-          />
-          <p className={classes.bullet}>
-            Models opened from local drive cannot be saved or shared.
-          </p>
+          <p>Models opened from local drive cannot be saved or shared.</p>
         </div>
       }
     />
@@ -145,6 +132,7 @@ const useStyles = makeStyles((theme) => ({
   content: {
     width: '260px',
     paddingTop: '6px',
+    textAlign: 'left',
   },
   snippet: {
     textAlign: 'left',
@@ -153,12 +141,6 @@ const useStyles = makeStyles((theme) => ({
     textAlign: 'left',
     paddingLeft: '10px',
     paddingRight: '10px',
-  },
-  link: {
-    fontWeight: 'bold',
-    color: theme.palette.highlight.secondary,
-    cursor: 'pointer',
-    borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
   },
   root: {
     '& button': {

@@ -1,8 +1,11 @@
 import React from 'react'
+import DialogActions from '@mui/material/DialogContent'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
-import {Typography} from '@mui/material'
+import Typography from '@mui/material/Typography'
+import {RectangularButton, TooltipIconButton} from '../Components/Buttons'
 import {assertDefined} from '../utils/assert'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
 /**
@@ -20,9 +23,14 @@ export default function Dialog({
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  actionTitle,
+  actionIcon,
+  actionCb,
   content,
 }) {
-  assertDefined(icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content)
+  assertDefined(
+      icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
+      actionTitle, actionIcon, actionCb)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
@@ -30,23 +38,34 @@ export default function Dialog({
       onClose={close}
       sx={{textAlign: 'center'}}
     >
-      <Typography
-        variant='h1'
-        sx={{marginTop: '24px'}}
+      <div
+        style={{
+          position: 'absolute',
+          right: 0,
+          margin: '0.5em',
+          opacity: 0.5,
+        }}
       >
-        {headerText}
-      </Typography>
-      <DialogContent sx={{
-        'marginTop': '10px',
-        'paddingTop': '0px',
-        '@media (max-width: 900px)': {
-          paddingTop: '10px',
-        },
-      }}
+        <TooltipIconButton
+          icon={<CloseIcon/>}
+          onClick={close}
+          title='Close'
+        />
+      </div>
+      <DialogContent
+        sx={{
+          '& svg': {
+            width: '30px',
+            height: '30px',
+          },
+        }}
       >
-        <Typography variant='p'>
-          {content}
-        </Typography>
+        {icon}
+        <Typography variant='h1' sx={{margin: '1em 0'}}>{headerText}</Typography>
+        {content}
       </DialogContent>
+      <DialogActions>
+        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
+      </DialogActions>
     </MuiDialog>)
 }

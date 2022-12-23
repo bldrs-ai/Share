@@ -7,7 +7,7 @@ import * as Privacy from './privacy/Privacy'
 /**
  * @return {object} {theme, colorMode}
  */
-export default function useTheme() {
+export default function useShareTheme() {
   const [themeChangeListeners] = useState({})
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
@@ -102,29 +102,28 @@ function loadTheme(mode) {
       lime,
     },
   }
-  const fontSize = '1rem'
+  const fontSize = 16
   const lineHeight = '1.5em'
   const letterSpacing = 'normal'
   const fontWeight = '400'
-  const fontWeightBold = '400'
   const typography = {
+    fontFamily: fontFamily,
+    fontSize: fontSize,
+    lineHeight: lineHeight,
+    letterSpacing: letterSpacing,
+    fontWeight: fontWeight,
     fontWeightRegular: fontWeight,
-    fontWeightBold,
     fontWeightMedium: fontWeight,
-    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h4: {fontSize: '0.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propValue: {
-      fontSize,
-      lineHeight,
-      letterSpacing,
-      fontWeight: '100',
-      fontFamily},
+    h1: {fontSize: '1.3em', fontWeight},
+    h2: {fontSize: '1.2em', fontWeight},
+    h3: {fontSize: '1.1em', fontWeight},
+    h4: {fontSize: fontSize, fontWeight: '600', textDecoration: 'underline'},
+    h5: {fontSize, textDecoration: 'underline'},
+    body1: {fontSize, lineHeight, letterSpacing, fontWeight},
+    body2: {fontSize: '0.9em'},
+    tree: {fontSize, lineHeight, letterSpacing, fontWeight},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
+    propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '100'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
