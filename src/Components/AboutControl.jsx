@@ -96,7 +96,7 @@ function AboutContent({setIsDialogDisplayed}) {
         </a>
       </Typography>
       <Typography sx={{position: 'relative', top: '-6px', fontWeight: 600}}>
-        <a href='http://localhost:8080/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' target='_new'>
+        <a href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953' target='_new'>
           User Guide
         </a>
       </Typography>
