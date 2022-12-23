@@ -9,7 +9,7 @@ import TextField from '@mui/material/TextField'
 import {makeStyles, useTheme} from '@mui/styles'
 import Dialog from './Dialog'
 import {ColorModeContext} from '../Context/ColorMode'
-import ModelsIcon from '../assets/2D_Icons/Model.svg'
+import OpenIcon from '../assets/2D_Icons/Open.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
 
 
@@ -36,7 +36,7 @@ export default function OpenModelControl({fileOpen}) {
             color='primary'
             value={'Open IFC'}
           >
-            <ModelsIcon/>
+            <OpenIcon/>
           </ToggleButton>
         </Tooltip>
       </Paper>
@@ -85,7 +85,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 
   return (
     <Dialog
-      icon={<UploadIcon/>}
+      icon={<OpenIcon/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -120,7 +120,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               wiki
             </a> to learn more.
           </p>
-          <p>Models opened from local drive cannot be saved or shared.</p>
+          <p>Models opened from local drive cannot yet be saved or shared.</p>
         </div>
       }
     />

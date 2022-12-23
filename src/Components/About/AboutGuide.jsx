@@ -48,16 +48,19 @@ export default function AboutGuide() {
           },
         }}
       >
-        <div>Share models → <ShareIcon/></div>
+        <div>Share model → <ShareIcon/></div>
         <div>Collaborate with Notes → <NotesIcon/></div>
-        <div>View element properties → <ListIcon/></div>
-        <div>View building plans → <CutPlaneIcon/></div>
+        <div>View model item properties → <ListIcon/></div>
+        <div>Section and Plan views → <CutPlaneIcon/></div>
       </Box>
       <img
         src='/logo-buildings.png'
         alt='logo'
         width='100'
-        style={{margin: '0 auto'}}
+        style={{
+          margin: '0 auto',
+          opacity: 0.5,
+        }}
       />
     </Box>
   )
