@@ -33,7 +33,6 @@ export function SideDrawer({
     }
   }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
-
   return (
     <>
       {isMobile && isDrawerOpen ?
@@ -158,7 +157,6 @@ export default function SideDrawerWrapper() {
 
   useEffect(() => {
     const noteHash = getHashParams(location, 'i')
-
     if (noteHash !== undefined) {
       const extractedCommentId = noteHash.split(':')[1]
       setSelectedNoteId(Number(extractedCommentId))
