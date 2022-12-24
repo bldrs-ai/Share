@@ -127,7 +127,7 @@ function loadTheme(mode) {
       fontFamily},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
-  // look like we don't need an explicit color scheme for dark that
+  // look like we don't need an explicit color scheme for dark; that
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
