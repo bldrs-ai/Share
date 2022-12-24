@@ -62,7 +62,7 @@ describe('IssueControl', () => {
           <Notes/>
         </ShareMock>)
 
-    const expectedText = 'Local issue 2'
+    const expectedText = 'Local issue - some text is here to test - Id:1257156364'
     expect(await findByText(expectedText)).toBeVisible()
   })
 

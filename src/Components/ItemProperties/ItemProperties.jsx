@@ -1,10 +1,11 @@
 import React, {useEffect, useState} from 'react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
-import {Box, Switch, Typography} from '@mui/material'
+import {Box, Typography} from '@mui/material'
 import {useTheme} from '@mui/styles'
 import useStore from '../../store/useStore'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
+import Toggle from '../Toggle'
 
 
 /**
@@ -79,7 +80,7 @@ export default function ItemProperties() {
           }}
           >
             Property Sets
-            <Switch
+            <Toggle
               checked={expandAll}
               onChange={() => setExpandAll(!expandAll)}
             />
