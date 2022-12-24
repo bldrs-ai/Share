@@ -75,6 +75,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const inputGlobalStyles = (
     <GlobalStyles
       styles={{
+        'a': {
+          color: theme.palette.highlight.main,
+        },
         'svg': {
           width: '18px',
           height: '18px',

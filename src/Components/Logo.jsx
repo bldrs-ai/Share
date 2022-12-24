@@ -2,7 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/styles'
 import {TooltipIconButton} from './Buttons'
-import LogoIcon from '../assets/LogoB_3.svg'
+import LogoIcon from '../assets/LogoB.svg'
 import PkgJson from '../../package.json'
 
 
@@ -25,12 +25,12 @@ export default function Logo({onClick}) {
             width: '40px',
           },
           '& .left-face': {
-            fill: theme.palette.primary.light,
+            fill: theme.palette.highlight.main,
           },
           '& .right-face': {
-            fill: theme.palette.primary.dark,
+            fill: theme.palette.primary.main,
           },
-          '& .edges': {
+          '& #logo path': {
             stroke: theme.palette.primary.contrastText,
           },
         },
