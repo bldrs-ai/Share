@@ -16,7 +16,6 @@ export const NOTE_PREFIX = 'i'
 export default function Notes() {
   const classes = useStyles()
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
@@ -93,10 +92,6 @@ export default function Notes() {
 
     if (selectedNoteId !== null) {
       fetchComments(filteredNote)
-    }
-    // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredNote) {
-      setSelectedNoteId(null)
     }
     // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
