@@ -27,7 +27,7 @@ const MenuButton = ({onClick}) => {
     <Tooltip title="Properties" placement="left">
       <IconButton
         edge='start'
-        color='secondary'
+        color='primary'
         aria-label='menu'
         onClick={onClick}
       >

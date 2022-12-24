@@ -1,7 +1,6 @@
-import React, {useState, useEffect, useContext} from 'react'
+import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
-import {makeStyles} from '@mui/styles'
-import {ColorModeContext} from '../../Context/ColorMode'
+import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
@@ -59,7 +58,6 @@ export default function NoteCard({
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const theme = useContext(ColorModeContext)
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -124,6 +122,7 @@ export default function NoteCard({
   }
 
 
+  const theme = useTheme()
   const classes = useStyles({
     isDay: theme.isDay(),
     expandText: expandText,
@@ -211,7 +210,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
 
 
 const ShowMore = ({onClick, expandText}) => {
-  const classes = useStyles()
+  const classes = useStyles(useTheme())
   return (
     <div className={classes.showMore}
       onClick={onClick}
@@ -323,7 +322,7 @@ const useStyles = makeStyles((theme) => ({
     'lineHeight': '1.3em',
     // Restore link styling for notes and comments
     '& a': {
-      color: (props) => props.isDay ? 'black' : 'lightGrey',
+      color: theme.isDay() ? 'black' : 'lightGrey',
       textDecoration: 'underline',
     },
     '& img': {
@@ -335,7 +334,7 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
     fontSize: '10px',
-    color: theme.palette.highlight.main,
+    color: theme.palette.primary.main,
   },
   actions: {
     display: 'flex',

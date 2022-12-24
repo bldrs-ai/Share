@@ -3,7 +3,7 @@ import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import useTheme from '../Theme'
+import {useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
@@ -120,7 +120,7 @@ export default function CutPlaneMenu() {
           },
           sx: {
             '& .Mui-selected': {
-              color: theme.theme.palette.highlight.main,
+              color: theme.palette.primary.main,
               fontWeight: 600,
             },
           },

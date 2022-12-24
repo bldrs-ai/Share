@@ -76,12 +76,12 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     <GlobalStyles
       styles={{
         'a': {
-          color: theme.palette.highlight.main,
+          color: theme.palette.primary.linkText,
         },
         'svg': {
           width: '18px',
           height: '18px',
-          fill: theme.palette.secondary.main,
+          fill: theme.palette.primary.contrastText,
         },
         '.closeButton': {
           width: '14px',

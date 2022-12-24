@@ -1,12 +1,10 @@
-import React, {useRef, useEffect, useState, useContext} from 'react'
+import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import debug from '../utils/debug'
-import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
-import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
@@ -34,7 +32,6 @@ export default function SearchBar({fileOpen}) {
   // it is passed into the styles as a property the input width needs to change when the querry exeeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const classes = useStyles({inputWidth: calculatedInputWidth})
-  const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
   useEffect(() => {
@@ -89,7 +86,7 @@ export default function SearchBar({fileOpen}) {
         className={classes.root}
         onSubmit={onSubmit}
         elevation={0}
-        sx={{backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C'}}
+        sx={{background: theme.palette.background.dark}}
       >
         <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
@@ -99,7 +96,7 @@ export default function SearchBar({fileOpen}) {
           error={true}
           placeholder={'Search / Insert GitHub link'}
           sx={{
-            ...theme.theme.typography.tree,
+            ...theme.typography.tree,
             'marginTop': '4px',
             'marginLeft': '8px',
             '& input::placeholder': {

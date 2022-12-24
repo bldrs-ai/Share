@@ -71,20 +71,8 @@ export function RectangularButton({
   background = true,
 }) {
   assertDefined(title, onClick)
-  const theme = useTheme()
   return (
-    <Button
-      onClick={onClick}
-      variant='rectangular'
-      startIcon={icon}
-      sx={{
-        'border': `1px solid ${border ? theme.palette.highlight.heavy : 'none'}`,
-        'backgroundColor': background ? theme.palette.highlight.main : 'none',
-        ':hover': {
-          backgroundColor: theme.palette.highlight.secondary,
-        },
-      }}
-    >
+    <Button onClick={onClick} variant='contained' startIcon={icon}>
       {title}
     </Button>
   )
@@ -137,11 +125,8 @@ export function ControlButton({
 const useStyles = makeStyles((theme) => ({
   root: {
     '& button': {
-      'border': 'none',
-      'margin': '4px 0px',
-      '&.Mui-selected, &.Mui-selected:hover': {
-        backgroundColor: '#97979720',
-      },
+      border: 'none',
+      margin: '4px 0px',
     },
   },
 }))

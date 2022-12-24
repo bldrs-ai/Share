@@ -6,7 +6,7 @@ import {makeStyles} from '@mui/styles'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
-import Logo from '../Components/Logo'
+import LogoButton from '../Components/LogoButton'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
@@ -131,10 +131,7 @@ export default function CadView({
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
         pathPrefix,
-        (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme?.palette?.background?.paper)
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -154,13 +151,13 @@ export default function CadView({
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
-      opacity: 0.5,
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.secondary.light,
       depthTest: true,
+      wireframe: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.highlight.main,
+      color: theme.palette.secondary.main,
       depthTest: true,
     })
     if (viewer.IFC.selector) {
@@ -442,11 +439,9 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
-      }
+      const intializedViewer = initViewer(pathPrefix, theme?.palette?.background?.paper)
+      setViewer(intializedViewer)
+      setViewerStore(intializedViewer)
     })
   }
 
@@ -484,7 +479,7 @@ export default function CadView({
           </div>
         )}
 
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+        <LogoButton onClick={() => navToDefault(navigate, appPrefix)}/>
         <div className={isDrawerOpen ?
                         classes.operationsGroupOpen :
                         classes.operationsGroup}

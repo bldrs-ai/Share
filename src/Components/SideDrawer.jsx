@@ -70,7 +70,7 @@ export function SideDrawer({
                    height: isPropertiesOn ? '50%' : '100%',
                    display: isCommentsOn ? 'block' : 'none',
                    borderRadius: '0px',
-                   borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                   borderBottom: `1px solid ${theme.palette.primary.dark}`,
                    overflowY: 'scroll',
                  }}
                >

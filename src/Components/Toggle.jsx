@@ -18,13 +18,13 @@ export default function Toggle({onChange, checked}) {
       onChange={onChange}
       sx={{
         '& .MuiSwitch-thumb': {
-          backgroundColor: theme.palette.highlight.main,
+          backgroundColor: theme.palette.primary.main,
         },
         '& .MuiSwitch-track': {
-          backgroundColor: theme.palette.highlight.heavier,
+          backgroundColor: theme.palette.primary.light,
         },
         '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': {
-          backgroundColor: theme.palette.highlight.secondary,
+          backgroundColor: theme.palette.primary.dark,
         },
       }}
     />

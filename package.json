@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r586",
+  "version": "1.0.0-r587",
   "main": "src/index.jsx",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {

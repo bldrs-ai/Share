@@ -3,11 +3,11 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import Dialog from '../Dialog'
+import Logo from '../Logo'
 import {ControlButton} from '../Buttons'
 import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/2D_Icons/Information.svg'
-import LogoB from '../../assets/LogoB_3.svg'
 
 
 /**
@@ -53,7 +53,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
-          <LogoB style={{width: '80px', height: '80px'}}/>
+          <Logo style={{width: '80px', height: '80px'}}/>
           bldrs.ai
         </Box>
       }

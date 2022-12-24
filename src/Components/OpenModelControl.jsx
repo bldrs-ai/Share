@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import Tooltip from '@mui/material/Tooltip'
 import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
-import {makeStyles, useTheme} from '@mui/styles'
+import {makeStyles} from '@mui/styles'
 import Dialog from './Dialog'
 import {ColorModeContext} from '../Context/ColorMode'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
@@ -20,7 +20,7 @@ import UploadIcon from '../assets/2D_Icons/Upload.svg'
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const classes = useStyles(useTheme())
+  const classes = useStyles()
   const theme = useContext(ColorModeContext)
   return (
     <div>
@@ -128,7 +128,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
 }
 
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles(() => ({
   content: {
     width: '260px',
     paddingTop: '6px',
@@ -143,42 +143,9 @@ const useStyles = makeStyles((theme) => ({
     paddingRight: '10px',
   },
   root: {
-    '& button': {
-      'border': `1px solid ${theme.palette.highlight.heavy}`,
-      '&.Mui-selected, &.Mui-selected:hover': {
-        backgroundColor: '#97979770',
-      },
-    },
   },
   dropDown: {
-    'width': '260px',
-    '& .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.secondary,
-    },
-    '& .MuiInputLabel-root': {
-      color: theme.palette.highlight.secondary,
-    },
-    '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.secondary,
-    },
-    '&:hover .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.secondary,
-    },
-    '&:hover .MuiInputLabel-root': {
-      color: theme.palette.highlight.secondary,
-    },
-    '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.secondary,
-    },
-    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.secondary,
-    },
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.highlight.secondary,
-    },
-    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.highlight.secondary,
-    },
+    width: '260px',
   },
 }),
 )

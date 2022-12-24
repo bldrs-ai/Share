@@ -58,7 +58,7 @@ export function PropertiesPanel() {
             <TooltipIconButton
               title='toggle drawer'
               onClick={toggleIsPropertiesOn}
-              icon={<CloseIcon class='closeButton'/>}
+              icon={<CloseIcon className='closeButton'/>}
             />
           </Box>
         }

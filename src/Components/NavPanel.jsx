@@ -1,13 +1,12 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
-import {makeStyles} from '@mui/styles'
+import {makeStyles, useTheme} from '@mui/styles'
 import NavTree from './NavTree'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {ColorModeContext} from '../Context/ColorMode'
 
 
 /**
@@ -29,7 +28,7 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const theme = useContext(ColorModeContext)
+  const theme = useTheme()
   const classes = useStyles({isDay: theme.isDay()})
   const selectedElements = useStore((state) => state.selectedElements)
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
@@ -39,7 +38,6 @@ export default function NavPanel({
     <Paper
       elevation={0}
       className={classes.root}
-      sx={{backgroundColor: theme.isDay() ? '#E8E8E8' : '#4C4C4C'}}
     >
       <div className={classes.treeContainer}>
         <TreeView

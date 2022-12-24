@@ -110,31 +110,31 @@ const useStyles = makeStyles((theme) => ({
   dropDown: {
     'width': '300px',
     '& .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.grey,
+      color: theme.palette.primary.contrastText,
     },
     '& .MuiInputLabel-root': {
-      color: theme.palette.highlight.heaviest,
+      color: theme.palette.primary.contrastText,
     },
     '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
     },
     '&:hover .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.heaviest,
+      color: theme.palette.primary.contrastText,
     },
     // TODO(oleg): connect to props
     '&:hover .MuiInputLabel-root': {
-      color: theme.palette.highlight.heaviest,
+      color: theme.palette.primary.contrastText,
     },
     '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
     },
     // TODO(oleg): connect to props
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.maximum,
+      color: theme.palette.primary.contrastText,
     },
     // TODO(oleg): connect to props
     '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.highlight.heaviest,
+      color: theme.palette.primary.contrastText,
     },
     '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
       borderColor: theme.palette.primary.main,
