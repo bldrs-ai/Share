@@ -1,8 +1,8 @@
 import React from 'react'
 import {act, render, screen, waitFor, renderHook} from '@testing-library/react'
-import ShareMock from '../ShareMock'
-import {MockModel} from '../utils/IfcMock.test'
-import useStore from '../store/useStore'
+import ShareMock from '../../ShareMock'
+import {MockModel} from '../../utils/IfcMock.test'
+import useStore from '../../store/useStore'
 import ItemProperties from './ItemProperties'
 
 
