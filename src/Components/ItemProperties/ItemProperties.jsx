@@ -24,8 +24,10 @@ export default function ItemProperties() {
 
   useEffect(() => {
     (async () => {
-      setPropTable(await createPropertyTable(model, element))
-      setPsetsList(await createPsetsList(model, element, expandAll))
+      if (model && element) {
+        setPropTable(await createPropertyTable(model, element))
+        setPsetsList(await createPsetsList(model, element, expandAll))
+      }
     })()
   }, [model, element, expandAll])
 
@@ -39,9 +41,6 @@ export default function ItemProperties() {
         cursor: 'pointer',
         padding: '3px 0',
         borderBottom: `.2px solid ${theme.palette.highlight.heavy}`,
-      },
-      '& td::-webkit-scrollbar': {
-        display: 'none',
       },
       '& table': {
         tableLayout: 'fixed',
@@ -63,11 +62,11 @@ export default function ItemProperties() {
     }}
     >
       {propTable}
-      <Box sx={{
-        marginTop: '20px',
-      }}
-      >
-        {psetsList && psetsList.props.children.length > 0 &&
+      {psetsList && psetsList.props.children.length > 0 &&
+        <Box sx={{
+          marginTop: '10px',
+        }}
+        >
           <Typography variant='h2' sx={{
             position: 'sticky',
             top: '0px',
@@ -85,9 +84,9 @@ export default function ItemProperties() {
               onChange={() => setExpandAll(!expandAll)}
             />
           </Typography>
-        }
-        {psetsList}
-      </Box>
+          {psetsList}
+        </Box>
+      }
     </Box>
   )
 }

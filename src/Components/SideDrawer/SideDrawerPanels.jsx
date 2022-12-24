@@ -73,12 +73,14 @@ export function PropertiesPanel() {
         }
       />
       <Box sx={{
-        marginTop: '4px',
+        paddingTop: '4px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        height: '100%',
-        overflow: 'scroll',
+        top: 0,
+        bottom: 0,
+        overflowX: 'hidden',
+        overflowY: 'auto',
       }}
       >
         {selectedElement ?
@@ -103,12 +105,14 @@ export const NotesPanel = () => {
     <>
       <NotesNavBar/>
       <Box sx={{
-        marginTop: '4px',
+        paddingTop: '4px',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        height: '100%',
-        overflow: 'auto',
+        top: 0,
+        bottom: 0,
+        overflowX: 'hidden',
+        overflowY: 'auto',
       }}
       >
         <Notes/>

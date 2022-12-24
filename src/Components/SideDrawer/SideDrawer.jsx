@@ -99,47 +99,36 @@ export function SideDrawer({
           })}
         >
           <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
-            'height': '100%',
-            'marginTop': '20px',
-            'display': 'flex',
-            'flexDirection': 'column',
-            'justifyContent': 'space-between',
-            '@media (max-width: MOBILE_WIDTH)': {
-              overflow: 'auto',
-            },
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            overflowX: 'hidden',
+            overflowY: 'auto',
           })}
           >
-            {isCommentsOn ?
-              (
-                <Box
-                  sx={{
-                    height: isPropertiesOn ? '50%' : '100%',
-                    display: isCommentsOn ? 'block' : 'none',
-                    borderRadius: '0px',
-                    borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                    overflowY: 'scroll',
-                  }}
-                >
-                  <NotesPanel/>
-                </Box>
-              ) : null
-            }
-            {(isCommentsOn && isPropertiesOn) ?
-              <Box sx={{
-                height: '1px',
-                width: '100%',
-                marginTop: '2px',
-                marginBottom: '2px',
-                display: isCommentsOn && isPropertiesOn ? 'block' : 'none',
+            <Box
+              sx={{
+                display: isCommentsOn ? 'block' : 'none',
+                height: isPropertiesOn ? '50%' : '100%',
+                borderRadius: '0px',
+                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                paddingTop: '20px',
+                overflowX: 'hidden',
+                overflowY: 'auto',
               }}
-              /> : null}
+            >
+              <NotesPanel/>
+            </Box>
             <Box sx={{
+              display: isPropertiesOn ? 'block' : 'none',
+              height: isCommentsOn ? '50%' : '100%',
               borderRadius: '5px',
-              display: isPropertiesOn ? '' : 'none',
-              height: isCommentsOn ? '50%' : '98%',
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
             >
-              {isPropertiesOn ? <PropertiesPanel/> : null}
+              <PropertiesPanel/>
             </Box>
           </Box>
         </Drawer>
