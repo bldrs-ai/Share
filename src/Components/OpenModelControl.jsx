@@ -144,17 +144,10 @@ const useStyles = makeStyles((theme) => ({
   },
   root: {
     '& button': {
-      'width': '44px',
-      'height': '44px',
       'border': `1px solid ${theme.palette.highlight.heavy}`,
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979770',
       },
-    },
-    '& svg': {
-      width: '40px',
-      height: '40px',
-      fill: theme.palette.primary.contrastText,
     },
   },
   dropDown: {

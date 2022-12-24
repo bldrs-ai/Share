@@ -90,7 +90,7 @@ export default function NotesNavBar() {
             title='Close Comments'
             placement='bottom'
             onClick={turnCommentsOff}
-            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+            icon={<CloseIcon className='closeButton'/>}
           />
         </div>
       </div>
@@ -130,13 +130,6 @@ const useStyles = makeStyles((theme) => ({
     alignItems: 'center',
   },
   iconContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '14px',
-    height: '14px',
-  },
-  iconContainerClose: {
     display: 'flex',
     justifyContent: 'center',
     alignItems: 'center',

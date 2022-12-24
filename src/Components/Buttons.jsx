@@ -16,31 +16,38 @@ import {useIsMobile} from './Hooks'
  * @param {string} dataTestId Internal attribute for component testing
  * @return {React.Component} React component
  */
-export function TooltipIconButton({title, onClick, icon, placement = 'left', selected = false}) {
+export function TooltipIconButton({
+  title,
+  onClick,
+  icon,
+  placement = 'left',
+  selected = false,
+  dataTestId = '',
+}) {
   assertDefined(icon, onClick, title)
   const classes = useStyles(useTheme())
   const isMobile = useIsMobile()
   return (
     <div className={classes.root}>
       {isMobile ?
-        <ToggleButton
-          selected={selected}
-          onClick={onClick}
-          color='primary'
-          value={''}
-        >
-          {icon}
-        </ToggleButton> :
-        <Tooltip title={title} describeChild placement={placement} data-testid="test-button">
-          <ToggleButton
-            selected={selected}
-            onClick={onClick}
-            color='primary'
-            value={''}
-          >
-            {icon}
-          </ToggleButton>
-        </Tooltip>
+       <ToggleButton
+         selected={selected}
+         onClick={onClick}
+         color='primary'
+         value={''}
+       >
+         {icon}
+       </ToggleButton> :
+       <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
+         <ToggleButton
+           selected={selected}
+           onClick={onClick}
+           color='primary'
+           value={''}
+         >
+           {icon}
+         </ToggleButton>
+       </Tooltip>
       }
     </div>
   )
@@ -75,10 +82,6 @@ export function RectangularButton({
         'backgroundColor': background ? theme.palette.highlight.main : 'none',
         ':hover': {
           backgroundColor: theme.palette.highlight.secondary,
-        },
-        '& svg': {
-          width: '20px',
-          height: '20px',
         },
       }}
     >
@@ -134,23 +137,12 @@ export function ControlButton({
 const useStyles = makeStyles((theme) => ({
   root: {
     '& button': {
-      'width': '40px',
-      'height': '40px',
       'border': 'none',
-      'margin': '4px 0px 4px 0px',
+      'margin': '4px 0px',
       '&.Mui-selected, &.Mui-selected:hover': {
         backgroundColor: '#97979720',
       },
     },
-    '& svg': {
-      width: '22px',
-      height: '22px',
-      fill: theme.palette.primary.contrastText,
-    },
-  },
-  iconContainer: {
-    width: '20px',
-    height: '20px',
   },
 }))
 

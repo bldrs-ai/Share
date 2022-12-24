@@ -1,16 +1,17 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Switch from '@mui/material/Switch'
-import {ColorModeContext} from '../Context/ColorMode'
+import {useTheme} from '@mui/styles'
 
 
 /**
  * Toggle Switch
  *
- * @param {string} installPrefix node
- * @return {object} React component
+ * @property {Function} onChange callback
+ * @property {boolean} checked react state
+ * @return {React.ReactElement} React component
  */
 export default function Toggle({onChange, checked}) {
-  const theme = useContext(ColorModeContext).getTheme()
+  const theme = useTheme()
   return (
     <Switch
       checked={checked}

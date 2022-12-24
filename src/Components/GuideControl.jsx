@@ -101,12 +101,8 @@ const useStyles = makeStyles({
     cursor: 'pointer',
   },
   closeButton: {
-    'float': 'right',
-    'cursor': 'pointer',
-    'marginTop': '8px',
-    '& svg': {
-      width: '24px',
-      height: '20px',
-    },
+    float: 'right',
+    cursor: 'pointer',
+    marginTop: '8px',
   },
 })

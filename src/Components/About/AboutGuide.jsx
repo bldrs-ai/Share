@@ -19,12 +19,12 @@ export default function AboutGuide() {
   return (
     <Box
       sx={{
-        width: '100%',
+        width: '250px',
         height: '150px',
         fontSize: '0.8em',
         borderRadius: '5px',
         opacity: .8,
-        marginTop: '10px',
+        margin: '2em 0',
         padding: '0.5em',
         color: theme.palette.primary.contrastText,
         backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',

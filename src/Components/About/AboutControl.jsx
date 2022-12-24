@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
@@ -52,17 +53,15 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
-          <LogoB style={{width: '100px', height: '100px'}}/>
+          <LogoB style={{width: '80px', height: '80px'}}/>
           bldrs.ai
         </Box>
-      }e
-      headerText={'Build Every Thing Together'}pa
+      }
+      headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
-      data-testid={'about-dialog'}
       actionTitle='OK'
-      actionIcon={<AboutIcon/>}
       actionCb={() => setIsDialogDisplayed(false)}
     />)
 }
@@ -71,11 +70,12 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 /**
  * The content portion of the AboutDialog
  *
- * @return {object} React component
+ * @return {React.ReactElement} React component
  */
 function AboutContent({setIsDialogDisplayed}) {
   return (
-    <Box sx={{minHeight: '200px', maxWidth: '250px'}}>
+    <Box>
+      <Typography variant='h1' gutterBottom={true}>Build Every Thing Together</Typography>
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>

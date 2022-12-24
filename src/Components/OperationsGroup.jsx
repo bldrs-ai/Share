@@ -2,18 +2,18 @@ import React, {useContext} from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
 import {makeStyles} from '@mui/styles'
+import {ColorModeContext} from '../Context/ColorMode'
+import useStore from '../store/useStore'
 import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
+import ShareControl from './ShareControl'
 // import ExtractLevelsMenu from './ExtractLevelsMenu'
-import useStore from '../store/useStore'
-import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
 import NotesIcon from '../assets/2D_Icons/Notes.svg'
-import ShareControl from './ShareControl'
 import SunIcon from '../assets/2D_Icons/Sun.svg'
 
 
@@ -66,11 +66,11 @@ export default function OperationsGroup({
 
   return (
     <div className={classes.container}>
-      <ButtonGroup orientation="vertical" >
+      <ButtonGroup orientation="vertical">
         <ShareControl/>
       </ButtonGroup>
       <Divider />
-      <ButtonGroup orientation="vertical" >
+      <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}

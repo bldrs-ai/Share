@@ -1,10 +1,11 @@
 import React, {useEffect, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
+import GlobalStyles from '@mui/material/GlobalStyles'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import useStore from './store/useStore'
-import useTheme from './Theme'
+import useShareTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import './index.css'
@@ -69,13 +70,34 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
-  const {theme, colorMode} = useTheme()
+  const {theme, colorMode} = useShareTheme()
+  // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
+  const inputGlobalStyles = (
+    <GlobalStyles
+      styles={{
+        'svg': {
+          width: '18px',
+          height: '18px',
+          fill: theme.palette.secondary.main,
+        },
+        '.closeButton': {
+          width: '14px',
+          height: '14px',
+        },
+        '.caretToggle': {
+          width: '14px',
+          height: '14px',
+        },
+      }}
+    />
+  )
 
   return (
     modelPath &&
-      <CssBaseline>
+      <CssBaseline enableColorScheme>
         <ColorModeContext.Provider value={colorMode}>
           <ThemeProvider theme={theme}>
+            {inputGlobalStyles}
             <CadView
               installPrefix={installPrefix}
               appPrefix={appPrefix}

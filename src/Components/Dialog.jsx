@@ -11,11 +11,14 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
 /**
  * A generic base dialog component.
  *
- * @param {object} icon Leading icon above header description
- * @param {string} headerText Short message describing the operation
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {object} content node
+ * @property {object} icon Leading icon above header description
+ * @property {string} headerText Short message describing the operation
+ * @property {boolean} isDialogDisplayed React var
+ * @property {Function} setIsDialogDisplayed React setter
+ * @property {string} actionTitle Title for the action button
+ * @property {Function} actionCb Callback for action button
+ * @property {React.ReactElement} content Content of the dialog
+ * @property {React.ReactElement} actionIcon Optional icon for the action button
  * @return {object} React component
  */
 export default function Dialog({
@@ -24,19 +27,21 @@ export default function Dialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
   actionTitle,
-  actionIcon,
   actionCb,
   content,
+  actionIcon,
 }) {
   assertDefined(
       icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
-      actionTitle, actionIcon, actionCb)
+      actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
       open={isDialogDisplayed}
       onClose={close}
-      sx={{textAlign: 'center'}}
+      sx={{
+        textAlign: 'center',
+      }}
     >
       <div
         style={{
@@ -47,25 +52,32 @@ export default function Dialog({
         }}
       >
         <TooltipIconButton
-          icon={<CloseIcon/>}
+          icon={<CloseIcon className='closeButton'/>}
           onClick={close}
           title='Close'
         />
       </div>
-      <DialogContent
-        sx={{
-          '& svg': {
-            width: '30px',
-            height: '30px',
-          },
-        }}
-      >
-        {icon}
-        <Typography variant='h1' sx={{margin: '1em 0'}}>{headerText}</Typography>
+      <DialogContent>
+        <Typography
+          variant='h1'
+          sx={{
+            'margin': '1em 0',
+            'textAlign': 'center',
+            'display': 'inline-flex',
+            'alignItems': 'center',
+            'justifyContent': 'center',
+            '& svg': {
+              marginRight: '0.5em',
+            },
+          }}
+        >
+          {icon && icon} {headerText}
+        </Typography>
         {content}
       </DialogContent>
       <DialogActions>
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
       </DialogActions>
-    </MuiDialog>)
+    </MuiDialog>
+  )
 }

@@ -44,8 +44,8 @@ export default function NavPanel({
       <div className={classes.treeContainer}>
         <TreeView
           aria-label='IFC Navigator'
-          defaultCollapseIcon={<NodeOpen className={classes.icon} />}
-          defaultExpandIcon={<NodeClosed className={classes.icon} />}
+          defaultCollapseIcon={<NodeOpen className='caretToggle'/>}
+          defaultExpandIcon={<NodeClosed className='caretToggle'/>}
           sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto', overflowX: 'hidden'}}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
@@ -94,14 +94,6 @@ const useStyles = makeStyles((theme) => ({
     overflow: 'auto',
     flexDirection: 'column',
     width: '220px',
-  },
-  treeIcon: {
-    width: '30px',
-    height: '30px',
-  },
-  icon: {
-    width: '0.8em',
-    height: '0.8em',
   },
   toggleButton: {
     'position': 'absolute',

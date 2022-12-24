@@ -28,7 +28,7 @@ export default function Property({detail, summary, expandState}) {
       onChange={() => setExpand(!expand)}
     >
       <AccordionSummary
-        expandIcon={<CaretIcon/>}
+        expandIcon={<CaretIcon className='caretToggle'/>}
         aria-controls="panel1a-content"
         id="panel1a-header"
       >
@@ -60,8 +60,6 @@ const useStyles = makeStyles((theme) => ({
       padding: 0,
     },
     '& svg': {
-      width: '14px',
-      height: '14px',
       fill: theme.palette.primary.contrastText,
       marginRight: '12px',
       marginLeft: '12px',
