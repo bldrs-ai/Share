@@ -77,7 +77,7 @@ function loadTheme(mode) {
         light: '#5b874b',
         medium: '#33691e',
         dark: '#234915',
-        contrastText: 'black',
+        contrastText: 'white',
       },
     },
     yellow: {
@@ -98,9 +98,9 @@ function loadTheme(mode) {
     white: 'white',
     grey: {
       lightest: grey[100],
-      light: grey[300],
+      light: grey[200],
       medium: grey[500],
-      dark: grey[700],
+      dark: grey[800],
       darkest: grey[900],
       web: 'green',
       contrastText: 'white',
@@ -108,7 +108,6 @@ function loadTheme(mode) {
     black: 'black',
   }
 
-  // Shade: 400
   const day = {
     primary: {
       light: colors.green.s400.light,
@@ -133,7 +132,6 @@ function loadTheme(mode) {
     },
   }
 
-  // Shade: 900
   const night = {
     primary: {
       light: colors.green.s900.light,
@@ -150,9 +148,9 @@ function loadTheme(mode) {
       contrastText: colors.yellow.s900.contrastText,
     },
     background: {
-      light: colors.grey.medium,
-      main: colors.grey.dark,
-      dark: colors.grey.darkest,
+      light: colors.grey.dark,
+      main: colors.grey.darkest,
+      dark: colors.grey.black,
       linkText: colors.grey.web,
       contrastText: colors.grey.contrastText,
     },
@@ -188,13 +186,6 @@ function loadTheme(mode) {
     mode: mode === Themes.Day ? 'light' : 'dark',
   }}
   const components = {
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          background: activePalette.background.dark,
-        },
-      },
-    },
     MuiTreeItem: {
       styleOverrides: {
         root: {

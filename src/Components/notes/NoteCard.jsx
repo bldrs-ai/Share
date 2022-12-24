@@ -1,5 +1,6 @@
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
+import Paper from '@mui/material/Paper'
 import {makeStyles, useTheme} from '@mui/styles'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -152,9 +153,25 @@ export default function NoteCard({
           onClickSelect={selectCard}
         />
       </div>
-      <div className={classes.body}>
+      <Paper
+        elevation={2}
+        sx={{
+          'width': '99%',
+          'height': 'auto',
+          'margin': '0',
+          'padding': '1em',
+          'fontSize': '1em',
+          'lineHeight': '1.3em',
+          '& img': {
+            width: '100%',
+          },
+          '& p': {
+            margin: '0',
+          },
+        }}
+      >
         <ReactMarkdown>{body}</ReactMarkdown>
-      </div>
+      </Paper>
       {textOverflow &&
          <ShowMore
            expandText={expandText}
@@ -277,7 +294,6 @@ const CardActions = ({
 const useStyles = makeStyles((theme) => ({
   container: {
     'marginBottom': '1em',
-    'backgroundColor': (props) => props.isDay ? 'white' : '#383838',
     'borderRadius': '5px',
     'width': '100%',
     '@media (max-width: 900px)': {
@@ -290,7 +306,7 @@ const useStyles = makeStyles((theme) => ({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: '0.5em',
-    background: (props) => props.isComment ? '#F0F0F0' : '#C8E8C7',
+    background: (props) => props.isComment ? theme.palette.primary.light : theme.palette.primary.main,
   },
   titleRightContainer: {
     width: '200px',
@@ -301,7 +317,6 @@ const useStyles = makeStyles((theme) => ({
     marginRight: '6px',
   },
   title: {
-    color: 'black',
     width: '230px',
   },
   metaDataContainer: {
@@ -320,11 +335,6 @@ const useStyles = makeStyles((theme) => ({
     'paddingLeft': '5px',
     'fontSize': '1em',
     'lineHeight': '1.3em',
-    // Restore link styling for notes and comments
-    '& a': {
-      color: theme.isDay() ? 'black' : 'lightGrey',
-      textDecoration: 'underline',
-    },
     '& img': {
       width: '100%',
     },
@@ -334,7 +344,6 @@ const useStyles = makeStyles((theme) => ({
     cursor: 'pointer',
     margin: '5px 5px 15px 10px',
     fontSize: '10px',
-    color: theme.palette.primary.main,
   },
   actions: {
     display: 'flex',
@@ -362,7 +371,6 @@ const useStyles = makeStyles((theme) => ({
     width: 24,
     height: 24,
     borderRadius: '50%',
-    backgroundColor: 'lightGrey',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
@@ -380,14 +388,12 @@ const useStyles = makeStyles((theme) => ({
     width: 16,
     height: 16,
     borderRadius: '50%',
-    backgroundColor: 'white',
     border: '1px solid lightGrey',
     display: 'flex',
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     fontWeight: 'bold',
-    color: 'black',
     cursor: 'pointer',
   },
   select: {
@@ -397,7 +403,6 @@ const useStyles = makeStyles((theme) => ({
   },
   username: {
     fontSize: '10px',
-    color: 'black',
   },
   iconContainer: {
     width: '20px',

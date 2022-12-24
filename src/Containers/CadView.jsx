@@ -131,7 +131,7 @@ export default function CadView({
     const theme = colorModeContext.getTheme()
     const initializedViewer = initViewer(
         pathPrefix,
-        theme?.palette?.background?.paper)
+        theme?.palette?.background?.main)
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -439,7 +439,7 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorModeContext.addThemeChangeListener((newMode, theme) => {
-      const intializedViewer = initViewer(pathPrefix, theme?.palette?.background?.paper)
+      const intializedViewer = initViewer(pathPrefix, theme?.palette?.background?.main)
       setViewer(intializedViewer)
       setViewerStore(intializedViewer)
     })
@@ -508,6 +508,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
+  console.log('bgc:', backgroundColorStr)
   const v = new IfcViewerAPI({
     container,
     backgroundColor: new Color(backgroundColorStr),

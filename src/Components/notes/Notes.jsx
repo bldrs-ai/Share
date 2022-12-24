@@ -164,7 +164,7 @@ export default function Notes() {
 }
 
 
-const useStyles = makeStyles((theme) => ({
+const useStyles = makeStyles(() => ({
   commentsContainer: {
     width: '100%',
   },
