@@ -15,7 +15,6 @@ export const NOTE_PREFIX = 'i'
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
@@ -100,10 +99,6 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredNote) {
-      setSelectedNoteId(null)
-    }
     // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
