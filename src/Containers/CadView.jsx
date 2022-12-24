@@ -508,7 +508,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   const container = document.getElementById('viewer-container')
   // Clear any existing scene.
   container.textContent = ''
-  console.log('bgc:', backgroundColorStr)
   const v = new IfcViewerAPI({
     container,
     backgroundColor: new Color(backgroundColorStr),
