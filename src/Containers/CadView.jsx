@@ -81,8 +81,7 @@ export default function CadView({
 
   // Granular visibility controls for the UI compononets
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  const isBranchesControlVisible = useStore((state) => state.isBranchesControlVisible)
-  const isNavPanelVisible = useStore((state) => state.isNavPanelVisible)
+  const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -495,11 +494,11 @@ export default function CadView({
               fileOpen={loadLocalFile}
             />}
             {
-              modelPath.repo !== undefined && isBranchesControlVisible &&
+              modelPath.repo !== undefined &&
               <BranchesControl location={location}/>
             }
             {isNavPanelOpen &&
-             isNavPanelVisible &&
+             isNavigationPanelVisible &&
               <NavPanel
                 model={model}
                 element={rootElement}

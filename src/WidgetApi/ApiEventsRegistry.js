@@ -1,6 +1,6 @@
-import LoadModelEventHandler from './events-handlers/LoadModelEventHandler'
-import SelectElementsEventHandler from './events-handlers/SelectElementsEventHandler'
-import UIComponentsVisibilityEventHandler from './events-handlers/UIComponentsVisibilityEventHandler'
+import LoadModelEventHandler from './event-handlers/LoadModelEventHandler'
+import SelectElementsEventHandler from './event-handlers/SelectElementsEventHandler'
+import UIComponentsVisibilityEventHandler from './event-handlers/UIComponentsVisibilityEventHandler'
 import ElementSelectionEventDispatcher from './event-dispatchers/ElementSelectionEventDispatcher'
 import ElementDeselectionEventDispatcher from './event-dispatchers/ElementDeselectionEventDispatcher'
 
