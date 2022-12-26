@@ -150,7 +150,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
-            rows={5}
+            rows={6}
             InputProps={{
               readOnly: true,
             }}
