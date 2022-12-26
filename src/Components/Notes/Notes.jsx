@@ -22,7 +22,6 @@ export default function Notes() {
   const filteredNote = (notes && selectedNoteId) ?
         notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
-  console.log('notes: ', notes)
 
 
   useEffect(() => {

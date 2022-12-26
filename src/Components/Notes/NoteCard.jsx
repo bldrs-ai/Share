@@ -249,7 +249,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
           </Box>
         </Box>
         {!isRunningLocally() ?
-          <img alt={'avatarImage'}
+          <Box
             sx={{
               width: 24,
               height: 24,
@@ -262,7 +262,9 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
               fontWeight: 'bold',
               border: '1px solid lightGrey',
             }}
+            component='img'
             src={avatarUrl}
+            alt={'avatarImage'}
           /> :
           <Box
             sx={{
