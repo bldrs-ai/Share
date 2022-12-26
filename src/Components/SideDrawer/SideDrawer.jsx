@@ -39,34 +39,38 @@ export function SideDrawer({
         <MobileDrawer
           content={
             <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
-              'height': '100%',
-              'marginTop': '20px',
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'space-between',
-              '@media (max-width: MOBILE_WIDTH)': {
-                overflow: 'auto',
-              },
+              position: 'relative',
+              bottom: 0,
+              height: 'auto',
+              marginTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              overflow: 'hidden',
             })}
             >
-              <Box sx={{}}>
-                {isCommentsOn ? <NotesPanel/> : null}
+              <Box
+                sx={{
+                  display: isCommentsOn ? 'block' : 'none',
+                  height: isPropertiesOn ? '50%' : '100%',
+                  borderRadius: '0px',
+                  borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                  paddingTop: '20px',
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                }}
+              >
+                <NotesPanel/>
               </Box>
               <Box sx={{
-                height: '1px',
-                width: '100%',
-                marginTop: '2px',
-                marginBottom: '2px',
-                display: isCommentsOn && isPropertiesOn ? 'block' : 'none',
-              }}
-              />
-              <Box sx={{
+                display: isPropertiesOn ? 'block' : 'none',
+                height: isCommentsOn ? '50%' : '100%',
                 borderRadius: '5px',
-                display: isPropertiesOn ? '' : 'none',
-                height: isCommentsOn ? '50%' : '98%',
+                overflowX: 'hidden',
+                overflowY: 'auto',
               }}
               >
-                {isPropertiesOn ? <PropertiesPanel/> : null}
+                <PropertiesPanel/>
               </Box>
             </Box>
           }
@@ -81,19 +85,14 @@ export function SideDrawer({
               display: 'none',
             },
             '& > .MuiPaper-root': {
-              'width': SIDE_DRAWER_WIDTH,
+              width: SIDE_DRAWER_WIDTH,
               // This lets the h1 in ItemProperties use 1em padding but have
               // its mid-line align with the text in SearchBar
-              'padding': '4px 1em',
-              '@media (max-width: MOBILE_WIDTH)': {
-                width: '100%',
-                height: '400px',
-              },
+              padding: '4px 1em',
             },
             '& .MuiPaper-root': {
               marginTop: '0px',
               borderRadius: '0px',
-              zIndex: 10,
             },
           })}
         >

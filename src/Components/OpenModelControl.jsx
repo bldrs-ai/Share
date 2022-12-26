@@ -160,6 +160,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             paddingLeft: '10px',
             paddingRight: '10px',
           }}
+          component='p'
           >
             Models hosted on GitHub are opened by inserting the link to the file into the Search.
             <br/>

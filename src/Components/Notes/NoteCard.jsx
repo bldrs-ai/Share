@@ -127,19 +127,15 @@ export default function NoteCard({
 
   return (
     <Box sx={{
-      'marginBottom': '1em',
-      'backgroundColor': colorTheme.isDay() ? 'white' : '#383838',
-      'borderRadius': '5px',
-      'width': '100%',
-      '@media (max-width: 900px)': {
-        width: '350px',
-      },
+      marginBottom: '1em',
+      backgroundColor: colorTheme.isDay() ? 'white' : '#383838',
+      borderRadius: '5px',
+      width: '100%',
     }}
     >
       <Box
         sx={{
           cursor: isComment ? null : 'pointer',
-
         }}
         role='button'
         tabIndex={0}
