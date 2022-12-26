@@ -119,15 +119,17 @@ describe('bldrs inside iframe', () => {
     cy.get('iframe').iframe().trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UIComponentsVisibility')
     const msg = {
-      aboutButton: false,
-      isolateLevelsMenu: false,
-      clearButton: false,
+      navigationPanel: false,
+      modelInteraction: false,
     }
     cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
     cy.get('#btnSendMessage').click()
 
+    cy.findByRole('tree', {label: 'IFC Navigator'}).should('not.exist')
+
+    cy.get('iframe').iframe().findByRole('button', {name: /Notes/}).should('not.exist')
+    cy.get('iframe').iframe().findByRole('button', {name: /Properties/}).should('not.exist')
+    cy.get('iframe').iframe().findByRole('button', {name: /Section/}).should('not.exist')
     cy.get('iframe').iframe().findByRole('button', {name: /Clear/}).should('not.exist')
-    cy.get('iframe').iframe().findByRole('button', {name: /About BLDRS/}).should('not.exist')
-    cy.get('iframe').iframe().findByRole('button', {name: /Isolate Levels/}).should('not.exist')
   })
 })
