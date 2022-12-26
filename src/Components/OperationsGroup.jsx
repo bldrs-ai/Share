@@ -75,7 +75,7 @@ export default function OperationsGroup({
         <ButtonGroup orientation="vertical" >
           <ShareControl/>
         </ButtonGroup>}
-      {isFirstDividerVisible() && <Divider />}
+      {isFirstDividerVisible() && <Divider/>}
       {isModelInteractionGroupVisible &&
       <ButtonGroup orientation="vertical" >
         <TooltipIconButton
