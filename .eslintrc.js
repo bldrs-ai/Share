@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 module.exports = {
   env: {
     browser: true,
@@ -87,6 +88,9 @@ module.exports = {
     'func-call-spacing': ['error', 'never'],
     'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 1}],
     'react/jsx-closing-bracket-location': 'error',
+    'react/jsx-tag-spacing': ['error', {beforeSelfClosing: 'never'}],
+    'react/jsx-closing-tag-location': 'error',
+    'react/self-closing-comp': 'error',
     'valid-jsdoc': 'off',
     'jsdoc/newline-after-description': 'error',
     'jsdoc/check-types': 'error',
@@ -96,6 +100,7 @@ module.exports = {
     'jsdoc/require-param': 'off',
     'jsdoc/require-param-type': 'off',
     'require-await': 'error',
+    'linebreak-style': ['error', 'unix'],
   },
   settings: {
     react: {
@@ -103,7 +108,7 @@ module.exports = {
     },
     jsdoc: {
       tagNamePreference: {
-        'returns': 'return',
+        returns: 'return',
       },
     },
   },

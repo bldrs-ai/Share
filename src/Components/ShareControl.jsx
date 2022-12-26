@@ -168,7 +168,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             marginBottom: '10px',
           }}
           >
-            <RectangularButton title={'Copy Link'} icon={<CopyIcon/>} onClick={onCopy} />
+            <RectangularButton title={'Copy Link'} icon={<CopyIcon/>} onClick={onCopy}/>
           </Box>
         </div>
       }

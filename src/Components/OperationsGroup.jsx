@@ -96,7 +96,7 @@ export default function OperationsGroup({
           title="Clear"
           onClick={unSelectItem}
           selected={isSelected()}
-          icon={<ClearIcon />}
+          icon={<ClearIcon/>}
         />
       </ButtonGroup>}
       {isSecondDividerVisible() && <Divider/>}

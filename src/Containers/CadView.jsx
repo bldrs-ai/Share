@@ -11,7 +11,7 @@ import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
+import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -480,7 +480,7 @@ export default function CadView({
 
   return (
     <div className={classes.root} data-model-ready={modelReady}>
-      <div className={classes.view} id='viewer-container'></div>
+      <div className={classes.view} id='viewer-container'/>
       <div className={classes.menusWrapper}>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
@@ -525,7 +525,7 @@ export default function CadView({
         </div>
         {alert}
       </div>
-      <SideDrawerWrapper />
+      <SideDrawerWrapper/>
     </div>
   )
 }

@@ -31,7 +31,7 @@ const MenuButton = ({onClick}) => {
         aria-label='menu'
         onClick={onClick}
       >
-        <Hamburger className={classes.icon} />
+        <Hamburger className={classes.icon}/>
       </IconButton>
     </Tooltip>
   )
