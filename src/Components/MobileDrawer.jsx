@@ -59,7 +59,7 @@ export default function MobileDrawer({content}) {
         borderTopRightRadius: '16px',
         backgroundColor: theme.palette.background.paper,
         overflowX: 'hidden',
-        overflowY: 'scroll',
+        overflowY: 'auto',
         height: '100%',
       }}
       >
