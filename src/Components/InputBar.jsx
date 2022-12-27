@@ -1,5 +1,8 @@
 import React, {useRef, useState} from 'react'
-import {Box, Divider, InputBase, Paper} from '@mui/material'
+import Box from '@mui/material/Box'
+import Divider from '@mui/material/Divider'
+import InputBase from '@mui/material/InputBase'
+import Paper from '@mui/material/Paper'
 import {UilMinusSquare, UilSearch} from '@iconscout/react-unicons'
 import {TooltipToggleButton} from './Buttons'
 

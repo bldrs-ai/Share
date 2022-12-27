@@ -1,5 +1,7 @@
 import React, {createRef, useEffect, useState} from 'react'
-import {Box, TextField, Typography} from '@mui/material'
+import Box from '@mui/material/Box'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import useStore from '../store/useStore'
 import {addPlaneLocationToUrl} from './CutPlaneMenu'
 import {removeHashParams} from '../utils/location'

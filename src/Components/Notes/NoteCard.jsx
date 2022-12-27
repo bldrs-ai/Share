@@ -1,6 +1,7 @@
 import React, {useState, useEffect, useContext} from 'react'
 import ReactMarkdown from 'react-markdown'
-import {Box, useTheme} from '@mui/material'
+import Box from '@mui/material/Box'
+import useTheme from '@mui/styles/useTheme'
 import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'

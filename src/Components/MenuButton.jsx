@@ -1,5 +1,7 @@
 import React from 'react'
-import {Box, IconButton, Tooltip} from '@mui/material'
+import Box from '@mui/material'
+import IconButton from '@mui/material'
+import Tooltip from '@mui/material'
 import Hamburger from '../assets/2D_Icons/menu.svg'
 
 

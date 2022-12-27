@@ -1,5 +1,5 @@
 import React, {useContext} from 'react'
-import {Switch} from '@mui/material'
+import Switch from '@mui/material/Switch'
 import {ColorModeContext} from '../Context/ColorMode'
 
 

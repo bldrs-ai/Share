@@ -1,5 +1,6 @@
 import React, {useContext} from 'react'
-import {Box, Paper} from '@mui/material'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
 import NavTree from './NavTree'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'

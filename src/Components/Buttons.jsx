@@ -1,6 +1,9 @@
 import React from 'react'
-import {Box, Button, Tooltip, ToggleButton} from '@mui/material'
-import {useTheme} from '@mui/styles'
+import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Tooltip from '@mui/material/Tooltip'
+import ToggleButton from '@mui/material/ToggleButton'
+import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 

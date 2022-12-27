@@ -1,5 +1,7 @@
 import React, {useContext} from 'react'
-import {Box, ButtonGroup, Divider} from '@mui/material'
+import Box from '@mui/material/Box'
+import ButtonGroup from '@mui/material/ButtonGroup'
+import Divider from '@mui/material/Divider'
 import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'

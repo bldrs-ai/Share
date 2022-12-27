@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
-import {Box, Drawer} from '@mui/material'
+import Box from '@mui/material/Box'
+import Drawer from '@mui/material/Drawer'
 import {useTheme} from '@mui/styles'
 import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'

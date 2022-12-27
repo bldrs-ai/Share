@@ -1,5 +1,6 @@
 import React, {useEffect} from 'react'
-import {Box, Paper} from '@mui/material'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'

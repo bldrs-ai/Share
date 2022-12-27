@@ -1,6 +1,8 @@
 import React from 'react'
-import {Box, IconButton, Tooltip} from '@mui/material'
-import {useTheme} from '@mui/styles'
+import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
+import useTheme from '@mui/styles/useTheme'
 import LogoIcon from '../assets/LogoB_4.svg'
 import PkgJson from '../../package.json'
 

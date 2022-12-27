@@ -1,5 +1,6 @@
 import React, {useContext} from 'react'
-import {Box, Typography} from '@mui/material'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import {ColorModeContext} from '../Context/ColorMode'
 import AttentionIcon from '../assets/2D_Icons/Attention.svg'
 

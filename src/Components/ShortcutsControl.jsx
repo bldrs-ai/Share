@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
-import {Box, Typography} from '@mui/material'
+import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import Dialog from './Dialog'
 import {useIsMobile} from './Hooks'
 import {ControlButton} from './Buttons'

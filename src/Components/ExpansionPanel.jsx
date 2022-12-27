@@ -1,6 +1,10 @@
 import React, {useState, useEffect} from 'react'
-import {Box, Accordion, AccordionSummary, AccordionDetails, Typography} from '@mui/material'
-import {useTheme} from '@mui/styles'
+import Box from '@mui/material'
+import Accordion from '@mui/material'
+import AccordionSummary from '@mui/material'
+import AccordionDetails from '@mui/material'
+import Typography from '@mui/material'
+import useTheme from '@mui/styles/useTheme'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 

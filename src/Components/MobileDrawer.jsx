@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
-import {Box, SwipeableDrawer} from '@mui/material'
+import Box from '@mui/material/Box'
+import SwipeableDrawer from '@mui/material/SwipeableDrawer'
 import {useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {preprocessMediaQuery} from '../utils/mediaQuery'

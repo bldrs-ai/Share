@@ -1,5 +1,6 @@
 import React from 'react'
-import {Typography, DialogContent} from '@mui/material'
+import Typography from '@mui/material/Typography'
+import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
 import {assertDefined} from '../utils/assert'
 
