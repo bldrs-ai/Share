@@ -37,20 +37,6 @@ export default function NotesNavBar() {
     }
   }
 
-  // const toggle = (panel) => {
-  //   openDrawer()
-  //   if (panel === 'Properties') {
-  //     toggleIsPropertiesOn()
-  //   }
-  //   if (panel === 'Notes') {
-  //     if (isCommentsOn) {
-  //       turnCommentsOff()
-  //     } else {
-  //       turnCommentsOn()
-  //     }
-  //   }
-  // }
-
 
   return (
     <Box sx={{
@@ -139,9 +125,7 @@ export default function NotesNavBar() {
           <TooltipIconButton
             title='Close Comments'
             placement='bottom'
-            onClick={() => {
-              turnCommentsOff()
-            }}
+            onClick={turnCommentsOff}
             icon={
               <Box sx={{
                 display: 'flex',

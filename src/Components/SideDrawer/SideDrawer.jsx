@@ -116,7 +116,7 @@ export function SideDrawer({
                 overflowY: 'auto',
               }}
             >
-              <NotesPanel/>
+              {isCommentsOn && <NotesPanel/>}
             </Box>
             <Box sx={{
               display: isPropertiesOn ? 'block' : 'none',
@@ -126,7 +126,7 @@ export function SideDrawer({
               overflowY: 'auto',
             }}
             >
-              <PropertiesPanel/>
+              {isPropertiesOn && <PropertiesPanel/>}
             </Box>
           </Box>
         </Drawer>
