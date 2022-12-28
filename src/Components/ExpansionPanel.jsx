@@ -1,9 +1,9 @@
-import React, {useState, useEffect} from 'react'
-import Box from '@mui/material'
-import Accordion from '@mui/material'
-import AccordionSummary from '@mui/material'
-import AccordionDetails from '@mui/material'
-import Typography from '@mui/material'
+import React, {useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
+import Accordion from '@mui/material/Accordion'
+import AccordionSummary from '@mui/material/AccordionSummary'
+import AccordionDetails from '@mui/material/AccordionDetails'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
@@ -11,16 +11,18 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
 /**
  * Expansion panels are used to package property sets
  *
- * @param {string} detail title of the panel
- * @param {string} summary content of the panel
- * @param {boolean} expandState global control of the panel
- * @param {object} classes styles for the panel
- * @return {object}
+ * @property {string} summary content of the panel
+ * @property {string} detail title of the panel
+ * @property {boolean} expandState global control of the panel
+ * @return {React.ReactElement}
  */
-export default function Property({detail, summary, expandState}) {
-  useEffect(() => setExpand(expandState), [expandState])
+export default function ExpansionPanel({summary, detail, expandState}) {
   const theme = useTheme()
-  const [expand, setExpand] = useState()
+  const [expanded, setExpanded] = useState(expandState)
+
+  useEffect(() => {
+    setExpanded(expandState)
+  }, [expandState])
 
 
   return (
@@ -46,8 +48,8 @@ export default function Property({detail, summary, expandState}) {
           marginLeft: '12px',
         },
       }}
-      expanded={expand === true}
-      onChange={() => setExpand(!expand)}
+      expanded={expanded}
+      onChange={() => setExpanded(!expanded)}
     >
       <AccordionSummary
         expandIcon={<CaretIcon/>}
