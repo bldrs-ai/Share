@@ -3,18 +3,17 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Tooltip from '@mui/material/Tooltip'
 import ToggleButton from '@mui/material/ToggleButton'
-import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 
 
 /**
- * @param {string} title Tooltip text
- * @param {Function} onClick
- * @param {object} icon
- * @param {string} placement
- * @param {boolean} selected
- * @param {string} dataTestId Internal attribute for component testing
+ * @property {string} title Tooltip text
+ * @property {Function} onClick callback
+ * @property {object} icon button icon
+ * @property {string} placement Tooltip location. Default: left
+ * @property {boolean} selected Selected state.  Default: false
+ * @property {string} dataTestId Internal attribute for component testing. Default: ''
  * @return {React.Component} React component
  */
 export function TooltipIconButton({
@@ -26,44 +25,17 @@ export function TooltipIconButton({
   dataTestId = '',
 }) {
   assertDefined(icon, onClick, title)
-  const theme = useTheme()
   const isMobile = useIsMobile()
 
 
   return (
-    <Box sx={{
-      '& button': {
-        'width': '40px',
-        'height': '40px',
-        'border': 'none',
-        'margin': '4px 0px 4px 0px',
-        '&.Mui-selected, &.Mui-selected:hover': {
-          backgroundColor: '#97979720',
-        },
-      },
-      '& svg': {
-        width: '22px',
-        height: '22px',
-        fill: theme.palette.primary.contrastText,
-      },
-    }}
-    >
+    <Box>
       {isMobile ?
-       <ToggleButton
-         selected={selected}
-         onClick={onClick}
-         color='primary'
-         value={''}
-       >
+       <ToggleButton selected={selected} onClick={onClick} value={''}>
          {icon}
        </ToggleButton> :
        <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
-         <ToggleButton
-           selected={selected}
-           onClick={onClick}
-           color='primary'
-           value={''}
-         >
+         <ToggleButton selected={selected} onClick={onClick} value={''}>
            {icon}
          </ToggleButton>
        </Tooltip>
@@ -76,11 +48,11 @@ export function TooltipIconButton({
 /**
  * A RectangularButton is used in dialogs
  *
- * @param {string} title
- * @param {object} icon
- * @param {Function} onClick
- * @param {boolean} border Default: false
- * @param {boolean} background Default: true
+ * @property {string} title Text to show in button
+ * @property {Function} onClick callback
+ * @property {object} icon Start icon to left of text
+ * @property {boolean} border Default: false
+ * @property {boolean} background Default: true
  * @return {object} React component
  */
 export function RectangularButton({
@@ -91,34 +63,17 @@ export function RectangularButton({
   background = true,
 }) {
   assertDefined(title, onClick)
-  const theme = useTheme()
-  return (
-    <Button
-      onClick={onClick}
-      variant='rectangular'
-      startIcon={icon}
-      sx={{
-        'border': `1px solid ${border ? theme.palette.highlight.heavy : 'none'}`,
-        'backgroundColor': background ? theme.palette.highlight.main : 'none',
-        ':hover': {
-          backgroundColor: theme.palette.highlight.secondary,
-        },
-      }}
-    >
-      {title}
-    </Button>
-  )
+  return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
 }
 
 
 /**
- * @param {string} title The text for tooltip
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {object} icon The header icon
- * @param {string} placement Default: left
- * @param {string} size Size of button component
- * @param {object} dialog The controlled dialog
+ * @property {string} title The text for tooltip
+ * @property {boolean} isDialogDisplayed Initial state
+ * @property {Function} setIsDialogDisplayed Handler
+ * @property {object} icon The header icon
+ * @property {object} dialog The controlled dialog
+ * @property {string} placement Default: left
  * @return {React.Component} React component
  */
 export function ControlButton({
@@ -126,63 +81,21 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   icon,
-  placement = 'left',
   dialog,
-  state = false,
+  placement = 'left',
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
-  const theme = useTheme()
 
 
   return (
-    <Box>
-      <Box sx={{
-        '& button': {
-          'width': '40px',
-          'height': '40px',
-          'border': 'none',
-          'margin': '4px 0px 4px 0px',
-          '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: '#97979720',
-          },
-        },
-        '& svg': {
-          width: '22px',
-          height: '22px',
-          fill: theme.palette.primary.contrastText,
-        },
-      }}
-      >
-        <Tooltip title={title} describeChild placement={placement}>
-          <ToggleButton
-            sx={{
-              '& button': {
-                'width': '40px',
-                'height': '40px',
-                'border': 'none',
-                'margin': '4px 0px 4px 0px',
-                '&.Mui-selected, &.Mui-selected:hover': {
-                  backgroundColor: '#97979720',
-                },
-              },
-              '& svg': {
-                width: '22px',
-                height: '22px',
-                fill: theme.palette.primary.contrastText,
-              },
-            }}
-            selected={isDialogDisplayed}
-            onClick={() => {
-              setIsDialogDisplayed(true)
-            }}
-            color='primary'
-            value={''}
-          >
-            {icon}
-          </ToggleButton>
-        </Tooltip>
-      </Box>
+    <div>
+      <TooltipIconButton
+        title={title}
+        icon={icon}
+        selected={isDialogDisplayed}
+        onClick={() => setIsDialogDisplayed(true)}
+      />
       {isDialogDisplayed && dialog}
-    </Box>
+    </div>
   )
 }

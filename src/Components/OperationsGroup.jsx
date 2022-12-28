@@ -68,17 +68,15 @@ export default function OperationsGroup({
       'display': 'flex',
       'flexDirection': 'column',
       'height': 'calc(100vh - 40px)',
-      'margin': '20px 20px 0 0',
+      'margin': '1em 1em 0 0',
       '@media (max-width: 900px)': {
-        margin: '20px 10px 0 0',
+        margin: '1em 0.5em 0 0',
       },
     }}
     >
       <ButtonGroup orientation="vertical" >
         <ShareControl/>
-      </ButtonGroup>
-      <Divider/>
-      <ButtonGroup orientation="vertical" >
+        <Divider/>
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
@@ -99,9 +97,7 @@ export default function OperationsGroup({
           selected={isSelected()}
           icon={<ClearIcon/>}
         />
-      </ButtonGroup>
-      <Divider/>
-      <ButtonGroup orientation="vertical">
+        <Divider/>
         <TooltipIconButton
           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => colorMode.toggleColorMode()}

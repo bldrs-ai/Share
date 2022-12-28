@@ -40,23 +40,25 @@ export default function NotesNavBar() {
 
 
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderRadius: '2px',
-    }}
-    >
-      <Box sx={{
-        'display': 'flex',
-        'flexDirection': 'row',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '@media (max-width: 900px)': {
-          paddingLeft: '12px',
-        },
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        height: '4.5em',
       }}
+    >
+      <Box
+        sx={{
+          'display': 'flex',
+          'flexDirection': 'row',
+          'justifyContent': 'center',
+          'alignItems': 'center',
+          '@media (max-width: 900px)': {
+            paddingLeft: '12px',
+          },
+        }}
       >
         <Typography variant='h2'>
           {!selectedNoteId && 'Notes'}

@@ -1,5 +1,5 @@
 import {createTheme} from '@mui/material/styles'
-import {grey} from '@mui/material/colors'
+import {grey, green} from '@mui/material/colors'
 import {useEffect, useMemo, useState} from 'react'
 import * as Privacy from './privacy/Privacy'
 
@@ -61,45 +61,53 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const lightGreen = '#C8E8C7'
-  const darkGreen = '#459A47'
   const fontFamily = 'Roboto'
-  const lime = '#4EEF4B'
+  const colors = {
+    grey: {
+      lightest: grey[100],
+      light: grey[300],
+      medium: grey[500],
+      dark: grey[700],
+      darkest: grey[900],
+    },
+    green: {
+      lightest: green[100],
+      light: green[300],
+      medium: green[500],
+      dark: green[700],
+      darkest: green[900],
+    },
+    lime: green['A400'],
+    black: 'black',
+  }
   const day = {
     primary: {
-      main: grey[100],
-      background: grey[200],
+      main: colors.grey.lightest,
+      background: colors.grey.light,
+      contrastText: colors.black,
     },
     secondary: {
-      main: grey[800],
-      background: grey[300],
+      main: colors.green.light,
+      background: colors.green.medium,
+      contrastText: colors.black,
     },
-    highlight: {
-      main: lightGreen,
-      secondary: darkGreen,
-      heavy: grey[300],
-      heavier: grey[400],
-      heaviest: grey[500],
-      maximum: 'black',
-      lime,
+    scene: {
+      background: colors.grey.lightest,
     },
   }
   const night = {
     primary: {
-      main: grey[800],
-      background: grey[700],
+      main: colors.grey.dark,
+      background: colors.grey.darkest,
+      contrastText: colors.grey.lightest,
     },
     secondary: {
-      main: grey[100],
-      background: grey[700],
+      main: colors.green.dark,
+      background: colors.green.darkest,
+      contrastText: colors.green.lightest,
     },
-    highlight: {
-      main: darkGreen,
-      secondary: lightGreen,
-      heavy: grey[600],
-      heavier: grey[500],
-      heaviest: grey[400],
-      lime,
+    scene: {
+      background: colors.black,
     },
   }
   const fontSize = 16
@@ -131,7 +139,7 @@ function loadTheme(mode) {
   activePalette = {...activePalette, ...{
     mode: mode === Themes.Day ? 'light' : 'dark',
     background: {
-      paper: activePalette.primary.main,
+      paper: activePalette.primary.background,
     },
   }}
   const components = {
@@ -157,7 +165,8 @@ function loadTheme(mode) {
             width: '180px',
             height: '40px',
             textTransform: 'none',
-            color: activePalette.secondary.main,
+            border: `solid 1px ${activePalette.secondary.background}`,
+            backgroundColor: activePalette.secondary.main,
           },
         },
       ],
@@ -167,13 +176,39 @@ function loadTheme(mode) {
         disableRipple: true,
       },
     },
+    MuiToggleButton: {
+      styleOverrides: {
+        sizeMedium: {
+          'margin': '1em',
+          'border': 'none',
+          '&.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: activePalette.secondary.main,
+          },
+        },
+      },
+    },
+    MuiPaper: {
+      variants: [
+        {
+          props: {variant: 'control'},
+          style: {
+            backgroundColor: activePalette.primary.background,
+          },
+        },
+        {
+          props: {variant: 'note'},
+          style: {
+            backgroundColor: activePalette.primary.main,
+          },
+        },
+      ],
+    },
   }
   const theme = {
     components: components,
     typography: typography,
     shape: {borderRadius: 8},
     palette: activePalette,
-    button: {},
   }
   return createTheme(theme)
 }

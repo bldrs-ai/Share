@@ -133,8 +133,8 @@ export default function CadView({
         pathPrefix,
         (theme &&
          theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+         theme.palette.scene &&
+         theme.palette.scene.background) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -155,12 +155,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.secondary.background,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.highlight.main,
+      color: theme.palette.secondary.main,
       depthTest: true,
     })
 
@@ -448,11 +448,9 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
-      }
+      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
+      setViewer(intializedViewer)
+      setViewerStore(intializedViewer)
     })
   }
 
@@ -488,14 +486,18 @@ export default function CadView({
         />
         {showSearchBar && (
           <Box sx={{
-            position: 'absolute',
-            top: `30px`,
-            left: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            maxHeight: '95%',
+            'position': 'absolute',
+            'top': '0',
+            'left': '0',
+            'margin': '1.5em 0 0 1em',
+            'display': 'flex',
+            'flexDirection': 'column',
+            'justifyContent': 'flex-start',
+            'alignItems': 'flex-start',
+            'maxHeight': '95%',
+            '@media (max-width: 900px)': {
+              margin: '1em 0 0 0.5em',
+            },
           }}
           >
             <SearchBar

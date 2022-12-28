@@ -74,21 +74,35 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const inputGlobalStyles = (
     <GlobalStyles
       styles={{
+        'body': {
+          overscrollBehavior: 'none',
+          overflow: 'hidden',
+          padding: 0,
+          height: '100%',
+          maxHeight: '100%',
+        },
         'a': {
-          color: theme.palette.highlight.main,
+          color: theme.palette.secondary.contrastText,
         },
         'svg': {
           width: '18px',
           height: '18px',
-          fill: theme.palette.secondary.main,
+          fill: theme.palette.primary.contrastText,
         },
         '.closeButton': {
-          width: '14px',
-          height: '14px',
+          width: '12px',
+          height: '12px',
         },
         '.caretToggle': {
-          width: '14px',
-          height: '14px',
+          width: '12px',
+          height: '12px',
+        },
+        '*::-webkit-scrollbar': {
+          width: '10px',
+          background: theme.palette.secondary.background,
+        },
+        '*::-webkit-scrollbar-thumb': {
+          backgroundColor: theme.palette.secondary.main,
         },
       }}
     />

@@ -1,8 +1,8 @@
-import React, {useState, useEffect, useContext} from 'react'
+import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
-import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
@@ -61,7 +61,6 @@ export default function NoteCard({
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const colorTheme = useContext(ColorModeContext)
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -127,13 +126,7 @@ export default function NoteCard({
 
 
   return (
-    <Box sx={{
-      marginBottom: '1em',
-      backgroundColor: colorTheme.isDay() ? 'white' : '#383838',
-      borderRadius: '5px',
-      width: '100%',
-    }}
-    >
+    <Paper elevation={1} variant='note'>
       <Box
         sx={{
           cursor: isComment ? null : 'pointer',
@@ -154,21 +147,16 @@ export default function NoteCard({
           onClickSelect={selectCard}
         />
       </Box>
-      <Box sx={{
-        'height': 'auto',
-        'margin': '5px',
-        'paddingLeft': '5px',
-        'fontSize': '1em',
-        'lineHeight': '1.3em',
-        // Restore link styling for notes and comments
-        '& a': {
-          color: colorTheme.isDay() ? 'black' : 'lightGrey',
-          textDecoration: 'underline',
-        },
-        '& img': {
-          width: '100%',
-        },
-      }}
+      <Box
+        sx={{
+          'height': 'auto',
+          'fontSize': '1em',
+          'lineHeight': '1.3em',
+          'padding': '0.5em',
+          '& img': {
+            width: '100%',
+          },
+        }}
       >
         <ReactMarkdown>{body}</ReactMarkdown>
       </Box>
@@ -191,12 +179,13 @@ export default function NoteCard({
           onClickShare={shareIssue}
         /> : null
       }
-    </Box>
+    </Paper>
   )
 }
 
 
 const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
+  const theme = useTheme()
   const dateParts = date.split('T')
   return (
     <Box sx={{
@@ -205,7 +194,7 @@ const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onCli
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: '0.5em',
-      background: isComment ? '#F0F0F0' : '#C8E8C7',
+      background: isComment ? '#F0F0F0' : theme.palette.secondary.main,
     }}
     >
       <Box sx={{
@@ -288,7 +277,7 @@ const ShowMore = ({onClick, expandText}) => {
       cursor: 'pointer',
       margin: '5px 5px 15px 10px',
       fontSize: '10px',
-      color: theme.palette.highlight.main,
+      color: theme.palette.primary.contrastText,
     }}
     onClick={onClick}
     role='button'

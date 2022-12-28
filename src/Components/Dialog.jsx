@@ -35,6 +35,8 @@ export default function Dialog({
       icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
       actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
+
+
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -42,6 +44,7 @@ export default function Dialog({
       sx={{
         textAlign: 'center',
       }}
+      PaperProps={{variant: 'control'}}
     >
       <div
         style={{
@@ -75,7 +78,7 @@ export default function Dialog({
         </Typography>
         {content}
       </DialogContent>
-      <DialogActions>
+      <DialogActions sx={{overflowY: 'hidden'}}>
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
       </DialogActions>
     </MuiDialog>

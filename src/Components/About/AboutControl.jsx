@@ -21,12 +21,14 @@ export default function AboutControl() {
     name: 'isFirstTime',
     defaultValue: true,
   }))
+
+
   return (
     <ControlButton
       title='About BLDRS'
-      icon={<AboutIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
+      icon={<AboutIcon/>}
       dialog={
         <AboutDialog
           isDialogDisplayed={isDialogDisplayed}
@@ -60,7 +62,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
+      content={<AboutContent/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
     />)
@@ -72,7 +74,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  *
  * @return {React.ReactElement} React component
  */
-function AboutContent({setIsDialogDisplayed}) {
+function AboutContent() {
   return (
     <Box>
       <Typography variant='h1' gutterBottom={true}>Build Every Thing Together</Typography>

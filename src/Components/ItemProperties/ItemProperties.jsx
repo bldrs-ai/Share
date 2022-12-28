@@ -41,24 +41,13 @@ export default function ItemProperties() {
         verticalAlign: 'top',
         cursor: 'pointer',
         padding: '3px 0',
-        borderBottom: `.2px solid ${theme.palette.highlight.heavy}`,
+        borderBottom: `.2px solid ${theme.palette.primary.contrastText}`,
       },
       '& table': {
         tableLayout: 'fixed',
         width: '100%',
         overflow: 'hidden',
         borderSpacing: 0,
-      },
-      '& .MuiSwitch-root': {
-        float: 'right',
-      },
-      '& .MuiSwitch-track': {
-        backgroundColor: theme.palette.highlight.secondary,
-        opacity: 0.8,
-        border: 'solid 2px grey',
-      },
-      '& .MuiSwitch-thumb': {
-        backgroundColor: theme.palette.highlight.main,
       },
     }}
     >
@@ -75,7 +64,6 @@ export default function ItemProperties() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: theme.palette.primary.main,
             zIndex: 1000,
           }}
           >

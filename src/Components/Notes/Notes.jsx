@@ -106,15 +106,13 @@ export default function Notes() {
   }, [filteredNote, repository, setComments])
 
   return (
-    <Paper sx={{width: '100%'}} elevation={0}>
+    <Paper elevation={0}>
       <Box sx={{
         'display': 'flex',
         'flexDirection': 'column',
         'alignItems': 'center',
         'resizeMode': 'contain',
-        'width': '100%',
-        'paddingTop': '10px',
-        'paddingBottom': '30px',
+        'margin': '0 1em 30px 0',
         '@media (max-width: 900px)': {
           paddingTop: '0px',
         },

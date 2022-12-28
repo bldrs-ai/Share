@@ -55,7 +55,7 @@ export function SideDrawer({
                   display: isCommentsOn ? 'block' : 'none',
                   height: isPropertiesOn ? '50%' : '100%',
                   borderRadius: '0px',
-                  borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                  borderBottom: `1px solid ${theme.palette.primary.contrastText}`,
                   paddingTop: '20px',
                   overflowX: 'hidden',
                   overflowY: 'auto',
@@ -81,6 +81,7 @@ export function SideDrawer({
           anchor={'right'}
           variant='persistent'
           elevation={4}
+          PaperProps={{variant: 'control'}}
           sx={preprocessMediaQuery(MOBILE_WIDTH, {
             '&::-webkit-scrollbar': {
               display: 'none',
@@ -89,7 +90,7 @@ export function SideDrawer({
               width: SIDE_DRAWER_WIDTH,
               // This lets the h1 in ItemProperties use 1em padding but have
               // its mid-line align with the text in SearchBar
-              padding: '4px 1em',
+              padding: '1em',
             },
             '& .MuiPaper-root': {
               marginTop: '0px',
@@ -111,8 +112,7 @@ export function SideDrawer({
                 display: isCommentsOn ? 'block' : 'none',
                 height: isPropertiesOn ? '50%' : '100%',
                 borderRadius: '0px',
-                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                paddingTop: '20px',
+                borderBottom: `1px solid ${theme.palette.primary.contrastText}`,
                 overflowX: 'hidden',
                 overflowY: 'auto',
               }}

@@ -31,15 +31,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
-      icon={
-        <Box sx={{
-          width: '20px',
-          height: '20px',
-          marginBottom: '2px',
-        }}
-        >
-          <ShareIcon/>
-        </Box>}
+      icon={<ShareIcon/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
