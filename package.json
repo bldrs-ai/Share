@@ -1,7 +1,8 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r586",
+  "version": "1.0.0-r587",
   "main": "src/index.jsx",
+  "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
@@ -44,6 +45,7 @@
     "react-router-dom": "^6.3.0",
     "remark-gfm": "^3.0.1",
     "three": "^0.135",
+    "typescript": "^4.8.4",
     "web-ifc-viewer": "^1.0.209",
     "web-vitals": "^2.1.0",
     "zustand": "^4.0.0"
@@ -55,6 +57,7 @@
     "@babel/preset-env": "^7.18.10",
     "@babel/preset-react": "^7.18.6",
     "@bahmutov/cypress-esbuild-preprocessor": "^2.1.3",
+    "@mui/types": "^7.2.3",
     "@pablo-mayrgundter/cookies.js": "^1.0.0",
     "@storybook/addon-actions": "^6.5.10",
     "@storybook/addon-essentials": "^6.5.10",

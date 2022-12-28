@@ -4,7 +4,7 @@ import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import {makeStyles} from '@mui/styles'
+import useTheme from '@mui/styles/useTheme'
 import {ColorModeContext} from '../Context/ColorMode'
 import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
@@ -18,7 +18,6 @@ import {navigateBaseOnModelPath} from '../utils/location'
  * @return {object} React component
  */
 export default function Branches() {
-  const classes = useStyles()
   const navigate = useNavigate()
   const colorMode = useContext(ColorModeContext)
   const repository = useStore((state) => state.repository)
@@ -26,6 +25,8 @@ export default function Branches() {
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
   const modelPath = useStore((state) => state.modelPath)
+  const theme = useTheme()
+
 
   useEffect(() => {
     if (!repository) {
@@ -67,6 +68,7 @@ export default function Branches() {
     })
   }
 
+
   return (
     <>
       {branches.length > 1 && modelPath.repo !== undefined &&
@@ -78,7 +80,39 @@ export default function Branches() {
           }}
         >
           <TextField
-            className={classes.dropDown}
+            sx={{
+              'width': '300px',
+              '& .MuiOutlinedInput-input': {
+                color: theme.palette.highlight.grey,
+              },
+              '& .MuiInputLabel-root': {
+                color: theme.palette.highlight.heaviest,
+              },
+              '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+                borderColor: theme.palette.primary.main,
+              },
+              '&:hover .MuiOutlinedInput-input': {
+                color: theme.palette.highlight.heaviest,
+              },
+              // TODO(oleg): connect to props
+              '&:hover .MuiInputLabel-root': {
+                color: theme.palette.highlight.heaviest,
+              },
+              '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+                borderColor: theme.palette.primary.main,
+              },
+              // TODO(oleg): connect to props
+              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
+                color: theme.palette.highlight.maximum,
+              },
+              // TODO(oleg): connect to props
+              '& .MuiInputLabel-root.Mui-focused': {
+                color: theme.palette.highlight.heaviest,
+              },
+              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                borderColor: theme.palette.primary.main,
+              },
+            }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
             label='Git Branches / Project Versions'
@@ -104,41 +138,3 @@ export default function Branches() {
 
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  dropDown: {
-    'width': '300px',
-    '& .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.grey,
-    },
-    '& .MuiInputLabel-root': {
-      color: theme.palette.highlight.heaviest,
-    },
-    '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
-    },
-    '&:hover .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.heaviest,
-    },
-    // TODO(oleg): connect to props
-    '&:hover .MuiInputLabel-root': {
-      color: theme.palette.highlight.heaviest,
-    },
-    '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
-    },
-    // TODO(oleg): connect to props
-    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-      color: theme.palette.highlight.maximum,
-    },
-    // TODO(oleg): connect to props
-    '& .MuiInputLabel-root.Mui-focused': {
-      color: theme.palette.highlight.heaviest,
-    },
-    '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-      borderColor: theme.palette.primary.main,
-    },
-  },
-}),
-)

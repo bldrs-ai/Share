@@ -13,6 +13,7 @@ export default class SearchIndex {
     this.eltsByText = {}
   }
 
+
   /**
    * Recursively visits elt and indexes properties.
    *
@@ -69,6 +70,7 @@ export default class SearchIndex {
     return new Set(str.match(/(\w+)/g))
   }
 
+
   /**
    * Create index set of found results
    *
@@ -84,6 +86,7 @@ export default class SearchIndex {
     return set
   }
 
+
   /**
    * Add entry for key in index pointing to given elt
    *
@@ -95,6 +98,7 @@ export default class SearchIndex {
     this.findCreateIndexSet(index, key).add(elt)
     this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
   }
+
 
   /**
    * Add entry for key in index pointing to given elt for each key in the set
@@ -109,6 +113,7 @@ export default class SearchIndex {
     }
   }
 
+
   /** Clear all entries in the search index. */
   clearIndex() {
     deleteProperties(this.eltsByType)
@@ -116,6 +121,7 @@ export default class SearchIndex {
     deleteProperties(this.eltsByGlobalId)
     deleteProperties(this.eltsByText)
   }
+
 
   /**
    * Search the index with the given query and return the express IDs of matching IFC elements
@@ -161,7 +167,6 @@ export default class SearchIndex {
     addAll(this.eltsByGlobalId[token])
 
     addAll(this.eltsByText[token])
-
 
     const resultIDs = toExpressIds(Array.from(resultSet))
     debug().log('result IDs: ', resultIDs)

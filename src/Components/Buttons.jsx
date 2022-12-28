@@ -1,8 +1,9 @@
 import React from 'react'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
-import {makeStyles, useTheme} from '@mui/styles'
+import ToggleButton from '@mui/material/ToggleButton'
+import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 
@@ -25,10 +26,28 @@ export function TooltipIconButton({
   dataTestId = '',
 }) {
   assertDefined(icon, onClick, title)
-  const classes = useStyles(useTheme())
+  const theme = useTheme()
   const isMobile = useIsMobile()
+
+
   return (
-    <div className={classes.root}>
+    <Box sx={{
+      '& button': {
+        'width': '40px',
+        'height': '40px',
+        'border': 'none',
+        'margin': '4px 0px 4px 0px',
+        '&.Mui-selected, &.Mui-selected:hover': {
+          backgroundColor: '#97979720',
+        },
+      },
+      '& svg': {
+        width: '22px',
+        height: '22px',
+        fill: theme.palette.primary.contrastText,
+      },
+    }}
+    >
       {isMobile ?
        <ToggleButton
          selected={selected}
@@ -49,9 +68,10 @@ export function TooltipIconButton({
          </ToggleButton>
        </Tooltip>
       }
-    </div>
+    </Box>
   )
 }
+
 
 /**
  * A RectangularButton is used in dialogs
@@ -90,6 +110,7 @@ export function RectangularButton({
   )
 }
 
+
 /**
  * @param {string} title The text for tooltip
  * @param {boolean} isDialogDisplayed
@@ -110,13 +131,46 @@ export function ControlButton({
   state = false,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
-  const classes = useStyles(useTheme())
+  const theme = useTheme()
+
+
   return (
-    <div>
-      <div className={classes.root}>
+    <Box>
+      <Box sx={{
+        '& button': {
+          'width': '40px',
+          'height': '40px',
+          'border': 'none',
+          'margin': '4px 0px 4px 0px',
+          '&.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: '#97979720',
+          },
+        },
+        '& svg': {
+          width: '22px',
+          height: '22px',
+          fill: theme.palette.primary.contrastText,
+        },
+      }}
+      >
         <Tooltip title={title} describeChild placement={placement}>
           <ToggleButton
-            className={classes.root}
+            sx={{
+              '& button': {
+                'width': '40px',
+                'height': '40px',
+                'border': 'none',
+                'margin': '4px 0px 4px 0px',
+                '&.Mui-selected, &.Mui-selected:hover': {
+                  backgroundColor: '#97979720',
+                },
+              },
+              '& svg': {
+                width: '22px',
+                height: '22px',
+                fill: theme.palette.primary.contrastText,
+              },
+            }}
             selected={isDialogDisplayed}
             onClick={() => {
               setIsDialogDisplayed(true)
@@ -127,22 +181,8 @@ export function ControlButton({
             {icon}
           </ToggleButton>
         </Tooltip>
-      </div>
+      </Box>
       {isDialogDisplayed && dialog}
-    </div>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  root: {
-    '& button': {
-      'border': 'none',
-      'margin': '4px 0px',
-      '&.Mui-selected, &.Mui-selected:hover': {
-        backgroundColor: '#97979720',
-      },
-    },
-  },
-}))
-

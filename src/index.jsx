@@ -4,10 +4,10 @@ import {BrowserRouter} from 'react-router-dom'
 import BaseRoutes from './BaseRoutes'
 import {FlagsProvider} from 'react-feature-flags'
 import {flags} from './FeatureFlags'
+import {worker} from './__mocks__/browser'
 
 
 if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
-  const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
       if (req.url.host === 'api.github.com') {

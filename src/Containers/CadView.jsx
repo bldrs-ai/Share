@@ -2,7 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-import {makeStyles} from '@mui/styles'
+import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
@@ -11,7 +11,7 @@ import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer'
+import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -28,9 +28,9 @@ import BranchesControl from '../Components/BranchesControl'
  * when new models load.
  */
 const searchIndex = new SearchIndex()
-
-
 let count = 0
+
+
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
@@ -59,8 +59,7 @@ export default function CadView({
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
-  const colorModeContext = useContext(ColorModeContext)
-  const classes = useStyles()
+  const colorMode = useContext(ColorModeContext)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -77,6 +76,8 @@ export default function CadView({
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const [modelReady, setModelReady] = useState(false)
+  const isMobile = useIsMobile()
+  const location = useLocation()
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -105,7 +106,6 @@ export default function CadView({
 
   // Watch for path changes within the model.
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
-  const location = useLocation()
   useEffect(() => {
     if (model) {
       (async () => {
@@ -128,7 +128,7 @@ export default function CadView({
     resetState()
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
-    const theme = colorModeContext.getTheme()
+    const theme = colorMode.getTheme()
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
@@ -143,7 +143,7 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    const theme = colorModeContext.getTheme()
+    const theme = colorMode.getTheme()
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -163,21 +163,21 @@ export default function CadView({
       color: theme.palette.highlight.main,
       depthTest: true,
     })
+
     if (viewer.IFC.selector) {
       viewer.IFC.selector.preselection.material = preselectMat
       viewer.IFC.selector.selection.material = selectMat
     }
+
     addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
-
     setModelReady(true)
   }
 
 
-  const isMobile = useIsMobile()
   // Shrink the scene viewer when drawer is open.  This recenters the
   // view in the new shrunk canvas, which preserves what the user is
   // looking at.
@@ -193,6 +193,7 @@ export default function CadView({
   const setAlertMessage = (msg) =>
     setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
+
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
    *
@@ -200,6 +201,7 @@ export default function CadView({
    */
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath)
+
     if (pathPrefix.endsWith('new')) {
       const l = window.location
       filepath = filepath.split('.ifc')[0]
@@ -208,9 +210,11 @@ export default function CadView({
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
     }
+
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
+
     const loadedModel = await viewer.IFC.loadIfcUrl(
         filepath,
         !urlHasCameraParams(), // fitToFrame
@@ -229,6 +233,7 @@ export default function CadView({
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${ filepath}`)
         })
+
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
@@ -248,6 +253,7 @@ export default function CadView({
       setModelStore(loadedModel)
       return loadedModel
     }
+
     debug().error('CadView#loadIfc: Model load failed!')
   }
 
@@ -441,7 +447,7 @@ export default function CadView({
 
 
   const addThemeListener = () => {
-    colorModeContext.addThemeChangeListener((newMode, theme) => {
+    colorMode.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
         const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
         setViewer(intializedViewer)
@@ -452,16 +458,46 @@ export default function CadView({
 
 
   return (
-    <div className={classes.root} data-model-ready={modelReady}>
-      <div className={classes.view} id='viewer-container'></div>
-      <div className={classes.menusWrapper}>
+    <Box sx={{
+      'position': 'absolute',
+      'top': '0px',
+      'left': '0px',
+      'minWidth': '100vw',
+      'minHeight': '100vh',
+      '@media (max-width: 900px)': {
+        height: ' calc(100vh - calc(100vh - 100%))',
+        minHeight: '-webkit-fill-available',
+      },
+    }}data-model-ready={modelReady}
+    >
+      <Box sx={{
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        textAlign: 'center',
+        width: '100vw',
+        height: '100vh',
+        margin: 'auto',
+      }} id='viewer-container'
+      />
+      <>
         <SnackBarMessage
           message={snackMessage ? snackMessage : loadingMessage}
           type={'info'}
           open={isLoading || snackMessage !== null}
         />
         {showSearchBar && (
-          <div className={classes.topLeftContainer}>
+          <Box sx={{
+            position: 'absolute',
+            top: `30px`,
+            left: '20px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
+            maxHeight: '95%',
+          }}
+          >
             <SearchBar
               fileOpen={loadLocalFile}
             />
@@ -481,23 +517,49 @@ export default function CadView({
                 }
               />
             }
-          </div>
+          </Box>
         )}
 
         <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
-        <div className={isDrawerOpen ?
-                        classes.operationsGroupOpen :
-                        classes.operationsGroup}
+        <Box sx={isDrawerOpen ? {
+          'position': 'fixed',
+          'top': 0,
+          'right': '31em',
+          'border': 'none',
+          'zIndex': 0,
+          '@media (max-width: 900px)': {
+            right: 0,
+            height: '50%',
+          },
+          '@media (max-width: 350px)': {
+            top: '120px',
+            height: '50%',
+          },
+        } : {
+          'position': 'fixed',
+          'top': 0,
+          'right': 0,
+          'border': 'none',
+          'zIndex': 0,
+          '@media (max-width: 900px)': {
+            right: 0,
+            height: '50%',
+          },
+          '@media (max-width: 350px)': {
+            top: '75px',
+            height: '50%',
+          },
+        }}
         >
           {viewer &&
             <OperationsGroup
               unSelectItem={unSelectItems}
             />}
-        </div>
+        </Box>
         {alert}
-      </div>
-      <SideDrawerWrapper />
-    </div>
+      </>
+      <SideDrawerWrapper/>
+    </Box>
   )
 }
 
@@ -511,6 +573,7 @@ export default function CadView({
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   debug().log('CadView#initViewer: pathPrefix: ', pathPrefix, backgroundColorStr)
   const container = document.getElementById('viewer-container')
+
   // Clear any existing scene.
   container.textContent = ''
   const v = new IfcViewerAPI({
@@ -518,6 +581,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     backgroundColor: new Color(backgroundColorStr),
   })
   debug().log('CadView#initViewer: viewer created:', v)
+
   // Path to web-ifc.wasm in serving directory.
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
@@ -547,81 +611,3 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.container = container
   return v
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'position': 'absolute',
-    'top': '0px',
-    'left': '0px',
-    'minWidth': '100vw',
-    'minHeight': '100vh',
-    '@media (max-width: 900px)': {
-      height: ' calc(100vh - calc(100vh - 100%))',
-      minHeight: '-webkit-fill-available',
-    },
-
-  },
-  topLeftContainer: {
-    position: 'absolute',
-    top: `30px`,
-    left: '20px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'flex-start',
-    alignItems: 'flex-start',
-    maxHeight: '95%',
-  },
-  view: {
-    position: 'absolute',
-    top: '0px',
-    left: '0px',
-    textAlign: 'center',
-    width: '100vw',
-    height: '100vh',
-    margin: 'auto',
-  },
-  operationsGroup: {
-    'position': 'fixed',
-    'top': 0,
-    'right': 0,
-    'border': 'none',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      right: 0,
-      height: '50%',
-    },
-    '@media (max-width: 350px)': {
-      top: '75px',
-      height: '50%',
-    },
-  },
-  operationsGroupOpen: {
-    'position': 'fixed',
-    'top': 0,
-    'right': '31em',
-    'border': 'none',
-    'zIndex': 0,
-    '@media (max-width: 900px)': {
-      right: 0,
-      height: '50%',
-    },
-    '@media (max-width: 350px)': {
-      top: '120px',
-      height: '50%',
-    },
-  },
-  baseGroup: {
-    position: 'fixed',
-    bottom: '20px',
-    right: '20px',
-  },
-  baseGroupOpen: {
-    'position': 'fixed',
-    'bottom': '20px',
-    'right': '32em',
-    '@media (max-width: 900px)': {
-      display: 'none',
-    },
-  },
-})

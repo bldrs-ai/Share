@@ -8,15 +8,16 @@ import QuestionIcon from '../assets/2D_Icons/Question.svg'
 describe('<TooltipIconButton />', () => {
   test('should render successfully', async () => {
     const testId = 'test-button'
-    const rendered = render(<MockComponent>
-      <TooltipIconButton
-        dataTestId={testId}
-        title={'Hello. Is it me you\'re looking for?'}
-        // eslint-disable-next-line no-empty-function
-        onClick={() => {}}
-        icon={<QuestionIcon/>}
-      />
-    </MockComponent>)
+    const rendered = render(
+        <MockComponent>
+          <TooltipIconButton
+            dataTestId={testId}
+            title={'Hello. Is it me you\'re looking for?'}
+            // eslint-disable-next-line no-empty-function
+            onClick={() => {}}
+            icon={<QuestionIcon/>}
+          />
+        </MockComponent>)
 
     const button = rendered.getByTestId(testId)
     fireEvent.mouseOver(button)

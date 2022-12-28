@@ -12,6 +12,8 @@ import {useTheme} from '@mui/styles'
  */
 export default function Toggle({onChange, checked}) {
   const theme = useTheme()
+
+
   return (
     <Switch
       checked={checked}

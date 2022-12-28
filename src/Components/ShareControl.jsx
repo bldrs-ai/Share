@@ -26,10 +26,20 @@ import ShareIcon from '../assets/2D_Icons/Share.svg'
 export default function ShareControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const openedDialog = !!isDialogDisplayed
+
+
   return (
     <ControlButton
       title='Share'
-      icon={<ShareIcon/>}
+      icon={
+        <Box sx={{
+          width: '20px',
+          height: '20px',
+          marginBottom: '2px',
+        }}
+        >
+          <ShareIcon/>
+        </Box>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -61,6 +71,13 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const model = useStore((state) => state.modelStore)
   const urlTextFieldRef = createRef()
   const isPlanesOn = viewer.clipper.planes.length > 0
+  const rowStyle = {
+    display: 'flex',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  }
+
 
   useEffect(() => {
     if (viewer) {
@@ -77,16 +94,19 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
 
+
   const closeDialog = () => {
     setIsDialogDisplayed(false)
     setIsLinkCopied(false)
   }
+
 
   const onCopy = (event) => {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(location)
     urlTextFieldRef.current.select()
   }
+
 
   const toggleCameraIncluded = () => {
     if (isCameraInUrl) {
@@ -101,6 +121,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }
 
+
   const togglePlaneIncluded = () => {
     if (isPlaneInUrl) {
       removeHashParams(window.location, 'p')
@@ -110,12 +131,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     setIsPlaneInUrl(!isPlaneInUrl)
   }
 
-  const rowStyle = {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  }
 
   return (
     <Dialog
@@ -127,22 +142,23 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       actionIcon={<CopyIcon/>}
       actionCb={onCopy}
       content={
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginTop: '10px',
-          }}
+        <Box sx={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginTop: '10px',
+        }}
         >
           <TextField
             value={String(window.location)}
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
-            rows={5}
-            InputProps={{readOnly: true}}
+            rows={6}
+            InputProps={{
+              readOnly: true,
+            }}
           />
           <Box
             sx={{
