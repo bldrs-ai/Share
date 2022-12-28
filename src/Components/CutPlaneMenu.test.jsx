@@ -91,4 +91,3 @@ describe('CutPlane', () => {
     expect(result.current.cutPlaneOffset).toBe('14')
   })
 })
-

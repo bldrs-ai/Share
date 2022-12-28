@@ -1,6 +1,7 @@
 import React from 'react'
+import Box from '@mui/material/Box'
 import Drawer from '@mui/material/Drawer'
-import {makeStyles} from '@mui/styles'
+import Typography from '@mui/material/Typography'
 import {TooltipIconButton} from '../Buttons'
 import {MOBILE_WIDTH} from '../Hooks'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
@@ -21,62 +22,57 @@ export default function ItemPropertiesDrawer({
   content,
   onClose,
 }) {
-  const classes = useStyles()
   return (
     <Drawer
+      sx={preprocessMediaQuery(MOBILE_WIDTH, {
+        '& > .MuiPaper-root': {
+          'width': '20em',
+          // This lets the h1 in ItemProperties use 1em padding but have its mid-line align with the text in SearchBar
+          'padding': '4px 1em',
+          '@media (max-width: MOBILE_WIDTH)': {
+            width: 'auto',
+            height: '250px',
+          },
+        },
+        '& .MuiPaper-root': {
+          marginTop: '0px',
+          borderRadius: '0px',
+          zIndex: 10,
+        },
+      })}
       open={true}
       anchor={'right'}
       variant='persistent'
       elevation={4}
-      className={classes.drawer}
     >
-      <div className={classes.headerBar}>
-        <h1>{title}</h1>
+      <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
+        'display': 'flex',
+        'justifyContent': 'space-between',
+        'alignItems': 'center',
+        'margin': '1em 0',
+        '@media (max-width: MOBILE_WIDTH)': {
+          borderBottom: 'none',
+          height: '20px',
+        },
+      })}
+      >
+        <Typography variant='h1'>{title}</Typography>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}
           icon={<CloseIcon/>}
         />
-      </div>
-      <div className={classes.content}>{content}</div>
+      </Box>
+      <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
+        'overflow': 'auto',
+        'height': '90%',
+        '@media (max-width: MOBILE_WIDTH)': {
+          overflow: 'auto',
+        },
+      })}
+      >
+        {content}
+      </Box>
     </Drawer>
   )
 }
-
-
-const useStyles = makeStyles((props) => (preprocessMediaQuery(MOBILE_WIDTH, {
-  drawer: {
-    '& > .MuiPaper-root': {
-      'width': '20em',
-      // This lets the h1 in ItemProperties use 1em padding but have
-      // its mid-line align with the text in SearchBar
-      'padding': '4px 1em',
-      '@media (max-width: MOBILE_WIDTH)': {
-        width: 'auto',
-        height: '250px',
-      },
-    },
-    '& .MuiPaper-root': {
-      marginTop: '0px',
-      borderRadius: '0px',
-      zIndex: 10,
-    },
-  },
-  headerBar: {
-    'display': 'flex',
-    'justifyContent': 'space-between',
-    'alignItems': 'center',
-    'margin': '1em 0',
-    '@media (max-width: MOBILE_WIDTH)': {
-      borderBottom: 'none',
-      height: '20px',
-    },
-  },
-  content: {
-    'overflow': 'auto',
-    'height': '90%',
-    '@media (max-width: MOBILE_WIDTH)': {
-      overflow: 'auto',
-    },
-  },
-})))
