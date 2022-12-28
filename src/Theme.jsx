@@ -125,7 +125,7 @@ function loadTheme(mode) {
     h4: {fontSize: fontSize, fontWeight: '600', textDecoration: 'underline'},
     h5: {fontSize, textDecoration: 'underline'},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
-    body2: {fontSize: '0.9em'},
+    body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},
     propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
     propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '100'},

@@ -1,12 +1,15 @@
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
+import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import CardActionArea from '@mui/material/CardActionArea'
+import CardContent from '@mui/material/CardContent'
+import CardHeader from '@mui/material/CardHeader'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
-import {isRunningLocally} from '../../utils/network'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {
@@ -123,52 +126,54 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+  const dateParts = date.split('T')
+  const theme = useTheme()
 
 
   return (
-    <Paper elevation={1} variant='note'>
-      <Box
+    <Paper
+      elevation={1}
+      variant='note'
+      sx={{
+        marginBottom: '1em',
+        width: '100%',
+      }}
+    >
+      <CardActionArea
         sx={{
           cursor: isComment ? null : 'pointer',
         }}
-        role='button'
-        tabIndex={0}
         onClick={() => isComment ? null : selectCard()}
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        <CardTitle
-          title={title}
-          username={username}
-          date={date}
-          avatarUrl={avatarUrl}
-          isComment={isComment}
-          selected={selected}
-          onClickSelect={selectCard}
+        <CardHeader
+          title={isComment ? null : title}
+          avatar={<Avatar alt={username} src={avatarUrl}/>}
+          subheader={<div>by {username} at {dateParts[0]} {dateParts[1]}</div>}
+          sx={{
+            backgroundColor: isComment ? theme.palette.primary.main : theme.palette.secondary.main,
+          }}
         />
-      </Box>
-      <Box
+      </CardActionArea>
+      <CardContent
         sx={{
-          'height': 'auto',
-          'fontSize': '1em',
-          'lineHeight': '1.3em',
-          'padding': '0.5em',
           '& img': {
             width: '100%',
           },
         }}
       >
         <ReactMarkdown>{body}</ReactMarkdown>
-      </Box>
-      {textOverflow &&
-        <ShowMore
-          expandText={expandText}
-          onClick={(event) => {
-            event.preventDefault()
-            setExpandText(!expandText)
-          }}
-        />
-      }
+        {textOverflow &&
+         <ShowMore
+           expandText={expandText}
+           onClick={(event) => {
+             event.preventDefault()
+             setExpandText(!expandText)
+           }}
+         />
+        }
+      </CardContent>
       {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
@@ -184,105 +189,23 @@ export default function NoteCard({
 }
 
 
-const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
-  const theme = useTheme()
-  const dateParts = date.split('T')
-  return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0.5em',
-      background: isComment ? '#F0F0F0' : theme.palette.secondary.main,
-    }}
-    >
-      <Box sx={{
-        color: 'black',
-        width: '230px',
-      }}
-      >
-        {isComment ? null : <Box >{title}</Box>}
-      </Box>
-      <Box sx={{
-        width: '200px',
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        marginRight: '6px',
-      }}
-      >
-        <Box sx={{
-          marginRight: '10px',
-          paddingRight: '10px',
-          paddingLeft: '10px',
-          borderRadius: '5px',
-          opacity: .5,
-        }}
-        >
-          <Box sx={{
-            fontSize: '10px',
-            color: 'black',
-          }}
-          >{username}
-          </Box>
-          <Box sx={{
-            fontSize: '10px',
-            color: 'black',
-          }}
-          >{dateParts[0]} {dateParts[1]}
-          </Box>
-        </Box>
-        {!isRunningLocally() ?
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              backgroundColor: 'lightGrey',
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-              fontWeight: 'bold',
-              border: '1px solid lightGrey',
-            }}
-            component='img'
-            src={avatarUrl}
-            alt={'avatarImage'}
-          /> :
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              background: 'green',
-              borderRadius: '50%',
-            }}
-          />
-        }
-      </Box>
-    </Box>
-  )
-}
-
-
 const ShowMore = ({onClick, expandText}) => {
   const theme = useTheme()
 
 
   return (
-    <Box sx={{
-      display: 'none',
-      cursor: 'pointer',
-      margin: '5px 5px 15px 10px',
-      fontSize: '10px',
-      color: theme.palette.primary.contrastText,
-    }}
-    onClick={onClick}
-    role='button'
-    tabIndex={0}
-    onKeyPress={onClick}
+    <Box
+      sx={{
+        display: 'none',
+        cursor: 'pointer',
+        margin: '5px 5px 15px 10px',
+        fontSize: '0.9em',
+        color: theme.palette.primary.contrastText,
+      }}
+      onClick={onClick}
+      role='button'
+      tabIndex={0}
+      onKeyPress={onClick}
     >
       {expandText ? 'show less' : 'show more'}
     </Box>
@@ -306,7 +229,6 @@ const CardActions = ({
       justifyContent: 'space-between',
       alignItems: 'center',
       padding: '0px 5px 10px 5px',
-      fontSize: '10px',
     }}
     >
       <Box sx={{
@@ -314,7 +236,6 @@ const CardActions = ({
         flexDirection: 'row',
         justifyContent: 'flex-start',
         alignItems: 'center',
-        fontSize: '10px',
       }}
       >
         {hasCameras &&

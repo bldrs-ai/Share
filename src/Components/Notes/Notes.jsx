@@ -1,5 +1,4 @@
 import React, {useEffect} from 'react'
-import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
@@ -106,8 +105,10 @@ export default function Notes() {
   }, [filteredNote, repository, setComments])
 
   return (
-    <Paper elevation={0}>
-      <Box sx={{
+    <Paper
+      elevation={0}
+      sx={{
+        'width': '100%',
         'display': 'flex',
         'flexDirection': 'column',
         'alignItems': 'center',
@@ -117,65 +118,64 @@ export default function Notes() {
           paddingTop: '0px',
         },
       }}
-      >
-        {notes === null && <Loader type={'linear'}/> }
-        {notes && notes.length === 0 && <NoContent/> }
-        {notes && !selectedNoteId ?
-          notes.map((issue, index) => {
+    >
+      {notes === null && <Loader type={'linear'}/> }
+      {notes && notes.length === 0 && <NoContent/> }
+      {notes && !selectedNoteId ?
+       notes.map((issue, index) => {
+         return (
+           <NoteCard
+             embeddedUrl={issue.embeddedUrl}
+             index={issue.index}
+             id={issue.id}
+             key={index}
+             title={issue.title}
+             date={issue.date}
+             body={issue.body}
+             username={issue.username}
+             numberOfComments={issue.numberOfComments}
+             avatarUrl={issue.avatarUrl}
+             imageUrl={issue.imageUrl}
+           />
+         )
+       }) :
+       <>
+         {filteredNote ?
+          <NoteCard
+            embeddedUrl={filteredNote.embeddedUrl}
+            index={filteredNote.index}
+            id={filteredNote.id}
+            key={filteredNote.id}
+            title={filteredNote.title}
+            date={filteredNote.date}
+            body={filteredNote.body}
+            username={filteredNote.username}
+            numberOfComments={filteredNote.numberOfComments}
+            avatarUrl={filteredNote.avatarUrl}
+            imageUrl={filteredNote.imageUrl}
+          /> : null
+         }
+         {comments &&
+          comments.map((comment, index) => {
             return (
               <NoteCard
-                embeddedUrl={issue.embeddedUrl}
-                index={issue.index}
-                id={issue.id}
-                key={index}
-                title={issue.title}
-                date={issue.date}
-                body={issue.body}
-                username={issue.username}
-                numberOfComments={issue.numberOfComments}
-                avatarUrl={issue.avatarUrl}
-                imageUrl={issue.imageUrl}
+                embeddedUrl={comment.embeddedUrl}
+                isComment={true}
+                index=''
+                id={comment.id}
+                key={comment.id}
+                title={index + 1}
+                date={comment.date}
+                body={comment.body}
+                username={comment.username}
+                avatarUrl={comment.avatarUrl}
+                imageUrl={comment.imageUrl}
               />
             )
-          }) :
-        <>
-          {filteredNote ?
-           <NoteCard
-             embeddedUrl={filteredNote.embeddedUrl}
-             index={filteredNote.index}
-             id={filteredNote.id}
-             key={filteredNote.id}
-             title={filteredNote.title}
-             date={filteredNote.date}
-             body={filteredNote.body}
-             username={filteredNote.username}
-             numberOfComments={filteredNote.numberOfComments}
-             avatarUrl={filteredNote.avatarUrl}
-             imageUrl={filteredNote.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
-               <NoteCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
-        }
-      </Box>
+          })
+         }
+       </>
+      }
     </Paper>
   )
 }
