@@ -1,10 +1,10 @@
-import React, {useState} from 'react'
+import React, {useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
-import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import {useTheme} from '@mui/styles'
+import useTheme from '@mui/styles/useTheme'
 import CaretIcon from '../assets/2D_Icons/Caret.svg'
 
 
@@ -17,8 +17,12 @@ import CaretIcon from '../assets/2D_Icons/Caret.svg'
  * @return {React.ReactElement}
  */
 export default function ExpansionPanel({summary, detail, expandState}) {
-  const [expanded, setExpanded] = useState(expandState)
   const theme = useTheme()
+  const [expanded, setExpanded] = useState(expandState)
+
+  useEffect(() => {
+    setExpanded(expandState)
+  }, [expandState])
 
 
   return (
