@@ -18,7 +18,6 @@ import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUti
 import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
 
