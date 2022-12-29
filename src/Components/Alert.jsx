@@ -16,10 +16,14 @@ import CheckIcon from '@mui/icons-material/Check'
  */
 export default function Alert({onCloseCb, title = 'Oops', message}) {
   const [isOpen, setIsOpen] = useState(true)
+
+
   const handleClose = () => {
     setIsOpen(false)
     onCloseCb()
   }
+
+
   return (
     <Dialog
       open={isOpen}
