@@ -18,6 +18,7 @@ import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUti
 import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
 
@@ -77,6 +78,9 @@ export default function CadView({
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const [modelReady, setModelReady] = useState(false)
+  const selectedElements = useStore((state) => state.selectedElements)
+  const isMobile = useIsMobile()
+  const location = useLocation()
 
   // Granular visibility controls for the UI compononets
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
