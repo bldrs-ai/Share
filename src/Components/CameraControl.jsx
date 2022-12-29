@@ -89,6 +89,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
+
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6
@@ -96,6 +97,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
       cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
+
   addCameraUrlParams(cameraControls)
 }
 
@@ -113,6 +115,7 @@ const paramRegex = new RegExp(paramPattern)
  */
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
+
   const stof = (str) => {
     const floatDigits = 2
     const val = parseFloat(parseFloat(str).toFixed(floatDigits))
@@ -123,7 +126,9 @@ export function parseHashParams(encodedParams) {
       console.warn('Invalid coordinate: ', str)
     }
   }
+
   debug().log('CameraControl#onHash: match: ', match)
+
   if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
     const x = stof(match[1])
     const y = stof(match[2])

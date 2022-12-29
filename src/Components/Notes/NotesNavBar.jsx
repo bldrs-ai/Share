@@ -1,7 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import {makeStyles, useTheme} from '@mui/styles'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -15,7 +14,6 @@ import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
 /** @return {object} React component. */
 export default function NotesNavBar() {
-  const classes = useStyles(useTheme())
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
@@ -42,10 +40,26 @@ export default function NotesNavBar() {
 
 
   return (
-    <div className={classes.titleContainer}>
-      <div className={classes.leftGroup}>
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      borderRadius: '2px',
+    }}
+    >
+      <Box sx={{
+        'display': 'flex',
+        'flexDirection': 'row',
+        'justifyContent': 'center',
+        'alignItems': 'center',
+        '@media (max-width: 900px)': {
+          paddingLeft: '12px',
+        },
+      }}
+      >
         <Typography variant='h2'>
-          {!selectedNoteId && 'Notes' }
+          {!selectedNoteId && 'Notes'}
         </Typography>
 
         {selectedNoteId ?
@@ -57,13 +71,30 @@ export default function NotesNavBar() {
                 removeHashParams(window.location, NOTE_PREFIX)
                 setSelectedNoteId(null)
               }}
-              icon={<div className={classes.iconContainer}><BackIcon/></div>}
+              icon={
+                <Box sx={{
+                  display: 'flex',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: '14px',
+                  height: '14px',
+                }}
+                >
+                  <BackIcon/>
+                </Box>}
             />
           </Box> : null
         }
-      </div>
+      </Box>
 
-      <div className={classes.middleGroup} >
+      <Box sx={{
+        width: '400px',
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
+      }}
+      >
         {(notes && selectedNoteId) && notes.length > 1 &&
           <>
             <TooltipIconButton
@@ -82,65 +113,34 @@ export default function NotesNavBar() {
             />
           </>
         }
-      </div>
+      </Box>
 
-      <div className={classes.rightGroup}>
-        <div>
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'center',
+      }}
+      >
+        <Box>
           <TooltipIconButton
             title='Close Comments'
             placement='bottom'
             onClick={turnCommentsOff}
-            icon={<div className={classes.iconContainerClose}><CloseIcon/></div>}
+            icon={
+              <Box sx={{
+                display: 'flex',
+                justifyContent: 'center',
+                alignItems: 'center',
+                width: '14px',
+                height: '14px',
+              }}
+              >
+                <CloseIcon/>
+              </Box>}
           />
-        </div>
-      </div>
-    </div>
+        </Box>
+      </Box>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  titleContainer: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: '2px',
-  },
-  leftGroup: {
-    'display': 'flex',
-    'flexDirection': 'row',
-    'justifyContent': 'center',
-    'alignItems': 'center',
-    '@media (max-width: 900px)': {
-      paddingLeft: '12px',
-    },
-  },
-  middleGroup: {
-    width: '400px',
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rightGroup: {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  iconContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '14px',
-    height: '14px',
-  },
-  iconContainerClose: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '14px',
-    height: '14px',
-  },
-}))

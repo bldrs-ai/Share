@@ -20,6 +20,7 @@ import ListIcon from '../assets/2D_Icons/List.svg'
  */
 export default function ItemPanelControl({model, element, isOpenState}) {
   let titleStr = 'Element Properties'
+
   if (model) {
     if (element.Name && element.Name.value) {
       titleStr = decodeIFCString(element.Name.value)
@@ -28,8 +29,10 @@ export default function ItemPanelControl({model, element, isOpenState}) {
       titleStr = element.constructor.name
     }
   }
+
   const isMobile = useIsMobile()
   const itemProps = <ItemProperties model={model} element={element}/>
+
   if (element) {
     return (
       <>
@@ -38,17 +41,19 @@ export default function ItemPanelControl({model, element, isOpenState}) {
            title='Properties'
            icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
            onClick={() => isOpenState.set(!isOpenState.value)}
-         />}
+         />
+        }
         {isOpenState.value &&
          (isMobile ? <MobileDrawer content={itemProps}/> :
          <ItemPropertiesDrawer
            content={itemProps}
            title={titleStr}
            onClose={() => isOpenState.set(false)}
-         />)}
+         />)
+        }
       </>
     )
   }
+
   return null
 }
-

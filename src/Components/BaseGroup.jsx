@@ -1,5 +1,5 @@
 import React from 'react'
-import {makeStyles} from '@mui/styles'
+import Box from '@mui/material/Box'
 import OpenModelControl from './OpenModelControl'
 
 
@@ -12,20 +12,15 @@ import OpenModelControl from './OpenModelControl'
  * @return {object} React component
  */
 export default function BaseGroup({installPrefix, fileOpen}) {
-  const classes = useStyles()
   return (
-    <div className={classes.root}>
+    <Box sx={{
+      display: 'flex',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+    }}
+    >
       <OpenModelControl installPrefix={installPrefix} fileOpen={fileOpen}/>
-    </div>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    display: 'flex',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-})

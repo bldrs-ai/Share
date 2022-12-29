@@ -1,8 +1,8 @@
 import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
+import Box from '@mui/material/Box'
 import Drawer from '@mui/material/Drawer'
-import {Box} from '@mui/system'
-import {makeStyles, useTheme} from '@mui/styles'
+import {useTheme} from '@mui/styles'
 import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
@@ -24,11 +24,6 @@ export function SideDrawer({
   isCommentsOn,
   isPropertiesOn,
 }) {
-  const classes = useStyles({
-    divider: (isCommentsOn && isPropertiesOn),
-    isCommentsOn: isCommentsOn,
-    isPropertiesOn: isPropertiesOn,
-  })
   const isMobile = useIsMobile()
   const theme = useTheme()
 
@@ -44,15 +39,41 @@ export function SideDrawer({
       {isMobile && isDrawerOpen ?
         <MobileDrawer
           content={
-            <div className={classes.content}>
-              <div className={classes.containerNotes}>
-                {isCommentsOn ? <NotesPanel/> : null}
-              </div>
-              <div className={classes.divider}/>
-              <div className={classes.containerProperties}>
-                {isPropertiesOn ? <PropertiesPanel/> : null}
-              </div>
-            </div>
+            <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
+              position: 'relative',
+              bottom: 0,
+              height: 'auto',
+              marginTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              overflow: 'hidden',
+            })}
+            >
+              <Box
+                sx={{
+                  display: isCommentsOn ? 'block' : 'none',
+                  height: isPropertiesOn ? '50%' : '100%',
+                  borderRadius: '0px',
+                  borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                  paddingTop: '20px',
+                  overflowX: 'hidden',
+                  overflowY: 'auto',
+                }}
+              >
+                <NotesPanel/>
+              </Box>
+              <Box sx={{
+                display: isPropertiesOn ? 'block' : 'none',
+                height: isCommentsOn ? '50%' : '100%',
+                borderRadius: '5px',
+                overflowX: 'hidden',
+                overflowY: 'auto',
+              }}
+              >
+                <PropertiesPanel/>
+              </Box>
+            </Box>
           }
         /> :
         <Drawer
@@ -60,29 +81,55 @@ export function SideDrawer({
           anchor={'right'}
           variant='persistent'
           elevation={4}
-          className={classes.drawer}
+          sx={preprocessMediaQuery(MOBILE_WIDTH, {
+            '&::-webkit-scrollbar': {
+              display: 'none',
+            },
+            '& > .MuiPaper-root': {
+              width: SIDE_DRAWER_WIDTH,
+              // This lets the h1 in ItemProperties use 1em padding but have
+              // its mid-line align with the text in SearchBar
+              padding: '4px 1em',
+            },
+            '& .MuiPaper-root': {
+              marginTop: '0px',
+              borderRadius: '0px',
+            },
+          })}
         >
-          <div className={classes.content}>
-            {isCommentsOn ?
-             (
-               <Box
-                 sx={{
-                   height: isPropertiesOn ? '50%' : '100%',
-                   display: isCommentsOn ? 'block' : 'none',
-                   borderRadius: '0px',
-                   borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                   overflowY: 'scroll',
-                 }}
-               >
-                 <NotesPanel/>
-               </Box>
-             ) : null
-            }
-            {(isCommentsOn && isPropertiesOn) ? <div className={classes.divider}/> : null}
-            <div className={classes.containerProperties}>
-              {isPropertiesOn ? <PropertiesPanel/> : null}
-            </div>
-          </div>
+          <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            overflowX: 'hidden',
+            overflowY: 'auto',
+          })}
+          >
+            <Box
+              sx={{
+                display: isCommentsOn ? 'block' : 'none',
+                height: isPropertiesOn ? '50%' : '100%',
+                borderRadius: '0px',
+                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
+                paddingTop: '20px',
+                overflowX: 'hidden',
+                overflowY: 'auto',
+              }}
+            >
+              {isCommentsOn && <NotesPanel/>}
+            </Box>
+            <Box sx={{
+              display: isPropertiesOn ? 'block' : 'none',
+              height: isCommentsOn ? '50%' : '100%',
+              borderRadius: '5px',
+              overflowX: 'hidden',
+              overflowY: 'auto',
+            }}
+            >
+              {isPropertiesOn && <PropertiesPanel/>}
+            </Box>
+          </Box>
         </Drawer>
       }
     </>
@@ -118,11 +165,13 @@ export default function SideDrawerWrapper() {
         turnCommentsOn()
       }
     }
+
     // This address bug #314 by clearing selected issue when new model is loaded
     if (noteHash === undefined && isDrawerOpen) {
       setSelectedNoteId(null)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location, openDrawer, setSelectedNoteId])
 
 
@@ -142,63 +191,3 @@ export default function SideDrawerWrapper() {
 
 
 export const SIDE_DRAWER_WIDTH = '31em'
-
-
-const useStyles = makeStyles((theme, props) => (preprocessMediaQuery(MOBILE_WIDTH, {
-  drawer: {
-    '::-webkit-scrollbar': {
-      display: 'none',
-    },
-    '& > .MuiPaper-root': {
-      'width': SIDE_DRAWER_WIDTH,
-      // This lets the h1 in ItemProperties use 1em padding but have
-      // its mid-line align with the text in SearchBar
-      'padding': '4px 1em',
-      '@media (max-width: MOBILE_WIDTH)': {
-        width: '100%',
-        height: '400px',
-      },
-    },
-    '& .MuiPaper-root': {
-      marginTop: '0px',
-      borderRadius: '0px',
-      zIndex: 10,
-    },
-  },
-  headerBar: {
-    'display': 'flex',
-    'justifyContent': 'space-between',
-    'alignItems': 'center',
-    'margin': '1em 0',
-    '@media (max-width: MOBILE_WIDTH)': {
-      borderBottom: 'none',
-      height: '20px',
-    },
-  },
-  content: {
-    'height': '100%',
-    'marginTop': '20px',
-    'display': 'flex',
-    'flexDirection': 'column',
-    'justifyContent': 'space-between',
-    '@media (max-width: MOBILE_WIDTH)': {
-      overflow: 'auto',
-    },
-  },
-  container: {
-    borderRadius: '5px',
-    overflow: 'hidden',
-  },
-  containerProperties: {
-    borderRadius: '5px',
-    display: (p) => p.isPropertiesOn ? '' : 'none',
-    height: (p) => p.isCommentsOn ? '50%' : '98%',
-  },
-  divider: {
-    height: '1px',
-    width: '100%',
-    marginTop: '2px',
-    marginBottom: '2px',
-    display: (p) => p.divider ? 'block' : 'none',
-  },
-})))
