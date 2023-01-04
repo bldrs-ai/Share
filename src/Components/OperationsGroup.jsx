@@ -1,11 +1,10 @@
 import React, {useContext} from 'react'
+import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
-import {makeStyles} from '@mui/styles'
 import AboutControl from './AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
-// import ExtractLevelsMenu from './ExtractLevelsMenu'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import {TooltipIconButton} from './Buttons'
@@ -36,8 +35,7 @@ export default function OperationsGroup({
   const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
-  const classes = useStyles({isCommentsOn: isCommentsOn})
-  const theme = useContext(ColorModeContext)
+  const colorMode = useContext(ColorModeContext)
 
 
   const isSelected = () => {
@@ -48,6 +46,7 @@ export default function OperationsGroup({
     )
     return ifSelected
   }
+
 
   const toggle = (panel) => {
     openDrawer()
@@ -65,11 +64,20 @@ export default function OperationsGroup({
 
 
   return (
-    <div className={classes.container}>
+    <Box sx={{
+      'display': 'flex',
+      'flexDirection': 'column',
+      'height': 'calc(100vh - 40px)',
+      'margin': '20px 20px 0 0',
+      '@media (max-width: 900px)': {
+        margin: '20px 10px 0 0',
+      },
+    }}
+    >
       <ButtonGroup orientation="vertical" >
         <ShareControl/>
       </ButtonGroup>
-      <Divider />
+      <Divider/>
       <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
@@ -89,35 +97,20 @@ export default function OperationsGroup({
           title="Clear"
           onClick={unSelectItem}
           selected={isSelected()}
-          icon={<ClearIcon />}
+          icon={<ClearIcon/>}
         />
       </ButtonGroup>
       <Divider/>
       <ButtonGroup orientation="vertical">
         <TooltipIconButton
-          title={`${theme.isDay() ? 'Night' : 'Day'} theme`}
-          onClick={() => theme.toggleColorMode()}
-          icon={theme.isDay() ? <MoonIcon/> : <SunIcon/>}
+          title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
+          onClick={() => colorMode.toggleColorMode()}
+          icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
         <AboutControl/>
       </ButtonGroup>
       {/* Invisible */}
       <CameraControl/>
-    </div>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles({
-  container: {
-    // Actually want 100 - size of settings button
-    'display': 'flex',
-    'flexDirection': 'column',
-    'height': 'calc(100vh - 40px)',
-    'margin': '20px 20px 0 0',
-    '@media (max-width: 900px)': {
-      margin: '20px 10px 0 0',
-    },
-  },
-})
-

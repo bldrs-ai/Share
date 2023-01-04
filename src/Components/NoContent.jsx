@@ -13,6 +13,8 @@ import AttentionIcon from '../assets/2D_Icons/Attention.svg'
  */
 export default function NoContent() {
   const theme = useContext(ColorModeContext).getTheme()
+
+
   return (
     <Box sx={{width: '100%'}}>
       <Box sx={{

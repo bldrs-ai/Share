@@ -11,6 +11,8 @@ import {ColorModeContext} from '../Context/ColorMode'
  */
 export default function Toggle({onChange, checked}) {
   const theme = useContext(ColorModeContext).getTheme()
+
+
   return (
     <Switch
       checked={checked}

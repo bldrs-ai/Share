@@ -2,6 +2,7 @@
   "name": "bldrs",
   "version": "1.0.0-r592",
   "main": "src/index.jsx",
+  "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
   "bugs": {
     "url": "https://github.com/bldrs-ai/Share/issues"
@@ -45,6 +46,7 @@
     "react-router-dom": "^6.3.0",
     "remark-gfm": "^3.0.1",
     "three": "^0.135",
+    "typescript": "^4.8.4",
     "web-ifc-viewer": "^1.0.209",
     "web-vitals": "^2.1.0",
     "zustand": "^4.0.0"

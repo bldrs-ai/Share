@@ -1,6 +1,6 @@
 import React, {useEffect} from 'react'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
@@ -8,15 +8,14 @@ import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 
+
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
 
 
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
-  const classes = useStyles()
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
   const comments = useStore((state) => state.comments)
@@ -24,11 +23,14 @@ export default function Notes() {
   const filteredNote = (notes && selectedNoteId) ?
         notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
+
+
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Notes: 1, no repo defined')
       return
     }
+
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
@@ -59,14 +61,17 @@ export default function Notes() {
         debug().warn('failed to fetch notes', e)
       }
     }
+
     fetchNotes()
   }, [setNotes, repository])
+
 
   useEffect(() => {
     if (!repository) {
       debug().warn('IssuesControl#Notes: 2, no repo defined')
       return
     }
+
     const fetchComments = async (selectedNote) => {
       try {
         const commentsArr = []
@@ -94,18 +99,27 @@ export default function Notes() {
     if (selectedNoteId !== null) {
       fetchComments(filteredNote)
     }
-    // This address bug #314 by clearing selected issue when new model is loaded
-    if (!filteredNote) {
-      setSelectedNoteId(null)
-    }
+
     // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments])
 
   return (
-    <Paper className={classes.commentsContainer} elevation={0}>
-      <div className={classes.cardsContainer}>
+    <Paper sx={{width: '100%'}} elevation={0}>
+      <Box sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'alignItems': 'center',
+        'resizeMode': 'contain',
+        'width': '100%',
+        'paddingTop': '10px',
+        'paddingBottom': '30px',
+        '@media (max-width: 900px)': {
+          paddingTop: '0px',
+        },
+      }}
+      >
         {notes === null && <Loader type={'linear'}/> }
         {notes && notes.length === 0 && <NoContent/> }
         {notes && !selectedNoteId ?
@@ -163,26 +177,7 @@ export default function Notes() {
           }
         </>
         }
-      </div>
+      </Box>
     </Paper>
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  commentsContainer: {
-    width: '100%',
-  },
-  cardsContainer: {
-    'display': 'flex',
-    'flexDirection': 'column',
-    'alignItems': 'center',
-    'resizeMode': 'contain',
-    'width': '100%',
-    'paddingTop': '10px',
-    'paddingBottom': '30px',
-    '@media (max-width: 900px)': {
-      paddingTop: '0px',
-    },
-  },
-}))
