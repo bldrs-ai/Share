@@ -28,16 +28,18 @@ export default class WidgetApi {
     try {
       // if this document is hosted in an iframe and has the *same origin*
       // as the parent document then window.frameElement is to be checked.
-      if(window.frameElement) return true;
+      if (window.frameElement) {
+        return true
+      }
     } catch (e) {
+      // continue regardless of error
     }
 
-    // if this document is not hosted in an iframe or is hosted in an 
+    // if this document is not hosted in an iframe or is hosted in an
     // iframe that has a *different origin* than the parent document then
     // window.top should be checked.
     try {
-      const res = window.self !== window.top
-      return res
+      return window.self !== window.top
     } catch (e) {
       return true
     }
