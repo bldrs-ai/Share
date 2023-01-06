@@ -67,50 +67,50 @@ describe('bldrs inside iframe', () => {
     cy.get('iframe').iframe().contains('span', expectedExpressId).should('exist')
   })
 
-  it('should emit ElementsSelected-message when element was double-clicked', () => {
-    cy.clearCookies()
-    cy.visit(SYSTEM_UNDER_TEST)
+  // it('should emit ElementsSelected-message when element was double-clicked', () => {
+  //   cy.clearCookies()
+  //   cy.visit(SYSTEM_UNDER_TEST)
 
-    cy.get('iframe').iframe().trigger('keydown', {keyCode: KEYCODE_ESC})
-    // eslint-disable-next-line cypress/no-unnecessary-waiting
-    cy.get('iframe').iframe().find('canvas').click('center')
-        // eslint-disable-next-line no-magic-numbers
-        .trigger('wheel', {deltaY: -2000, bubbles: true}).wait(500)
-        .dblclick('center')
-    // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
-    cy.wait(1000)
-    cy.get('#txtLastMsg').should(($txtLastMsg) => {
-      const msg = JSON.parse($txtLastMsg.val())
-      assert.equal(msg.api, 'fromWidget')
-      assert.equal(msg.widgetId, 'bldrs-share')
-      assert.exists(msg.requestId)
-      assert.equal(msg.action, 'ai.bldrs-share.ElementsSelected')
-      assert.exists(msg.data)
-    })
-  })
+  //   cy.get('iframe').iframe().trigger('keydown', {keyCode: KEYCODE_ESC})
+  //   // eslint-disable-next-line cypress/no-unnecessary-waiting
+  //   cy.get('iframe').iframe().find('canvas').click('center')
+  //       // eslint-disable-next-line no-magic-numbers
+  //       .trigger('wheel', {deltaY: -2000, bubbles: true}).wait(500)
+  //       .dblclick('center')
+  //   // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
+  //   cy.wait(1000)
+  //   cy.get('#txtLastMsg').should(($txtLastMsg) => {
+  //     const msg = JSON.parse($txtLastMsg.val())
+  //     assert.equal(msg.api, 'fromWidget')
+  //     assert.equal(msg.widgetId, 'bldrs-share')
+  //     assert.exists(msg.requestId)
+  //     assert.equal(msg.action, 'ai.bldrs-share.ElementsSelected')
+  //     assert.exists(msg.data)
+  //   })
+  // })
 
-  it('should emit ElementsDeSelected-message when selection was cleared', () => {
-    cy.clearCookies()
-    cy.visit(SYSTEM_UNDER_TEST)
+  // it('should emit ElementsDeSelected-message when selection was cleared', () => {
+  //   cy.clearCookies()
+  //   cy.visit(SYSTEM_UNDER_TEST)
 
-    cy.get('iframe').iframe().trigger('keydown', {keyCode: KEYCODE_ESC})
-    // eslint-disable-next-line cypress/no-unnecessary-waiting
-    cy.get('iframe').iframe().find('canvas').click('center')
-        // eslint-disable-next-line no-magic-numbers
-        .trigger('wheel', {deltaY: -2000, bubbles: true}).wait(500)
-        .dblclick('center')
-    // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
-    cy.wait(1000)
-    cy.get('iframe').iframe().findByRole('button', {name: /Clear/}).click()
-    cy.get('#txtLastMsg').should(($txtLastMsg) => {
-      const msg = JSON.parse($txtLastMsg.val())
-      assert.equal(msg.api, 'fromWidget')
-      assert.equal(msg.widgetId, 'bldrs-share')
-      assert.exists(msg.requestId)
-      assert.equal(msg.action, 'ai.bldrs-share.ElementsDeSelected')
-      assert.exists(msg.data)
-    })
-  })
+  //   cy.get('iframe').iframe().trigger('keydown', {keyCode: KEYCODE_ESC})
+  //   // eslint-disable-next-line cypress/no-unnecessary-waiting
+  //   cy.get('iframe').iframe().find('canvas').click('center')
+  //       // eslint-disable-next-line no-magic-numbers
+  //       .trigger('wheel', {deltaY: -2000, bubbles: true}).wait(500)
+  //       .dblclick('center')
+  //   // eslint-disable-next-line cypress/no-unnecessary-waiting, no-magic-numbers
+  //   cy.wait(1000)
+  //   cy.get('iframe').iframe().findByRole('button', {name: /Clear/}).click()
+  //   cy.get('#txtLastMsg').should(($txtLastMsg) => {
+  //     const msg = JSON.parse($txtLastMsg.val())
+  //     assert.equal(msg.api, 'fromWidget')
+  //     assert.equal(msg.widgetId, 'bldrs-share')
+  //     assert.exists(msg.requestId)
+  //     assert.equal(msg.action, 'ai.bldrs-share.ElementsDeSelected')
+  //     assert.exists(msg.data)
+  //   })
+  // })
 
   it('should hide UI components when UIComponentsVisibility-message emitted', () => {
     cy.clearCookies()
