@@ -7,7 +7,6 @@ import useStore from '../../store/useStore'
  */
 class ElementDeselectionEventDispatcher extends ApiEventDispatcher {
   name = 'ai.bldrs-share.ElementsDeSelected'
-  canDispatch = true
   utils = null
   apiConnection = null
 
@@ -21,9 +20,6 @@ class ElementDeselectionEventDispatcher extends ApiEventDispatcher {
     super()
     this.apiConnection = apiConnection
     this.utils = new Utils(searchIndex)
-    useStore.subscribe((state) => {
-      this.canDispatch = !state.deselectElementsDebounce
-    })
   }
 
   /**
@@ -31,22 +27,17 @@ class ElementDeselectionEventDispatcher extends ApiEventDispatcher {
    *
    */
   initDispatch() {
-    if (this.canDispatch) {
-      let lastSelectedElementIds = []
-      useStore.subscribe((state) => {
-        if (this.utils.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
-          const newSelectedElementIds = this.utils.getSelectedElementIds(state)
-          if (!state.deselectElementsDebounce) {
-            const deSelectedElementIds = lastSelectedElementIds.filter((x) => !newSelectedElementIds.includes(x))
-            if (deSelectedElementIds && deSelectedElementIds.length > 0) {
-              this.apiConnection.send(this.name, deSelectedElementIds)
-            }
-          }
-          lastSelectedElementIds = newSelectedElementIds
-          state.setDeselectElementsDebounce(false)
+    let lastSelectedElementIds = []
+    useStore.subscribe((state) => {
+      if (this.utils.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
+        const newSelectedElementIds = this.utils.getSelectedElementIds(state)
+        const deSelectedElementIds = lastSelectedElementIds.filter((x) => !newSelectedElementIds.includes(x))
+        if (deSelectedElementIds && deSelectedElementIds.length > 0) {
+          this.apiConnection.send(this.name, deSelectedElementIds)
         }
-      })
-    }
+        lastSelectedElementIds = newSelectedElementIds
+      }
+    })
   }
 }
 

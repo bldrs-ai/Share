@@ -7,7 +7,6 @@ import useStore from '../../store/useStore'
  */
 class ElementSelectionEventDispatcher extends ApiEventDispatcher {
   name = 'ai.bldrs-share.ElementsSelected'
-  canDispatch = true
 
   /**
    * constructor
@@ -26,21 +25,16 @@ class ElementSelectionEventDispatcher extends ApiEventDispatcher {
    *
    */
   initDispatch() {
-    if (this.canDispatch) {
-      let lastSelectedElementIds = []
-      useStore.subscribe((state) => {
-        if (this.utils.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
-          const newSelectedElementIds = this.utils.getSelectedElementIds(state)
-          if (!state.selectElementsDebounce) {
-            if (newSelectedElementIds.length > 0) {
-              this.apiConnection.send(this.name, newSelectedElementIds)
-            }
-          }
-          lastSelectedElementIds = newSelectedElementIds
-          state.setSelectElementsDebounce(false)
+    let lastSelectedElementIds = []
+    useStore.subscribe((state) => {
+      if (this.utils.selectedElementIdsHasChanged(state, lastSelectedElementIds)) {
+        const newSelectedElementIds = this.utils.getSelectedElementIds(state)
+        if (newSelectedElementIds.length > 0) {
+          this.apiConnection.send(this.name, newSelectedElementIds)
         }
-      })
-    }
+        lastSelectedElementIds = newSelectedElementIds
+      }
+    })
   }
 }
 
