@@ -48,7 +48,6 @@ export default function useShareTheme() {
   return {theme, colorMode}
 }
 
-
 export const Themes = {
   Day: 'Day',
   Night: 'Night',
@@ -61,7 +60,7 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const fontFamily = 'Roboto'
+  const fontFamily = 'Helvetica'
   const colors = {
     grey: {
       lightest: grey[100],
@@ -74,7 +73,7 @@ function loadTheme(mode) {
       lightest: green[100],
       light: green[300],
       medium: green[500],
-      dark: green[700],
+      dark: green[800],
       darkest: green[900],
     },
     lime: green['A400'],
@@ -87,9 +86,9 @@ function loadTheme(mode) {
       contrastText: colors.black,
     },
     secondary: {
-      main: colors.green.light,
-      background: colors.green.medium,
-      contrastText: colors.black,
+      main: colors.green.dark,
+      background: colors.green.darkest,
+      contrastText: colors.green.lightest,
     },
     scene: {
       background: colors.grey.lightest,
@@ -102,9 +101,9 @@ function loadTheme(mode) {
       contrastText: colors.grey.lightest,
     },
     secondary: {
-      main: colors.green.dark,
-      background: colors.green.darkest,
-      contrastText: colors.green.lightest,
+      main: colors.green.lightest,
+      background: colors.green.medium,
+      contrastText: colors.black,
     },
     scene: {
       background: colors.black,
@@ -121,7 +120,7 @@ function loadTheme(mode) {
     letterSpacing: letterSpacing,
     h1: {fontSize: '1.3em', fontWeight},
     h2: {fontSize: '1.2em', fontWeight},
-    h3: {fontSize: '1.1em', fontWeight},
+    h3: {fontSize: '1.1em', fontWeight: 400},
     h4: {fontSize: fontSize, fontWeight: '600', textDecoration: 'underline'},
     h5: {fontSize, textDecoration: 'underline'},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
@@ -166,7 +165,7 @@ function loadTheme(mode) {
             height: '40px',
             textTransform: 'none',
             border: `solid 1px ${activePalette.secondary.background}`,
-            backgroundColor: activePalette.secondary.main,
+            backgroundColor: activePalette.secondary.background,
           },
         },
       ],
@@ -179,7 +178,7 @@ function loadTheme(mode) {
     MuiToggleButton: {
       styleOverrides: {
         sizeMedium: {
-          'margin': '1em',
+          'margin': '.2em 0em .2em 0em',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: activePalette.secondary.main,

@@ -19,20 +19,21 @@ export default function AboutGuide() {
   return (
     <Box
       sx={{
-        width: '250px',
-        height: '150px',
+        width: '260px',
+        height: '180px',
         fontSize: '0.8em',
         borderRadius: '5px',
-        opacity: .8,
         margin: '2em 0',
-        padding: '0.5em',
+        padding: '1em',
         color: theme.palette.primary.contrastText,
-        backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        // backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        border: `1px solid ${colorMode.isDay() ? 'Grey' : '#4C4C4C'}`,
       }}
     >
       <Box
         sx={{
           'float': 'right',
+          'margin': '0em 0em 0em 0em',
           '& svg': {
             width: '12px',
             height: '12px',
@@ -54,12 +55,12 @@ export default function AboutGuide() {
         <div>Section and Plan views → <CutPlaneIcon/></div>
       </Box>
       <img
-        src='/logo-buildings.png'
+        src='https://user-images.githubusercontent.com/3433606/211069358-034f639e-3cfd-4a05-803b-313b96a0c25b.png'
         alt='logo'
         width='100'
         style={{
-          margin: '0 auto',
-          opacity: 0.5,
+          margin: '1.7em auto',
+          width: '60%',
         }}
       />
     </Box>

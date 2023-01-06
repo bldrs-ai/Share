@@ -67,7 +67,6 @@ export default function OperationsGroup({
     <Box sx={{
       'display': 'flex',
       'flexDirection': 'column',
-      'height': 'calc(100vh - 40px)',
       'margin': '1em 1em 0 0',
       '@media (max-width: 900px)': {
         margin: '1em 0.5em 0 0',

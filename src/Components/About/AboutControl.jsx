@@ -56,7 +56,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB style={{width: '80px', height: '80px'}}/>
-          bldrs.ai
+          <Typography variant='h3'>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}

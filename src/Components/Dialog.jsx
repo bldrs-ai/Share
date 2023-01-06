@@ -78,7 +78,10 @@ export default function Dialog({
         </Typography>
         {content}
       </DialogContent>
-      <DialogActions sx={{overflowY: 'hidden'}}>
+      <DialogActions
+        sx={{overflowY: 'hidden',
+          padding: '0em 0em 2em 0em'}}
+      >
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
       </DialogActions>
     </MuiDialog>
