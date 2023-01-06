@@ -34,12 +34,10 @@ class ElementSelectionChangedEventDispatcher extends ApiEventDispatcher {
       // of the array to determine whether or not it was changed
       const propertyStateChanged = (state.selectedElements != previousState.selectedElements)
       if (!propertyStateChanged) return
-
       const currSelectedItemsGlobalIds = this.utils.getSelectedElementIds(state);
-      const selectionValuesChanged = this.utils.arraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
+      const noChanges = this.utils.arraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
+      if (noChanges) return
 
-      if (!selectionValuesChanged) return
-      
       const eventData = { "previous": lastSelectedElementGlobalIds, "current": currSelectedItemsGlobalIds }
       this.apiConnection.send(this.name, eventData)
       lastSelectedElementGlobalIds = currSelectedItemsGlobalIds
