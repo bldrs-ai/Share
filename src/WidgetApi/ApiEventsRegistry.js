@@ -2,6 +2,7 @@ import LoadModelEventHandler from './event-handlers/LoadModelEventHandler'
 import SelectElementsEventHandler from './event-handlers/SelectElementsEventHandler'
 import UIComponentsVisibilityEventHandler from './event-handlers/UIComponentsVisibilityEventHandler'
 import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementSelectionChangedEventDispatcher'
+import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
 
 /**
  * Api Events are defined here
@@ -49,6 +50,7 @@ class ApiEventsRegistry {
   registerEventDispatchers() {
     const events = [
       new ElementSelectionChangedEventDispatcher(this.apiConnection, this.searchIndex),
+      new ModelLoadedEventDispatcher(this.apiConnection),
     ]
     this.apiConnection.requestCapabilities(events.map((e) => e.name))
     for (const eventDispatcher of events) {
