@@ -65,7 +65,7 @@ function loadTheme(mode) {
     grey: {
       lightest: grey[100],
       light: grey[300],
-      medium: grey[500],
+      medium: grey[400],
       dark: grey[700],
       darkest: grey[900],
     },
@@ -76,19 +76,19 @@ function loadTheme(mode) {
       dark: green[800],
       darkest: green[900],
     },
-    lime: green['A400'],
+    lime: green[400],
     black: 'black',
   }
   const day = {
     primary: {
-      main: colors.grey.lightest,
+      main: colors.grey.medium,
       background: colors.grey.light,
       contrastText: colors.black,
     },
     secondary: {
       main: colors.green.dark,
       background: colors.green.darkest,
-      contrastText: colors.green.lightest,
+      contrastText: colors.green.darkest,
     },
     scene: {
       background: colors.grey.lightest,
@@ -103,7 +103,7 @@ function loadTheme(mode) {
     secondary: {
       main: colors.green.lightest,
       background: colors.green.medium,
-      contrastText: colors.black,
+      contrastText: colors.green.lightest,
     },
     scene: {
       background: colors.black,
@@ -121,7 +121,7 @@ function loadTheme(mode) {
     h1: {fontSize: '1.3em', fontWeight},
     h2: {fontSize: '1.2em', fontWeight},
     h3: {fontSize: '1.1em', fontWeight: 400},
-    h4: {fontSize: fontSize, fontWeight: '600', textDecoration: 'underline'},
+    h4: {fontSize: fontSize, fontWeight},
     h5: {fontSize, textDecoration: 'underline'},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
@@ -146,8 +146,8 @@ function loadTheme(mode) {
       styleOverrides: {
         root: {
           '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            color: activePalette.secondary.main,
-            backgroundColor: activePalette.secondary.background,
+            color: activePalette.primary.contrastText,
+            backgroundColor: activePalette.primary.main,
             borderRadius: '5px',
           },
           '& > div.MuiTreeItem-content': {
@@ -164,8 +164,8 @@ function loadTheme(mode) {
             width: '180px',
             height: '40px',
             textTransform: 'none',
-            border: `solid 1px ${activePalette.secondary.background}`,
-            backgroundColor: activePalette.secondary.main,
+            border: `solid 1px ${activePalette.primary.main}`,
+            backgroundColor: activePalette.primary.main,
           },
         },
       ],
@@ -181,7 +181,8 @@ function loadTheme(mode) {
           'margin': '.2em 0em .2em 0em',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: activePalette.secondary.main,
+            backgroundColor: activePalette.primary.background,
+            opacity: .8,
           },
         },
       },
@@ -197,7 +198,7 @@ function loadTheme(mode) {
         {
           props: {variant: 'note'},
           style: {
-            backgroundColor: activePalette.primary.main,
+            backgroundColor: activePalette.scene.background,
           },
         },
       ],

@@ -152,7 +152,7 @@ export default function NoteCard({
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>by {username} at {dateParts[0]} {dateParts[1]}</div>}
           sx={{
-            backgroundColor: isComment ? theme.palette.secondary.main : theme.palette.secondary.main,
+            backgroundColor: isComment ? theme.palette.scene.background : theme.palette.primary.main,
           }}
         />
       </CardActionArea>
@@ -194,8 +194,6 @@ export default function NoteCard({
 
 const ShowMore = ({onClick, expandText}) => {
   const theme = useTheme()
-
-
   return (
     <Box
       sx={{
