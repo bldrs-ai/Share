@@ -27,7 +27,7 @@ export default function Toggle({onChange, checked}) {
           border: `solid 1px ${theme.palette.primary.main}`,
         },
         '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': {
-          backgroundColor: theme.palette.secondary.background,
+          backgroundColor: theme.palette.secondary.main,
         },
       }}
     />

@@ -117,7 +117,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
-      5: '/share/v/gh/sujal23ks/BCF/background/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+      5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
     }
     navigate({pathname: modelPath[e.target.value]})
     setIsDialogDisplayed(false)
@@ -128,31 +128,31 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       sx={{
         'width': '260px',
         '& .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '& .MuiInputLabel-root': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.background,
+          borderColor: theme.palette.secondary.main,
         },
         '&:hover .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '&:hover .MuiInputLabel-root': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.background,
+          borderColor: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '& .MuiInputLabel-root.Mui-focused': {
-          color: theme.palette.secondary.background,
+          color: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.background,
+          borderColor: theme.palette.secondary.main,
         },
       }}
       value={selected}

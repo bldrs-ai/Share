@@ -86,8 +86,8 @@ function loadTheme(mode) {
       contrastText: colors.black,
     },
     secondary: {
-      main: colors.green.lightest,
-      background: colors.green.darkest,
+      main: colors.green.darkest,
+      background: colors.green.lightest,
       contrastText: colors.green.dark,
     },
     scene: {
