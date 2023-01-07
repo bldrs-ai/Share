@@ -24,7 +24,7 @@ export default function SnackBarMessage({message, type, open}) {
           'backgroundColor': colorMode.isDay() ? '#A9A9A9' : '#4C4C4C',
           'opacity': .8,
           'position': 'relative',
-          'bottom': '60px',
+          'bottom': '90px',
           'left': '6px',
           '@media (max-width: 900px)': {
             left: '18px',

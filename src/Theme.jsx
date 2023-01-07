@@ -70,11 +70,11 @@ function loadTheme(mode) {
       darkest: grey[900],
     },
     green: {
-      lightest: green[100],
+      lightest: '#CEE6CA',
       light: green[300],
       medium: green[500],
       dark: green[800],
-      darkest: green[900],
+      darkest: '#459A47',
     },
     lime: green[400],
     black: 'black',
@@ -86,9 +86,9 @@ function loadTheme(mode) {
       contrastText: colors.black,
     },
     secondary: {
-      main: colors.green.dark,
+      main: colors.green.lightest,
       background: colors.green.darkest,
-      contrastText: colors.green.darkest,
+      contrastText: colors.green.dark,
     },
     scene: {
       background: colors.grey.lightest,

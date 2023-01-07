@@ -6,7 +6,7 @@ import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
 import Alert from '../Components/Alert'
 import debug from '../utils/debug'
-import Logo from '../Components/Logo'
+import LogoButton from '../Components/LogoButton'
 import NavPanel from '../Components/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
@@ -522,11 +522,11 @@ export default function CadView({
           </Box>
         )}
 
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+        <LogoButton onClick={() => navToDefault(navigate, appPrefix)}/>
         <Box sx={isDrawerOpen ? {
           'position': 'fixed',
           'top': 0,
-          'right': '31em',
+          'right': '34em',
           'border': 'none',
           'zIndex': 0,
           '@media (max-width: 900px)': {

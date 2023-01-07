@@ -190,4 +190,4 @@ export default function SideDrawerWrapper() {
 }
 
 
-export const SIDE_DRAWER_WIDTH = '31em'
+export const SIDE_DRAWER_WIDTH = '34em'
