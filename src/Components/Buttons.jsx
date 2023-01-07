@@ -88,7 +88,7 @@ export function ControlButton({
 
 
   return (
-    <div>
+    <Box>
       <TooltipIconButton
         title={title}
         icon={icon}
@@ -96,6 +96,6 @@ export function ControlButton({
         onClick={() => setIsDialogDisplayed(true)}
       />
       {isDialogDisplayed && dialog}
-    </div>
+    </Box>
   )
 }

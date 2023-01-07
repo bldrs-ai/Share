@@ -28,7 +28,14 @@ export default function AboutControl() {
       title='About BLDRS'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<AboutIcon/>}
+      icon={
+        <AboutIcon
+          style={{
+            width: '22px',
+            height: '22px',
+          }}
+        />
+      }
       dialog={
         <AboutDialog
           isDialogDisplayed={isDialogDisplayed}
