@@ -150,7 +150,7 @@ export default function NoteCard({
         <CardHeader
           title={isComment ? null : title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>by {username} at {dateParts[0]} {dateParts[1]}</div>}
+          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
           sx={{
             backgroundColor: isComment ? theme.palette.scene.background : theme.palette.primary.main,
           }}
@@ -269,14 +269,7 @@ const CardActions = ({
               setShareIssue(!shareIssue)
             }}
             icon={
-              <Box sx={{
-                width: '20px',
-                height: '20px',
-                marginBottom: '2px',
-              }}
-              >
-                <ShareIcon/>
-              </Box>
+              <ShareIcon/>
             }
           />
         }
@@ -295,18 +288,16 @@ const CardActions = ({
       >
         {numberOfComments > 0 &&
           <Box sx={{
-            width: '16px',
-            height: '16px',
+            width: '20px',
+            height: '20px',
             borderRadius: '50%',
-            backgroundColor: 'white',
-            border: `1px solid ${theme.palette.secondary.main}`,
+            backgroundColor: theme.palette.primary.main,
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
-            fontWeight: 'bold',
-            fontSize: '10px',
-            color: 'black',
+            fontSize: '12px',
+            color: theme.palette.primary.contrastText,
             cursor: 'pointer',
           }}
           >
