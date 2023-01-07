@@ -83,7 +83,7 @@ export function SideDrawer({
           elevation={4}
           PaperProps={{variant: 'control'}}
           sx={preprocessMediaQuery(MOBILE_WIDTH, {
-            '&::-webkit-scrollbar': {
+            '& ::-webkit-scrollbar': {
               display: 'none',
             },
             '& > .MuiPaper-root': {
