@@ -1,4 +1,4 @@
-const path = require('path');
+const path = require('path')
 
 /**
  * Black-box integration tests for Bldrs running in an iframe.
@@ -11,49 +11,49 @@ const path = require('path');
  * that in all these tests Bldrs runs in an iframe which runs in an iframe.
  */
 describe('bldrs inside iframe', () => {
-  const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html';
-  const KEYCODE_ESC = 27;
+  const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html'
+  const KEYCODE_ESC = 27
 
-  const REMOTE_IFC_URL = '**/Momentum.ifc';
-  const REMOTE_IFC_FIXTURE = 'Momentum.ifc';
+  const REMOTE_IFC_URL = '**/Momentum.ifc'
+  const REMOTE_IFC_FIXTURE = 'Momentum.ifc'
 
   /**
    * Copy web page to target directory to make it accessible to cypress.
    */
   before(() => {
-    const fixtures = ['bldrs-inside-iframe.html', 'bldrs-inside-iframe.js'];
-    const targetDirectory = 'docs/cypress/static/';
+    const fixtures = ['bldrs-inside-iframe.html', 'bldrs-inside-iframe.js']
+    const targetDirectory = 'docs/cypress/static/'
     for (const fixture of fixtures) {
       cy.fixture(fixture, null).then(content => {
-        const outPath = path.join(targetDirectory, fixture);
-        cy.writeFile(outPath, content);
+        const outPath = path.join(targetDirectory, fixture)
+        cy.writeFile(outPath, content)
       })
     }
   })
 
   beforeEach(() => {
     cy.clearCookies()
-    cy.visit(SYSTEM_UNDER_TEST);
-    cy.get('iframe').iframe().as('iframe');
-    cy.get('@iframe').trigger('keydown', { keyCode: KEYCODE_ESC });
-  });
+    cy.visit(SYSTEM_UNDER_TEST)
+    cy.get('iframe').iframe().as('iframe')
+    cy.get('@iframe').trigger('keydown', { keyCode: KEYCODE_ESC })
+  })
 
   it('should emit ready-messsage when page load completes', () => {
-    // cy.get('@iframe').find('[data-ifc-model="1"]');
+    // cy.get('@iframe').find('[data-ifc-model="1"]')
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
 
   it('should load model when LoadModel-message emitted', () => {
-    const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc';
+    const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
     const modelRootNodeName = 'Momentum / KNIK v3'
 
-    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist');
-    // cy.get('#messagesCount').contains('1'); //First loaded message
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
+    // cy.get('#messagesCount').contains('1') //First loaded message
 
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.LoadModel')
     const msg = {
       githubIfcPath: model
-    };
+    }
 
     cy.intercept('GET', REMOTE_IFC_URL, { fixture: REMOTE_IFC_FIXTURE }).as('loadModel')
 
@@ -61,20 +61,20 @@ describe('bldrs inside iframe', () => {
       .type(JSON.stringify(msg), { parseSpecialCharSequences: false })
     cy.get('#btnSendMessage').click()
     cy.wait('@loadModel').its('response.statusCode').should('eq', 200)
-    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist');
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     cy.get('@iframe').contains('span', modelRootNodeName).should('exist')
-    // cy.get('#messagesCount').contains('2'); //Second loaded message received
+    // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
   it('should select element when SelectElements-message emitted', () => {
-    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i);
-    const globalId = '02uD5Qe8H3mek2PYnMWHk1';
-    const expectedExpressId = '621';
-    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist');
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    const globalId = '02uD5Qe8H3mek2PYnMWHk1'
+    const expectedExpressId = '621'
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SelectElements')
     const msg = {
       globalIds: [globalId],
-    };
+    }
     cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), { parseSpecialCharSequences: false })
     cy.get('#btnSendMessage').click()
     cy.get('@iframe').findByRole('button', { name: /Properties/ }).click()
@@ -82,15 +82,15 @@ describe('bldrs inside iframe', () => {
   })
 
   it('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
-    const targetElementId = '3vMqyUfHj3tgritpIZS4iG';
+    const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
     
-    cy.get('#messagesCount').contains(/1/);
-    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i);
-    cy.get('@iframe').findByText(/bldrs/i).click();
-    cy.get('@iframe').findByText(/build/i).click();
-    cy.get('@iframe').findByText(/every/i).click();
-    cy.get('@iframe').findByText(/thing/i).click();
-    cy.get('@iframe').findAllByText(/together/i).first().click();
+    cy.get('#messagesCount').contains(/1/)
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    cy.get('@iframe').findByText(/bldrs/i).click()
+    cy.get('@iframe').findByText(/build/i).click()
+    cy.get('@iframe').findByText(/every/i).click()
+    cy.get('@iframe').findByText(/thing/i).click()
+    cy.get('@iframe').findAllByText(/together/i).first().click()
     
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       let msg = JSON.parse($txtLastMsg.val())
@@ -102,10 +102,10 @@ describe('bldrs inside iframe', () => {
       assert.equal(msg.data["current"][0],targetElementId)
     })
 
-    cy.get('@iframe').findAllByText(/together/i).last().click();
-    cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i);
+    cy.get('@iframe').findAllByText(/together/i).last().click()
+    cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
 
-    cy.get('@iframe').findByRole('button', { name: /Clear/ }).click();
+    cy.get('@iframe').findByRole('button', { name: /Clear/ }).click()
 
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       var msg = JSON.parse($txtLastMsg.val())

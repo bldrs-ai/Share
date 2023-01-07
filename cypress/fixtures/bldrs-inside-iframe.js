@@ -143,8 +143,6 @@ function ListenToApiAction(actionName, callback)
     api.transport.reply(event.detail, {})
     txtMessagesCount.innerText = messagesReceivedCount
     txtLastMessageReceivedAction.innerText = event.detail.action
-    
-    console.log("event log",messagesReceivedCount,actionName);
   })
 }
 
