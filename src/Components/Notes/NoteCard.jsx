@@ -158,7 +158,7 @@ export default function NoteCard({
       </CardActionArea>
       <CardContent
         sx={{
-          'borderBottom': '1px solid lightGrey',
+          'borderBottom': `1px solid ${theme.palette.primary.main}`,
           'padding': '0px 20px 0px 20px',
           'margin': '0px 0px 0px 0px',
           '& img': {
