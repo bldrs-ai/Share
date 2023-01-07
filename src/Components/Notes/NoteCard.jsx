@@ -152,12 +152,15 @@ export default function NoteCard({
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>by {username} at {dateParts[0]} {dateParts[1]}</div>}
           sx={{
-            backgroundColor: isComment ? theme.palette.primary.main : theme.palette.secondary.main,
+            backgroundColor: isComment ? theme.palette.secondary.main : theme.palette.secondary.main,
           }}
         />
       </CardActionArea>
       <CardContent
         sx={{
+          'borderBottom': '1px solid lightGrey',
+          'padding': '0px 20px 0px 20px',
+          'margin': '0px 0px 0px 0px',
           '& img': {
             width: '100%',
           },
@@ -222,13 +225,15 @@ const CardActions = ({
   selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
+  const theme = useTheme()
   return (
     <Box sx={{
       display: 'flex',
       flexDirection: 'row',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: '0px 5px 10px 5px',
+      padding: '0px 5px 0px 14px',
+      height: '50px',
     }}
     >
       <Box sx={{
@@ -296,16 +301,18 @@ const CardActions = ({
             height: '16px',
             borderRadius: '50%',
             backgroundColor: 'white',
-            border: '1px solid lightGrey',
+            border: `1px solid ${theme.palette.secondary.main}`,
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
             fontWeight: 'bold',
+            fontSize: '10px',
             color: 'black',
             cursor: 'pointer',
           }}
-          >{numberOfComments}
+          >
+            {numberOfComments}
           </Box>
         }
       </Box>

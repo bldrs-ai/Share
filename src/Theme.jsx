@@ -165,7 +165,7 @@ function loadTheme(mode) {
             height: '40px',
             textTransform: 'none',
             border: `solid 1px ${activePalette.secondary.background}`,
-            backgroundColor: activePalette.secondary.background,
+            backgroundColor: activePalette.secondary.main,
           },
         },
       ],
