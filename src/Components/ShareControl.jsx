@@ -34,8 +34,8 @@ export default function ShareControl() {
       icon={
         <ShareIcon
           style={{
-            width: '21px',
-            height: '21px',
+            width: '20px',
+            height: '20px',
           }}
         />
       }

@@ -31,8 +31,8 @@ export default function AboutControl() {
       icon={
         <AboutIcon
           style={{
-            width: '22px',
-            height: '22px',
+            width: '20px',
+            height: '20px',
           }}
         />
       }
