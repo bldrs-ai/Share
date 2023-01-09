@@ -1,8 +1,8 @@
 import LoadModelEventHandler from './event-handlers/LoadModelEventHandler'
 import SelectElementsEventHandler from './event-handlers/SelectElementsEventHandler'
 import UIComponentsVisibilityEventHandler from './event-handlers/UIComponentsVisibilityEventHandler'
-import ElementSelectionEventDispatcher from './event-dispatchers/ElementSelectionEventDispatcher'
-import ElementDeselectionEventDispatcher from './event-dispatchers/ElementDeselectionEventDispatcher'
+import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementSelectionChangedEventDispatcher'
+import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
 
 /**
  * Api Events are defined here
@@ -49,8 +49,8 @@ class ApiEventsRegistry {
    */
   registerEventDispatchers() {
     const events = [
-      new ElementSelectionEventDispatcher(this.apiConnection, this.searchIndex),
-      new ElementDeselectionEventDispatcher(this.apiConnection, this.searchIndex),
+      new ElementSelectionChangedEventDispatcher(this.apiConnection, this.searchIndex),
+      new ModelLoadedEventDispatcher(this.apiConnection),
     ]
     this.apiConnection.requestCapabilities(events.map((e) => e.name))
     for (const eventDispatcher of events) {

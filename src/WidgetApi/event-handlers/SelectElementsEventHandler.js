@@ -27,15 +27,16 @@ class SelectElementsEventHandler extends ApiEventHandler {
    * @return {object} the response of the API call
    */
   handler(data) {
+    if (!('globalIds' in data)) {
+      return this.apiConnection.missingArgumentResponse('globalIds')
+    }
+
     if (data.globalIds === null) {
       return this.apiConnection.invalidOperationResponse('globalIds can\'t be null')
     }
 
     const expressIds = []
 
-    if (!('globalIds' in data)) {
-      return this.apiConnection.missingArgumentResponse('globalIds')
-    }
     if (data.globalIds.length) {
       for (const globalId of data.globalIds) {
         const expressId = this.searchIndex.getExpressIdByGlobalId(globalId)
@@ -44,10 +45,9 @@ class SelectElementsEventHandler extends ApiEventHandler {
         }
       }
     }
-    useStore.setState({selectElementsDebounce: true})
-    useStore.setState({deselectElementsDebounce: true})
-    useStore.setState({selectedElements: expressIds})
 
+    useStore.setState({selectedElements: expressIds})
+    
     return this.apiConnection.successfulResponse({})
   }
 }
