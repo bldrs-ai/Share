@@ -10,109 +10,142 @@ class BldrsWidget {
 }
 
 /**
- * The Bldrs Widget Driver.
- */
+* The Bldrs Widget Driver.
+*/
 class BldrsWidgetDriver {
-  // eslint-disable-next-line require-jsdoc
   askOpenID(observer) {
     // not implemented yet
   }
 
-  // eslint-disable-next-line require-jsdoc
   getTurnServers() {
     return undefined
   }
 
-  // eslint-disable-next-line require-jsdoc
-  navigate(uri) {
+  navigate(uri){
     return Promise.resolve(undefined)
   }
 
   // NOSONAR
-  // eslint-disable-next-line require-jsdoc
   readEventRelations(
-      eventId,
-      roomId,
-      relationType,
-      eventType,
-      from,
-      to,
-      limit,
-      direction,
+    eventId,
+    roomId,
+    relationType,
+    eventType,
+    from,
+    to,
+    limit,
+    direction
   ) {
     return Promise.resolve(undefined)
   }
 
-  // eslint-disable-next-line require-jsdoc
   readRoomEvents(eventType, msgtype, limit, roomIds) {
     return Promise.resolve([])
   }
 
-  // eslint-disable-next-line require-jsdoc
   readStateEvents(eventType, stateKey, limit, roomIds) {
     return Promise.resolve([])
   }
 
-  // eslint-disable-next-line require-jsdoc
   sendEvent(eventType, content, stateKey, roomId) {
     return Promise.resolve(undefined)
   }
 
-  // eslint-disable-next-line require-jsdoc
   sendToDevice(eventType, encrypted, contentMap) {
     return Promise.resolve(undefined)
   }
 
-  // eslint-disable-next-line require-jsdoc
   validateCapabilities(requested) {
     return Promise.resolve(requested)
   }
 }
 
 /**
- * Message types.
- */
+* Message types.
+*/
+const EVENT_VIEWER_LOAD_MODEL = 'ai.bldrs-share.LoadModel'
+const EVENT_VIEWER_SELECT_ELEMENTS = 'ai.bldrs-share.SelectElements'
 const EVENT_CLIENT_SELECT_ELEMENTS = 'ai.bldrs-share.ElementsSelected'
 const EVENT_CLIENT_DESELECT_ELEMENTS = 'ai.bldrs-share.ElementsDeSelected'
+const EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS = 'ai.bldrs-share.SelectionChanged'
+const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
 
-document.addEventListener('DOMContentLoaded', function(event) {
-  const container = document.getElementById('bldrs-widget-iframe')
-  const bldrsWidget = new BldrsWidget()
-  bldrsWidget.url = `${location.protocol}//${location.host}`
-  // eslint-disable-next-line no-undef
-  const widget = new mxwidgets.Widget(bldrsWidget)
-  const driver = new BldrsWidgetDriver()
-  // eslint-disable-next-line no-undef
-  const api = new mxwidgets.ClientWidgetApi(widget, container, driver)
+document.addEventListener("DOMContentLoaded", function(event) { 
+const container = document.getElementById('bldrs-widget-iframe')
+const bldrsWidget = new BldrsWidget()
+bldrsWidget.url = location.protocol + '//' + location.host
+const widget = new mxwidgets.Widget(bldrsWidget)
+const driver = new BldrsWidgetDriver()
+const api = new mxwidgets.ClientWidgetApi(widget, container, driver)
 
-  const cbxIsReady = document.getElementById('cbxIsReady')
-  const txtLastMsg = document.getElementById('txtLastMsg')
-  const txtSendMessageType = document.getElementById('txtSendMessageType')
-  const txtSendMessagePayload = document.getElementById('txtSendMessagePayload')
-  const btnSendMessage = document.getElementById('btnSendMessage')
+const cbxIsReady = document.getElementById('cbxIsReady')
+const txtLastMsg = document.getElementById('txtLastMsg')
+const txtSendMessageType = document.getElementById('txtSendMessageType')
+const txtSendMessagePayload = document.getElementById('txtSendMessagePayload')
+const btnSendMessage = document.getElementById('btnSendMessage')
 
-  container.src = bldrsWidget.url
+const txtMessagesCount = document.getElementById('messagesCount')
+const txtLastMessageReceivedAction = document.getElementById('lastMessageReceivedAction')
 
-  api.on('ready', () => {
-    cbxIsReady.checked = true
-    console.log('message: ready')
-  })
 
-  api.on(`action:${EVENT_CLIENT_SELECT_ELEMENTS}`, (e) => {
-    e.preventDefault()
-    txtLastMsg.value = JSON.stringify(e.detail)
-    api.transport.reply(e.detail, {})
-  })
+container.src = bldrsWidget.url
 
-  api.on(`action:${EVENT_CLIENT_DESELECT_ELEMENTS}`, (e) => {
-    e.preventDefault()
-    txtLastMsg.value = JSON.stringify(e.detail)
-    api.transport.reply(e.detail, {})
-  })
-
-  btnSendMessage.addEventListener('click', () => {
-    const messageType = txtSendMessageType.value
-    const messagePayload = JSON.parse(txtSendMessagePayload.value)
-    api.transport.send(messageType, messagePayload)
-  })
+api.on('ready', () => {
+  cbxIsReady.checked = true
+  console.log("message: ready")
 })
+
+// api.on('action:' + EVENT_CLIENT_SELECT_ELEMENTS, (event) => {
+//   event.preventDefault()
+//   txtLastMsg.value = JSON.stringify(event.detail)
+//   api.transport.reply(event.detail, {})
+// })
+
+// api.on('action:' + EVENT_CLIENT_DESELECT_ELEMENTS, (event) => {
+//   event.preventDefault()
+//   txtLastMsg.value = JSON.stringify(event.detail)
+//   api.transport.reply(event.detail, {})
+// })
+
+// api.on('action:' + EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS, (event) => {
+//   event.preventDefault()
+//   txtLastMsg.value = JSON.stringify(event.detail)
+//   api.transport.reply(event.detail, {})
+// })
+
+ListenToApiAction(EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS, 
+  event=>
+  {
+    txtLastMsg.value = JSON.stringify(event.detail??"")
+  }
+)
+
+ListenToApiAction(EVENT_CLIENT_MODEL_LOADED, 
+  event=>
+  {
+    txtLastMsg.value = JSON.stringify(event.detail??"")
+  }
+)
+
+btnSendMessage.addEventListener('click', () => {
+  const messageType = txtSendMessageType.value
+  const messagePayload = JSON.parse(txtSendMessagePayload.value)
+  api.transport.send(messageType, messagePayload)
+})
+
+let messagesReceivedCount = 0
+function ListenToApiAction(actionName, callback)
+{
+  api.on('action:' + actionName, (event) => {
+    event.preventDefault()
+    messagesReceivedCount++
+    if(callback) callback(event)
+    api.transport.reply(event.detail, {})
+    txtMessagesCount.innerText = messagesReceivedCount
+    txtLastMessageReceivedAction.innerText = event.detail.action
+  })
+}
+
+})
+
+
