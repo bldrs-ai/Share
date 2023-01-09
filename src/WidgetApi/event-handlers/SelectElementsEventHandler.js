@@ -47,7 +47,7 @@ class SelectElementsEventHandler extends ApiEventHandler {
     }
 
     useStore.setState({selectedElements: expressIds})
-    
+
     return this.apiConnection.successfulResponse({})
   }
 }

@@ -29,19 +29,21 @@ class ElementSelectionChangedEventDispatcher extends ApiEventDispatcher {
   initDispatch() {
     let lastSelectedElementGlobalIds = []
     useStore.subscribe((state, previousState) => {
-      //NOTE: Currently this subscribe is being triggered on random unrelated events, 
+      // NOTE: Currently this subscribe is being triggered on random unrelated events,
       // so this is a workaround done to compare the "reference" values
       // of the array to determine whether or not it was changed
-      const propertyStateChanged = (state.selectedElements != previousState.selectedElements)
-      if (!propertyStateChanged) return
-      const currSelectedItemsGlobalIds = this.utils.getSelectedElementIds(state);
+      const propertyStateChanged = (state.selectedElements !== previousState.selectedElements)
+      if (!propertyStateChanged) {
+        return
+      }
+      const currSelectedItemsGlobalIds = this.utils.getSelectedElementIds(state)
       const noChanges = this.utils.arraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
-      if (noChanges) return
-
-      const eventData = { "previous": lastSelectedElementGlobalIds, "current": currSelectedItemsGlobalIds }
+      if (noChanges) {
+        return
+      }
+      const eventData = {previous: lastSelectedElementGlobalIds, current: currSelectedItemsGlobalIds}
       this.apiConnection.send(this.name, eventData)
       lastSelectedElementGlobalIds = currSelectedItemsGlobalIds
-    
     })
   }
 }
