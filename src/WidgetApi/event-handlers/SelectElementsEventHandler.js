@@ -45,10 +45,9 @@ class SelectElementsEventHandler extends ApiEventHandler {
         }
       }
     }
-    useStore.setState({selectElementsDebounce: true})
-    useStore.setState({deselectElementsDebounce: true})
-    useStore.setState({selectedElements: expressIds})
 
+    useStore.setState({selectedElements: expressIds})
+    
     return this.apiConnection.successfulResponse({})
   }
 }
