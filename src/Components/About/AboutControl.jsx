@@ -7,7 +7,7 @@ import {ControlButton} from '../Buttons'
 import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/2D_Icons/Information.svg'
-import LogoB from '../../assets/LogoB_3.svg'
+import LogoB from '../../assets/LogoB_5.svg'
 
 
 /**
@@ -62,8 +62,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
-          <LogoB style={{width: '80px', height: '80px'}}/>
-          <Typography variant='h3'>bldrs.ai</Typography>
+          <LogoB style={{width: '60px', height: '60px'}}/>
+          <Typography variant='h6'sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}

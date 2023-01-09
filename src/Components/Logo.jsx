@@ -1,7 +1,7 @@
 import React from 'react'
 import {useTheme} from '@mui/styles'
 import Box from '@mui/material/Box'
-import LogoIcon from '../assets/LogoB.svg'
+import LogoIcon from '../assets/LogoB_5.svg'
 
 
 /**
@@ -15,6 +15,8 @@ export default function Logo() {
         '& svg': {
           'width': '50px',
           'height': '50px',
+          'marginBottom': '-4px',
+          'marginTop': '4px',
           '@media (max-width: 900px)': {
             width: '40px',
           },
