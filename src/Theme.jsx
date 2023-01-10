@@ -77,7 +77,7 @@ function loadTheme(mode) {
       darkest: '#459A47',
     },
     lime: green[400],
-    black: 'black',
+    black: '#101010',
   }
   const day = {
     primary: {
@@ -123,7 +123,7 @@ function loadTheme(mode) {
     h3: {fontSize: '1.1em', fontWeight: 400},
     h4: {fontSize: fontSize, fontWeight},
     h5: {fontSize, textDecoration: 'underline'},
-    h6: {fontSize: '.9em', fontWeight: 500},
+    h6: {fontSize: '.8m', fontWeight: 500},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},

@@ -23,18 +23,18 @@ export default function AboutGuide() {
         width: '260px',
         height: '160px',
         fontSize: '0.8em',
-        borderRadius: '5px',
+        borderRadius: '10px',
         margin: '2em 0',
         padding: '.5em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
-        // backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
-        border: `1px solid ${colorMode.isDay() ? 'Grey' : '#4C4C4C'}`,
+        backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#353535',
+        // border: `1px solid ${colorMode.isDay() ? 'Grey' : '#4C4C4C'}`,
       }}
     >
       <Box
         sx={{
           'float': 'right',
-          'margin': '0em 0em 0em 0em',
+          'margin': '.4em 0em 0em 0em',
           '& svg': {
             width: '12px',
             height: '12px',
@@ -68,16 +68,6 @@ export default function AboutGuide() {
       >
         <LogoBuildings/>
       </Box>
-
-      {/* <img
-        src='https://user-images.githubusercontent.com/3433606/211069358-034f639e-3cfd-4a05-803b-313b96a0c25b.png'
-        alt='logo'
-        width='100'
-        style={{
-          margin: '1.7em auto',
-          width: '60%',
-        }}
-      /> */}
     </Box>
   )
 }

@@ -84,7 +84,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 function AboutContent() {
   return (
     <Box>
-      <Typography variant='h1' gutterBottom={true}>Build Every Thing Together</Typography>
+      <Typography variant='h2' gutterBottom={true}>Build Every Thing Together</Typography>
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>
