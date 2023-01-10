@@ -11,11 +11,19 @@ const LoginButton = ({
 }) => {
   const {loginWithRedirect} = useAuth0()
 
+  const onClick = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+
   return (
     <TooltipIconButton
       title={'Log in with Github'}
       icon={<GitHubIcon />}
-      onClick={loginWithRedirect}
+      onClick={onClick}
     />
   )
 }
