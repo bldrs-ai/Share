@@ -1,6 +1,6 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
-import {IfcViewerAPI} from 'web-ifc-viewer'
+import {IfcViewerAPIExtended} from '../Infrastructure/ifcviewerExtensions/IfcViewerAPIExtended'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
@@ -21,7 +21,6 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
-
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -307,7 +306,7 @@ export default function CadView({
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
    *
-   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} m The IfcViewerAPIExtended instance.
    * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
@@ -377,9 +376,13 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
+    // -- Update selection in viewer State
+    // -- manage selection in scene
+    // -- Perform selection logic
+    // -- abstract selection logic
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
-      await viewer.pickIfcItemsByID(0, resultIDs, true)
+      await viewer.addSelection(0, resultIDs, true)
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -434,13 +437,21 @@ export default function CadView({
   function setDoubleClickListener() {
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName === 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const pathIds = await onElementSelect(item.id)
-          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-          const path = pathIds.join('/')
-          navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        const expressId = await viewer.castRayToIfcScene()
+        if (expressId) {
+          if (event.shiftKey) {
+            await viewer.toggleElementSelection(0, expressId.id, true)
+          } else {
+            await viewer.setSelection(0, [expressId.id], true)
+          }
         }
+        // const item = await viewer.IFC.pickIfcItem(true, false)
+        // if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
+        //   const pathIds = await onElementSelect(item.id)
+        //   const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+        //   const path = pathIds.join('/')
+        //   navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        // }
       }
     }
   }
@@ -567,7 +578,7 @@ export default function CadView({
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {object} IfcViewerAPI viewer, width a .container property
+ * @return {object} IfcViewerAPIExtended viewer, width a .container property
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
@@ -576,7 +587,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPI({
+  const v = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
@@ -609,5 +620,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // window.addEventListener('resize', () => {v.context.resize()})
 
   v.container = container
+  console.log('v :>> ', v)
   return v
 }
