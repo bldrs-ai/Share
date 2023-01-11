@@ -136,7 +136,6 @@ export default function CadView({
          theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
-    setSelectedElement(null)
   }
 
 
@@ -292,6 +291,7 @@ export default function CadView({
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
+    setKeydownListeners()
     initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
     rootElt.Name = rootProps.Name
@@ -338,37 +338,30 @@ export default function CadView({
         search_term: query,
       })
     } else {
-      clearSearch()
+      resetSelection()
     }
   }
 
 
   /** Clear active search state and unpick active scene elts. */
-  function clearSearch() {
-    setSelectedElements([])
-    if (viewer) {
-      viewer.IFC.unpickIfcItems()
-    }
+  function resetSelection() {
+    selectItemsInScene([])
   }
 
   /** Reset global state */
   function resetState() {
-    setSelectedElement(null)
-    setSelectedElements(null)
+    resetSelection()
     setCutPlaneDirection(null)
     setLevelInstance(null)
   }
 
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.IFC.unpickIfcItems()
     viewer.clipper.deleteAllPlanes()
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     navigate(`${pathPrefix}${repoFilePath}`)
   }
-
 
   /**
    * Pick the given items in the scene.
@@ -376,13 +369,25 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs) {
-    // -- Update selection in viewer State
-    // -- manage selection in scene
+    // -- Update selection in viewer State ##
+    // -- manage selection in scene ##
     // -- Perform selection logic
     // -- abstract selection logic
-    setSelectedElements(resultIDs.map((id) => `${id}`))
+    // -- compare with previously selected
+    // -- Change state to store modelId as well
+    // -- maybe change selectedElement object to store all selected? instead of last 
+    if (!viewer) {
+      return
+    }
     try {
-      await viewer.addSelection(0, resultIDs, true)
+      await viewer.setSelection(0, resultIDs)
+      setSelectedElements(resultIDs.map((id) => `${id}`))
+      if (resultIDs.length > 0) {
+        const props = await viewer.getProperties(0, resultIDs.slice(-1))
+        setSelectedElement(props)
+      } else {
+        setSelectedElement(null)
+      }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -409,9 +414,6 @@ export default function CadView({
     await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
-    setSelectedElements(`${expressId}`)
-    const props = await viewer.getProperties(0, expressId)
-    setSelectedElement(props)
     return pathIds
   }
 
@@ -431,27 +433,41 @@ export default function CadView({
       }
     }
   }
-
-
   /** Select items in model when they are double-clicked. */
   function setDoubleClickListener() {
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName === 'CANVAS') {
-        const expressId = await viewer.castRayToIfcScene()
-        if (expressId) {
+        const item = await viewer.castRayToIfcScene()
+        if (item) {
           if (event.shiftKey) {
-            await viewer.toggleElementSelection(0, expressId.id, true)
+            await viewer.toggleElementSelection(0, item.id)
           } else {
-            await viewer.setSelection(0, [expressId.id], true)
+            await viewer.setSelection(0, [item.id])
           }
         }
-        // const item = await viewer.IFC.pickIfcItem(true, false)
         // if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
         //   const pathIds = await onElementSelect(item.id)
         //   const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         //   const path = pathIds.join('/')
         //   navigate(`${pathPrefix}${repoFilePath}/${path}`)
         // }
+      }
+    }
+  }
+  /** Set Keyboard button Shortcuts */
+  function setKeydownListeners() {
+    window.onkeydown = (event) => {
+      // add a plane
+      if (event.code === 'KeyQ') {
+        viewer.clipper.createPlane()
+      }
+      // delete all planes
+      if (event.code === 'KeyW') {
+        viewer.clipper.deletePlane()
+      }
+      if (event.code === 'KeyA' ||
+      event.code === 'Escape') {
+        selectItemsInScene([])
       }
     }
   }
@@ -601,20 +617,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
     v.prePickIfcItem()
-  }
-
-  window.onkeydown = (event) => {
-    // add a plane
-    if (event.code === 'KeyQ') {
-      v.clipper.createPlane()
-    }
-    // delete all planes
-    if (event.code === 'KeyW') {
-      v.clipper.deletePlane()
-    }
-    if (event.code === 'KeyA') {
-      v.IFC.unpickIfcItems()
-    }
   }
 
   // window.addEventListener('resize', () => {v.context.resize()})

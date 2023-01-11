@@ -4,7 +4,7 @@ import {IfcViewerAPI} from 'web-ifc-viewer'
  * Extending the originla IFCViewerFunctionality
  */
 export class IfcViewerAPIExtended extends IfcViewerAPI {
-  // TODO: might be usefull if we used a Set as well to handle large selections, 
+  // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   #selectedExpressIds = []
   /**
