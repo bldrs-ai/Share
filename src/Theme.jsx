@@ -65,8 +65,8 @@ function loadTheme(mode) {
     grey: {
       lightest: grey[100],
       light: grey[300],
-      medium: grey[400],
-      dark: grey[700],
+      medium: '#C1C1C1',
+      dark: '#444444',
       darkest: grey[900],
     },
     green: {
@@ -128,7 +128,7 @@ function loadTheme(mode) {
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},
     propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
-    propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '100'},
+    propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '300'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that

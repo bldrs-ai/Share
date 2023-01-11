@@ -44,7 +44,7 @@ export default function NavPanel({
         'opacity': .8,
         'justifyContent': 'space-around',
         'alignItems': 'center',
-        'maxHeight': '100%',
+        'maxHeight': '400px',
         '@media (max-width: 900px)': {
           maxHeight: '150px',
           width: '300px',

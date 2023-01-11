@@ -48,11 +48,31 @@ export default function AboutGuide() {
             whiteSpace: 'nowrap',
             lineHeight: '15px',
           },
+          '& a': {
+            textAlign: 'right',
+            verticalAlign: 'middle',
+            whiteSpace: 'nowrap',
+            lineHeight: '15px',
+          },
         }}
       >
-        <div>Share model → <ShareIcon/></div>
+        <div>
+          <a
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
+            target='_new'
+          >
+              Share model → <ShareIcon/>
+          </a>
+        </div>
         <div>Collaborate with Notes → <NotesIcon/></div>
-        <div>View model item properties → <ListIcon/></div>
+        <div>
+          <a
+            href='http://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1527240734'
+            target='_new'
+          >
+              View model item properties → <ListIcon/>
+          </a>
+        </div>
         <div>Section and Plan views → <CutPlaneIcon/></div>
       </Box>
       <Box
