@@ -26,11 +26,11 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     return {modelID: mesh.modelID, id}
   }
   /**
-   * gets the current selected expressIds in the scene
+   * gets a copy of the current selected expressIds in the scene
    *
    * @return {number[]} the selected express ids in the scene
    */
-  getSelectedIds = () => this.#selectedExpressIds
+  getSelectedIds = () => [...this.#selectedExpressIds]
 
   /**
    * sets the current selected expressIds in the scene

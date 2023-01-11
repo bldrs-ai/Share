@@ -440,22 +440,36 @@ export default function CadView({
       }
     }
   }
+
   /** Select items in model when they are double-clicked. */
   function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName === 'CANVAS') {
-        const item = await viewer.castRayToIfcScene()
-        if (item) {
-          if (event.shiftKey) {
-            await viewer.toggleElementSelection(0, item.id)
-          } else {
-            await viewer.setSelection(0, [item.id])
-          }
-          const selected = viewer.getSelectedIds()
-          selectItemsInScene(selected)
-        }
-      }
+    window.ondblclick = canvasDoubleClickHandler
+  }
+
+  /** Handle double click event on canvas. */
+  async function canvasDoubleClickHandler(event) {
+    if (!event.target || event.target.tagName !== 'CANVAS') {
+      return
     }
+    const item = await viewer.castRayToIfcScene()
+    if (!item) {
+      return
+    }
+    let newSelection = []
+    if (event.shiftKey) {
+      const selectedInViewer = viewer.getSelectedIds()
+      const indexOfItem = selectedInViewer.indexOf(item.id)
+      const alreadySelected = indexOfItem !== -1
+      if (alreadySelected) {
+        selectedInViewer.splice(indexOfItem, 1)
+      } else {
+        selectedInViewer.push(item.id)
+      }
+      newSelection = selectedInViewer
+    } else {
+      newSelection = [item.id]
+    }
+    selectItemsInScene(newSelection)
   }
   /** Set Keyboard button Shortcuts */
   function setKeydownListeners() {
