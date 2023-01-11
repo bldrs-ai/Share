@@ -193,6 +193,17 @@ export default function CadView({
   const setAlertMessage = (msg) =>
     setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
 
+  /**
+   * Prevent reloading page without user approval when loading a model from local
+   *
+   * @param {Event} e
+   * @return {string} confirmationMessage
+   */
+  function handleBeforeUnload(e) {
+    const confirmationMessage = 'It looks like you have been editing something. If you leave before saving, your changes will be lost.';
+    (e || window.event).returnValue = confirmationMessage // Gecko + IE
+    return confirmationMessage // Gecko + Webkit, Safari, Chrome etc.
+  }
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -209,12 +220,9 @@ export default function CadView({
       filepath = parts[parts.length - 1]
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
-
-      window.addEventListener('beforeunload', function(e) {
-        const confirmationMessage = 'It looks like you have been editing something. If you leave before saving, your changes will be lost.';
-        (e || window.event).returnValue = confirmationMessage // Gecko + IE
-        return confirmationMessage // Gecko + Webkit, Safari, Chrome etc.
-      })
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    } else {
+      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
