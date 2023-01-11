@@ -191,7 +191,13 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(
+        <Alert onCloseCb={() => {
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navToDefault(navigate, appPrefix)
+        }} message={msg}
+        />,
+    )
 
   /**
    * Prevent reloading page without user approval when loading a model from local
@@ -200,7 +206,7 @@ export default function CadView({
    * @return {string} confirmationMessage
    */
   function handleBeforeUnload(e) {
-    const confirmationMessage = 'It looks like you have been editing something. If you leave before saving, your changes will be lost.';
+    const confirmationMessage = 'Uploaded models are not saved. If you leave this page you will need to upload the model again.';
     (e || window.event).returnValue = confirmationMessage // Gecko + IE
     return confirmationMessage // Gecko + Webkit, Safari, Chrome etc.
   }
@@ -221,8 +227,6 @@ export default function CadView({
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
       window.addEventListener('beforeunload', handleBeforeUnload)
-    } else {
-      window.removeEventListener('beforeunload', handleBeforeUnload)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -472,17 +476,19 @@ export default function CadView({
 
 
   return (
-    <Box sx={{
-      'position': 'absolute',
-      'top': '0px',
-      'left': '0px',
-      'minWidth': '100vw',
-      'minHeight': '100vh',
-      '@media (max-width: 900px)': {
-        height: ' calc(100vh - calc(100vh - 100%))',
-        minHeight: '-webkit-fill-available',
-      },
-    }} data-model-ready={modelReady}
+    <Box
+      sx={{
+        'position': 'absolute',
+        'top': '0px',
+        'left': '0px',
+        'minWidth': '100vw',
+        'minHeight': '100vh',
+        '@media (max-width: 900px)': {
+          height: ' calc(100vh - calc(100vh - 100%))',
+          minHeight: '-webkit-fill-available',
+        },
+      }}
+      data-model-ready={modelReady}
     >
       <Box sx={{
         position: 'absolute',
