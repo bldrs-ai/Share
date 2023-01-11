@@ -132,9 +132,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -208,7 +208,13 @@ export default function CadView({
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+
+      window.addEventListener('beforeunload', function(e) {
+        const confirmationMessage = 'It looks like you have been editing something. If you leave before saving, your changes will be lost.';
+        (e || window.event).returnValue = confirmationMessage // Gecko + IE
+        return confirmationMessage // Gecko + Webkit, Safari, Chrome etc.
+      })
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -231,7 +237,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
 
     Privacy.recordEvent('select_content', {
@@ -334,7 +340,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -468,7 +474,7 @@ export default function CadView({
         height: ' calc(100vh - calc(100vh - 100%))',
         minHeight: '-webkit-fill-available',
       },
-    }}data-model-ready={modelReady}
+    }} data-model-ready={modelReady}
     >
       <Box sx={{
         position: 'absolute',
