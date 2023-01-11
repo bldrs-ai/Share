@@ -490,15 +490,17 @@ export default function CadView({
       }}
       data-model-ready={modelReady}
     >
-      <Box sx={{
-        position: 'absolute',
-        top: '0px',
-        left: '0px',
-        textAlign: 'center',
-        width: '100vw',
-        height: '100vh',
-        margin: 'auto',
-      }} id='viewer-container'
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          textAlign: 'center',
+          width: '100vw',
+          height: '100vh',
+          margin: 'auto',
+        }}
+        id='viewer-container'
       />
       <>
         <SnackBarMessage
