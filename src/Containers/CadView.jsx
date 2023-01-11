@@ -124,7 +124,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    resetState()
+    // resetState()
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorMode.getTheme()
@@ -332,7 +332,7 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs)
+      selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
       Privacy.recordEvent('search', {
         search_term: query,
@@ -368,14 +368,14 @@ export default function CadView({
    *
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItemsInScene(resultIDs) {
+  async function selectItemsInScene(resultIDs, updateNavigation = true) {
     // -- Update selection in viewer State ##
     // -- manage selection in scene ##
     // -- Perform selection logic
     // -- abstract selection logic
     // -- compare with previously selected
     // -- Change state to store modelId as well
-    // -- maybe change selectedElement object to store all selected? instead of last 
+    // -- maybe change selectedElement object to store all selected? instead of last
     if (!viewer) {
       return
     }
@@ -383,8 +383,15 @@ export default function CadView({
       await viewer.setSelection(0, resultIDs)
       setSelectedElements(resultIDs.map((id) => `${id}`))
       if (resultIDs.length > 0) {
-        const props = await viewer.getProperties(0, resultIDs.slice(-1))
+        const lastId = resultIDs.slice(-1)
+        const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
+        const pathIds = await onElementSelect(lastId)
+        if (updateNavigation) {
+          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+          const path = pathIds.join('/')
+          navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        }
       } else {
         setSelectedElement(null)
       }
@@ -405,13 +412,12 @@ export default function CadView({
    * @param {number} expressId
    * @return {Array} pathIds
    */
-  async function onElementSelect(expressId) {
+  function onElementSelect(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
       debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
       return
     }
-    await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     setExpandedElements(pathIds.map((n) => `${n}`))
     return pathIds
@@ -428,8 +434,9 @@ export default function CadView({
     if (parts.length > 0) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect(targetId)
+      const selectedInViewer = viewer.getSelectedIds()
+      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
+        selectItemsInScene([targetId], false)
       }
     }
   }
@@ -444,13 +451,9 @@ export default function CadView({
           } else {
             await viewer.setSelection(0, [item.id])
           }
+          const selected = viewer.getSelectedIds()
+          selectItemsInScene(selected)
         }
-        // if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-        //   const pathIds = await onElementSelect(item.id)
-        //   const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-        //   const path = pathIds.join('/')
-        //   navigate(`${pathPrefix}${repoFilePath}/${path}`)
-        // }
       }
     }
   }
