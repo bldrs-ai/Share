@@ -278,10 +278,7 @@ export default function CadView({
 
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
-    const viewerContainer = document.getElementById('viewer-container')
-    const fileInput = document.createElement('input')
-    fileInput.setAttribute('type', 'file')
-    fileInput.classList.add('file-input')
+    const fileInput = document.getElementById('file_input')
     fileInput.addEventListener(
         'change',
         (event) => {
@@ -292,7 +289,6 @@ export default function CadView({
         },
         false,
     )
-    viewerContainer.appendChild(fileInput)
     fileInput.click()
   }
 
@@ -581,6 +577,7 @@ export default function CadView({
         {alert}
       </>
       <SideDrawerWrapper/>
+      <input type='file' id='file_input' data-testid='file_input' style={{display: 'none'}}/>
     </Box>
   )
 }
