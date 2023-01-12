@@ -633,6 +633,5 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   // window.addEventListener('resize', () => {v.context.resize()})
 
   v.container = container
-  console.log('v :>> ', v)
   return v
 }

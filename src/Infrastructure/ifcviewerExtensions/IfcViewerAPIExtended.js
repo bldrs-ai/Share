@@ -1,7 +1,7 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
 
 /**
- * Extending the originla IFCViewerFunctionality
+ * Extending the original IFCViewerFunctionality
  */
 export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be usefull if we used a Set as well to handle large selections,
@@ -13,7 +13,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @return {object} the expressId of the element and modelId
    */
   castRayToIfcScene() {
-    const ifcManager = this.IFC
     const found = this.context.castRayIfc()
     if (!found) {
       return null
@@ -22,6 +21,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     if (found.faceIndex === undefined) {
       return null
     }
+    const ifcManager = this.IFC
     const id = ifcManager.loader.ifcManager.getExpressId(mesh.geometry, found.faceIndex)
     return {modelID: mesh.modelID, id}
   }
