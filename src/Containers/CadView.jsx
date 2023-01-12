@@ -124,7 +124,6 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    // resetState()
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorMode.getTheme()
