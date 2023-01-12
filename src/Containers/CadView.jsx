@@ -369,13 +369,7 @@ export default function CadView({
    * @param {Array} resultIDs Array of expressIDs
    */
   async function selectItemsInScene(resultIDs, updateNavigation = true) {
-    // -- Update selection in viewer State ##
-    // -- manage selection in scene ##
-    // -- Perform selection logic
-    // -- abstract selection logic
-    // -- compare with previously selected
-    // -- Change state to store modelId as well
-    // -- maybe change selectedElement object to store all selected? instead of last
+    // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
     }
