@@ -30,7 +30,7 @@ describe('CadView', () => {
           />
         </ShareMock>)
     // Necessary to wait for some of the component to render to avoid
-    // act() warningings from testing-library.
+    // act() warnings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
   })
@@ -102,5 +102,45 @@ describe('CadView', () => {
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlaneDirection).toBe(null)
     await actAsyncFlush()
+  })
+
+  // it('prevent reloading without user approval when loading a model from local', async () => {
+  //   render(<CadView/>)
+  //   await new Promise((r) => setTimeout(r, '500'))
+
+  //   const infos = within(screen.getByTestId('infos'))
+  //   await waitFor(() => expect(infos.getByText('R$ 2.400,00')).toBeInTheDocument())
+
+  //   const uploadForm = screen.getAllByTestId('upload-form')
+  //   fireEvent.drop(uploadForm[3], {
+  //     dataTransfer: {
+  //       files: [new File(['(⌐□_□)'], 'chucknorris.png', {type: 'image/png'})],
+  //     },
+  //   })
+
+  //   await waitFor(() =>
+  //     expect(screen.getByText('chucknorris.jpg enviado com sucesso!')).toBeInTheDocument(),
+  //   )
+  // })
+})
+
+/**
+ *
+ */
+function main() {
+  const blob = new Blob(['testing'], {type: 'application/pdf'})
+  console.log(blob)
+}
+
+describe('pdf blob', () => {
+  it('should mock correctly', () => {
+    const mBlob = {size: 1024, type: 'application/pdf'}
+    const blobSpy = jest.spyOn(global, 'Blob').mockImplementationOnce(() => mBlob)
+    const logSpy = jest.spyOn(console, 'log')
+    main()
+    expect(blobSpy).toBeCalledWith(['testing'], {
+      type: 'application/pdf',
+    })
+    expect(logSpy).toBeCalledWith(mBlob)
   })
 })

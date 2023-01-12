@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useState} from 'react'
+import React, {useCallback, useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
@@ -224,8 +224,8 @@ export default function CadView({
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
       filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+      debug().log('CadView#loadIfc: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
@@ -276,6 +276,29 @@ export default function CadView({
   }
 
 
+  /** onUpload */
+  // async function onUpload(event) {
+  //   if (event?.target.files?.length) {
+  //     debug().log('CadView#onUpload: event: ', event)
+  //     const data = await event.target.files[0].text()
+  //     debug().log('CadView#onUpload: data: ', data)
+  //   } else {
+  //     throw new Error('couldn\'t get files')
+  //   }
+  // }
+
+
+  const handleChange = useCallback(({target}) => {
+    const reader = new FileReader()
+    reader.addEventListener('load', (evt) => {
+      if (reader.result) {
+        debug().log('CadView#handleChange: reader.result: ', reader.result)
+      }
+    })
+    reader.readAsDataURL(target.files[0])
+  }, [])
+
+
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
     const fileInput = document.getElementById('file_input')
@@ -283,6 +306,7 @@ export default function CadView({
         'change',
         (event) => {
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          debug().log('CadView#loadLocalFile: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
           navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
@@ -577,7 +601,7 @@ export default function CadView({
         {alert}
       </>
       <SideDrawerWrapper/>
-      <input type='file' id='file_input' data-testid='file_input' style={{display: 'none'}}/>
+      <input type='file' id='file_input' data-testid='file_input' style={{display: 'none'}} onChange={handleChange}/>
     </Box>
   )
 }
