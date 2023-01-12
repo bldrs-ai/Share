@@ -53,38 +53,4 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
       this.IFC.selector.unpickIfcItems()
     }
   }
-  /**
-   * Add element to selection if doesn't exist, or remove it if it already exists
-   *
-   * @param {number} modelID
-   * @param {number} expressId express Id of the element
-   */
-  async toggleElementSelection(modelID, expressId, focusSelection) {
-    if (this.#selectedExpressIds.includes(expressId)) {
-      this.#selectedExpressIds = this.#selectedExpressIds.filter((a) => a !== expressId)
-    } else {
-      this.#selectedExpressIds.push(expressId)
-    }
-    await this.setSelection(modelID, this.#selectedExpressIds, focusSelection)
-  }
-  /**
-   * Add elements to the current selected expressIds in the scene
-   *
-   * @param {number} modelID
-   * @param {number[]} expressIds express Ids of the elements
-   */
-  async addSelection(modelID, expressIds, focusSelection) {
-    const distinctValues = new Set(this.#selectedExpressIds.concat(expressIds))
-    await this.setSelection(modelID, Array.from(distinctValues), focusSelection)
-  }
-  /**
-   * Removes elements from the current selected expressIds in the scene
-   *
-   * @param {number} modelID
-   * @param {number[]} expressIds express Ids of the elements
-   */
-  async removeSelection(modelID, expressIds, focusSelection) {
-    const filteredIds = this.#selectedExpressIds.filter((a) => !expressIds.includes(a))
-    await this.setSelection(modelID, filteredIds, focusSelection)
-  }
 }
