@@ -43,7 +43,6 @@ export default function CadView({
   appPrefix,
   pathPrefix,
   modelPath,
-  getNewModelRealPath,
 }) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
@@ -264,7 +263,9 @@ export default function CadView({
 
   /** Upload a local IFC file for display. */
   function loadLocalFile() {
-    const fileInput = document.getElementById('file_input')
+    const viewerContainer = document.getElementById('viewer-container')
+    const fileInput = document.createElement('input')
+    fileInput.setAttribute('type', 'file')
     fileInput.addEventListener(
         'change',
         (event) => {
@@ -278,7 +279,9 @@ export default function CadView({
         },
         false,
     )
+    viewerContainer.appendChild(fileInput)
     fileInput.click()
+    viewerContainer.removeChild(fileInput)
   }
 
 
@@ -568,11 +571,6 @@ export default function CadView({
         {alert}
       </>
       <SideDrawerWrapper/>
-      <input
-        style={{display: 'none'}}
-        type='file'
-        id='file_input'
-      />
     </Box>
   )
 }
@@ -624,4 +622,17 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   v.container = container
   return v
+}
+
+/**
+ * @param {string} filepath
+ * @return {string}
+ */
+export function getNewModelRealPath(filepath) {
+  const l = window.location
+  filepath = filepath.split('.ifc')[0]
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
 }

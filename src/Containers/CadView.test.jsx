@@ -7,6 +7,7 @@ import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
+import * as AllCadView from './CadView'
 
 
 describe('CadView', () => {
@@ -106,14 +107,15 @@ describe('CadView', () => {
   })
 
   it('prevent reloading without user approval when loading a model from local', async () => {
+    window.addEventListener = jest.fn()
+    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
+
     const modelPath = {
       filepath: `haus.ifc`,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
-    window.addEventListener = jest.fn()
 
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
-    const getModelPath1 = jest.fn(() => 'haus.ifc')
     render(
         <ShareMock>
           <CadView
@@ -121,16 +123,13 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix='/v/new'
             modelPath={modelPath}
-            getNewModelRealPath={getModelPath1}
           />
         </ShareMock>,
     )
-    expect(getModelPath1).toHaveBeenCalled()
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
 
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
-    const getModelPath2 = jest.fn(() => 'index.ifc')
     render(
         <ShareMock>
           <CadView
@@ -138,11 +137,9 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix=''
             modelPath={modelPath}
-            getNewModelRealPath={getModelPath2}
           />
         </ShareMock>,
     )
-    expect(getModelPath2).not.toHaveBeenCalled()
     expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
     await actAsyncFlush()
   })
