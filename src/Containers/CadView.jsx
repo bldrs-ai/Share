@@ -601,7 +601,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    // v.prePickIfcItem()
+    v.prePickIfcItem()
   }
 
   window.onkeydown = (event) => {
