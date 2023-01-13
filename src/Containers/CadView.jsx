@@ -21,6 +21,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
+import {handleBeforeUnload} from '../utils/event'
 
 
 /**
@@ -194,23 +195,11 @@ export default function CadView({
   const setAlertMessage = (msg) =>
     setAlert(
         <Alert onCloseCb={() => {
-          window.removeEventListener('beforeunload', handleBeforeUnload)
           navToDefault(navigate, appPrefix)
         }} message={msg}
         />,
     )
 
-  /**
-   * Prevent reloading page without user approval when loading a model from local
-   *
-   * @param {Event} e
-   * @return {string} confirmationMessage
-   */
-  function handleBeforeUnload(e) {
-    const confirmationMessage = 'Uploaded models are not saved. If you leave this page you will need to upload the model again.';
-    (e || window.event).returnValue = confirmationMessage // Gecko + IE
-    return confirmationMessage // Gecko + Webkit, Safari, Chrome etc.
-  }
 
   /**
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
@@ -284,6 +273,7 @@ export default function CadView({
           debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
         },
         false,
@@ -380,6 +370,7 @@ export default function CadView({
     viewer.clipper.deleteAllPlanes()
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate(`${pathPrefix}${repoFilePath}`)
   }
 
@@ -452,6 +443,7 @@ export default function CadView({
           const pathIds = await onElementSelect(item.id)
           const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
           const path = pathIds.join('/')
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${pathPrefix}${repoFilePath}/${path}`)
         }
       }

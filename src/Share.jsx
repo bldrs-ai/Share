@@ -8,6 +8,7 @@ import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import {getNewModelRealPath} from './utils/file'
+import {handleBeforeUnload} from './utils/event'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
@@ -98,6 +99,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   if (window.innerWidth <= mediaSizeTabletWith) {
     navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
   } else {
