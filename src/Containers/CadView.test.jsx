@@ -1,5 +1,6 @@
 import React, {useState} from 'react'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
+// import user from '@testing-library/user-event'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
@@ -28,7 +29,8 @@ describe('CadView', () => {
             pathPrefix={''}
             modelPath={result.current[0]}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
@@ -39,7 +41,6 @@ describe('CadView', () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
-
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
@@ -104,43 +105,45 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-  // it('prevent reloading without user approval when loading a model from local', async () => {
-  //   render(<CadView/>)
-  //   await new Promise((r) => setTimeout(r, '500'))
+  it('prevent reloading without user approval when loading a model from local', async () => {
+    const modelPath = {
+      filepath: `haus.ifc`,
+    }
+    const viewer = __getIfcViewerAPIMockSingleton()
+    window.addEventListener = jest.fn()
 
-  //   const infos = within(screen.getByTestId('infos'))
-  //   await waitFor(() => expect(infos.getByText('R$ 2.400,00')).toBeInTheDocument())
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    const getModelPath1 = jest.fn(() => 'haus.ifc')
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix='/v/new'
+            modelPath={modelPath}
+            getNewModelRealPath={getModelPath1}
+          />
+        </ShareMock>,
+    )
+    expect(getModelPath1).toHaveBeenCalled()
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
 
-  //   const uploadForm = screen.getAllByTestId('upload-form')
-  //   fireEvent.drop(uploadForm[3], {
-  //     dataTransfer: {
-  //       files: [new File(['(⌐□_□)'], 'chucknorris.png', {type: 'image/png'})],
-  //     },
-  //   })
-
-  //   await waitFor(() =>
-  //     expect(screen.getByText('chucknorris.jpg enviado com sucesso!')).toBeInTheDocument(),
-  //   )
-  // })
-})
-
-/**
- *
- */
-function main() {
-  const blob = new Blob(['testing'], {type: 'application/pdf'})
-  console.log(blob)
-}
-
-describe('pdf blob', () => {
-  it('should mock correctly', () => {
-    const mBlob = {size: 1024, type: 'application/pdf'}
-    const blobSpy = jest.spyOn(global, 'Blob').mockImplementationOnce(() => mBlob)
-    const logSpy = jest.spyOn(console, 'log')
-    main()
-    expect(blobSpy).toBeCalledWith(['testing'], {
-      type: 'application/pdf',
-    })
-    expect(logSpy).toBeCalledWith(mBlob)
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    const getModelPath2 = jest.fn(() => 'index.ifc')
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix=''
+            modelPath={modelPath}
+            getNewModelRealPath={getModelPath2}
+          />
+        </ShareMock>,
+    )
+    expect(getModelPath2).not.toHaveBeenCalled()
+    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
+    await actAsyncFlush()
   })
 })

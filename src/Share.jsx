@@ -7,6 +7,7 @@ import useStore from './store/useStore'
 import useTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
+import {getNewModelRealPath} from './utils/file'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
@@ -72,18 +73,19 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   return (
     modelPath &&
-      <CssBaseline>
-        <ColorModeContext.Provider value={colorMode}>
-          <ThemeProvider theme={theme}>
-            <CadView
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
-              pathPrefix={pathPrefix}
-              modelPath={modelPath}
-            />
-          </ThemeProvider>
-        </ColorModeContext.Provider>
-      </CssBaseline>)
+    <CssBaseline>
+      <ColorModeContext.Provider value={colorMode}>
+        <ThemeProvider theme={theme}>
+          <CadView
+            installPrefix={installPrefix}
+            appPrefix={appPrefix}
+            pathPrefix={pathPrefix}
+            modelPath={modelPath}
+            getNewModelRealPath={getNewModelRealPath}
+          />
+        </ThemeProvider>
+      </ColorModeContext.Provider>
+    </CssBaseline>)
 }
 
 
