@@ -112,7 +112,7 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `haus.ifc`,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
 
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
