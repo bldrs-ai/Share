@@ -105,7 +105,7 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
- * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
+ * Returns a reference to an IFC model file.  For use by CustomViewerAPI.load.
  *
  * Format is either a reference within this project's serving directory:
  *   {filepath: '/file.ifc'}

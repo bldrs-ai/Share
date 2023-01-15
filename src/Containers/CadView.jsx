@@ -1,6 +1,5 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
-import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
@@ -21,7 +20,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
-
+import CustomViewerAPI from '../Viewer/CustomViewerAPI'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -215,9 +214,8 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
-    const loadedModel = await viewer.IFC.loadIfcUrl(
+    const loadedModel = await viewer.loadIfcUrl(
         filepath,
-        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -232,8 +230,8 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${ filepath}`)
-        })
-
+        },
+        !urlHasCameraParams())
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
@@ -255,6 +253,7 @@ export default function CadView({
     }
 
     debug().error('CadView#loadIfc: Model load failed!')
+    return loadedModel
   }
 
 
@@ -288,6 +287,7 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    console.log(rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
@@ -307,7 +307,7 @@ export default function CadView({
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
    *
-   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} m The CustomViewerAPI instance.
    * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
@@ -379,7 +379,7 @@ export default function CadView({
   async function selectItemsInScene(resultIDs) {
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
-      await viewer.pickIfcItemsByID(0, resultIDs, true)
+      await viewer.IFC.pickIfcItemsByID(0, resultIDs, true)
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -435,6 +435,7 @@ export default function CadView({
     window.ondblclick = async (event) => {
       if (event.target && event.target.tagName === 'CANVAS') {
         const item = await viewer.IFC.pickIfcItem(true)
+        console.log(item)
         if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
           const pathIds = await onElementSelect(item.id)
           const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
@@ -567,7 +568,7 @@ export default function CadView({
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {object} IfcViewerAPI viewer, width a .container property
+ * @return {object} CustomViewerAPI viewer, width a .container property
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
@@ -576,7 +577,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPI({
+  const v = new CustomViewerAPI({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
@@ -589,7 +590,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    v.prePickIfcItem()
+    v.IFC.prePickIfcItem()
   }
 
   window.onkeydown = (event) => {

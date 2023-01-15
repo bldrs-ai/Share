@@ -4,7 +4,7 @@ import {Vector3} from 'three'
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
-// are not present in the instantiated IfcViewerAPI.
+// are not present in the instantiated CustomViewerAPI.
 const loadedModel = {
   ifcManager: {
     getSpatialStructure: jest.fn(),
@@ -40,7 +40,6 @@ const impl = {
         },
       },
     },
-    loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
     setWasmPath: jest.fn(),
     unpickIfcItems: jest.fn(),
   },
@@ -65,6 +64,7 @@ const impl = {
   context: {
     resize: jest.fn(),
   },
+  loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
@@ -76,7 +76,7 @@ constructorMock.mockImplementation(() => impl)
 /**
  * @return {object} The single mock instance of IfcViewerAPI.
  */
-function __getIfcViewerAPIMockSingleton() {
+function __getCustomViewerAPIMockSingleton() {
   return impl
 }
 
@@ -84,5 +84,5 @@ function __getIfcViewerAPIMockSingleton() {
 export {
   ifcjsMock as default,
   constructorMock as IfcViewerAPI,
-  __getIfcViewerAPIMockSingleton,
+  __getCustomViewerAPIMockSingleton as __getCustomViewerAPIMockSingleton,
 }

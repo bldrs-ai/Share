@@ -5,7 +5,7 @@ import ShareControl from './ShareControl'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import model from '../__mocks__/MockModel.js'
-import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
+import {__getCustomViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
 describe('CutPlane', () => {
@@ -27,7 +27,7 @@ describe('CutPlane', () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     await act(() => {
       result.current.setViewerStore(viewer)
     })
@@ -48,7 +48,7 @@ describe('CutPlane', () => {
           <CutPlaneMenu/>
         </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     await act(() => {
       result.current.setViewerStore(viewer)
     })
@@ -65,7 +65,7 @@ describe('CutPlane', () => {
         </ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
     // mock contains one plane
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     await act(() => {
       result.current.setViewerStore(viewer)
     })
@@ -76,7 +76,7 @@ describe('CutPlane', () => {
 
   it('Plane Offset is correct', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     await act(() => {
       result.current.setViewerStore(viewer)
       result.current.setModelStore(model)

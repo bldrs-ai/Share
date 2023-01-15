@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
-import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
+import {__getCustomViewerAPIMockSingleton} from 'web-ifc-viewer'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
@@ -13,11 +13,11 @@ describe('CadView', () => {
     jest.clearAllMocks()
   })
 
-  it('renders with mock IfcViewerAPI', async () => {
+  it('renders with mock CustomViewerAPI', async () => {
     const modelPath = {
       filepath: `index.ifc`,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
     render(
@@ -43,7 +43,7 @@ describe('CadView', () => {
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useState(modelPath))
     render(
@@ -74,7 +74,7 @@ describe('CadView', () => {
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = __getCustomViewerAPIMockSingleton()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
