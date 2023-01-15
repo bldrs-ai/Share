@@ -70,4 +70,32 @@ export default class CustomViewerAPI extends IfcViewerAPI {
       this.subsets[rootElement.expressID] = subset
     }
   }
+
+  /**
+   * Pick element by id
+   *
+   * @param {number} modelID
+   * @param {number} element ids
+   * @param {boolean} focus selection
+   * @param {boolean} remove previous selection
+   */
+  async pickByID(modelID, ids, focusSelection = false, removePrevious = true) {
+    const mesh = this.subsets[ids]
+    if (!mesh) {
+      return
+    }
+    if (removePrevious) {
+      this.IFC.selector.selection.modelIDs.clear()
+    }
+    this.IFC.selector.selection.modelIDs.add(modelID)
+    const selected = this.IFC.selector.selection.newSelection(modelID, ids, removePrevious)
+    selected.visible = true
+    selected.position.copy(mesh.position)
+    selected.rotation.copy(mesh.rotation)
+    selected.scale.copy(mesh.scale)
+    selected.renderOrder = this.IFC.selector.selection.renderOrder
+    if (focusSelection) {
+      await this.IFC.selector.selection.focusSelection(selected)
+    }
+  }
 }

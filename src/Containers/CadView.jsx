@@ -385,7 +385,7 @@ export default function CadView({
   async function selectItemsInScene(resultIDs) {
     setSelectedElements(resultIDs.map((id) => `${id}`))
     try {
-      await viewer.IFC.pickIfcItemsByID(0, resultIDs, true)
+      await viewer.pickByID(0, resultIDs, true)
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
