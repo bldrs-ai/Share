@@ -6,7 +6,7 @@ import {IfcViewerAPI} from 'web-ifc-viewer'
 export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
-  #selectedExpressIds = []
+  _selectedExpressIds = []
   /**
    * Gets the expressId of the element that the mouse is pointing at
    *
@@ -30,7 +30,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    *
    * @return {number[]} the selected express ids in the scene
    */
-  getSelectedIds = () => [...this.#selectedExpressIds]
+  getSelectedIds = () => [...this._selectedExpressIds]
 
   /**
    * sets the current selected expressIds in the scene
@@ -39,13 +39,13 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {number[]} expressIds express Ids of the elements
    */
   async setSelection(modelID, expressIds, focusSelection) {
-    this.#selectedExpressIds = expressIds
+    this._selectedExpressIds = expressIds
     if (typeof focusSelection === 'undefined') {
-      focusSelection = this.#selectedExpressIds.length === 1
+      focusSelection = this._selectedExpressIds.length === 1
     }
-    if (this.#selectedExpressIds.length !== 0) {
+    if (this._selectedExpressIds.length !== 0) {
       try {
-        await this.pickIfcItemsByID(modelID, this.#selectedExpressIds, focusSelection, true)
+        await this.pickIfcItemsByID(modelID, this._selectedExpressIds, focusSelection, true)
       } catch (e) {
         console.error(e)
       }

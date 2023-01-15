@@ -61,7 +61,7 @@ describe('CadView', () => {
     const numCallsExpected = 2 // First for root, second from URL path
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
-    expect(getPropsCalls[0][0]).toBe(0) // call 2, arg 2
+    expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
     expect(getPropsCalls[1][1]).toBe(targetEltId) // call 2, arg 2
     await actAsyncFlush()
@@ -71,7 +71,7 @@ describe('CadView', () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
-      filepath: `index.ifc/${targetEltId}`,
+      filepath: `index.ifc`,
       gitpath: undefined,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
@@ -93,12 +93,12 @@ describe('CadView', () => {
         </ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
-    act(() => {
-      fireEvent.click(clearSelection)
+    await act(async () => {
+      await fireEvent.click(clearSelection)
     })
     const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
     expect(callDeletePlanes.length).toBe(1)
-    expect(result.current.selectedElements).toBe(null)
+    expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlaneDirection).toBe(null)
     await actAsyncFlush()
