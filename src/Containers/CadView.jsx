@@ -1,6 +1,6 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
-import {IfcViewerAPIExtended} from '../Infrastructure/ifcviewerExtensions/IfcViewerAPIExtended'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import * as Privacy from '../privacy/Privacy'
