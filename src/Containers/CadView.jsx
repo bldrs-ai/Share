@@ -287,7 +287,6 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
-    console.log(rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }

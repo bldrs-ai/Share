@@ -4,7 +4,7 @@ import {Matrix4} from 'three'
 
 /** Class CustomViewerAPI*/
 export default class CustomViewerAPI extends IfcViewerAPI {
-  subsets = []
+  subsets = {}
 
   /**
    * Loads the given IFC in the current scene.
@@ -26,9 +26,9 @@ export default class CustomViewerAPI extends IfcViewerAPI {
       const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
       // subset ops
       // this.IFC.addIfcModel(ifcModel)
-      const rootElt = await ifcModel.ifcManager.getSpatialStructure(0, true)
-      this.newSubsetOfElement(rootElt)
-
+      const rootElement = await ifcModel.ifcManager.getSpatialStructure(0, true)
+      this.createSubsetForElementsTree(rootElement)
+      console.log(this.subsets)
       if (firstModel) {
         // eslint-disable-next-line new-cap
         const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
@@ -51,25 +51,23 @@ export default class CustomViewerAPI extends IfcViewerAPI {
   /**
    * Creates a subset of the given IFC element in the current scene.
    *
-   * @param {object} IFC spatial element
-   * @param {object} scene
+   * @param {object} IFC spatial root element
    */
-  newSubsetOfElement(element) {
-    element.children.forEach((e) => {
-      console.log(e)
-      this.newSubsetOfElement(e)
+  createSubsetForElementsTree(rootElement) {
+    rootElement.children.forEach((e) => {
+      this.createSubsetForElementsTree(e)
     })
     const subset = this.IFC.loader.ifcManager.createSubset({
       modelID: 0,
       scene: this.context.getScene(),
-      ids: [element.expressID],
+      ids: [rootElement.expressID],
       removePrevious: true,
-      customID: element.expressID,
+      customID: rootElement.expressID,
     })
     this.context.getScene().add(subset)
     this.context.items.pickableIfcModels.push(subset)
     if (subset) {
-      this.subsets.push(subset)
+      this.subsets[rootElement.expressID] = subset
     }
   }
 }
