@@ -28,7 +28,7 @@ export default class CustomViewerAPI extends IfcViewerAPI {
       // this.IFC.addIfcModel(ifcModel)
       const rootElement = await ifcModel.ifcManager.getSpatialStructure(0, true)
       this.createSubsetForElementsTree(rootElement)
-      console.log(this.subsets)
+
       if (firstModel) {
         // eslint-disable-next-line new-cap
         const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
