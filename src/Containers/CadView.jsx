@@ -20,6 +20,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
+import {handleBeforeUnload} from '../utils/event'
 import CustomViewerAPI from '../Viewer/CustomViewerAPI'
 
 /**
@@ -131,9 +132,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
     setSelectedElement(null)
@@ -190,7 +191,12 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(
+        <Alert onCloseCb={() => {
+          navToDefault(navigate, appPrefix)
+        }} message={msg}
+        />,
+    )
 
 
   /**
@@ -202,12 +208,9 @@ export default function CadView({
     debug().log(`CadView#loadIfc: `, filepath)
 
     if (pathPrefix.endsWith('new')) {
-      const l = window.location
-      filepath = filepath.split('.ifc')[0]
-      const parts = filepath.split('/')
-      filepath = parts[parts.length - 1]
+      filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -262,19 +265,22 @@ export default function CadView({
     const viewerContainer = document.getElementById('viewer-container')
     const fileInput = document.createElement('input')
     fileInput.setAttribute('type', 'file')
-    fileInput.classList.add('file-input')
     fileInput.addEventListener(
         'change',
         (event) => {
+          debug().log('CadView#loadLocalFile#event:', event)
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
         },
         false,
     )
     viewerContainer.appendChild(fileInput)
     fileInput.click()
+    viewerContainer.removeChild(fileInput)
   }
 
 
@@ -333,7 +339,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -366,6 +372,7 @@ export default function CadView({
     viewer.clipper.deleteAllPlanes()
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate(`${pathPrefix}${repoFilePath}`)
   }
 
@@ -439,6 +446,7 @@ export default function CadView({
           const pathIds = await onElementSelect(item.id)
           const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
           const path = pathIds.join('/')
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${pathPrefix}${repoFilePath}/${path}`)
         }
       }
@@ -458,27 +466,31 @@ export default function CadView({
 
 
   return (
-    <Box sx={{
-      'position': 'absolute',
-      'top': '0px',
-      'left': '0px',
-      'minWidth': '100vw',
-      'minHeight': '100vh',
-      '@media (max-width: 900px)': {
-        height: ' calc(100vh - calc(100vh - 100%))',
-        minHeight: '-webkit-fill-available',
-      },
-    }}data-model-ready={modelReady}
+    <Box
+      sx={{
+        'position': 'absolute',
+        'top': '0px',
+        'left': '0px',
+        'minWidth': '100vw',
+        'minHeight': '100vh',
+        '@media (max-width: 900px)': {
+          height: ' calc(100vh - calc(100vh - 100%))',
+          minHeight: '-webkit-fill-available',
+        },
+      }}
+      data-model-ready={modelReady}
     >
-      <Box sx={{
-        position: 'absolute',
-        top: '0px',
-        left: '0px',
-        textAlign: 'center',
-        width: '100vw',
-        height: '100vh',
-        margin: 'auto',
-      }} id='viewer-container'
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          textAlign: 'center',
+          width: '100vw',
+          height: '100vh',
+          margin: 'auto',
+        }}
+        id='viewer-container'
       />
       <>
         <SnackBarMessage
@@ -610,4 +622,17 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   v.container = container
   return v
+}
+
+/**
+ * @param {string} filepath
+ * @return {string}
+ */
+export function getNewModelRealPath(filepath) {
+  const l = window.location
+  filepath = filepath.split('.ifc')[0]
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
 }

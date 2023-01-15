@@ -6,6 +6,7 @@ import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
+import * as AllCadView from './CadView'
 
 
 describe('CadView', () => {
@@ -28,9 +29,10 @@ describe('CadView', () => {
             pathPrefix={''}
             modelPath={result.current[0]}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     // Necessary to wait for some of the component to render to avoid
-    // act() warningings from testing-library.
+    // act() warnings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
   })
@@ -39,7 +41,6 @@ describe('CadView', () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
-
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
@@ -101,6 +102,44 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toBe(null)
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlaneDirection).toBe(null)
+    await actAsyncFlush()
+  })
+
+  it('prevent reloading without user approval when loading a model from local', async () => {
+    window.addEventListener = jest.fn()
+    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
+
+    const modelPath = {
+      filepath: `haus.ifc`,
+    }
+    const viewer = __getIfcViewerAPIMockSingleton()
+
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix='/v/new'
+            modelPath={modelPath}
+          />
+        </ShareMock>,
+    )
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
+
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix=''
+            modelPath={modelPath}
+          />
+        </ShareMock>,
+    )
+    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
     await actAsyncFlush()
   })
 })

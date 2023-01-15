@@ -9,6 +9,7 @@ import {
 import {assertDefined} from './utils/assert'
 import Share from './Share'
 import debug from './utils/debug'
+import {handleBeforeUnload} from './utils/event'
 
 
 /**
@@ -92,6 +93,7 @@ function Forward({appPrefix}) {
     if (location.pathname === appPrefix) {
       const dest = `${appPrefix}/v/p`
       debug().log('ShareRoutes#useEffect[location]: forwarding to: ', dest)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       navigate(dest)
     }
   }, [location, appPrefix, navigate])
