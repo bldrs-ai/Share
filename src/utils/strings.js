@@ -71,8 +71,6 @@ export function stof(str) {
   if (isFinite(val)) {
     const rounded = parseFloat(val.toFixed(0))
     return rounded === val ? rounded : val
-  } else {
-    console.warn('Invalid coordinate: ', str)
   }
   return val
 }
