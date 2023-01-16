@@ -58,3 +58,21 @@ export function findUrls(str) {
     }
   })
 }
+
+/**
+ * Convert string to finite float.
+ *
+ * @param {string} str Input string.
+ * @return {number} float.
+ */
+export function stof(str) {
+  const floatDigits = 2
+  const val = parseFloat(parseFloat(str).toFixed(floatDigits))
+  if (isFinite(val)) {
+    const rounded = parseFloat(val.toFixed(0))
+    return rounded === val ? rounded : val
+  } else {
+    console.warn('Invalid coordinate: ', str)
+  }
+  return val
+}

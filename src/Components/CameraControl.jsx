@@ -9,6 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {roundCoord} from '../utils/math'
+import {stof} from '../utils/strings'
 
 
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
@@ -115,17 +116,6 @@ const paramRegex = new RegExp(paramPattern)
  */
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
-
-  const stof = (str) => {
-    const floatDigits = 2
-    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
-    if (isFinite(val)) {
-      const rounded = parseFloat(val.toFixed(0))
-      return rounded === val ? rounded : val
-    } else {
-      console.warn('Invalid coordinate: ', str)
-    }
-  }
 
   debug().log('CameraControl#onHash: match: ', match)
 

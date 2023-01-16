@@ -8,6 +8,7 @@ import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import {stof} from '../utils/strings'
 
 
 /**
@@ -58,7 +59,7 @@ export default function CutPlaneMenu() {
         createPlane(planeNormal, normalOffset)
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
 
@@ -75,18 +76,19 @@ export default function CutPlaneMenu() {
       return
     }
     let normal
+    const finiteOffset = stof(offset)
     switch (normalDirection) {
       case 'x':
         normal = new Vector3(-1, 0, 0)
-        planeOffsetX = parseFloat(offset)
+        planeOffsetX = finiteOffset
         break
       case 'y':
         normal = new Vector3(0, -1, 0)
-        planeOffsetY = parseFloat(offset)
+        planeOffsetY = finiteOffset
         break
       case 'z':
         normal = new Vector3(0, 0, -1)
-        planeOffsetZ = parseFloat(offset)
+        planeOffsetZ = finiteOffset
         break
       default:
         normal = new Vector3(0, 1, 0)
@@ -94,7 +96,7 @@ export default function CutPlaneMenu() {
     }
     const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
     const planeHash = getHashParams(location, 'p')
-    if (!planeHash || planeHash !== normalDirection ) {
+    if (!planeHash || planeHash !== normalDirection) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
     setCutPlaneDirection(normalDirection)
@@ -171,7 +173,7 @@ export function getPlaneOffset(viewer, ifcModel) {
     const modelCenter = new Vector3
     ifcModel?.geometry.boundingBox.getCenter(modelCenter)
     for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
-      if (value !== 0 ) {
+      if (value !== 0) {
         planeNormal = key
         planeAxisCenter = modelCenter[planeNormal]
         planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
