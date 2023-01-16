@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
-import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
@@ -17,7 +17,7 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `index.ifc`,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
     render(
@@ -43,7 +43,7 @@ describe('CadView', () => {
       filepath: `index.ifc/${targetEltId}`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useState(modelPath))
     render(
@@ -74,7 +74,7 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
@@ -102,5 +102,56 @@ describe('CadView', () => {
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlaneDirection).toBe(null)
     await actAsyncFlush()
+  })
+
+  it('select multiple elements and then clears selection, then reselect', async () => {
+    const testTree = makeTestTree()
+    const selectedIds = [0, 1]
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const viewer = new IfcViewerAPIExtended()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setSelectedElement(selectedIds.slice(-1))
+      result.current.setSelectedElements(selectedIds)
+    })
+    const {getByTitle} = render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    expect(getByTitle('Section')).toBeInTheDocument()
+    const clearSelection = getByTitle('Clear')
+    await act(async () => {
+      await fireEvent.click(clearSelection)
+    })
+    await act(() => {
+      result.current.setSelectedElement(selectedIds.slice(-1))
+      result.current.setSelectedElements(selectedIds)
+    })
+    await act(async () => {
+      await fireEvent.click(clearSelection)
+    })
+    expect(result.current.selectedElement).toBe(null)
+    expect(result.current.selectedElements).toHaveLength(0)
+    await act(() => {
+      result.current.setSelectedElement(testTree.children[0])
+      result.current.setSelectedElements(selectedIds)
+    })
+    await act(async () => {
+      await fireEvent.click(clearSelection)
+    })
+    expect(result.current.selectedElement).toBe(null)
+    expect(result.current.selectedElements).toHaveLength(0)
+    const setSelectionCalls = viewer.setSelection.mock.calls
+    const numCallsExpected = 4 // 2 on viewer load reseting state + the 2 test actions
+    expect(setSelectionCalls.length).toBe(numCallsExpected)
   })
 })
