@@ -8,7 +8,7 @@ import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
-import {stof} from '../utils/strings'
+import {floatStrTrim} from '../utils/strings'
 
 
 /**
@@ -76,7 +76,7 @@ export default function CutPlaneMenu() {
       return
     }
     let normal
-    const finiteOffset = stof(offset)
+    const finiteOffset = floatStrTrim(offset)
     switch (normalDirection) {
       case 'x':
         normal = new Vector3(-1, 0, 0)

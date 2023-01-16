@@ -59,18 +59,27 @@ export function findUrls(str) {
   })
 }
 
+
 /**
- * Convert string to finite float.
+ * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
+ * - '0' -> 0
+ * - '12.34567' -> 12.346
+ * - '12.340' -> 12.34
+ * - '12.300' -> 12.3
+ * - '12.000' -> 12
  *
- * @param {string} str Input string.
+ * @param {string} str string.
  * @return {number} float.
  */
-export function stof(str) {
-  const floatDigits = 2
-  const val = parseFloat(parseFloat(str).toFixed(floatDigits))
-  if (isFinite(val)) {
-    const rounded = parseFloat(val.toFixed(0))
-    return rounded === val ? rounded : val
+export function floatStrTrim(str) {
+  const floatDigits = 3
+  let floatStr = parseFloat(str)
+  if (!floatStr) {
+    floatStr = 0
+  }
+  const val = parseFloat(floatStr.toFixed(floatDigits))
+  if (!isFinite(val)) {
+    throw new Error('Parameter is invalid.')
   }
   return val
 }
