@@ -82,7 +82,7 @@ export function floatStrTrim(str, floatDigits = 3) {
   if (!floatStr) {
     floatStr = 0
   }
-  const val = parseFloat(floatStr.toFixed(floatDigits))
+  const val = Number(floatStr.toFixed(floatDigits))
   if (!isFinite(val)) {
     throw new Error('Parameter is invalid.')
   }

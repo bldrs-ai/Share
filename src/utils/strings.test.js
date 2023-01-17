@@ -51,6 +51,6 @@ describe('strings', () => {
     expect(floatStrTrim('12.340')).toStrictEqual(12.34)
     expect(floatStrTrim('12.300')).toStrictEqual(12.3)
     expect(floatStrTrim('12.000')).toStrictEqual(12)
-    expect(floatStrTrim('-4.500')).toStrictEqual(-4.5)
+    expect(floatStrTrim('-4.500826166251047')).toStrictEqual(-4.501)
   })
 })

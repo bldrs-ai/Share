@@ -88,6 +88,7 @@ describe('CutPlane', () => {
           <CutPlaneMenu/>
         </ShareMock>)
 
-    expect(result.current.cutPlaneOffset).toBe('14')
+    // eslint-disable-next-line no-magic-numbers
+    expect(result.current.cutPlaneOffset).toBe(14)
   })
 })

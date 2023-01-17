@@ -457,9 +457,9 @@ export default function CadView({
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
+        const initializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(initializedViewer)
+        setViewerStore(initializedViewer)
       }
     })
   }

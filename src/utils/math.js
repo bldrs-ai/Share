@@ -24,6 +24,6 @@ export function round(num, numDigits = 0) {
  * @param {number} numDigits Number of digits to round to, default = 0
  * @return {Array<number>} Array of [x, y, z]
  */
-export function roundCoord(x, y, z, numDigits = 0) {
+export function roundCoord(x, y, z, numDigits = 3) {
   return [x, y, z].map((n) => floatStrTrim(n, numDigits))
 }
