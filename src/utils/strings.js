@@ -68,12 +68,17 @@ export function findUrls(str) {
  * - '12.300' -> 12.3
  * - '12.000' -> 12
  *
- * @param {string} str string.
- * @return {number} float.
+ * @param {string|number} str
+ * @param {number} floatDigits
+ * @return {number} float
  */
-export function floatStrTrim(str) {
-  const floatDigits = 3
-  let floatStr = parseFloat(str)
+export function floatStrTrim(str, floatDigits = 3) {
+  let floatStr
+  if (typeof str === 'string') {
+    floatStr = parseFloat(str)
+  } else {
+    floatStr = str
+  }
   if (!floatStr) {
     floatStr = 0
   }

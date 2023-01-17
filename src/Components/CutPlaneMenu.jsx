@@ -27,6 +27,7 @@ export default function CutPlaneMenu() {
   const setCutPlaneOffset = useStore((state) => state.setCutPlaneOffset)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const location = useLocation()
+  console.log('CutPlaneMenu: location: ', location)
 
   const PLANE_PREFIX = 'p'
   let planeOffsetX = 0
@@ -48,6 +49,7 @@ export default function CutPlaneMenu() {
 
 
   useEffect(() => {
+    console.log('CutPlaneMenu#useEffect: ')
     const planeHash = getHashParams(location, 'p')
     if (planeHash && model && viewer) {
       const planeInfo = planeHash.split(':')[1].split('=')
@@ -96,6 +98,7 @@ export default function CutPlaneMenu() {
     }
     const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
     const planeHash = getHashParams(location, 'p')
+    console.log('CutPlaneMenu#createPlane: planeHash: ', planeHash)
     const planeDirection = getPlaneDirection(planeHash)
     if (!planeHash || planeDirection !== normalDirection) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})

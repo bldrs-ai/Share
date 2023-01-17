@@ -1,3 +1,5 @@
+import {floatStrTrim} from './strings'
+
 /**
  * @param {number|string} num Number to round
  * @param {number} numDigits Number of digits to round to, default = 0
@@ -23,5 +25,5 @@ export function round(num, numDigits = 0) {
  * @return {Array<number>} Array of [x, y, z]
  */
 export function roundCoord(x, y, z, numDigits = 0) {
-  return [x, y, z].map((n) => round(n, numDigits))
+  return [x, y, z].map((n) => floatStrTrim(n, numDigits))
 }
