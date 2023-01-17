@@ -96,7 +96,8 @@ export default function CutPlaneMenu() {
     }
     const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
     const planeHash = getHashParams(location, 'p')
-    if (!planeHash || planeHash !== normalDirection) {
+    const planeDirection = getPlaneDirection(planeHash)
+    if (!planeHash || planeDirection !== normalDirection) {
       addHashParams(window.location, PLANE_PREFIX, {planeAxis: normalDirection})
     }
     setCutPlaneDirection(normalDirection)
@@ -198,4 +199,21 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
     const planeOffset = getPlaneOffset(viewer, ifcModel)
     addHashParams(window.location, PLANE_PREFIX, planeOffset)
   }
+}
+
+
+/**
+ * get plane direction from hash string
+ *
+ * @param {string} hash
+ * @return {string} direction
+ */
+function getPlaneDirection(hash) {
+  if (!hash) {
+    return ''
+  }
+  const directionPattern = `p:([a-z]?)=`
+  const directionRegex = new RegExp(directionPattern)
+  const match = hash.match(directionRegex)
+  return (match && match[1]) || ''
 }
