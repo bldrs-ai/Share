@@ -68,7 +68,7 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
@@ -362,7 +362,7 @@ export default function CadView({
   function resetState() {
     setSelectedElement(null)
     setSelectedElements(null)
-    setCutPlaneDirection(null)
+    setCutPlaneDirections([])
     setLevelInstance(null)
   }
 

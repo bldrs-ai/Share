@@ -143,7 +143,7 @@ export function getObjectParams(hashParams) {
 /**
  * @param {Location} location
  * @param {string} name prefix of the params to fetch
- * @return {string|undefined} The encoded params
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParams(location, name) {
   return getHashParamsFromHashStr(location.hash.substring(1), name)
@@ -153,7 +153,7 @@ export function getHashParams(location, name) {
 /**
  * @param {string} hashStr
  * @param {string} name prefix of the params to fetch
- * @return {string|undefined} The encoded params
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParamsFromHashStr(hashStr, name) {
   const sets = hashStr.split('::')
@@ -169,23 +169,44 @@ export function getHashParamsFromHashStr(hashStr, name) {
 
 
 /**
- * Removes the given named hash param.
+ * Removes the given named hash param
  *
  * @param {Location} location
  * @param {string} name prefix of the params to fetch
+ * @param {Array<string>} paramKeys param keys to remove from hash params. if empty, then remove all params
  */
-export function removeHashParams(location, name) {
+export function removeHashParams(location, name, paramKeys = []) {
   const sets = location.hash.substring(1).split('::')
   const prefix = `${name}:`
   let newParamsEncoded = ''
+
   for (let i = 0; i < sets.length; i++) {
-    const set = sets[i]
+    let set = sets[i]
+
     if (set.startsWith(prefix)) {
-      continue
+      if (!paramKeys) {
+        continue
+      }
+      const objectSet = getObjectParams(set)
+      paramKeys.forEach((paramKey) => {
+        // @ts-ignore
+        delete objectSet[paramKey]
+      })
+      /**
+       * @type {string[]}
+       */
+      const subSets = []
+      Object.entries(objectSet).forEach((entry) => {
+        const [key, value] = entry
+        subSets.push(`${key}=${value}`)
+      })
+      set = `${prefix}${subSets.join(',')}`
     }
+
     const separator = newParamsEncoded.length === 0 ? '' : '::'
     newParamsEncoded += separator + set
   }
+
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(

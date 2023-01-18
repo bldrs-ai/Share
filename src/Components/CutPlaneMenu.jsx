@@ -23,20 +23,17 @@ export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const model = useStore((state) => state.modelStore)
   const viewer = useStore((state) => state.viewerStore)
-  const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
-  const setCutPlaneOffset = useStore((state) => state.setCutPlaneOffset)
+  const cutPlanes = useStore((state) => state.cutPlanes)
+  const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
+  const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const location = useLocation()
   const PLANE_PREFIX = 'p'
   const open = Boolean(anchorEl)
   const theme = useTheme()
 
-  let planeOffsetX = 0
-  let planeOffsetY = 0
-  let planeOffsetZ = 0
-
   debug().log('CutPlaneMenu: location: ', location)
+  debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
 
 
   const handleClick = (event) => {
@@ -56,9 +53,8 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
-        viewer.clipper.deleteAllPlanes()
         planes.forEach((plane) => {
-          createPlane(plane)
+          togglePlane(plane)
         })
       }
     }
@@ -66,40 +62,30 @@ export default function CutPlaneMenu() {
   }, [model])
 
 
-  const createPlane = ({direction, offset = 0}) => {
+  const togglePlane = ({direction, offset = 0}) => {
     setLevelInstance(null)
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
-    if (direction === cutPlaneDirection) {
-      removeHashParams(window.location, PLANE_PREFIX)
-      setCutPlaneDirection(null)
-      return
+    const {normal, modelCenterOffset} = getPlaneInfo({modelCenter, direction, offset})
+    debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
+
+    if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
+      debug().log('CutPlaneMenu#togglePlane: found: ', true)
+      removeHashParams(window.location, PLANE_PREFIX, [direction])
+      removeCutPlaneDirection(direction)
+      viewer.clipper.deleteAllPlanes()
+      const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+      restCutPlanes.forEach((restCutPlane) => {
+        const planeInfo = getPlaneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
+        viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
+      })
+    } else {
+      debug().log('CutPlaneMenu#togglePlane: found: ', false)
+      addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
+      addCutPlaneDirection({direction, offset})
+      viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
     }
-    let normal
-    const finiteOffset = floatStrTrim(offset)
-    switch (direction) {
-      case 'x':
-        normal = new Vector3(-1, 0, 0)
-        planeOffsetX = finiteOffset
-        break
-      case 'y':
-        normal = new Vector3(0, -1, 0)
-        planeOffsetY = finiteOffset
-        break
-      case 'z':
-        normal = new Vector3(0, 0, -1)
-        planeOffsetZ = finiteOffset
-        break
-      default:
-        normal = new Vector3(0, 1, 0)
-        break
-    }
-    const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
-    addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
-    setCutPlaneDirection(direction)
-    setCutPlaneOffset(offset)
-    return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
   }
 
 
@@ -109,7 +95,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null || cutPlaneDirection !== null}
+        selected={anchorEl !== null || cutPlanes.length}
       />
       <Menu
         elevation={1}
@@ -132,9 +118,18 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => createPlane({direction: 'x'})} selected={cutPlaneDirection === 'x'}> X</MenuItem>
-        <MenuItem onClick={() => createPlane({direction: 'y'})} selected={cutPlaneDirection === 'y'}>Y</MenuItem>
-        <MenuItem onClick={() => createPlane({direction: 'z'})} selected={cutPlaneDirection === 'z'}>Z</MenuItem>
+        <MenuItem onClick={() => togglePlane({direction: 'x'})}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+        >X
+        </MenuItem>
+        <MenuItem onClick={() => togglePlane({direction: 'y'})}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+        >Y
+        </MenuItem>
+        <MenuItem onClick={() => togglePlane({direction: 'z'})}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
+        >Z
+        </MenuItem>
       </Menu>
     </div>
   )
@@ -144,7 +139,7 @@ export default function CutPlaneMenu() {
 /**
  * removePlanes delete all section planes from the viewer
  *
- * @param {object} viewer bouding box
+ * @param {object} viewer bounding box
  */
 export function removePlanes(viewer) {
   viewer?.clipper.deleteAllPlanes()
@@ -227,21 +222,39 @@ function getPlanes(planeHash) {
 }
 
 
-// /**
-//  * get directions array from planes object
-//  *
-//  * @param {object} planes
-//  * @return {Array}
-//  */
-// function getPlaneDirections(planes) {
-//   if (!planes) {
-//     return []
-//   }
-//   const directions = []
-//   planes.forEach((plane) => {
-//     if (plane.direction) {
-//       directions.push(plane.direction)
-//     }
-//   })
-//   return directions
-// }
+/**
+ * get plane information (normal, model center offset)
+ *
+ * @param {Vector3} modelCenter
+ * @param {string} direction
+ * @param {number} offset
+ * @return {object}
+ */
+function getPlaneInfo({modelCenter, direction, offset = 0}) {
+  let normal
+  let planeOffsetX = 0
+  let planeOffsetY = 0
+  let planeOffsetZ = 0
+  const finiteOffset = floatStrTrim(offset)
+
+  switch (direction) {
+    case 'x':
+      normal = new Vector3(-1, 0, 0)
+      planeOffsetX = finiteOffset
+      break
+    case 'y':
+      normal = new Vector3(0, -1, 0)
+      planeOffsetY = finiteOffset
+      break
+    case 'z':
+      normal = new Vector3(0, 0, -1)
+      planeOffsetZ = finiteOffset
+      break
+    default:
+      normal = new Vector3(0, 1, 0)
+      break
+  }
+
+  const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
+  return {normal, modelCenterOffset}
+}
