@@ -1,3 +1,6 @@
+import {isNumeric} from './strings'
+
+
 /** @type {Object<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
@@ -31,19 +34,27 @@ export function addHashListener(name, onHashCb) {
  *   parameter names in the encoding, default is false.
  */
 export function addHashParams(location, name, params, includeNames = false) {
-  let encodedParams = ''
+  const hashGlobalParams = getHashParams(location, name)
+  let objectGlobalParams = {}
+  if (hashGlobalParams) {
+    objectGlobalParams = getObjectParams(hashGlobalParams)
+  }
+
   for (const paramName in params) {
     if (!Object.prototype.hasOwnProperty.call(params, paramName)) {
       continue
     }
-    const paramValue = params[paramName]
-    const separator = encodedParams === '' ? '' : ','
-    const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
-    encodedParams += `${separator}${encodedParam}`
+    if (includeNames || isNumeric(paramName)) {
+      // @ts-ignore
+      objectGlobalParams[paramName] = params[paramName]
+    }
   }
+
+  const encodedParams = getEncodedParam(objectGlobalParams)
   const sets = location.hash.substring(1).split('::')
   /** @type {Object<string, string>} */
   const setMap = {}
+
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (set === '') {
@@ -54,15 +65,78 @@ export function addHashParams(location, name, params, includeNames = false) {
     const setValue = setParts[1]
     setMap[setName] = setValue
   }
+
   setMap[name] = encodedParams
   let newHash = ''
+
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += `${newHash.length === 0 ? '' : '::' }${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : '::'}${setKey}:${setValue}`
     }
   }
+
   location.hash = newHash
+}
+
+
+/**
+ * @param {object} objectParams
+ * @return {string}
+ */
+export function getEncodedParam(objectParams) {
+  const objectKeys = Object.keys(objectParams)
+  /**
+   * @type {string[]}
+   */
+  const encodedParams = []
+
+  objectKeys.forEach((objectKey) => {
+    if (isNumeric(objectKey)) {
+      // @ts-ignore
+      encodedParams.push(`${objectParams[objectKey]}`)
+    } else {
+      // @ts-ignore
+      encodedParams.push(`${objectKey}=${objectParams[objectKey]}`)
+    }
+  })
+
+  const encodedParam = encodedParams.join(',')
+  return encodedParam
+}
+
+
+/**
+ * @param {string} hashParams
+ * @return {object}
+ */
+export function getObjectParams(hashParams) {
+  if (!hashParams) {
+    return {}
+  }
+  const parts = hashParams.split(':')
+  if (!parts[0] || !parts[1]) {
+    return {}
+  }
+  const params = parts[1].split(',')
+  const objectGlobalParams = {}
+
+  params.forEach((param, index) => {
+    if (!param) {
+      return
+    }
+    const paramParts = param.split('=')
+    // eslint-disable-next-line no-magic-numbers
+    if (paramParts.length < 2) {
+      // @ts-ignore
+      objectGlobalParams[index] = paramParts[0]
+    } else {
+      // @ts-ignore
+      objectGlobalParams[paramParts[0]] = paramParts[1]
+    }
+  })
+
+  return objectGlobalParams
 }
 
 
@@ -102,7 +176,7 @@ export function getHashParamsFromHashStr(hashStr, name) {
  */
 export function removeHashParams(location, name) {
   const sets = location.hash.substring(1).split('::')
-  const prefix = `${name }:`
+  const prefix = `${name}:`
   let newParamsEncoded = ''
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]

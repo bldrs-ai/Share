@@ -56,10 +56,10 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
-        // planes.forEach((plane) => {
-        //   createPlane(plane)
-        // })
-        createPlane(planes[0])
+        viewer.clipper.deleteAllPlanes()
+        planes.forEach((plane) => {
+          createPlane(plane)
+        })
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -67,7 +67,6 @@ export default function CutPlaneMenu() {
 
 
   const createPlane = ({direction, offset = 0}) => {
-    viewer.clipper.deleteAllPlanes()
     setLevelInstance(null)
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
@@ -97,11 +96,7 @@ export default function CutPlaneMenu() {
         break
     }
     const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
-    const planeHash = getHashParams(location, 'p')
-    const planeDirection = getPlanes(planeHash)
-    if (!planeHash || planeDirection !== direction) {
-      addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
-    }
+    addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
     setCutPlaneDirection(direction)
     setCutPlaneOffset(offset)
     return viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
@@ -230,3 +225,23 @@ function getPlanes(planeHash) {
   })
   return planes
 }
+
+
+// /**
+//  * get directions array from planes object
+//  *
+//  * @param {object} planes
+//  * @return {Array}
+//  */
+// function getPlaneDirections(planes) {
+//   if (!planes) {
+//     return []
+//   }
+//   const directions = []
+//   planes.forEach((plane) => {
+//     if (plane.direction) {
+//       directions.push(plane.direction)
+//     }
+//   })
+//   return directions
+// }
