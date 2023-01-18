@@ -9,6 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {roundCoord} from '../utils/math'
+import {floatStrTrim} from '../utils/strings'
 
 
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
@@ -116,27 +117,16 @@ const paramRegex = new RegExp(paramPattern)
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
 
-  const stof = (str) => {
-    const floatDigits = 2
-    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
-    if (isFinite(val)) {
-      const rounded = parseFloat(val.toFixed(0))
-      return rounded === val ? rounded : val
-    } else {
-      console.warn('Invalid coordinate: ', str)
-    }
-  }
-
   debug().log('CameraControl#onHash: match: ', match)
 
   if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
-    const x = stof(match[1])
-    const y = stof(match[2])
-    const z = stof(match[3])
+    const x = floatStrTrim(match[1])
+    const y = floatStrTrim(match[2])
+    const z = floatStrTrim(match[3])
     if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
       return [x, y, z]
     } else {
-      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])]
+      return [x, y, z, floatStrTrim(match[4]), floatStrTrim(match[5]), floatStrTrim(match[6])]
     }
   } else {
     debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)

@@ -58,3 +58,28 @@ export function findUrls(str) {
     }
   })
 }
+
+
+/**
+ * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
+ * - '0' -> 0
+ * - '12.34567' -> 12.346
+ * - '12.340' -> 12.34
+ * - '12.300' -> 12.3
+ * - '12.000' -> 12
+ *
+ * @param {string} str string.
+ * @return {number} float.
+ */
+export function floatStrTrim(str) {
+  const floatDigits = 3
+  let floatStr = parseFloat(str)
+  if (!floatStr) {
+    floatStr = 0
+  }
+  const val = parseFloat(floatStr.toFixed(floatDigits))
+  if (!isFinite(val)) {
+    throw new Error('Parameter is invalid.')
+  }
+  return val
+}

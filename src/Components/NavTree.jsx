@@ -7,6 +7,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import {computeElementPathIds} from '../utils/TreeUtils'
+import {handleBeforeUnload} from '../utils/event'
 
 
 const NavTreePropTypes = {
@@ -93,6 +94,7 @@ export default function NavTree({
       if (selectedElement) {
         const newPath =
               `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
+        window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(newPath)
       }
     }, [selectedElement, navigate])
