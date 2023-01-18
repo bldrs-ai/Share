@@ -35,6 +35,8 @@
     "@mui/styled-engine": "^5.8.7",
     "@mui/styles": "^5.9.2",
     "@octokit/rest": "^19.0.3",
+    "@sentry/react": "^7.31.1",
+    "@sentry/tracing": "^7.31.1",
     "clsx": "^1.2.1",
     "normalize.css": "^8.0.1",
     "prop-types": "^15.8.1",
