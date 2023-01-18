@@ -12,6 +12,7 @@ import {FlagsProvider} from 'react-feature-flags'
 import {flags} from './FeatureFlags'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
+import ApplicationError from './Components/ApplicationError'
 
 
 Sentry.init({
@@ -43,8 +44,11 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 
 const root = createRoot(document.getElementById('root'))
 root.render(
-    <FlagsProvider value={flags}>
-      <BrowserRouter>
-        <BaseRoutes/>
-      </BrowserRouter>
-    </FlagsProvider>)
+    <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
+      <FlagsProvider value={flags}>
+        <BrowserRouter>
+          <BaseRoutes/>
+        </BrowserRouter>
+      </FlagsProvider>
+    </Sentry.ErrorBoundary>,
+)
