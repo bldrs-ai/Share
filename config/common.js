@@ -35,6 +35,9 @@ export const build = {
   platform: 'browser',
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
+  define: {
+    'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
+  },
   plugins: [
     progress(),
     svgrPlugin(),
