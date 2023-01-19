@@ -95,7 +95,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null || cutPlanes.length}
+        selected={anchorEl !== null || !!cutPlanes.length}
       />
       <Menu
         elevation={1}

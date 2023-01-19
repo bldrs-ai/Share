@@ -10,7 +10,7 @@ window.onhashchange = () => {
 }
 
 
-// TODO(pablo): Ideally this would be hanled by react-router
+// TODO(pablo): Ideally this would be handled by react-router
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
 /**
@@ -44,13 +44,11 @@ export function addHashParams(location, name, params, includeNames = false) {
     if (!Object.prototype.hasOwnProperty.call(params, paramName)) {
       continue
     }
-    if (includeNames || isNumeric(paramName)) {
-      // @ts-ignore
-      objectGlobalParams[paramName] = params[paramName]
-    }
+    // @ts-ignore
+    objectGlobalParams[paramName] = params[paramName]
   }
 
-  const encodedParams = getEncodedParam(objectGlobalParams)
+  const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
   const sets = location.hash.substring(1).split('::')
   /** @type {Object<string, string>} */
   const setMap = {}
@@ -84,7 +82,7 @@ export function addHashParams(location, name, params, includeNames = false) {
  * @param {object} objectParams
  * @return {string}
  */
-export function getEncodedParam(objectParams) {
+export function getEncodedParam(objectParams, includeNames = false) {
   const objectKeys = Object.keys(objectParams)
   /**
    * @type {string[]}
@@ -92,12 +90,13 @@ export function getEncodedParam(objectParams) {
   const encodedParams = []
 
   objectKeys.forEach((objectKey) => {
-    if (isNumeric(objectKey)) {
+    if (includeNames) {
       // @ts-ignore
-      encodedParams.push(`${objectParams[objectKey]}`)
+      const objectValue = objectParams[objectKey]
+      encodedParams.push(objectValue ? `${objectKey}=${objectValue}` : objectKey)
     } else {
       // @ts-ignore
-      encodedParams.push(`${objectKey}=${objectParams[objectKey]}`)
+      encodedParams.push(`${objectParams[objectKey]}`)
     }
   })
 
@@ -128,8 +127,13 @@ export function getObjectParams(hashParams) {
     const paramParts = param.split('=')
     // eslint-disable-next-line no-magic-numbers
     if (paramParts.length < 2) {
-      // @ts-ignore
-      objectGlobalParams[index] = paramParts[0]
+      if (isNumeric(paramParts[0])) {
+        // @ts-ignore
+        objectGlobalParams[index] = paramParts[0]
+      } else {
+        // @ts-ignore
+        objectGlobalParams[paramParts[0]] = 0
+      }
     } else {
       // @ts-ignore
       objectGlobalParams[paramParts[0]] = paramParts[1]
@@ -184,7 +188,7 @@ export function removeHashParams(location, name, paramKeys = []) {
     let set = sets[i]
 
     if (set.startsWith(prefix)) {
-      if (!paramKeys) {
+      if (!paramKeys.length) {
         continue
       }
       const objectSet = getObjectParams(set)
@@ -198,7 +202,7 @@ export function removeHashParams(location, name, paramKeys = []) {
       const subSets = []
       Object.entries(objectSet).forEach((entry) => {
         const [key, value] = entry
-        subSets.push(`${key}=${value}`)
+        subSets.push(value ? `${key}=${value}` : key)
       })
       set = `${prefix}${subSets.join(',')}`
     }

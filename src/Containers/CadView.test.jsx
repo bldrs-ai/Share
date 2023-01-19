@@ -101,7 +101,7 @@ describe('CadView', () => {
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toBe(null)
     expect(result.current.selectedElement).toBe(null)
-    expect(result.current.cutPlanes).toBe([])
+    expect(result.current.cutPlanes.length).toBe(0)
     await actAsyncFlush()
   })
 

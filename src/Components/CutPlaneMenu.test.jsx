@@ -34,10 +34,11 @@ describe('CutPlane', () => {
     fireEvent.click(sectionButton)
     const xDirection = getByText('X')
     fireEvent.click(xDirection)
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
+    const callCreatePlanes = viewer.clipper.createFromNormalAndCoplanarPoint.mock.calls
     expect(callCreatePlanes.length).toBe(1)
+    fireEvent.click(xDirection)
+    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+    expect(callDeletePlanes.length).toBe(1)
   })
 
   it('X Section in URL', async () => {
@@ -52,9 +53,7 @@ describe('CutPlane', () => {
     await act(() => {
       result.current.setViewerStore(viewer)
     })
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    const callCreatePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
+    const callCreatePlanes = viewer.clipper.createFromNormalAndCoplanarPoint.mock.calls
     expect(callCreatePlanes.length).toBe(1)
   })
 
@@ -87,8 +86,8 @@ describe('CutPlane', () => {
         >
           <CutPlaneMenu/>
         </ShareMock>)
-
+    expect(result.current.cutPlanes[0].direction).toBe('y')
     // eslint-disable-next-line no-magic-numbers
-    expect(result.current.cutPlaneOffset).toBe(14)
+    expect(result.current.cutPlanes[0].offset).toBe(14)
   })
 })
