@@ -15,7 +15,6 @@ const esModules = [
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
-  'nanoid',
   'property-information',
   'space-separated-tokens',
   'remark-rehype',
@@ -53,7 +52,6 @@ module.exports = {
     `/node_modules/(?!${esModules}/)`,
   ],
   moduleNameMapper: {
-    'nanoid': require.resolve('nanoid'),
     '^.+\\.css$': 'identity-obj-proxy',
   },
   setupFilesAfterEnv: [

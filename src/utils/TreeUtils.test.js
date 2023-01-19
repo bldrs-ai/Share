@@ -2,7 +2,7 @@ import {
   computeElementPathIds,
   setupLookupAndParentLinks,
 } from './TreeUtils'
-import {nanoid} from 'nanoid'
+import {v4 as uuidv4} from 'uuid'
 
 /**
  *Helper to create a mock IFC doc object tree.
@@ -139,7 +139,7 @@ export const createFakeSite = ({expressId, globalId, name, longName, parent}) =>
 
   site.GlobalId = {
     type: 1,
-    value: globalId || nanoid(),
+    value: globalId || uuidv4(),
   }
 
   return site
@@ -191,7 +191,7 @@ export const createFakeBuilding = ({expressId, globalId, name, longName, parent}
 
   building.GlobalId = {
     type: 1,
-    value: globalId || nanoid(),
+    value: globalId || uuidv4(),
   }
 
   return building
