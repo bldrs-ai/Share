@@ -7,7 +7,16 @@ import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
 import * as AllCadView from './CadView'
+import * as reactRouting from 'react-router-dom'
 
+
+const mockUseDefaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
+jest.mock('react-router-dom', () => {
+  return {
+    ...jest.requireActual('react-router-dom'),
+    useLocation: jest.fn(() => mockUseDefaultLocationValue),
+  }
+})
 
 describe('CadView', () => {
   afterEach(() => {
@@ -40,8 +49,10 @@ describe('CadView', () => {
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
+    const mockCurrentLocationValue = {pathname: '/index.ifc/1', search: '', hash: '', state: null, key: 'default'}
+    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
     const modelPath = {
-      filepath: `index.ifc/${targetEltId}`,
+      filepath: `index.ifc`,
       gitpath: undefined,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
@@ -62,7 +73,7 @@ describe('CadView', () => {
     const numCallsExpected = 2 // First for root, second from URL path
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
-    expect(getPropsCalls[0][0]).toBe(0) // call 2, arg 2
+    expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
     expect(getPropsCalls[1][1]).toBe(targetEltId) // call 2, arg 2
     await actAsyncFlush()
@@ -71,8 +82,10 @@ describe('CadView', () => {
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
+    const mockCurrentLocationValue = {pathname: '/index.ifc/1', search: '', hash: '', state: null, key: 'default'}
+    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
     const modelPath = {
-      filepath: `index.ifc/${targetEltId}`,
+      filepath: `index.ifc`,
       gitpath: undefined,
     }
     const viewer = __getIfcViewerAPIMockSingleton()
@@ -108,6 +121,8 @@ describe('CadView', () => {
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
     jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
+    const mockCurrentLocationValue = {pathname: '/haus.ifc', search: '', hash: '', state: null, key: 'default'}
+    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
 
     const modelPath = {
       filepath: `haus.ifc`,
