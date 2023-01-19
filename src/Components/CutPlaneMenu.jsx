@@ -5,11 +5,14 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import useTheme from '../Theme'
 import useStore from '../store/useStore'
-import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
+import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
-import {floatStrTrim} from '../utils/strings'
+import {floatStrTrim, isNumeric} from '../utils/strings'
 import debug from '../utils/debug'
+
+
+const PLANE_PREFIX = 'p'
 
 
 /**
@@ -28,7 +31,6 @@ export default function CutPlaneMenu() {
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const location = useLocation()
-  const PLANE_PREFIX = 'p'
   const open = Boolean(anchorEl)
   const theme = useTheme()
 
@@ -187,7 +189,6 @@ export function getPlaneOffset(viewer, ifcModel) {
  * @param {object} ifcModel
  */
 export function addPlaneLocationToUrl(viewer, ifcModel) {
-  const PLANE_PREFIX = 'p'
   if (viewer.clipper.planes.length > 0) {
     const planeOffset = getPlaneOffset(viewer, ifcModel)
     addHashParams(window.location, PLANE_PREFIX, planeOffset)
@@ -209,15 +210,25 @@ function getPlanes(planeHash) {
   if (parts[0] !== 'p' || !parts[1]) {
     return []
   }
+  const planeObjectParams = getObjectParams(planeHash)
+  debug().log('CutPlaneMenu#getPlanes: planeObjectParams: ', planeObjectParams)
   const planes = []
-  const subParts = parts[1].split(',')
-  subParts.forEach((subPart) => {
-    const planeParts = subPart.split('=')
-    planes.push({
-      direction: planeParts[0],
-      offset: floatStrTrim(planeParts[1]),
-    })
+  Object.entries(planeObjectParams).forEach((entry) => {
+    const [key, value] = entry
+    const removableParamKeys = []
+    if (isNumeric(key)) {
+      removableParamKeys.push(key)
+    } else {
+      planes.push({
+        direction: key,
+        offset: floatStrTrim(value),
+      })
+    }
+    if (removableParamKeys.length) {
+      removeHashParams(window.location, PLANE_PREFIX, removableParamKeys)
+    }
   })
+  debug().log('CutPlaneMenu#getPlanes: planes: ', planes)
   return planes
 }
 
