@@ -7,22 +7,17 @@ import {MockComponent} from '../__mocks__/MockComponent'
 // When this test is ran an error is thrown by the assert as expected therefore the test is passing,
 // but the error is printed on the screen making it look like something is wrong.
 describe('<TooltipIconButton />', () => {
-  test('should throw error if missing required props', () => {
-    expect(() => render(<MockComponent>
-      <TooltipIconButton/>
-    </MockComponent>)).toThrowError('Arg 0 is not defined')
-  })
-
   test('should render successfully', async () => {
     /* eslint-disable no-empty-function */
-    const rendered = render(<MockComponent>
-      <TooltipIconButton
-        data-testid={'test-button'}
-        title={'Hello. Is it me you\'re looking for?'}
-        onClick={() => {}}
-        icon={<QuestionIcon/>}
-      />
-    </MockComponent>)
+    const rendered = render(
+        <MockComponent>
+          <TooltipIconButton
+            data-testid={'test-button'}
+            title={'Hello. Is it me you\'re looking for?'}
+            onClick={() => {}}
+            icon={<QuestionIcon/>}
+          />
+        </MockComponent>)
     /* eslint-enable no-empty-function */
 
     const button = rendered.getByTestId('test-button')

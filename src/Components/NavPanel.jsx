@@ -1,14 +1,13 @@
 import React, {useContext} from 'react'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
-import {makeStyles} from '@mui/styles'
 import NavTree from './NavTree'
 import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
 import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {ColorModeContext} from '../Context/ColorMode'
-import {useIsMobile} from './Hooks'
 
 
 /**
@@ -30,25 +29,53 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const theme = useContext(ColorModeContext)
-  const classes = useStyles({isDay: theme.isDay()})
+  const colorMode = useContext(ColorModeContext)
   const selectedElements = useStore((state) => state.selectedElements)
-  const isMobile = useIsMobile()
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
+
+
   return (
     <Paper
+      sx={{
+        'marginTop': '14px',
+        'overflow': 'auto',
+        'width': '300px',
+        'opacity': .8,
+        'justifyContent': 'space-around',
+        'alignItems': 'center',
+        'maxHeight': '100%',
+        '@media (max-width: 900px)': {
+          maxHeight: '150px',
+          width: '300px',
+          top: '86px',
+        },
+        'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+      }}
       elevation={0}
-      className={classes.root}
-      sx={{backgroundColor: isMobile ? (theme.isDay() ? '#E8E8E8' : '#4C4C4C') : null}}
     >
-      <div className={classes.treeContainer}>
+      <Box sx={{
+        paddingTop: '14px',
+        paddingBottom: '14px',
+        overflow: 'auto',
+      }}
+      >
         <TreeView
+          sx={{flexGrow: 1, maxWidth: '400px', overflowY: 'auto', overflowX: 'hidden'}}
           aria-label='IFC Navigator'
-          defaultCollapseIcon={<NodeOpen className={classes.icon} />}
-          defaultExpandIcon={<NodeClosed className={classes.icon} />}
-          sx={{flexGrow: 1, maxWidth: 400, overflowY: 'auto', overflowX: 'hidden'}}
+          defaultCollapseIcon={
+            <NodeOpen sx={{
+              width: '0.8em',
+              height: '0.8em',
+            }}
+            />}
+          defaultExpandIcon={
+            <NodeClosed sx={{
+              width: '0.8em',
+              height: '0.8em',
+            }}
+            />}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
           selected={selectedElements}
@@ -57,63 +84,13 @@ export default function NavPanel({
           }}
           key='tree'
         >
-          {
-            <NavTree
-              model={model}
-              element={element}
-              pathPrefix={pathPrefix}
-            />
-          }
+          <NavTree
+            model={model}
+            element={element}
+            pathPrefix={pathPrefix}
+          />
         </TreeView>
-      </div>
+      </Box>
     </Paper>
   )
 }
-
-
-const useStyles = makeStyles((theme) => ({
-  root: {
-    'position': 'absolute',
-    'top': '86px',
-    'left': '20px',
-    'overflow': 'auto',
-    'width': '300px',
-    'opacity': .8,
-    'justifyContent': 'space-around',
-    'alignItems': 'center',
-    'maxHeight': '50%',
-    '@media (max-width: 900px)': {
-      maxHeight: '150px',
-      width: '300px',
-      top: '86px',
-    },
-  },
-  treeContainer: {
-    paddingTop: '14px',
-    paddingBottom: '14px',
-    overflow: 'auto',
-  },
-  paper: {
-    display: 'flex',
-    overflow: 'auto',
-    flexDirection: 'column',
-    width: '220px',
-  },
-  treeIcon: {
-    width: '30px',
-    height: '30px',
-  },
-  icon: {
-    width: '0.8em',
-    height: '0.8em',
-  },
-  toggleButton: {
-    'position': 'absolute',
-    'top': (props) => `${props.topOffset}px`,
-    'left': '30px',
-    '@media (max-width: 900px)': {
-      left: '20px',
-    },
-  },
-}),
-)

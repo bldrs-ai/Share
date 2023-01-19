@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename)
 
 const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
 const assetsDir = path.resolve(__dirname, '..', 'public')
-const buildDir = path.resolve(__dirname, '..', 'docs')
+export const buildDir = path.resolve(__dirname, '..', 'docs')
 
 export const build = {
   entryPoints: [entryPoint],
@@ -35,6 +35,9 @@ export const build = {
   platform: 'browser',
   target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
   logLevel: 'info',
+  define: {
+    'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
+  },
   plugins: [
     progress(),
     svgrPlugin(),

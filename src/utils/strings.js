@@ -25,8 +25,22 @@ export function toKey(str) {
 
 
 /**
+ * Check if the string is a number
+ *
+ * @param {string} str to check
+ * @return {boolean} true if the string is a number
+ */
+export function isNumeric(str) {
+  if (typeof str !== 'string') {
+    throw new Error('Expected a string')
+  }
+  return !isNaN(parseFloat(str))
+}
+
+
+/**
  * @param {string} str
- * @return {Array} url matches
+ * @return {Array<string>} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
@@ -43,4 +57,29 @@ export function findUrls(str) {
       return false
     }
   })
+}
+
+
+/**
+ * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
+ * - '0' -> 0
+ * - '12.34567' -> 12.346
+ * - '12.340' -> 12.34
+ * - '12.300' -> 12.3
+ * - '12.000' -> 12
+ *
+ * @param {string} str string.
+ * @return {number} float.
+ */
+export function floatStrTrim(str) {
+  const floatDigits = 3
+  let floatStr = parseFloat(str)
+  if (!floatStr) {
+    floatStr = 0
+  }
+  const val = parseFloat(floatStr.toFixed(floatDigits))
+  if (!isFinite(val)) {
+    throw new Error('Parameter is invalid.')
+  }
+  return val
 }

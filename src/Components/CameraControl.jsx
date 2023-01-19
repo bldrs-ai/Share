@@ -2,7 +2,6 @@ import React, {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import {assertDefined} from '../utils/assert'
 import {
   addHashListener,
   addHashParams,
@@ -10,6 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {roundCoord} from '../utils/math'
+import {floatStrTrim} from '../utils/strings'
 
 
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
@@ -21,12 +21,10 @@ import {roundCoord} from '../utils/math'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @param {object} viewer The IFC viewer, which contains the
- *   cameraControls
  * @return {object} React component
  */
-export default function CameraControl({viewer}) {
-  assertDefined(viewer, viewer.IFC, viewer.IFC.context, viewer.IFC.context.ifcCamera)
+export default function CameraControl() {
+  const viewer = useStore((state) => state.viewerStore)
   const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
   const setCameraControls = useStore((state) => state.setCameraControls)
   const location = useLocation()
@@ -92,6 +90,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
+
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6
@@ -99,6 +98,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
       cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
+
   addCameraUrlParams(cameraControls)
 }
 
@@ -116,25 +116,17 @@ const paramRegex = new RegExp(paramPattern)
  */
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
-  const stof = (str) => {
-    const floatDigits = 2
-    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
-    if (isFinite(val)) {
-      const rounded = parseFloat(val.toFixed(0))
-      return rounded === val ? rounded : val
-    } else {
-      console.warn('Invalid coordinate: ', str)
-    }
-  }
+
   debug().log('CameraControl#onHash: match: ', match)
+
   if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
-    const x = stof(match[1])
-    const y = stof(match[2])
-    const z = stof(match[3])
+    const x = floatStrTrim(match[1])
+    const y = floatStrTrim(match[2])
+    const z = floatStrTrim(match[3])
     if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
       return [x, y, z]
     } else {
-      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])]
+      return [x, y, z, floatStrTrim(match[4]), floatStrTrim(match[5]), floatStrTrim(match[6])]
     }
   } else {
     debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)

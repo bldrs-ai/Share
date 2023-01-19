@@ -1,7 +1,7 @@
 import React from 'react'
+import Typography from '@mui/material/Typography'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
-import {Typography} from '@mui/material'
 import {assertDefined} from '../utils/assert'
 
 
@@ -32,11 +32,18 @@ export default function Dialog({
     >
       <Typography
         variant='h1'
-        sx={{marginTop: '40px'}}
+        sx={{marginTop: '24px'}}
       >
         {headerText}
       </Typography>
-      <DialogContent>
+      <DialogContent sx={{
+        'marginTop': '10px',
+        'paddingTop': '0px',
+        '@media (max-width: 900px)': {
+          paddingTop: '10px',
+        },
+      }}
+      >
         <Typography variant='p'>
           {content}
         </Typography>
