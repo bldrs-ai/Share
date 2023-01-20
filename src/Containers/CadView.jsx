@@ -111,7 +111,7 @@ export default function CadView({
       if (selectedElements.length > 0) {
         selectItemsInScene(selectedElements.map((id) => parseInt(id)))
       } else {
-        unSelectItems()
+        viewer?.IFC.unpickIfcItems()
       }
     }
   }, [selectedElements])

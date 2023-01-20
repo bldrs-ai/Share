@@ -10,11 +10,13 @@ import * as AllCadView from './CadView'
 import * as reactRouting from 'react-router-dom'
 
 
-const mockUseDefaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
+const mockedUseNavigate = jest.fn()
+const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
 jest.mock('react-router-dom', () => {
   return {
     ...jest.requireActual('react-router-dom'),
-    useLocation: jest.fn(() => mockUseDefaultLocationValue),
+    useNavigate: () => mockedUseNavigate,
+    useLocation: jest.fn(() => defaultLocationValue),
   }
 })
 
@@ -49,8 +51,9 @@ describe('CadView', () => {
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
-    const mockCurrentLocationValue = {pathname: '/index.ifc/1', search: '', hash: '', state: null, key: 'default'}
-    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
@@ -71,6 +74,7 @@ describe('CadView', () => {
     await actAsyncFlush()
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
+    expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
     expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
@@ -79,11 +83,43 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+  it('sets up camera and cutting plan from URL,', async () => {
+    const testTree = makeTestTree()
+    const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const viewer = __getIfcViewerAPIMockSingleton()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
+    const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
+    // eslint-disable-next-line no-magic-numbers
+    expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
+    const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
+    // eslint-disable-next-line no-magic-numbers
+    expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
+    const createPlanMock = viewer.clipper.createFromNormalAndCoplanarPoint
+    expect(createPlanMock).toHaveBeenCalled()
+    await actAsyncFlush()
+  })
+
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
-    const mockCurrentLocationValue = {pathname: '/index.ifc/1', search: '', hash: '', state: null, key: 'default'}
-    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
@@ -121,8 +157,8 @@ describe('CadView', () => {
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
     jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
-    const mockCurrentLocationValue = {pathname: '/haus.ifc', search: '', hash: '', state: null, key: 'default'}
-    reactRouting.useLocation.mockReturnValue(mockCurrentLocationValue)
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
 
     const modelPath = {
       filepath: `haus.ifc`,
