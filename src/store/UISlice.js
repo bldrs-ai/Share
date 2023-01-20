@@ -1,3 +1,5 @@
+import debug from '../utils/debug'
+
 /**
  * Data stored in Zustand for UI state.
  *
@@ -13,8 +15,7 @@ export default function createUISlice(set, get) {
     isOpenControlHighlighted: true,
     isPropertiesOn: false,
     snackMessage: null,
-    cutPlaneDirection: null,
-    cutPlaneOffset: 0,
+    cutPlanes: [],
     levelInstance: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
@@ -24,8 +25,20 @@ export default function createUISlice(set, get) {
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     turnCommentsOn: () => set(() => ({isCommentsOn: true})),
     turnCommentsOff: () => set(() => ({isCommentsOn: false})),
-    setCutPlaneDirection: (direction) => set(() => ({cutPlaneDirection: direction})),
-    setCutPlaneOffset: (offset) => set(() => ({cutPlaneOffset: offset})),
+    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
+    addCutPlaneDirection: ({direction, offset}) => set((state) => {
+      debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
+      if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
+        state.cutPlanes.push({direction, offset})
+      }
+      debug().log('UISlice#addCutPlaneDirection: cutPlanes(end): ', state.cutPlanes)
+      return state.cutPlanes
+    }),
+    removeCutPlaneDirection: (direction) => set((state) => {
+      const filterPlanes = state.cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+      debug().log('UISlice#removeCutPlaneDirection: filterPlanes: ', filterPlanes)
+      return {cutPlanes: filterPlanes}
+    }),
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
