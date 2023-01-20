@@ -69,7 +69,7 @@ export default function CutPlaneMenu() {
     const modelCenter = new Vector3
     model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
-    const {normal, modelCenterOffset} = getPlaneInfo({modelCenter, direction, offset})
+    const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, direction, offset})
     debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
@@ -79,7 +79,7 @@ export default function CutPlaneMenu() {
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
       restCutPlanes.forEach((restCutPlane) => {
-        const planeInfo = getPlaneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
+        const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
         viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
       })
     } else {
@@ -157,27 +157,28 @@ export function removePlanes(viewer) {
  *
  * @param {object} viewer
  * @param {object} ifcModel
- * @return {object} offsetObj contains plane normal access as a key and offset as a value
+ * @return {object} {x: 0, y: 0, ...}
  */
-export function getPlaneOffset(viewer, ifcModel) {
+export function getPlanesOffset(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     let planeNormal
     let planeAxisCenter
     let planeOffsetFromCenter
-    let planeHash
+    const planesOffset = {}
     const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
     const modelCenter = new Vector3
     ifcModel?.geometry.boundingBox.getCenter(modelCenter)
-    for (const [key, value] of Object.entries(viewer.clipper.planes[0].plane.normal)) {
-      if (value !== 0) {
-        planeNormal = key
-        planeAxisCenter = modelCenter[planeNormal]
-        planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
-        planeHash = `${planeNormal}=${planeOffsetFromCenter}`
+    viewer.clipper.planes.forEach((plane) => {
+      for (const [key, value] of Object.entries(plane.plane.normal)) {
+        if (value !== 0) {
+          planeNormal = key
+          planeAxisCenter = modelCenter[planeNormal]
+          planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
+          planesOffset[planeNormal] = floatStrTrim(planeOffsetFromCenter)
+        }
       }
-    }
-    const planeOffsetObj = {planeAxis: planeHash}
-    return planeOffsetObj
+    })
+    return planesOffset
   }
 }
 
@@ -190,8 +191,9 @@ export function getPlaneOffset(viewer, ifcModel) {
  */
 export function addPlaneLocationToUrl(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
-    const planeOffset = getPlaneOffset(viewer, ifcModel)
-    addHashParams(window.location, PLANE_PREFIX, planeOffset)
+    const planeInfo = getPlanesOffset(viewer, ifcModel)
+    debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
+    addHashParams(window.location, PLANE_PREFIX, planeInfo, true)
   }
 }
 
@@ -241,7 +243,7 @@ function getPlanes(planeHash) {
  * @param {number} offset
  * @return {object}
  */
-function getPlaneInfo({modelCenter, direction, offset = 0}) {
+function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
   let normal
   let planeOffsetX = 0
   let planeOffsetY = 0
