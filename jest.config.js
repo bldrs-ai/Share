@@ -30,6 +30,7 @@ const esModules = [
   'unist-util-position',
   'unist-util-stringify-position',
   'unist-util-visit',
+  'uuid',
   'vfile',
   'vfile-message',
   'web-ifc',
