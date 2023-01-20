@@ -70,6 +70,8 @@ export default function CutPlaneMenu() {
     model?.geometry.boundingBox.getCenter(modelCenter)
     setAnchorEl(null)
     const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, direction, offset})
+    debug().log('CutPlaneMenu#togglePlane: normal: ', normal)
+    debug().log('CutPlaneMenu#togglePlane: modelCenterOffset: ', modelCenterOffset)
     debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
@@ -165,12 +167,13 @@ export function getPlanesOffset(viewer, ifcModel) {
     let planeAxisCenter
     let planeOffsetFromCenter
     const planesOffset = {}
-    const planeOffsetFromModelBoundary = viewer.clipper.planes[0].plane.constant
     const modelCenter = new Vector3
     ifcModel?.geometry.boundingBox.getCenter(modelCenter)
+    debug().log('CutPlaneMenu#getPlanesOffset: modelCenter: ', modelCenter)
     viewer.clipper.planes.forEach((plane) => {
       for (const [key, value] of Object.entries(plane.plane.normal)) {
         if (value !== 0) {
+          const planeOffsetFromModelBoundary = plane.plane.constant
           planeNormal = key
           planeAxisCenter = modelCenter[planeNormal]
           planeOffsetFromCenter = planeOffsetFromModelBoundary - planeAxisCenter
