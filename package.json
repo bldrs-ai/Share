@@ -38,6 +38,7 @@
     "@sentry/react": "^7.31.1",
     "@sentry/tracing": "^7.31.1",
     "clsx": "^1.2.1",
+    "matrix-widget-api": "^1.1.1",
     "normalize.css": "^8.0.1",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",

@@ -44,6 +44,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
 }
 
 const root = createRoot(document.getElementById('root'))
+
 root.render(
     <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
       <FlagsProvider value={flags}>
