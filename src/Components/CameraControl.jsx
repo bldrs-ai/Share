@@ -155,13 +155,12 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
-  const floatDigits = 2
-  let camArr = roundCoord(...position, floatDigits)
+  let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
   if (target.x === 0 && target.y === 0 && target.z === 0) {
     camArr = camArr.concat(0)
   } else {
-    camArr = camArr.concat(roundCoord(...target, floatDigits))
+    camArr = camArr.concat(roundCoord(...target))
   }
   addHashParams(window.location, CAMERA_PREFIX, camArr)
 }

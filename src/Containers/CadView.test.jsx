@@ -130,7 +130,7 @@ describe('CadView', () => {
     await act(() => {
       result.current.setSelectedElement(targetEltId)
       result.current.setSelectedElements([targetEltId])
-      result.current.setCutPlaneDirection('y')
+      result.current.setCutPlaneDirections(['y'])
     })
     const {getByTitle} = render(
         <ShareMock>
@@ -150,7 +150,7 @@ describe('CadView', () => {
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toBe(null)
     expect(result.current.selectedElement).toBe(null)
-    expect(result.current.cutPlaneDirection).toBe(null)
+    expect(result.current.cutPlanes.length).toBe(0)
     await actAsyncFlush()
   })
 

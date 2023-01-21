@@ -17,6 +17,7 @@ import ApplicationError from './Components/ApplicationError'
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
+  environment: process.env.SENTRY_ENVIRONMENT,
   integrations: [
     new BrowserTracing({
       routingInstrumentation: Sentry.reactRouterV6Instrumentation(

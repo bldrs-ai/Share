@@ -7,6 +7,7 @@ import MuiDialog from '@mui/material/Dialog'
 import {grey} from '@mui/material/colors'
 import {UilBuilding, UilUpload, UilMultiply, UilGraduationCap, UilGithub} from '@iconscout/react-unicons'
 import {assertDefined} from '../utils/assert'
+import debug from '../utils/debug'
 import {RectangularButton} from './Buttons'
 import InputBar from './InputBar'
 
@@ -138,7 +139,7 @@ export function OpenDialogBodyContent() {
         >or
         </Box>
       </Box>
-      <RectangularButton title='Upload from device' onClick={() => console.log('clicked')} icon={<UilUpload/>}/>
+      <RectangularButton title='Upload from device' onClick={() => debug().log('clicked')} icon={<UilUpload/>}/>
       <Box sx={{
         display: 'flex',
         flexDirection: 'column',
@@ -159,7 +160,7 @@ export function OpenDialogBodyContent() {
         >or
         </Box>
       </Box>
-      <RectangularButton title='Load Sample Model' onClick={() => console.log('clicked')} icon={<UilBuilding/>}/>
+      <RectangularButton title='Load Sample Model' onClick={() => debug().log('clicked')} icon={<UilBuilding/>}/>
     </Box>
   )
 }

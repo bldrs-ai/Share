@@ -37,6 +37,7 @@ export const build = {
   logLevel: 'info',
   define: {
     'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
+    'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
   },
   plugins: [
     progress(),
