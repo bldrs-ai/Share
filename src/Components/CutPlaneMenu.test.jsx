@@ -99,9 +99,7 @@ describe('CutPlane', () => {
       result.current.setModelStore(model)
     })
     render(
-        <ShareMock
-          initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y=14']}
-        >
+        <ShareMock>
           <CutPlaneMenu/>
         </ShareMock>)
     const planes = getPlanes('p:0,1,x=0,y=1.11111,z=2.22222')
