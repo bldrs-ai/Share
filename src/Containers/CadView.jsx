@@ -72,6 +72,7 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const [modelReady, setModelReady] = useState(false)
@@ -101,6 +102,16 @@ export default function CadView({
   useEffect(() => {
     onSearchParams()
   }, [searchParams])
+
+
+  useEffect(() => {
+    (async () => {
+      if (Array.isArray(selectedElements)) {
+        // Update The Scene state
+        await viewer?.setSelection(0, selectedElements)
+      }
+    })()
+  }, [selectedElements])
 
 
   // Watch for path changes within the model.
@@ -344,7 +355,9 @@ export default function CadView({
 
   /** Clear active search state and unpick active scene elts. */
   function resetSelection() {
-    selectItemsInScene([])
+    if (selectedElements?.length !== 0) {
+      selectItemsInScene([])
+    }
   }
 
   /** Reset global state */
@@ -373,8 +386,9 @@ export default function CadView({
       return
     }
     try {
-      await viewer.setSelection(0, resultIDs)
-      setSelectedElements(resultIDs.map((id) => `${id}`))
+      console.trace(resultIDs)
+      // Update The Component state
+      setSelectedElements(resultIDs)
       if (resultIDs.length > 0) {
         const lastId = resultIDs.slice(-1)
         const props = await viewer.getProperties(0, Number(lastId))
@@ -477,7 +491,7 @@ export default function CadView({
       }
       if (event.code === 'KeyA' ||
       event.code === 'Escape') {
-        selectItemsInScene([])
+        resetSelection()
       }
     }
   }

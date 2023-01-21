@@ -78,7 +78,7 @@ export default function NavPanel({
             />}
           defaultExpanded={defaultExpandedElements}
           expanded={expandedElements}
-          selected={selectedElements}
+          selected={selectedElements?.map((id) => `${id}`)}
           onNodeToggle={(event, nodeIds) => {
             setExpandedElements(nodeIds)
           }}

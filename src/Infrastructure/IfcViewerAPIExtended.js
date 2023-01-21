@@ -41,6 +41,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   async setSelection(modelID, expressIds, focusSelection) {
     this._selectedExpressIds = expressIds
     if (typeof focusSelection === 'undefined') {
+      // if not specified, only focus on item if it was the first one to be selected
       focusSelection = this._selectedExpressIds.length === 1
     }
     if (this._selectedExpressIds.length !== 0) {
