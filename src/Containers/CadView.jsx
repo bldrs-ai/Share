@@ -375,7 +375,7 @@ export default function CadView({
   }
 
 
-  /** Clear active search state and unpick active scene elts. */
+  /** Clear current selection. */
   function resetSelection() {
     if (selectedElements?.length !== 0) {
       selectItemsInScene([])
@@ -413,6 +413,7 @@ export default function CadView({
     try {
       // Update The Component state
       setSelectedElements(resultIDs.map((id) => `${id}`))
+      // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
         const pathIds = getPathIdsForElements(lastId)
