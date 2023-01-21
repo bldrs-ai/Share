@@ -91,7 +91,7 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     render(
         <ShareMock>
@@ -118,8 +118,6 @@ describe('CadView', () => {
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
-    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
-    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
@@ -163,7 +161,7 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `haus.ifc`,
     }
-    const viewer = __getIfcViewerAPIMockSingleton()
+    const viewer = new IfcViewerAPIExtended()
 
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
@@ -240,8 +238,12 @@ describe('CadView', () => {
     })
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.selectedElements).toHaveLength(0)
+    const modelId = 0
+    const clearCallParam = [modelId, []] // Clear Selection Call Parameters
+    const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
+    /** Expected 2 Clears onViewerLoad, select, clear, select, clear */
+    const expectedCalls = [clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
     const setSelectionCalls = viewer.setSelection.mock.calls
-    const numCallsExpected = 4 // 2 on viewer load reseting state + the 2 test actions
-    expect(setSelectionCalls.length).toBe(numCallsExpected)
+    expect(setSelectionCalls).toEqual(expectedCalls)
   })
 })
