@@ -108,9 +108,24 @@ export default function CadView({
 
   useEffect(() => {
     (async () => {
-      if (Array.isArray(selectedElements)) {
-        // Update The Scene state
-        await viewer?.setSelection(0, selectedElements)
+      if (!Array.isArray(selectedElements) || !viewer) {
+        return
+      }
+      // Update The selection on the scene pick/unpick
+      await viewer.setSelection(0, selectedElements.map((id) => parseInt(id)))
+      // If current selection is not empty
+      if (selectedElements.length > 0) {
+        // Display the properties of the last one,
+        const lastId = selectedElements.slice(-1)
+        const props = await viewer.getProperties(0, Number(lastId))
+        setSelectedElement(props)
+        // Update the expanded elements in NavPanel
+        const pathIds = getPathIdsForElements(lastId)
+        if (pathIds) {
+          setExpandedElements(pathIds.map((n) => `${n}`))
+        }
+      } else {
+        setSelectedElement(null)
       }
     })()
   }, [selectedElements])
@@ -390,26 +405,20 @@ export default function CadView({
    *
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItemsInScene(resultIDs, updateNavigation = true) {
+  function selectItemsInScene(resultIDs, updateNavigation = true) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
     if (!viewer) {
       return
     }
     try {
       // Update The Component state
-      setSelectedElements(resultIDs)
-      if (resultIDs.length > 0) {
+      setSelectedElements(resultIDs.map((id) => `${id}`))
+      if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
-        const props = await viewer.getProperties(0, Number(lastId))
-        setSelectedElement(props)
-        const pathIds = await onElementSelect(lastId)
-        if (updateNavigation) {
-          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-          const path = pathIds.join('/')
-          navigate(`${pathPrefix}${repoFilePath}/${path}`)
-        }
-      } else {
-        setSelectedElement(null)
+        const pathIds = getPathIdsForElements(lastId)
+        const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+        const path = pathIds.join('/')
+        navigate(`${pathPrefix}${repoFilePath}/${path}`)
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -421,21 +430,19 @@ export default function CadView({
 
 
   /**
-   * Select the items in the NavTree and update ItemProperties.
    * Returns the ids of path parts from root to this elt in spatial
    * structure.
    *
    * @param {number} expressId
    * @return {Array} pathIds
    */
-  function onElementSelect(expressId) {
+  function getPathIdsForElements(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
       return
     }
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
-    setExpandedElements(pathIds.map((n) => `${n}`))
     return pathIds
   }
 

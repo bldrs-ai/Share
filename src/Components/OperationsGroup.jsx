@@ -41,7 +41,7 @@ export default function OperationsGroup({
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
-      cutPlanes.length ||
+      cutPlanes.length !== 0 ||
       levelInstance !== null
     )
     return ifSelected

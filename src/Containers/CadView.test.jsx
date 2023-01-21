@@ -195,6 +195,7 @@ describe('CadView', () => {
   it('select multiple elements and then clears selection, then reselect', async () => {
     const testTree = makeTestTree()
     const selectedIds = [0, 1]
+    const selectedIdsAsString = ['0', '1']
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
@@ -203,8 +204,7 @@ describe('CadView', () => {
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.setSelectedElement(selectedIds.slice(-1))
-      result.current.setSelectedElements(selectedIds)
+      result.current.setSelectedElements(selectedIdsAsString)
     })
     const {getByTitle} = render(
         <ShareMock>
@@ -221,8 +221,7 @@ describe('CadView', () => {
       await fireEvent.click(clearSelection)
     })
     await act(() => {
-      result.current.setSelectedElement(selectedIds.slice(-1))
-      result.current.setSelectedElements(selectedIds)
+      result.current.setSelectedElements(selectedIdsAsString)
     })
     await act(async () => {
       await fireEvent.click(clearSelection)
@@ -230,8 +229,7 @@ describe('CadView', () => {
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.selectedElements).toHaveLength(0)
     await act(() => {
-      result.current.setSelectedElement(testTree.children[0])
-      result.current.setSelectedElements(selectedIds)
+      result.current.setSelectedElements(selectedIdsAsString)
     })
     await act(async () => {
       await fireEvent.click(clearSelection)
@@ -241,9 +239,9 @@ describe('CadView', () => {
     const modelId = 0
     const clearCallParam = [modelId, []] // Clear Selection Call Parameters
     const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
-    /** Expected 2 Clears onViewerLoad, select, clear, select, clear */
-    const expectedCalls = [clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
+    /** Expected basic 2 on load (init search, Select from Url), select, clear, select, clear */
+    const expectedCall = [clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
     const setSelectionCalls = viewer.setSelection.mock.calls
-    expect(setSelectionCalls).toEqual(expectedCalls)
+    expect(setSelectionCalls).toEqual(expectedCall)
   })
 })
