@@ -21,12 +21,14 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useIsMobile} from '../Components/Hooks'
 import SearchIndex from './SearchIndex'
 import BranchesControl from '../Components/BranchesControl'
+import {handleBeforeUnload} from '../utils/event'
+
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
-const searchIndex = new SearchIndex()
+export const searchIndex = new SearchIndex()
 let count = 0
 
 
@@ -66,7 +68,7 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
@@ -141,9 +143,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.background &&
-         theme.palette.background.paper) || '0xabcdef')
+        theme.palette &&
+        theme.palette.background &&
+        theme.palette.background.paper) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
   }
@@ -199,7 +201,12 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(
+        <Alert onCloseCb={() => {
+          navToDefault(navigate, appPrefix)
+        }} message={msg}
+        />,
+    )
 
 
   /**
@@ -211,12 +218,9 @@ export default function CadView({
     debug().log(`CadView#loadIfc: `, filepath)
 
     if (pathPrefix.endsWith('new')) {
-      const l = window.location
-      filepath = filepath.split('.ifc')[0]
-      const parts = filepath.split('/')
-      filepath = parts[parts.length - 1]
+      filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -239,7 +243,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
 
     Privacy.recordEvent('select_content', {
@@ -271,19 +275,22 @@ export default function CadView({
     const viewerContainer = document.getElementById('viewer-container')
     const fileInput = document.createElement('input')
     fileInput.setAttribute('type', 'file')
-    fileInput.classList.add('file-input')
     fileInput.addEventListener(
         'change',
         (event) => {
+          debug().log('CadView#loadLocalFile#event:', event)
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
         },
         false,
     )
     viewerContainer.appendChild(fileInput)
     fileInput.click()
+    viewerContainer.removeChild(fileInput)
   }
 
 
@@ -363,15 +370,18 @@ export default function CadView({
   /** Reset global state */
   function resetState() {
     resetSelection()
-    setCutPlaneDirection(null)
+    setCutPlaneDirections([])
     setLevelInstance(null)
   }
 
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.clipper.deleteAllPlanes()
+    if (viewer) {
+      viewer.clipper.deleteAllPlanes()
+    }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate(`${pathPrefix}${repoFilePath}`)
   }
 
@@ -386,7 +396,6 @@ export default function CadView({
       return
     }
     try {
-      console.trace(resultIDs)
       // Update The Component state
       setSelectedElements(resultIDs)
       if (resultIDs.length > 0) {
@@ -500,36 +509,40 @@ export default function CadView({
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
       if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const intializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(intializedViewer)
-        setViewerStore(intializedViewer)
+        const initializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
+        setViewer(initializedViewer)
+        setViewerStore(initializedViewer)
       }
     })
   }
 
 
   return (
-    <Box sx={{
-      'position': 'absolute',
-      'top': '0px',
-      'left': '0px',
-      'minWidth': '100vw',
-      'minHeight': '100vh',
-      '@media (max-width: 900px)': {
-        height: ' calc(100vh - calc(100vh - 100%))',
-        minHeight: '-webkit-fill-available',
-      },
-    }}data-model-ready={modelReady}
+    <Box
+      sx={{
+        'position': 'absolute',
+        'top': '0px',
+        'left': '0px',
+        'minWidth': '100vw',
+        'minHeight': '100vh',
+        '@media (max-width: 900px)': {
+          height: ' calc(100vh - calc(100vh - 100%))',
+          minHeight: '-webkit-fill-available',
+        },
+      }}
+      data-model-ready={modelReady}
     >
-      <Box sx={{
-        position: 'absolute',
-        top: '0px',
-        left: '0px',
-        textAlign: 'center',
-        width: '100vw',
-        height: '100vh',
-        margin: 'auto',
-      }} id='viewer-container'
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          textAlign: 'center',
+          width: '100vw',
+          height: '100vh',
+          margin: 'auto',
+        }}
+        id='viewer-container'
       />
       <>
         <SnackBarMessage
@@ -647,4 +660,17 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   v.container = container
   return v
+}
+
+/**
+ * @param {string} filepath
+ * @return {string}
+ */
+export function getNewModelRealPath(filepath) {
+  const l = window.location
+  filepath = filepath.split('.ifc')[0]
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
 }

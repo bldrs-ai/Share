@@ -1,6 +1,9 @@
 import React from 'react'
+import AddCircle from '@mui/icons-material/AddCircle'
+import ArrowBack from '@mui/icons-material/ArrowBack'
+import ArrowForward from '@mui/icons-material/ArrowForward'
+import Check from '@mui/icons-material/Check'
 import {TooltipIconButton} from '../../Components/Buttons'
-import {AddCircle, ArrowBack, ArrowForward, Check} from '@mui/icons-material'
 
 
 export default {

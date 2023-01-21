@@ -6,7 +6,19 @@ import ShareMock from '../ShareMock'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
+import * as AllCadView from './CadView'
+import * as reactRouting from 'react-router-dom'
 
+
+const mockedUseNavigate = jest.fn()
+const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
+jest.mock('react-router-dom', () => {
+  return {
+    ...jest.requireActual('react-router-dom'),
+    useNavigate: () => mockedUseNavigate,
+    useLocation: jest.fn(() => defaultLocationValue),
+  }
+})
 
 describe('CadView', () => {
   afterEach(() => {
@@ -28,9 +40,10 @@ describe('CadView', () => {
             pathPrefix={''}
             modelPath={result.current[0]}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     // Necessary to wait for some of the component to render to avoid
-    // act() warningings from testing-library.
+    // act() warnings from testing-library.
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
   })
@@ -38,9 +51,11 @@ describe('CadView', () => {
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
-    const modelPath = {
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
 
-      filepath: `index.ifc/${targetEltId}`,
+    const modelPath = {
+      filepath: `index.ifc`,
       gitpath: undefined,
     }
     const viewer = new IfcViewerAPIExtended()
@@ -59,6 +74,7 @@ describe('CadView', () => {
     await actAsyncFlush()
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
+    expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
     expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
@@ -67,9 +83,43 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+  it('sets up camera and cutting plan from URL,', async () => {
+    const testTree = makeTestTree()
+    const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const viewer = __getIfcViewerAPIMockSingleton()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
+    const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
+    // eslint-disable-next-line no-magic-numbers
+    expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
+    const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
+    // eslint-disable-next-line no-magic-numbers
+    expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
+    const createPlanMock = viewer.clipper.createFromNormalAndCoplanarPoint
+    expect(createPlanMock).toHaveBeenCalled()
+    await actAsyncFlush()
+  })
+
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
@@ -80,7 +130,7 @@ describe('CadView', () => {
     await act(() => {
       result.current.setSelectedElement(targetEltId)
       result.current.setSelectedElements([targetEltId])
-      result.current.setCutPlaneDirection('y')
+      result.current.setCutPlaneDirections(['y'])
     })
     const {getByTitle} = render(
         <ShareMock>
@@ -100,7 +150,47 @@ describe('CadView', () => {
     expect(callDeletePlanes.length).toBe(1)
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
-    expect(result.current.cutPlaneDirection).toBe(null)
+    expect(result.current.cutPlanes.length).toBe(0)
+    await actAsyncFlush()
+  })
+
+  it('prevent reloading without user approval when loading a model from local', async () => {
+    window.addEventListener = jest.fn()
+    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
+    reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+
+    const modelPath = {
+      filepath: `haus.ifc`,
+    }
+    const viewer = __getIfcViewerAPIMockSingleton()
+
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix='/v/new'
+            modelPath={modelPath}
+          />
+        </ShareMock>,
+    )
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
+
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix=''
+            appPrefix=''
+            pathPrefix=''
+            modelPath={modelPath}
+          />
+        </ShareMock>,
+    )
+    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
     await actAsyncFlush()
   })
 

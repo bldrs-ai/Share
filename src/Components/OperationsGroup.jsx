@@ -32,7 +32,7 @@ export default function OperationsGroup({
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
+  const cutPlanes = useStore((state) => state.cutPlanes)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
@@ -41,7 +41,7 @@ export default function OperationsGroup({
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
-      cutPlaneDirection !== null ||
+      cutPlanes.length ||
       levelInstance !== null
     )
     return ifSelected

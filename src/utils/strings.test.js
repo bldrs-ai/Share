@@ -1,4 +1,5 @@
-import {findUrls, isNumeric} from './strings'
+/* eslint-disable no-magic-numbers */
+import {findUrls, isNumeric, floatStrTrim} from './strings'
 
 
 describe('strings', () => {
@@ -41,5 +42,15 @@ describe('strings', () => {
     expect(isNumeric('0')).toBeTruthy()
     expect(isNumeric('1')).toBeTruthy()
     expect(isNumeric('NaN')).toBeFalsy()
+  })
+
+
+  it('floatStrTrim convert string to finite string', () => {
+    expect(floatStrTrim('0')).toStrictEqual(0)
+    expect(floatStrTrim('12.34567')).toStrictEqual(12.346)
+    expect(floatStrTrim('12.340')).toStrictEqual(12.34)
+    expect(floatStrTrim('12.300')).toStrictEqual(12.3)
+    expect(floatStrTrim('12.000')).toStrictEqual(12)
+    expect(floatStrTrim('-4.500826166251047')).toStrictEqual(-4.501)
   })
 })

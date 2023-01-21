@@ -2,7 +2,10 @@ import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import * as Sentry from '@sentry/react'
 
+
+const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -34,7 +37,7 @@ export default function BaseRoutes({testElt = null}) {
   }, [basePath, installPrefix, location, navigation])
 
   return (
-    <Routes>
+    <SentryRoutes>
       <Route path={basePath} element={<Outlet/>}>
         <Route
           path="share/*"
@@ -47,6 +50,6 @@ export default function BaseRoutes({testElt = null}) {
           }
         />
       </Route>
-    </Routes>
+    </SentryRoutes>
   )
 }
