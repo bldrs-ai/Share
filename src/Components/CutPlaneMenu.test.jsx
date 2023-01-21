@@ -1,6 +1,6 @@
 import React from 'react'
 import {act, fireEvent, render, renderHook} from '@testing-library/react'
-import CutPlaneMenu from './CutPlaneMenu'
+import CutPlaneMenu, {getPlanes} from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
@@ -89,5 +89,31 @@ describe('CutPlane', () => {
     expect(result.current.cutPlanes[0].direction).toBe('y')
     // eslint-disable-next-line no-magic-numbers
     expect(result.current.cutPlanes[0].offset).toBe(14)
+  })
+
+  it('Get planes info from plane hash string', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = __getIfcViewerAPIMockSingleton()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+      result.current.setModelStore(model)
+    })
+    render(
+        <ShareMock
+          initialEntries={['/v/p/index.ifc#c:-136.31,37.98,62.86,-43.48,15.73,-4.34::p:y=14']}
+        >
+          <CutPlaneMenu/>
+        </ShareMock>)
+    const planes = getPlanes('p:0,1,x=0,y=1.11111,z=2.22222')
+    // eslint-disable-next-line no-magic-numbers
+    expect(planes.length).toBe(3)
+    expect(planes[0].direction).toBe('x')
+    expect(planes[0].offset).toBe(0)
+    expect(planes[1].direction).toBe('y')
+    // eslint-disable-next-line no-magic-numbers
+    expect(planes[1].offset).toBe(1.111)
+    expect(planes[2].direction).toBe('z')
+    // eslint-disable-next-line no-magic-numbers
+    expect(planes[2].offset).toBe(2.222)
   })
 })

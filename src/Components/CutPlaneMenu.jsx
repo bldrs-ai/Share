@@ -207,7 +207,7 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
  * @param {string} planeHash
  * @return {Array}
  */
-function getPlanes(planeHash) {
+export function getPlanes(planeHash) {
   if (!planeHash) {
     return []
   }
@@ -246,7 +246,7 @@ function getPlanes(planeHash) {
  * @param {number} offset
  * @return {object}
  */
-function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
+export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
   let normal
   let planeOffsetX = 0
   let planeOffsetY = 0

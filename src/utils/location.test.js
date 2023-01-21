@@ -2,6 +2,7 @@ import {
   addHashParams,
   getHashParams,
   removeHashParams,
+  getEncodedParam,
 } from './location'
 
 
@@ -130,4 +131,12 @@ test('removeHashParams', () => {
   loc.hash = '#p:x=1,y=1,z=1'
   removeHashParams(loc, 'p', ['y', 'z'])
   expect(loc.hash).toBe('p:x=1')
+})
+
+test('getEncodedParam', () => {
+  const objectParams = {x: 1, y: 2, z: 3}
+  const withNames = getEncodedParam(objectParams, true)
+  expect(withNames).toBe('x=1,y=2,z=3')
+  const withoutNames = getEncodedParam(objectParams)
+  expect(withoutNames).toBe('1,2,3')
 })
