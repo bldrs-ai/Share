@@ -40,6 +40,7 @@ export default function AuthControl() {
         'width': '30px',
         'height': '30px',
         'margin': '1em 0',
+        'cursor': 'pointer',
         '& svg': {
           width: '30px',
           height: '30px',
