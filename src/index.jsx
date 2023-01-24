@@ -7,11 +7,11 @@ import {
   createRoutesFromChildren,
   matchRoutes,
 } from 'react-router-dom'
-import BaseRoutes from './BaseRoutes'
 import {FlagsProvider} from 'react-feature-flags'
-import {flags} from './FeatureFlags'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
+import BaseRoutes from './BaseRoutes'
+import {flags} from './FeatureFlags'
 import ApplicationError from './Components/ApplicationError'
 
 
@@ -42,6 +42,7 @@ if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
     },
   })
 }
+
 
 const root = createRoot(document.getElementById('root'))
 

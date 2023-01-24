@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
 import AboutControl from './AboutControl'
+import AuthControl from './AuthControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import useStore from '../store/useStore'
@@ -75,6 +76,7 @@ export default function OperationsGroup({
     }}
     >
       <ButtonGroup orientation="vertical" >
+        <AuthControl/>
         <ShareControl/>
       </ButtonGroup>
       <Divider/>

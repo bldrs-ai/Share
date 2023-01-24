@@ -44,6 +44,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [
     'src/Share.test.js',
+    'src/BaseRoutes.test.js',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',

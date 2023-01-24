@@ -1,11 +1,32 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
+import {Auth0Provider, withAuthenticationRequired} from '@auth0/auth0-react'
+import * as Sentry from '@sentry/react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
-import * as Sentry from '@sentry/react'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+
+
+const ProtectedRoute = ({component, ...args}) => {
+  const Component = withAuthenticationRequired(component, args)
+  return <Component/>
+}
+
+
+const Auth0ProviderWithRedirectCallback = ({children, ...props}) => {
+  const navigate = useNavigate()
+  const onRedirectCallback = (appState) => {
+    navigate((appState && appState.returnTo) || window.location.pathname)
+  }
+  return (
+    <Auth0Provider onRedirectCallback={onRedirectCallback} {...props}>
+      {children}
+    </Auth0Provider>
+  )
+}
+
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -36,20 +57,35 @@ export default function BaseRoutes({testElt = null}) {
     }
   }, [basePath, installPrefix, location, navigation])
 
+
+  const ShareRoutesCtx = () => {
+    return (
+      <ShareRoutes
+        installPrefix={installPrefix}
+        appPrefix={`${installPrefix }/share`}
+      />
+    )
+  }
+
   return (
-    <SentryRoutes>
-      <Route path={basePath} element={<Outlet/>}>
-        <Route
-          path="share/*"
-          element={
-            testElt ||
-              <ShareRoutes
-                installPrefix={installPrefix}
-                appPrefix={`${installPrefix }/share`}
-              />
-          }
-        />
-      </Route>
-    </SentryRoutes>
+    <Auth0ProviderWithRedirectCallback
+      domain='bldrs.us.auth0.com'
+      clientId='xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv'
+      authorizationParams={{
+        redirect_uri: window.location.origin,
+      }}
+    >
+      <SentryRoutes>
+        <Route path={basePath} element={<Outlet/>}>
+          <Route
+            path="share/*"
+            element={
+              testElt ||
+                <ProtectedRoute component={ShareRoutesCtx}/>
+            }
+          />
+        </Route>
+      </SentryRoutes>
+    </Auth0ProviderWithRedirectCallback>
   )
 }
