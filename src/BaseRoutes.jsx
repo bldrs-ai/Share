@@ -9,6 +9,7 @@ import debug from './utils/debug'
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 
 
+// The next two components from https://auth0.com/docs/quickstart/spa/react
 const ProtectedRoute = ({component, ...args}) => {
   const Component = withAuthenticationRequired(component, args)
   return <Component/>
