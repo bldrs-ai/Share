@@ -1,7 +1,12 @@
 import React from 'react'
 import {useArgs} from '@storybook/addons'
 import {ControlButton} from '../../Components/Buttons'
-import {AddCircle, Announcement, ArrowBack, ArrowForward, Check, Help} from '@mui/icons-material'
+import AddCircle from '@mui/icons-material/AddCircle'
+import Announcement from '@mui/icons-material/Announcement'
+import ArrowBack from '@mui/icons-material/ArrowBack'
+import ArrowForward from '@mui/icons-material/ArrowForward'
+import Check from '@mui/icons-material/Check'
+import Help from '@mui/icons-material/Help'
 import Dialog from '../../Components/Dialog'
 
 

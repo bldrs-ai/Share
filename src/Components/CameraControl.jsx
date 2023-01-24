@@ -9,6 +9,7 @@ import {
   removeHashParams,
 } from '../utils/location'
 import {roundCoord} from '../utils/math'
+import {floatStrTrim} from '../utils/strings'
 
 
 // TODO(pablo): CameraControl has to be loaded into DOM for any of the
@@ -89,6 +90,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
+
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6
@@ -96,6 +98,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
       cameraControls.setTarget(coords[3], coords[4], coords[5], true)
     }
   }
+
   addCameraUrlParams(cameraControls)
 }
 
@@ -113,25 +116,17 @@ const paramRegex = new RegExp(paramPattern)
  */
 export function parseHashParams(encodedParams) {
   const match = encodedParams.match(paramRegex)
-  const stof = (str) => {
-    const floatDigits = 2
-    const val = parseFloat(parseFloat(str).toFixed(floatDigits))
-    if (isFinite(val)) {
-      const rounded = parseFloat(val.toFixed(0))
-      return rounded === val ? rounded : val
-    } else {
-      console.warn('Invalid coordinate: ', str)
-    }
-  }
+
   debug().log('CameraControl#onHash: match: ', match)
+
   if (match && match[1] !== undefined && match[2] !== undefined && match[3] !== undefined) {
-    const x = stof(match[1])
-    const y = stof(match[2])
-    const z = stof(match[3])
+    const x = floatStrTrim(match[1])
+    const y = floatStrTrim(match[2])
+    const z = floatStrTrim(match[3])
     if (match[4] === undefined && match[5] === undefined && match[6] === undefined) {
       return [x, y, z]
     } else {
-      return [x, y, z, stof(match[4]), stof(match[5]), stof(match[6])]
+      return [x, y, z, floatStrTrim(match[4]), floatStrTrim(match[5]), floatStrTrim(match[6])]
     }
   } else {
     debug().warn('CameraControl#onHash, no camera coordinate present in hash: ', location.hash)
@@ -160,13 +155,12 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
-  const floatDigits = 2
-  let camArr = roundCoord(...position, floatDigits)
+  let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
   if (target.x === 0 && target.y === 0 && target.z === 0) {
     camArr = camArr.concat(0)
   } else {
-    camArr = camArr.concat(roundCoord(...target, floatDigits))
+    camArr = camArr.concat(roundCoord(...target))
   }
   addHashParams(window.location, CAMERA_PREFIX, camArr)
 }

@@ -1,3 +1,6 @@
+import {Vector3} from 'three'
+
+
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
@@ -8,6 +11,11 @@ const loadedModel = {
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),
+  geometry: {
+    boundingBox: {
+      getCenter: jest.fn(),
+    },
+  },
 }
 
 
@@ -17,7 +25,24 @@ const impl = {
   IFC: {
     context: {
       ifcCamera: {
-        cameraControls: {},
+        cameraControls: {
+          setPosition: jest.fn((x, y, z) => {
+            return {}
+          }),
+          getPosition: jest.fn((x, y, z) => {
+            // eslint-disable-next-line no-magic-numbers
+            const position = [0, 0, 0]
+            return position
+          }),
+          setTarget: jest.fn((x, y, z) => {
+            return {}
+          }),
+          getTarget: jest.fn((x, y, z) => {
+            // eslint-disable-next-line no-magic-numbers
+            const target = [0, 0, 0]
+            return target
+          }),
+        },
       },
     },
     loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
@@ -32,6 +57,12 @@ const impl = {
     createFromNormalAndCoplanarPoint: jest.fn(() => {
       return 'createFromNormalAndCoplanarPoint'
     }),
+    planes: [{
+      plane: {
+        normal: new Vector3(1, 0, 0),
+        constant: 10,
+      },
+    }],
   },
   container: {
     style: {},
@@ -42,6 +73,7 @@ const impl = {
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
+  setSelection: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

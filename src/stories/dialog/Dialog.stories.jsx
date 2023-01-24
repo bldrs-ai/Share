@@ -1,5 +1,6 @@
 import React from 'react'
 import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from '../../Components/Dialog_redesign'
+import debug from '../../utils/debug'
 
 
 export default {
@@ -14,7 +15,7 @@ const Template = (args) => {
       bodyContent={<OpenDialogBodyContent/>}
       headerText={'Open file'}
       isDialogDisplayed={ true }
-      setIsDialogDisplayed={() => console.log('setIsDialogDisplayed')}
+      setIsDialogDisplayed={() => debug().log('setIsDialogDisplayed')}
     />
   )
 }

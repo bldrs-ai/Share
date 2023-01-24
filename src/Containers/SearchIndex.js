@@ -10,8 +10,10 @@ export default class SearchIndex {
     this.eltsByType = {}
     this.eltsByName = {}
     this.eltsByGlobalId = {}
+    this.eltsByExpressId = {}
     this.eltsByText = {}
   }
+
 
   /**
    * Recursively visits elt and indexes properties.
@@ -45,6 +47,10 @@ export default class SearchIndex {
       this.indexElementByString(this.eltsByGlobalId, elt.GlobalId.value, elt)
     }
 
+    if (elt.expressID) {
+      this.indexElementByString(this.eltsByExpressId, elt.expressID.toString(), elt)
+    }
+
     const description = Ifc.getDescription(elt)
     if (description) {
       this.indexElementByStringSet(this.eltsByGlobalId,
@@ -69,6 +75,7 @@ export default class SearchIndex {
     return new Set(str.match(/(\w+)/g))
   }
 
+
   /**
    * Create index set of found results
    *
@@ -84,6 +91,7 @@ export default class SearchIndex {
     return set
   }
 
+
   /**
    * Add entry for key in index pointing to given elt
    *
@@ -95,6 +103,7 @@ export default class SearchIndex {
     this.findCreateIndexSet(index, key).add(elt)
     this.findCreateIndexSet(index, key.toLowerCase()).add(elt)
   }
+
 
   /**
    * Add entry for key in index pointing to given elt for each key in the set
@@ -109,13 +118,16 @@ export default class SearchIndex {
     }
   }
 
+
   /** Clear all entries in the search index. */
   clearIndex() {
     deleteProperties(this.eltsByType)
     deleteProperties(this.eltsByName)
     deleteProperties(this.eltsByGlobalId)
+    deleteProperties(this.eltsByExpressId)
     deleteProperties(this.eltsByText)
   }
+
 
   /**
    * Search the index with the given query and return the express IDs of matching IFC elements
@@ -159,12 +171,43 @@ export default class SearchIndex {
     addAll(this.eltsByType[lowerToken])
 
     addAll(this.eltsByGlobalId[token])
+    addAll(this.eltsByExpressId[token])
 
     addAll(this.eltsByText[token])
-
 
     const resultIDs = toExpressIds(Array.from(resultSet))
     debug().log('result IDs: ', resultIDs)
     return resultIDs
+  }
+
+  /**
+   *
+   * @param {string} expressId
+   * @return {string} globalId
+   */
+  getGlobalIdByExpressId(expressId) {
+    if (Object.prototype.hasOwnProperty.call(this.eltsByExpressId, expressId)) {
+      const set = this.eltsByExpressId[expressId]
+      const element = (set.values().next().value)
+      if (Object.prototype.hasOwnProperty.call(element, 'GlobalId')) {
+        return element['GlobalId'].value
+      }
+    }
+  }
+
+  /**
+   *
+   *
+   * @param {string} globalId
+   * @return {string} expressId
+   */
+  getExpressIdByGlobalId(globalId) {
+    if (Object.prototype.hasOwnProperty.call(this.eltsByGlobalId, globalId)) {
+      const set = this.eltsByGlobalId[globalId]
+      const element = (set.values().next().value)
+      if (Object.prototype.hasOwnProperty.call(element, 'expressID')) {
+        return element['expressID'].toString()
+      }
+    }
   }
 }

@@ -4,7 +4,10 @@ import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 import {useAuth0} from '@auth0/auth0-react'
 import useStore from './store/useStore'
+import * as Sentry from '@sentry/react'
 
+
+const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
@@ -63,7 +66,7 @@ export default function BaseRoutes({testElt = null}) {
   }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
 
   return (
-    <Routes>
+    <SentryRoutes>
       <Route path={basePath} element={<Outlet/>}>
         <Route
           path="share/*"
@@ -76,6 +79,6 @@ export default function BaseRoutes({testElt = null}) {
           }
         />
       </Route>
-    </Routes>
+    </SentryRoutes>
   )
 }

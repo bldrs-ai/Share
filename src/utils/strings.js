@@ -32,16 +32,15 @@ export function toKey(str) {
  */
 export function isNumeric(str) {
   if (typeof str !== 'string') {
-    return false
+    throw new Error('Expected a string')
   }
-  return !isNaN(str) && // use type coercion to parse the _entirety_ of the string
-         !isNaN(parseFloat(str)) // ...and ensure strings of whitespace fail
+  return !isNaN(parseFloat(str))
 }
 
 
 /**
  * @param {string} str
- * @return {Array} url matches
+ * @return {Array<string>} url matches
  */
 export function findUrls(str) {
   // TODO(pablo): maybe support example.com/asdf
@@ -58,4 +57,34 @@ export function findUrls(str) {
       return false
     }
   })
+}
+
+
+/**
+ * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
+ * - '0' -> 0
+ * - '12.34567' -> 12.346
+ * - '12.340' -> 12.34
+ * - '12.300' -> 12.3
+ * - '12.000' -> 12
+ *
+ * @param {string|number} str
+ * @param {number} floatDigits
+ * @return {number} float
+ */
+export function floatStrTrim(str, floatDigits = 3) {
+  let floatStr
+  if (typeof str === 'string') {
+    floatStr = parseFloat(str)
+  } else {
+    floatStr = str
+  }
+  if (!floatStr) {
+    floatStr = 0
+  }
+  const val = Number(floatStr.toFixed(floatDigits))
+  if (!isFinite(val)) {
+    throw new Error('Parameter is invalid.')
+  }
+  return val
 }

@@ -2,6 +2,7 @@ import React from 'react'
 import {render, screen} from '@testing-library/react'
 import Dialog, {OpenDialogHeaderContent, OpenDialogBodyContent} from '../Components/Dialog_redesign'
 import ShareMock from '../ShareMock'
+import debug from '../utils/debug'
 
 
 test('Open Dialog', () => {
@@ -12,7 +13,7 @@ test('Open Dialog', () => {
           bodyContent={<OpenDialogBodyContent/>}
           headerText={'Open file'}
           isDialogDisplayed={ true }
-          setIsDialogDisplayed={() => console.log('setIsDialogDisplayed')}
+          setIsDialogDisplayed={() => debug().log('setIsDialogDisplayed')}
         />
       </ShareMock>)
   expect(screen.getByText('Open file')).toBeInTheDocument()

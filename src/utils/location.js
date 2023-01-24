@@ -1,15 +1,16 @@
+import {isNumeric} from './strings'
+
+
+/** @type {Object<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
-  for (const name in hashListeners) {
-    if (Object.prototype.hasOwnProperty.call(hashListeners, name)) {
-      const listener = hashListeners[name]
-      listener()
-    }
-  }
+  Object.values(hashListeners).forEach((listener) => {
+    listener()
+  })
 }
 
 
-// TODO(pablo): Ideally this would be hanled by react-router
+// TODO(pablo): Ideally this would be handled by react-router
 // location, but doesn't seem to be supported yet in v6.
 // See also https://stackoverflow.com/a/71210781/3630172
 /**
@@ -26,25 +27,32 @@ export function addHashListener(name, onHashCb) {
  * Serialize the given paramObj and add it to the current
  * location.hash
  *
- * @param {object} location The window.location object
+ * @param {Location} location The window.location object
  * @param {string} name A unique name for the params
- * @param {object} params The parameters to encode
+ * @param {Object<string, any>} params The parameters to encode
  * @param {boolean} includeNames Whether or not to include the
  *   parameter names in the encoding, default is false.
  */
 export function addHashParams(location, name, params, includeNames = false) {
-  let encodedParams = ''
+  const hashGlobalParams = getHashParams(location, name)
+  let objectGlobalParams = {}
+  if (hashGlobalParams) {
+    objectGlobalParams = getObjectParams(hashGlobalParams)
+  }
+
   for (const paramName in params) {
     if (!Object.prototype.hasOwnProperty.call(params, paramName)) {
       continue
     }
-    const paramValue = params[paramName]
-    const separator = encodedParams === '' ? '' : ','
-    const encodedParam = includeNames ? `${paramName}=${paramValue}` : paramValue
-    encodedParams += `${separator}${encodedParam}`
+    // @ts-ignore
+    objectGlobalParams[paramName] = params[paramName]
   }
+
+  const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
   const sets = location.hash.substring(1).split('::')
+  /** @type {Object<string, string>} */
   const setMap = {}
+
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
     if (set === '') {
@@ -55,22 +63,91 @@ export function addHashParams(location, name, params, includeNames = false) {
     const setValue = setParts[1]
     setMap[setName] = setValue
   }
+
   setMap[name] = encodedParams
   let newHash = ''
+
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += `${newHash.length === 0 ? '' : '::' }${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : '::'}${setKey}:${setValue}`
     }
   }
+
   location.hash = newHash
 }
 
 
 /**
- * @param {object} location
+ * @param {object} objectParams
+ * @return {string}
+ */
+export function getEncodedParam(objectParams, includeNames = false) {
+  const objectKeys = Object.keys(objectParams)
+  /**
+   * @type {string[]}
+   */
+  const encodedParams = []
+
+  objectKeys.forEach((objectKey) => {
+    if (includeNames) {
+      // @ts-ignore
+      const objectValue = objectParams[objectKey]
+      encodedParams.push(objectValue ? `${objectKey}=${objectValue}` : objectKey)
+    } else {
+      // @ts-ignore
+      encodedParams.push(`${objectParams[objectKey]}`)
+    }
+  })
+
+  const encodedParam = encodedParams.join(',')
+  return encodedParam
+}
+
+
+/**
+ * @param {string} hashParams
+ * @return {object}
+ */
+export function getObjectParams(hashParams) {
+  if (!hashParams) {
+    return {}
+  }
+  const parts = hashParams.split(':')
+  if (!parts[0] || !parts[1]) {
+    return {}
+  }
+  const params = parts[1].split(',')
+  const objectGlobalParams = {}
+
+  params.forEach((param, index) => {
+    if (!param) {
+      return
+    }
+    const paramParts = param.split('=')
+    // eslint-disable-next-line no-magic-numbers
+    if (paramParts.length < 2) {
+      if (isNumeric(paramParts[0])) {
+        // @ts-ignore
+        objectGlobalParams[index] = paramParts[0]
+      } else {
+        // @ts-ignore
+        objectGlobalParams[paramParts[0]] = 0
+      }
+    } else {
+      // @ts-ignore
+      objectGlobalParams[paramParts[0]] = paramParts[1]
+    }
+  })
+
+  return objectGlobalParams
+}
+
+
+/**
+ * @param {Location} location
  * @param {string} name prefix of the params to fetch
- * @return {string|undefined} The encoded params
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParams(location, name) {
   return getHashParamsFromHashStr(location.hash.substring(1), name)
@@ -80,7 +157,7 @@ export function getHashParams(location, name) {
 /**
  * @param {string} hashStr
  * @param {string} name prefix of the params to fetch
- * @return {string|undefined} The encoded params
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParamsFromHashStr(hashStr, name) {
   const sets = hashStr.split('::')
@@ -96,23 +173,44 @@ export function getHashParamsFromHashStr(hashStr, name) {
 
 
 /**
- * Removes the given named hash param.
+ * Removes the given named hash param
  *
- * @param {object} location
+ * @param {Location} location
  * @param {string} name prefix of the params to fetch
+ * @param {Array<string>} paramKeys param keys to remove from hash params. if empty, then remove all params
  */
-export function removeHashParams(location, name) {
+export function removeHashParams(location, name, paramKeys = []) {
   const sets = location.hash.substring(1).split('::')
-  const prefix = `${name }:`
+  const prefix = `${name}:`
   let newParamsEncoded = ''
+
   for (let i = 0; i < sets.length; i++) {
-    const set = sets[i]
+    let set = sets[i]
+
     if (set.startsWith(prefix)) {
-      continue
+      if (!paramKeys.length) {
+        continue
+      }
+      const objectSet = getObjectParams(set)
+      paramKeys.forEach((paramKey) => {
+        // @ts-ignore
+        delete objectSet[paramKey]
+      })
+      /**
+       * @type {string[]}
+       */
+      const subSets = []
+      Object.entries(objectSet).forEach((entry) => {
+        const [key, value] = entry
+        subSets.push(value ? `${key}=${value}` : key)
+      })
+      set = `${prefix}${subSets.join(',')}`
     }
+
     const separator = newParamsEncoded.length === 0 ? '' : '::'
     newParamsEncoded += separator + set
   }
+
   location.hash = newParamsEncoded
   if (location.hash === '') {
     history.pushState(

@@ -1,3 +1,5 @@
+<img width="1430" alt="image" src="https://user-images.githubusercontent.com/2480879/209037130-43d1d04e-d943-452c-93fc-2d556c4f17be.png">
+
 Share is a web-based BIM & CAD integration environment from [bldrs.ai](https://bldrs.ai/).
 
 - *Open* any IFC model on github by pasting into the searchbar, or uploading from your local desktop.
@@ -6,8 +8,6 @@ Share is a web-based BIM & CAD integration environment from [bldrs.ai](https://b
 - *Collaborate* with teammates by commenting on model parts and properties (in development).
 - *Share* with teammates, using permalinks to model parts with exact camera views.
 - *Extend* our platform with your Apps. (in development)
-
-![image](https://user-images.githubusercontent.com/2480879/173548785-c61ac976-751e-4a1f-ba28-1514b44d539e.png)
 
 # Contributing
 Please join in creating Bldrs!  Come chat with us at the [Bldrs Discord](https://discord.gg/apWHfDtkJs).

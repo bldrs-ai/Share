@@ -1,8 +1,8 @@
 import React, {useRef, useState} from 'react'
+import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
-import {makeStyles} from '@mui/styles'
 import {UilMinusSquare, UilSearch} from '@iconscout/react-unicons'
 import {TooltipToggleButton} from './Buttons'
 
@@ -18,14 +18,44 @@ export default function InputBar({startAdorment, onSubmit}) {
   const [inputText, setInputText] = useState('')
   const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  const classes = useStyles({inputWidth: '288px'})
+
+
   return (
-    <div>
-      <Paper component='form' className={classes.root}>
-        <div className={classes.iconContainer}>
+    <Box>
+      <Paper component='form' sx={{
+        'display': 'flex',
+        'minWidth': '200px',
+        'width': '288px',
+        'maxWidth': '400px',
+        'alignItems': 'center',
+        'padding': '2px 2px 2px 2px',
+        '@media (max-width: 900px)': {
+          minWidth: '300px',
+          width: '300px',
+          maxWidth: '300px',
+        },
+        '& .MuiInputBase-root': {
+          flex: 1,
+        },
+      }}
+      >
+        <Box sx={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          width: '30px',
+          height: '30px',
+          margin: '5px',
+        }}
+        >
           {startAdorment}
-        </div>
-        <Divider orientation="vertical" flexItem className={classes.divider}/>
+        </Box>
+        <Divider sx={{
+          height: '36px',
+          alignSelf: 'center',
+          margin: '0px 10px 0px 0px',
+        }} orientation="vertical" flexItem
+        />
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -54,45 +84,6 @@ export default function InputBar({startAdorment, onSubmit}) {
           /> : null
         }
       </Paper>
-    </div>
+    </Box>
   )
 }
-
-
-const useStyles = makeStyles({
-  root: {
-    'display': 'flex',
-    'minWidth': '200px',
-    'width': (props) => props.inputWidth,
-    'maxWidth': '400px',
-    'alignItems': 'center',
-    'padding': '2px 2px 2px 2px',
-    '@media (max-width: 900px)': {
-      minWidth: '300px',
-      width: '300px',
-      maxWidth: '300px',
-    },
-    '& .MuiInputBase-root': {
-      flex: 1,
-    },
-  },
-  error: {
-    marginLeft: '10px',
-    marginTop: '3px',
-    fontSize: '10px',
-    color: 'red',
-  },
-  divider: {
-    height: '36px',
-    alignSelf: 'center',
-    margin: '0px 10px 0px 0px',
-  },
-  iconContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: '30px',
-    height: '30px',
-    margin: '5px',
-  },
-})
