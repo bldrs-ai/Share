@@ -1,11 +1,14 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import {Auth0Provider, withAuthenticationRequired} from '@auth0/auth0-react'
+import {useAuth0} from '@auth0/auth0-react'
 import * as Sentry from '@sentry/react'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
 
+const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+const basePath = `${installPrefix }/`
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
 
 
@@ -47,16 +50,15 @@ const Auth0ProviderWithRedirectCallback = ({children, ...props}) => {
 export default function BaseRoutes({testElt = null}) {
   const location = useLocation()
   const navigation = useNavigate()
-  const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
-  const basePath = `${installPrefix }/`
+
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
-      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
-      navigation(`${installPrefix }/share`)
+      debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix}/share`)
+      navigation(`${installPrefix}/share`)
     }
-  }, [basePath, installPrefix, location, navigation])
+  }, [location, navigation])
 
 
   const ShareRoutesCtx = () => {
@@ -68,6 +70,7 @@ export default function BaseRoutes({testElt = null}) {
     )
   }
 
+  const {isAuthenticated} = useAuth0()
   return (
     <Auth0ProviderWithRedirectCallback
       domain='bldrs.us.auth0.com'
@@ -82,7 +85,11 @@ export default function BaseRoutes({testElt = null}) {
             path="share/*"
             element={
               testElt ||
-                <ProtectedRoute component={ShareRoutesCtx}/>
+                isAuthenticated ? (
+                  <ProtectedRoute component={ShareRoutesCtx}/>
+                ) : (
+                  <ShareRoutesCtx/>
+                )
             }
           />
         </Route>
