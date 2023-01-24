@@ -8,11 +8,12 @@ import model from '../__mocks__/MockModel.js'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
-describe('CutPlane', () => {
+describe('CutPlaneMenu', () => {
   it('Section Button', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
   })
+
 
   it('Section Menu', () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
@@ -22,6 +23,7 @@ describe('CutPlane', () => {
     expect(getByText('Y')).toBeInTheDocument()
     expect(getByText('Z')).toBeInTheDocument()
   })
+
 
   it('X Section', async () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
@@ -41,6 +43,7 @@ describe('CutPlane', () => {
     expect(callDeletePlanes.length).toBe(1)
   })
 
+
   it('X Section in URL', async () => {
     render(
         <ShareMock
@@ -57,6 +60,7 @@ describe('CutPlane', () => {
     expect(callCreatePlanes.length).toBe(1)
   })
 
+
   it('Plane in the scene', async () => {
     const {getByTitle, getByText} = render(
         <ShareMock>
@@ -72,6 +76,7 @@ describe('CutPlane', () => {
     fireEvent.click(shareButton)
     expect(getByText('Cutplane position')).toBeInTheDocument()
   })
+
 
   it('Plane Offset is correct', async () => {
     const {result} = renderHook(() => useStore((state) => state))
@@ -91,27 +96,27 @@ describe('CutPlane', () => {
     expect(result.current.cutPlanes[0].offset).toBe(14)
   })
 
-  it('Get planes info from plane hash string', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getIfcViewerAPIMockSingleton()
-    await act(() => {
-      result.current.setViewerStore(viewer)
-      result.current.setModelStore(model)
-    })
-    render(
-        <ShareMock>
-          <CutPlaneMenu/>
-        </ShareMock>)
-    const planes = getPlanes('p:0,1,x=0,y=1.11111,z=2.22222')
-    // eslint-disable-next-line no-magic-numbers
-    expect(planes.length).toBe(3)
-    expect(planes[0].direction).toBe('x')
-    expect(planes[0].offset).toBe(0)
-    expect(planes[1].direction).toBe('y')
-    // eslint-disable-next-line no-magic-numbers
-    expect(planes[1].offset).toBe(1.111)
-    expect(planes[2].direction).toBe('z')
-    // eslint-disable-next-line no-magic-numbers
-    expect(planes[2].offset).toBe(2.222)
+
+  it('getPlanes handles many combinations', () => {
+    const check = (actualPlanes, expectPlanes) => {
+      expect(actualPlanes.length).toBe(expectPlanes.length)
+      for (let i = 0; i < expectPlanes.length; i++) {
+        const actualPlane = actualPlanes[i]
+        const expectPlane = expectPlanes[i]
+        expect(actualPlane.direction).toBe(expectPlane[0])
+        expect(actualPlane.offset).toBe(expectPlane[1])
+      }
+    }
+
+    /* eslint-disable no-magic-numbers */
+    check(getPlanes(''), [])
+    check(getPlanes('p:x=1'), [['x', 1]])
+    check(getPlanes('p:y=2'), [['y', 2]])
+    check(getPlanes('p:z=3'), [['z', 3]])
+    check(getPlanes('p:x=1,y=4'), [['x', 1], ['y', 4]])
+    check(getPlanes('p:x=2,z=5'), [['x', 2], ['z', 5]])
+    check(getPlanes('p:y=3,z=6'), [['y', 3], ['z', 6]])
+    check(getPlanes('p:x=0,y=1.11111,z=2.22222'), [['x', 0], ['y', 1.111], ['z', 2.222]])
+    /* eslint-enable no-magic-numbers */
   })
 })
