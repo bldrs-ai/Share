@@ -9,12 +9,12 @@ const AuthNav = () => {
   const {isLoading, isAuthenticated} = useAuth0()
 
   if (isLoading) {
-    return <CircularProgress />
+    return <CircularProgress/>
   }
 
   return isAuthenticated ?
-    <UserProfile /> :
-    <LoginButton />
+    <UserProfile/> :
+    <LoginButton/>
 }
 
 export default AuthNav

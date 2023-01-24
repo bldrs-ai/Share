@@ -62,7 +62,7 @@ const UserProfile = ({size = 'medium'}) => {
       >
         <MenuItem>
           <ListItemIcon sx={{display: 'flex', alignItems: 'center'}}>
-            <GitHubIcon />
+            <GitHubIcon/>
             <Typography sx={{paddingLeft: '11px'}}>
               Hi, {user.name}!
             </Typography>
