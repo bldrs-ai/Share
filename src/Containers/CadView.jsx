@@ -53,7 +53,6 @@ export default function CadView({
   const [searchParams, setSearchParams] = useSearchParams()
 
   // IFC
-  const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
@@ -66,6 +65,8 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const viewer = useStore((state) => state.viewer)
+  const setViewer = useStore((state) => state.setViewer)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
@@ -365,7 +366,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -507,7 +508,7 @@ export default function CadView({
         viewer.clipper.deletePlane()
       }
       if (event.code === 'KeyA' ||
-      event.code === 'Escape') {
+        event.code === 'Escape') {
         resetSelection()
       }
     }
@@ -626,7 +627,8 @@ export default function CadView({
           {viewer &&
             <OperationsGroup
               unSelectItem={unSelectItems}
-            />}
+            />
+          }
         </Box>
         {alert}
       </>
