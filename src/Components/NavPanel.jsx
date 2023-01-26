@@ -8,6 +8,7 @@ import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {ColorModeContext} from '../Context/ColorMode'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -51,7 +52,7 @@ export default function NavPanel({
           width: '300px',
           top: '86px',
         },
-        'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
       }}
       elevation={0}
     >
@@ -62,7 +63,11 @@ export default function NavPanel({
       }}
       >
         <TreeView
-          sx={{flexGrow: 1, maxWidth: '400px', overflowY: 'auto', overflowX: 'hidden'}}
+          sx={{
+            flexGrow: 1,
+            maxWidth: '400px',
+            overflowY: 'auto',
+          }}
           aria-label='IFC Navigator'
           defaultCollapseIcon={
             <NodeOpen sx={{

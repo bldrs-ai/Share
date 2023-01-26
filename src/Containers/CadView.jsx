@@ -8,7 +8,6 @@ import Alert from '../Components/Alert'
 import debug from '../utils/debug'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
-import OperationsGroup from '../Components/OperationsGroup'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
 import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
@@ -529,15 +528,12 @@ export default function CadView({
   return (
     <Box
       sx={{
-        'position': 'absolute',
-        'top': '0px',
-        'left': '0px',
-        'minWidth': '100vw',
-        'minHeight': '100vh',
-        '@media (max-width: 900px)': {
-          height: ' calc(100vh - calc(100vh - 100%))',
-          minHeight: '-webkit-fill-available',
-        },
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        display: 'flex',
+        width: '100vw',
+        height: '100vh',
       }}
       data-model-ready={modelReady}
     >
@@ -553,86 +549,47 @@ export default function CadView({
         }}
         id='viewer-container'
       />
-      <>
-        <SnackBarMessage
-          message={snackMessage ? snackMessage : loadingMessage}
-          type={'info'}
-          open={isLoading || snackMessage !== null}
-        />
-        {showSearchBar && (
-          <Box sx={{
-            position: 'absolute',
-            top: `30px`,
-            left: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            maxHeight: '95%',
-          }}
-          >
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />
-            {
-              modelPath.repo !== undefined &&
-              <BranchesControl location={location}/>
-            }
-            {isNavPanelOpen &&
-              <NavPanel
-                model={model}
-                element={rootElement}
-                defaultExpandedElements={defaultExpandedElements}
-                expandedElements={expandedElements}
-                setExpandedElements={setExpandedElements}
-                pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-                }
-              />
-            }
-          </Box>
-        )}
-
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
-        <Box sx={isDrawerOpen ? {
-          'position': 'fixed',
-          'top': 0,
-          'right': '31em',
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '120px',
-            height: '50%',
-          },
-        } : {
-          'position': 'fixed',
-          'top': 0,
-          'right': 0,
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '75px',
-            height: '50%',
-          },
+      <SnackBarMessage
+        message={snackMessage ? snackMessage : loadingMessage}
+        type={'info'}
+        open={isLoading || snackMessage !== null}
+      />
+      {showSearchBar && (
+        <Box sx={{
+          position: 'absolute',
+          top: `30px`,
+          left: '20px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          alignItems: 'flex-start',
+          maxHeight: '95%',
         }}
         >
-          {viewer &&
-            <OperationsGroup
-              unSelectItem={unSelectItems}
+          <SearchBar
+            fileOpen={loadLocalFile}
+          />
+          {
+            modelPath.repo !== undefined &&
+            <BranchesControl location={location}/>
+          }
+          {isNavPanelOpen &&
+            <NavPanel
+              model={model}
+              element={rootElement}
+              defaultExpandedElements={defaultExpandedElements}
+              expandedElements={expandedElements}
+              setExpandedElements={setExpandedElements}
+              pathPrefix={
+                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+              }
             />
           }
         </Box>
-        {alert}
-      </>
-      <SideDrawerWrapper/>
+      )}
+      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      {alert}
+      <SideDrawerWrapper unSelectItem={unSelectItems}/>
     </Box>
   )
 }
@@ -671,6 +628,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.container = container
   return v
 }
+
 
 /**
  * @param {string} filepath

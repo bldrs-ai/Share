@@ -1,12 +1,14 @@
-import React, {useEffect} from 'react'
+import React, {useEffect, useContext} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
+import {ColorModeContext} from '../../Context/ColorMode'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
+import {dayColor, nightColor} from '../../utils/constants'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -23,6 +25,7 @@ export default function Notes() {
   const filteredNote = (notes && selectedNoteId) ?
         notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
+  const colorMode = useContext(ColorModeContext)
 
 
   useEffect(() => {
@@ -100,7 +103,7 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments])
@@ -114,7 +117,7 @@ export default function Notes() {
         'resizeMode': 'contain',
         'width': '100%',
         'paddingTop': '10px',
-        'paddingBottom': '30px',
+        'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         '@media (max-width: 900px)': {
           paddingTop: '0px',
         },

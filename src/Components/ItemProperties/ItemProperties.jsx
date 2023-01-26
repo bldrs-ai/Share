@@ -76,7 +76,7 @@ export default function ItemProperties() {
             alignItems: 'center',
             justifyContent: 'space-between',
             background: theme.palette.primary.main,
-            zIndex: 1000,
+            // zIndex: 1000,
           }}
           >
             Property Sets

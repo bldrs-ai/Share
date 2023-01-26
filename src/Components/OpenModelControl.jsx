@@ -15,6 +15,7 @@ import ModelsIcon from '../assets/2D_Icons/Model.svg'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
 import {handleBeforeUnload} from '../utils/event'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -31,7 +32,7 @@ export default function OpenModelControl({fileOpen}) {
   return (
     <>
       <Paper sx={{
-        'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         '& button': {
           'width': '44px',
           'height': '44px',

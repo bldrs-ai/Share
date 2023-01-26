@@ -2,6 +2,7 @@ import React, {useContext} from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
 import {ColorModeContext} from '../Context/ColorMode'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -21,7 +22,7 @@ export default function SnackBarMessage({message, type, open}) {
     >
       <Alert
         sx={{
-          'backgroundColor': colorMode.isDay() ? '#A9A9A9' : '#4C4C4C',
+          'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
           'opacity': .8,
           'position': 'relative',
           'bottom': '60px',

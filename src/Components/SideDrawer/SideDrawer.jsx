@@ -1,140 +1,19 @@
-import React, {useEffect} from 'react'
+import React, {useEffect, useContext} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import Drawer from '@mui/material/Drawer'
 import {useTheme} from '@mui/styles'
+import OperationsGroup from '../../Components/OperationsGroup'
+import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'
-import {preprocessMediaQuery} from '../../utils/mediaQuery'
-import MobileDrawer from '../MobileDrawer'
-import {MOBILE_WIDTH, useIsMobile} from '../Hooks'
+import CaretIcon from '../../assets/2D_Icons/Caret.svg'
+import {useIsMobile} from '../Hooks'
+import {TooltipIconButton} from '../Buttons'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
+import {dayColor, nightColor} from '../../utils/constants'
 
 
-/**
- * SideDrawer contains the ItemPanel and CommentPanel and allows for
- * show/hide from the right of the screen.
- * it is connected to the global store and controlled by isDrawerOpen property.
- *
- * @return {object} SideDrawer react component
- */
-export function SideDrawer({
-  isDrawerOpen,
-  closeDrawer,
-  isCommentsOn,
-  isPropertiesOn,
-}) {
-  const isMobile = useIsMobile()
-  const theme = useTheme()
-
-
-  useEffect(() => {
-    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
-      closeDrawer()
-    }
-  }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
-
-  return (
-    <>
-      {isMobile && isDrawerOpen ?
-        <MobileDrawer
-          content={
-            <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
-              position: 'relative',
-              bottom: 0,
-              height: 'auto',
-              marginTop: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'space-between',
-              overflow: 'hidden',
-            })}
-            >
-              <Box
-                sx={{
-                  display: isCommentsOn ? 'block' : 'none',
-                  height: isPropertiesOn ? '50%' : '100%',
-                  borderRadius: '0px',
-                  borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                  paddingTop: '20px',
-                  overflowX: 'hidden',
-                  overflowY: 'auto',
-                }}
-              >
-                <NotesPanel/>
-              </Box>
-              <Box sx={{
-                display: isPropertiesOn ? 'block' : 'none',
-                height: isCommentsOn ? '50%' : '100%',
-                borderRadius: '5px',
-                overflowX: 'hidden',
-                overflowY: 'auto',
-              }}
-              >
-                <PropertiesPanel/>
-              </Box>
-            </Box>
-          }
-        /> :
-        <Drawer
-          open={isDrawerOpen}
-          anchor={'right'}
-          variant='persistent'
-          elevation={4}
-          sx={preprocessMediaQuery(MOBILE_WIDTH, {
-            '&::-webkit-scrollbar': {
-              display: 'none',
-            },
-            '& > .MuiPaper-root': {
-              width: SIDE_DRAWER_WIDTH,
-              // This lets the h1 in ItemProperties use 1em padding but have
-              // its mid-line align with the text in SearchBar
-              padding: '4px 1em',
-            },
-            '& .MuiPaper-root': {
-              marginTop: '0px',
-              borderRadius: '0px',
-            },
-          })}
-        >
-          <Box sx={preprocessMediaQuery(MOBILE_WIDTH, {
-            height: '100%',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            overflowX: 'hidden',
-            overflowY: 'auto',
-          })}
-          >
-            <Box
-              sx={{
-                display: isCommentsOn ? 'block' : 'none',
-                height: isPropertiesOn ? '50%' : '100%',
-                borderRadius: '0px',
-                borderBottom: `1px solid ${theme.palette.highlight.heaviest}`,
-                paddingTop: '20px',
-                overflowX: 'hidden',
-                overflowY: 'auto',
-              }}
-            >
-              {isCommentsOn && <NotesPanel/>}
-            </Box>
-            <Box sx={{
-              display: isPropertiesOn ? 'block' : 'none',
-              height: isCommentsOn ? '50%' : '100%',
-              borderRadius: '5px',
-              overflowX: 'hidden',
-              overflowY: 'auto',
-            }}
-            >
-              {isPropertiesOn && <PropertiesPanel/>}
-            </Box>
-          </Box>
-        </Drawer>
-      }
-    </>
-  )
-}
+export const SIDE_DRAWER_WIDTH = '31em'
 
 
 /**
@@ -144,7 +23,7 @@ export function SideDrawer({
  *
  * @return {object} SideDrawer react component
  */
-export default function SideDrawerWrapper() {
+export default function SideDrawerWrapper({unSelectItem}) {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)
@@ -153,6 +32,10 @@ export default function SideDrawerWrapper() {
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const location = useLocation()
+  const isMobile = useIsMobile()
+  const theme = useTheme()
+  const colorTheme = useContext(ColorModeContext)
+  const viewer = useStore((state) => state.viewer)
 
 
   useEffect(() => {
@@ -175,19 +58,70 @@ export default function SideDrawerWrapper() {
   }, [location, openDrawer, setSelectedNoteId])
 
 
+  useEffect(() => {
+    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
+      closeDrawer()
+    }
+  }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
+
+
   return (
-    <>
-      {isDrawerOpen &&
-        <SideDrawer
-          isDrawerOpen={isDrawerOpen}
-          closeDrawer={closeDrawer}
-          isCommentsOn={isCommentsOn}
-          isPropertiesOn={isPropertiesOn}
-          openDrawer={openDrawer}
-        />}
-    </>
+    <Box
+      sx={{
+        position: 'absolute',
+        display: 'flex',
+        borderLeft: 'grey 1px solid',
+        flexDirection: 'row',
+        height: '100%',
+        top: 0,
+        right: 0,
+      }}
+    >
+      {viewer &&
+        <OperationsGroup
+          unSelectItem={unSelectItem}
+        />
+      }
+      <Box sx={{
+        display: isDrawerOpen ? 'flex' : 'none',
+        minWidth: '150px',
+        width: isMobile ? '100vw' : SIDE_DRAWER_WIDTH,
+        height: '100%',
+        flexDirection: 'column',
+        overflowY: 'auto',
+        backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+        borderLeft: 'grey 1px solid',
+      }}
+      >
+        <Box sx={{
+          'display': isMobile ? 'flex' : 'none',
+          'justifyContent': 'center',
+          'alignItems': 'center',
+          '& svg': {
+            transform: 'rotate(180deg)',
+          },
+        }}
+        >
+          <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
+        </Box>
+        <Box
+          sx={{
+            display: isCommentsOn ? 'block' : 'none',
+            borderBottom: `${theme.palette.highlight.heaviest} 1px solid`,
+            padding: '0 .5em',
+          }}
+        >
+          {isCommentsOn && <NotesPanel/>}
+        </Box>
+        <Box
+          sx={{
+            display: isPropertiesOn ? 'block' : 'none',
+            padding: '0 .5em',
+          }}
+        >
+          {isPropertiesOn && <PropertiesPanel/>}
+        </Box>
+      </Box>
+    </Box>
   )
 }
-
-
-export const SIDE_DRAWER_WIDTH = '31em'

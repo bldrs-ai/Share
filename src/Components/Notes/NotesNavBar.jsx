@@ -45,24 +45,19 @@ export default function NotesNavBar() {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderRadius: '2px',
     }}
     >
       <Box sx={{
-        'display': 'flex',
-        'flexDirection': 'row',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '@media (max-width: 900px)': {
-          paddingLeft: '12px',
-        },
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
       }}
       >
         <Typography variant='h2'>
           {!selectedNoteId && 'Notes'}
         </Typography>
-
-        {selectedNoteId ?
+        {selectedNoteId &&
           <Box>
             <TooltipIconButton
               title='Back to the list'
@@ -83,10 +78,9 @@ export default function NotesNavBar() {
                   <BackIcon/>
                 </Box>}
             />
-          </Box> : null
+          </Box>
         }
       </Box>
-
       <Box sx={{
         width: '400px',
         display: 'flex',
@@ -114,7 +108,6 @@ export default function NotesNavBar() {
           </>
         }
       </Box>
-
       <Box sx={{
         display: 'flex',
         flexDirection: 'row',

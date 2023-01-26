@@ -20,6 +20,7 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../../assets/2D_Icons/Share.svg'
+import {dayColor, nightColor} from '../../utils/constants'
 
 
 /**
@@ -129,7 +130,7 @@ export default function NoteCard({
   return (
     <Box sx={{
       marginBottom: '1em',
-      backgroundColor: colorTheme.isDay() ? 'white' : '#383838',
+      backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
       borderRadius: '5px',
       width: '100%',
     }}

@@ -11,6 +11,7 @@ import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import {handleBeforeUnload} from '../utils/event'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -111,7 +112,7 @@ export default function SearchBar({fileOpen}) {
           '& .MuiInputBase-root': {
             flex: 1,
           },
-          'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+          'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         }}
         onSubmit={onSubmit}
         elevation={0}
