@@ -1,4 +1,4 @@
-import React, {useEffect, useContext} from 'react'
+import React, {useEffect, useContext, useRef, useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/styles'
@@ -11,9 +11,6 @@ import {useIsMobile} from '../Hooks'
 import {TooltipIconButton} from '../Buttons'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import {dayColor, nightColor} from '../../utils/constants'
-
-
-export const SIDE_DRAWER_WIDTH = '31em'
 
 
 /**
@@ -31,11 +28,45 @@ export default function SideDrawerWrapper({unSelectItem}) {
   const openDrawer = useStore((state) => state.openDrawer)
   const turnCommentsOn = useStore((state) => state.turnCommentsOn)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const viewer = useStore((state) => state.viewer)
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const location = useLocation()
   const isMobile = useIsMobile()
   const theme = useTheme()
   const colorTheme = useContext(ColorModeContext)
-  const viewer = useStore((state) => state.viewer)
+  const sidebarRef = useRef(null)
+  const [isResizing, setIsResizing] = useState(false)
+
+
+  const startResizing = React.useCallback(() => {
+    setIsResizing(true)
+  }, [])
+
+
+  const stopResizing = React.useCallback(() => {
+    setIsResizing(false)
+  }, [])
+
+
+  const resize = React.useCallback(
+      (mouseMoveEvent) => {
+        if (isResizing) {
+          setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX)
+        }
+      },
+      [isResizing, setSidebarWidth],
+  )
+
+
+  useEffect(() => {
+    window.addEventListener('mousemove', resize)
+    window.addEventListener('mouseup', stopResizing)
+    return () => {
+      window.removeEventListener('mousemove', resize)
+      window.removeEventListener('mouseup', stopResizing)
+    }
+  }, [resize, stopResizing])
 
 
   useEffect(() => {
@@ -82,44 +113,67 @@ export default function SideDrawerWrapper({unSelectItem}) {
           unSelectItem={unSelectItem}
         />
       }
-      <Box sx={{
-        display: isDrawerOpen ? 'flex' : 'none',
-        minWidth: '150px',
-        width: isMobile ? '100vw' : SIDE_DRAWER_WIDTH,
-        height: '100%',
-        flexDirection: 'column',
-        overflowY: 'auto',
-        backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
-        borderLeft: 'grey 1px solid',
-      }}
+      <Box
+        sx={{
+          display: isDrawerOpen ? 'flex' : 'none',
+          width: isMobile ? '100vw' : sidebarWidth,
+          height: '100%',
+          flexDirection: 'row',
+          overflowY: 'auto',
+          backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+          borderLeft: 'grey 1px solid',
+        }}
+        ref={sidebarRef}
+        onMouseDown={(e) => e.preventDefault()}
       >
+        <Box
+          sx={{
+            'flexGrow': 0,
+            'flexShrink': 0,
+            'flexBasis': '6px',
+            'justifySelf': 'flex-start',
+            'cursor': 'col-resize',
+            'resize': 'horizontal',
+            '&:hover': {
+              width: '3px',
+              backgroundColor: '#c1c3c5b4',
+            },
+          }}
+          onMouseDown={startResizing}
+        />
         <Box sx={{
-          'display': isMobile ? 'flex' : 'none',
-          'justifyContent': 'center',
-          'alignItems': 'center',
-          '& svg': {
-            transform: 'rotate(180deg)',
-          },
+          flexDirection: 'column',
+          flex: 1,
         }}
         >
-          <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
-        </Box>
-        <Box
-          sx={{
-            display: isCommentsOn ? 'block' : 'none',
-            borderBottom: `${theme.palette.highlight.heaviest} 1px solid`,
-            padding: '0 .5em',
+          <Box sx={{
+            'display': isMobile ? 'flex' : 'none',
+            'justifyContent': 'center',
+            'alignItems': 'center',
+            '& svg': {
+              transform: 'rotate(180deg)',
+            },
           }}
-        >
-          {isCommentsOn && <NotesPanel/>}
-        </Box>
-        <Box
-          sx={{
-            display: isPropertiesOn ? 'block' : 'none',
-            padding: '0 .5em',
-          }}
-        >
-          {isPropertiesOn && <PropertiesPanel/>}
+          >
+            <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
+          </Box>
+          <Box
+            sx={{
+              display: isCommentsOn ? 'block' : 'none',
+              borderBottom: `${theme.palette.highlight.heaviest} 1px solid`,
+              padding: '0 .5em',
+            }}
+          >
+            {isCommentsOn && <NotesPanel/>}
+          </Box>
+          <Box
+            sx={{
+              display: isPropertiesOn ? 'block' : 'none',
+              padding: '0 .5em',
+            }}
+          >
+            {isPropertiesOn && <PropertiesPanel/>}
+          </Box>
         </Box>
       </Box>
     </Box>

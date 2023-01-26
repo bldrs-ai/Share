@@ -37,7 +37,6 @@ export default function ItemPropertiesDrawer({
         '& .MuiPaper-root': {
           marginTop: '0px',
           borderRadius: '0px',
-          // zIndex: 10,
         },
       })}
       open={true}

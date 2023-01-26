@@ -82,7 +82,7 @@ export default function NotesNavBar() {
         }
       </Box>
       <Box sx={{
-        width: '400px',
+        width: '100%',
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'center',

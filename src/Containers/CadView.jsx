@@ -10,7 +10,7 @@ import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
+import SideDrawerWrapper from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -77,6 +77,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -209,10 +210,10 @@ export default function CadView({
   // TODO(pablo): add render testing
   useEffect(() => {
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth})` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, isMobile, viewer])
+  }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
   const setAlertMessage = (msg) =>
