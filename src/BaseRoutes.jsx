@@ -7,31 +7,6 @@ import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
 
 
-const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
-const basePath = `${installPrefix }/`
-const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
-
-
-// The next two components from https://auth0.com/docs/quickstart/spa/react
-const ProtectedRoute = ({component, ...args}) => {
-  const Component = withAuthenticationRequired(component, args)
-  return <Component/>
-}
-
-
-const Auth0ProviderWithRedirectCallback = ({children, ...props}) => {
-  const navigate = useNavigate()
-  const onRedirectCallback = (appState) => {
-    navigate((appState && appState.returnTo) || window.location.pathname)
-  }
-  return (
-    <Auth0Provider onRedirectCallback={onRedirectCallback} {...props}>
-      {children}
-    </Auth0Provider>
-  )
-}
-
-
 /**
  * From URL design: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  * ... We adopt a URL structure similar to Google Apps URL structure:
@@ -88,12 +63,45 @@ export default function BaseRoutes({testElt = null}) {
                 isAuthenticated ? (
                   <ProtectedRoute component={ShareRoutesCtx}/>
                 ) : (
-                  <ShareRoutesCtx/>
+                  <>
+                    NOT AUTHED
+                    <ShareRoutesCtx/>
+                  </>
                 )
             }
           />
         </Route>
       </SentryRoutes>
     </Auth0ProviderWithRedirectCallback>
+  )
+}
+
+
+const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+const basePath = `${installPrefix }/`
+const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
+
+
+// See:
+//   https://auth0.github.io/auth0-react/
+//   https://developer.auth0.com/resources/guides/spa/react/basic-authentication
+//   https://developer.auth0.com/resources/code-samples/spa/react/basic-authentication
+//
+// The next two components from https://auth0.com/docs/quickstart/spa/react
+const ProtectedRoute = ({component, ...args}) => {
+  const Component = withAuthenticationRequired(component, args)
+  return <Component/>
+}
+
+
+const Auth0ProviderWithRedirectCallback = ({children, ...props}) => {
+  const navigate = useNavigate()
+  const onRedirectCallback = (appState) => {
+    navigate((appState && appState.returnTo) || window.location.pathname)
+  }
+  return (
+    <Auth0Provider onRedirectCallback={onRedirectCallback} {...props}>
+      {children}
+    </Auth0Provider>
   )
 }
