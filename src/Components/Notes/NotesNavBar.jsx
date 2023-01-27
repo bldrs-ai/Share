@@ -28,6 +28,7 @@ export default function NotesNavBar() {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
+      removeHashParams(window.location, NOTE_PREFIX)
       addHashParams(window.location, NOTE_PREFIX, {id: note.id})
       if (note.url) {
         setCameraFromParams(note.url)

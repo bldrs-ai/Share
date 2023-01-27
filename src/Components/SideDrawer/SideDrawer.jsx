@@ -117,6 +117,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
         sx={{
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
+          minWidth: '8px',
           maxWidth: '100vw',
           height: '100%',
           flexDirection: 'row',
