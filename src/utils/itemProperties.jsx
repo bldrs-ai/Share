@@ -164,7 +164,7 @@ export async function unpackHelper(model, eltArr, serial, ifcToRowCb) {
           throw new Error('Array contains non-reference type')
         }
         const refId = stoi(p.value)
-        if (model.getItemProperties) {
+        if (model.getItemProperties && model.getItemProperties !== 'undfined') {
           const ifcElt = await model.getItemProperties(refId)
           ifcToRowCb(ifcElt, rows)
         } else {
