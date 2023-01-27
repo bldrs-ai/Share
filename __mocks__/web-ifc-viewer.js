@@ -11,6 +11,11 @@ const loadedModel = {
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),
+  geometry: {
+    boundingBox: {
+      getCenter: jest.fn(),
+    },
+  },
 }
 
 
@@ -21,22 +26,22 @@ const impl = {
     context: {
       ifcCamera: {
         cameraControls: {
-          setPosition: (x, y, z) => {
+          setPosition: jest.fn((x, y, z) => {
             return {}
-          },
-          getPosition: (x, y, z) => {
+          }),
+          getPosition: jest.fn((x, y, z) => {
             // eslint-disable-next-line no-magic-numbers
             const position = [0, 0, 0]
             return position
-          },
-          setTarget: (x, y, z) => {
+          }),
+          setTarget: jest.fn((x, y, z) => {
             return {}
-          },
-          getTarget: (x, y, z) => {
+          }),
+          getTarget: jest.fn((x, y, z) => {
             // eslint-disable-next-line no-magic-numbers
             const target = [0, 0, 0]
             return target
-          },
+          }),
         },
       },
     },
@@ -68,6 +73,7 @@ const impl = {
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
+  setSelection: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

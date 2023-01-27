@@ -20,7 +20,7 @@ export default function Notes() {
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
 
 
@@ -34,13 +34,14 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository)
+        let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
           fetchedNotes.push({
-            index: index,
+            index: issueIndex++,
             id: issue.id,
             number: issue.number,
             title: issue.title,
@@ -99,7 +100,7 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments])
@@ -113,7 +114,6 @@ export default function Notes() {
         'flexDirection': 'column',
         'alignItems': 'center',
         'resizeMode': 'contain',
-        'margin': '0 1em 30px 0',
         '@media (max-width: 900px)': {
           paddingTop: '0px',
         },

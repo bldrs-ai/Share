@@ -1,33 +1,33 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
-import {IfcViewerAPI} from 'web-ifc-viewer'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import * as Privacy from '../privacy/Privacy'
-import Alert from '../Components/Alert'
-import debug from '../utils/debug'
-import LogoButton from '../Components/LogoButton'
-import NavPanel from '../Components/NavPanel'
-import OperationsGroup from '../Components/OperationsGroup'
-import useStore from '../store/useStore'
-import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
-import SnackBarMessage from '../Components/SnackbarMessage'
-import {assertDefined} from '../utils/assert'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {ColorModeContext} from '../Context/ColorMode'
 import {navToDefault} from '../Share'
+import Alert from '../Components/Alert'
+import BranchesControl from '../Components/BranchesControl'
+import Logo from '../Components/Logo'
+import NavPanel from '../Components/NavPanel'
+import SearchBar from '../Components/SearchBar'
+import SideDrawerWrapper from '../Components/SideDrawer/SideDrawer'
+import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
+import {ColorModeContext} from '../Context/ColorMode'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import * as Privacy from '../privacy/Privacy'
+import debug from '../utils/debug'
+import useStore from '../store/useStore'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {assertDefined} from '../utils/assert'
+import {handleBeforeUnload} from '../utils/event'
 import SearchIndex from './SearchIndex'
-import BranchesControl from '../Components/BranchesControl'
 
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
-const searchIndex = new SearchIndex()
+export const searchIndex = new SearchIndex()
 let count = 0
 
 
@@ -52,7 +52,6 @@ export default function CadView({
   const [searchParams, setSearchParams] = useSearchParams()
 
   // IFC
-  const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
@@ -65,16 +64,20 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const viewer = useStore((state) => state.viewer)
+  const setViewer = useStore((state) => state.setViewer)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -104,6 +107,31 @@ export default function CadView({
   }, [searchParams])
 
 
+  useEffect(() => {
+    (async () => {
+      if (!Array.isArray(selectedElements) || !viewer) {
+        return
+      }
+      // Update The selection on the scene pick/unpick
+      await viewer.setSelection(0, selectedElements.map((id) => parseInt(id)))
+      // If current selection is not empty
+      if (selectedElements.length > 0) {
+        // Display the properties of the last one,
+        const lastId = selectedElements.slice(-1)
+        const props = await viewer.getProperties(0, Number(lastId))
+        setSelectedElement(props)
+        // Update the expanded elements in NavPanel
+        const pathIds = getPathIdsForElements(lastId)
+        if (pathIds) {
+          setExpandedElements(pathIds.map((n) => `${n}`))
+        }
+      } else {
+        setSelectedElement(null)
+      }
+    })()
+  }, [selectedElements])
+
+
   // Watch for path changes within the model.
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
@@ -125,7 +153,6 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    resetState()
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
     const theme = colorMode.getTheme()
@@ -137,7 +164,6 @@ export default function CadView({
          theme.palette.scene.background) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
-    setSelectedElement(null)
   }
 
 
@@ -184,14 +210,19 @@ export default function CadView({
   // TODO(pablo): add render testing
   useEffect(() => {
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth})` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, isMobile, viewer])
+  }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
   const setAlertMessage = (msg) =>
-    setAlert(<Alert onCloseCb={() => navToDefault(navigate, appPrefix)} message={msg}/>)
+    setAlert(
+        <Alert onCloseCb={() => {
+          navToDefault(navigate, appPrefix)
+        }} message={msg}
+        />,
+    )
 
 
   /**
@@ -203,12 +234,9 @@ export default function CadView({
     debug().log(`CadView#loadIfc: `, filepath)
 
     if (pathPrefix.endsWith('new')) {
-      const l = window.location
-      filepath = filepath.split('.ifc')[0]
-      const parts = filepath.split('/')
-      filepath = parts[parts.length - 1]
+      filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${ l.port}` : '')}/${filepath}`
+      window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -231,7 +259,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
 
     Privacy.recordEvent('select_content', {
@@ -263,19 +291,22 @@ export default function CadView({
     const viewerContainer = document.getElementById('viewer-container')
     const fileInput = document.createElement('input')
     fileInput.setAttribute('type', 'file')
-    fileInput.classList.add('file-input')
     fileInput.addEventListener(
         'change',
         (event) => {
+          debug().log('CadView#loadLocalFile#event:', event)
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
+          window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
         },
         false,
     )
     viewerContainer.appendChild(fileInput)
     fileInput.click()
+    viewerContainer.removeChild(fileInput)
   }
 
 
@@ -293,6 +324,7 @@ export default function CadView({
     }
     setupLookupAndParentLinks(rootElt, elementsById)
     setDoubleClickListener()
+    setKeydownListeners()
     initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
     rootElt.Name = rootProps.Name
@@ -307,7 +339,7 @@ export default function CadView({
    * previous index data and parses any incoming search params in the
    * URL.  Enables search bar when done.
    *
-   * @param {object} m The IfcViewerAPI instance.
+   * @param {object} m The IfcViewerAPIExtended instance.
    * @param {object} rootElt Root ifc element for recursive indexing.
    */
   function initSearch(m, rootElt) {
@@ -333,53 +365,63 @@ export default function CadView({
         throw new Error('IllegalState: empty search query')
       }
       const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      selectItemsInScene(resultIDs, false)
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
     } else {
-      clearSearch()
+      resetSelection()
     }
   }
 
 
-  /** Clear active search state and unpick active scene elts. */
-  function clearSearch() {
-    setSelectedElements([])
-    if (viewer) {
-      viewer.IFC.unpickIfcItems()
+  /** Clear current selection. */
+  function resetSelection() {
+    if (selectedElements?.length !== 0) {
+      selectItemsInScene([])
     }
   }
 
   /** Reset global state */
   function resetState() {
-    setSelectedElement(null)
-    setSelectedElements(null)
-    setCutPlaneDirection(null)
+    resetSelection()
+    setCutPlaneDirections([])
     setLevelInstance(null)
   }
 
-
   /** Unpick active scene elts and remove clip planes. */
   function unSelectItems() {
-    viewer.IFC.unpickIfcItems()
-    viewer.clipper.deleteAllPlanes()
+    if (viewer) {
+      viewer.clipper.deleteAllPlanes()
+    }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate(`${pathPrefix}${repoFilePath}`)
   }
-
 
   /**
    * Pick the given items in the scene.
    *
    * @param {Array} resultIDs Array of expressIDs
    */
-  async function selectItemsInScene(resultIDs) {
-    setSelectedElements(resultIDs.map((id) => `${id}`))
+  function selectItemsInScene(resultIDs, updateNavigation = true) {
+    // NOTE: we might want to compare with previous selection to avoid unnecessary updates
+    if (!viewer) {
+      return
+    }
     try {
-      await viewer.pickIfcItemsByID(0, resultIDs, true)
+      // Update The Component state
+      setSelectedElements(resultIDs.map((id) => `${id}`))
+      // Sets the url to the last selected element path.
+      if (resultIDs.length > 0 && updateNavigation) {
+        const lastId = resultIDs.slice(-1)
+        const pathIds = getPathIdsForElements(lastId)
+        const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
+        const path = pathIds.join('/')
+        navigate(`${pathPrefix}${repoFilePath}/${path}`)
+      }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
@@ -390,25 +432,19 @@ export default function CadView({
 
 
   /**
-   * Select the items in the NavTree and update ItemProperties.
    * Returns the ids of path parts from root to this elt in spatial
    * structure.
    *
    * @param {number} expressId
    * @return {Array} pathIds
    */
-  async function onElementSelect(expressId) {
+  function getPathIdsForElements(expressId) {
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
-      debug().error(`CadView#onElementSelect(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
       return
     }
-    await selectItemsInScene([expressId])
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
-    setExpandedElements(pathIds.map((n) => `${n}`))
-    setSelectedElements(`${expressId}`)
-    const props = await viewer.getProperties(0, expressId)
-    setSelectedElement(props)
     return pathIds
   }
 
@@ -423,24 +459,57 @@ export default function CadView({
     if (parts.length > 0) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
-      if (isFinite(targetId)) {
-        onElementSelect(targetId)
+      const selectedInViewer = viewer.getSelectedIds()
+      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
+        selectItemsInScene([targetId], false)
       }
     }
   }
 
-
   /** Select items in model when they are double-clicked. */
   function setDoubleClickListener() {
-    window.ondblclick = async (event) => {
-      if (event.target && event.target.tagName === 'CANVAS') {
-        const item = await viewer.IFC.pickIfcItem(true)
-        if (item && Number.isFinite(item.modelID) && Number.isFinite(item.id)) {
-          const pathIds = await onElementSelect(item.id)
-          const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-          const path = pathIds.join('/')
-          navigate(`${pathPrefix}${repoFilePath}/${path}`)
-        }
+    window.ondblclick = canvasDoubleClickHandler
+  }
+
+  /** Handle double click event on canvas. */
+  async function canvasDoubleClickHandler(event) {
+    if (!event.target || event.target.tagName !== 'CANVAS') {
+      return
+    }
+    const item = await viewer.castRayToIfcScene()
+    if (!item) {
+      return
+    }
+    let newSelection = []
+    if (event.shiftKey) {
+      const selectedInViewer = viewer.getSelectedIds()
+      const indexOfItem = selectedInViewer.indexOf(item.id)
+      const alreadySelected = indexOfItem !== -1
+      if (alreadySelected) {
+        selectedInViewer.splice(indexOfItem, 1)
+      } else {
+        selectedInViewer.push(item.id)
+      }
+      newSelection = selectedInViewer
+    } else {
+      newSelection = [item.id]
+    }
+    selectItemsInScene(newSelection)
+  }
+  /** Set Keyboard button Shortcuts */
+  function setKeydownListeners() {
+    window.onkeydown = (event) => {
+      // add a plane
+      if (event.code === 'KeyQ') {
+        viewer.clipper.createPlane()
+      }
+      // delete all planes
+      if (event.code === 'KeyW') {
+        viewer.clipper.deletePlane()
+      }
+      if (event.code === 'KeyA' ||
+        event.code === 'Escape') {
+        resetSelection()
       }
     }
   }
@@ -456,111 +525,70 @@ export default function CadView({
 
 
   return (
-    <Box sx={{
-      'position': 'absolute',
-      'top': '0px',
-      'left': '0px',
-      'minWidth': '100vw',
-      'minHeight': '100vh',
-      '@media (max-width: 900px)': {
-        height: ' calc(100vh - calc(100vh - 100%))',
-        minHeight: '-webkit-fill-available',
-      },
-    }}data-model-ready={modelReady}
-    >
-      <Box sx={{
+    <Box
+      sx={{
         position: 'absolute',
         top: '0px',
         left: '0px',
-        textAlign: 'center',
+        display: 'flex',
         width: '100vw',
         height: '100vh',
-        margin: 'auto',
-      }} id='viewer-container'
+      }}
+      data-model-ready={modelReady}
+    >
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '0px',
+          left: '0px',
+          textAlign: 'center',
+          width: '100vw',
+          height: '100vh',
+          margin: 'auto',
+        }}
+        id='viewer-container'
       />
-      <>
-        <SnackBarMessage
-          message={snackMessage ? snackMessage : loadingMessage}
-          type={'info'}
-          open={isLoading || snackMessage !== null}
-        />
-        {showSearchBar && (
-          <Box sx={{
-            'position': 'absolute',
-            'top': '0',
-            'left': '0',
-            'margin': '1.5em 0 0 1em',
-            'display': 'flex',
-            'flexDirection': 'column',
-            'justifyContent': 'flex-start',
-            'alignItems': 'flex-start',
-            'maxHeight': '95%',
-            '@media (max-width: 900px)': {
-              margin: '1em 0 0 0.5em',
-            },
-          }}
-          >
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />
-            {
-              modelPath.repo !== undefined &&
-              <BranchesControl location={location}/>
-            }
-            {isNavPanelOpen &&
-              <NavPanel
-                model={model}
-                element={rootElement}
-                defaultExpandedElements={defaultExpandedElements}
-                expandedElements={expandedElements}
-                setExpandedElements={setExpandedElements}
-                pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-                }
-              />
-            }
-          </Box>
-        )}
-
-        <LogoButton onClick={() => navToDefault(navigate, appPrefix)}/>
-        <Box sx={isDrawerOpen ? {
-          'position': 'fixed',
-          'top': 0,
-          'right': '34em',
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '120px',
-            height: '50%',
-          },
-        } : {
-          'position': 'fixed',
-          'top': 0,
-          'right': 0,
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '75px',
-            height: '50%',
-          },
+      <SnackBarMessage
+        message={snackMessage ? snackMessage : loadingMessage}
+        type={'info'}
+        open={isLoading || snackMessage !== null}
+      />
+      {showSearchBar && (
+        <Box sx={{
+          position: 'absolute',
+          top: `1em`,
+          left: '1em',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          alignItems: 'flex-start',
+          maxHeight: '95%',
         }}
         >
-          {viewer &&
-            <OperationsGroup
-              unSelectItem={unSelectItems}
-            />}
+          <SearchBar
+            fileOpen={loadLocalFile}
+          />
+          {
+            modelPath.repo !== undefined &&
+            <BranchesControl location={location}/>
+          }
+          {isNavPanelOpen &&
+            <NavPanel
+              model={model}
+              element={rootElement}
+              defaultExpandedElements={defaultExpandedElements}
+              expandedElements={expandedElements}
+              setExpandedElements={setExpandedElements}
+              pathPrefix={
+                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+              }
+            />
+          }
         </Box>
-        {alert}
-      </>
-      <SideDrawerWrapper/>
+      )}
+      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      {alert}
+      <SideDrawerWrapper unSelectItem={unSelectItems}/>
     </Box>
   )
 }
@@ -569,7 +597,7 @@ export default function CadView({
 /**
  * @param {string} pathPrefix E.g. /share/v/p
  * @param {string} backgroundColorStr CSS str like '#abcdef'
- * @return {object} IfcViewerAPI viewer, width a .container property
+ * @return {object} IfcViewerAPIExtended viewer, width a .container property
  *     referencing its container.
  */
 function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
@@ -578,7 +606,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPI({
+  const v = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
@@ -594,22 +622,20 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     v.prePickIfcItem()
   }
 
-  window.onkeydown = (event) => {
-    // add a plane
-    if (event.code === 'KeyQ') {
-      v.clipper.createPlane()
-    }
-    // delete all planes
-    if (event.code === 'KeyW') {
-      v.clipper.deletePlane()
-    }
-    if (event.code === 'KeyA') {
-      v.IFC.unpickIfcItems()
-    }
-  }
-
-  // window.addEventListener('resize', () => {v.context.resize()})
-
   v.container = container
   return v
+}
+
+
+/**
+ * @param {string} filepath
+ * @return {string}
+ */
+export function getNewModelRealPath(filepath) {
+  const l = window.location
+  filepath = filepath.split('.ifc')[0]
+  const parts = filepath.split('/')
+  filepath = parts[parts.length - 1]
+  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+  return filepath
 }

@@ -1,7 +1,6 @@
 import React from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
-// import {ColorModeContext} from '../Context/ColorMode'
 import {useTheme} from '@mui/styles'
 
 
@@ -12,7 +11,6 @@ import {useTheme} from '@mui/styles'
  * @return {object}
  */
 export default function SnackBarMessage({message, type, open}) {
-  // const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
 

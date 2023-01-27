@@ -50,27 +50,30 @@ export function PropertiesPanel() {
   // error where createElement is undefined.  I've refactored a little
   // and now can't reproduce.
   return (
-    <>
+    <Box
+      sx={{
+        margin: '1em',
+      }}
+    >
       <PanelTitle
         title='Properties'
         controlsGroup={
-          <Box>
-            <TooltipIconButton
-              title='toggle drawer'
-              onClick={toggleIsPropertiesOn}
-              icon={
-                <Box sx={{
+          <TooltipIconButton
+            title='toggle drawer'
+            onClick={toggleIsPropertiesOn}
+            icon={
+              <Box
+                sx={{
                   display: 'flex',
                   justifyContent: 'center',
                   alignItems: 'center',
                   width: '14px',
                   height: '14px',
                 }}
-                >
-                  <CloseIcon/>
-                </Box>}
-            />
-          </Box>
+              >
+                <CloseIcon/>
+              </Box>}
+          />
         }
       />
       <Box
@@ -96,27 +99,27 @@ export function PropertiesPanel() {
           </Box>
         }
       </Box>
-    </>
+    </Box>
   )
 }
 
 
 export const NotesPanel = () => {
   return (
-    <>
+    <Box
+      sx={{
+        margin: '1em',
+      }}
+    >
       <NotesNavBar/>
       <Box sx={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        top: 0,
-        bottom: 0,
-        overflowX: 'hidden',
-        overflowY: 'auto',
       }}
       >
         <Notes/>
       </Box>
-    </>
+    </Box>
   )
 }

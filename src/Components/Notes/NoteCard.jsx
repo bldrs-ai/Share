@@ -9,7 +9,7 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
+import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {
@@ -99,6 +99,7 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
+    removeHashParams(window.location, NOTE_PREFIX)
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 

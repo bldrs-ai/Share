@@ -90,7 +90,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       setIsPlaneInUrl(true)
       addPlaneLocationToUrl(viewer, model)
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
 
 

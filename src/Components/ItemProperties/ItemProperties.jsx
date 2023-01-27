@@ -64,7 +64,6 @@ export default function ItemProperties() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            zIndex: 1000,
           }}
           >
             Property Sets

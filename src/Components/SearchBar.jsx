@@ -9,6 +9,7 @@ import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import {handleBeforeUnload} from '../utils/event'
 
 
 /**
@@ -44,6 +45,7 @@ export default function SearchBar({fileOpen}) {
           setInputText(newInputText)
         }
       } else {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(location.pathname)
       }
     }
@@ -62,6 +64,7 @@ export default function SearchBar({fileOpen}) {
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
+        window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(modelPath, {replace: true})
       } catch (e) {
         console.error(e)
@@ -73,6 +76,7 @@ export default function SearchBar({fileOpen}) {
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       navigate({
         pathname: newPath,
         search: `?q=${inputText}`,

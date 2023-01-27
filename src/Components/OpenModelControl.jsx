@@ -10,6 +10,7 @@ import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
+import {handleBeforeUnload} from '../utils/event'
 
 
 /**
@@ -119,6 +120,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
     }
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
     setIsDialogDisplayed(false)
   }

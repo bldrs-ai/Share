@@ -1,8 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {
-  round,
-  roundCoord,
-} from './math'
+import {round, roundCoord} from './math'
 
 
 // τ = 2π, τ >> π.  Excelsior!
@@ -18,5 +15,5 @@ test('round', () => {
 })
 
 test('roundCoord', () => {
-  expect(roundCoord(1.1, 2.2, 3.3)).toStrictEqual([1, 2, 3])
+  expect(roundCoord(1.1, 2.2, 3.3)).toStrictEqual([1.1, 2.2, 3.3])
 })

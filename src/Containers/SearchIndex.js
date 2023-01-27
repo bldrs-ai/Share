@@ -10,6 +10,7 @@ export default class SearchIndex {
     this.eltsByType = {}
     this.eltsByName = {}
     this.eltsByGlobalId = {}
+    this.eltsByExpressId = {}
     this.eltsByText = {}
   }
 
@@ -44,6 +45,10 @@ export default class SearchIndex {
 
     if (elt.GlobalId && elt.GlobalId.value) {
       this.indexElementByString(this.eltsByGlobalId, elt.GlobalId.value, elt)
+    }
+
+    if (elt.expressID) {
+      this.indexElementByString(this.eltsByExpressId, elt.expressID.toString(), elt)
     }
 
     const description = Ifc.getDescription(elt)
@@ -119,6 +124,7 @@ export default class SearchIndex {
     deleteProperties(this.eltsByType)
     deleteProperties(this.eltsByName)
     deleteProperties(this.eltsByGlobalId)
+    deleteProperties(this.eltsByExpressId)
     deleteProperties(this.eltsByText)
   }
 
@@ -165,11 +171,43 @@ export default class SearchIndex {
     addAll(this.eltsByType[lowerToken])
 
     addAll(this.eltsByGlobalId[token])
+    addAll(this.eltsByExpressId[token])
 
     addAll(this.eltsByText[token])
 
     const resultIDs = toExpressIds(Array.from(resultSet))
     debug().log('result IDs: ', resultIDs)
     return resultIDs
+  }
+
+  /**
+   *
+   * @param {string} expressId
+   * @return {string} globalId
+   */
+  getGlobalIdByExpressId(expressId) {
+    if (Object.prototype.hasOwnProperty.call(this.eltsByExpressId, expressId)) {
+      const set = this.eltsByExpressId[expressId]
+      const element = (set.values().next().value)
+      if (Object.prototype.hasOwnProperty.call(element, 'GlobalId')) {
+        return element['GlobalId'].value
+      }
+    }
+  }
+
+  /**
+   *
+   *
+   * @param {string} globalId
+   * @return {string} expressId
+   */
+  getExpressIdByGlobalId(globalId) {
+    if (Object.prototype.hasOwnProperty.call(this.eltsByGlobalId, globalId)) {
+      const set = this.eltsByGlobalId[globalId]
+      const element = (set.values().next().value)
+      if (Object.prototype.hasOwnProperty.call(element, 'expressID')) {
+        return element['expressID'].toString()
+      }
+    }
   }
 }

@@ -189,6 +189,10 @@ function loadTheme(mode) {
       },
     },
     MuiPaper: {
+      styleOverrides: {
+        root: {
+        },
+      },
       variants: [
         {
           props: {variant: 'control'},

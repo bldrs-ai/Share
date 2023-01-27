@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react'
+import React, {useEffect, useMemo, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import GlobalStyles from '@mui/material/GlobalStyles'
 import {useNavigate, useParams} from 'react-router-dom'
@@ -8,10 +8,13 @@ import useStore from './store/useStore'
 import useShareTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
+import {handleBeforeUnload} from './utils/event'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
+import WidgetApi from "./WidgetApi/WidgetApi";
+import {searchIndex} from './Containers/CadView';
 /* eslint-enable */
 
 
@@ -30,6 +33,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
 
+  useMemo(() => {
+    new WidgetApi(navigation.current, searchIndex)
+  }, [navigation])
 
   /**
    * On a change to urlParams, setting a new model path will clear the
@@ -135,6 +141,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
+  window.removeEventListener('beforeunload', handleBeforeUnload)
   if (window.innerWidth <= mediaSizeTabletWith) {
     navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
   } else {

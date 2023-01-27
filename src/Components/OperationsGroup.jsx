@@ -32,7 +32,7 @@ export default function OperationsGroup({
   const isCommentsOn = useStore((state) => state.isCommentsOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const cutPlaneDirection = useStore((state) => state.cutPlaneDirection)
+  const cutPlanes = useStore((state) => state.cutPlanes)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
@@ -41,7 +41,7 @@ export default function OperationsGroup({
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
-      cutPlaneDirection !== null ||
+      cutPlanes.length !== 0 ||
       levelInstance !== null
     )
     return ifSelected
@@ -75,7 +75,7 @@ export default function OperationsGroup({
     >
       <ButtonGroup orientation="vertical" >
         <ShareControl/>
-        <Divider/>
+        <Divider sx={{margin: '0.5em 0'}}/>
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
@@ -96,7 +96,7 @@ export default function OperationsGroup({
           selected={isSelected()}
           icon={<ClearIcon/>}
         />
-        <Divider/>
+        <Divider sx={{margin: '0.5em 0'}}/>
         <TooltipIconButton
           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => colorMode.toggleColorMode()}

@@ -9,6 +9,7 @@ import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
+import {handleBeforeUnload} from '../utils/event'
 
 
 /**
@@ -61,6 +62,7 @@ export default function Branches() {
   const handleSelect = (event) => {
     const versionNumber = event.target.value
     setSelected(versionNumber)
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({
       pathname: versionPaths[versionNumber],
     })
@@ -132,6 +134,5 @@ export default function Branches() {
         </Paper>
       }
     </>
-
   )
 }
