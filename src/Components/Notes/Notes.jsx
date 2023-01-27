@@ -23,7 +23,7 @@ export default function Notes() {
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const colorMode = useContext(ColorModeContext)
 
@@ -38,13 +38,14 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository)
+        let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
           fetchedNotes.push({
-            index: index,
+            index: issueIndex++,
             id: issue.id,
             number: issue.number,
             title: issue.title,
@@ -123,8 +124,8 @@ export default function Notes() {
         },
       }}
       >
-        {notes === null && <Loader type={'linear'}/> }
-        {notes && notes.length === 0 && <NoContent/> }
+        {notes === null && <Loader type={'linear'}/>}
+        {notes && notes.length === 0 && <NoContent/>}
         {notes && !selectedNoteId ?
           notes.map((issue, index) => {
             return (
@@ -143,42 +144,42 @@ export default function Notes() {
               />
             )
           }) :
-        <>
-          {filteredNote ?
-           <NoteCard
-             embeddedUrl={filteredNote.embeddedUrl}
-             index={filteredNote.index}
-             id={filteredNote.id}
-             key={filteredNote.id}
-             title={filteredNote.title}
-             date={filteredNote.date}
-             body={filteredNote.body}
-             username={filteredNote.username}
-             numberOfComments={filteredNote.numberOfComments}
-             avatarUrl={filteredNote.avatarUrl}
-             imageUrl={filteredNote.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
-               <NoteCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
+          <>
+            {filteredNote ?
+              <NoteCard
+                embeddedUrl={filteredNote.embeddedUrl}
+                index={filteredNote.index}
+                id={filteredNote.id}
+                key={filteredNote.id}
+                title={filteredNote.title}
+                date={filteredNote.date}
+                body={filteredNote.body}
+                username={filteredNote.username}
+                numberOfComments={filteredNote.numberOfComments}
+                avatarUrl={filteredNote.avatarUrl}
+                imageUrl={filteredNote.imageUrl}
+              /> : null
+            }
+            {comments &&
+              comments.map((comment, index) => {
+                return (
+                  <NoteCard
+                    embeddedUrl={comment.embeddedUrl}
+                    isComment={true}
+                    index=''
+                    id={comment.id}
+                    key={comment.id}
+                    title={index + 1}
+                    date={comment.date}
+                    body={comment.body}
+                    username={comment.username}
+                    avatarUrl={comment.avatarUrl}
+                    imageUrl={comment.imageUrl}
+                  />
+                )
+              })
+            }
+          </>
         }
       </Box>
     </Paper>

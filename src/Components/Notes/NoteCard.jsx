@@ -5,7 +5,7 @@ import useTheme from '@mui/styles/useTheme'
 import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
+import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {isRunningLocally} from '../../utils/network'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -98,6 +98,7 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
+    removeHashParams(window.location, NOTE_PREFIX)
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
