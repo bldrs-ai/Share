@@ -163,7 +163,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
                   width: '4px',
                   height: '4px',
                   borderRadius: '2px',
-                  backgroundColor: 'white',
+                  backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
                 }}
               />,
             )}
