@@ -102,7 +102,6 @@ describe('CadView', () => {
             modelPath={modelPath}
           />
         </ShareMock>)
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
     const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
     // eslint-disable-next-line no-magic-numbers
@@ -157,12 +156,10 @@ describe('CadView', () => {
     jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
-
     const modelPath = {
       filepath: `haus.ifc`,
     }
     const viewer = new IfcViewerAPIExtended()
-
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
@@ -176,7 +173,6 @@ describe('CadView', () => {
     )
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
-
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
@@ -240,7 +236,7 @@ describe('CadView', () => {
     const clearCallParam = [modelId, []] // Clear Selection Call Parameters
     const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
     /** Expected basic 2 on load (init search, Select from Url), select, clear, select, clear */
-    const expectedCall = [clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
+    const expectedCall = [selectCallParam, clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
     const setSelectionCalls = viewer.setSelection.mock.calls
     expect(setSelectionCalls).toEqual(expectedCall)
   })

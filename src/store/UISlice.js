@@ -17,6 +17,8 @@ export default function createUISlice(set, get) {
     snackMessage: null,
     cutPlanes: [],
     levelInstance: null,
+    viewer: null,
+    sidebarWidth: 500,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -42,5 +44,7 @@ export default function createUISlice(set, get) {
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
+    setViewer: (newViewer) => set(() => ({viewer: newViewer})),
+    setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
   }
 }

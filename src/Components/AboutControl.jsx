@@ -9,6 +9,7 @@ import Dialog from './Dialog'
 import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
 import LogoB from '../assets/LogoB_3.svg'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -142,7 +143,7 @@ function AboutContent({setIsDialogDisplayed}) {
         </a>
       </Typography>
       <Box sx={{
-        backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+        backgroundColor: colorMode.isDay() ? dayColor : nightColor,
         borderRadius: '10px',
         opacity: .8,
         marginTop: '10px',

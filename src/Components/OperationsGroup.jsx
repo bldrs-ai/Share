@@ -65,13 +65,10 @@ export default function OperationsGroup({
 
   return (
     <Box sx={{
-      'display': 'flex',
-      'flexDirection': 'column',
-      'height': 'calc(100vh - 40px)',
-      'margin': '20px 20px 0 0',
-      '@media (max-width: 900px)': {
-        margin: '20px 10px 0 0',
-      },
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      margin: '20px',
     }}
     >
       <ButtonGroup orientation="vertical" >

@@ -28,6 +28,7 @@ export default function NotesNavBar() {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
+      removeHashParams(window.location, NOTE_PREFIX)
       addHashParams(window.location, NOTE_PREFIX, {id: note.id})
       if (note.url) {
         setCameraFromParams(note.url)
@@ -45,24 +46,19 @@ export default function NotesNavBar() {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      borderRadius: '2px',
     }}
     >
       <Box sx={{
-        'display': 'flex',
-        'flexDirection': 'row',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '@media (max-width: 900px)': {
-          paddingLeft: '12px',
-        },
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        alignItems: 'center',
       }}
       >
         <Typography variant='h2'>
           {!selectedNoteId && 'Notes'}
         </Typography>
-
-        {selectedNoteId ?
+        {selectedNoteId &&
           <Box>
             <TooltipIconButton
               title='Back to the list'
@@ -83,12 +79,11 @@ export default function NotesNavBar() {
                   <BackIcon/>
                 </Box>}
             />
-          </Box> : null
+          </Box>
         }
       </Box>
-
       <Box sx={{
-        width: '400px',
+        width: '100%',
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'center',
@@ -114,7 +109,6 @@ export default function NotesNavBar() {
           </>
         }
       </Box>
-
       <Box sx={{
         display: 'flex',
         flexDirection: 'row',
