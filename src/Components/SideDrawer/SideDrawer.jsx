@@ -117,6 +117,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
         sx={{
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
+          maxWidth: '100vw',
           height: '100%',
           flexDirection: 'row',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
@@ -126,13 +127,14 @@ export default function SideDrawerWrapper({unSelectItem}) {
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
+        {/* Resizer */}
         <Box
           sx={{
             flexGrow: 0,
             flexShrink: 0,
             flexBasis: '8px',
             justifySelf: 'flex-start',
-            display: 'flex',
+            display: isMobile ? 'none' : 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
@@ -166,6 +168,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
             )}
           </Box>
         </Box>
+        {/* Content */}
         <Box sx={{
           flexDirection: 'column',
           flex: 1,
