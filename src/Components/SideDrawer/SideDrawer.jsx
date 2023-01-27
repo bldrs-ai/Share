@@ -52,7 +52,8 @@ export default function SideDrawerWrapper({unSelectItem}) {
   const resize = React.useCallback(
       (mouseMoveEvent) => {
         if (isResizing) {
-          setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX)
+        // eslint-disable-next-line no-magic-numbers
+          setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4)
         }
       },
       [isResizing, setSidebarWidth],
@@ -122,25 +123,51 @@ export default function SideDrawerWrapper({unSelectItem}) {
           overflowY: 'auto',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           borderLeft: 'grey 1px solid',
+          color: colorTheme.isDay() ? 'black' : 'lightGrey',
         }}
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
         <Box
           sx={{
-            'flexGrow': 0,
-            'flexShrink': 0,
-            'flexBasis': '6px',
-            'justifySelf': 'flex-start',
-            'cursor': 'col-resize',
-            'resize': 'horizontal',
-            '&:hover': {
-              width: '3px',
-              backgroundColor: '#c1c3c5b4',
-            },
+            flexGrow: 0,
+            flexShrink: 0,
+            flexBasis: '8px',
+            justifySelf: 'flex-start',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'col-resize',
+            resize: 'horizontal',
           }}
-          onMouseDown={startResizing}
-        />
+        >
+          <Box
+            sx={{
+              width: '100%',
+              height: '30px',
+              backgroundColor: '#c1c3c5b4',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+            onMouseDown={startResizing}
+          >
+            {Array.from({length: 3}).map((v, i) =>
+              <Box
+                key={i}
+                sx={{
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  backgroundColor: 'white',
+                }}
+              />,
+            )}
+          </Box>
+        </Box>
         <Box sx={{
           flexDirection: 'column',
           flex: 1,

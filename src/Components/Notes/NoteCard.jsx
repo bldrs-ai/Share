@@ -163,7 +163,6 @@ export default function NoteCard({
         'lineHeight': '1.3em',
         // Restore link styling for notes and comments
         '& a': {
-          color: colorTheme.isDay() ? 'black' : 'lightGrey',
           textDecoration: 'underline',
         },
         '& img': {
