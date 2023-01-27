@@ -68,6 +68,7 @@ export default function OperationsGroup({
       display: 'flex',
       flexDirection: 'column',
       height: '100%',
+      margin: '20px',
     }}
     >
       <ButtonGroup orientation="vertical" >

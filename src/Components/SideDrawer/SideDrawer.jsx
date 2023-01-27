@@ -102,7 +102,6 @@ export default function SideDrawerWrapper({unSelectItem}) {
       sx={{
         position: 'absolute',
         display: 'flex',
-        borderLeft: 'grey 1px solid',
         flexDirection: 'row',
         height: '100%',
         top: 0,
@@ -145,7 +144,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
           <Box
             sx={{
               width: '100%',
-              height: '30px',
+              height: '40px',
               backgroundColor: '#c1c3c5b4',
               display: 'flex',
               flexDirection: 'column',
