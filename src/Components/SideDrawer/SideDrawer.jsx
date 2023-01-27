@@ -119,7 +119,6 @@ export default function SideDrawerWrapper({unSelectItem}) {
           width: isMobile ? '100vw' : sidebarWidth,
           height: '100%',
           flexDirection: 'row',
-          overflowY: 'auto',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
@@ -170,6 +169,8 @@ export default function SideDrawerWrapper({unSelectItem}) {
         <Box sx={{
           flexDirection: 'column',
           flex: 1,
+          height: '100%',
+          overflowY: 'auto',
         }}
         >
           <Box sx={{
