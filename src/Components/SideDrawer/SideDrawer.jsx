@@ -1,4 +1,4 @@
-import React, {useEffect, useContext, useRef, useState} from 'react'
+import React, {useEffect, useContext, useRef, useState, useCallback} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/styles'
@@ -31,43 +31,72 @@ export default function SideDrawer({unSelectItem}) {
   const viewer = useStore((state) => state.viewer)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const setSidebarWidth = useStore((state) => state.setSidebarWidth)
+  const sidebarHeight = useStore((state) => state.sidebarHeight)
+  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
+  const isSidebarExpanded = useStore((state) => state.isSidebarExpanded)
+  const toggleIsSidebarExpanded = useStore((state) => state.toggleIsSidebarExpanded)
   const location = useLocation()
   const isMobile = useIsMobile()
   const theme = useTheme()
   const colorTheme = useContext(ColorModeContext)
   const sidebarRef = useRef(null)
   const [isXResizing, setIsXResizing] = useState(false)
+  const [isYResizing, setIsYResizing] = useState(false)
 
 
-  const startXResizing = React.useCallback(() => {
+  const startXResizing = useCallback(() => {
     setIsXResizing(true)
   }, [])
 
 
-  const stopXResizing = React.useCallback(() => {
+  const stopXResizing = useCallback(() => {
     setIsXResizing(false)
   }, [])
 
 
-  const resize = React.useCallback(
+  const startYResizing = useCallback(() => {
+    setIsYResizing(true)
+  }, [])
+
+
+  const stopYResizing = useCallback(() => {
+    setIsYResizing(false)
+  }, [])
+
+
+  const resize = useCallback(
       (mouseMoveEvent) => {
         if (isXResizing) {
         // eslint-disable-next-line no-magic-numbers
-          setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4)
+          let tempSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4
+          if (tempSidebarWidth > window.innerWidth) {
+            tempSidebarWidth = window.innerWidth
+          }
+          setSidebarWidth(tempSidebarWidth)
+        }
+        if (isYResizing) {
+        // eslint-disable-next-line no-magic-numbers
+          let tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
+          if (tempSidebarHeight > window.innerHeight) {
+            tempSidebarHeight = window.innerHeight
+          }
+          setSidebarHeight(tempSidebarHeight)
         }
       },
-      [isXResizing, setSidebarWidth],
+      [isXResizing, isYResizing, setSidebarWidth, setSidebarHeight],
   )
 
 
   useEffect(() => {
     window.addEventListener('mousemove', resize)
     window.addEventListener('mouseup', stopXResizing)
+    window.addEventListener('mouseup', stopYResizing)
     return () => {
       window.removeEventListener('mousemove', resize)
       window.removeEventListener('mouseup', stopXResizing)
+      window.removeEventListener('mouseup', stopYResizing)
     }
-  }, [resize, stopXResizing])
+  }, [resize, stopXResizing, stopYResizing])
 
 
   useEffect(() => {
@@ -120,8 +149,7 @@ export default function SideDrawer({unSelectItem}) {
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
-          maxWidth: '100vw',
-          maxHeight: '100vh',
+          maxHeight: isSidebarExpanded ? sidebarHeight ? sidebarHeight : '100vh' : 0,
           flexDirection: 'row',
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
@@ -136,7 +164,8 @@ export default function SideDrawer({unSelectItem}) {
             flexShrink: 0,
             flexBasis: '8px',
             justifySelf: 'flex-start',
-            display: isMobile ? 'none' : 'flex',
+            // eslint-disable-next-line no-magic-numbers
+            display: (isMobile || !isSidebarExpanded || (isSidebarExpanded && sidebarHeight < 40 && sidebarHeight > 0)) ? 'none' : 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
@@ -177,7 +206,8 @@ export default function SideDrawer({unSelectItem}) {
           sx={{
             position: 'absolute',
             bottom: 0,
-            display: 'flex',
+            // eslint-disable-next-line no-magic-numbers
+            display: sidebarWidth >= 40 ? 'flex' : 'none',
             justifyContent: 'center',
             alignItems: 'center',
             cursor: 'row-resize',
@@ -196,7 +226,7 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
-            // onMouseDown={startXResizing}
+            onMouseDown={startYResizing}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box

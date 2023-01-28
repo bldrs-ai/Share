@@ -19,6 +19,8 @@ export default function createUISlice(set, get) {
     levelInstance: null,
     viewer: null,
     sidebarWidth: 500,
+    sidebarHeight: 0, // If `sidebarHeight` is zero, and `isSidebarExpanded` is true, then sidebar max height should be 100vh
+    isSidebarExpanded: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -46,5 +48,7 @@ export default function createUISlice(set, get) {
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
+    setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
+    toggleIsSidebarExpanded: () => set((state) => ({isSidebarExpanded: !state.isSidebarExpanded})),
   }
 }
