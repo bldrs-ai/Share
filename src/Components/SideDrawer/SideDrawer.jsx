@@ -32,7 +32,7 @@ export default function SideDrawer({unSelectItem}) {
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const setSidebarHeight = useStore((state) => state.setSidebarHeight)
   const isSidebarExpanded = useStore((state) => state.isSidebarExpanded)
-  const toggleIsSidebarExpanded = useStore((state) => state.toggleIsSidebarExpanded)
+  const setIsSidebarExpanded = useStore((state) => state.setIsSidebarExpanded)
   const location = useLocation()
   const isMobile = useIsMobile()
   const theme = useTheme()
@@ -69,7 +69,7 @@ export default function SideDrawer({unSelectItem}) {
       }
       // eslint-disable-next-line no-magic-numbers
       case 2: { // double click
-        toggleIsSidebarExpanded()
+        setIsSidebarExpanded(!isSidebarExpanded)
         break
       }
       // eslint-disable-next-line no-magic-numbers
@@ -80,7 +80,7 @@ export default function SideDrawer({unSelectItem}) {
         break
       }
     }
-  }, [toggleIsSidebarExpanded])
+  }, [isSidebarExpanded, setIsSidebarExpanded])
 
 
   const resize = useCallback(
@@ -94,18 +94,18 @@ export default function SideDrawer({unSelectItem}) {
           setSidebarWidth(tempSidebarWidth)
         }
         if (isYResizing) {
-          if (!isSidebarExpanded) {
-            toggleIsSidebarExpanded()
-          }
-          // eslint-disable-next-line no-magic-numbers
+        // eslint-disable-next-line no-magic-numbers
           let tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
           if (tempSidebarHeight > window.innerHeight) {
             tempSidebarHeight = window.innerHeight
           }
           setSidebarHeight(tempSidebarHeight)
+          if ((isSidebarExpanded && tempSidebarHeight <= 0) || (!isSidebarExpanded && tempSidebarHeight > 0)) {
+            setIsSidebarExpanded(!isSidebarExpanded)
+          }
         }
       },
-      [isXResizing, isYResizing, setSidebarWidth, isSidebarExpanded, setSidebarHeight, toggleIsSidebarExpanded],
+      [isXResizing, isYResizing, setSidebarWidth, isSidebarExpanded, setSidebarHeight, setIsSidebarExpanded],
   )
 
 
