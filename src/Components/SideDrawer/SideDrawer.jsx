@@ -64,6 +64,27 @@ export default function SideDrawer({unSelectItem}) {
   }, [])
 
 
+  const onYResizerClick = useCallback((e) => {
+    switch (e.detail) {
+      case 1: { // single click
+        break
+      }
+      // eslint-disable-next-line no-magic-numbers
+      case 2: { // double click
+        toggleIsSidebarExpanded()
+        break
+      }
+      // eslint-disable-next-line no-magic-numbers
+      case 3: { // triple click
+        break
+      }
+      default: {
+        break
+      }
+    }
+  }, [toggleIsSidebarExpanded])
+
+
   const resize = useCallback(
       (mouseMoveEvent) => {
         if (isXResizing) {
@@ -227,6 +248,7 @@ export default function SideDrawer({unSelectItem}) {
               gap: '6px',
             }}
             onMouseDown={startYResizing}
+            onClick={onYResizerClick}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box
