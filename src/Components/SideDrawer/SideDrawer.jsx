@@ -94,8 +94,14 @@ export default function SideDrawer({unSelectItem}) {
           setSidebarWidth(tempSidebarWidth)
         }
         if (isYResizing) {
-        // eslint-disable-next-line no-magic-numbers
-          let tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
+          let tempSidebarHeight
+          if (isMobile) {
+            // eslint-disable-next-line no-magic-numbers
+            tempSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + 4
+          } else {
+            // eslint-disable-next-line no-magic-numbers
+            tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
+          }
           if (tempSidebarHeight > window.innerHeight) {
             tempSidebarHeight = window.innerHeight
           }
@@ -105,7 +111,7 @@ export default function SideDrawer({unSelectItem}) {
           }
         }
       },
-      [isXResizing, isYResizing, setSidebarWidth, isSidebarExpanded, setSidebarHeight, setIsSidebarExpanded],
+      [isXResizing, isYResizing, setSidebarWidth, isMobile, setSidebarHeight, isSidebarExpanded, setIsSidebarExpanded],
   )
 
 
@@ -230,7 +236,6 @@ export default function SideDrawer({unSelectItem}) {
         <Box
           sx={{
             position: 'absolute',
-            bottom: 0,
             // eslint-disable-next-line no-magic-numbers
             display: sidebarWidth >= 40 ? 'flex' : 'none',
             justifyContent: 'center',
@@ -239,6 +244,11 @@ export default function SideDrawer({unSelectItem}) {
             resize: 'vertical',
             width: '100%',
             backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+            ...(isMobile ? {
+              top: 0,
+            } : {
+              bottom: 0,
+            }),
           }}
         >
           <Box
@@ -274,7 +284,11 @@ export default function SideDrawer({unSelectItem}) {
           maxHeight: '100%',
           overflowY: isSidebarExpanded ? 'auto' : 'hidden',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
-          paddingBottom: '8px',
+          ...(isMobile ? {
+            paddingTop: '8px',
+          } : {
+            paddingBottom: '8px',
+          }),
         }}
         >
           <Box
