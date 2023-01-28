@@ -116,6 +116,7 @@ export default function SideDrawer({unSelectItem}) {
       {/* Sidebar */}
       <Box
         sx={{
+          position: 'relative',
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
@@ -171,6 +172,45 @@ export default function SideDrawer({unSelectItem}) {
             )}
           </Box>
         </Box>
+        {/* Y Resizer */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            cursor: 'row-resize',
+            resize: 'vertical',
+            width: '100%',
+            backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+          }}
+        >
+          <Box
+            sx={{
+              width: '40px',
+              height: '8px',
+              backgroundColor: '#c1c3c5b4',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px',
+            }}
+            // onMouseDown={startXResizing}
+          >
+            {Array.from({length: 3}).map((v, i) =>
+              <Box
+                key={i}
+                sx={{
+                  width: '4px',
+                  height: '4px',
+                  borderRadius: '2px',
+                  backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+                }}
+              />,
+            )}
+          </Box>
+        </Box>
         {/* Content */}
         <Box sx={{
           flexDirection: 'column',
@@ -178,6 +218,7 @@ export default function SideDrawer({unSelectItem}) {
           maxHeight: '100%',
           overflowY: 'auto',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
+          paddingBottom: '8px',
         }}
         >
           <Box sx={{
