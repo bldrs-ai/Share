@@ -1,12 +1,14 @@
-import React, {useEffect} from 'react'
+import React, {useEffect, useContext} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
+import {ColorModeContext} from '../../Context/ColorMode'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
+import {dayColor, nightColor} from '../../utils/constants'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -21,8 +23,9 @@ export default function Notes() {
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
+  const colorMode = useContext(ColorModeContext)
 
 
   useEffect(() => {
@@ -35,13 +38,14 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository)
+        let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
           fetchedNotes.push({
-            index: index,
+            index: issueIndex++,
             id: issue.id,
             number: issue.number,
             title: issue.title,
@@ -100,7 +104,7 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments])
@@ -114,14 +118,14 @@ export default function Notes() {
         'resizeMode': 'contain',
         'width': '100%',
         'paddingTop': '10px',
-        'paddingBottom': '30px',
+        'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         '@media (max-width: 900px)': {
           paddingTop: '0px',
         },
       }}
       >
-        {notes === null && <Loader type={'linear'}/> }
-        {notes && notes.length === 0 && <NoContent/> }
+        {notes === null && <Loader type={'linear'}/>}
+        {notes && notes.length === 0 && <NoContent/>}
         {notes && !selectedNoteId ?
           notes.map((issue, index) => {
             return (
@@ -140,42 +144,42 @@ export default function Notes() {
               />
             )
           }) :
-        <>
-          {filteredNote ?
-           <NoteCard
-             embeddedUrl={filteredNote.embeddedUrl}
-             index={filteredNote.index}
-             id={filteredNote.id}
-             key={filteredNote.id}
-             title={filteredNote.title}
-             date={filteredNote.date}
-             body={filteredNote.body}
-             username={filteredNote.username}
-             numberOfComments={filteredNote.numberOfComments}
-             avatarUrl={filteredNote.avatarUrl}
-             imageUrl={filteredNote.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
-               <NoteCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
+          <>
+            {filteredNote ?
+              <NoteCard
+                embeddedUrl={filteredNote.embeddedUrl}
+                index={filteredNote.index}
+                id={filteredNote.id}
+                key={filteredNote.id}
+                title={filteredNote.title}
+                date={filteredNote.date}
+                body={filteredNote.body}
+                username={filteredNote.username}
+                numberOfComments={filteredNote.numberOfComments}
+                avatarUrl={filteredNote.avatarUrl}
+                imageUrl={filteredNote.imageUrl}
+              /> : null
+            }
+            {comments &&
+              comments.map((comment, index) => {
+                return (
+                  <NoteCard
+                    embeddedUrl={comment.embeddedUrl}
+                    isComment={true}
+                    index=''
+                    id={comment.id}
+                    key={comment.id}
+                    title={index + 1}
+                    date={comment.date}
+                    body={comment.body}
+                    username={comment.username}
+                    avatarUrl={comment.avatarUrl}
+                    imageUrl={comment.imageUrl}
+                  />
+                )
+              })
+            }
+          </>
         }
       </Box>
     </Paper>

@@ -2,9 +2,61 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {Matrix4} from 'three'
 
-/** Class CustomViewerAPI*/
-export default class CustomViewerAPI extends IfcViewerAPI {
+/** Class IfcViewerAPIExtended*/
+export default class IfcViewerAPIExtended extends IfcViewerAPI {
   subsets = {}
+  // TODO: might be usefull if we used a Set as well to handle large selections,
+  // but for now array is more performant for small numbers
+  _selectedExpressIds = []
+
+  /**
+   * Gets the expressId of the element that the mouse is pointing at
+   *
+   * @return {object} the expressId of the element and modelId
+   */
+  castRayToIfcScene() {
+    const found = this.context.castRayIfc()
+    if (!found) {
+      return null
+    }
+    const mesh = found.object
+    if (found.faceIndex === undefined) {
+      return null
+    }
+    const ifcManager = this.IFC
+    const id = ifcManager.loader.ifcManager.getExpressId(mesh.geometry, found.faceIndex)
+    return {modelID: mesh.modelID, id}
+  }
+
+  /**
+   * gets a copy of the current selected expressIds in the scene
+   *
+   * @return {number[]} the selected express ids in the scene
+   */
+  getSelectedIds = () => [...this._selectedExpressIds]
+
+  /**
+   * sets the current selected expressIds in the scene
+   *
+   * @param {number} modelID
+   * @param {number[]} expressIds express Ids of the elements
+   */
+  async setSelection(modelID, expressIds, focusSelection) {
+    this._selectedExpressIds = expressIds
+    if (typeof focusSelection === 'undefined') {
+      // if not specified, only focus on item if it was the first one to be selected
+      focusSelection = this._selectedExpressIds.length === 1
+    }
+    if (this._selectedExpressIds.length !== 0) {
+      try {
+        await this.pickByID(modelID, this._selectedExpressIds, focusSelection, true)
+      } catch (e) {
+        console.error(e)
+      }
+    } else {
+      this.IFC.selector.unpickIfcItems()
+    }
+  }
 
   /**
    * Loads the given IFC in the current scene.
@@ -25,7 +77,6 @@ export default class CustomViewerAPI extends IfcViewerAPI {
       })
       const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
       // subset ops
-      // this.IFC.addIfcModel(ifcModel)
       const rootElement = await ifcModel.ifcManager.getSpatialStructure(0, true)
       this.createSubsetForElementsTree(rootElement)
 
@@ -72,27 +123,20 @@ export default class CustomViewerAPI extends IfcViewerAPI {
   }
 
   /**
-   * Pick element by id
+   * Pick elements by their ids
    *
    * @param {number} modelID
-   * @param {number} element ids
+   * @param {Array} elements ids
    * @param {boolean} focus selection
    * @param {boolean} remove previous selection
    */
   async pickByID(modelID, ids, focusSelection = false, removePrevious = true) {
-    const mesh = this.subsets[ids]
-    if (!mesh) {
-      return
-    }
     if (removePrevious) {
       this.IFC.selector.selection.modelIDs.clear()
     }
     this.IFC.selector.selection.modelIDs.add(modelID)
     const selected = this.IFC.selector.selection.newSelection(modelID, ids, removePrevious)
     selected.visible = true
-    selected.position.copy(mesh.position)
-    selected.rotation.copy(mesh.rotation)
-    selected.scale.copy(mesh.scale)
     selected.renderOrder = this.IFC.selector.selection.renderOrder
     if (focusSelection) {
       await this.IFC.selector.selection.focusSelection(selected)

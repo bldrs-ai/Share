@@ -4,13 +4,18 @@ import {Vector3} from 'three'
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
-// are not present in the instantiated CustomViewerAPI.
+// are not present in the instantiated IfcViewerAPIExtended.
 const loadedModel = {
   ifcManager: {
     getSpatialStructure: jest.fn(),
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),
+  geometry: {
+    boundingBox: {
+      getCenter: jest.fn(),
+    },
+  },
 }
 
 
@@ -21,22 +26,22 @@ const impl = {
     context: {
       ifcCamera: {
         cameraControls: {
-          setPosition: (x, y, z) => {
+          setPosition: jest.fn((x, y, z) => {
             return {}
-          },
-          getPosition: (x, y, z) => {
+          }),
+          getPosition: jest.fn((x, y, z) => {
             // eslint-disable-next-line no-magic-numbers
             const position = [0, 0, 0]
             return position
-          },
-          setTarget: (x, y, z) => {
+          }),
+          setTarget: jest.fn((x, y, z) => {
             return {}
-          },
-          getTarget: (x, y, z) => {
+          }),
+          getTarget: jest.fn((x, y, z) => {
             // eslint-disable-next-line no-magic-numbers
             const target = [0, 0, 0]
             return target
-          },
+          }),
         },
       },
     },
@@ -68,6 +73,7 @@ const impl = {
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
+  setSelection: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)
@@ -76,7 +82,7 @@ constructorMock.mockImplementation(() => impl)
 /**
  * @return {object} The single mock instance of IfcViewerAPI.
  */
-function __getCustomViewerAPIMockSingleton() {
+function __getIfcViewerAPIExtendedMockSingleton() {
   return impl
 }
 
@@ -84,5 +90,5 @@ function __getCustomViewerAPIMockSingleton() {
 export {
   ifcjsMock as default,
   constructorMock as IfcViewerAPI,
-  __getCustomViewerAPIMockSingleton as __getCustomViewerAPIMockSingleton,
+  __getIfcViewerAPIExtendedMockSingleton as __getIfcViewerAPIExtendedMockSingleton,
 }

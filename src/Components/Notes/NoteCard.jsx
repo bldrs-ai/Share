@@ -5,7 +5,7 @@ import useTheme from '@mui/styles/useTheme'
 import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
+import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {isRunningLocally} from '../../utils/network'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -20,6 +20,7 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/2D_Icons/Camera.svg'
 import ShareIcon from '../../assets/2D_Icons/Share.svg'
+import {dayColor, nightColor} from '../../utils/constants'
 
 
 /**
@@ -97,6 +98,7 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
+    removeHashParams(window.location, NOTE_PREFIX)
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
@@ -129,7 +131,7 @@ export default function NoteCard({
   return (
     <Box sx={{
       marginBottom: '1em',
-      backgroundColor: colorTheme.isDay() ? 'white' : '#383838',
+      backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
       borderRadius: '5px',
       width: '100%',
     }}
@@ -162,7 +164,6 @@ export default function NoteCard({
         'lineHeight': '1.3em',
         // Restore link styling for notes and comments
         '& a': {
-          color: colorTheme.isDay() ? 'black' : 'lightGrey',
           textDecoration: 'underline',
         },
         '& img': {

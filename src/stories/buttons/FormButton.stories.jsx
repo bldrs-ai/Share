@@ -1,6 +1,10 @@
 import React from 'react'
+import AddCircle from '@mui/icons-material/AddCircle'
+import ArrowBack from '@mui/icons-material/ArrowBack'
+import ArrowForward from '@mui/icons-material/ArrowForward'
+import Check from '@mui/icons-material/Check'
+import Search from '@mui/icons-material/Search'
 import {FormButton} from '../../Components/Buttons'
-import {AddCircle, ArrowBack, ArrowForward, Check, Search} from '@mui/icons-material'
 
 
 export default {

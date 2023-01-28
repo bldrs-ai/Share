@@ -2,7 +2,7 @@ import React from 'react'
 import {act, render, screen, renderHook} from '@testing-library/react'
 import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
-import {__getCustomViewerAPIMockSingleton} from 'web-ifc-viewer'
+import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
 import CameraControl, {
   onHash,
   parseHashParams,
@@ -22,7 +22,7 @@ describe('CameraControl', () => {
 
   it('CameraControl', async () => {
     const {result} = renderHook(() => useStore((state) => state))
-    const viewer = __getCustomViewerAPIMockSingleton()
+    const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
       result.current.setViewerStore(viewer)
     })

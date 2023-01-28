@@ -21,7 +21,8 @@ export default function SnackBarMessage({message, type, open}) {
     >
       <Alert
         sx={{
-          'backgroundColor': colorMode.isDay() ? '#A9A9A9' : '#4C4C4C',
+          'backgroundColor': colorMode.isDay() ? 'gray' : 'white',
+          'color': colorMode.isDay() ? 'white' : 'gray',
           'opacity': .8,
           'position': 'relative',
           'bottom': '60px',

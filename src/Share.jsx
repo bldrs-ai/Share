@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react'
+import React, {useEffect, useMemo, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
@@ -12,6 +12,8 @@ import {handleBeforeUnload} from './utils/event'
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
+import WidgetApi from "./WidgetApi/WidgetApi";
+import {searchIndex} from './Containers/CadView';
 /* eslint-enable */
 
 
@@ -30,6 +32,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
 
+  useMemo(() => {
+    new WidgetApi(navigation.current, searchIndex)
+  }, [navigation])
 
   /**
    * On a change to urlParams, setting a new model path will clear the
@@ -107,7 +112,7 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
- * Returns a reference to an IFC model file.  For use by CustomViewerAPI.load.
+ * Returns a reference to an IFC model file.  For use by IfcViewerAPIExtended.load.
  *
  * Format is either a reference within this project's serving directory:
  *   {filepath: '/file.ifc'}
