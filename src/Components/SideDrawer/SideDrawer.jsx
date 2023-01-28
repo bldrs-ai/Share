@@ -14,13 +14,13 @@ import {dayColor, nightColor} from '../../utils/constants'
 
 
 /**
- * SideDrawerWrapper is the container for the SideDrawer component.
- * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
+ * It is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
  * It makes it is possible to test Side Drawer outside of the cad view.
  *
- * @return {object} SideDrawer react component
+ * @param {Function} unSelectItem deselects currently selected element
+ * @return {React.Component}
  */
-export default function SideDrawerWrapper({unSelectItem}) {
+export default function SideDrawer({unSelectItem}) {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
   const isCommentsOn = useStore((state) => state.isCommentsOn)

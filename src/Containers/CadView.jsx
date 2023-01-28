@@ -10,7 +10,7 @@ import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper from '../Components/SideDrawer/SideDrawer'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {assertDefined} from '../utils/assert'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -590,7 +590,7 @@ export default function CadView({
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
-      <SideDrawerWrapper unSelectItem={unSelectItems}/>
+      <SideDrawer unSelectItem={unSelectItems}/>
     </Box>
   )
 }
