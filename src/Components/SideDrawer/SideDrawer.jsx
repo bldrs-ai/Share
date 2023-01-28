@@ -167,7 +167,9 @@ export default function SideDrawer({unSelectItem}) {
       {/* Sidebar */}
       <Box
         sx={{
-          position: 'relative',
+          position: isMobile ? 'fixed' : 'relative',
+          bottom: 0,
+          left: 0,
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
