@@ -36,38 +36,38 @@ export default function SideDrawer({unSelectItem}) {
   const theme = useTheme()
   const colorTheme = useContext(ColorModeContext)
   const sidebarRef = useRef(null)
-  const [isResizing, setIsResizing] = useState(false)
+  const [isXResizing, setIsXResizing] = useState(false)
 
 
-  const startResizing = React.useCallback(() => {
-    setIsResizing(true)
+  const startXResizing = React.useCallback(() => {
+    setIsXResizing(true)
   }, [])
 
 
-  const stopResizing = React.useCallback(() => {
-    setIsResizing(false)
+  const stopXResizing = React.useCallback(() => {
+    setIsXResizing(false)
   }, [])
 
 
   const resize = React.useCallback(
       (mouseMoveEvent) => {
-        if (isResizing) {
+        if (isXResizing) {
         // eslint-disable-next-line no-magic-numbers
           setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4)
         }
       },
-      [isResizing, setSidebarWidth],
+      [isXResizing, setSidebarWidth],
   )
 
 
   useEffect(() => {
     window.addEventListener('mousemove', resize)
-    window.addEventListener('mouseup', stopResizing)
+    window.addEventListener('mouseup', stopXResizing)
     return () => {
       window.removeEventListener('mousemove', resize)
-      window.removeEventListener('mouseup', stopResizing)
+      window.removeEventListener('mouseup', stopXResizing)
     }
-  }, [resize, stopResizing])
+  }, [resize, stopXResizing])
 
 
   useEffect(() => {
@@ -128,7 +128,7 @@ export default function SideDrawer({unSelectItem}) {
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        {/* Resizer */}
+        {/* X Resizer */}
         <Box
           sx={{
             flexGrow: 0,
@@ -156,7 +156,7 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
-            onMouseDown={startResizing}
+            onMouseDown={startXResizing}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box
