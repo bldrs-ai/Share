@@ -75,8 +75,6 @@ export default function ItemProperties() {
             flexDirection: 'row',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: theme.palette.primary.main,
-            zIndex: 1000,
           }}
           >
             Property Sets

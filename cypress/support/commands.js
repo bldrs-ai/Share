@@ -25,9 +25,15 @@
 // Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
 import '@testing-library/cypress/add-commands'
 
-
-// eslint-disable-next-line no-empty-function
-Cypress.Commands.add('iframe', {prevSubject: 'element'}, ($iframe, callback = () => {}) => {
-  return cy.wrap($iframe).should( (iframe) => expect(iframe.contents().find('body')).to.exist)
-      .then((iframe) => cy.wrap(iframe.contents().find('body'))).within({}, callback)
+/**
+ * Allow access to elements inside iframe and chain commands from there.
+ * @source https://www.nicknish.co/blog/cypress-targeting-elements-inside-iframes
+ */
+ Cypress.Commands.add('iframe', { prevSubject: 'element' }, ($iframe, callback = () => {}) => {
+     return cy
+        .wrap($iframe)
+        .should(iframe => expect(iframe.contents().find('body')).to.exist)
+        .then(iframe => cy.wrap(iframe.contents().find('body')))
+        .within({}, callback)
 })
+

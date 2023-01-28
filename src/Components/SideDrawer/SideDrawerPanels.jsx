@@ -78,10 +78,6 @@ export function PropertiesPanel() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        top: 0,
-        bottom: 0,
-        overflowX: 'hidden',
-        overflowY: 'auto',
       }}
       >
         {selectedElement ?
@@ -110,10 +106,6 @@ export const NotesPanel = () => {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        top: 0,
-        bottom: 0,
-        overflowX: 'hidden',
-        overflowY: 'auto',
       }}
       >
         <Notes/>

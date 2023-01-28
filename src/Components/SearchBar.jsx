@@ -10,6 +10,8 @@ import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import {handleBeforeUnload} from '../utils/event'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -46,6 +48,7 @@ export default function SearchBar({fileOpen}) {
           setInputText(newInputText)
         }
       } else {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(location.pathname)
       }
     }
@@ -64,6 +67,7 @@ export default function SearchBar({fileOpen}) {
     if (looksLikeLink(inputText)) {
       try {
         const modelPath = githubUrlOrPathToSharePath(inputText)
+        window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(modelPath, {replace: true})
       } catch (e) {
         console.error(e)
@@ -75,6 +79,7 @@ export default function SearchBar({fileOpen}) {
     // Searches from SearchBar clear current URL's IFC path.
     if (containsIfcPath(location)) {
       const newPath = stripIfcPathFromLocation(location)
+      window.removeEventListener('beforeunload', handleBeforeUnload)
       navigate({
         pathname: newPath,
         search: `?q=${inputText}`,
@@ -107,7 +112,7 @@ export default function SearchBar({fileOpen}) {
           '& .MuiInputBase-root': {
             flex: 1,
           },
-          'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+          'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         }}
         onSubmit={onSubmit}
         elevation={0}

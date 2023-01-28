@@ -10,6 +10,8 @@ import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
+import {handleBeforeUnload} from '../utils/event'
+import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -63,6 +65,7 @@ export default function Branches() {
   const handleSelect = (event) => {
     const versionNumber = event.target.value
     setSelected(versionNumber)
+    window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({
       pathname: versionPaths[versionNumber],
     })
@@ -74,7 +77,7 @@ export default function Branches() {
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0}
           sx={{
-            backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
+            backgroundColor: colorMode.isDay() ? dayColor : nightColor,
             marginTop: '34px',
             opacity: .8,
           }}

@@ -27,7 +27,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const location = useLocation()
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
-  const setCutPlaneDirection = useStore((state) => state.setCutPlaneDirection)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const viewer = useStore((state) => state.viewerStore)
   const theme = useTheme()
   const open = Boolean(anchorEl)
@@ -61,7 +61,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
 
   const createFloorplanPlane = (planeHeightBottom, planeHeightTop, level) => {
     viewer.clipper.deleteAllPlanes()
-    setCutPlaneDirection(null)
+    setCutPlaneDirections([])
     const levelHash = getHashParams(location, 'p')
     const modelCenter1 = new Vector3(0, planeHeightBottom, 0)
     const modelCenter2 = new Vector3(0, planeHeightTop, 0)
