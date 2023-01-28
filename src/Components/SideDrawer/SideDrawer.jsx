@@ -6,9 +6,7 @@ import OperationsGroup from '../../Components/OperationsGroup'
 import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'
-import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 import {useIsMobile} from '../Hooks'
-import {TooltipIconButton} from '../Buttons'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import {dayColor, nightColor} from '../../utils/constants'
 
@@ -277,17 +275,6 @@ export default function SideDrawer({unSelectItem}) {
           paddingBottom: '8px',
         }}
         >
-          <Box sx={{
-            'display': isMobile ? 'flex' : 'none',
-            'justifyContent': 'center',
-            'alignItems': 'center',
-            '& svg': {
-              transform: 'rotate(180deg)',
-            },
-          }}
-          >
-            <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
-          </Box>
           <Box
             sx={{
               display: isCommentsOn ? 'block' : 'none',
