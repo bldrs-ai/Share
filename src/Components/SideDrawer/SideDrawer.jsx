@@ -96,7 +96,10 @@ export default function SideDrawer({unSelectItem}) {
           setSidebarWidth(tempSidebarWidth)
         }
         if (isYResizing) {
-        // eslint-disable-next-line no-magic-numbers
+          if (!isSidebarExpanded) {
+            toggleIsSidebarExpanded()
+          }
+          // eslint-disable-next-line no-magic-numbers
           let tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
           if (tempSidebarHeight > window.innerHeight) {
             tempSidebarHeight = window.innerHeight
@@ -104,7 +107,7 @@ export default function SideDrawer({unSelectItem}) {
           setSidebarHeight(tempSidebarHeight)
         }
       },
-      [isXResizing, isYResizing, setSidebarWidth, setSidebarHeight],
+      [isXResizing, isYResizing, setSidebarWidth, isSidebarExpanded, setSidebarHeight, toggleIsSidebarExpanded],
   )
 
 
@@ -170,6 +173,7 @@ export default function SideDrawer({unSelectItem}) {
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
+          minHeight: '8px',
           maxHeight: isSidebarExpanded ? sidebarHeight ? sidebarHeight : '100vh' : 0,
           flexDirection: 'row',
           borderLeft: 'grey 1px solid',
@@ -268,7 +272,7 @@ export default function SideDrawer({unSelectItem}) {
           flexDirection: 'column',
           flex: 1,
           maxHeight: '100%',
-          overflowY: 'auto',
+          overflowY: isSidebarExpanded ? 'auto' : 'hidden',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           paddingBottom: '8px',
         }}
