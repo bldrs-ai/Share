@@ -101,11 +101,11 @@ export default function SideDrawer({unSelectItem}) {
     <Box
       sx={{
         position: 'absolute',
-        display: 'flex',
-        flexDirection: 'row',
-        height: '100%',
+        width: '100%',
         top: 0,
-        right: 0,
+        left: 0,
+        display: 'flex',
+        justifyContent: 'flex-end',
       }}
     >
       {viewer &&
@@ -113,15 +113,15 @@ export default function SideDrawer({unSelectItem}) {
           unSelectItem={unSelectItem}
         />
       }
+      {/* Sidebar */}
       <Box
         sx={{
           display: isDrawerOpen ? 'flex' : 'none',
           width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
           maxWidth: '100vw',
-          height: '100%',
+          maxHeight: '100vh',
           flexDirection: 'row',
-          backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
         }}
@@ -141,6 +141,8 @@ export default function SideDrawer({unSelectItem}) {
             alignItems: 'center',
             cursor: 'col-resize',
             resize: 'horizontal',
+            maxHeight: '100vh',
+            backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           }}
         >
           <Box
@@ -173,8 +175,9 @@ export default function SideDrawer({unSelectItem}) {
         <Box sx={{
           flexDirection: 'column',
           flex: 1,
-          height: '100%',
+          maxHeight: '100%',
           overflowY: 'auto',
+          backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
         }}
         >
           <Box sx={{

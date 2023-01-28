@@ -65,49 +65,55 @@ export default function OperationsGroup({
 
   return (
     <Box sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      margin: '20px',
+      position: 'relative',
     }}
     >
-      <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-      </ButtonGroup>
-      <Divider/>
-      <ButtonGroup orientation="vertical" >
-        <TooltipIconButton
-          title='Notes'
-          icon={<NotesIcon/>}
-          selected={isCommentsOn}
-          onClick={() => toggle('Notes')}
-        />
-        <TooltipIconButton
-          title="Properties"
-          onClick={() => toggle('Properties')}
-          selected={isPropertiesOn}
-          icon={<ListIcon/>}
-        />
-        <CutPlaneMenu/>
-        {/* <ExtractLevelsMenu/> */}
-        <TooltipIconButton
-          title="Clear"
-          onClick={unSelectItem}
-          selected={isSelected()}
-          icon={<ClearIcon/>}
-        />
-      </ButtonGroup>
-      <Divider/>
-      <ButtonGroup orientation="vertical">
-        <TooltipIconButton
-          title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
-          onClick={() => colorMode.toggleColorMode()}
-          icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
-        />
-        <AboutControl/>
-      </ButtonGroup>
-      {/* Invisible */}
-      <CameraControl/>
+      <Box sx={{
+        position: 'absolute',
+        display: 'flex',
+        flexDirection: 'column',
+        top: '20px',
+        right: '20px',
+      }}
+      >
+        <ButtonGroup orientation="vertical" >
+          <ShareControl/>
+        </ButtonGroup>
+        <Divider/>
+        <ButtonGroup orientation="vertical" >
+          <TooltipIconButton
+            title='Notes'
+            icon={<NotesIcon/>}
+            selected={isCommentsOn}
+            onClick={() => toggle('Notes')}
+          />
+          <TooltipIconButton
+            title="Properties"
+            onClick={() => toggle('Properties')}
+            selected={isPropertiesOn}
+            icon={<ListIcon/>}
+          />
+          <CutPlaneMenu/>
+          {/* <ExtractLevelsMenu/> */}
+          <TooltipIconButton
+            title="Clear"
+            onClick={unSelectItem}
+            selected={isSelected()}
+            icon={<ClearIcon/>}
+          />
+        </ButtonGroup>
+        <Divider/>
+        <ButtonGroup orientation="vertical">
+          <TooltipIconButton
+            title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
+            onClick={() => colorMode.toggleColorMode()}
+            icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
+          />
+          <AboutControl/>
+        </ButtonGroup>
+        {/* Invisible */}
+        <CameraControl/>
+      </Box>
     </Box>
   )
 }
