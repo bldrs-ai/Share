@@ -47,17 +47,13 @@ export default function SideDrawer({unSelectItem}) {
   }, [])
 
 
-  const stopXResizing = useCallback(() => {
-    setIsXResizing(false)
-  }, [])
-
-
   const startYResizing = useCallback(() => {
     setIsYResizing(true)
   }, [])
 
 
-  const stopYResizing = useCallback(() => {
+  const stopResizing = useCallback(() => {
+    setIsXResizing(false)
     setIsYResizing(false)
   }, [])
 
@@ -96,10 +92,10 @@ export default function SideDrawer({unSelectItem}) {
         if (isYResizing) {
           let tempSidebarHeight
           if (isMobile) {
-            // eslint-disable-next-line no-magic-numbers
+          // eslint-disable-next-line no-magic-numbers
             tempSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + 4
           } else {
-            // eslint-disable-next-line no-magic-numbers
+          // eslint-disable-next-line no-magic-numbers
             tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
           }
           if (tempSidebarHeight > window.innerHeight) {
@@ -117,14 +113,12 @@ export default function SideDrawer({unSelectItem}) {
 
   useEffect(() => {
     window.addEventListener('mousemove', resize)
-    window.addEventListener('mouseup', stopXResizing)
-    window.addEventListener('mouseup', stopYResizing)
+    window.addEventListener('mouseup', stopResizing)
     return () => {
       window.removeEventListener('mousemove', resize)
-      window.removeEventListener('mouseup', stopXResizing)
-      window.removeEventListener('mouseup', stopYResizing)
+      window.removeEventListener('mouseup', stopResizing)
     }
-  }, [resize, stopXResizing, stopYResizing])
+  }, [resize, stopResizing])
 
 
   useEffect(() => {
