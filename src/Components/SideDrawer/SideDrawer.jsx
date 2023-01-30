@@ -38,6 +38,8 @@ export default function SideDrawer({unSelectItem}) {
   const theme = useTheme()
   const colorTheme = useContext(ColorModeContext)
   const sidebarRef = useRef(null)
+  const xResizerRef = useRef(null)
+  const yResizerRef = useRef(null)
   const [isXResizing, setIsXResizing] = useState(false)
   const [isYResizing, setIsYResizing] = useState(false)
 
@@ -211,6 +213,7 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
+            ref={xResizerRef}
             onMouseDown={startXResizing}
           >
             {Array.from({length: 3}).map((v, i) =>
@@ -255,6 +258,7 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
+            ref={yResizerRef}
             onMouseDown={startYResizing}
             onClick={onYResizerClick}
           >
