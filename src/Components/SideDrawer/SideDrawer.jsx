@@ -38,7 +38,6 @@ export default function SideDrawer({unSelectItem}) {
   const theme = useTheme()
   const colorTheme = useContext(ColorModeContext)
   const sidebarRef = useRef(null)
-  const xResizerRef = useRef(null)
   const yResizerRef = useRef(null)
   const [isXResizing, setIsXResizing] = useState(false)
   const [isYResizing, setIsYResizing] = useState(false)
@@ -121,6 +120,43 @@ export default function SideDrawer({unSelectItem}) {
       window.removeEventListener('mouseup', stopResizing)
     }
   }, [resize, stopResizing])
+
+
+  useEffect(() => {
+    yResizerRef.current.addEventListener('touchstart', (e) => {
+      switch (e.touches.length) {
+        case 1: // one finger
+          startYResizing(true)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // two finger
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // three finger
+          break
+        default:
+          break
+      }
+    })
+    yResizerRef.current.addEventListener('touchend', (e) => {
+      startYResizing(false)
+    })
+    yResizerRef.current.addEventListener('touchmove', (e) => {
+      switch (e.touches.length) {
+        case 1: // one finger
+          resize(e.touches[0])
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // two finger
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // three finger
+          break
+        default:
+          break
+      }
+    })
+  }, [resize, startYResizing])
 
 
   useEffect(() => {
@@ -213,7 +249,6 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
-            ref={xResizerRef}
             onMouseDown={startXResizing}
           >
             {Array.from({length: 3}).map((v, i) =>
