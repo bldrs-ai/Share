@@ -147,7 +147,7 @@ export default function SideDrawer({unSelectItem}) {
     }
     yResizer.addEventListener('touchstart', onTouchStart)
     const onTouchEnd = (e) => {
-      startYResizing(false)
+      stopResizing()
     }
     yResizer.addEventListener('touchend', onTouchEnd)
     const onTouchMove = (e) => {
