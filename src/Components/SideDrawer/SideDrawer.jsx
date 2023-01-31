@@ -310,6 +310,7 @@ export default function SideDrawer({unSelectItem}) {
               gap: '6px',
             }}
             ref={yResizerRef}
+            data-testid="y_resizer"
             onMouseDown={startYResizing}
             onClick={onYResizerClick}
           >
