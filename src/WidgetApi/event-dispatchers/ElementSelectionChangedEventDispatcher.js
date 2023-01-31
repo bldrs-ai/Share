@@ -1,6 +1,7 @@
 import ApiEventDispatcher from './ApiEventDispatcher'
 import Utils from '../Utils'
 import useStore from '../../store/useStore'
+import {unsortedArraysAreEqual} from '../../utils/arrays'
 
 /**
  * class ElementSelectionChangedEventDispatcher
@@ -37,7 +38,7 @@ class ElementSelectionChangedEventDispatcher extends ApiEventDispatcher {
         return
       }
       const currSelectedItemsGlobalIds = this.utils.getSelectedElementIds(state)
-      const noChanges = this.utils.arraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
+      const noChanges = unsortedArraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
       if (noChanges) {
         return
       }
