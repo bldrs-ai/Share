@@ -381,9 +381,7 @@ export default function CadView({
 
   /** Clear current selection. */
   function resetSelection() {
-    if (selectedElements?.length !== 0) {
-      selectItemsInScene([])
-    }
+    selectItemsInScene([])
   }
 
   /** Reset global state */
