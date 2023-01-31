@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import Box from '@mui/material/Box'
+import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 
@@ -45,6 +46,7 @@ export default function ResizerButton({sidebarRef}) {
 
 
   const isMobile = useIsMobile()
+  const theme = useTheme()
   return (
     <Box
       sx={{
@@ -69,6 +71,8 @@ export default function ResizerButton({sidebarRef}) {
           alignItems: 'center',
           justifyContent: 'center',
           gap: '6px',
+          background: theme.palette.primary.background,
+          padding: '3px',
         }}
         onMouseDown={startResizing}
       >
@@ -76,9 +80,11 @@ export default function ResizerButton({sidebarRef}) {
           <Box
             key={i}
             sx={{
-              width: '4px',
-              height: '4px',
-              borderRadius: '2px',
+              width: '5px',
+              height: '5px',
+              borderRadius: '3px',
+              background: theme.palette.primary.contrastText,
+              opacity: '0.3',
             }}
           />,
         )}

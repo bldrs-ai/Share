@@ -26,10 +26,9 @@ import SunIcon from '../assets/2D_Icons/Sun.svg'
 export default function OperationsGroup({
   unSelectItem,
 }) {
-  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
-  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
+  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -54,11 +53,7 @@ export default function OperationsGroup({
       toggleIsPropertiesOn()
     }
     if (panel === 'Notes') {
-      if (isCommentsOn) {
-        turnCommentsOff()
-      } else {
-        turnCommentsOn()
-      }
+      toggleIsCommentsOn()
     }
   }
 
@@ -79,7 +74,7 @@ export default function OperationsGroup({
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
-          selected={isCommentsOn}
+          selected={isNotesOn}
           onClick={() => toggle('Notes')}
         />
         <TooltipIconButton

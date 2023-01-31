@@ -1,25 +1,23 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
+import {CloseButton, TooltipIconButton} from '../Buttons'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
-import {TooltipIconButton} from '../Buttons'
-import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import {NOTE_PREFIX} from './Notes'
 import BackIcon from '../../assets/2D_Icons/Back.svg'
-import CloseIcon from '../../assets/2D_Icons/Close.svg'
 import NextIcon from '../../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
 
-/** @return {object} React component. */
+/** @return {React.Element} */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
-  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
+  const closeNotes = useStore((state) => state.closeNotes)
 
 
   const selectNote = (direction) => {
@@ -47,7 +45,6 @@ export default function NotesNavBar() {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        height: '3em',
       }}
     >
       <Box
@@ -61,31 +58,27 @@ export default function NotesNavBar() {
           },
         }}
       >
-        <Typography variant='h2'>
-          {!selectedNoteId && 'Notes'}
-        </Typography>
         {selectedNoteId &&
-          <Box>
-            <TooltipIconButton
-              title='Back to the list'
-              placement='bottom'
-              onClick={() => {
-                removeHashParams(window.location, NOTE_PREFIX)
-                setSelectedNoteId(null)
-              }}
-              icon={
-                <Box sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  width: '14px',
-                  height: '14px',
-                }}
-                >
-                  <BackIcon/>
-                </Box>}
-            />
-          </Box>
+         <TooltipIconButton
+           title='Back to the list'
+           placement='bottom'
+           onClick={() => {
+             removeHashParams(window.location, NOTE_PREFIX)
+             setSelectedNoteId(null)
+           }}
+           icon={
+             <Box
+               sx={{
+                 display: 'flex',
+                 justifyContent: 'center',
+                 alignItems: 'center',
+                 width: '14px',
+                 height: '14px',
+               }}
+             >
+               <BackIcon/>
+             </Box>}
+         />
         }
       </Box>
       <Box sx={{
@@ -122,24 +115,7 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
-        <Box>
-          <TooltipIconButton
-            title='Close Comments'
-            placement='bottom'
-            onClick={turnCommentsOff}
-            icon={
-              <Box sx={{
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                width: '14px',
-                height: '14px',
-              }}
-              >
-                <CloseIcon/>
-              </Box>}
-          />
-        </Box>
+        <CloseButton onClick={closeNotes}/>
       </Box>
     </Box>
   )

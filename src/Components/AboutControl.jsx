@@ -1,10 +1,9 @@
-import React, {useState, useEffect, useContext} from 'react'
+import React, {useState, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {useTheme} from '@mui/styles'
 import Toggle from '../Components/Toggle'
 import * as Privacy from '../privacy/Privacy'
-import {ColorModeContext} from '../Context/ColorMode'
 import Dialog from './Dialog'
 import {ControlButton, RectangularButton} from './Buttons'
 import AboutIcon from '../assets/2D_Icons/Information.svg'
@@ -80,7 +79,6 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({setIsDialogDisplayed}) {
   const theme = useTheme()
-  const colorMode = useContext(ColorModeContext)
   const [acceptCookies, setAcceptCookies] = useState(true)
   const bulletStyle = {textAlign: 'center'}
 

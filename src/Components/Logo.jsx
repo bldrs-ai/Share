@@ -1,17 +1,23 @@
 import React from 'react'
 import {useTheme} from '@mui/styles'
 import Box from '@mui/material/Box'
+import {TooltipIconButton} from './Buttons'
 import LogoIcon from '../assets/LogoB_5.svg'
+import PkgJson from '../../package.json'
 
 
 /**
+ * @param {Function} onClick function triggered when logo is clicked
  * @return {React.ReactElement}
  */
-export default function Logo() {
+export default function Logo({onClick}) {
   const theme = useTheme()
   return (
     <Box
       sx={{
+        'position': 'fixed',
+        'bottom': '1em',
+        'left': '1em',
         '& svg': {
           'width': '50px',
           'height': '50px',
@@ -32,7 +38,12 @@ export default function Logo() {
         },
       }}
     >
-      <LogoIcon/>
+      <TooltipIconButton
+        title={`Bldrs: ${PkgJson.version}`}
+        placement="right"
+        icon={<LogoIcon/>}
+        onClick={onClick}
+      />
     </Box>
   )
 }

@@ -3,7 +3,6 @@ import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
-import {useTheme} from '@mui/styles'
 import OperationsGroup from '../../Components/OperationsGroup'
 import {useIsMobile} from '../Hooks'
 import {TooltipIconButton} from '../Buttons'
@@ -24,16 +23,15 @@ import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 export default function SideDrawerWrapper({unSelectItem}) {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
-  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
+  const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const viewer = useStore((state) => state.viewer)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const location = useLocation()
   const isMobile = useIsMobile()
-  const theme = useTheme()
   const sidebarRef = useRef(null)
 
 
@@ -44,7 +42,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
       setSelectedNoteId(Number(extractedCommentId))
       if (!isDrawerOpen) {
         openDrawer()
-        turnCommentsOn()
+        openNotes()
       }
     }
 
@@ -58,12 +56,13 @@ export default function SideDrawerWrapper({unSelectItem}) {
 
 
   useEffect(() => {
-    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
+    if (!isNotesOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
-  }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
+  }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
-  console.log('contrastText', theme.palette.primary.contrastText)
+
+  const margin = '1em'
   return (
     <Box
       sx={{
@@ -87,7 +86,6 @@ export default function SideDrawerWrapper({unSelectItem}) {
           borderLeft: 'grey 1px solid',
           borderRadius: 0,
         }}
-        foo='bar'
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
@@ -99,6 +97,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
             flex: 1,
             height: '100%',
             overflowY: 'auto',
+            margin: margin,
           }}
         >
           <Box
@@ -113,21 +112,20 @@ export default function SideDrawerWrapper({unSelectItem}) {
           >
             <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
           </Box>
+          {/* The height is calulated to align the Divider with the center of the drag button. */}
           <Box
             sx={{
-              display: isCommentsOn ? 'block' : 'none',
-              height: isPropertiesOn ? '50%' : '100%',
+              display: isNotesOn ? 'block' : 'none',
+              height: isPropertiesOn ? `calc(50% - ${margin})` : '100%',
               overflow: 'auto',
-              padding: '1em 0',
             }}
           >
-            {isCommentsOn && <NotesPanel/>}
+            {isNotesOn && <NotesPanel/>}
           </Box>
-          {isCommentsOn && isPropertiesOn && <Divider/>}
+          {isNotesOn && isPropertiesOn && <Divider/>}
           <Box
             sx={{
               display: isPropertiesOn ? 'block' : 'none',
-              padding: '1em 0',
             }}
           >
             {isPropertiesOn && <PropertiesPanel/>}

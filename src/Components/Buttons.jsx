@@ -1,10 +1,11 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
-import Tooltip from '@mui/material/Tooltip'
 import ToggleButton from '@mui/material/ToggleButton'
+import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
+import CloseIcon from '../assets/2D_Icons/Close.svg'
 
 
 /**
@@ -24,7 +25,7 @@ export function TooltipIconButton({
   selected = false,
   dataTestId = '',
 }) {
-  assertDefined(icon, onClick, title)
+  assertDefined(title, onClick, icon)
   const isMobile = useIsMobile()
 
 
@@ -42,28 +43,6 @@ export function TooltipIconButton({
       }
     </Box>
   )
-}
-
-
-/**
- * A RectangularButton is used in dialogs
- *
- * @property {string} title Text to show in button
- * @property {Function} onClick callback
- * @property {object} icon Start icon to left of text
- * @property {boolean} border Default: false
- * @property {boolean} background Default: true
- * @return {object} React component
- */
-export function RectangularButton({
-  title,
-  onClick,
-  icon = null,
-  border = false,
-  background = true,
-}) {
-  assertDefined(title, onClick)
-  return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
 }
 
 
@@ -98,4 +77,42 @@ export function ControlButton({
       {isDialogDisplayed && dialog}
     </Box>
   )
+}
+
+
+/**
+ * @property {Function} onClick Handler for close event.
+ * @return {React.Element}
+ */
+export function CloseButton({onClick}) {
+  return (
+    <TooltipIconButton
+      title='Close'
+      onClick={onClick}
+      icon={<CloseIcon/>}
+      size='small'
+    />
+  )
+}
+
+
+/**
+ * A RectangularButton is used in dialogs
+ *
+ * @property {string} title Text to show in button
+ * @property {Function} onClick callback
+ * @property {object} icon Start icon to left of text
+ * @property {boolean} border Default: false
+ * @property {boolean} background Default: true
+ * @return {object} React component
+ */
+export function RectangularButton({
+  title,
+  onClick,
+  icon = null,
+  border = false,
+  background = true,
+}) {
+  assertDefined(title, onClick)
+  return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
 }

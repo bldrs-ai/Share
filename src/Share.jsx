@@ -1,10 +1,10 @@
 import React, {useEffect, useMemo, useRef} from 'react'
 import CssBaseline from '@mui/material/CssBaseline'
-import GlobalStyles from '@mui/material/GlobalStyles'
 import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import useStore from './store/useStore'
+import Styles from './Styles'
 import useShareTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
@@ -77,49 +77,13 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
   const {theme, colorMode} = useShareTheme()
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
-  const inputGlobalStyles = (
-    <GlobalStyles
-      styles={{
-        'body': {
-          overscrollBehavior: 'none',
-          overflow: 'hidden',
-          padding: 0,
-          height: '100%',
-          maxHeight: '100%',
-        },
-        'a': {
-          color: theme.palette.secondary.contrastText,
-        },
-        'svg': {
-          width: '18px',
-          height: '18px',
-          fill: theme.palette.primary.contrastText,
-        },
-        '.closeButton': {
-          width: '12px',
-          height: '12px',
-        },
-        '.caretToggle': {
-          width: '12px',
-          height: '12px',
-        },
-        '*::-webkit-scrollbar': {
-          width: '10px',
-          background: theme.palette.secondary.background,
-        },
-        '*::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.secondary.main,
-        },
-      }}
-    />
-  )
 
   return (
     modelPath &&
       <CssBaseline enableColorScheme>
         <ColorModeContext.Provider value={colorMode}>
           <ThemeProvider theme={theme}>
-            {inputGlobalStyles}
+            <Styles theme={theme}/>
             <CadView
               installPrefix={installPrefix}
               appPrefix={appPrefix}

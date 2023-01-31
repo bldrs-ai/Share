@@ -9,7 +9,7 @@ import debug from '../utils/debug'
  */
 export default function createUISlice(set, get) {
   return {
-    isCommentsOn: false,
+    isNotesOn: false,
     isDrawerOpen: false,
     isNavPanelOpen: true,
     isOpenControlHighlighted: true,
@@ -22,11 +22,11 @@ export default function createUISlice(set, get) {
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
-    toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
+    toggleIsNotesOn: () => set((state) => ({isNotesOn: !state.isNotesOn})),
+    openNotes: () => set(() => ({isNotesOn: true})),
+    closeNotes: () => set(() => ({isNotesOn: false})),
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
-    turnCommentsOn: () => set(() => ({isCommentsOn: true})),
-    turnCommentsOff: () => set(() => ({isCommentsOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
