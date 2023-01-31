@@ -59,23 +59,20 @@ export default function SideDrawer({unSelectItem}) {
   }, [])
 
 
-  const onYResizerClick = useCallback((e) => {
-    switch (e.detail) {
-      case 1: { // single click
-        break
-      }
+  const onYResizerClick = useCallback(() => {
+    if (touchTime) {
+      // compare first click to this click and see if they occurred within double click threshold
       // eslint-disable-next-line no-magic-numbers
-      case 2: { // double click
+      if (((new Date().getTime()) - touchTime) < 800) {
         setIsSidebarExpanded(!isSidebarExpanded)
-        break
+        touchTime = 0
+      } else {
+        // not a double click so set as a new first click
+        touchTime = new Date().getTime()
       }
-      // eslint-disable-next-line no-magic-numbers
-      case 3: { // triple click
-        break
-      }
-      default: {
-        break
-      }
+    } else {
+      // set first click
+      touchTime = new Date().getTime()
     }
   }, [isSidebarExpanded, setIsSidebarExpanded])
 
@@ -123,7 +120,17 @@ export default function SideDrawer({unSelectItem}) {
 
 
   useEffect(() => {
-    yResizerRef.current.addEventListener('touchstart', (e) => {
+    const onResize = (e) => {
+      // if (e.target.innerWidth < sidebarWidth) {
+      //   setSidebarWidth(e.target.innerWidth)
+      // }
+      if (e.target.innerHeight < sidebarHeight) {
+        setSidebarHeight(e.target.innerHeight)
+      }
+    }
+    window.addEventListener('resize', onResize)
+    const yResizer = yResizerRef.current
+    const onTouchStart = (e) => {
       switch (e.touches.length) {
         case 1: // one finger
           startYResizing(true)
@@ -137,11 +144,13 @@ export default function SideDrawer({unSelectItem}) {
         default:
           break
       }
-    })
-    yResizerRef.current.addEventListener('touchend', (e) => {
+    }
+    yResizer.addEventListener('touchstart', onTouchStart)
+    const onTouchEnd = (e) => {
       startYResizing(false)
-    })
-    yResizerRef.current.addEventListener('touchmove', (e) => {
+    }
+    yResizer.addEventListener('touchend', onTouchEnd)
+    const onTouchMove = (e) => {
       switch (e.touches.length) {
         case 1: // one finger
           resize(e.touches[0])
@@ -155,8 +164,15 @@ export default function SideDrawer({unSelectItem}) {
         default:
           break
       }
-    })
-  }, [resize, startYResizing])
+    }
+    yResizer.addEventListener('touchmove', onTouchMove)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      yResizer.removeEventListener('touchstart', onTouchStart)
+      yResizer.removeEventListener('touchend', onTouchEnd)
+      yResizer.removeEventListener('touchmove', onTouchMove)
+    }
+  }, [resize, setSidebarHeight, setSidebarWidth, sidebarHeight, sidebarWidth, startYResizing, stopResizing])
 
 
   useEffect(() => {
@@ -346,3 +362,6 @@ export default function SideDrawer({unSelectItem}) {
     </Box>
   )
 }
+
+
+let touchTime = 0
