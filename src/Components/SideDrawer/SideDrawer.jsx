@@ -285,7 +285,7 @@ export default function SideDrawer({unSelectItem}) {
           sx={{
             position: 'absolute',
             // eslint-disable-next-line no-magic-numbers
-            display: sidebarWidth >= 40 ? 'flex' : 'none',
+            display: (sidebarWidth >= 40 && isMobile) ? 'flex' : 'none',
             justifyContent: 'center',
             alignItems: 'center',
             cursor: 'row-resize',
