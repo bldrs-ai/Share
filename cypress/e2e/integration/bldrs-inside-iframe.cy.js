@@ -15,7 +15,7 @@ describe('bldrs inside iframe', () => {
   const KEYCODE_ESC = 27
   const REQUEST_SUCCESS_CODE = 200
   const REMOTE_IFC_URL = '**/Momentum.ifc'
-  const REMOTE_IFC_FIXTURE = 'Momentum.ifc'
+  const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
 
   /**
    * Copy web page to target directory to make it accessible to cypress.
@@ -45,7 +45,7 @@ describe('bldrs inside iframe', () => {
 
   it('should load model when LoadModel-message emitted', () => {
     const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
-    const modelRootNodeName = 'Momentum / KNIK v3'
+    const modelRootNodeName = 'Proxy with extruded box'
 
     // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     // cy.get('#messagesCount').contains('1') //First loaded message

@@ -1,6 +1,6 @@
 describe('sample models', () => {
   const REMOTE_IFC_URL = '**/Momentum.ifc'
-  const REMOTE_IFC_FIXTURE = 'Momentum.ifc'
+  const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
   const REQUEST_SUCCESS_CODE = 200
 
   context('when no model is loaded', () => {
@@ -33,7 +33,7 @@ describe('sample models', () => {
       })
       cy.findByRole('listbox', {timeout: 300000}).should('not.exist')
       cy.findByRole('tree', {label: 'IFC Navigator', timeout: 300000})
-      cy.findByText('Momentum / KNIK v3', {timeout: 300000})
+      cy.findByText('Proxy with extruded box', {timeout: 300000})
     })
   })
 })

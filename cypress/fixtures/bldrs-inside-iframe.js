@@ -63,10 +63,6 @@ class BldrsWidgetDriver {
 /**
 * Message types.
 */
-const EVENT_VIEWER_LOAD_MODEL = 'ai.bldrs-share.LoadModel'
-const EVENT_VIEWER_SELECT_ELEMENTS = 'ai.bldrs-share.SelectElements'
-const EVENT_CLIENT_SELECT_ELEMENTS = 'ai.bldrs-share.ElementsSelected'
-const EVENT_CLIENT_DESELECT_ELEMENTS = 'ai.bldrs-share.ElementsDeSelected'
 const EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS = 'ai.bldrs-share.SelectionChanged'
 const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
 
@@ -116,7 +112,7 @@ api.on('ready', () => {
 ListenToApiAction(EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS, 
   event=>
   {
-    txtLastMsg.value = JSON.stringify(event.detail??"")
+    txtLastMsg.value = JSON.stringify(event.detail ?? "")
   }
 )
 
