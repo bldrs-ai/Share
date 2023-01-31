@@ -381,7 +381,9 @@ export default function CadView({
 
   /** Clear current selection. */
   function resetSelection() {
-    selectItemsInScene([])
+    if (selectedElements?.length !== 0) {
+      selectItemsInScene([])
+    }
   }
 
   /** Reset global state */
@@ -511,7 +513,7 @@ export default function CadView({
       }
       if (event.code === 'KeyA' ||
         event.code === 'Escape') {
-        resetSelection()
+        selectItemsInScene([])
       }
     }
   }
