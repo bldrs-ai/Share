@@ -25,14 +25,14 @@ export default class WidgetApi {
    * @return {boolean}
    */
   detectIframe() {
+    // if this document is hosted in an iframe and has the *same origin*
+    // as the parent document then window.frameElement is to be checked.
     try {
-      // if this document is hosted in an iframe and has the *same origin*
-      // as the parent document then window.frameElement is to be checked.
       if (window.frameElement) {
         return true
       }
     } catch (e) {
-      // continue regardless of error
+      // ignore
     }
 
     // if this document is not hosted in an iframe or is hosted in an

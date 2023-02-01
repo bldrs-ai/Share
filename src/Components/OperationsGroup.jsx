@@ -37,6 +37,12 @@ export default function OperationsGroup({
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
 
+  const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
+  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
+  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+
+  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
+  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -62,7 +68,6 @@ export default function OperationsGroup({
     }
   }
 
-
   return (
     <Box sx={{
       display: 'flex',
@@ -71,10 +76,12 @@ export default function OperationsGroup({
       margin: '20px',
     }}
     >
-      <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-      </ButtonGroup>
-      <Divider/>
+      {isCollaborationGroupVisible &&
+        <ButtonGroup orientation="vertical" >
+          <ShareControl/>
+        </ButtonGroup>}
+      {isFirstDividerVisible() && <Divider/>}
+      {isModelInteractionGroupVisible &&
       <ButtonGroup orientation="vertical" >
         <TooltipIconButton
           title='Notes'
@@ -96,8 +103,9 @@ export default function OperationsGroup({
           selected={isSelected()}
           icon={<ClearIcon/>}
         />
-      </ButtonGroup>
-      <Divider/>
+      </ButtonGroup>}
+      {isSecondDividerVisible() && <Divider/>}
+      {isSettingsVisible &&
       <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
@@ -105,7 +113,7 @@ export default function OperationsGroup({
           icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
         <AboutControl/>
-      </ButtonGroup>
+      </ButtonGroup>}
       {/* Invisible */}
       <CameraControl/>
     </Box>
