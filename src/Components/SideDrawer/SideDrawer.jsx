@@ -297,6 +297,7 @@ export default function SideDrawer({unSelectItem}) {
               justifyContent: 'center',
               gap: '6px',
             }}
+            data-testid="x_resizer"
             onMouseDown={startXResizing}
             onClick={onXResizerClick}
           >
