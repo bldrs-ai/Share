@@ -2,6 +2,7 @@ import React, {useEffect, useContext, useRef, useState, useCallback} from 'react
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {useTheme} from '@mui/styles'
+import {useDoubleTap} from 'use-double-tap'
 import OperationsGroup from '../../Components/OperationsGroup'
 import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
@@ -61,40 +62,14 @@ export default function SideDrawer({unSelectItem}) {
   }, [])
 
 
-  const onXResizerClick = useCallback(() => {
-    if (touchTime) {
-      // compare first click to this click and see if they occurred within double click threshold
-      // eslint-disable-next-line no-magic-numbers
-      if (((new Date().getTime()) - touchTime) < 800) {
-        setIsSidebarXExpanded(!isSidebarXExpanded)
-        touchTime = 0
-      } else {
-        // not a double click so set as a new first click
-        touchTime = new Date().getTime()
-      }
-    } else {
-      // set first click
-      touchTime = new Date().getTime()
-    }
-  }, [isSidebarXExpanded, setIsSidebarXExpanded])
+  const onXResizerDblTap = useDoubleTap((e) => {
+    setIsSidebarXExpanded(!isSidebarXExpanded)
+  })
 
 
-  const onYResizerClick = useCallback(() => {
-    if (touchTime) {
-      // compare first click to this click and see if they occurred within double click threshold
-      // eslint-disable-next-line no-magic-numbers
-      if (((new Date().getTime()) - touchTime) < 800) {
-        touchTime = 0
-        setIsSidebarYExpanded(!isSidebarYExpanded)
-      } else {
-        // not a double click so set as a new first click
-        touchTime = new Date().getTime()
-      }
-    } else {
-      // set first click
-      touchTime = new Date().getTime()
-    }
-  }, [isSidebarYExpanded, setIsSidebarYExpanded])
+  const onYResizerDblTap = useDoubleTap((e) => {
+    setIsSidebarYExpanded(!isSidebarYExpanded)
+  })
 
 
   const resize = useCallback(
@@ -124,7 +99,6 @@ export default function SideDrawer({unSelectItem}) {
           if (tempSidebarHeight > window.innerHeight) {
             tempSidebarHeight = window.innerHeight
           }
-          console.log('tempSidebarHeight: ', tempSidebarHeight)
           setSidebarHeight(tempSidebarHeight)
         }
       },
@@ -306,7 +280,7 @@ export default function SideDrawer({unSelectItem}) {
             }}
             data-testid="x_resizer"
             onMouseDown={startXResizing}
-            onClick={onXResizerClick}
+            {...onXResizerDblTap}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box
@@ -353,7 +327,7 @@ export default function SideDrawer({unSelectItem}) {
             ref={yResizerRef}
             data-testid="y_resizer"
             onMouseDown={startYResizing}
-            onClick={onYResizerClick}
+            {...onYResizerDblTap}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box
@@ -407,6 +381,5 @@ export default function SideDrawer({unSelectItem}) {
 }
 
 
-let touchTime = 0
 let tempSidebarWidth = MOBILE_WIDTH
 let tempSidebarHeight = MOBILE_HEIGHT

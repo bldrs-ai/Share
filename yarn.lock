@@ -14522,6 +14522,11 @@ url@^0.11.0:
     punycode "1.3.2"
     querystring "0.2.0"
 
+use-double-tap@^1.3.4:
+  version "1.3.4"
+  resolved "https://registry.yarnpkg.com/use-double-tap/-/use-double-tap-1.3.4.tgz#be1a95539c777e865cedb9f4552d74557a2beacd"
+  integrity sha512-oO7QwWveB0DTo2hRjQAruSBL7XlfJl6ndJ61SCiLIY9rAkPmJw9thqBZXPZbRW5h3Usv3oNqkZ5PnAEqufOQng==
+
 use-sync-external-store@1.2.0:
   version "1.2.0"
   resolved "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.2.0.tgz"
