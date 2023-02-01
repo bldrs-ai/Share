@@ -1,3 +1,4 @@
+import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
 
 /**
@@ -18,9 +19,10 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: 500,
-    sidebarHeight: 0, // If `sidebarHeight` is zero, and `isSidebarExpanded` is true, then sidebar should be expanded fully
-    isSidebarExpanded: true,
+    sidebarWidth: MOBILE_WIDTH,
+    sidebarHeight: MOBILE_HEIGHT, // If `sidebarHeight` is zero, and `isSidebarYExpanded` is true, then sidebar should be expanded fully
+    isSidebarXExpanded: true,
+    isSidebarYExpanded: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -49,6 +51,7 @@ export default function createUISlice(set, get) {
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
     setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
-    setIsSidebarExpanded: (newIsSidebarExpanded) => set(() => ({isSidebarExpanded: newIsSidebarExpanded})),
+    setIsSidebarXExpanded: (newIsSidebarXExpanded) => set(() => ({isSidebarXExpanded: newIsSidebarXExpanded})),
+    setIsSidebarYExpanded: (newIsSidebarYExpanded) => set(() => ({isSidebarYExpanded: newIsSidebarYExpanded})),
   }
 }

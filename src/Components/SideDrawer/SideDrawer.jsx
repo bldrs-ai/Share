@@ -8,7 +8,7 @@ import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'
 import {useIsMobile} from '../Hooks'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import {dayColor, nightColor} from '../../utils/constants'
+import {dayColor, MOBILE_HEIGHT, MOBILE_WIDTH, nightColor} from '../../utils/constants'
 
 
 /**
@@ -31,8 +31,10 @@ export default function SideDrawer({unSelectItem}) {
   const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const setSidebarHeight = useStore((state) => state.setSidebarHeight)
-  const isSidebarExpanded = useStore((state) => state.isSidebarExpanded)
-  const setIsSidebarExpanded = useStore((state) => state.setIsSidebarExpanded)
+  const isSidebarXExpanded = useStore((state) => state.isSidebarXExpanded)
+  const setIsSidebarXExpanded = useStore((state) => state.setIsSidebarXExpanded)
+  const isSidebarYExpanded = useStore((state) => state.isSidebarYExpanded)
+  const setIsSidebarYExpanded = useStore((state) => state.setIsSidebarYExpanded)
   const location = useLocation()
   const isMobile = useIsMobile()
   const theme = useTheme()
@@ -59,12 +61,12 @@ export default function SideDrawer({unSelectItem}) {
   }, [])
 
 
-  const onYResizerClick = useCallback(() => {
+  const onXResizerClick = useCallback(() => {
     if (touchTime) {
       // compare first click to this click and see if they occurred within double click threshold
       // eslint-disable-next-line no-magic-numbers
       if (((new Date().getTime()) - touchTime) < 800) {
-        setIsSidebarExpanded(!isSidebarExpanded)
+        setIsSidebarXExpanded(!isSidebarXExpanded)
         touchTime = 0
       } else {
         // not a double click so set as a new first click
@@ -74,7 +76,25 @@ export default function SideDrawer({unSelectItem}) {
       // set first click
       touchTime = new Date().getTime()
     }
-  }, [isSidebarExpanded, setIsSidebarExpanded])
+  }, [isSidebarXExpanded, setIsSidebarXExpanded])
+
+
+  const onYResizerClick = useCallback(() => {
+    if (touchTime) {
+      // compare first click to this click and see if they occurred within double click threshold
+      // eslint-disable-next-line no-magic-numbers
+      if (((new Date().getTime()) - touchTime) < 800) {
+        setIsSidebarYExpanded(!isSidebarYExpanded)
+        touchTime = 0
+      } else {
+        // not a double click so set as a new first click
+        touchTime = new Date().getTime()
+      }
+    } else {
+      // set first click
+      touchTime = new Date().getTime()
+    }
+  }, [isSidebarYExpanded, setIsSidebarYExpanded])
 
 
   const resize = useCallback(
@@ -100,12 +120,12 @@ export default function SideDrawer({unSelectItem}) {
             tempSidebarHeight = window.innerHeight
           }
           setSidebarHeight(tempSidebarHeight)
-          if ((isSidebarExpanded && tempSidebarHeight <= 0) || (!isSidebarExpanded && tempSidebarHeight > 0)) {
-            setIsSidebarExpanded(!isSidebarExpanded)
+          if ((isSidebarYExpanded && tempSidebarHeight <= 0) || (!isSidebarYExpanded && tempSidebarHeight > 0)) {
+            setIsSidebarYExpanded(!isSidebarYExpanded)
           }
         }
       },
-      [isXResizing, isYResizing, setSidebarWidth, isMobile, setSidebarHeight, isSidebarExpanded, setIsSidebarExpanded],
+      [isXResizing, isYResizing, setSidebarWidth, isMobile, setSidebarHeight, isSidebarYExpanded, setIsSidebarYExpanded],
   )
 
 
@@ -176,6 +196,16 @@ export default function SideDrawer({unSelectItem}) {
 
 
   useEffect(() => {
+    if (isXResizing) {
+      setIsSidebarXExpanded(true)
+    }
+    if (!isYResizing) {
+      setIsSidebarYExpanded(true)
+    }
+  }, [isXResizing, isYResizing, setIsSidebarXExpanded, setIsSidebarYExpanded])
+
+
+  useEffect(() => {
     const noteHash = getHashParams(location, 'i')
     if (noteHash !== undefined) {
       const extractedCommentId = noteHash.split(':')[1]
@@ -225,10 +255,12 @@ export default function SideDrawer({unSelectItem}) {
           bottom: 0,
           left: 0,
           display: isDrawerOpen ? 'flex' : 'none',
-          width: isMobile ? '100vw' : sidebarWidth,
+          width: isMobile ? '100vw' : isSidebarXExpanded ? sidebarWidth :
+            window.innerWidth < MOBILE_WIDTH ? window.innerWidth : MOBILE_WIDTH,
           minWidth: '8px',
           minHeight: '8px',
-          maxHeight: isSidebarExpanded ? sidebarHeight ? sidebarHeight : '100vh' : 0,
+          maxHeight: isSidebarYExpanded ? sidebarHeight ? sidebarHeight : '100vh' :
+            window.innerHeight < MOBILE_HEIGHT ? window.innerHeight : MOBILE_HEIGHT,
           flexDirection: 'row',
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
@@ -244,7 +276,7 @@ export default function SideDrawer({unSelectItem}) {
             flexBasis: '8px',
             justifySelf: 'flex-start',
             // eslint-disable-next-line no-magic-numbers
-            display: (isMobile || !isSidebarExpanded || (isSidebarExpanded && sidebarHeight < 40 && sidebarHeight > 0)) ? 'none' : 'flex',
+            display: (isMobile || !isSidebarYExpanded || (isSidebarYExpanded && sidebarHeight < 40 && sidebarHeight > 0)) ? 'none' : 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
@@ -266,6 +298,7 @@ export default function SideDrawer({unSelectItem}) {
               gap: '6px',
             }}
             onMouseDown={startXResizing}
+            onClick={onXResizerClick}
           >
             {Array.from({length: 3}).map((v, i) =>
               <Box
@@ -332,7 +365,8 @@ export default function SideDrawer({unSelectItem}) {
           flexDirection: 'column',
           flex: 1,
           maxHeight: '100%',
-          overflowY: isSidebarExpanded ? 'auto' : 'hidden',
+          // eslint-disable-next-line no-magic-numbers
+          overflowY: sidebarHeight > 40 ? 'auto' : 'hidden',
           backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
           ...(isMobile ? {
             paddingTop: '8px',

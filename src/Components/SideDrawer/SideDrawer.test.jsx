@@ -2,8 +2,9 @@ import React from 'react'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
+import {MOBILE_WIDTH} from '../../utils/constants'
+import {useIsMobile} from '../Hooks'
 import SideDrawer from './SideDrawer'
-import {useIsMobile, MOBILE_WIDTH} from '../Hooks'
 
 
 describe('SideDrawer', () => {
@@ -54,9 +55,9 @@ describe('SideDrawer', () => {
     const yResizerEl = getByTestId('y_resizer')
     fireEvent.click(yResizerEl)
     fireEvent.click(yResizerEl)
-    expect(storeHook.result.current.isSidebarExpanded).toBe(false)
+    expect(storeHook.result.current.isSidebarYExpanded).toBe(false)
     fireEvent.click(yResizerEl)
     fireEvent.click(yResizerEl)
-    expect(storeHook.result.current.isSidebarExpanded).toBe(true)
+    expect(storeHook.result.current.isSidebarYExpanded).toBe(true)
   })
 })
