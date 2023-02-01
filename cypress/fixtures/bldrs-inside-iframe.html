@@ -18,7 +18,6 @@
     <!-- Flag is set once Matrix Widget API is ready -->
     <input id="cbxIsReady" type="checkbox"></input>
     <label for="cbxIsReady">Is Ready</label>
-    <br/>
 
     <!-- Contains the last message received from the iframe through Matrix Widget API -->
     <input id="txtLastMsg" type="text"></input>
@@ -26,9 +25,22 @@
     <br/>
 
     <!-- Sends a message to the iframe through Matrix Widget API -->
-    <input id="txtSendMessageType" type="text" placeholder="message type"></input>
-    <input id="txtSendMessagePayload" type="text" placeholder="message payload"></input>
-    <input id="btnSendMessage" type="button" value="Send"></input>
+    <div class="send-actions d-flex">
+      <input id="txtSendMessageType" type="text" placeholder="message type"></input>
+      <input id="txtSendMessagePayload" type="text" placeholder="message payload"></input>
+      <input id="btnSendMessage" type="button" value="Send"></input>
+        <!-- Last Message Received info -->
+      <div class="msg-info d-flex" >
+        <div>
+          Messages Count: <span id="messagesCount">0</span>
+        </div>
+        <div>
+          Last Action Type: <span id="lastMessageReceivedAction">-</span>
+        </div>
+      </div>
+    </div> 
+  
+    
 
     <!-- Contains Bldrs in an iframe, the URL is set later -->
     <iframe 
@@ -39,5 +51,23 @@
       height="90%">
     </iframe>
 
+    <style> 
+
+    .d-flex{
+      display: flex;
+    }
+ 
+    .msg-info div {
+      padding:4px;
+      margin: 2px;
+      border-radius: 5px;
+      background-color: #c7c7c7;
+    }
+
+    .send-actions > * {
+     margin-right: 0.5rem;
+    }
+
+    </style>
   </body>
 </html>
