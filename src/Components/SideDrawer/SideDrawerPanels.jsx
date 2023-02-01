@@ -2,6 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
+import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
@@ -21,6 +22,7 @@ function PanelWithTitle(props) {
   // This isn't visible, but the alignment is important for debugging, so leaving.
   const headerBorderOpacity = 0
   const headerBorderColor = hexToRgba(theme.palette.primary.contrastText, headerBorderOpacity)
+  const isMobile = useIsMobile()
   return (
     <Box sx={{height: '100%', overflow: 'hidden'}}>
       <Box
@@ -35,7 +37,7 @@ function PanelWithTitle(props) {
         sx={{
           height: `calc(100% - ${titleHeight})`,
           overflow: 'auto',
-          padding: '1em 0.5em 1em 0',
+          padding: isMobile ? '0 0.5em 0 0' : '1em 0.5em 1em 0',
         }}
       >
         {props.children}

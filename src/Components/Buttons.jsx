@@ -29,8 +29,6 @@ export function TooltipIconButton({
 }) {
   assertDefined(title, onClick, icon)
   const isMobile = useIsMobile()
-
-
   return (
     <Box>
       {isMobile ?
@@ -66,8 +64,6 @@ export function ControlButton({
   placement = 'left',
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
-
-
   return (
     <Box>
       <TooltipIconButton

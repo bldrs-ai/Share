@@ -623,7 +623,6 @@ function OperationsGroupAndDrawer({deselectItems}) {
              position: 'absolute',
              bottom: 0,
              width: '100%',
-             border: 'solid 1px red',
            }}
          >
            <SideDrawer/>

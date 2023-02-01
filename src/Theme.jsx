@@ -165,7 +165,7 @@ function loadTheme(mode) {
             width: '180px',
             height: '40px',
             textTransform: 'none',
-            border: `solid 1px ${activePalette.primary.main}`,
+            border: 'none',
             backgroundColor: activePalette.primary.main,
           },
         },
@@ -185,6 +185,9 @@ function loadTheme(mode) {
             backgroundColor: activePalette.primary.background,
             opacity: .8,
           },
+        },
+        sizeSmall: {
+          border: 'none',
         },
       },
     },

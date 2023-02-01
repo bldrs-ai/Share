@@ -20,14 +20,14 @@ import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 export default function SideDrawer() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
-  const closeNotes = useStore((state) => state.closeNotes)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const closeProperties = useStore((state) => state.closeProperties)
   const openDrawer = useStore((state) => state.openDrawer)
   const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const sidebarHeight = useStore((state) => state.sidebarHeight)
+  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
   const location = useLocation()
   const isMobile = useIsMobile()
   const sidebarRef = useRef(null)
@@ -61,10 +61,12 @@ export default function SideDrawer() {
 
 
   /** Notes and Props shouldn't show as active when drawer closed. */
-  function closeDrawerNotesProps() {
-    closeDrawer()
-    closeNotes()
-    closeProperties()
+  function onDrawerExpand() {
+    if (sidebarHeight === '100vh') {
+      setSidebarHeight('50vh')
+    } else {
+      setSidebarHeight('100vh')
+    }
   }
 
 
@@ -80,8 +82,7 @@ export default function SideDrawer() {
         flexDirection: 'row',
       }, isMobile ? {
         width: '100%',
-        height: '50vh',
-        border: 'solid 1px green',
+        height: sidebarHeight,
       } : {
         top: 0,
         right: 0,
@@ -96,7 +97,7 @@ export default function SideDrawer() {
           display: 'flex',
           flexDirection: 'row',
           width: '100%',
-          borderLeft: `solid 1px ${borderColor}`,
+          borderLeft: isMobile ? 'none' : `solid 1px ${borderColor}`,
           borderRadius: 0,
         }}
         ref={sidebarRef}
@@ -108,11 +109,11 @@ export default function SideDrawer() {
           sx={{
             width: '100%',
             margin: '1em',
-            marginLeft: `calc(1em - ${gripSize}px)`,
+            marginLeft: isMobile ? '1em' : `calc(1em - ${gripSize}px)`,
             overflow: 'hidden',
           }}
         >
-          {isMobile && <DrawerExpandButton onClick={closeDrawerNotesProps}/>}
+          {isMobile && <DrawerExpandButton onClick={onDrawerExpand}/>}
           <Box
             sx={{
               display: isNotesOn ? 'block' : 'none',
@@ -153,7 +154,7 @@ function DrawerExpandButton({onClick}) {
         },
       }}
     >
-      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>}/>
+      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>} size='small'/>
     </Box>
   )
 }

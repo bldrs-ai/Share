@@ -9,7 +9,6 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {hexToRgba} from '../../utils/color'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -130,8 +129,6 @@ export default function NoteCard({
   }
   const dateParts = date.split('T')
   const theme = useTheme()
-
-
   return (
     <Paper
       elevation={1}
@@ -226,7 +223,6 @@ const CardActions = ({
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
-  const cardActionBackgroundOpacity = 0.5
   return (
     <Box
       sx={{
@@ -236,7 +232,6 @@ const CardActions = ({
         alignItems: 'center',
         padding: '0px 5px 0px 14px',
         height: '50px',
-        backgroundColor: hexToRgba(theme.palette.primary.background, cardActionBackgroundOpacity),
       }}
     >
       <Box sx={{
@@ -248,21 +243,11 @@ const CardActions = ({
       >
         {hasCameras &&
           <TooltipIconButton
-            disabled={hasCameras}
             title='Show the camera view'
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={
-              <Box sx={{
-                width: '20px',
-                height: '20px',
-                marginBottom: '2px',
-              }}
-              >
-                <CameraIcon/>
-              </Box>
-            }
+            icon={<CameraIcon/>}
           />}
         {selected &&
           <TooltipIconButton
@@ -273,9 +258,7 @@ const CardActions = ({
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={
-              <ShareIcon/>
-            }
+            icon={<ShareIcon/>}
           />
         }
       </Box>

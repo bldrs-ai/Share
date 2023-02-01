@@ -19,6 +19,7 @@ export default function createUISlice(set, get) {
     levelInstance: null,
     viewer: null,
     sidebarWidth: 500,
+    sidebarHeight: '50vh',
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -47,5 +48,6 @@ export default function createUISlice(set, get) {
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
+    setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
   }
 }
