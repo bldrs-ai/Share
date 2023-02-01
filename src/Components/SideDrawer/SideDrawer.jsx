@@ -259,8 +259,8 @@ export default function SideDrawer({unSelectItem}) {
             window.innerWidth < MOBILE_WIDTH ? window.innerWidth : MOBILE_WIDTH,
           minWidth: '8px',
           minHeight: '8px',
-          maxHeight: isSidebarYExpanded ? sidebarHeight ? sidebarHeight : '100vh' :
-            window.innerHeight < MOBILE_HEIGHT ? window.innerHeight : MOBILE_HEIGHT,
+          maxHeight: isMobile ? isSidebarYExpanded ? sidebarHeight :
+            window.innerHeight < MOBILE_HEIGHT ? window.innerHeight : MOBILE_HEIGHT : '100vh',
           flexDirection: 'row',
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
