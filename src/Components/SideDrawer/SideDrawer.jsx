@@ -84,8 +84,8 @@ export default function SideDrawer({unSelectItem}) {
       // compare first click to this click and see if they occurred within double click threshold
       // eslint-disable-next-line no-magic-numbers
       if (((new Date().getTime()) - touchTime) < 800) {
-        setIsSidebarYExpanded(!isSidebarYExpanded)
         touchTime = 0
+        setIsSidebarYExpanded(!isSidebarYExpanded)
       } else {
         // not a double click so set as a new first click
         touchTime = new Date().getTime()
@@ -101,14 +101,16 @@ export default function SideDrawer({unSelectItem}) {
       (mouseMoveEvent) => {
         if (isXResizing) {
         // eslint-disable-next-line no-magic-numbers
-          let tempSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4
+          tempSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4
+          if (tempSidebarWidth < 0) {
+            tempSidebarWidth = 0
+          }
           if (tempSidebarWidth > window.innerWidth) {
             tempSidebarWidth = window.innerWidth
           }
           setSidebarWidth(tempSidebarWidth)
         }
         if (isYResizing) {
-          let tempSidebarHeight
           if (isMobile) {
           // eslint-disable-next-line no-magic-numbers
             tempSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + 4
@@ -116,16 +118,17 @@ export default function SideDrawer({unSelectItem}) {
           // eslint-disable-next-line no-magic-numbers
             tempSidebarHeight = mouseMoveEvent.clientY - sidebarRef.current.getBoundingClientRect().top - 4
           }
+          if (tempSidebarHeight < 0) {
+            tempSidebarHeight = 0
+          }
           if (tempSidebarHeight > window.innerHeight) {
             tempSidebarHeight = window.innerHeight
           }
+          console.log('tempSidebarHeight: ', tempSidebarHeight)
           setSidebarHeight(tempSidebarHeight)
-          if ((isSidebarYExpanded && tempSidebarHeight <= 0) || (!isSidebarYExpanded && tempSidebarHeight > 0)) {
-            setIsSidebarYExpanded(!isSidebarYExpanded)
-          }
         }
       },
-      [isXResizing, isYResizing, setSidebarWidth, isMobile, setSidebarHeight, isSidebarYExpanded, setIsSidebarYExpanded],
+      [isXResizing, isYResizing, setSidebarWidth, isMobile, setSidebarHeight],
   )
 
 
@@ -196,13 +199,19 @@ export default function SideDrawer({unSelectItem}) {
 
 
   useEffect(() => {
-    if (isXResizing) {
-      setIsSidebarXExpanded(true)
+    if (isSidebarXExpanded) {
+      setSidebarWidth(tempSidebarWidth)
+    } else {
+      const defaultWidth = Math.min(window.innerWidth, MOBILE_WIDTH)
+      setSidebarWidth(defaultWidth)
     }
-    if (!isYResizing) {
-      setIsSidebarYExpanded(true)
+    if (isSidebarYExpanded) {
+      setSidebarHeight(tempSidebarHeight)
+    } else {
+      const defaultHeight = Math.min(window.innerHeight, MOBILE_HEIGHT)
+      setSidebarHeight(defaultHeight)
     }
-  }, [isXResizing, isYResizing, setIsSidebarXExpanded, setIsSidebarYExpanded])
+  }, [isSidebarXExpanded, isSidebarYExpanded, setSidebarHeight, setSidebarWidth])
 
 
   useEffect(() => {
@@ -255,12 +264,10 @@ export default function SideDrawer({unSelectItem}) {
           bottom: 0,
           left: 0,
           display: isDrawerOpen ? 'flex' : 'none',
-          width: isMobile ? '100vw' : isSidebarXExpanded ? sidebarWidth :
-            window.innerWidth < MOBILE_WIDTH ? window.innerWidth : MOBILE_WIDTH,
+          width: isMobile ? '100vw' : sidebarWidth,
           minWidth: '8px',
+          height: isMobile ? sidebarHeight : '100vh',
           minHeight: '8px',
-          maxHeight: isMobile ? isSidebarYExpanded ? sidebarHeight :
-            window.innerHeight < MOBILE_HEIGHT ? window.innerHeight : MOBILE_HEIGHT : '100vh',
           flexDirection: 'row',
           borderLeft: 'grey 1px solid',
           color: colorTheme.isDay() ? 'black' : 'lightGrey',
@@ -276,7 +283,7 @@ export default function SideDrawer({unSelectItem}) {
             flexBasis: '8px',
             justifySelf: 'flex-start',
             // eslint-disable-next-line no-magic-numbers
-            display: (isMobile || !isSidebarYExpanded || (isSidebarYExpanded && sidebarHeight < 40 && sidebarHeight > 0)) ? 'none' : 'flex',
+            display: (isMobile || !isSidebarYExpanded || (isSidebarYExpanded && sidebarHeight < 40)) ? 'none' : 'flex',
             flexDirection: 'column',
             justifyContent: 'center',
             alignItems: 'center',
@@ -401,3 +408,5 @@ export default function SideDrawer({unSelectItem}) {
 
 
 let touchTime = 0
+let tempSidebarWidth = MOBILE_WIDTH
+let tempSidebarHeight = MOBILE_HEIGHT
