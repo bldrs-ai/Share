@@ -39,6 +39,12 @@ export default function OperationsGroup({
   const colorMode = useContext(ColorModeContext)
   const isMobile = useIsMobile()
 
+  const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
+  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
+  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+
+  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
+  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -64,7 +70,6 @@ export default function OperationsGroup({
     }
   }
 
-
   return (
     <Box sx={isMobile ? {
       position: 'absolute',
@@ -82,41 +87,44 @@ export default function OperationsGroup({
         right: '20px',
       }}
       >
-        <ButtonGroup orientation="vertical" >
-          <ShareControl/>
-        </ButtonGroup>
-        <Divider/>
-        <ButtonGroup orientation="vertical" >
-          <TooltipIconButton
-            title='Notes'
-            icon={<NotesIcon/>}
-            selected={isCommentsOn}
-            onClick={() => toggle('Notes')}
-          />
-          <TooltipIconButton
-            title="Properties"
-            onClick={() => toggle('Properties')}
-            selected={isPropertiesOn}
-            icon={<ListIcon/>}
-          />
-          <CutPlaneMenu/>
-          {/* <ExtractLevelsMenu/> */}
-          <TooltipIconButton
-            title="Clear"
-            onClick={unSelectItem}
-            selected={isSelected()}
-            icon={<ClearIcon/>}
-          />
-        </ButtonGroup>
-        <Divider/>
-        <ButtonGroup orientation="vertical">
-          <TooltipIconButton
-            title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
-            onClick={() => colorMode.toggleColorMode()}
-            icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
-          />
-          <AboutControl/>
-        </ButtonGroup>
+        {isCollaborationGroupVisible &&
+          <ButtonGroup orientation="vertical" >
+            <ShareControl/>
+          </ButtonGroup>}
+        {isFirstDividerVisible() && <Divider/>}
+        {isModelInteractionGroupVisible &&
+          <ButtonGroup orientation="vertical" >
+            <TooltipIconButton
+              title='Notes'
+              icon={<NotesIcon/>}
+              selected={isCommentsOn}
+              onClick={() => toggle('Notes')}
+            />
+            <TooltipIconButton
+              title="Properties"
+              onClick={() => toggle('Properties')}
+              selected={isPropertiesOn}
+              icon={<ListIcon/>}
+            />
+            <CutPlaneMenu/>
+            {/* <ExtractLevelsMenu/> */}
+            <TooltipIconButton
+              title="Clear"
+              onClick={unSelectItem}
+              selected={isSelected()}
+              icon={<ClearIcon/>}
+            />
+          </ButtonGroup>}
+        {isSecondDividerVisible() && <Divider/>}
+        {isSettingsVisible &&
+          <ButtonGroup orientation="vertical">
+            <TooltipIconButton
+              title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
+              onClick={() => colorMode.toggleColorMode()}
+              icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
+            />
+            <AboutControl/>
+          </ButtonGroup>}
         {/* Invisible */}
         <CameraControl/>
       </Box>

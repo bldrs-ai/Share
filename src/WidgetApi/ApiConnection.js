@@ -59,6 +59,20 @@ class AbstractApiConnection {
   }
 
   /**
+   * returns an invalid operation response.
+   *
+   * @param {string} message
+   * @return {object} invalid operation response.
+   */
+  invalidOperationResponse = function(message) {
+    return {
+      error: true,
+      reason: message,
+    }
+  }
+
+
+  /**
    * returns a successful response.
    *
    * @param {object} data
