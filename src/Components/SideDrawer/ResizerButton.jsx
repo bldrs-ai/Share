@@ -8,10 +8,11 @@ import useStore from '../../store/useStore'
 /**
  * Grab button to for resizing SideDrawer.
  *
- * @property {React.Element} The sidebar controlled by this button's action.
+ * @property {number} width Width of the grip (and column) in pixels.
+ * @property {React.Component} The sidebar controlled by this button's action.
  * @return {React.Component}
  */
-export default function ResizerButton({sidebarRef}) {
+export default function ResizerButton({sidebarRef, width = 10}) {
   const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const [isResizing, setIsResizing] = useState(false)
 
@@ -47,6 +48,8 @@ export default function ResizerButton({sidebarRef}) {
 
   const isMobile = useIsMobile()
   const theme = useTheme()
+  const gripButtonRatio = 0.5
+  const gripSize = width * gripButtonRatio
   return (
     <Box
       sx={{
@@ -80,8 +83,8 @@ export default function ResizerButton({sidebarRef}) {
           <Box
             key={i}
             sx={{
-              width: '5px',
-              height: '5px',
+              width: `${gripSize}px`,
+              height: `${gripSize}px`,
               borderRadius: '3px',
               background: theme.palette.primary.contrastText,
               opacity: '0.3',

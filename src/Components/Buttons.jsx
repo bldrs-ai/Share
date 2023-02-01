@@ -12,8 +12,9 @@ import CloseIcon from '../assets/2D_Icons/Close.svg'
  * @property {string} title Tooltip text
  * @property {Function} onClick callback
  * @property {object} icon button icon
- * @property {string} placement Tooltip location. Default: left
- * @property {boolean} selected Selected state.  Default: false
+ * @property {string} [placement] Tooltip location. Default: left
+ * @property {boolean} [selected] Selected state.  Default: false
+ * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} dataTestId Internal attribute for component testing. Default: ''
  * @return {React.Component} React component
  */
@@ -23,6 +24,7 @@ export function TooltipIconButton({
   icon,
   placement = 'left',
   selected = false,
+  size = 'medium',
   dataTestId = '',
 }) {
   assertDefined(title, onClick, icon)
@@ -32,11 +34,11 @@ export function TooltipIconButton({
   return (
     <Box>
       {isMobile ?
-       <ToggleButton selected={selected} onClick={onClick} value={''}>
+       <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
          {icon}
        </ToggleButton> :
        <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
-         <ToggleButton selected={selected} onClick={onClick} value={''}>
+         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
            {icon}
          </ToggleButton>
        </Tooltip>
@@ -82,15 +84,15 @@ export function ControlButton({
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Element}
+ * @return {React.Component}
  */
 export function CloseButton({onClick}) {
   return (
     <TooltipIconButton
       title='Close'
       onClick={onClick}
-      icon={<CloseIcon/>}
-      size='small'
+      icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
+      size='medium'
     />
   )
 }

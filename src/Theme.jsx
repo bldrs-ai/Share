@@ -208,6 +208,14 @@ function loadTheme(mode) {
         },
       ],
     },
+    MuiCardActions: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'blue',
+          border: 'solid 3px red',
+        },
+      },
+    },
   }
   const theme = {
     components: components,

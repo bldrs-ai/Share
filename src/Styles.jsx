@@ -4,7 +4,7 @@ import GlobalStyles from '@mui/material/GlobalStyles'
 
 /**
  * @property {object} theme To set link, icon and scollbar colors.
- * @return {React.Element}
+ * @return {React.Component}
  */
 export default function Styles({theme}) {
   return (

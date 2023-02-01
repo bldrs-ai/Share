@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
 import Toggle from '../Toggle'
@@ -33,6 +34,8 @@ export default function ItemProperties() {
   }, [model, element, expandAll])
 
 
+  const propSeparatorBorderOpacity = 0.3
+  const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
   return (
     <Box sx={{
       '& td': {
@@ -41,7 +44,7 @@ export default function ItemProperties() {
         verticalAlign: 'top',
         cursor: 'pointer',
         padding: '3px 0',
-        borderBottom: `.2px solid ${theme.palette.primary.contrastText}`,
+        borderBottom: `.2px solid ${propSeparatorColor}`,
       },
       '& table': {
         tableLayout: 'fixed',

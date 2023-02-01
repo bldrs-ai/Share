@@ -9,6 +9,7 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
+import {hexToRgba} from '../../utils/color'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
@@ -135,6 +136,7 @@ export default function NoteCard({
     <Paper
       elevation={1}
       variant='note'
+      square
       sx={{
         marginBottom: '1em',
         width: '100%',
@@ -159,7 +161,6 @@ export default function NoteCard({
       </CardActionArea>
       <CardContent
         sx={{
-          'borderBottom': `1px solid ${theme.palette.primary.main}`,
           'padding': '0px 20px 0px 20px',
           'margin': '0px 0px 0px 0px',
           '& img': {
@@ -225,15 +226,18 @@ const CardActions = ({
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
+  const cardActionBackgroundOpacity = 0.5
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0px 5px 0px 14px',
-      height: '50px',
-    }}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0px 5px 0px 14px',
+        height: '50px',
+        backgroundColor: hexToRgba(theme.palette.primary.background, cardActionBackgroundOpacity),
+      }}
     >
       <Box sx={{
         display: 'flex',

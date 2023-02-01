@@ -8,7 +8,7 @@ import Typography from '@mui/material/Typography'
  *
  * @param {string} title Panel title
  * @param {object} [controlsGroup] Controls Group is placed on the right of the title
- * @return {React.Element} Properties Panel react component
+ * @return {React.Component} Properties Panel react component
  */
 export default function PanelTitle({title, controlsGroup}) {
   return (

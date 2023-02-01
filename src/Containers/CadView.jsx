@@ -8,7 +8,8 @@ import BranchesControl from '../Components/BranchesControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper from '../Components/SideDrawer/SideDrawer'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -390,8 +391,8 @@ export default function CadView({
     setLevelInstance(null)
   }
 
-  /** Unpick active scene elts and remove clip planes. */
-  function unSelectItems() {
+  /** Deselect active scene elts and remove clip planes. */
+  function deselectItems() {
     if (viewer) {
       viewer.clipper.deleteAllPlanes()
     }
@@ -496,6 +497,8 @@ export default function CadView({
     }
     selectItemsInScene(newSelection)
   }
+
+
   /** Set Keyboard button Shortcuts */
   function setKeydownListeners() {
     window.onkeydown = (event) => {
@@ -530,7 +533,7 @@ export default function CadView({
         position: 'absolute',
         top: '0px',
         left: '0px',
-        display: 'flex',
+        flex: 1,
         width: '100vw',
         height: '100vh',
       }}
@@ -588,8 +591,60 @@ export default function CadView({
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
-      <SideDrawerWrapper unSelectItem={unSelectItems}/>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      }
     </Box>
+  )
+}
+
+
+/**
+ * @property {Function} deselectItems deselects currently selected element
+ * @return {React.Component}
+ */
+function OperationsGroupAndDrawer({deselectItems}) {
+  const isMobile = useIsMobile()
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  return (
+    isMobile ? (
+      <>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+          }}
+        >
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
+        {isDrawerOpen &&
+         <Box
+           sx={{
+             position: 'absolute',
+             bottom: 0,
+             width: '100%',
+             border: 'solid 1px red',
+           }}
+         >
+           <SideDrawer/>
+         </Box>
+        }
+      </>
+    ) : (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'row',
+        }}
+      >
+        <OperationsGroup deselectItems={deselectItems}/>
+        {isDrawerOpen && <SideDrawer/>}
+      </Box>
+    )
   )
 }
 

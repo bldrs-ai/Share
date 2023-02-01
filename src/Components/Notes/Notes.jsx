@@ -108,15 +108,11 @@ export default function Notes() {
   return (
     <Paper
       elevation={0}
+      square
       sx={{
-        'width': '100%',
-        'display': 'flex',
-        'flexDirection': 'column',
-        'alignItems': 'center',
-        'resizeMode': 'contain',
-        '@media (max-width: 900px)': {
-          paddingTop: '0px',
-        },
+        width: '100%',
+        display: 'block',
+        overflow: 'auto',
       }}
     >
       {notes === null && <Loader type={'linear'}/> }

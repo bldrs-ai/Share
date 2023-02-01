@@ -3,10 +3,11 @@ import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
-import OperationsGroup from '../../Components/OperationsGroup'
+import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import ResizerButton from './ResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
@@ -14,21 +15,18 @@ import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
 
 /**
- * SideDrawerWrapper is the container for the SideDrawer component.
- * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
- * It makes it is possible to test Side Drawer outside of the cad view.
- *
- * @return {object} SideDrawer react component
+ * @return {React.Component}
  */
-export default function SideDrawerWrapper({unSelectItem}) {
+export default function SideDrawer() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
+  const closeNotes = useStore((state) => state.closeNotes)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const closeProperties = useStore((state) => state.closeProperties)
   const openDrawer = useStore((state) => state.openDrawer)
   const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const viewer = useStore((state) => state.viewer)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const location = useLocation()
   const isMobile = useIsMobile()
@@ -62,76 +60,100 @@ export default function SideDrawerWrapper({unSelectItem}) {
   }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
 
-  const margin = '1em'
+  /** Notes and Props shouldn't show as active when drawer closed. */
+  function closeDrawerNotesProps() {
+    closeDrawer()
+    closeNotes()
+    closeProperties()
+  }
+
+
+  const theme = useTheme()
+  const gripSize = 10
+  const isDividerOn = isNotesOn && isPropertiesOn
+  const borderOpacity = 0.5
+  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
   return (
     <Box
-      sx={{
-        position: 'absolute',
+      sx={Object.assign({
         display: 'flex',
         flexDirection: 'row',
-        height: '100%',
+      }, isMobile ? {
+        width: '100%',
+        height: '50vh',
+        border: 'solid 1px green',
+      } : {
         top: 0,
         right: 0,
-      }}
+        width: sidebarWidth,
+        height: '100vh',
+        minWidth: '8px',
+        maxWidth: '100vw',
+      })}
     >
-      {viewer && <OperationsGroup unSelectItem={unSelectItem}/>}
       <Paper
         sx={{
-          display: isDrawerOpen ? 'flex' : 'none',
-          width: isMobile ? '100vw' : sidebarWidth,
-          minWidth: '8px',
-          maxWidth: '100vw',
-          height: '100%',
+          display: 'flex',
           flexDirection: 'row',
-          borderLeft: 'grey 1px solid',
+          width: '100%',
+          borderLeft: `solid 1px ${borderColor}`,
           borderRadius: 0,
         }}
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        <ResizerButton sidebarRef={sidebarRef}/>
+        {!isMobile && <ResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
         {/* Content */}
         <Box
           sx={{
-            flexDirection: 'column',
-            flex: 1,
-            height: '100%',
-            overflowY: 'auto',
-            margin: margin,
+            width: '100%',
+            margin: '1em',
+            marginLeft: `calc(1em - ${gripSize}px)`,
+            overflow: 'hidden',
           }}
         >
-          <Box
-            sx={{
-              'display': isMobile ? 'flex' : 'none',
-              'justifyContent': 'center',
-              'alignItems': 'center',
-              '& svg': {
-                transform: 'rotate(180deg)',
-              },
-            }}
-          >
-            <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
-          </Box>
-          {/* The height is calulated to align the Divider with the center of the drag button. */}
+          {isMobile && <DrawerExpandButton onClick={closeDrawerNotesProps}/>}
           <Box
             sx={{
               display: isNotesOn ? 'block' : 'none',
-              height: isPropertiesOn ? `calc(50% - ${margin})` : '100%',
+              height: isPropertiesOn ? `50%` : '100%',
               overflow: 'auto',
             }}
           >
             {isNotesOn && <NotesPanel/>}
           </Box>
-          {isNotesOn && isPropertiesOn && <Divider/>}
+          {isDividerOn && <Divider sx={{borderColor: borderColor}}/>}
           <Box
             sx={{
               display: isPropertiesOn ? 'block' : 'none',
+              height: isNotesOn ? `50%` : '100%',
+              marginTop: isDividerOn ? '1em' : '0',
             }}
           >
-            {isPropertiesOn && <PropertiesPanel/>}
+            {isPropertiesOn && <PropertiesPanel includeGutter={!isDividerOn}/>}
           </Box>
         </Box>
       </Paper>
+    </Box>
+  )
+}
+
+
+/** @return {React.Component} */
+function DrawerExpandButton({onClick}) {
+  const isMobile = useIsMobile()
+  return (
+    <Box
+      sx={{
+        'display': isMobile ? 'flex' : 'none',
+        'justifyContent': 'center',
+        'alignItems': 'center',
+        '& svg': {
+          transform: 'rotate(180deg)',
+        },
+      }}
+    >
+      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>}/>
     </Box>
   )
 }

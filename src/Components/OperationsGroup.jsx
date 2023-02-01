@@ -17,16 +17,14 @@ import SunIcon from '../assets/2D_Icons/Sun.svg'
 
 
 /**
- * OperationsGroup contains tools for cut plane, deselecting items and
- * toggling shortcut visibility
+ * OperationsGroup contains tools for sharing, notes, properties, cut
+ * plane, deselect, theme change and about.
  *
- * @param {Function} unSelectItem deselects currently selected element
+ * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({
-  unSelectItem,
-}) {
-  const toggleIsCommentsOn = useStore((state) => state.toggleIsCommentsOn)
+export default function OperationsGroup({deselectItems}) {
+  const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
@@ -53,7 +51,7 @@ export default function OperationsGroup({
       toggleIsPropertiesOn()
     }
     if (panel === 'Notes') {
-      toggleIsCommentsOn()
+      toggleIsNotesOn()
     }
   }
 
@@ -87,7 +85,7 @@ export default function OperationsGroup({
         {/* <ExtractLevelsMenu/> */}
         <TooltipIconButton
           title="Clear"
-          onClick={unSelectItem}
+          onClick={deselectItems}
           selected={isSelected()}
           icon={<ClearIcon/>}
         />

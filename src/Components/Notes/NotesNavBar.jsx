@@ -10,7 +10,7 @@ import NextIcon from '../../assets/2D_Icons/NavNext.svg'
 import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
 
 
-/** @return {React.Element} */
+/** @return {React.Component} */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
@@ -66,18 +66,7 @@ export default function NotesNavBar() {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={
-             <Box
-               sx={{
-                 display: 'flex',
-                 justifyContent: 'center',
-                 alignItems: 'center',
-                 width: '14px',
-                 height: '14px',
-               }}
-             >
-               <BackIcon/>
-             </Box>}
+           icon={<BackIcon/>}
          />
         }
       </Box>
@@ -93,17 +82,15 @@ export default function NotesNavBar() {
           <>
             <TooltipIconButton
               title='Previous Note'
-              placement='bottom'
-              size='small'
               onClick={() => selectNote('previous')}
               icon={<PreviousIcon/>}
+              placement='bottom'
             />
             <TooltipIconButton
               title='Next Note'
-              size='small'
-              placement='bottom'
               onClick={() => selectNote('next')}
               icon={<NextIcon/>}
+              placement='bottom'
             />
           </>
         }
