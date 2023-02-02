@@ -73,9 +73,6 @@ export default function OperationsGroup({deselectItems}) {
     }}
     >
       <AuthNav/>
-      <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-      </ButtonGroup>
       <Divider/>
 
       {isCollaborationGroupVisible &&
