@@ -1,5 +1,5 @@
-import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
+
 
 /**
  * Data stored in Zustand for UI state.
@@ -10,7 +10,7 @@ import debug from '../utils/debug'
  */
 export default function createUISlice(set, get) {
   return {
-    isCommentsOn: false,
+    isNotesOn: false,
     isDrawerOpen: false,
     isNavPanelOpen: true,
     isOpenControlHighlighted: true,
@@ -19,18 +19,19 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: MOBILE_WIDTH,
-    sidebarHeight: MOBILE_HEIGHT, // If `sidebarHeight` is zero, and `isSidebarYExpanded` is true, then sidebar should be expanded fully
+    sidebarWidth: 500,
+    sidebarHeight: '50vh',
     isSidebarXExpanded: true,
     isSidebarYExpanded: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
-    toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
+    toggleIsNotesOn: () => set((state) => ({isNotesOn: !state.isNotesOn})),
+    openNotes: () => set(() => ({isNotesOn: true})),
+    closeNotes: () => set(() => ({isNotesOn: false})),
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
-    turnCommentsOn: () => set(() => ({isCommentsOn: true})),
-    turnCommentsOff: () => set(() => ({isCommentsOn: false})),
+    closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)

@@ -25,7 +25,7 @@ export default function NoContent() {
         '& svg': {
           width: '30px',
           height: '30px',
-          fill: theme.palette.highlight.secondary,
+          fill: theme.palette.primary.secondary,
         },
       }}
       >

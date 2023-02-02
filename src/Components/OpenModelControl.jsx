@@ -1,65 +1,45 @@
-import React, {useState, useContext} from 'react'
+import React, {useState} from 'react'
 import {useNavigate} from 'react-router-dom'
+import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import Tooltip from '@mui/material/Tooltip'
-import ToggleButton from '@mui/material/ToggleButton'
 import TextField from '@mui/material/TextField'
-import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
-import {RectangularButton} from '../Components/Buttons'
-import {ColorModeContext} from '../Context/ColorMode'
-import ModelsIcon from '../assets/2D_Icons/Model.svg'
+import {TooltipIconButton} from './Buttons'
 import OpenIcon from '../assets/2D_Icons/Open.svg'
 import UploadIcon from '../assets/2D_Icons/Upload.svg'
 import {handleBeforeUnload} from '../utils/event'
-import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
- * Displays open warning.
+ * Displays model open dialog.
  *
- * @return {object} React component
+ * @return {React.ReactElement}
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
 
   return (
-    <>
-      <Paper sx={{
-        'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
+    <Box
+      sx={{
         '& button': {
-          'width': '44px',
-          'height': '44px',
-          'border': `1px solid ${theme.palette.highlight.heavy}`,
-          '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: '#97979770',
-          },
+          margin: '0',
+          border: `solid 1px ${theme.palette.primary.background}`,
         },
-        '& svg': {
-          width: '40px',
-          height: '40px',
-          fill: theme.palette.primary.contrastText,
-        },
-      }} elevation={0}
-      >
-        <Tooltip title={'Open IFC'} describeChild placement={'top'}>
-          <ToggleButton
-            selected={isDialogDisplayed}
-            onClick={() => {
-              setIsDialogDisplayed(true)
-            }}
-            color='primary'
-            value={'Open IFC'}
-          >
-            <OpenIcon/>
-          </ToggleButton>
-        </Tooltip>
+      }}
+    >
+      <Paper elevation={0} variant='control'>
+        <TooltipIconButton
+          title={'Open IFC'}
+          onClick={() => setIsDialogDisplayed(true)}
+          icon={<OpenIcon/>}
+          placement={'top'}
+          selected={isDialogDisplayed}
+        />
       </Paper>
       {isDialogDisplayed &&
         <OpenModelDialog
@@ -68,7 +48,7 @@ export default function OpenModelControl({fileOpen}) {
           fileOpen={fileOpen}
         />
       }
-    </>
+    </Box>
   )
 }
 
@@ -79,17 +59,56 @@ export default function OpenModelControl({fileOpen}) {
  * @return {object} React component
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
-  const [selected, setSelected] = useState('')
-  const navigate = useNavigate()
-  const theme = useTheme()
-
-
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
   }
 
 
+  return (
+    <Dialog
+      icon={<OpenIcon/>}
+      headerText={'Open'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle={'Open local file'}
+      actionIcon={<UploadIcon/>}
+      actionCb={openFile}
+      content={
+        <Box
+          sx={{
+            width: '260px',
+            paddingTop: '6px',
+            textAlign: 'left',
+          }}
+        >
+          <ModelFileSelector setIsDialogDisplayed/>
+          <p>Models hosted on GitHub are opened by inserting the link to the file into the Search.</p>
+          <p>Visit our {' '}
+            <a
+              target="_blank"
+              href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+              rel="noreferrer"
+            >
+              wiki
+            </a> to learn more.
+          </p>
+          <p>Models opened from local drive cannot yet be saved or shared.</p>
+        </Box>
+      }
+    />
+  )
+}
+
+
+/**
+ * @property {Function} setIsDialogDisplayed callback
+ * @return {React.ReactElement}
+ */
+function ModelFileSelector({setIsDialogDisplayed}) {
+  const navigate = useNavigate()
+  const [selected, setSelected] = useState('')
+  const theme = useTheme()
   const handleSelect = (e) => {
     setSelected(e.target.value)
     const modelPath = {
@@ -106,107 +125,51 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
     setIsDialogDisplayed(false)
   }
 
-
   return (
-    <Dialog
-      icon={<ModelsIcon/>}
-      headerText={'Open'}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      content={
-        <Box sx={{
-          width: '260px',
-          paddingTop: '6px',
-        }}
-        >
-          <TextField
-            sx={{
-              'width': '260px',
-              '& .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.secondary,
-              },
-              '& .MuiInputLabel-root': {
-                color: theme.palette.highlight.secondary,
-              },
-              '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.highlight.secondary,
-              },
-              '&:hover .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.secondary,
-              },
-              '&:hover .MuiInputLabel-root': {
-                color: theme.palette.highlight.secondary,
-              },
-              '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.highlight.secondary,
-              },
-              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.secondary,
-              },
-              '& .MuiInputLabel-root.Mui-focused': {
-                color: theme.palette.highlight.secondary,
-              },
-              '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.highlight.secondary,
-              },
-            }}
-            value={selected}
-            onChange={(e) => handleSelect(e)}
-            variant='outlined'
-            label='Sample Projects'
-            select
-            size='small'
-          >
-            <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-            <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-            <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-            <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-            <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-            <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-          </TextField>
-          <Box sx={{
-            textAlign: 'left',
-            paddingLeft: '10px',
-            paddingRight: '10px',
-          }}
-          component='p'
-          >
-            Models hosted on GitHub are opened by inserting the link to the file into the Search.
-            <br/>
-            Visit our {' '}
-            <Box component='span'>
-              <Box component='a'
-                sx={{
-                  fontWeight: 'bold',
-                  color: theme.palette.highlight.secondary,
-                  cursor: 'pointer',
-                  borderBottom: `1px solid ${theme.palette.highlight.secondary}`,
-                }}
-                target="_blank"
-                href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
-                rel="noreferrer"
-              >
-                wiki
-              </Box>
-            </Box> to learn more.
-          </Box>
-          <RectangularButton
-            title='Open from local drive'
-            icon={<UploadIcon/>}
-            onClick={openFile}
-            noBackground={true}
-            noBorder={false}
-          />
-          <Box component='p' sx={{
-            textAlign: 'left',
-            paddingLeft: '10px',
-            paddingRight: '10px',
-          }}
-          >
-            Models opened from local drive cannot be saved or shared.
-          </Box>
-        </Box>
-      }
-    />
+    <TextField
+      sx={{
+        'width': '260px',
+        '& .MuiOutlinedInput-input': {
+          color: theme.palette.secondary.main,
+        },
+        '& .MuiInputLabel-root': {
+          color: theme.palette.secondary.main,
+        },
+        '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.secondary.main,
+        },
+        '&:hover .MuiOutlinedInput-input': {
+          color: theme.palette.secondary.main,
+        },
+        '&:hover .MuiInputLabel-root': {
+          color: theme.palette.secondary.main,
+        },
+        '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.secondary.main,
+        },
+        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
+          color: theme.palette.secondary.main,
+        },
+        '& .MuiInputLabel-root.Mui-focused': {
+          color: theme.palette.secondary.main,
+        },
+        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.secondary.main,
+        },
+      }}
+      value={selected}
+      onChange={(e) => handleSelect(e)}
+      variant='outlined'
+      label='Sample Projects'
+      select
+      size='small'
+    >
+      <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+      <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+      <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+      <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+      <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+      <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+    </TextField>
   )
 }
