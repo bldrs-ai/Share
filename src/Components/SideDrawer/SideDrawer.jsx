@@ -118,11 +118,13 @@ export default function SideDrawer({unSelectItem}) {
 
   useEffect(() => {
     const onResize = (e) => {
-      // if (e.target.innerWidth < sidebarWidth) {
-      //   setSidebarWidth(e.target.innerWidth)
-      // }
+      if (e.target.innerWidth < sidebarWidth) {
+        tempSidebarWidth = e.target.innerWidth
+        setSidebarWidth(tempSidebarWidth)
+      }
       if (e.target.innerHeight < sidebarHeight) {
-        setSidebarHeight(e.target.innerHeight)
+        tempSidebarHeight = e.target.innerHeight
+        setSidebarHeight(tempSidebarHeight)
       }
     }
     window.addEventListener('resize', onResize)
