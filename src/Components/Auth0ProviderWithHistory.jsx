@@ -14,7 +14,9 @@ export const Auth0ProviderWithHistory = ({children}) => {
     <Auth0Provider
       domain={process.env.AUTH0_DOMAIN}
       clientId={process.env.OAUTH2_CLIENT_ID}
-      redirectUri={process.env.OAUTH2_REDIRECT_URI || window.location.origin}
+      authorizationParams={{
+        redirect_uri: process.env.OAUTH2_REDIRECT_URI || window.location.origin,
+      }}
       cacheLocation={'localstorage'}
       onRedirectCallback={onRedirect}
       useRefreshTokens={true}

@@ -51,8 +51,10 @@ export default function BaseRoutes({testElt = null}) {
 
     if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
-        audience: 'https://api.github.com/',
-        scope: 'repo',
+        authorizationParams: {
+          audience: 'https://api.github.com/',
+          scope: 'repo',
+        },
       }).then((token) => {
         setAccessToken(token)
       }).catch((err) => {
