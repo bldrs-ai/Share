@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r642",
+  "version": "1.0.0-r612",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -22,8 +22,8 @@
     "test": "jest",
     "cypress": "cypress run",
     "cypress-spec": "cypress run --spec",
-    "cypress-headed": "cypress run --headed --no-exit",
-    "cypress-headed-spec": "cypress run --headed --no-exit --spec",
+    "cypress-headed": "cypress run --headed --browser chrome --no-exit",
+    "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
   "dependencies": {

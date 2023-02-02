@@ -63,8 +63,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
     fileOpen()
     setIsDialogDisplayed(false)
   }
-
-
   return (
     <Dialog
       icon={<OpenIcon/>}
@@ -82,7 +80,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             textAlign: 'left',
           }}
         >
-          <ModelFileSelector setIsDialogDisplayed/>
+          <ModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           <p>Models hosted on GitHub are opened by inserting the link to the file into the Search.</p>
           <p>Visit our {' '}
             <a
@@ -109,7 +107,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
   const navigate = useNavigate()
   const [selected, setSelected] = useState('')
   const theme = useTheme()
-  const handleSelect = (e) => {
+  const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
       0: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
@@ -122,7 +120,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
-    setIsDialogDisplayed(false)
+    closeDialog()
   }
 
   return (
@@ -158,7 +156,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
         },
       }}
       value={selected}
-      onChange={(e) => handleSelect(e)}
+      onChange={(e) => handleSelect(e, () => setIsDialogDisplayed(false))}
       variant='outlined'
       label='Sample Projects'
       select
