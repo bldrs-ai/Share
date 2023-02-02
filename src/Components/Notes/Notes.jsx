@@ -1,5 +1,4 @@
 import React, {useEffect} from 'react'
-import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
@@ -21,7 +20,7 @@ export default function Notes() {
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
-        notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
 
 
@@ -35,13 +34,14 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository)
+        let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
           fetchedNotes.push({
-            index: index,
+            index: issueIndex++,
             id: issue.id,
             number: issue.number,
             title: issue.title,
@@ -100,84 +100,78 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // this useEffect runs everytime notes are fetched to enable fetching the comments when the platform is open
+    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments])
 
   return (
-    <Paper sx={{width: '100%'}} elevation={0}>
-      <Box sx={{
-        'display': 'flex',
-        'flexDirection': 'column',
-        'alignItems': 'center',
-        'resizeMode': 'contain',
-        'width': '100%',
-        'paddingTop': '10px',
-        'paddingBottom': '30px',
-        '@media (max-width: 900px)': {
-          paddingTop: '0px',
-        },
+    <Paper
+      elevation={0}
+      square
+      sx={{
+        width: '100%',
+        display: 'block',
+        overflow: 'auto',
       }}
-      >
-        {notes === null && <Loader type={'linear'}/> }
-        {notes && notes.length === 0 && <NoContent/> }
-        {notes && !selectedNoteId ?
-          notes.map((issue, index) => {
+    >
+      {notes === null && <Loader type={'linear'}/> }
+      {notes && notes.length === 0 && <NoContent/> }
+      {notes && !selectedNoteId ?
+       notes.map((issue, index) => {
+         return (
+           <NoteCard
+             embeddedUrl={issue.embeddedUrl}
+             index={issue.index}
+             id={issue.id}
+             key={index}
+             title={issue.title}
+             date={issue.date}
+             body={issue.body}
+             username={issue.username}
+             numberOfComments={issue.numberOfComments}
+             avatarUrl={issue.avatarUrl}
+             imageUrl={issue.imageUrl}
+           />
+         )
+       }) :
+       <>
+         {filteredNote ?
+          <NoteCard
+            embeddedUrl={filteredNote.embeddedUrl}
+            index={filteredNote.index}
+            id={filteredNote.id}
+            key={filteredNote.id}
+            title={filteredNote.title}
+            date={filteredNote.date}
+            body={filteredNote.body}
+            username={filteredNote.username}
+            numberOfComments={filteredNote.numberOfComments}
+            avatarUrl={filteredNote.avatarUrl}
+            imageUrl={filteredNote.imageUrl}
+          /> : null
+         }
+         {comments &&
+          comments.map((comment, index) => {
             return (
               <NoteCard
-                embeddedUrl={issue.embeddedUrl}
-                index={issue.index}
-                id={issue.id}
-                key={index}
-                title={issue.title}
-                date={issue.date}
-                body={issue.body}
-                username={issue.username}
-                numberOfComments={issue.numberOfComments}
-                avatarUrl={issue.avatarUrl}
-                imageUrl={issue.imageUrl}
+                embeddedUrl={comment.embeddedUrl}
+                isComment={true}
+                index=''
+                id={comment.id}
+                key={comment.id}
+                title={index + 1}
+                date={comment.date}
+                body={comment.body}
+                username={comment.username}
+                avatarUrl={comment.avatarUrl}
+                imageUrl={comment.imageUrl}
               />
             )
-          }) :
-        <>
-          {filteredNote ?
-           <NoteCard
-             embeddedUrl={filteredNote.embeddedUrl}
-             index={filteredNote.index}
-             id={filteredNote.id}
-             key={filteredNote.id}
-             title={filteredNote.title}
-             date={filteredNote.date}
-             body={filteredNote.body}
-             username={filteredNote.username}
-             numberOfComments={filteredNote.numberOfComments}
-             avatarUrl={filteredNote.avatarUrl}
-             imageUrl={filteredNote.imageUrl}
-           /> : null
-          }
-          {comments &&
-           comments.map((comment, index) => {
-             return (
-               <NoteCard
-                 embeddedUrl={comment.embeddedUrl}
-                 isComment={true}
-                 index=''
-                 id={comment.id}
-                 key={comment.id}
-                 title={index + 1}
-                 date={comment.date}
-                 body={comment.body}
-                 username={comment.username}
-                 avatarUrl={comment.avatarUrl}
-                 imageUrl={comment.imageUrl}
-               />
-             )
-           })
-          }
-        </>
-        }
-      </Box>
+          })
+         }
+       </>
+      }
     </Paper>
   )
 }

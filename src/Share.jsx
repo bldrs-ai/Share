@@ -4,7 +4,8 @@ import {useNavigate, useParams} from 'react-router-dom'
 import {ThemeProvider} from '@mui/material/styles'
 import CadView from './Containers/CadView'
 import useStore from './store/useStore'
-import useTheme from './Theme'
+import Styles from './Styles'
+import useShareTheme from './Theme'
 import debug from './utils/debug'
 import {ColorModeContext} from './Context/ColorMode'
 import {handleBeforeUnload} from './utils/event'
@@ -74,22 +75,24 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
-  const {theme, colorMode} = useTheme()
+  const {theme, colorMode} = useShareTheme()
+  // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
 
   return (
     modelPath &&
-    <CssBaseline>
-      <ColorModeContext.Provider value={colorMode}>
-        <ThemeProvider theme={theme}>
-          <CadView
-            installPrefix={installPrefix}
-            appPrefix={appPrefix}
-            pathPrefix={pathPrefix}
-            modelPath={modelPath}
-          />
-        </ThemeProvider>
-      </ColorModeContext.Provider>
-    </CssBaseline>)
+      <CssBaseline enableColorScheme>
+        <ColorModeContext.Provider value={colorMode}>
+          <ThemeProvider theme={theme}>
+            <Styles theme={theme}/>
+            <CadView
+              installPrefix={installPrefix}
+              appPrefix={appPrefix}
+              pathPrefix={pathPrefix}
+              modelPath={modelPath}
+            />
+          </ThemeProvider>
+        </ColorModeContext.Provider>
+      </CssBaseline>)
 }
 
 

@@ -1,27 +1,27 @@
 import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
-import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import * as Privacy from '../privacy/Privacy'
+import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import debug from '../utils/debug'
+import BranchesControl from '../Components/BranchesControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
-import OperationsGroup from '../Components/OperationsGroup'
-import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper, {SIDE_DRAWER_WIDTH} from '../Components/SideDrawer/SideDrawer'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import {assertDefined} from '../utils/assert'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {ColorModeContext} from '../Context/ColorMode'
-import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
-import SearchIndex from './SearchIndex'
-import BranchesControl from '../Components/BranchesControl'
+import {ColorModeContext} from '../Context/ColorMode'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import * as Privacy from '../privacy/Privacy'
+import debug from '../utils/debug'
+import useStore from '../store/useStore'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
+import SearchIndex from './SearchIndex'
 
 
 /**
@@ -53,7 +53,6 @@ export default function CadView({
   const [searchParams, setSearchParams] = useSearchParams()
 
   // IFC
-  const [viewer, setViewer] = useState(null)
   const [rootElement, setRootElement] = useState({})
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
@@ -66,6 +65,8 @@ export default function CadView({
   const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
+  const viewer = useStore((state) => state.viewer)
+  const setViewer = useStore((state) => state.setViewer)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
@@ -77,10 +78,14 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
 
+  // Granular visibility controls for the UI compononets
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -135,11 +140,11 @@ export default function CadView({
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
     if (model) {
-      (async () => {
+      (() => {
         const parts = location.pathname.split(/\.ifc/i)
         const expectedPartCount = 2
         if (parts.length === expectedPartCount) {
-          await selectElementBasedOnFilepath(parts[1])
+          selectElementBasedOnFilepath(parts[1])
         }
       })()
     }
@@ -158,9 +163,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-        theme.palette &&
-        theme.palette.background &&
-        theme.palette.background.paper) || '0xabcdef')
+         theme.palette &&
+         theme.palette.scene &&
+         theme.palette.scene.background) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
   }
@@ -180,12 +185,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.secondary.background,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.highlight.main,
+      color: theme.palette.secondary.main,
       depthTest: true,
     })
 
@@ -209,10 +214,10 @@ export default function CadView({
   // TODO(pablo): add render testing
   useEffect(() => {
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${SIDE_DRAWER_WIDTH})` : '100%'
+      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth})` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, isMobile, viewer])
+  }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
   const setAlertMessage = (msg) =>
@@ -365,7 +370,7 @@ export default function CadView({
       }
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id }`))
+      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -389,8 +394,8 @@ export default function CadView({
     setLevelInstance(null)
   }
 
-  /** Unpick active scene elts and remove clip planes. */
-  function unSelectItems() {
+  /** Deselect active scene elts and remove clip planes. */
+  function deselectItems() {
     if (viewer) {
       viewer.clipper.deleteAllPlanes()
     }
@@ -447,7 +452,6 @@ export default function CadView({
     return pathIds
   }
 
-
   /**
    * Extracts the path to the element from the url and selects the element
    *
@@ -495,6 +499,8 @@ export default function CadView({
     }
     selectItemsInScene(newSelection)
   }
+
+
   /** Set Keyboard button Shortcuts */
   function setKeydownListeners() {
     window.onkeydown = (event) => {
@@ -507,7 +513,7 @@ export default function CadView({
         viewer.clipper.deletePlane()
       }
       if (event.code === 'KeyA' ||
-      event.code === 'Escape') {
+        event.code === 'Escape') {
         resetSelection()
       }
     }
@@ -516,11 +522,9 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const initializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(initializedViewer)
-        setViewerStore(initializedViewer)
-      }
+      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
+      setViewer(intializedViewer)
+      setViewerStore(intializedViewer)
     })
   }
 
@@ -528,15 +532,12 @@ export default function CadView({
   return (
     <Box
       sx={{
-        'position': 'absolute',
-        'top': '0px',
-        'left': '0px',
-        'minWidth': '100vw',
-        'minHeight': '100vh',
-        '@media (max-width: 900px)': {
-          height: ' calc(100vh - calc(100vh - 100%))',
-          minHeight: '-webkit-fill-available',
-        },
+        position: 'absolute',
+        top: '0px',
+        left: '0px',
+        flex: 1,
+        width: '100vw',
+        height: '100vh',
       }}
       data-model-ready={modelReady}
     >
@@ -552,86 +553,101 @@ export default function CadView({
         }}
         id='viewer-container'
       />
-      <>
-        <SnackBarMessage
-          message={snackMessage ? snackMessage : loadingMessage}
-          type={'info'}
-          open={isLoading || snackMessage !== null}
-        />
-        {showSearchBar && (
-          <Box sx={{
-            position: 'absolute',
-            top: `30px`,
-            left: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            maxHeight: '95%',
-          }}
-          >
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />
-            {
-              modelPath.repo !== undefined &&
-              <BranchesControl location={location}/>
-            }
-            {isNavPanelOpen &&
-              <NavPanel
-                model={model}
-                element={rootElement}
-                defaultExpandedElements={defaultExpandedElements}
-                expandedElements={expandedElements}
-                setExpandedElements={setExpandedElements}
-                pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-                }
-              />
-            }
-          </Box>
-        )}
-
-        <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
-        <Box sx={isDrawerOpen ? {
-          'position': 'fixed',
-          'top': 0,
-          'right': '31em',
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '120px',
-            height: '50%',
-          },
-        } : {
-          'position': 'fixed',
-          'top': 0,
-          'right': 0,
-          'border': 'none',
-          'zIndex': 0,
-          '@media (max-width: 900px)': {
-            right: 0,
-            height: '50%',
-          },
-          '@media (max-width: 350px)': {
-            top: '75px',
-            height: '50%',
-          },
+      <SnackBarMessage
+        message={snackMessage ? snackMessage : loadingMessage}
+        type={'info'}
+        open={isLoading || snackMessage !== null}
+      />
+      {showSearchBar && (
+        <Box sx={{
+          position: 'absolute',
+          top: `1em`,
+          left: '1em',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'flex-start',
+          alignItems: 'flex-start',
+          maxHeight: '95%',
         }}
         >
-          {viewer &&
-            <OperationsGroup
-              unSelectItem={unSelectItems}
-            />}
+          {isSearchBarVisible &&
+          <SearchBar
+            fileOpen={loadLocalFile}
+          />}
+          {
+            modelPath.repo !== undefined &&
+            <BranchesControl location={location}/>
+          }
+          { isNavPanelOpen &&
+            isNavigationPanelVisible &&
+            <NavPanel
+              model={model}
+              element={rootElement}
+              defaultExpandedElements={defaultExpandedElements}
+              expandedElements={expandedElements}
+              setExpandedElements={setExpandedElements}
+              pathPrefix={
+                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+              }
+            />
+          }
         </Box>
-        {alert}
-      </>
-      <SideDrawerWrapper/>
+      )}
+      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      {alert}
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      }
     </Box>
+  )
+}
+
+
+/**
+ * @property {Function} deselectItems deselects currently selected element
+ * @return {React.Component}
+ */
+function OperationsGroupAndDrawer({deselectItems}) {
+  const isMobile = useIsMobile()
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  return (
+    isMobile ? (
+      <>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+          }}
+        >
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
+        {isDrawerOpen &&
+         <Box
+           sx={{
+             position: 'absolute',
+             bottom: 0,
+             width: '100%',
+           }}
+         >
+           <SideDrawer/>
+         </Box>
+        }
+      </>
+    ) : (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'row',
+        }}
+      >
+        <OperationsGroup deselectItems={deselectItems}/>
+        {isDrawerOpen && <SideDrawer/>}
+      </Box>
+    )
   )
 }
 
@@ -664,11 +680,10 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     v.prePickIfcItem()
   }
 
-  // window.addEventListener('resize', () => {v.context.resize()})
-
   v.container = container
   return v
 }
+
 
 /**
  * @param {string} filepath

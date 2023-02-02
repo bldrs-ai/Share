@@ -1,13 +1,11 @@
-import React, {useContext} from 'react'
-import Box from '@mui/material/Box'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
 import NavTree from './NavTree'
-import NodeClosed from '../assets/2D_Icons/NodeClosed.svg'
-import NodeOpen from '../assets/2D_Icons/NodeOpened.svg'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {ColorModeContext} from '../Context/ColorMode'
+import NodeClosedIcon from '../assets/2D_Icons/NodeClosed.svg'
+import NodeOpenIcon from '../assets/2D_Icons/NodeOpened.svg'
 
 
 /**
@@ -29,7 +27,6 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const colorMode = useContext(ColorModeContext)
   const selectedElements = useStore((state) => state.selectedElements)
   // TODO(pablo): the defaultExpanded array can contain bogus IDs with
   // no error.  Not sure of a better way to pre-open the first few
@@ -38,6 +35,8 @@ export default function NavPanel({
 
   return (
     <Paper
+      elevation={0}
+      variant='control'
       sx={{
         'marginTop': '14px',
         'overflow': 'auto',
@@ -45,52 +44,35 @@ export default function NavPanel({
         'opacity': .8,
         'justifyContent': 'space-around',
         'alignItems': 'center',
-        'maxHeight': '100%',
+        'maxHeight': '400px',
         '@media (max-width: 900px)': {
           maxHeight: '150px',
           width: '300px',
           top: '86px',
         },
-        'backgroundColor': colorMode.isDay() ? '#E8E8E8' : '#4C4C4C',
       }}
-      elevation={0}
     >
-      <Box sx={{
-        paddingTop: '14px',
-        paddingBottom: '14px',
-        overflow: 'auto',
-      }}
+      <TreeView
+        aria-label='IFC Navigator'
+        defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
+        defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
+        defaultExpanded={defaultExpandedElements}
+        expanded={expandedElements}
+        selected={selectedElements}
+        onNodeToggle={(event, nodeIds) => {
+          setExpandedElements(nodeIds)
+        }}
+        key='tree'
+        sx={{
+          padding: '14px 0',
+          maxWidth: '400px',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          flexGrow: 1,
+        }}
       >
-        <TreeView
-          sx={{flexGrow: 1, maxWidth: '400px', overflowY: 'auto', overflowX: 'hidden'}}
-          aria-label='IFC Navigator'
-          defaultCollapseIcon={
-            <NodeOpen sx={{
-              width: '0.8em',
-              height: '0.8em',
-            }}
-            />}
-          defaultExpandIcon={
-            <NodeClosed sx={{
-              width: '0.8em',
-              height: '0.8em',
-            }}
-            />}
-          defaultExpanded={defaultExpandedElements}
-          expanded={expandedElements}
-          selected={selectedElements}
-          onNodeToggle={(event, nodeIds) => {
-            setExpandedElements(nodeIds)
-          }}
-          key='tree'
-        >
-          <NavTree
-            model={model}
-            element={element}
-            pathPrefix={pathPrefix}
-          />
-        </TreeView>
-      </Box>
+        <NavTree model={model} element={element} pathPrefix={pathPrefix}/>
+      </TreeView>
     </Paper>
   )
 }

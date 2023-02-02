@@ -14,9 +14,14 @@
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
-    "module": "es6",
     "jsx": "react-jsx",
-    "pretty": false,
+    "lib": ["es6", "dom"],
+    "module": "es6",
     "noEmit": true,
+    "noImplicitAny": true,
+    "noImplicitThis": true,
+    "pretty": false,
+    "strict": true,
+    "strictNullChecks": true,
   },
 }

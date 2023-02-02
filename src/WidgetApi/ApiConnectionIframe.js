@@ -1,4 +1,5 @@
 import {WidgetApi as MatrixWidgetApi} from 'matrix-widget-api/lib/WidgetApi'
+import {MatrixCapabilities} from 'matrix-widget-api/lib/interfaces/Capabilities'
 import AbstractApiConnection from './ApiConnection'
 
 
@@ -15,7 +16,7 @@ class ApiConnectionIframe extends AbstractApiConnection {
   constructor() {
     super()
     this.matrixWidgetApi = new MatrixWidgetApi(this.widgetId)
-    this.matrixWidgetApi.requestCapabilities([])
+    this.matrixWidgetApi.requestCapabilities([MatrixCapabilities.AlwaysOnScreen])
   }
 
   /**
