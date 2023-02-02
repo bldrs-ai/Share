@@ -13,6 +13,9 @@ const path = require('path')
 describe('bldrs inside iframe', () => {
   const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html'
   const KEYCODE_ESC = 27
+  const REQUEST_SUCCESS_CODE = 200
+  const REMOTE_IFC_URL = '**/Momentum.ifc'
+  const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
 
   /**
    * Copy web page to target directory to make it accessible to cypress.
@@ -36,67 +39,95 @@ describe('bldrs inside iframe', () => {
   })
 
   it('should emit ready-messsage when page load completes', () => {
+    // cy.get('@iframe').find('[data-ifc-model="1"]')
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
 
   it('should load model when LoadModel-message emitted', () => {
     const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
-    const modelRootNodeName = 'Momentum / KNIK v3'
+    const modelRootNodeName = 'Proxy with extruded box'
+
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
+    // cy.get('#messagesCount').contains('1') //First loaded message
+
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.LoadModel')
     const msg = {
       githubIfcPath: model,
     }
-    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+
+    cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
+
+    cy.get('#txtSendMessagePayload').clear()
+        .type(JSON.stringify(msg), {parseSpecialCharSequences: false})
     cy.get('#btnSendMessage').click()
+    cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     cy.get('@iframe').contains('span', modelRootNodeName).should('exist')
+    // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
   it('should select element when SelectElements-message emitted', () => {
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
-    const expectedExpressId = '621'
+    // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SelectElements')
     const msg = {
       globalIds: [globalId],
     }
     cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
-    cy.get('@iframe').find('[data-model-ready="true"]').should('exist')
     cy.get('#btnSendMessage').click()
     cy.get('@iframe').findByRole('button', {name: /Properties/}).click()
-    // Bldrs itemProperties dialog appears to slice the ID across different rows
-    // therefore we currently need to do it this way as a workaround:
-    cy.get('iframe').iframe().contains('span', expectedExpressId[0]).should('exist')
-    cy.get('iframe').iframe().contains('span', expectedExpressId[1]).should('exist')
-    cy.get('iframe').iframe().contains('span', expectedExpressId[2]).should('exist')
+    cy.get('@iframe').contains('span', /621/).should('exist')
   })
 
-  it('should emit ElementsSelected-message when element was selected from panel', () => {
-    cy.get('@iframe').find('[data-model-ready="true"]').should('exist')
+  it('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
+    const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     cy.get('@iframe').findByText(/bldrs/i).click()
     cy.get('@iframe').findByText(/build/i).click()
+    cy.get('@iframe').findByText(/every/i).click()
+    cy.get('@iframe').findByText(/thing/i).click()
+    cy.get('@iframe').findAllByText(/together/i).first().click()
 
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       const msg = JSON.parse($txtLastMsg.val())
       assert.equal(msg.api, 'fromWidget')
       assert.equal(msg.widgetId, 'bldrs-share')
       assert.exists(msg.requestId)
-      assert.equal(msg.action, 'ai.bldrs-share.ElementsSelected')
       assert.exists(msg.data)
+      assert.equal(msg.action, 'ai.bldrs-share.SelectionChanged')
+      assert.equal(msg.data['current'][0], targetElementId)
     })
-  })
 
-  it('should emit ElementsDeSelected-message when selection was cleared', () => {
-    cy.get('@iframe').find('[data-model-ready="true"]').should('exist')
-    cy.get('@iframe').findByText(/bldrs/i).click()
-    cy.get('@iframe').findByText(/build/i).click()
+    cy.get('@iframe').findAllByText(/together/i).last().click()
+    cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
 
     cy.get('@iframe').findByRole('button', {name: /Clear/}).click()
+
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       const msg = JSON.parse($txtLastMsg.val())
       assert.equal(msg.api, 'fromWidget')
       assert.equal(msg.widgetId, 'bldrs-share')
       assert.exists(msg.requestId)
-      assert.equal(msg.action, 'ai.bldrs-share.ElementsDeSelected')
       assert.exists(msg.data)
+      assert.equal(msg.action, 'ai.bldrs-share.SelectionChanged')
+      assert.equal(msg.data['current'].length, 0)
     })
+  })
+
+  it('should hide UI components when UIComponentsVisibility-message emitted', () => {
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UIComponentsVisibility')
+    const msg = {
+      navigationPanel: false,
+      modelInteraction: false,
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    cy.findByRole('tree', {label: 'IFC Navigator'}).should('not.exist')
+    cy.get('@iframe').findByRole('button', {name: /Notes/}).should('not.exist')
+    cy.get('@iframe').findByRole('button', {name: /Properties/}).should('not.exist')
+    cy.get('@iframe').findByRole('button', {name: /Section/}).should('not.exist')
+    cy.get('@iframe').findByRole('button', {name: /Clear/}).should('not.exist')
   })
 })

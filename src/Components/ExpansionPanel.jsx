@@ -1,5 +1,4 @@
 import React, {useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
 import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
@@ -20,6 +19,7 @@ export default function ExpansionPanel({summary, detail, expandState}) {
   const theme = useTheme()
   const [expanded, setExpanded] = useState(expandState)
 
+
   useEffect(() => {
     setExpanded(expandState)
   }, [expandState])
@@ -28,11 +28,12 @@ export default function ExpansionPanel({summary, detail, expandState}) {
   return (
     <Accordion
       elevation={0}
+      PaperProps={{variant: 'control'}}
       sx={{
         '& .MuiAccordionSummary-root': {
           width: '100%',
           padding: 0,
-          borderBottom: `.5px solid ${theme.palette.highlight.heavier}`,
+          borderBottom: `.5px solid ${theme.palette.primary.contrastText}`,
         },
         '& .MuiAccordionSummary-root.Mui-expanded': {
           marginBottom: '0.5em',
@@ -41,9 +42,6 @@ export default function ExpansionPanel({summary, detail, expandState}) {
           padding: 0,
         },
         '& svg': {
-          width: '14px',
-          height: '14px',
-          fill: theme.palette.primary.contrastText,
           marginRight: '12px',
           marginLeft: '12px',
         },
@@ -52,7 +50,7 @@ export default function ExpansionPanel({summary, detail, expandState}) {
       onChange={() => setExpanded(!expanded)}
     >
       <AccordionSummary
-        expandIcon={<CaretIcon/>}
+        expandIcon={<CaretIcon className='caretToggle'/>}
         aria-controls="panel1a-content"
         id="panel1a-header"
       >
@@ -66,7 +64,7 @@ export default function ExpansionPanel({summary, detail, expandState}) {
           },
         }} variant='h3'
         >
-          <Box>{summary}</Box>
+          {summary}
         </Typography>
       </AccordionSummary>
       <AccordionDetails>

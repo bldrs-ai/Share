@@ -19,8 +19,9 @@ describe('NoteCard', () => {
           />
         </ShareMock>)
     expect(screen.getByText('new_title')).toBeInTheDocument()
-    expect(screen.getByText('2000-01-01 00:00:00Z')).toBeInTheDocument()
-    expect(screen.getByText('bob')).toBeInTheDocument()
+    expect(screen.getByText(/2000-01-01/)).toBeInTheDocument()
+    expect(screen.getByText(/00:00:00Z/)).toBeInTheDocument()
+    expect(screen.getByText(/bob/)).toBeInTheDocument()
   })
 
   it('Number of comments', () => {

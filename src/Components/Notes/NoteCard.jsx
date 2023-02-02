@@ -1,12 +1,15 @@
-import React, {useState, useEffect, useContext} from 'react'
+import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
+import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import CardActionArea from '@mui/material/CardActionArea'
+import CardContent from '@mui/material/CardContent'
+import CardHeader from '@mui/material/CardHeader'
+import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
-import {ColorModeContext} from '../../Context/ColorMode'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {addHashParams, getHashParamsFromHashStr} from '../../utils/location'
-import {isRunningLocally} from '../../utils/network'
+import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {TooltipIconButton} from '../Buttons'
 import {
@@ -61,7 +64,6 @@ export default function NoteCard({
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
-  const colorTheme = useContext(ColorModeContext)
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -97,6 +99,7 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
+    removeHashParams(window.location, NOTE_PREFIX)
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
@@ -124,63 +127,55 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
-
-
+  const dateParts = date.split('T')
+  const theme = useTheme()
   return (
-    <Box sx={{
-      marginBottom: '1em',
-      backgroundColor: colorTheme.isDay() ? 'white' : '#383838',
-      borderRadius: '5px',
-      width: '100%',
-    }}
+    <Paper
+      elevation={1}
+      variant='note'
+      square
+      sx={{
+        marginBottom: '1em',
+        width: '100%',
+      }}
     >
-      <Box
+      <CardActionArea
         sx={{
           cursor: isComment ? null : 'pointer',
         }}
-        role='button'
-        tabIndex={0}
         onClick={() => isComment ? null : selectCard()}
         onKeyPress={() => isComment ? null : selectCard()}
         data-testid="selectionContainer"
       >
-        <CardTitle
-          title={title}
-          username={username}
-          date={date}
-          avatarUrl={avatarUrl}
-          isComment={isComment}
-          selected={selected}
-          onClickSelect={selectCard}
-        />
-      </Box>
-      <Box sx={{
-        'height': 'auto',
-        'margin': '5px',
-        'paddingLeft': '5px',
-        'fontSize': '1em',
-        'lineHeight': '1.3em',
-        // Restore link styling for notes and comments
-        '& a': {
-          color: colorTheme.isDay() ? 'black' : 'lightGrey',
-          textDecoration: 'underline',
-        },
-        '& img': {
-          width: '100%',
-        },
-      }}
-      >
-        <ReactMarkdown>{body}</ReactMarkdown>
-      </Box>
-      {textOverflow &&
-        <ShowMore
-          expandText={expandText}
-          onClick={(event) => {
-            event.preventDefault()
-            setExpandText(!expandText)
+        <CardHeader
+          title={isComment ? null : title}
+          avatar={<Avatar alt={username} src={avatarUrl}/>}
+          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+          sx={{
+            backgroundColor: isComment ? theme.palette.scene.background : theme.palette.primary.main,
           }}
         />
-      }
+      </CardActionArea>
+      <CardContent
+        sx={{
+          'padding': '0px 20px 0px 20px',
+          'margin': '0px 0px 0px 0px',
+          '& img': {
+            width: '100%',
+          },
+        }}
+      >
+        <ReactMarkdown>{body}</ReactMarkdown>
+        {textOverflow &&
+         <ShowMore
+           expandText={expandText}
+           onClick={(event) => {
+             event.preventDefault()
+             setExpandText(!expandText)
+           }}
+         />
+        }
+      </CardContent>
       {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
           selectCard={selectCard}
@@ -191,109 +186,26 @@ export default function NoteCard({
           onClickShare={shareIssue}
         /> : null
       }
-    </Box>
-  )
-}
-
-
-const CardTitle = ({avatarUrl, title, username, selected, isComment, date, onClickSelect}) => {
-  const dateParts = date.split('T')
-  return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0.5em',
-      background: isComment ? '#F0F0F0' : '#C8E8C7',
-    }}
-    >
-      <Box sx={{
-        color: 'black',
-        width: '230px',
-      }}
-      >
-        {isComment ? null : <Box >{title}</Box>}
-      </Box>
-      <Box sx={{
-        width: '200px',
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        marginRight: '6px',
-      }}
-      >
-        <Box sx={{
-          marginRight: '10px',
-          paddingRight: '10px',
-          paddingLeft: '10px',
-          borderRadius: '5px',
-          opacity: .5,
-        }}
-        >
-          <Box sx={{
-            fontSize: '10px',
-            color: 'black',
-          }}
-          >{username}
-          </Box>
-          <Box sx={{
-            fontSize: '10px',
-            color: 'black',
-          }}
-          >{dateParts[0]} {dateParts[1]}
-          </Box>
-        </Box>
-        {!isRunningLocally() ?
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: '50%',
-              backgroundColor: 'lightGrey',
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-              fontWeight: 'bold',
-              border: '1px solid lightGrey',
-            }}
-            component='img'
-            src={avatarUrl}
-            alt={'avatarImage'}
-          /> :
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              background: 'green',
-              borderRadius: '50%',
-            }}
-          />
-        }
-      </Box>
-    </Box>
+    </Paper>
   )
 }
 
 
 const ShowMore = ({onClick, expandText}) => {
   const theme = useTheme()
-
-
   return (
-    <Box sx={{
-      display: 'none',
-      cursor: 'pointer',
-      margin: '5px 5px 15px 10px',
-      fontSize: '10px',
-      color: theme.palette.highlight.main,
-    }}
-    onClick={onClick}
-    role='button'
-    tabIndex={0}
-    onKeyPress={onClick}
+    <Box
+      sx={{
+        display: 'none',
+        cursor: 'pointer',
+        margin: '5px 5px 15px 10px',
+        fontSize: '0.9em',
+        color: theme.palette.primary.contrastText,
+      }}
+      onClick={onClick}
+      role='button'
+      tabIndex={0}
+      onKeyPress={onClick}
     >
       {expandText ? 'show less' : 'show more'}
     </Box>
@@ -310,41 +222,32 @@ const CardActions = ({
   selected}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
+  const theme = useTheme()
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      justifyContent: 'space-between',
-      alignItems: 'center',
-      padding: '0px 5px 10px 5px',
-      fontSize: '10px',
-    }}
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0px 5px 0px 14px',
+        height: '50px',
+      }}
     >
       <Box sx={{
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'flex-start',
         alignItems: 'center',
-        fontSize: '10px',
       }}
       >
         {hasCameras &&
           <TooltipIconButton
-            disabled={hasCameras}
             title='Show the camera view'
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={
-              <Box sx={{
-                width: '20px',
-                height: '20px',
-                marginBottom: '2px',
-              }}
-              >
-                <CameraIcon/>
-              </Box>
-            }
+            icon={<CameraIcon/>}
           />}
         {selected &&
           <TooltipIconButton
@@ -355,16 +258,7 @@ const CardActions = ({
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={
-              <Box sx={{
-                width: '20px',
-                height: '20px',
-                marginBottom: '2px',
-              }}
-              >
-                <ShareIcon/>
-              </Box>
-            }
+            icon={<ShareIcon/>}
           />
         }
       </Box>
@@ -382,20 +276,20 @@ const CardActions = ({
       >
         {numberOfComments > 0 &&
           <Box sx={{
-            width: '16px',
-            height: '16px',
+            width: '20px',
+            height: '20px',
             borderRadius: '50%',
-            backgroundColor: 'white',
-            border: '1px solid lightGrey',
+            backgroundColor: theme.palette.primary.main,
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
-            fontWeight: 'bold',
-            color: 'black',
+            fontSize: '12px',
+            color: theme.palette.primary.contrastText,
             cursor: 'pointer',
           }}
-          >{numberOfComments}
+          >
+            {numberOfComments}
           </Box>
         }
       </Box>
