@@ -50,6 +50,8 @@ export default function ResizerButton({sidebarRef, width = 10}) {
   const theme = useTheme()
   const gripButtonRatio = 0.5
   const gripSize = width * gripButtonRatio
+
+
   return (
     <Box
       sx={{
