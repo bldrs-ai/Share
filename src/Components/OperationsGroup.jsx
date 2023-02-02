@@ -34,6 +34,12 @@ export default function OperationsGroup({deselectItems}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
 
+  const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
+  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
+  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+
+  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
+  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -55,7 +61,6 @@ export default function OperationsGroup({deselectItems}) {
     }
   }
 
-
   return (
     <Box sx={{
       'display': 'flex',
@@ -66,9 +71,13 @@ export default function OperationsGroup({deselectItems}) {
       },
     }}
     >
+      {isCollaborationGroupVisible &&
+        <ButtonGroup orientation="vertical" >
+          <ShareControl/>
+        </ButtonGroup>}
+      {isFirstDividerVisible() && <Divider sx={{margin: '0.5em 0'}}/>}
+      {isModelInteractionGroupVisible &&
       <ButtonGroup orientation="vertical" >
-        <ShareControl/>
-        <Divider sx={{margin: '0.5em 0'}}/>
         <TooltipIconButton
           title='Notes'
           icon={<NotesIcon/>}
@@ -89,14 +98,17 @@ export default function OperationsGroup({deselectItems}) {
           selected={isSelected()}
           icon={<ClearIcon/>}
         />
-        <Divider sx={{margin: '0.5em 0'}}/>
+      </ButtonGroup>}
+      {isSecondDividerVisible() && <Divider sx={{margin: '0.5em 0'}}/>}
+      {isSettingsVisible &&
+      <ButtonGroup orientation="vertical">
         <TooltipIconButton
           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
           onClick={() => colorMode.toggleColorMode()}
           icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
         />
         <AboutControl/>
-      </ButtonGroup>
+      </ButtonGroup>}
       {/* Invisible */}
       <CameraControl/>
     </Box>

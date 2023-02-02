@@ -83,6 +83,9 @@ export default function CadView({
   const isMobile = useIsMobile()
   const location = useLocation()
 
+  // Granular visibility controls for the UI compononets
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -137,11 +140,11 @@ export default function CadView({
   // TODO(pablo): would be nice to have more consistent handling of path parsing.
   useEffect(() => {
     if (model) {
-      (async () => {
+      (() => {
         const parts = location.pathname.split(/\.ifc/i)
         const expectedPartCount = 2
         if (parts.length === expectedPartCount) {
-          await selectElementBasedOnFilepath(parts[1])
+          selectElementBasedOnFilepath(parts[1])
         }
       })()
     }
@@ -449,7 +452,6 @@ export default function CadView({
     return pathIds
   }
 
-
   /**
    * Extracts the path to the element from the url and selects the element
    *
@@ -568,14 +570,16 @@ export default function CadView({
           maxHeight: '95%',
         }}
         >
+          {isSearchBarVisible &&
           <SearchBar
             fileOpen={loadLocalFile}
-          />
+          />}
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
           }
-          {isNavPanelOpen &&
+          { isNavPanelOpen &&
+            isNavigationPanelVisible &&
             <NavPanel
               model={model}
               element={rootElement}
