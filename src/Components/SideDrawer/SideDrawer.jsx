@@ -9,7 +9,7 @@ import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
-import ResizerButton from './ResizerButton'
+import HorizonResizerButton from './HorizonResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
@@ -105,7 +105,7 @@ export default function SideDrawer() {
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        {!isMobile && <ResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
+        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
         {/* Content */}
         <Box
           sx={{

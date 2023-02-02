@@ -12,7 +12,7 @@ import useStore from '../../store/useStore'
  * @property {React.Component} The sidebar controlled by this button's action.
  * @return {React.Component}
  */
-export default function ResizerButton({sidebarRef, width = 10}) {
+export default function HorizonResizerButton({sidebarRef, width = 10}) {
   const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const [isResizing, setIsResizing] = useState(false)
 
