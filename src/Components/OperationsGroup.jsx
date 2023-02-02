@@ -4,11 +4,12 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
-import AboutControl from './About/AboutControl'
+import AuthControl from './AuthControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
+import AboutControl from './About/AboutControl'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import ListIcon from '../assets/2D_Icons/List.svg'
 import MoonIcon from '../assets/2D_Icons/Moon.svg'
@@ -71,6 +72,7 @@ export default function OperationsGroup({deselectItems}) {
       },
     }}
     >
+      <AuthControl/>
       {isCollaborationGroupVisible &&
         <ButtonGroup orientation="vertical" >
           <ShareControl/>
