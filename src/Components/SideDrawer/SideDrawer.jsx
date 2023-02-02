@@ -1,73 +1,36 @@
-import React, {useEffect, useContext, useRef, useState} from 'react'
+import React, {useEffect, useRef} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import {useTheme} from '@mui/styles'
-import OperationsGroup from '../../Components/OperationsGroup'
-import {ColorModeContext} from '../../Context/ColorMode'
-import useStore from '../../store/useStore'
-import {getHashParams} from '../../utils/location'
-import CaretIcon from '../../assets/2D_Icons/Caret.svg'
+import Divider from '@mui/material/Divider'
+import Paper from '@mui/material/Paper'
+import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import {TooltipIconButton} from '../Buttons'
+import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
+import {getHashParams} from '../../utils/location'
+import ResizerButton from './ResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import {dayColor, nightColor} from '../../utils/constants'
+import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
 
 /**
- * SideDrawerWrapper is the container for the SideDrawer component.
- * it is loaded into the CadView, connected to the store and passes the props to the sideDrawer.
- * It makes it is possible to test Side Drawer outside of the cad view.
- *
- * @return {object} SideDrawer react component
+ * @return {React.Component}
  */
-export default function SideDrawerWrapper({unSelectItem}) {
+export default function SideDrawer() {
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const closeDrawer = useStore((state) => state.closeDrawer)
-  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
+  const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const viewer = useStore((state) => state.viewer)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
-  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
+  const sidebarHeight = useStore((state) => state.sidebarHeight)
+  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
   const location = useLocation()
   const isMobile = useIsMobile()
-  const theme = useTheme()
-  const colorTheme = useContext(ColorModeContext)
   const sidebarRef = useRef(null)
-  const [isResizing, setIsResizing] = useState(false)
-
-
-  const startResizing = React.useCallback(() => {
-    setIsResizing(true)
-  }, [])
-
-
-  const stopResizing = React.useCallback(() => {
-    setIsResizing(false)
-  }, [])
-
-
-  const resize = React.useCallback(
-      (mouseMoveEvent) => {
-        if (isResizing) {
-        // eslint-disable-next-line no-magic-numbers
-          setSidebarWidth(sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4)
-        }
-      },
-      [isResizing, setSidebarWidth],
-  )
-
-
-  useEffect(() => {
-    window.addEventListener('mousemove', resize)
-    window.addEventListener('mouseup', stopResizing)
-    return () => {
-      window.removeEventListener('mousemove', resize)
-      window.removeEventListener('mouseup', stopResizing)
-    }
-  }, [resize, stopResizing])
 
 
   useEffect(() => {
@@ -77,7 +40,7 @@ export default function SideDrawerWrapper({unSelectItem}) {
       setSelectedNoteId(Number(extractedCommentId))
       if (!isDrawerOpen) {
         openDrawer()
-        turnCommentsOn()
+        openNotes()
       }
     }
 
@@ -91,122 +54,107 @@ export default function SideDrawerWrapper({unSelectItem}) {
 
 
   useEffect(() => {
-    if (!isCommentsOn && !isPropertiesOn && isDrawerOpen) {
+    if (!isNotesOn && !isPropertiesOn && isDrawerOpen) {
       closeDrawer()
     }
-  }, [isCommentsOn, isPropertiesOn, isDrawerOpen, closeDrawer])
+  }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
 
+  /** Notes and Props shouldn't show as active when drawer closed. */
+  function onDrawerExpand() {
+    if (sidebarHeight === '100vh') {
+      setSidebarHeight('50vh')
+    } else {
+      setSidebarHeight('100vh')
+    }
+  }
+
+
+  const theme = useTheme()
+  const gripSize = 10
+  const isDividerOn = isNotesOn && isPropertiesOn
+  const borderOpacity = 0.5
+  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
   return (
     <Box
-      sx={{
-        position: 'absolute',
+      sx={Object.assign({
         display: 'flex',
         flexDirection: 'row',
-        height: '100%',
+      }, isMobile ? {
+        width: '100%',
+        height: sidebarHeight,
+      } : {
         top: 0,
         right: 0,
-      }}
+        width: sidebarWidth,
+        height: '100vh',
+        minWidth: '8px',
+        maxWidth: '100vw',
+      })}
     >
-      {viewer &&
-        <OperationsGroup
-          unSelectItem={unSelectItem}
-        />
-      }
-      <Box
+      <Paper
         sx={{
-          display: isDrawerOpen ? 'flex' : 'none',
-          width: isMobile ? '100vw' : sidebarWidth,
-          minWidth: '8px',
-          maxWidth: '100vw',
-          height: '100%',
+          display: 'flex',
           flexDirection: 'row',
-          backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
-          borderLeft: 'grey 1px solid',
-          color: colorTheme.isDay() ? 'black' : 'lightGrey',
+          width: '100%',
+          borderLeft: isMobile ? 'none' : `solid 1px ${borderColor}`,
+          borderRadius: 0,
         }}
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        {/* Resizer */}
+        {!isMobile && <ResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
+        {/* Content */}
         <Box
           sx={{
-            flexGrow: 0,
-            flexShrink: 0,
-            flexBasis: '8px',
-            justifySelf: 'flex-start',
-            display: isMobile ? 'none' : 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
-            alignItems: 'center',
-            cursor: 'col-resize',
-            resize: 'horizontal',
+            width: '100%',
+            margin: '1em',
+            marginLeft: isMobile ? '1em' : `calc(1em - ${gripSize}px)`,
+            overflow: 'hidden',
           }}
         >
+          {isMobile && <DrawerExpandButton onClick={onDrawerExpand}/>}
           <Box
             sx={{
-              width: '100%',
-              height: '40px',
-              backgroundColor: '#c1c3c5b4',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-            }}
-            onMouseDown={startResizing}
-          >
-            {Array.from({length: 3}).map((v, i) =>
-              <Box
-                key={i}
-                sx={{
-                  width: '4px',
-                  height: '4px',
-                  borderRadius: '2px',
-                  backgroundColor: colorTheme.isDay() ? dayColor : nightColor,
-                }}
-              />,
-            )}
-          </Box>
-        </Box>
-        {/* Content */}
-        <Box sx={{
-          flexDirection: 'column',
-          flex: 1,
-          height: '100%',
-          overflowY: 'auto',
-        }}
-        >
-          <Box sx={{
-            'display': isMobile ? 'flex' : 'none',
-            'justifyContent': 'center',
-            'alignItems': 'center',
-            '& svg': {
-              transform: 'rotate(180deg)',
-            },
-          }}
-          >
-            <TooltipIconButton title='Expand' onClick={closeDrawer} icon={<CaretIcon/>}/>
-          </Box>
-          <Box
-            sx={{
-              display: isCommentsOn ? 'block' : 'none',
-              borderBottom: `${theme.palette.highlight.heaviest} 1px solid`,
-              padding: '0 .5em',
+              display: isNotesOn ? 'block' : 'none',
+              height: isPropertiesOn ? `50%` : '100%',
+              overflow: 'auto',
             }}
           >
-            {isCommentsOn && <NotesPanel/>}
+            {isNotesOn && <NotesPanel/>}
           </Box>
+          {isDividerOn && <Divider sx={{borderColor: borderColor}}/>}
           <Box
             sx={{
               display: isPropertiesOn ? 'block' : 'none',
-              padding: '0 .5em',
+              height: isNotesOn ? `50%` : '100%',
+              marginTop: isDividerOn ? '1em' : '0',
             }}
           >
-            {isPropertiesOn && <PropertiesPanel/>}
+            {isPropertiesOn && <PropertiesPanel includeGutter={!isDividerOn}/>}
           </Box>
         </Box>
-      </Box>
+      </Paper>
+    </Box>
+  )
+}
+
+
+/** @return {React.Component} */
+function DrawerExpandButton({onClick}) {
+  const isMobile = useIsMobile()
+  return (
+    <Box
+      sx={{
+        'display': isMobile ? 'flex' : 'none',
+        'justifyContent': 'center',
+        'alignItems': 'center',
+        '& svg': {
+          transform: 'rotate(180deg)',
+        },
+      }}
+    >
+      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>} size='small'/>
     </Box>
   )
 }

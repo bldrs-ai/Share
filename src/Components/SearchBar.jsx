@@ -1,17 +1,15 @@
-import React, {useRef, useEffect, useState, useContext} from 'react'
+import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
 import debug from '../utils/debug'
-import {ColorModeContext} from '../Context/ColorMode'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/2D_Icons/Clear.svg'
 import {handleBeforeUnload} from '../utils/event'
-import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -35,7 +33,6 @@ export default function SearchBar({fileOpen}) {
   const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
   // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
-  const colorMode = useContext(ColorModeContext)
   const theme = useTheme()
 
 
@@ -95,6 +92,9 @@ export default function SearchBar({fileOpen}) {
     <Box>
       <Paper
         component='form'
+        onSubmit={onSubmit}
+        elevation={0}
+        variant='control'
         sx={{
           'display': 'flex',
           'minWidth': '300px',
@@ -112,10 +112,7 @@ export default function SearchBar({fileOpen}) {
           '& .MuiInputBase-root': {
             flex: 1,
           },
-          'backgroundColor': colorMode.isDay() ? dayColor : nightColor,
         }}
-        onSubmit={onSubmit}
-        elevation={0}
       >
         <OpenModelControl fileOpen={fileOpen}/>
         <InputBase

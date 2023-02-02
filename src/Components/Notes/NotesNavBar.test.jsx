@@ -14,12 +14,6 @@ describe('IssueControl', () => {
   })
 
 
-  it('Notes NavBar Notes', () => {
-    const {getByText} = render(<ShareMock><NotesNavBar/></ShareMock>)
-    expect(getByText('Notes')).toBeInTheDocument()
-  })
-
-
   it('NavBar changes to back nav when issue selected', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByTitle} = render(<ShareMock><NotesNavBar/></ShareMock>)

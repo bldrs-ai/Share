@@ -136,7 +136,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           },
           sx: {
             '& .Mui-selected': {
-              color: theme.theme.palette.highlight.main,
+              color: theme.theme.palette.secondary.main,
               fontWeight: 600,
             },
           },
