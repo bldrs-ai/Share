@@ -63,6 +63,9 @@ export default function HorizonResizerButton({
           if (expansionSidebarWidth > window.innerWidth) {
             expansionSidebarWidth = window.innerWidth
           }
+          if (expansionSidebarWidth < thickness) {
+            expansionSidebarWidth = thickness
+          }
           setSidebarWidth(expansionSidebarWidth)
           setIsExpanded(true)
         }

@@ -63,6 +63,9 @@ export default function VerticalResizerButton({
           if (expansionSidebarHeight > window.innerHeight) {
             expansionSidebarHeight = window.innerHeight
           }
+          if (expansionSidebarHeight < thickness) {
+            expansionSidebarHeight = thickness
+          }
           setSidebarHeight(expansionSidebarHeight)
           setIsExpanded(true)
         }
