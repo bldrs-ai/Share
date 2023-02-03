@@ -22,33 +22,33 @@ export default function HorizonResizerButton({
   isOnLeft = true,
   sidebarWidth = MOBILE_WIDTH,
 }) {
-  const [isXResizing, setIsXResizing] = useState(false)
-  const [isSidebarXExpanded, setIsSidebarXExpanded] = useState(false)
-  const xResizerRef = useRef(null)
+  const [isResizing, setIsResizing] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const resizerRef = useRef(null)
   const theme = useTheme()
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
   // eslint-disable-next-line no-magic-numbers
   const horizonPadding = (thickness - gripSize) / 2
 
-  const startXResizing = useCallback(() => {
-    setIsXResizing(true)
+  const startResizing = useCallback(() => {
+    setIsResizing(true)
   }, [])
 
 
   const stopResizing = useCallback(() => {
-    setIsXResizing(false)
+    setIsResizing(false)
   }, [])
 
 
-  const onXResizerDblTap = useDoubleTap((e) => {
-    setIsSidebarXExpanded(!isSidebarXExpanded)
+  const onResizerDblTap = useDoubleTap((e) => {
+    setIsExpanded(!isExpanded)
   })
 
 
   const resize = useCallback(
       (mouseMoveEvent) => {
-        if (isXResizing) {
+        if (isResizing) {
           if (isOnLeft) {
           // eslint-disable-next-line no-magic-numbers
             expansionSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + (thickness / 2)
@@ -63,10 +63,10 @@ export default function HorizonResizerButton({
             expansionSidebarWidth = window.innerWidth
           }
           setSidebarWidth(expansionSidebarWidth)
-          setIsSidebarXExpanded(true)
+          setIsExpanded(true)
         }
       },
-      [isXResizing, isOnLeft, setSidebarWidth, sidebarRef, thickness],
+      [isResizing, isOnLeft, setSidebarWidth, sidebarRef, thickness],
   )
 
 
@@ -91,11 +91,11 @@ export default function HorizonResizerButton({
 
 
   useEffect(() => {
-    const xResizer = xResizerRef.current
+    const resizer = resizerRef.current
     const onTouchStart = (e) => {
       switch (e.touches.length) {
         case 1: // one finger
-          startXResizing(true)
+          startResizing(true)
           break
         // eslint-disable-next-line no-magic-numbers
         case 2: // two finger
@@ -125,25 +125,25 @@ export default function HorizonResizerButton({
           break
       }
     }
-    xResizer.addEventListener('touchstart', onTouchStart)
-    xResizer.addEventListener('touchend', onTouchEnd)
-    xResizer.addEventListener('touchmove', onTouchMove)
+    resizer.addEventListener('touchstart', onTouchStart)
+    resizer.addEventListener('touchend', onTouchEnd)
+    resizer.addEventListener('touchmove', onTouchMove)
     return () => {
-      xResizer.removeEventListener('touchstart', onTouchStart)
-      xResizer.removeEventListener('touchend', onTouchEnd)
-      xResizer.removeEventListener('touchmove', onTouchMove)
+      resizer.removeEventListener('touchstart', onTouchStart)
+      resizer.removeEventListener('touchend', onTouchEnd)
+      resizer.removeEventListener('touchmove', onTouchMove)
     }
-  }, [resize, setSidebarWidth, sidebarWidth, startXResizing, stopResizing])
+  }, [resize, setSidebarWidth, sidebarWidth, startResizing, stopResizing])
 
 
   useEffect(() => {
-    if (isSidebarXExpanded) {
+    if (isExpanded) {
       setSidebarWidth(expansionSidebarWidth)
     } else {
       const defaultWidth = Math.min(window.innerWidth, MOBILE_WIDTH)
       setSidebarWidth(defaultWidth)
     }
-  }, [isSidebarXExpanded, setSidebarWidth])
+  }, [isExpanded, setSidebarWidth])
 
 
   return (
@@ -167,10 +167,10 @@ export default function HorizonResizerButton({
           gap: `${gripSize}px`,
           background: theme.palette.primary.background,
         }}
-        ref={xResizerRef}
+        ref={resizerRef}
         data-testid="x_resizer"
-        onMouseDown={startXResizing}
-        {...onXResizerDblTap}
+        onMouseDown={startResizing}
+        {...onResizerDblTap}
       >
         {Array.from({length: 3}).map((v, i) =>
           <Box
