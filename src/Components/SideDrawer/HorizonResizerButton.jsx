@@ -50,26 +50,28 @@ export default function HorizonResizerButton({
       (mouseMoveEvent) => {
         if (isXResizing) {
         // eslint-disable-next-line no-magic-numbers
-          tempSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + 4
-          if (tempSidebarWidth < 0) {
-            tempSidebarWidth = 0
+          expansionSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + (thickness / 2)
+          if (expansionSidebarWidth < 0) {
+            expansionSidebarWidth = 0
           }
-          if (tempSidebarWidth > window.innerWidth) {
-            tempSidebarWidth = window.innerWidth
+          if (expansionSidebarWidth > window.innerWidth) {
+            expansionSidebarWidth = window.innerWidth
           }
-          setSidebarWidth(tempSidebarWidth)
+          setSidebarWidth(expansionSidebarWidth)
           setIsSidebarXExpanded(true)
         }
       },
-      [isXResizing, sidebarRef, setSidebarWidth],
+      [isXResizing, sidebarRef, thickness, setSidebarWidth],
   )
 
 
   useEffect(() => {
     const onWindowResize = (e) => {
+      if (e.target.innerWidth < expansionSidebarWidth) {
+        expansionSidebarWidth = e.target.innerWidth
+      }
       if (e.target.innerWidth < sidebarWidth) {
-        tempSidebarWidth = e.target.innerWidth
-        setSidebarWidth(tempSidebarWidth)
+        setSidebarWidth(e.target.innerWidth)
       }
     }
     window.addEventListener('resize', onWindowResize)
@@ -131,7 +133,7 @@ export default function HorizonResizerButton({
 
   useEffect(() => {
     if (isSidebarXExpanded) {
-      setSidebarWidth(tempSidebarWidth)
+      setSidebarWidth(expansionSidebarWidth)
     } else {
       const defaultWidth = Math.min(window.innerWidth, MOBILE_WIDTH)
       setSidebarWidth(defaultWidth)
@@ -183,4 +185,4 @@ export default function HorizonResizerButton({
 }
 
 
-let tempSidebarWidth = window.innerWidth
+let expansionSidebarWidth = window.innerWidth
