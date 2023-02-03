@@ -5,7 +5,7 @@ import Typography from '@mui/material/Typography'
 import {TooltipIconButton} from '../Buttons'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
 import {MOBILE_WIDTH} from '../../utils/constants'
-import CloseIcon from '../../assets/2D_Icons/Close.svg'
+import CloseIcon from '../../assets/icons/Close.svg'
 
 
 /**

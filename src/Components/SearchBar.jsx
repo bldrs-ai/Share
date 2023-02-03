@@ -8,7 +8,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import useTheme from '../Theme'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
-import ClearIcon from '../assets/2D_Icons/Clear.svg'
+import ClearIcon from '../assets/icons/Clear.svg'
 import {handleBeforeUnload} from '../utils/event'
 
 

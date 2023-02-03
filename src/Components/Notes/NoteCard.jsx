@@ -21,8 +21,8 @@ import {
 } from '../CameraControl'
 import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
-import CameraIcon from '../../assets/2D_Icons/Camera.svg'
-import ShareIcon from '../../assets/2D_Icons/Share.svg'
+import CameraIcon from '../../assets/icons/Camera.svg'
+import ShareIcon from '../../assets/icons/Share.svg'
 
 
 /**
