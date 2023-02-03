@@ -2,7 +2,7 @@ import React from 'react'
 import {useTheme} from '@mui/styles'
 import Box from '@mui/material/Box'
 import {TooltipIconButton} from './Buttons'
-import LogoIcon from '../assets/LogoB_5.svg'
+import LogoIcon from '../assets/LogoB.svg'
 import PkgJson from '../../package.json'
 
 
