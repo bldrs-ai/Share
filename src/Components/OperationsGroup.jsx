@@ -38,8 +38,8 @@ export default function OperationsGroup({deselectItems}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
 
-  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
-  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
+  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisibility)
+  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisibility)
 
   const isSelected = () => {
     const ifSelected = (
