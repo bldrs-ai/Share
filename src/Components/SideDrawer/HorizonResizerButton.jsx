@@ -9,10 +9,10 @@ import {MOBILE_WIDTH} from '../../utils/constants'
  * Grab button to for resizing SideDrawer horizontally.
  *
  * @property {useRef} sidebarRef sidebar ref object.
- * @property {number} thickness resizer thickness in pixels.
- * @property {string} isOnLeft resizer is on the left.
  * @property {Function} setSidebarWidth sidebar width changing button.
- * @property {React.Component} The sidebar controlled by this button's action.
+ * @property {number} thickness resizer thickness in pixels.
+ * @property {boolean} isOnLeft resizer is on the left.
+ * @property {string} sidebarWidth sidebar width (...px, ...vw).
  * @return {React.Component}
  */
 export default function HorizonResizerButton({
