@@ -10,17 +10,17 @@ import {MOBILE_WIDTH} from '../../utils/constants'
  *
  * @property {useRef} sidebarRef sidebar ref object.
  * @property {number} thickness resizer thickness in pixels.
- * @property {string} position position of the resizer on the sidebar (left or right).
+ * @property {string} isOnLeft resizer is on the left.
  * @property {Function} setSidebarWidth sidebar width changing button.
  * @property {React.Component} The sidebar controlled by this button's action.
  * @return {React.Component}
  */
 export default function HorizonResizerButton({
   sidebarRef,
-  thickness = 10,
-  position,
-  sidebarWidth,
   setSidebarWidth,
+  thickness = 10,
+  isOnLeft = true,
+  sidebarWidth = MOBILE_WIDTH,
 }) {
   const [isXResizing, setIsXResizing] = useState(false)
   const [isSidebarXExpanded, setIsSidebarXExpanded] = useState(false)
@@ -49,8 +49,13 @@ export default function HorizonResizerButton({
   const resize = useCallback(
       (mouseMoveEvent) => {
         if (isXResizing) {
-        // eslint-disable-next-line no-magic-numbers
-          expansionSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + (thickness / 2)
+          if (isOnLeft) {
+          // eslint-disable-next-line no-magic-numbers
+            expansionSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + (thickness / 2)
+          } else {
+          // eslint-disable-next-line no-magic-numbers
+            expansionSidebarWidth = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().left - (thickness / 2)
+          }
           if (expansionSidebarWidth < 0) {
             expansionSidebarWidth = 0
           }
@@ -61,7 +66,7 @@ export default function HorizonResizerButton({
           setIsSidebarXExpanded(true)
         }
       },
-      [isXResizing, sidebarRef, thickness, setSidebarWidth],
+      [isXResizing, isOnLeft, setSidebarWidth, sidebarRef, thickness],
   )
 
 

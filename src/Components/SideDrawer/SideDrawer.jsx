@@ -110,7 +110,7 @@ export default function SideDrawer() {
           <HorizonResizerButton
             sidebarRef={sidebarRef}
             thickness={thickness}
-            position="left"
+            isOnLeft={true}
             sidebarWidth={sidebarWidth}
             setSidebarWidth={setSidebarWidth}
           />
