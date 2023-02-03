@@ -97,6 +97,7 @@ export default function SideDrawer() {
     >
       <Paper
         sx={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'row',
           width: '100%',
@@ -120,7 +121,6 @@ export default function SideDrawer() {
           sx={{
             width: '100%',
             margin: '1em',
-            marginLeft: isMobile ? '1em' : `calc(1em - ${thickness}px)`,
             overflow: 'hidden',
           }}
         >
@@ -129,7 +129,8 @@ export default function SideDrawer() {
             sx={{
               display: isNotesOn ? 'block' : 'none',
               height: isPropertiesOn ? `50%` : '100%',
-              overflow: 'auto',
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
           >
             {isNotesOn && <NotesPanel/>}

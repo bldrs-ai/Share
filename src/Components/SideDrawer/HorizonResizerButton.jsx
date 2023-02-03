@@ -149,12 +149,20 @@ export default function HorizonResizerButton({
   return (
     <Box
       sx={{
+        position: 'absolute',
+        top: 0,
+        height: '100%',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
         cursor: 'col-resize',
         resize: 'horizontal',
+        ...(isOnLeft ? {
+          left: 0,
+        } : {
+          right: 0,
+        }),
       }}
     >
       <Box
