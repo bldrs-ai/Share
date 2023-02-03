@@ -1,3 +1,4 @@
+import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
 
 
@@ -19,8 +20,8 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: 500,
-    sidebarHeight: '50vh',
+    sidebarWidth: MOBILE_WIDTH,
+    sidebarHeight: MOBILE_HEIGHT,
     isSidebarXExpanded: true,
     isSidebarYExpanded: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),

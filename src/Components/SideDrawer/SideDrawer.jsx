@@ -26,6 +26,7 @@ export default function SideDrawer() {
   const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const setSidebarHeight = useStore((state) => state.setSidebarHeight)
   const location = useLocation()
@@ -71,7 +72,7 @@ export default function SideDrawer() {
 
 
   const theme = useTheme()
-  const gripSize = 10
+  const thickness = 10
   const isDividerOn = isNotesOn && isPropertiesOn
   const borderOpacity = 0.5
   const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
@@ -105,13 +106,21 @@ export default function SideDrawer() {
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
+        {!isMobile &&
+          <HorizonResizerButton
+            sidebarRef={sidebarRef}
+            thickness={thickness}
+            position="left"
+            sidebarWidth={sidebarWidth}
+            setSidebarWidth={setSidebarWidth}
+          />
+        }
         {/* Content */}
         <Box
           sx={{
             width: '100%',
             margin: '1em',
-            marginLeft: isMobile ? '1em' : `calc(1em - ${gripSize}px)`,
+            marginLeft: isMobile ? '1em' : `calc(1em - ${thickness}px)`,
             overflow: 'hidden',
           }}
         >
