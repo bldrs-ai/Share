@@ -3,8 +3,8 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
-import Close from '../assets/2D_Icons/Clear.svg'
-import Question from '../assets/2D_Icons/Question.svg'
+import Close from '../assets/icons/Clear.svg'
+import Question from '../assets/icons/Question.svg'
 
 
 /**

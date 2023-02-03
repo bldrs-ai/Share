@@ -6,7 +6,7 @@ import useTheme from '@mui/styles/useTheme'
 import {TooltipToggleButton} from './Buttons'
 import {ColorModeContext} from '../Context/ColorMode'
 import PkgJson from '../../package.json'
-import SettingsIcon from '../assets/2D_Icons/Settings.svg'
+import SettingsIcon from '../assets/icons/Settings.svg'
 
 
 /**

@@ -12,8 +12,8 @@ import {
 } from './CameraControl'
 import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
-import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
+import CopyIcon from '../assets/icons/Copy.svg'
+import ShareIcon from '../assets/icons/Share.svg'
 
 
 /**

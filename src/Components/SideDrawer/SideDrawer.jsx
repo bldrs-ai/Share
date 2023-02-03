@@ -11,7 +11,7 @@ import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import ResizerButton from './ResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import CaretIcon from '../../assets/2D_Icons/Caret.svg'
+import CaretIcon from '../../assets/icons/Caret.svg'
 
 
 /**

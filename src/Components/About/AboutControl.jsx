@@ -6,8 +6,8 @@ import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
-import AboutIcon from '../../assets/2D_Icons/Information.svg'
-import LogoB from '../../assets/LogoB_5.svg'
+import AboutIcon from '../../assets/icons/Information.svg'
+import LogoB from '../../assets/LogoB.svg'
 
 
 /**

@@ -2,7 +2,7 @@ import React from 'react'
 import {fireEvent, render} from '@testing-library/react'
 import {MockComponent} from '../__mocks__/MockComponent'
 import {TooltipIconButton} from './Buttons'
-import QuestionIcon from '../assets/2D_Icons/Question.svg'
+import QuestionIcon from '../assets/icons/Question.svg'
 
 
 describe('<TooltipIconButton />', () => {
