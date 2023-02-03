@@ -5,7 +5,7 @@ import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
 import {RectangularButton, TooltipIconButton} from '../Components/Buttons'
 import {assertDefined} from '../utils/assert'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
+import CloseIcon from '../assets/icons/Close.svg'
 
 
 /**

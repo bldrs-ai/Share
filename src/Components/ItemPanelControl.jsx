@@ -5,8 +5,8 @@ import {TooltipIconButton} from './Buttons'
 import {useIsMobile} from './Hooks'
 import MobileDrawer from './MobileDrawer'
 import {decodeIFCString} from '../utils/Ifc'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
-import ListIcon from '../assets/2D_Icons/List.svg'
+import CloseIcon from '../assets/icons/Close.svg'
+import ListIcon from '../assets/icons/List.svg'
 
 
 /**
