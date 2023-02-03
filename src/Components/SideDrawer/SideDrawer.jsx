@@ -10,6 +10,7 @@ import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
+import VerticalResizerButton from './VerticalResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
@@ -114,6 +115,15 @@ export default function SideDrawer() {
             isOnLeft={true}
             sidebarWidth={sidebarWidth}
             setSidebarWidth={setSidebarWidth}
+          />
+        }
+        {isMobile &&
+          <VerticalResizerButton
+            sidebarRef={sidebarRef}
+            thickness={thickness}
+            isOnTop={true}
+            sidebarHeight={sidebarHeight}
+            setSidebarHeight={setSidebarHeight}
           />
         }
         {/* Content */}
