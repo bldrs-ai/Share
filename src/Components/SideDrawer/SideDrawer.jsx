@@ -5,14 +5,12 @@ import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
-import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
 
 /**
@@ -33,6 +31,11 @@ export default function SideDrawer() {
   const location = useLocation()
   const isMobile = useIsMobile()
   const sidebarRef = useRef(null)
+  const theme = useTheme()
+  const thickness = 10
+  const isDividerOn = isNotesOn && isPropertiesOn
+  const borderOpacity = 0.5
+  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
 
 
   useEffect(() => {
@@ -60,23 +63,6 @@ export default function SideDrawer() {
       closeDrawer()
     }
   }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
-
-
-  /** Notes and Props shouldn't show as active when drawer closed. */
-  function onDrawerExpand() {
-    if (sidebarHeight === '100vh') {
-      setSidebarHeight('50vh')
-    } else {
-      setSidebarHeight('100vh')
-    }
-  }
-
-
-  const theme = useTheme()
-  const thickness = 10
-  const isDividerOn = isNotesOn && isPropertiesOn
-  const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
 
 
   return (
@@ -134,7 +120,6 @@ export default function SideDrawer() {
             overflow: 'hidden',
           }}
         >
-          {isMobile && <DrawerExpandButton onClick={onDrawerExpand}/>}
           <Box
             sx={{
               display: isNotesOn ? 'block' : 'none',
@@ -157,26 +142,6 @@ export default function SideDrawer() {
           </Box>
         </Box>
       </Paper>
-    </Box>
-  )
-}
-
-
-/** @return {React.Component} */
-function DrawerExpandButton({onClick}) {
-  const isMobile = useIsMobile()
-  return (
-    <Box
-      sx={{
-        'display': isMobile ? 'flex' : 'none',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '& svg': {
-          transform: 'rotate(180deg)',
-        },
-      }}
-    >
-      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>} size='small'/>
     </Box>
   )
 }
