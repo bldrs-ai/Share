@@ -39,6 +39,19 @@ export function isNumeric(str) {
 
 
 /**
+ * Check if the value is a number
+ *
+ * @param {any} value to check
+ * @return {boolean} true if the value is a number
+ */
+export function isNumber(value) {
+  value = value.toString()
+  const strNumericValue = parseFloat(value).toString()
+  return strNumericValue === value && strNumericValue !== 'NaN'
+}
+
+
+/**
  * @param {string} str
  * @return {Array<string>} url matches
  */

@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import {findUrls, isNumeric, floatStrTrim} from './strings'
+import {findUrls, isNumeric, floatStrTrim, isNumber} from './strings'
 
 
 describe('strings', () => {
@@ -42,6 +42,19 @@ describe('strings', () => {
     expect(isNumeric('0')).toBeTruthy()
     expect(isNumeric('1')).toBeTruthy()
     expect(isNumeric('NaN')).toBeFalsy()
+  })
+
+
+  it('isNumber recognizes common cases', () => {
+    expect(isNumber(-1)).toBeTruthy()
+    expect(isNumber('-1')).toBeTruthy()
+    expect(isNumber(0)).toBeTruthy()
+    expect(isNumber('0')).toBeTruthy()
+    expect(isNumber(1)).toBeTruthy()
+    expect(isNumber('1')).toBeTruthy()
+    expect(isNumber('-1vw')).toBeFalsy()
+    expect(isNumber('1vw')).toBeFalsy()
+    expect(isNumber('NaN')).toBeFalsy()
   })
 
 
