@@ -3,6 +3,7 @@ import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {MOBILE_WIDTH} from '../../utils/constants'
+import {isNumeric} from '../../utils/strings'
 
 
 /**
@@ -140,7 +141,7 @@ export default function HorizonResizerButton({
     if (isExpanded) {
       setSidebarWidth(expansionSidebarWidth)
     } else {
-      const defaultWidth = Math.min(window.innerWidth, MOBILE_WIDTH)
+      const defaultWidth = isNumeric(MOBILE_WIDTH) ? Math.min(window.innerWidth, MOBILE_WIDTH) : MOBILE_WIDTH
       setSidebarWidth(defaultWidth)
     }
   }, [isExpanded, setSidebarWidth])
