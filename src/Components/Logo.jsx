@@ -21,7 +21,7 @@ export default function Logo({onClick}) {
         '& svg': {
           'width': '50px',
           'height': '50px',
-          'marginBottom': '-4px',
+          'marginBottom': '4px',
           'marginTop': '4px',
           '@media (max-width: 900px)': {
             width: '40px',
