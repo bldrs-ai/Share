@@ -4,7 +4,8 @@ import {Matrix4} from 'three'
 
 /** Class IfcViewerAPIExtended*/
 export default class IfcViewerAPIExtended extends IfcViewerAPI {
-  subsets = {}
+  currentSelectionSubsets = []
+  ids = []
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -76,9 +77,19 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
         USE_FAST_BOOLS: fastBools,
       })
       const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
+
       // subset ops
       const rootElement = await ifcModel.ifcManager.getSpatialStructure(0, true)
-      this.createSubsetForElementsTree(rootElement)
+      this.collectElementsId(rootElement)
+
+      // this createSubset call also adds the subset to the scene
+      const subset = this.IFC.loader.ifcManager.createSubset({
+        modelID: 0,
+        scene: this.context.getScene(),
+        ids: this.ids,
+        removePrevious: true,
+      })
+      this.context.items.pickableIfcModels.push(subset)
 
       if (firstModel) {
         // eslint-disable-next-line new-cap
@@ -100,27 +111,36 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
   }
 
   /**
-   * Creates a subset of the given IFC element in the current scene.
+   * Collect elements ids.
    *
    * @param {object} IFC spatial root element
    */
-  createSubsetForElementsTree(rootElement) {
-    rootElement.children.forEach((e) => {
-      this.createSubsetForElementsTree(e)
+  collectElementsId(element) {
+    element.children.forEach((e) => {
+      this.collectElementsId(e)
     })
-    const subset = this.IFC.loader.ifcManager.createSubset({
-      modelID: 0,
-      scene: this.context.getScene(),
-      ids: [rootElement.expressID],
-      removePrevious: true,
-      customID: rootElement.expressID,
-    })
-    this.context.getScene().add(subset)
-    this.context.items.pickableIfcModels.push(subset)
-    if (subset) {
-      this.subsets[rootElement.expressID] = subset
+    // create a subset only for the leaf elements of the spatial tree
+    // i.e. elements that aren't spatial containers; projects, sites etc.
+    if (element.children.length === 0) {
+      this.ids.push(element.expressID)
     }
   }
+
+  /**
+   * hide selected elements
+   *
+   * @param {number} modelID
+   * @param {Array} elements ids
+   */
+  hideSelectedElements() {
+    this.currentSelectionSubsets.forEach((subset) => {
+      this.context.getScene().remove(subset)
+    })
+    this.getSelectedIds().forEach((id) => {
+      this.IFC.loader.ifcManager.removeFromSubset(0, [id])
+    })
+  }
+
 
   /**
    * Pick elements by their ids
@@ -136,6 +156,7 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     }
     this.IFC.selector.selection.modelIDs.add(modelID)
     const selected = this.IFC.selector.selection.newSelection(modelID, ids, removePrevious)
+    this.currentSelectionSubsets.push(selected)
     selected.visible = true
     selected.renderOrder = this.IFC.selector.selection.renderOrder
     if (focusSelection) {

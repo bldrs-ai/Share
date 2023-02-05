@@ -245,10 +245,6 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
-    // This loaded model mesh is not rendered it is only kept in memory
-    // for other dependencies that consume it
-    // this custom 'loadIfcUrl' method renders subset of each element as
-    // a way to render individual meshes
     const loadedModel = await viewer.loadIfcUrl(
         filepath,
         (progressEvent) => {
@@ -516,6 +512,9 @@ export default function CadView({
       if (event.code === 'KeyA' ||
         event.code === 'Escape') {
         selectItemsInScene([])
+      }
+      if (event.code === 'KeyH') {
+        viewer.hideSelectedElements()
       }
     }
   }
