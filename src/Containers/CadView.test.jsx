@@ -240,4 +240,35 @@ describe('CadView', () => {
     const setSelectionCalls = viewer.setSelection.mock.calls
     expect(setSelectionCalls).toEqual(expectedCall)
   })
+
+  it('can clear selection using Escape key', async () => {
+    const testTree = makeTestTree()
+    const selectedIdsAsString = ['0', '1']
+    const elementCount = 2
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const viewer = new IfcViewerAPIExtended()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByTitle} = render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    await actAsyncFlush()
+    expect(getByTitle('Section')).toBeInTheDocument()
+    await act(() => {
+      result.current.setSelectedElements(selectedIdsAsString)
+    })
+    expect(result.current.selectedElements).toHaveLength(elementCount)
+    fireEvent.keyDown(getByTitle('Section'), {key: 'Escape', code: 'Escape', charCode: 27})
+    expect(result.current.selectedElements).toHaveLength(0)
+    await actAsyncFlush()
+  })
 })
