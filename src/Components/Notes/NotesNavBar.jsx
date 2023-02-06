@@ -5,9 +5,9 @@ import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '..
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {NOTE_PREFIX} from './Notes'
-import BackIcon from '../../assets/2D_Icons/Back.svg'
-import NextIcon from '../../assets/2D_Icons/NavNext.svg'
-import PreviousIcon from '../../assets/2D_Icons/NavPrev.svg'
+import BackIcon from '../../assets/icons/Back.svg'
+import NextIcon from '../../assets/icons/NavNext.svg'
+import PreviousIcon from '../../assets/icons/NavPrev.svg'
 
 
 /** @return {React.Component} */

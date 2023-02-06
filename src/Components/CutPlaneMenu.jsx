@@ -7,7 +7,7 @@ import useTheme from '../Theme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import CutPlaneIcon from '../assets/icons/CutPlane.svg'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import debug from '../utils/debug'
 

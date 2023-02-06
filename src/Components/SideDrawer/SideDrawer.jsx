@@ -5,13 +5,12 @@ import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
-import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
-import ResizerButton from './ResizerButton'
+import HorizonResizerButton from './HorizonResizerButton'
+import VerticalResizerButton from './VerticalResizerButton'
 import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
-import CaretIcon from '../../assets/2D_Icons/Caret.svg'
 
 
 /**
@@ -26,11 +25,17 @@ export default function SideDrawer() {
   const openNotes = useStore((state) => state.openNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const setSidebarHeight = useStore((state) => state.setSidebarHeight)
   const location = useLocation()
   const isMobile = useIsMobile()
   const sidebarRef = useRef(null)
+  const theme = useTheme()
+  const thickness = 10
+  const isDividerOn = isNotesOn && isPropertiesOn
+  const borderOpacity = 0.5
+  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
 
 
   useEffect(() => {
@@ -60,21 +65,6 @@ export default function SideDrawer() {
   }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
 
 
-  /** Notes and Props shouldn't show as active when drawer closed. */
-  function onDrawerExpand() {
-    if (sidebarHeight === '100vh') {
-      setSidebarHeight('50vh')
-    } else {
-      setSidebarHeight('100vh')
-    }
-  }
-
-
-  const theme = useTheme()
-  const gripSize = 10
-  const isDividerOn = isNotesOn && isPropertiesOn
-  const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
   return (
     <Box
       sx={Object.assign({
@@ -94,6 +84,7 @@ export default function SideDrawer() {
     >
       <Paper
         sx={{
+          position: 'relative',
           display: 'flex',
           flexDirection: 'row',
           width: '100%',
@@ -103,22 +94,38 @@ export default function SideDrawer() {
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}
       >
-        {!isMobile && <ResizerButton sidebarRef={sidebarRef} width={gripSize}/>}
+        {!isMobile &&
+          <HorizonResizerButton
+            sidebarRef={sidebarRef}
+            thickness={thickness}
+            isOnLeft={true}
+            sidebarWidth={sidebarWidth}
+            setSidebarWidth={setSidebarWidth}
+          />
+        }
+        {isMobile &&
+          <VerticalResizerButton
+            sidebarRef={sidebarRef}
+            thickness={thickness}
+            isOnTop={true}
+            sidebarHeight={sidebarHeight}
+            setSidebarHeight={setSidebarHeight}
+          />
+        }
         {/* Content */}
         <Box
           sx={{
             width: '100%',
             margin: '1em',
-            marginLeft: isMobile ? '1em' : `calc(1em - ${gripSize}px)`,
             overflow: 'hidden',
           }}
         >
-          {isMobile && <DrawerExpandButton onClick={onDrawerExpand}/>}
           <Box
             sx={{
               display: isNotesOn ? 'block' : 'none',
               height: isPropertiesOn ? `50%` : '100%',
-              overflow: 'auto',
+              overflowX: 'hidden',
+              overflowY: 'auto',
             }}
           >
             {isNotesOn && <NotesPanel/>}
@@ -135,26 +142,6 @@ export default function SideDrawer() {
           </Box>
         </Box>
       </Paper>
-    </Box>
-  )
-}
-
-
-/** @return {React.Component} */
-function DrawerExpandButton({onClick}) {
-  const isMobile = useIsMobile()
-  return (
-    <Box
-      sx={{
-        'display': isMobile ? 'flex' : 'none',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '& svg': {
-          transform: 'rotate(180deg)',
-        },
-      }}
-    >
-      <TooltipIconButton title='Expand' onClick={onClick} icon={<CaretIcon/>} size='small'/>
     </Box>
   )
 }

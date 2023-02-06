@@ -3,9 +3,9 @@ import Box from '@mui/material/Box'
 import Drawer from '@mui/material/Drawer'
 import Typography from '@mui/material/Typography'
 import {TooltipIconButton} from '../Buttons'
-import {MOBILE_WIDTH} from '../Hooks'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
-import CloseIcon from '../../assets/2D_Icons/Close.svg'
+import {MOBILE_WIDTH} from '../../utils/constants'
+import CloseIcon from '../../assets/icons/Close.svg'
 
 
 /**

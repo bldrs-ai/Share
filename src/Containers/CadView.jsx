@@ -85,7 +85,7 @@ export default function CadView({
   const isMobile = useIsMobile()
   const location = useLocation()
 
-  // Granular visibility controls for the UI compononets
+  // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 

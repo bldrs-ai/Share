@@ -8,8 +8,8 @@ import TextField from '@mui/material/TextField'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
-import OpenIcon from '../assets/2D_Icons/Open.svg'
-import UploadIcon from '../assets/2D_Icons/Upload.svg'
+import OpenIcon from '../assets/icons/Open.svg'
+import UploadIcon from '../assets/icons/Upload.svg'
 import {handleBeforeUnload} from '../utils/event'
 
 

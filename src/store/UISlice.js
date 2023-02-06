@@ -1,4 +1,6 @@
+import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
+
 
 /**
  * Data stored in Zustand for UI state.
@@ -18,8 +20,8 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: 500,
-    sidebarHeight: '50vh',
+    sidebarWidth: MOBILE_WIDTH,
+    sidebarHeight: MOBILE_HEIGHT,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
