@@ -27,6 +27,7 @@
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.0.0",
     "@babel/core": "^7.18.10",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
@@ -42,6 +43,7 @@
     "@sentry/react": "^7.31.1",
     "@sentry/tracing": "^7.31.1",
     "clsx": "^1.2.1",
+    "material-ui-popup-state": "^5.0.4",
     "matrix-widget-api": "^1.1.1",
     "normalize.css": "^8.0.1",
     "prop-types": "^15.8.1",
