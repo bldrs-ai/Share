@@ -4,8 +4,8 @@ import TreeView from '@mui/lab/TreeView'
 import NavTree from './NavTree'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import NodeClosedIcon from '../assets/2D_Icons/NodeClosed.svg'
-import NodeOpenIcon from '../assets/2D_Icons/NodeOpened.svg'
+import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
+import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
 
 
 /**

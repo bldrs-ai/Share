@@ -21,16 +21,14 @@ export default function SnackBarMessage({message, type, open}) {
     >
       <Alert
         sx={{
-          'backgroundColor': theme.palette.primary.main,
+          'backgroundColor': theme.palette.primary.background,
           'color': theme.palette.primary.contrastText,
-          'fontFamily': 'Helvetica',
-          'opacity': .8,
           'position': 'relative',
           'bottom': '90px',
-          'left': '6px',
+          'left': '-6px',
           '@media (max-width: 900px)': {
             left: '18px',
-            bottom: '70px',
+            bottom: '100px',
             width: '305px',
             inlineSize: '305px',
             overflow: 'visible',

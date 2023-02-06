@@ -4,7 +4,7 @@ import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import CaretIcon from '../assets/2D_Icons/Caret.svg'
+import CaretIcon from '../assets/icons/Caret.svg'
 
 
 /**

@@ -1,7 +1,5 @@
 import {useState, useEffect} from 'react'
-
-
-export const MOBILE_WIDTH = 500
+import {MOBILE_WIDTH} from '../utils/constants'
 
 
 /**

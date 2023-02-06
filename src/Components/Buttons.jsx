@@ -5,7 +5,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
-import CloseIcon from '../assets/2D_Icons/Close.svg'
+import CloseIcon from '../assets/icons/Close.svg'
 
 
 /**

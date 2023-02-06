@@ -13,10 +13,10 @@ export default function createUIVisibilitySlice(set, get) {
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
 
-    getFirstDividerVisiblility: () => get().isCollaborationGroupVisible &&
+    getFirstDividerVisibility: () => get().isCollaborationGroupVisible &&
       (get().isModelInteractionGroupVisible || get().isSettingsVisible),
 
-    getSecondDividerVisiblility: () => get().isSettingsVisible && get().isModelInteractionGroupVisible,
+    getSecondDividerVisibility: () => get().isSettingsVisible && get().isModelInteractionGroupVisible,
 
     setSearchbarVisibility: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setNavigationPanelVisibility: (isVisible) => set(() => ({isNavigationPanelVisible: isVisible})),
