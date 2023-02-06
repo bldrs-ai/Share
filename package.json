@@ -22,8 +22,8 @@
     "test": "jest",
     "cypress": "cypress run",
     "cypress-spec": "cypress run --spec",
-    "cypress-headed": "cypress run --headed --no-exit",
-    "cypress-headed-spec": "cypress run --headed --no-exit --spec",
+    "cypress-headed": "cypress run --headed --browser chrome --no-exit",
+    "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
   "dependencies": {
