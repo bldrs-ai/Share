@@ -5,7 +5,7 @@ import GitHubIcon from '@mui/icons-material/GitHub'
 
 
 const LoginButton = ({
-  title = 'Log in to GitHub',
+  title = 'Log in with GitHub',
   placement = 'right',
   ...props
 }) => {
@@ -21,7 +21,7 @@ const LoginButton = ({
 
   return (
     <TooltipIconButton
-      title={'Log in with Github'}
+      title={'Log in with GitHub'}
       icon={<GitHubIcon/>}
       onClick={onClick}
     />
