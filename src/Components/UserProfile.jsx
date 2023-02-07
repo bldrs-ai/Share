@@ -25,11 +25,15 @@ const UserProfile = ({size = 'medium'}) => {
 
   return isAuthenticated && (
     <>
-      <IconButton className={'no-hover'} {...bindTrigger(popupState)}>
+      <IconButton
+        sx={{width: '24px', height: '24px'}}
+        className={'no-hover'}
+        {...bindTrigger(popupState)}
+      >
         <Avatar
           alt={user.name}
           src={user.picture}
-          sx={{width: 22, height: 22}}
+          sx={{width: '20px', height: '20px'}}
         />
       </IconButton>
 
