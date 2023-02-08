@@ -1,4 +1,3 @@
-
 import {EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
@@ -27,6 +26,7 @@ export default class IfcHighlighter {
     context.renderer.update = newUpdateFunction(context, composer)
   }
 
+
   /**
    * Highlights and outlines meshes in scene
    *
@@ -36,6 +36,7 @@ export default class IfcHighlighter {
     this._outlineEffect.setSelection(meshes)
   }
 }
+
 
 /**
  * Returns a new update function that uses
