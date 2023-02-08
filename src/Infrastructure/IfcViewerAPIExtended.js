@@ -1,5 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import IfcHighlighter from './IfcHighLighter'
+import IfcHighlighter from './IfcHighlighter'
 
 /**
  * Extending the original IFCViewerFunctionality

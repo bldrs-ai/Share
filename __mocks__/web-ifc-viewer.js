@@ -1,7 +1,7 @@
 import {Vector3} from 'three'
 
 
-jest.mock('../src/Infrastructure/IfcHighLighter')
+jest.mock('../src/Infrastructure/IfcHighlighter')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
