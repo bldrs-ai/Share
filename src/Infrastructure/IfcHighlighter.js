@@ -33,7 +33,7 @@ export default class IfcHighlighter {
    * @param {Mesh} geometry meshes
    */
   setHighlighted(meshes) {
-    this._outlineEffect.setSelection(meshes)
+    this._outlineEffect.setSelection(meshes ?? [])
   }
 }
 
