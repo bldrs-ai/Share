@@ -1,6 +1,6 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
-
+import IfcViewsManager from './IfcElementsStyleManager'
 /**
  * Extending the original IFCViewerFunctionality
  */
@@ -12,6 +12,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser)
   }
   /**
    * Gets the expressId of the element that the mouse is pointing at
