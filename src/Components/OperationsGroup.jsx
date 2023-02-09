@@ -1,8 +1,11 @@
 import React, {useContext} from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import {useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
+import {assertDefined} from '../utils/assert'
+import {hexToRgba} from '../utils/color'
 import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
@@ -58,6 +61,9 @@ export default function OperationsGroup({deselectItems}) {
     }
   }
 
+  const theme = useTheme()
+  const separatorOpacity = 0.1
+  const separatorColor = hexToRgba(assertDefined(theme.palette.primary.contrastText), separatorOpacity)
   return (
     <Box
       sx={{
@@ -70,7 +76,7 @@ export default function OperationsGroup({deselectItems}) {
         '.MuiButtonGroup-root + .MuiButtonGroup-root': {
           marginTop: '0.5em',
           paddingTop: '0.5em',
-          borderTop: 'solid 1px lightgrey',
+          borderTop: `solid 1px ${separatorColor}`,
           borderRadius: 0,
         },
         '.MuiButtonBase-root + .MuiButtonBase-root': {
