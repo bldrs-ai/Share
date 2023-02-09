@@ -21,6 +21,7 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 
 
@@ -78,12 +79,13 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
 
-  // Granular visibility controls for the UI compononets
+  // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
@@ -236,8 +238,9 @@ export default function CadView({
    */
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath)
+    const uploadedFile = pathPrefix.endsWith('new')
 
-    if (pathPrefix.endsWith('new')) {
+    if (uploadedFile) {
       filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
@@ -247,8 +250,9 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
+    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.IFC.loadIfcUrl(
-        filepath,
+        ifcURL,
         !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
@@ -684,6 +688,28 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   return v
 }
 
+const getGitHubDownloadURL = async (url, accessToken) => {
+  const repo = parseGitHubRepositoryURL(url)
+  const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
+  return downloadURL
+}
+
+const getFinalURL = async (url, accessToken) => {
+  const u = new URL(url)
+
+  switch (u.host.toLowerCase()) {
+    case 'github.com':
+      if (accessToken === '') {
+        u.host = 'raw.githubusercontent.com'
+        return u.toString()
+      }
+
+      return await getGitHubDownloadURL(url, accessToken)
+
+    default:
+      return url
+  }
+}
 
 /**
  * @param {string} filepath

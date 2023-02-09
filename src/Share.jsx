@@ -161,7 +161,7 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
       eltPath: parts[1],
     }
     m.getRepoPath = () => `/${m.org}/${m.repo}/${m.branch}${m.filepath}`
-    m.gitpath = `https://raw.githubusercontent.com${m.getRepoPath()}`
+    m.gitpath = `https://github.com${m.getRepoPath()}`
     debug().log('Share#getModelPath: is a remote GitHub file: ', m)
   } else {
     throw new Error('Empty view type from pathPrefix')
