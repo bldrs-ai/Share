@@ -33,19 +33,19 @@ class UIComponentsVisibilityEventHandler extends ApiEventHandler {
    */
   handler(data) {
     if (('searchBar' in data)) {
-      useStore.getState().setSearchbarVisibility(data.searchBar)
+      useStore.getState().setIsSearchbarVisibile(data.searchBar)
     }
     if (('navigationPanel' in data)) {
-      useStore.getState().setNavigationPanelVisibility(data.navigationPanel)
+      useStore.getState().setIsNavigationPanelVisibile(data.navigationPanel)
     }
     if (('collaboration' in data)) {
-      useStore.getState().setCollaborationGroupVisibility(data.collaboration)
+      useStore.getState().setIsCollaborationGroupVisibile(data.collaboration)
     }
     if (('modelInteraction' in data)) {
-      useStore.getState().setModelInteractionGroupVisibility(data.modelInteraction)
+      useStore.getState().setIsModelInteractionGroupVisibile(data.modelInteraction)
     }
     if (('settings' in data)) {
-      useStore.getState().setSettingsVisibility(data.settings)
+      useStore.getState().setIsSettingsVisibile(data.settings)
     }
     return this.apiConnection.successfulResponse({})
   }

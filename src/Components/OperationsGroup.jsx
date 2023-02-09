@@ -1,7 +1,6 @@
 import React, {useContext} from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
 import AboutControl from './About/AboutControl'
@@ -35,12 +34,10 @@ export default function OperationsGroup({deselectItems}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
 
+  const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-
-  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisibility)
-  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisibility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -50,7 +47,6 @@ export default function OperationsGroup({deselectItems}) {
     )
     return ifSelected
   }
-
 
   const toggle = (panel) => {
     openDrawer()
@@ -63,56 +59,72 @@ export default function OperationsGroup({deselectItems}) {
   }
 
   return (
-    <Box sx={{
-      'display': 'flex',
-      'flexDirection': 'column',
-      'margin': '1em 1em 0 0',
-      '@media (max-width: 900px)': {
-        margin: '1em 0.5em 0 0',
-      },
-    }}
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'margin': '1em 1em 0 0',
+        '@media (max-width: 900px)': {
+          margin: '1em 0.5em 0 0',
+        },
+        '.MuiButtonGroup-root + .MuiButtonGroup-root': {
+          marginTop: '0.5em',
+          paddingTop: '0.5em',
+          borderTop: 'solid 1px lightgrey',
+          borderRadius: 0,
+        },
+        '.MuiButtonBase-root + .MuiButtonBase-root': {
+          marginTop: '0.5em',
+        },
+      }}
     >
-      <AuthNav/>
-      <Divider/>
+      {isLoginVisible &&
+       <ButtonGroup orientation='vertical'>
+         <AuthNav/>
+       </ButtonGroup>
+      }
 
       {isCollaborationGroupVisible &&
-        <ButtonGroup orientation="vertical" >
-          <ShareControl/>
-        </ButtonGroup>}
-      {isFirstDividerVisible() && <Divider sx={{margin: '0.5em 0'}}/>}
+       <ButtonGroup orientation='vertical'>
+         <ShareControl/>
+       </ButtonGroup>
+      }
+
       {isModelInteractionGroupVisible &&
-      <ButtonGroup orientation="vertical" >
-        <TooltipIconButton
-          title='Notes'
-          icon={<NotesIcon/>}
-          selected={isNotesOn}
-          onClick={() => toggle('Notes')}
-        />
-        <TooltipIconButton
-          title="Properties"
-          onClick={() => toggle('Properties')}
-          selected={isPropertiesOn}
-          icon={<ListIcon/>}
-        />
-        <CutPlaneMenu/>
-        {/* <ExtractLevelsMenu/> */}
-        <TooltipIconButton
-          title="Clear"
-          onClick={deselectItems}
-          selected={isSelected()}
-          icon={<ClearIcon/>}
-        />
-      </ButtonGroup>}
-      {isSecondDividerVisible() && <Divider sx={{margin: '0.5em 0'}}/>}
+       <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title='Notes'
+           icon={<NotesIcon/>}
+           selected={isNotesOn}
+           onClick={() => toggle('Notes')}
+         />
+         <TooltipIconButton
+           title='Properties'
+           onClick={() => toggle('Properties')}
+           selected={isPropertiesOn}
+           icon={<ListIcon/>}
+         />
+         <CutPlaneMenu/>
+         {/* <ExtractLevelsMenu/> */}
+         <TooltipIconButton
+           title='Clear'
+           onClick={deselectItems}
+           selected={isSelected()}
+           icon={<ClearIcon/>}
+         />
+       </ButtonGroup>
+      }
+
       {isSettingsVisible &&
-      <ButtonGroup orientation="vertical">
-        <TooltipIconButton
-          title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
-          onClick={() => colorMode.toggleColorMode()}
-          icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
-        />
-        <AboutControl/>
-      </ButtonGroup>}
+       <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
+           onClick={() => colorMode.toggleColorMode()}
+           icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
+         />
+         <AboutControl/>
+       </ButtonGroup>
+      }
       {/* Invisible */}
       <CameraControl/>
     </Box>

@@ -5,19 +5,19 @@ import AuthNav from './AuthNav'
 
 
 describe('AuthNav', () => {
-  it('renders the login button when not logged in', () => {
+  it('renders the login button when not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
 
     render(<AuthNav/>)
-    const loginButton = screen.getByTitle(/Log in with GitHub/i)
+    const loginButton = await screen.findByTitle(/Log in with GitHub/i)
     expect(loginButton).toBeInTheDocument()
   })
 
-  it('renders the user avatar when logged in', () => {
+  it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
     render(<AuthNav/>)
-    const avatarImage = screen.getByAltText(/Unit Testing/i)
+    const avatarImage = await screen.findByAltText(/Unit Testing/i)
     expect(avatarImage).toBeInTheDocument()
   })
 })
