@@ -1,5 +1,4 @@
 import React from 'react'
-import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
@@ -30,7 +29,7 @@ export function TooltipIconButton({
   assertDefined(title, onClick, icon)
   const isMobile = useIsMobile()
   return (
-    <Box>
+    <>
       {isMobile ?
        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
          {icon}
@@ -41,7 +40,7 @@ export function TooltipIconButton({
          </ToggleButton>
        </Tooltip>
       }
-    </Box>
+    </>
   )
 }
 
@@ -65,15 +64,15 @@ export function ControlButton({
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   return (
-    <Box>
+    <>
       <TooltipIconButton
         title={title}
+        onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
-        onClick={() => setIsDialogDisplayed(true)}
       />
       {isDialogDisplayed && dialog}
-    </Box>
+    </>
   )
 }
 

@@ -7,22 +7,19 @@
  */
 export default function createUIVisibilitySlice(set, get) {
   return {
+    isLoginVisible: true,
     isSearchBarVisible: true,
     isNavigationPanelVisible: true,
     isCollaborationGroupVisible: true,
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
 
-    getFirstDividerVisibility: () => get().isCollaborationGroupVisible &&
-      (get().isModelInteractionGroupVisible || get().isSettingsVisible),
+    setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
+    setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
+    setIsNavigationPanelVisibile: (isVisible) => set(() => ({isNavigationPanelVisible: isVisible})),
 
-    getSecondDividerVisibility: () => get().isSettingsVisible && get().isModelInteractionGroupVisible,
-
-    setSearchbarVisibility: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
-    setNavigationPanelVisibility: (isVisible) => set(() => ({isNavigationPanelVisible: isVisible})),
-
-    setCollaborationGroupVisibility: (isVisible) => set(() => ({isCollaborationGroupVisible: isVisible})),
-    setModelInteractionGroupVisibility: (isVisible) => set(() => ({isModelInteractionGroupVisible: isVisible})),
-    setSettingsVisibility: (isVisible) => set(() => ({isSettingsVisible: isVisible})),
+    setIsCollaborationGroupVisibile: (isVisible) => set(() => ({isCollaborationGroupVisible: isVisible})),
+    setIsModelInteractionGroupVisibile: (isVisible) => set(() => ({isModelInteractionGroupVisible: isVisible})),
+    setIsSettingsVisibile: (isVisible) => set(() => ({isSettingsVisible: isVisible})),
   }
 }
