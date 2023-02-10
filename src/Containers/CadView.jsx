@@ -1,7 +1,8 @@
-import React, {useContext, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
@@ -13,7 +14,6 @@ import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
-import {ColorModeContext} from '../Context/ColorMode'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
@@ -60,7 +60,7 @@ export default function CadView({
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
-  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -161,21 +161,22 @@ export default function CadView({
   function onModelPath() {
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
-    const theme = colorMode.getTheme()
-    const initializedViewer = initViewer(
-        pathPrefix,
-        (theme &&
-         theme.palette &&
-         theme.palette.scene &&
-         theme.palette.scene.background) || '0xabcdef')
-    setViewer(initializedViewer)
-    setViewerStore(initializedViewer)
+    // TODO(pablo): First arg isn't used for first time, and then it's
+    // newMode for the themeChangeListeners, which is also unused.
+    const initViewerCb = (any, themeArg) => {
+      const initializedViewer = initViewer(
+          pathPrefix,
+          assertDefined(themeArg.palette.scene.background))
+      setViewer(initializedViewer)
+      setViewerStore(initializedViewer)
+    }
+    initViewerCb(undefined, theme)
+    theme.addThemeChangeListener(initViewerCb)
   }
 
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    const theme = colorMode.getTheme()
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -201,7 +202,6 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
 
-    addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
@@ -524,15 +524,6 @@ export default function CadView({
   }
 
 
-  const addThemeListener = () => {
-    colorMode.addThemeChangeListener((newMode, theme) => {
-      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
-      setViewer(intializedViewer)
-      setViewerStore(intializedViewer)
-    })
-  }
-
-
   return (
     <Box
       sx={{
@@ -559,7 +550,7 @@ export default function CadView({
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
-        type={'info'}
+        severity={'info'}
         open={isLoading || snackMessage !== null}
       />
       {showSearchBar && (

@@ -7,9 +7,8 @@ import {ThemeProvider} from '@mui/material/styles'
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
 /* eslint-enable */
-import CadView, {searchIndex} from './Containers/CadView'
-import {ColorModeContext} from './Context/ColorMode'
 import Styles from './Styles'
+import CadView, {searchIndex} from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
@@ -74,23 +73,20 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
 
-  const {theme, colorMode} = useShareTheme()
+  const theme = useShareTheme()
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
-
   return (
     modelPath &&
       <CssBaseline enableColorScheme>
-        <ColorModeContext.Provider value={colorMode}>
-          <ThemeProvider theme={theme}>
-            <Styles theme={theme}/>
-            <CadView
-              installPrefix={installPrefix}
-              appPrefix={appPrefix}
-              pathPrefix={pathPrefix}
-              modelPath={modelPath}
-            />
-          </ThemeProvider>
-        </ColorModeContext.Provider>
+        <ThemeProvider theme={theme}>
+          <Styles theme={theme}/>
+          <CadView
+            installPrefix={installPrefix}
+            appPrefix={appPrefix}
+            pathPrefix={pathPrefix}
+            modelPath={modelPath}
+          />
+        </ThemeProvider>
       </CssBaseline>)
 }
 

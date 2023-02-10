@@ -5,6 +5,7 @@ const colors = getColors()
 
 
 export const day = {
+  mode: 'light',
   primary: {
     main: colors.grey.medium,
     background: colors.grey.light,
@@ -26,6 +27,7 @@ export const day = {
 
 
 export const night = {
+  mode: 'dark',
   primary: {
     main: colors.grey.dark,
     background: colors.grey.darkest,

@@ -1,20 +1,18 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import {ColorModeContext} from '../Context/ColorMode'
+import useTheme from '@mui/styles/useTheme'
 import AttentionIcon from '../assets/icons/Attention.svg'
 
 
 /**
- * Loader contains the ItemPanel and allows for
- * show/hide from the right of the screen.
+ * Loader contains the ItemPanel and allows for show/hide from the
+ * right of the screen.
  *
- * @return {object} React component.
+ * @return {React.Component}
  */
 export default function NoContent() {
-  const theme = useContext(ColorModeContext).getTheme()
-
-
+  const theme = useTheme()
   return (
     <Box sx={{width: '100%'}}>
       <Box sx={{

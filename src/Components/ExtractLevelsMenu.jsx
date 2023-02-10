@@ -4,9 +4,9 @@ import {Vector3} from 'three'
 import {IFCBUILDINGSTOREY} from 'web-ifc'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
-import useTheme from '../theme/Theme'
 import {isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import LevelsIcon from '../assets/icons/Levels.svg'
@@ -136,7 +136,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           },
           sx: {
             '& .Mui-selected': {
-              color: theme.theme.palette.secondary.main,
+              color: theme.palette.secondary.main,
               fontWeight: 600,
             },
           },

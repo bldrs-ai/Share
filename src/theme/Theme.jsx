@@ -7,7 +7,7 @@ import {day, night} from './Palette'
 
 
 /**
- * @return {object} {theme, colorMode}
+ * @return {object} theme
  */
 export default function useShareTheme() {
   const [mode, setMode] = useState(Privacy.getCookie({
@@ -19,13 +19,8 @@ export default function useShareTheme() {
 
 
   const theme = useMemo(() => {
-    return loadTheme(mode)
-  }, [mode])
-
-
-  const colorMode = useMemo(() => {
-    return loadColorMode(mode, setMode, theme, themeChangeListeners)
-  }, [mode, setMode, theme, themeChangeListeners])
+    return loadTheme(mode, setMode, themeChangeListeners)
+  }, [mode, setMode, themeChangeListeners])
 
 
   useEffect(() => {
@@ -34,8 +29,9 @@ export default function useShareTheme() {
     }
   }, [mode, theme, themeChangeListeners])
 
-  return {theme, colorMode}
+  return theme
 }
+
 
 export const Themes = {
   Day: 'Day',
@@ -45,9 +41,11 @@ export const Themes = {
 
 /**
  * @param {string} mode
+ * @param {Function} setMode
+ * @param {Array.Function} themeChangeListeners
  * @return {object} Theme settings
  */
-function loadTheme(mode) {
+function loadTheme(mode, setMode, themeChangeListeners) {
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
   // it will be created automatically.  I think I've had that working
@@ -59,22 +57,6 @@ function loadTheme(mode) {
     typography: getTypography(),
     shape: {borderRadius: 8},
     palette: activePalette,
-  }
-  return createTheme(theme)
-}
-
-
-/**
- * @param {string} mode
- * @param {Function} setMode
- * @param {object} theme
- * @param {Array.Function} themeChangeListeners
- * @return {object} ColorMode
- */
-function loadColorMode(mode, setMode, theme, themeChangeListeners) {
-  return {
-    isDay: () => mode === Themes.Day,
-    getTheme: () => theme,
     toggleColorMode: () => {
       setMode((prevMode) => {
         const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
@@ -86,6 +68,7 @@ function loadColorMode(mode, setMode, theme, themeChangeListeners) {
       themeChangeListeners[onChangeCb] = onChangeCb
     },
   }
+  return createTheme(theme)
 }
 
 
