@@ -2,7 +2,7 @@ import React, {useEffect} from 'react'
 import {ThemeProvider} from '@mui/material/styles'
 import useStore from './store/useStore'
 import {ColorModeContext} from './Context/ColorMode'
-import useTheme from './Theme'
+import useTheme from './theme/Theme'
 import BaseRoutesMock from './BaseRoutesMock.test'
 
 
