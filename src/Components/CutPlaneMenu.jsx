@@ -94,7 +94,7 @@ export default function CutPlaneMenu() {
 
 
   return (
-    <div>
+    <>
       <TooltipIconButton
         title={'Section'}
         icon={<CutPlaneIcon/>}
@@ -135,7 +135,7 @@ export default function CutPlaneMenu() {
         >Z
         </MenuItem>
       </Menu>
-    </div>
+    </>
   )
 }
 

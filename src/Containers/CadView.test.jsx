@@ -27,7 +27,7 @@ describe('CadView', () => {
 
   it('renders with mock IfcViewerAPI', async () => {
     const modelPath = {
-      filepath: `index.ifc`,
+      filepath: `/index.ifc`,
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
@@ -153,11 +153,11 @@ describe('CadView', () => {
 
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
-    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('haus.ifc')
+    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('/haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
-      filepath: `haus.ifc`,
+      filepath: `/haus.ifc`,
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())

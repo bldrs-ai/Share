@@ -1,6 +1,7 @@
 import {Vector3} from 'three'
 
 
+jest.mock('../src/Infrastructure/IfcHighlighter')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
@@ -47,7 +48,16 @@ const impl = {
     },
     loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
     setWasmPath: jest.fn(),
-    unpickIfcItems: jest.fn(),
+    selector: {
+      unpickIfcItems: jest.fn(),
+      selection: {
+        meshes: [],
+        material: null,
+      },
+      preselection: {
+        material: null,
+      },
+    },
   },
   clipper: {
     active: false,
@@ -69,11 +79,15 @@ const impl = {
   },
   context: {
     resize: jest.fn(),
+    getRenderer: jest.fn(),
+    getScene: jest.fn(),
+    getCamera: jest.fn(),
   },
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
   setSelection: jest.fn(),
+  pickIfcItemsByID: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

@@ -2,6 +2,8 @@ import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
 import debug from './utils/debug'
+import {useAuth0} from '@auth0/auth0-react'
+import useStore from './store/useStore'
 import * as Sentry from '@sentry/react'
 
 
@@ -27,14 +29,43 @@ export default function BaseRoutes({testElt = null}) {
   const navigation = useNavigate()
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix }/`
+  const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
+  const setAccessToken = useStore((state) => state.setAccessToken)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
       debug().log('BaseRoutes#useEffect[], forwarding to: ', `${installPrefix }/share`)
-      navigation(`${installPrefix }/share`)
+
+      let targetURL = `${installPrefix}/share`
+      if (location.search !== '') {
+        targetURL += location.search
+      }
+
+      if (location.hash !== '') {
+        targetURL += location.hash
+      }
+
+      navigation(targetURL)
     }
-  }, [basePath, installPrefix, location, navigation])
+
+    if (!isLoading && isAuthenticated) {
+      getAccessTokenSilently({
+        authorizationParams: {
+          audience: 'https://api.github.com/',
+          scope: 'openid profile email offline_access repo',
+        },
+      }).then((token) => {
+        setAccessToken(token)
+      }).catch((err) => {
+        if (err.error !== 'login_required') {
+          throw err
+        }
+
+        console.log(err.error)
+      })
+    }
+  }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
 
   return (
     <SentryRoutes>

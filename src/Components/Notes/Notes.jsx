@@ -22,6 +22,7 @@ export default function Notes() {
   const filteredNote = (notes && selectedNoteId) ?
     notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
+  const accessToken = useStore((state) => state.accessToken)
 
 
   useEffect(() => {
@@ -33,7 +34,7 @@ export default function Notes() {
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
-        const issuesData = await getIssues(repository)
+        const issuesData = await getIssues(repository, accessToken)
         let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
@@ -63,7 +64,7 @@ export default function Notes() {
     }
 
     fetchNotes()
-  }, [setNotes, repository])
+  }, [setNotes, repository, accessToken])
 
 
   useEffect(() => {
@@ -76,7 +77,7 @@ export default function Notes() {
       try {
         const commentsArr = []
 
-        const commentsData = await getComments(repository, selectedNote.number)
+        const commentsData = await getComments(repository, selectedNote.number, accessToken)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
@@ -103,7 +104,7 @@ export default function Notes() {
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredNote, repository, setComments])
+  }, [filteredNote, repository, setComments, accessToken])
 
   return (
     <Paper

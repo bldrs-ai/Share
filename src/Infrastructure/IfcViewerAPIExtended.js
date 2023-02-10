@@ -1,4 +1,5 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
+import IfcHighlighter from './IfcHighlighter'
 
 /**
  * Extending the original IFCViewerFunctionality
@@ -7,6 +8,11 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
+  /**  */
+  constructor(options) {
+    super(options)
+    this.highlighter = new IfcHighlighter(this.context)
+  }
   /**
    * Gets the expressId of the element that the mouse is pointing at
    *
@@ -47,10 +53,12 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     if (this._selectedExpressIds.length !== 0) {
       try {
         await this.pickIfcItemsByID(modelID, this._selectedExpressIds, focusSelection, true)
+        this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
         console.error(e)
       }
     } else {
+      this.highlighter.setHighlighted(null)
       this.IFC.selector.unpickIfcItems()
     }
   }

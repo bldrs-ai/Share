@@ -179,7 +179,8 @@ function loadTheme(mode) {
     MuiToggleButton: {
       styleOverrides: {
         sizeMedium: {
-          'margin': '.2em 0em .2em 0em',
+          'width': '50px',
+          'height': '50px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: activePalette.primary.background,
@@ -188,6 +189,8 @@ function loadTheme(mode) {
         },
         sizeSmall: {
           border: 'none',
+          width: '40px',
+          height: '40px',
         },
       },
     },
