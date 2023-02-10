@@ -5,6 +5,7 @@ import CutPlaneIcon from '../../assets/icons/CutPlane.svg'
 import ListIcon from '../../assets/icons/List.svg'
 import LogoBuildings from '../../assets/Logo_Buildings.svg'
 import NotesIcon from '../../assets/icons/Notes.svg'
+import OpenIcon from '../../assets/icons/Open.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
 
@@ -43,42 +44,51 @@ export default function AboutGuide() {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '15px',
+            lineHeight: '17px',
           },
           '& a': {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '15px',
+            lineHeight: '17px',
+            fontWeight: 'bold',
           },
         }}
       >
-        <div>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '234px',
+          }}
+        >
+          <a
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1506392033'
+            target='_new'
+          >
+            <OpenIcon/> ← Open
+          </a>
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
             target='_new'
           >
-              Share model → <ShareIcon/>
+              Share → <ShareIcon/>
           </a>
-        </div>
-        <div>Collaborate with Notes → <NotesIcon/></div>
+        </Box>
+        <div>Notes → <NotesIcon/></div>
         <div>
-          <a
-            href='http://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1527240734'
-            target='_new'
-          >
-              View model item properties → <ListIcon/>
-          </a>
+          Properties → <ListIcon/>
         </div>
-        <div>Section and Plan views → <CutPlaneIcon/></div>
+        <div>Section → <CutPlaneIcon/></div>
       </Box>
       <Box
         sx={{
           'float': 'right',
-          'margin': '1.4em 4em 0em 0em',
+          'margin': '-1em 4em 0em 0em',
           '& svg': {
-            width: '120px',
-            height: '50px',
+            width: '130px',
+            height: '100px',
             opacity: .9,
           },
         }}
