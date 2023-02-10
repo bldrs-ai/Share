@@ -518,7 +518,7 @@ export default function CadView({
       }
       if (event.code === 'KeyA' ||
         event.code === 'Escape') {
-        resetSelection()
+        selectItemsInScene([])
       }
     }
   }

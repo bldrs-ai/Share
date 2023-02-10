@@ -241,23 +241,17 @@ describe('CadView', () => {
     expect(setSelectionCalls).toEqual(expectedCall)
   })
 
-  it('highlights elements to be called every time selection changes', async () => {
+  it('can clear selection using Escape key', async () => {
     const testTree = makeTestTree()
     const selectedIdsAsString = ['0', '1']
+    const elementCount = 2
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const ActualImplementation = jest.requireActual('../Infrastructure/IfcViewerAPIExtended')
-    const ActualViewerPrototype = ActualImplementation.IfcViewerAPIExtended.prototype
     const viewer = new IfcViewerAPIExtended()
-    // Rewire the original setSelection function that calls the highlighter
-    viewer.setSelection.mockImplementation(ActualViewerPrototype.setSelection.bind(viewer))
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
     const {getByTitle} = render(
         <ShareMock>
           <CadView
@@ -267,29 +261,14 @@ describe('CadView', () => {
             modelPath={modelPath}
           />
         </ShareMock>)
+    await actAsyncFlush()
     expect(getByTitle('Section')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear')
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
     await act(() => {
       result.current.setSelectedElements(selectedIdsAsString)
     })
-    expect(viewer.highlighter.setHighlighted).toHaveBeenLastCalledWith(viewer.IFC.selector.selection.meshes)
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    expect(viewer.highlighter.setHighlighted).toHaveBeenLastCalledWith(null)
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    expect(viewer.highlighter.setHighlighted).toHaveBeenLastCalledWith(null)
-    const setSelectionCalls = viewer.setSelection.mock.calls
-    const setHighlightedMock = viewer.highlighter.setHighlighted.mock
-    // Make sure it's called every time selection changes
-    expect(setHighlightedMock.calls).toHaveLength(setSelectionCalls.length)
+    expect(result.current.selectedElements).toHaveLength(elementCount)
+    fireEvent.keyDown(getByTitle('Section'), {key: 'Escape', code: 'Escape', charCode: 27})
+    expect(result.current.selectedElements).toHaveLength(0)
+    await actAsyncFlush()
   })
 })
