@@ -10,12 +10,12 @@ import {day, night} from './Palette'
  * @return {object} {theme, colorMode}
  */
 export default function useShareTheme() {
-  const [themeChangeListeners] = useState({})
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
     name: 'mode',
     defaultValue: getSystemCurrentLightDark(),
   }))
+  const [themeChangeListeners] = useState({})
 
 
   const theme = useMemo(() => {
@@ -24,21 +24,8 @@ export default function useShareTheme() {
 
 
   const colorMode = useMemo(() => {
-    return {
-      isDay: () => mode === Themes.Day,
-      getTheme: () => theme,
-      toggleColorMode: () => {
-        setMode((prevMode) => {
-          const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-          Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
-          return newMode
-        })
-      },
-      addThemeChangeListener: (onChangeCb) => {
-        themeChangeListeners[onChangeCb] = onChangeCb
-      },
-    }
-  }, [mode, theme, themeChangeListeners])
+    return loadColorMode(mode, setMode, theme, themeChangeListeners)
+  }, [mode, setMode, theme, themeChangeListeners])
 
 
   useEffect(() => {
@@ -66,13 +53,7 @@ function loadTheme(mode) {
   // it will be created automatically.  I think I've had that working
   // before, but this is all that works now.
   // https://mui.com/customization/dark-mode/
-  let activePalette = mode === Themes.Day ? day : night
-  activePalette = {...activePalette, ...{
-    mode: mode === Themes.Day ? 'light' : 'dark',
-    background: {
-      paper: activePalette.primary.background,
-    },
-  }}
+  const activePalette = mode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
     typography: getTypography(),
@@ -80,6 +61,31 @@ function loadTheme(mode) {
     palette: activePalette,
   }
   return createTheme(theme)
+}
+
+
+/**
+ * @param {string} mode
+ * @param {Function} setMode
+ * @param {object} theme
+ * @param {Array.Function} themeChangeListeners
+ * @return {object} ColorMode
+ */
+function loadColorMode(mode, setMode, theme, themeChangeListeners) {
+  return {
+    isDay: () => mode === Themes.Day,
+    getTheme: () => theme,
+    toggleColorMode: () => {
+      setMode((prevMode) => {
+        const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
+        Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
+        return newMode
+      })
+    },
+    addThemeChangeListener: (onChangeCb) => {
+      themeChangeListeners[onChangeCb] = onChangeCb
+    },
+  }
 }
 
 

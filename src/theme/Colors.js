@@ -1,4 +1,4 @@
-import {grey, green} from '@mui/material/colors'
+import {grey, green, orange} from '@mui/material/colors'
 
 
 /**
@@ -22,6 +22,7 @@ export function getColors() {
       darkest: '#459A47',
     },
     lime: green[400],
+    orange: orange[400],
     black: '#101010',
   }
 }
