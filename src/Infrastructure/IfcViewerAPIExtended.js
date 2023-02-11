@@ -6,6 +6,8 @@ import {Matrix4} from 'three'
 export default class IfcViewerAPIExtended extends IfcViewerAPI {
   currentSelectionSubsets = []
   ids = []
+  ifcModel = null
+
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -76,10 +78,10 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
         COORDINATE_TO_ORIGIN: firstModel,
         USE_FAST_BOOLS: fastBools,
       })
-      const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
 
-      // subset ops
-      const rootElement = await ifcModel.ifcManager.getSpatialStructure(0, true)
+      this.ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
+
+      const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, true)
       this.collectElementsId(rootElement)
 
       // this createSubset call also adds the subset to the scene
@@ -93,14 +95,14 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
 
       if (firstModel) {
         // eslint-disable-next-line new-cap
-        const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
+        const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(this.ifcModel.modelID)
         const matrix = new Matrix4().fromArray(matrixArr)
         this.IFC.loader.ifcManager.setupCoordinationMatrix(matrix)
       }
       if (fitToFrame) {
         this.IFC.context.fitToFrame()
       }
-      return ifcModel
+      return this.ifcModel
     } catch (err) {
       console.error('Error loading IFC.')
       console.error(err)
@@ -119,8 +121,6 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     element.children.forEach((e) => {
       this.collectElementsId(e)
     })
-    // create a subset only for the leaf elements of the spatial tree
-    // i.e. elements that aren't spatial containers; projects, sites etc.
     if (element.children.length === 0) {
       this.ids.push(element.expressID)
     }
@@ -129,8 +129,6 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
   /**
    * hide selected elements
    *
-   * @param {number} modelID
-   * @param {Array} elements ids
    */
   hideSelectedElements() {
     this.currentSelectionSubsets.forEach((subset) => {
@@ -141,6 +139,17 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     })
   }
 
+  /**
+   * unhide elements
+   *
+   */
+  unHideAllElements() {
+    this.currentSelectionSubsets.forEach((subset) => {
+      this.context.getScene().remove(subset)
+    })
+    this.context.getScene().remove(this.subset)
+    this.context.getScene().add(this.ifcModel)
+  }
 
   /**
    * Pick elements by their ids

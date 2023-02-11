@@ -516,6 +516,9 @@ export default function CadView({
       if (event.code === 'KeyH') {
         viewer.hideSelectedElements()
       }
+      if (event.code === 'KeyU') {
+        viewer.unHideAllElements()
+      }
     }
   }
 
