@@ -2,25 +2,28 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import * as Privacy from '../privacy/Privacy'
+import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import debug from '../utils/debug'
+import BranchesControl from '../Components/BranchesControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
-import useStore from '../store/useStore'
 import SearchBar from '../Components/SearchBar'
-import SideDrawerWrapper from '../Components/SideDrawer/SideDrawer'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import {assertDefined} from '../utils/assert'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {ColorModeContext} from '../Context/ColorMode'
-import {navToDefault} from '../Share'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
-import SearchIndex from './SearchIndex'
-import BranchesControl from '../Components/BranchesControl'
+import {ColorModeContext} from '../Context/ColorMode'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import * as Privacy from '../privacy/Privacy'
+import debug from '../utils/debug'
+import useStore from '../store/useStore'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import IfcViewerAPIExtended from '../Infrastructure/IfcViewerAPIExtended'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import SearchIndex from './SearchIndex'
+
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -76,12 +79,13 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
 
-  // Granular visibility controls for the UI compononets
+  // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
@@ -161,9 +165,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-        theme.palette &&
-        theme.palette.background &&
-        theme.palette.background.paper) || '0xabcdef')
+         theme.palette &&
+         theme.palette.scene &&
+         theme.palette.scene.background) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
   }
@@ -183,12 +187,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.highlight.secondary,
+      color: theme.palette.secondary.background,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.highlight.main,
+      color: theme.palette.secondary.main,
       depthTest: true,
     })
 
@@ -234,8 +238,9 @@ export default function CadView({
    */
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath)
+    const uploadedFile = pathPrefix.endsWith('new')
 
-    if (pathPrefix.endsWith('new')) {
+    if (uploadedFile) {
       filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
@@ -245,8 +250,10 @@ export default function CadView({
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)
 
-    const loadedModel = await viewer.loadIfcUrl(
-        filepath,
+    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
+    const loadedModel = await viewer.IFC.loadIfcUrl(
+        ifcURL,
+        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -392,8 +399,8 @@ export default function CadView({
     setLevelInstance(null)
   }
 
-  /** Unpick active scene elts and remove clip planes. */
-  function unSelectItems() {
+  /** Deselect active scene elts and remove clip planes. */
+  function deselectItems() {
     if (viewer) {
       viewer.clipper.deleteAllPlanes()
     }
@@ -498,6 +505,8 @@ export default function CadView({
     }
     selectItemsInScene(newSelection)
   }
+
+
   /** Set Keyboard button Shortcuts */
   function setKeydownListeners() {
     window.onkeydown = (event) => {
@@ -525,11 +534,9 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
-      if (theme && theme.palette && theme.palette.background && theme.palette.background.paper) {
-        const initializedViewer = initViewer(pathPrefix, theme.palette.background.paper)
-        setViewer(initializedViewer)
-        setViewerStore(initializedViewer)
-      }
+      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
+      setViewer(intializedViewer)
+      setViewerStore(intializedViewer)
     })
   }
 
@@ -540,7 +547,7 @@ export default function CadView({
         position: 'absolute',
         top: '0px',
         left: '0px',
-        display: 'flex',
+        flex: 1,
         width: '100vw',
         height: '100vh',
       }}
@@ -566,8 +573,8 @@ export default function CadView({
       {showSearchBar && (
         <Box sx={{
           position: 'absolute',
-          top: `30px`,
-          left: '20px',
+          top: `1em`,
+          left: '1em',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'flex-start',
@@ -600,8 +607,59 @@ export default function CadView({
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
-      <SideDrawerWrapper unSelectItem={unSelectItems}/>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      }
     </Box>
+  )
+}
+
+
+/**
+ * @property {Function} deselectItems deselects currently selected element
+ * @return {React.Component}
+ */
+function OperationsGroupAndDrawer({deselectItems}) {
+  const isMobile = useIsMobile()
+  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
+  return (
+    isMobile ? (
+      <>
+        <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+          }}
+        >
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
+        {isDrawerOpen &&
+         <Box
+           sx={{
+             position: 'absolute',
+             bottom: 0,
+             width: '100%',
+           }}
+         >
+           <SideDrawer/>
+         </Box>
+        }
+      </>
+    ) : (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'row',
+        }}
+      >
+        <OperationsGroup deselectItems={deselectItems}/>
+        {isDrawerOpen && <SideDrawer/>}
+      </Box>
+    )
   )
 }
 
@@ -634,12 +692,32 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
     v.prePickIfcItem()
   }
 
-  // window.addEventListener('resize', () => {v.context.resize()})
-
   v.container = container
   return v
 }
 
+const getGitHubDownloadURL = async (url, accessToken) => {
+  const repo = parseGitHubRepositoryURL(url)
+  const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
+  return downloadURL
+}
+
+const getFinalURL = async (url, accessToken) => {
+  const u = new URL(url)
+
+  switch (u.host.toLowerCase()) {
+    case 'github.com':
+      if (accessToken === '') {
+        u.host = 'raw.githubusercontent.com'
+        return u.toString()
+      }
+
+      return await getGitHubDownloadURL(url, accessToken)
+
+    default:
+      return url
+  }
+}
 
 /**
  * @param {string} filepath

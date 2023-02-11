@@ -1,35 +1,35 @@
 import React, {useContext} from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import Divider from '@mui/material/Divider'
-import AboutControl from './AboutControl'
-import CameraControl from './CameraControl'
-import CutPlaneMenu from './CutPlaneMenu'
+import {useTheme} from '@mui/styles'
 import useStore from '../store/useStore'
 import {ColorModeContext} from '../Context/ColorMode'
-import {TooltipIconButton} from './Buttons'
-import ClearIcon from '../assets/2D_Icons/Clear.svg'
-import ListIcon from '../assets/2D_Icons/List.svg'
-import MoonIcon from '../assets/2D_Icons/Moon.svg'
-import NotesIcon from '../assets/2D_Icons/Notes.svg'
+import {assertDefined} from '../utils/assert'
+import {hexToRgba} from '../utils/color'
+import AboutControl from './About/AboutControl'
+import CameraControl from './CameraControl'
+import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
-import SunIcon from '../assets/2D_Icons/Sun.svg'
+import {TooltipIconButton} from './Buttons'
+import AuthNav from './AuthNav'
+import ClearIcon from '../assets/icons/Clear.svg'
+import ListIcon from '../assets/icons/List.svg'
+import MoonIcon from '../assets/icons/Moon.svg'
+import NotesIcon from '../assets/icons/Notes.svg'
+import SunIcon from '../assets/icons/Sun.svg'
 
 
 /**
- * OperationsGroup contains tools for cut plane, deselecting items and
- * toggling shortcut visibility
+ * OperationsGroup contains tools for sharing, notes, properties, cut
+ * plane, deselect, theme change and about.
  *
- * @param {Function} unSelectItem deselects currently selected element
+ * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({
-  unSelectItem,
-}) {
-  const turnCommentsOn = useStore((state) => state.turnCommentsOn)
-  const turnCommentsOff = useStore((state) => state.turnCommentsOff)
+export default function OperationsGroup({deselectItems}) {
+  const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const isCommentsOn = useStore((state) => state.isCommentsOn)
+  const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -37,12 +37,10 @@ export default function OperationsGroup({
   const selectedElement = useStore((state) => state.selectedElement)
   const colorMode = useContext(ColorModeContext)
 
+  const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-
-  const isFirstDividerVisible = useStore((state) => state.getFirstDividerVisiblility)
-  const isSecondDividerVisible = useStore((state) => state.getSecondDividerVisiblility)
 
   const isSelected = () => {
     const ifSelected = (
@@ -53,67 +51,86 @@ export default function OperationsGroup({
     return ifSelected
   }
 
-
   const toggle = (panel) => {
     openDrawer()
     if (panel === 'Properties') {
       toggleIsPropertiesOn()
     }
     if (panel === 'Notes') {
-      if (isCommentsOn) {
-        turnCommentsOff()
-      } else {
-        turnCommentsOn()
-      }
+      toggleIsNotesOn()
     }
   }
 
+  const theme = useTheme()
+  const separatorOpacity = 0.1
+  const separatorColor = hexToRgba(assertDefined(theme.palette.primary.contrastText), separatorOpacity)
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'column',
-      height: '100%',
-      margin: '20px',
-    }}
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'margin': '1em 1em 0 0',
+        '@media (max-width: 900px)': {
+          margin: '1em 0.5em 0 0',
+        },
+        '.MuiButtonGroup-root + .MuiButtonGroup-root': {
+          marginTop: '0.5em',
+          paddingTop: '0.5em',
+          borderTop: `solid 1px ${separatorColor}`,
+          borderRadius: 0,
+        },
+        '.MuiButtonBase-root + .MuiButtonBase-root': {
+          marginTop: '0.5em',
+        },
+      }}
     >
+      {isLoginVisible &&
+       <ButtonGroup orientation='vertical'>
+         <AuthNav/>
+       </ButtonGroup>
+      }
+
       {isCollaborationGroupVisible &&
-        <ButtonGroup orientation="vertical" >
-          <ShareControl/>
-        </ButtonGroup>}
-      {isFirstDividerVisible() && <Divider/>}
+       <ButtonGroup orientation='vertical'>
+         <ShareControl/>
+       </ButtonGroup>
+      }
+
       {isModelInteractionGroupVisible &&
-      <ButtonGroup orientation="vertical" >
-        <TooltipIconButton
-          title='Notes'
-          icon={<NotesIcon/>}
-          selected={isCommentsOn}
-          onClick={() => toggle('Notes')}
-        />
-        <TooltipIconButton
-          title="Properties"
-          onClick={() => toggle('Properties')}
-          selected={isPropertiesOn}
-          icon={<ListIcon/>}
-        />
-        <CutPlaneMenu/>
-        {/* <ExtractLevelsMenu/> */}
-        <TooltipIconButton
-          title="Clear"
-          onClick={unSelectItem}
-          selected={isSelected()}
-          icon={<ClearIcon/>}
-        />
-      </ButtonGroup>}
-      {isSecondDividerVisible() && <Divider/>}
+       <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title='Notes'
+           icon={<NotesIcon/>}
+           selected={isNotesOn}
+           onClick={() => toggle('Notes')}
+         />
+         <TooltipIconButton
+           title='Properties'
+           onClick={() => toggle('Properties')}
+           selected={isPropertiesOn}
+           icon={<ListIcon/>}
+         />
+         <CutPlaneMenu/>
+         {/* <ExtractLevelsMenu/> */}
+         <TooltipIconButton
+           title='Clear'
+           onClick={deselectItems}
+           selected={isSelected()}
+           icon={<ClearIcon/>}
+         />
+       </ButtonGroup>
+      }
+
       {isSettingsVisible &&
-      <ButtonGroup orientation="vertical">
-        <TooltipIconButton
-          title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
-          onClick={() => colorMode.toggleColorMode()}
-          icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
-        />
-        <AboutControl/>
-      </ButtonGroup>}
+       <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
+           onClick={() => colorMode.toggleColorMode()}
+           icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
+         />
+         <AboutControl/>
+       </ButtonGroup>
+      }
       {/* Invisible */}
       <CameraControl/>
     </Box>

@@ -10,17 +10,17 @@ import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import {ControlButton, RectangularButton} from './Buttons'
+import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
-import CopyIcon from '../assets/2D_Icons/Copy.svg'
-import ShareIcon from '../assets/2D_Icons/Share.svg'
+import CopyIcon from '../assets/icons/Copy.svg'
+import ShareIcon from '../assets/icons/Share.svg'
 
 
 /**
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * @return {object} The button react component, with a hosted
+ * @return {React.ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
 export default function ShareControl() {
@@ -31,15 +31,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
-      icon={
-        <Box sx={{
-          width: '20px',
-          height: '20px',
-          marginBottom: '2px',
-        }}
-        >
-          <ShareIcon/>
-        </Box>}
+      icon={<ShareIcon style={{width: '20px', height: '20px'}}/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -138,6 +130,9 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText='Share'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
+      actionTitle='Copy Link'
+      actionIcon={<CopyIcon/>}
+      actionCb={onCopy}
       content={
         <Box sx={{
           display: 'flex',
@@ -157,13 +152,14 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               readOnly: true,
             }}
           />
-          <Box sx={{
-            width: '100%',
-            marginTop: '20px',
-            display: 'flex',
-            flexDirection: 'column',
-            paddingLeft: '10px',
-          }}
+          <Box
+            sx={{
+              width: '100%',
+              marginTop: '20px',
+              display: 'flex',
+              flexDirection: 'column',
+              paddingLeft: '10px',
+            }}
           >
             {isPlanesOn &&
               <Box sx={rowStyle}>
@@ -181,13 +177,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 checked={isCameraInUrl}
               />
             </Box>
-          </Box>
-          <Box sx={{
-            marginTop: '20px',
-            marginBottom: '10px',
-          }}
-          >
-            <RectangularButton title={'Copy Link'} icon={<CopyIcon/>} onClick={onCopy}/>
           </Box>
         </Box>
       }

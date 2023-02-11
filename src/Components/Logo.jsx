@@ -1,47 +1,49 @@
 import React from 'react'
+import {useTheme} from '@mui/styles'
 import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
-import useTheme from '@mui/styles/useTheme'
-import LogoIcon from '../assets/LogoB_4.svg'
+import {TooltipIconButton} from './Buttons'
+import LogoIcon from '../assets/LogoB.svg'
 import PkgJson from '../../package.json'
 
 
 /**
- * @param {Function} onClick function triggered when logo is cliked
- * @return {object} React component
+ * @param {Function} onClick function triggered when logo is clicked
+ * @return {React.ReactElement}
  */
 export default function Logo({onClick}) {
   const theme = useTheme()
-
-
   return (
-    <Box sx={{
-      'position': 'fixed',
-      'bottom': '-60px',
-      'left': '12px',
-      '& svg': {
-        'width': '50px',
-        '@media (max-width: 900px)': {
-          width: '50px',
+    <Box
+      sx={{
+        'position': 'fixed',
+        'bottom': '1em',
+        'left': '1em',
+        '& svg': {
+          'width': '50px',
+          'height': '50px',
+          'marginBottom': '4px',
+          'marginTop': '4px',
+          '@media (max-width: 900px)': {
+            width: '40px',
+          },
+          '& .left-face': {
+            fill: theme.palette.secondary.background,
+          },
+          '& .right-face': {
+            fill: theme.palette.secondary.main,
+          },
+          '& #logo path': {
+            stroke: theme.palette.primary.main,
+          },
         },
-        '& .left-face': {
-          fill: theme.palette.primary.light,
-        },
-        '& .right-face': {
-          fill: theme.palette.primary.dark,
-        },
-        '& .edges': {
-          stroke: theme.palette.primary.contrastText,
-        },
-      },
-    }}
+      }}
     >
-      <Tooltip title={`Bldrs: ${PkgJson.version}`} describeChild placement="right">
-        <IconButton disableRipple onClick={onClick}>
-          <LogoIcon/>
-        </IconButton>
-      </Tooltip>
+      <TooltipIconButton
+        title={`Bldrs: ${PkgJson.version}`}
+        placement="right"
+        icon={<LogoIcon/>}
+        onClick={onClick}
+      />
     </Box>
   )
 }

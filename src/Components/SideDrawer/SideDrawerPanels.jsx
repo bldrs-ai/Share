@@ -1,36 +1,59 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
+import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
-import {TooltipIconButton} from '../Buttons'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
-import CloseIcon from '../../assets/2D_Icons/Close.svg'
+import PanelTitle from '../PanelTitle'
 
 
 /**
- * Panel Title
- *
- * @param {string} title Panel title
- * @param {object} controlsGroup Controls Group is placed on the right of the title
- * @return {object} Properties Panel react component
+ * @param {object} props React props with children
+ * @return {React.Component}
  */
-function PanelTitle({title, controlsGroup}) {
+function PanelWithTitle(props) {
+  const titleHeight = '3em'
+  const paddingBottom = '0.6em'
+  const theme = useTheme()
+  // This isn't visible, but the alignment is important for debugging, so leaving.
+  const headerBorderOpacity = 0
+  const headerBorderColor = hexToRgba(theme.palette.primary.contrastText, headerBorderOpacity)
+  const isMobile = useIsMobile()
   return (
-    <Box sx={{
-      display: 'flex',
-      flexDirection: 'row',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      borderRadius: '5px',
-    }}
-    >
-      <Typography variant='h2'>
-        {title}
-      </Typography>
-      {controlsGroup}
+    <Box sx={{height: '100%', overflow: 'hidden'}}>
+      <Box
+        sx={{
+          height: props.includeGutter ? `calc(${titleHeight} + ${paddingBottom})` : '${titleHeight}',
+          borderBottom: `solid 1px ${headerBorderColor}`,
+        }}
+      >
+        <PanelTitle title={props.title} controlsGroup={props.controlsGroup}/>
+      </Box>
+      <Box
+        sx={{
+          height: `calc(100% - ${titleHeight})`,
+          overflow: 'auto',
+          padding: isMobile ? '0 0.5em 0 0' : '1em 0.5em 1em 0',
+        }}
+      >
+        {props.children}
+      </Box>
     </Box>
+  )
+}
+
+
+/** @return {React.Component} */
+export function NotesPanel() {
+  // TODO(pablo): const selectedNoteId = useStore((state) => state.selectedNoteId)
+  return (
+    <PanelWithTitle title={'Notes'} controlsGroup={<NotesNavBar/>} includeGutter={true}>
+      <Notes/>
+    </PanelWithTitle>
   )
 }
 
@@ -39,77 +62,18 @@ function PanelTitle({title, controlsGroup}) {
  * PropertiesPanel is a wrapper for the item properties component.
  * It contains the title with additional controls, and the item properties styled container.
  *
- * @return {object} Properties Panel react component
+ * @property {boolean} Include gutter.  Should be present only when
+ *     Properties occupies full SideDrawer.
+ * @return {React.Component} Properties Panel react component
  */
-export function PropertiesPanel() {
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+export function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
-
-
-  // TODO(pablo): this render was sometimes coming up with a react
-  // error where createElement is undefined.  I've refactored a little
-  // and now can't reproduce.
   return (
-    <>
-      <PanelTitle
-        title='Properties'
-        controlsGroup={
-          <Box>
-            <TooltipIconButton
-              title='toggle drawer'
-              onClick={toggleIsPropertiesOn}
-              icon={
-                <Box sx={{
-                  display: 'flex',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                  width: '14px',
-                  height: '14px',
-                }}
-                >
-                  <CloseIcon/>
-                </Box>}
-            />
-          </Box>
-        }
-      />
-      <Box sx={{
-        paddingTop: '4px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}
-      >
-        {selectedElement ?
-          <ItemProperties/> :
-          <Box sx={{width: '100%'}}>
-            <Typography
-              variant='h4'
-              sx={{textAlign: 'left'}}
-            >
-              Please select an element
-            </Typography>
-          </Box>
-        }
-      </Box>
-    </>
-  )
-}
-
-
-export const NotesPanel = () => {
-  return (
-    <>
-      <NotesNavBar/>
-      <Box sx={{
-        paddingTop: '4px',
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-      }}
-      >
-        <Notes/>
-      </Box>
-    </>
+    <PanelWithTitle title={'Properties'} includeGutter={includeGutter}>
+      {selectedElement ?
+       <ItemProperties/> :
+       <Typography variant='p'>Please select an element</Typography>
+      }
+    </PanelWithTitle>
   )
 }

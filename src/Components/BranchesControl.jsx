@@ -1,17 +1,15 @@
-import React, {useContext, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import {ColorModeContext} from '../Context/ColorMode'
 import debug from '../utils/debug'
 import {getBranches} from '../utils/GitHub'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
 import {handleBeforeUnload} from '../utils/event'
-import {dayColor, nightColor} from '../utils/constants'
 
 
 /**
@@ -21,7 +19,6 @@ import {dayColor, nightColor} from '../utils/constants'
  */
 export default function Branches() {
   const navigate = useNavigate()
-  const colorMode = useContext(ColorModeContext)
   const repository = useStore((state) => state.repository)
   const [branches, setBranches] = useState([])
   const [versionPaths, setVersionPaths] = useState([])
@@ -75,9 +72,8 @@ export default function Branches() {
   return (
     <>
       {branches.length > 1 && modelPath.repo !== undefined &&
-        <Paper elevation={0}
+        <Paper elevation={0} variant='control'
           sx={{
-            backgroundColor: colorMode.isDay() ? dayColor : nightColor,
             marginTop: '34px',
             opacity: .8,
           }}
@@ -86,31 +82,31 @@ export default function Branches() {
             sx={{
               'width': '300px',
               '& .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.grey,
+                color: theme.palette.primary.contrastText,
               },
               '& .MuiInputLabel-root': {
-                color: theme.palette.highlight.heaviest,
+                color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
               },
               '&:hover .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.heaviest,
+                color: theme.palette.primary.contrastText,
               },
               // TODO(oleg): connect to props
               '&:hover .MuiInputLabel-root': {
-                color: theme.palette.highlight.heaviest,
+                color: theme.palette.primary.contrastText,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
               },
               // TODO(oleg): connect to props
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-                color: theme.palette.highlight.maximum,
+                color: theme.palette.primary.contrastText,
               },
               // TODO(oleg): connect to props
               '& .MuiInputLabel-root.Mui-focused': {
-                color: theme.palette.highlight.heaviest,
+                color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
@@ -138,6 +134,5 @@ export default function Branches() {
         </Paper>
       }
     </>
-
   )
 }

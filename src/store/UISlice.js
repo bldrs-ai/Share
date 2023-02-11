@@ -1,4 +1,6 @@
+import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
+
 
 /**
  * Data stored in Zustand for UI state.
@@ -9,7 +11,7 @@ import debug from '../utils/debug'
  */
 export default function createUISlice(set, get) {
   return {
-    isCommentsOn: false,
+    isNotesOn: false,
     isDrawerOpen: false,
     isNavPanelOpen: true,
     isOpenControlHighlighted: true,
@@ -18,15 +20,17 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: 500,
+    sidebarWidth: MOBILE_WIDTH,
+    sidebarHeight: MOBILE_HEIGHT,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
-    toggleIsCommentsOn: () => set((state) => ({isCommentsOn: !state.isCommentsOn})),
+    toggleIsNotesOn: () => set((state) => ({isNotesOn: !state.isNotesOn})),
+    openNotes: () => set(() => ({isNotesOn: true})),
+    closeNotes: () => set(() => ({isNotesOn: false})),
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
-    turnCommentsOn: () => set(() => ({isCommentsOn: true})),
-    turnCommentsOff: () => set(() => ({isCommentsOn: false})),
+    closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
@@ -46,5 +50,6 @@ export default function createUISlice(set, get) {
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
+    setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
   }
 }

@@ -7,7 +7,7 @@ import useTheme from '../Theme'
 import useStore from '../store/useStore'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/2D_Icons/CutPlane.svg'
+import CutPlaneIcon from '../assets/icons/CutPlane.svg'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import debug from '../utils/debug'
 
@@ -94,7 +94,7 @@ export default function CutPlaneMenu() {
 
 
   return (
-    <div>
+    <>
       <TooltipIconButton
         title={'Section'}
         icon={<CutPlaneIcon/>}
@@ -116,7 +116,7 @@ export default function CutPlaneMenu() {
           },
           sx: {
             '& .Mui-selected': {
-              color: theme.theme.palette.highlight.main,
+              color: theme.theme.palette.secondary.main,
               fontWeight: 600,
             },
           },
@@ -135,7 +135,7 @@ export default function CutPlaneMenu() {
         >Z
         </MenuItem>
       </Menu>
-    </div>
+    </>
   )
 }
 

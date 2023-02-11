@@ -1,5 +1,5 @@
 import {createTheme} from '@mui/material/styles'
-import {grey} from '@mui/material/colors'
+import {grey, green} from '@mui/material/colors'
 import {useEffect, useMemo, useState} from 'react'
 import * as Privacy from './privacy/Privacy'
 
@@ -7,7 +7,7 @@ import * as Privacy from './privacy/Privacy'
 /**
  * @return {object} {theme, colorMode}
  */
-export default function useTheme() {
+export default function useShareTheme() {
   const [themeChangeListeners] = useState({})
   const [mode, setMode] = useState(Privacy.getCookie({
     component: 'theme',
@@ -48,7 +48,6 @@ export default function useTheme() {
   return {theme, colorMode}
 }
 
-
 export const Themes = {
   Day: 'Day',
   Night: 'Night',
@@ -61,70 +60,75 @@ export const Themes = {
  */
 function loadTheme(mode) {
   // https://mui.com/customization/color/#color-palette
-  const lightGreen = '#C8E8C7'
-  const darkGreen = '#459A47'
-  const fontFamily = 'Roboto'
-  const lime = '#4EEF4B'
+  const fontFamily = 'Helvetica'
+  const colors = {
+    grey: {
+      lightest: grey[100],
+      light: grey[300],
+      medium: '#C1C1C1',
+      dark: '#444444',
+      darkest: grey[900],
+    },
+    green: {
+      lightest: '#CEE6CA',
+      light: green[300],
+      medium: green[500],
+      dark: green[800],
+      darkest: '#459A47',
+    },
+    lime: green[400],
+    black: '#101010',
+  }
   const day = {
     primary: {
-      main: grey[100],
-      background: grey[200],
+      main: colors.grey.medium,
+      background: colors.grey.light,
+      contrastText: colors.black,
     },
     secondary: {
-      main: grey[800],
-      background: grey[300],
+      main: colors.green.darkest,
+      background: colors.green.lightest,
+      contrastText: colors.green.dark,
     },
-    highlight: {
-      main: lightGreen,
-      secondary: darkGreen,
-      heavy: grey[300],
-      heavier: grey[400],
-      heaviest: grey[500],
-      maximum: 'black',
-      lime,
+    scene: {
+      background: colors.grey.lightest,
     },
   }
   const night = {
     primary: {
-      main: grey[800],
-      background: grey[700],
+      main: colors.grey.dark,
+      background: colors.grey.darkest,
+      contrastText: colors.grey.lightest,
     },
     secondary: {
-      main: grey[100],
-      background: grey[700],
+      main: colors.green.lightest,
+      background: colors.green.medium,
+      contrastText: colors.green.lightest,
     },
-    highlight: {
-      main: darkGreen,
-      secondary: lightGreen,
-      heavy: grey[600],
-      heavier: grey[500],
-      heaviest: grey[400],
-      lime,
+    scene: {
+      background: colors.black,
     },
   }
-  const fontSize = '1rem'
+  const fontSize = 16
   const lineHeight = '1.5em'
   const letterSpacing = 'normal'
   const fontWeight = '400'
-  const fontWeightBold = '400'
   const typography = {
-    fontWeightRegular: fontWeight,
-    fontWeightBold,
-    fontWeightMedium: fontWeight,
-    h1: {fontSize: '1.3rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h2: {fontSize: '1.2rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h3: {fontSize: '1.1rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h4: {fontSize: '0.9rem', lineHeight, letterSpacing, fontWeight, fontFamily},
-    h5: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    p: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    tree: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight, fontFamily},
-    propValue: {
-      fontSize,
-      lineHeight,
-      letterSpacing,
-      fontWeight: '100',
-      fontFamily},
+    fontFamily: fontFamily,
+    fontSize: fontSize,
+    lineHeight: lineHeight,
+    letterSpacing: letterSpacing,
+    h1: {fontSize: '1.3em', fontWeight},
+    h2: {fontSize: '1.2em', fontWeight},
+    h3: {fontSize: '1.1em', fontWeight: 400},
+    h4: {fontSize: fontSize, fontWeight},
+    h5: {fontSize, textDecoration: 'underline'},
+    h6: {fontSize: '.8m', fontWeight: 500},
+    body1: {fontSize, lineHeight, letterSpacing, fontWeight},
+    body2: {fontSize, lineHeight, letterSpacing, fontWeight},
+    tree: {fontSize, lineHeight, letterSpacing, fontWeight},
+    propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
+    propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '300'},
   }
   // TODO(pablo): still not sure how this works.  The docs make it
   // look like we don't need an explicit color scheme for dark; that
@@ -135,7 +139,7 @@ function loadTheme(mode) {
   activePalette = {...activePalette, ...{
     mode: mode === Themes.Day ? 'light' : 'dark',
     background: {
-      paper: activePalette.primary.main,
+      paper: activePalette.primary.background,
     },
   }}
   const components = {
@@ -143,8 +147,8 @@ function loadTheme(mode) {
       styleOverrides: {
         root: {
           '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            color: activePalette.secondary.main,
-            backgroundColor: activePalette.secondary.background,
+            color: activePalette.primary.contrastText,
+            backgroundColor: activePalette.primary.main,
             borderRadius: '5px',
           },
           '& > div.MuiTreeItem-content': {
@@ -161,7 +165,8 @@ function loadTheme(mode) {
             width: '180px',
             height: '40px',
             textTransform: 'none',
-            color: activePalette.secondary.main,
+            border: 'none',
+            backgroundColor: activePalette.primary.main,
           },
         },
       ],
@@ -171,13 +176,58 @@ function loadTheme(mode) {
         disableRipple: true,
       },
     },
+    MuiToggleButton: {
+      styleOverrides: {
+        sizeMedium: {
+          'width': '50px',
+          'height': '50px',
+          'border': 'none',
+          '&.Mui-selected, &.Mui-selected:hover': {
+            backgroundColor: activePalette.primary.background,
+            opacity: .8,
+          },
+        },
+        sizeSmall: {
+          border: 'none',
+          width: '40px',
+          height: '40px',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+        },
+      },
+      variants: [
+        {
+          props: {variant: 'control'},
+          style: {
+            backgroundColor: activePalette.primary.background,
+          },
+        },
+        {
+          props: {variant: 'note'},
+          style: {
+            backgroundColor: activePalette.scene.background,
+          },
+        },
+      ],
+    },
+    MuiCardActions: {
+      styleOverrides: {
+        root: {
+          backgroundColor: 'blue',
+          border: 'solid 3px red',
+        },
+      },
+    },
   }
   const theme = {
     components: components,
     typography: typography,
     shape: {borderRadius: 8},
     palette: activePalette,
-    button: {},
   }
   return createTheme(theme)
 }

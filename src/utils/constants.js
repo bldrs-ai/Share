@@ -1,2 +1,2 @@
-export const dayColor = '#E8E8E8'
-export const nightColor = '#4C4C4C'
+export const MOBILE_WIDTH = 500
+export const MOBILE_HEIGHT = '50vh'

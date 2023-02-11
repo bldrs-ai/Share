@@ -9,8 +9,8 @@ import useStore from '../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import {isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import LevelsIcon from '../assets/2D_Icons/Levels.svg'
-import PlanViewIcon from '../assets/2D_Icons/PlanView.svg'
+import LevelsIcon from '../assets/icons/Levels.svg'
+import PlanViewIcon from '../assets/icons/PlanView.svg'
 
 
 /**
@@ -136,7 +136,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
           },
           sx: {
             '& .Mui-selected': {
-              color: theme.theme.palette.highlight.main,
+              color: theme.theme.palette.secondary.main,
               fontWeight: 600,
             },
           },

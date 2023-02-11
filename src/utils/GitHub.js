@@ -8,10 +8,19 @@ import {assertDefined} from './assert'
  * Fetch all of the issues from GitHub.
  *
  * @param {object} repository
+ * @param {string} accessToken Github API OAuth access token
  * @return {Array} The issue array of issue objects.
  */
-export async function getIssues(repository) {
-  const issues = await getGitHub(repository, 'issues')
+export async function getIssues(repository, accessToken = '') {
+  const args = {}
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const issues = await getGitHub(repository, 'issues', args)
   debug().log('GitHub: issue: ', repository, issues)
   return issues
 }
@@ -23,10 +32,22 @@ export async function getIssues(repository) {
  *
  * @param {object} repository
  * @param {number} issueId
+ * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
  */
-export async function getIssue(repository, issueId) {
-  const issue = await getGitHub(repository, 'issues/{issue_number}', {issue_number: issueId})
+export async function getIssue(repository, issueId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const issue = await getGitHub(repository, 'issues/{issue_number}', args)
   debug().log('GitHub: issue: ', issue)
   return issue
 }
@@ -51,16 +72,24 @@ export async function getBranches(repository) {
  *
  * @param {object} repository
  * @param {number} issueId
+ * @param {string} accessToken Github API OAuth access token
  * @return {Array} The comments array.
  */
-export async function getComments(repository, issueId) {
-  const comments = await getGitHub(
-      repository,
-      'issues/{issue_number}/comments',
-      {
-        issue_number: issueId,
-      })
+export async function getComments(repository, issueId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
   debug().log('GitHub: comments: ', comments)
+
   if (comments && comments.data && comments.data.length > 0) {
     return comments.data
   } else {
@@ -75,16 +104,24 @@ export async function getComments(repository, issueId) {
  * @param {object} repository
  * @param {number} issueId
  * @param {number} commentId
+ * @param {string} accessToken Github API OAuth access token
  * @return {object} The comment object.
  */
-export async function getComment(repository, issueId, commentId) {
-  const comments = await getGitHub(
-      repository,
-      'issues/{issue_number}/comments',
-      {
-        issue_number: issueId,
-      })
+export async function getComment(repository, issueId, commentId, accessToken = '') {
+  const args = {
+    issue_number: issueId,
+  }
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
   debug().log('GitHub: comments: ', comments)
+
   if (comments && comments.data && comments.data.length > 0) {
     if (commentId > comments.data.length) {
       console.error(`Given commentId(${commentId}) is out of range(${comments.data.length}): `)
@@ -96,6 +133,76 @@ export async function getComment(repository, issueId, commentId) {
   }
 }
 
+/**
+ * Retrieves the contents download URL for a GitHub repository path
+ *
+ * @param {object} repository
+ * @param {string} path
+ * @param {string} [ref]
+ * @param {string} [accessToken]
+ * @return {Promise} Promise URL to the contents
+ */
+export async function getDownloadURL(repository, path, ref = '', accessToken = '') {
+  const args = {
+    path: path,
+    ref: ref,
+  }
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
+      ...args.headers,
+    }
+  }
+
+  const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args)
+  if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
+    throw new Error('No contents returned from GitHub')
+  }
+
+  return contents.data.download_url
+}
+
+/**
+ * Parses a GitHub repository URL and returns a structure
+ *
+ * @param {string} githubURL
+ * @return {object} A repository path object.
+ */
+export const parseGitHubRepositoryURL = (githubURL) => {
+  if (githubURL.indexOf('://') === -1) {
+    throw new Error('URL must be fully qualified and contain scheme')
+  }
+
+  const url = new URL(githubURL)
+
+  const host = url.host.toLowerCase()
+  if (host !== 'github.com' && host !== 'raw.githubusercontent.com') {
+    throw new Error('Not a valid GitHub repository URL')
+  }
+
+  const pathParts = [
+    '(?<owner>[^/]+)',
+    '(?<repository>[^/]+)',
+    '(?:(?<isBlob>blob)/)?(?<ref>[^/]+)',
+    '(?<path>.+)',
+  ]
+  const match = url.pathname.match(`^/${pathParts.join('/')}$`)
+  if (match === null) {
+    throw new Error('Could not match GitHub repository URL')
+  }
+
+  const {groups: {owner, repository, ref, path}} = match
+  return {
+    url: url,
+    owner: owner,
+    repository: repository,
+    ref: ref,
+    path: path,
+  }
+}
 
 // DO NOT EXPORT ANY BELOW //
 /**
@@ -113,10 +220,8 @@ async function getGitHub(repository, path, args = {}) {
 
   debug().log('Dispatching GitHub request for repo:', repository)
   const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
-    ...{
-      org: repository.orgName,
-      repo: repository.name,
-    },
+    org: repository.orgName,
+    repo: repository.name,
     ...args,
   })
 
@@ -425,6 +530,9 @@ export const MOCK_MODEL_PATH_LOCAL = {
 }
 
 
+// All direct uses of octokit should be private to this file to
+// ensure we setup mocks for local use and unit testing.
 const octokit = new Octokit({
+  baseUrl: process.env.GITHUB_BASE_URL,
   userAgent: `bldrs/${PkgJson.version}`,
 })

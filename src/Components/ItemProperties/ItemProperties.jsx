@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
+import {hexToRgba} from '../../utils/color'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
 import Toggle from '../Toggle'
@@ -12,7 +13,7 @@ import Toggle from '../Toggle'
 /**
  * ItemProperties displays IFC element properties and possibly PropertySets
  *
- * @return {object} The ItemProperties react component
+ * @return {React.ReactElement} The ItemProperties react component
  */
 export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
@@ -33,6 +34,8 @@ export default function ItemProperties() {
   }, [model, element, expandAll])
 
 
+  const propSeparatorBorderOpacity = 0.3
+  const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
   return (
     <Box sx={{
       '& td': {
@@ -41,24 +44,13 @@ export default function ItemProperties() {
         verticalAlign: 'top',
         cursor: 'pointer',
         padding: '3px 0',
-        borderBottom: `.2px solid ${theme.palette.highlight.heavy}`,
+        borderBottom: `.2px solid ${propSeparatorColor}`,
       },
       '& table': {
         tableLayout: 'fixed',
         width: '100%',
         overflow: 'hidden',
         borderSpacing: 0,
-      },
-      '& .MuiSwitch-root': {
-        float: 'right',
-      },
-      '& .MuiSwitch-track': {
-        backgroundColor: theme.palette.highlight.secondary,
-        opacity: 0.8,
-        border: 'solid 2px grey',
-      },
-      '& .MuiSwitch-thumb': {
-        backgroundColor: theme.palette.highlight.main,
       },
     }}
     >

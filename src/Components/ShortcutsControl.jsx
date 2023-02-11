@@ -4,7 +4,7 @@ import Typography from '@mui/material/Typography'
 import Dialog from './Dialog'
 import {useIsMobile} from './Hooks'
 import {ControlButton} from './Buttons'
-import KnowledgeIcon from '../assets/2D_Icons/Knowledge.svg'
+import KnowledgeIcon from '../assets/icons/Knowledge.svg'
 
 
 /**

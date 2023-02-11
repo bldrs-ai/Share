@@ -2,7 +2,7 @@ import React, {useContext} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {ColorModeContext} from '../Context/ColorMode'
-import AttentionIcon from '../assets/2D_Icons/Attention.svg'
+import AttentionIcon from '../assets/icons/Attention.svg'
 
 
 /**
@@ -25,7 +25,7 @@ export default function NoContent() {
         '& svg': {
           width: '30px',
           height: '30px',
-          fill: theme.palette.highlight.secondary,
+          fill: theme.palette.primary.secondary,
         },
       }}
       >

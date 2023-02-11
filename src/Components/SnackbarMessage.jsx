@@ -1,7 +1,7 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
-import {ColorModeContext} from '../Context/ColorMode'
+import {useTheme} from '@mui/styles'
 
 
 /**
@@ -11,7 +11,7 @@ import {ColorModeContext} from '../Context/ColorMode'
  * @return {object}
  */
 export default function SnackBarMessage({message, type, open}) {
-  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
 
 
   return (
@@ -21,15 +21,14 @@ export default function SnackBarMessage({message, type, open}) {
     >
       <Alert
         sx={{
-          'backgroundColor': colorMode.isDay() ? 'gray' : 'white',
-          'color': colorMode.isDay() ? 'white' : 'gray',
-          'opacity': .8,
+          'backgroundColor': theme.palette.primary.background,
+          'color': theme.palette.primary.contrastText,
           'position': 'relative',
-          'bottom': '60px',
-          'left': '6px',
+          'bottom': '90px',
+          'left': '-6px',
           '@media (max-width: 900px)': {
             left: '18px',
-            bottom: '70px',
+            bottom: '100px',
             width: '305px',
             inlineSize: '305px',
             overflow: 'visible',
