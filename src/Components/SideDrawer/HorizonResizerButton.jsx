@@ -19,7 +19,7 @@ import {isNumber} from '../../utils/strings'
 export default function HorizonResizerButton({
   sidebarRef,
   setSidebarWidth,
-  thickness = 10,
+  thickness = 100,
   isOnLeft = true,
   sidebarWidth = MOBILE_WIDTH,
 }) {

@@ -5,6 +5,7 @@ import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '..
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {NOTE_PREFIX} from './Notes'
+import AddNoteIcon from '../../assets/icons/AddNote.svg'
 import BackIcon from '../../assets/icons/Back.svg'
 import NextIcon from '../../assets/icons/NavNext.svg'
 import PreviousIcon from '../../assets/icons/NavPrev.svg'
@@ -13,6 +14,9 @@ import PreviousIcon from '../../assets/icons/NavPrev.svg'
 /** @return {React.Component} */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
+  const createNote = useStore((state) => state.createNote)
+  const createNoteOn = useStore((state) => state.createNoteOn)
+  const createNoteOff = useStore((state) => state.createNoteOff)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
@@ -58,7 +62,7 @@ export default function NotesNavBar() {
           },
         }}
       >
-        {selectedNoteId &&
+        {selectedNoteId && !createNote &&
          <TooltipIconButton
            title='Back to the list'
            placement='bottom'
@@ -66,7 +70,7 @@ export default function NotesNavBar() {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={<BackIcon/>}
+           icon={<BackIcon style={{width: '16px', height: '16px'}}/>}
          />
         }
       </Box>
@@ -78,7 +82,7 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
-        {(notes && selectedNoteId) && notes.length > 1 &&
+        {(notes && selectedNoteId) && !createNote && notes.length > 1 &&
           <>
             <TooltipIconButton
               title='Previous Note'
@@ -102,6 +106,23 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
+
+        {!selectedNoteId && (createNote ?
+          <TooltipIconButton
+            title='Back to the list'
+            placement='bottom'
+            onClick={createNoteOff}
+            icon={<BackIcon style={{width: '16px', height: '16px'}}/>}
+            size='medium'
+          /> :
+          <TooltipIconButton
+            title='Add a note'
+            placement='bottom'
+            onClick={createNoteOn}
+            icon={<AddNoteIcon style={{width: '18px', height: '18px'}}/>}
+            size='medium'
+          />
+        )}
         <CloseButton onClick={closeNotes}/>
       </Box>
     </Box>
