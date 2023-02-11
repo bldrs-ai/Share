@@ -5,6 +5,7 @@ import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '..
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {NOTE_PREFIX} from './Notes'
+import AddIcon from '../../assets/icons/Add.svg'
 import BackIcon from '../../assets/icons/Back.svg'
 import NextIcon from '../../assets/icons/NavNext.svg'
 import PreviousIcon from '../../assets/icons/NavPrev.svg'
@@ -13,6 +14,9 @@ import PreviousIcon from '../../assets/icons/NavPrev.svg'
 /** @return {React.Component} */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
+  const createNote = useStore((state) => state.createNote)
+  const createNoteOn = useStore((state) => state.createNoteOn)
+  const createNoteOff = useStore((state) => state.createNoteOff)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
@@ -102,6 +106,22 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
+        {createNote ?
+          <TooltipIconButton
+            title='Back to the list'
+            placement='bottom'
+            onClick={createNoteOff}
+            icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
+            size='medium'
+          /> :
+          <TooltipIconButton
+            title='Add a note'
+            placement='bottom'
+            onClick={createNoteOn}
+            icon={<AddIcon style={{width: '15px', height: '15px'}}/>}
+            size='medium'
+          />
+        }
         <CloseButton onClick={closeNotes}/>
       </Box>
     </Box>

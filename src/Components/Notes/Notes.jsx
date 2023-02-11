@@ -6,6 +6,7 @@ import {getIssues, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
+import NoteCardCreate from './NoteCardCreate'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -17,6 +18,7 @@ export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
+  const createNote = useStore((state) => state.createNote)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
@@ -116,9 +118,10 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
+      {createNote && <NoteCardCreate/>}
       {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && <NoContent/> }
-      {notes && !selectedNoteId ?
+      {notes && notes.length === 0 && !createNote && <NoContent/> }
+      {notes && !selectedNoteId && !createNote ?
        notes.map((issue, index) => {
          return (
            <NoteCard
