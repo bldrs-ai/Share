@@ -1,5 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AttentionIcon from '../assets/icons/Attention.svg'
@@ -11,27 +12,26 @@ import AttentionIcon from '../assets/icons/Attention.svg'
  *
  * @return {React.Component}
  */
-export default function NoContent() {
+export default function NoContent({message = 'no content'}) {
   const theme = useTheme()
   return (
-    <Box sx={{width: '100%'}}>
-      <Box sx={{
-        'display': 'flex',
-        'flexDirection': 'column',
-        'justifyContent': 'center',
-        'alignItems': 'center',
-        '& svg': {
-          width: '30px',
-          height: '30px',
-          fill: theme.palette.primary.secondary,
-        },
-      }}
-      >
-        <Box>
-          <AttentionIcon/>
-        </Box>
-        <Typography variant={'h4'}>no content</Typography>
+    <Paper sx={{
+      'width': '100%',
+      'display': 'flex',
+      'flexDirection': 'column',
+      'justifyContent': 'center',
+      'alignItems': 'center',
+      '& svg': {
+        width: '30px',
+        height: '30px',
+        fill: theme.palette.primary.secondary,
+      },
+    }}
+    >
+      <Box>
+        <AttentionIcon/>
       </Box>
-    </Box>
+      <Typography variant={'h4'}>{message}</Typography>
+    </Paper>
   )
 }
