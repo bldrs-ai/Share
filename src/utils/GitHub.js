@@ -52,6 +52,49 @@ export async function getIssue(repository, issueId, accessToken = '') {
   return issue
 }
 
+/**
+ * Post issue to github
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @param {object} payload issue payload shall contain title and body
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function postIssue(repository, payload, accessToken = '') {
+  const args = {
+    ...payload,
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  await postGitHub(repository, 'issues', args)
+}
+
+/**
+ * Close Github issue
+ *
+ * @param {object} repository
+ * @param {object} payload issue payload shall contain title and body
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function closeIssue(repository, issueNumber, accessToken = '') {
+  const args = {
+    issue_number: issueNumber,
+    state: 'closed',
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  await patchGitHub(repository, `issues/${issueNumber}`, args)
+}
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
@@ -74,7 +117,6 @@ export async function getBranches(repository, accessToken = '') {
   debug().log('GitHub: branches: ', branches)
   return branches
 }
-
 
 /**
  * The comments should have the following structure:
@@ -105,7 +147,6 @@ export async function getComments(repository, issueId, accessToken = '') {
     debug().log('Empty comments!')
   }
 }
-
 
 /**
  * The comments should have the following structure:
@@ -234,6 +275,47 @@ async function getGitHub(repository, path, args = {}) {
     ...args,
   })
 
+  return res
+}
+
+/**
+ * Post the resource to the GitHub
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args for posting
+ * @return {object} The object at the resource
+ */
+async function postGitHub(repository, path, args = {}) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('Dispatching GitHub request for repo:', repository)
+  const res = await octokit.request(`POST /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  })
+
+  return res
+}
+
+/**
+ * Patch the resource
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args for posting
+ * @return {object} The object at the resource
+ */
+async function patchGitHub(repository, path, args = {}) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('Dispatching GitHub request for repo:', repository)
+  const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  })
   return res
 }
 
