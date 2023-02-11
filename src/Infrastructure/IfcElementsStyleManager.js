@@ -1,3 +1,6 @@
+import IfcCustomViewSettings from './IfcCustomViewSettings'
+
+
 /**
  *  Overrides the default render functionality in the viewer
  * and adds a postprocessing effect (outlining selected elements)
@@ -18,10 +21,10 @@ export default class IfcElementsStyleManager {
   /**
    * Applys view settings to the next load call
    *
-   * @param {object} settings an object containing expressId:IfcColor pairs
+   * @param {IfcCustomViewSettings} settings an object containing expressId:IfcColor pairs
    */
   setViewSettings(settings) {
-    this.parser._overrideStyles = settings
+    this.parser._overrideStyles = settings ? settings : new IfcCustomViewSettings()
   }
 }
 
@@ -45,7 +48,7 @@ function newStreamMeshFunction(parser) {
       const placedGeometry = placedGeometries.get(i)
       const itemMesh = this.getPlacedGeometry(modelID, mesh.expressID, placedGeometry)
       const geom = itemMesh.geometry.applyMatrix4(itemMesh.matrix)
-      const overrideStyle = this._overrideStyles[mesh.expressID]
+      const overrideStyle = this._overrideStyles.getElementColor(mesh.expressID)
       const color = overrideStyle !== undefined ? overrideStyle : placedGeometry.color
       this.storeGeometryByMaterial(color, geom)
     }
