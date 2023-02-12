@@ -192,6 +192,9 @@ export default class IfcIsolator {
     this.context.items.pickableIfcModels.push(this.ifcModel)
     this.hiddenIds = []
     useStore.setState({hiddenElements: []})
+    if (this.revealHiddenElementsMode) {
+      this.toggleRevealHiddenElements()
+    }
   }
 
   /**
