@@ -1,6 +1,7 @@
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 
 
+/* eslint-disable jsdoc/no-undefined-types */
 /**
  *  Overrides the default render functionality in the viewer
  * and adds a postprocessing effect (outlining selected elements)
@@ -27,6 +28,7 @@ export default class IfcElementsStyleManager {
     this.parser._overrideStyles = settings ? settings : new IfcCustomViewSettings()
   }
 }
+
 
 /* eslint-disable no-invalid-this */
 /**

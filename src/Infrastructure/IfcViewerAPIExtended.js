@@ -4,6 +4,7 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 
 
+/* eslint-disable jsdoc/no-undefined-types */
 /**
  * Extending the original IFCViewerFunctionality
  */
@@ -20,15 +21,15 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
 
 
   /**
-  * Loads the given IFC in the current scene.
-  *
-  * @param {string} url IFC as URL.
-  * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
-  * @param {(event: ProgressEvent) => void} onProgress (optional) a callback function to report on downloading progress
-  * @param {(err: any) => any} onError (optional) a callback function to report on loading errors
-  * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
-  * @returns {IfcModel} ifcModel object
-  */
+   * Loads the given IFC in the current scene.
+   *
+   * @param {string} url IFC as URL.
+   * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
+   * @param {Function(event)} onProgress (optional) a callback function to report on downloading progress
+   * @param {Function} onError (optional) a callback function to report on loading errors
+   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
+   * @return {IfcModel} ifcModel object
+   */
   async loadIfcUrl(url, fitToFrame, onProgress, onError, customViewSettings) {
     this.viewsManager.setViewSettings(customViewSettings)
     return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
