@@ -3,7 +3,6 @@ import IfcViewerAPIExtended from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
-import {IFCPRODUCT, IFCBUILDINGELEMENTPROXY} from 'web-ifc/web-ifc-api'
 
 /**
  *  Provides hiding, unhiding, isolation, and unisolation functionality
