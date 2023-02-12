@@ -84,7 +84,7 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
       this.context.getScene().add(ifcModel)
       this.context.items.ifcModels.push(ifcModel)
       this.context.items.pickableIfcModels.push(ifcModel)
-      await this.isolator.setModel(ifcModel)
+      this.isolator.setModel(ifcModel)
 
       if (firstModel) {
         // eslint-disable-next-line new-cap

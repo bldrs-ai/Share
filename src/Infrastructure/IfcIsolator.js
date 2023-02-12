@@ -3,13 +3,14 @@ import IfcViewerAPIExtended from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
-
+import {IFCPRODUCT, IFCBUILDINGELEMENTPROXY} from 'web-ifc/web-ifc-api'
 
 /**
  *  Provides hiding, unhiding, isolation, and unisolation functionality
  */
 export default class IfcIsolator {
   subsetCustomId = 'Bldrs::Share::Isolator'
+  revealSubsetCustomId = 'Bldrs::Share::HiddenElements'
   context = null
   ifcModel = null
   viewer = null
@@ -40,10 +41,9 @@ export default class IfcIsolator {
    *
    * @param {Mesh} (ifcModel) the laoded ifc model mesh
    */
-  async setModel(ifcModel) {
+  setModel(ifcModel) {
     this.ifcModel = ifcModel
-    const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, false)
-    this.collectElementsId(rootElement)
+    this.collectElementsId()
   }
 
   /**
@@ -98,6 +98,9 @@ export default class IfcIsolator {
       return
     }
     const selection = this.viewer.getSelectedIds()
+    if (selection.length === 0) {
+      return
+    }
     const noChanges = unsortedArraysAreEqual(selection, this.hiddenIds)
     if (noChanges) {
       return
@@ -108,6 +111,7 @@ export default class IfcIsolator {
     useStore.setState({hiddenElements: this.hiddenIds})
     const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
+    this.viewer.setSelection(0, [], false)
   }
 
   /**
@@ -163,10 +167,12 @@ export default class IfcIsolator {
     }
     if (this.hiddenIds.length === 0) {
       this.unHideAllElements()
-      return
+    } else {
+      const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
+      this.initHideOperationsSubset(toBeShown)
     }
-    const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
-    this.initHideOperationsSubset(toBeShown)
+    this.revealHiddenElementsMode = false
+    this.toggleRevealHiddenElements()
   }
 
   /**
@@ -196,20 +202,22 @@ export default class IfcIsolator {
       this.context.getScene().remove(this.revealedElementsSubset)
       delete this.revealedElementsSubset
     } else {
-      this.revealHiddenElementsMode = true
       let hidden = this.hiddenIds
       if (this.tempIsolationModeOn) {
         hidden = hidden.concat(this.ids.filter((e) => !this.isolatedIds.includes(e)))
       }
       if (hidden.length === 0) {
+        this.context.getScene().remove(this.revealedElementsSubset)
+        delete this.revealedElementsSubset
         return
       }
+      this.revealHiddenElementsMode = true
       this.revealedElementsSubset = this.ifcModel.createSubset({
         modelID: 0,
         scene: this.context.getScene(),
         ids: hidden,
         removePrevious: true,
-        customID: 'Bldrs::Share::HiddenElements',
+        customID: this.revealSubsetCustomId,
         material: this.hiddenMaterial,
       })
     }
@@ -299,15 +307,13 @@ export default class IfcIsolator {
   /**
    * Collects elements ids.
    *
-   * @param {object} root IFC element
    */
-  collectElementsId(element) {
-    element.children.forEach((e) => {
-      this.collectElementsId(e)
+  collectElementsId() {
+    // eslint-disable-next-line new-cap
+    this.viewer.IFC.loader.ifcManager.ifcAPI.StreamAllMeshes(0, (mesh) => {
+      this.ids.push(mesh.expressID)
     })
-    if (element.children.length === 0) {
-      this.ids.push(element.expressID)
-    }
+    console.log(this.ids)
   }
 
   /**
