@@ -42,7 +42,7 @@ export default class IfcIsolator {
    */
   setModel(ifcModel) {
     this.ifcModel = ifcModel
-    this.collectElementsId()
+    this.ids = [...new Set(ifcModel.geometry.attributes.expressID.array)]
   }
 
   /**
@@ -301,18 +301,6 @@ export default class IfcIsolator {
       this.context.items.pickableIfcModels.push(this.ifcModel)
     }
     this.viewer.highlighter.setIsolated([])
-  }
-
-  /**
-   * Collects elements ids.
-   *
-   */
-  collectElementsId() {
-    // eslint-disable-next-line new-cap
-    this.viewer.IFC.loader.ifcManager.ifcAPI.StreamAllMeshes(0, (mesh) => {
-      this.ids.push(mesh.expressID)
-    })
-    console.log(this.ids)
   }
 
   /**
