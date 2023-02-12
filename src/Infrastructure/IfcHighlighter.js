@@ -10,7 +10,8 @@ import createComposer from './CustomPostProcessing'
  */
 export default class IfcHighlighter {
   highlightedMeshes = null
-  _outlineEffect = null
+  _selectionOutlineEffect = null
+  _isolationOutlineEffect = null
   /**
    * constructs new class
    *
@@ -21,8 +22,9 @@ export default class IfcHighlighter {
     const renderer = context.getRenderer()
     const scene = context.getScene()
     const camera = context.getCamera()
-    const {composer, outlineEffect} = createComposer(renderer, scene, camera)
-    this._outlineEffect = outlineEffect
+    const {composer, selectionOutlineEffect, isolationOutlineEffect} = createComposer(renderer, scene, camera)
+    this._selectionOutlineEffect = selectionOutlineEffect
+    this._isolationOutlineEffect = isolationOutlineEffect
     context.renderer.update = newUpdateFunction(context, composer)
   }
 
@@ -30,10 +32,19 @@ export default class IfcHighlighter {
   /**
    * Highlights and outlines meshes in scene
    *
-   * @param {Mesh} geometry meshes
+   * @param {Mesh[]} geometry meshes
    */
   setHighlighted(meshes) {
-    this._outlineEffect.setSelection(meshes ?? [])
+    this._selectionOutlineEffect.setSelection(meshes ?? [])
+  }
+
+  /**
+   * Outlines temporary isolated elements in scene
+   *
+   * @param {Mesh[]} geometry meshes
+   */
+  setIsolated(meshes) {
+    this._isolationOutlineEffect.setSelection(meshes ?? [])
   }
 }
 

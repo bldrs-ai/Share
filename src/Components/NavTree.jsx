@@ -1,4 +1,6 @@
 import React, {useEffect, useState} from 'react'
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
+import {faEye, faEyeSlash, faGlasses} from '@fortawesome/free-solid-svg-icons'
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
 import {useNavigate} from 'react-router-dom'
@@ -8,6 +10,8 @@ import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import {computeElementPathIds} from '../utils/TreeUtils'
 import {handleBeforeUnload} from '../utils/event'
+import useStore from '../store/useStore'
+import IfcIsolator from '../Infrastructure/IfcIsolator'
 
 
 const NavTreePropTypes = {
@@ -41,6 +45,50 @@ const NavTreePropTypes = {
   nodeId: PropTypes.string.isRequired,
 }
 
+/**
+ * @param {IfcIsolator} The IFC isoaltor
+ * @param {number} IFC element id
+ * @return {object} React component
+ */
+function HideIcon({isolator, elementId}) {
+  const [isHidden, setIsHidden] = useState(false)
+  const [isIsolated, setIsIsolated] = useState(false)
+  const [isDisabled, setIsDisabled] = useState(false)
+  const hiddenElements = useStore((state) => state.hiddenElements)
+  const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
+  const isolatedElements = useStore((state) => state.isolatedElements)
+  const [id] = useState(elementId)
+
+  useEffect(() => {
+    setIsHidden(hiddenElements.includes(id))
+  }, [hiddenElements, id])
+
+  useEffect(() => {
+    setIsIsolated(isolatedElements.includes(id))
+  }, [isolatedElements, id])
+
+  useEffect(() => {
+    setIsDisabled(isTempIsolationModeOn)
+  }, [isTempIsolationModeOn])
+
+  const toggleHide = () => {
+    if (!isHidden) {
+      setIsHidden(true)
+      isolator.hideElementsById(id)
+    } else {
+      setIsHidden(false)
+      isolator.unHideElementsById(id)
+    }
+  }
+
+  const iconStyle = {float: 'right', margin: '4px'}
+  if (isDisabled && !isIsolated) {
+    iconStyle.opacity = 0.3
+  }
+  const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
+
+  return <FontAwesomeIcon disabled={isDisabled} style={iconStyle} onClick={toggleHide} icon={icon}/>
+}
 
 /**
  * @param {object} model IFC model
@@ -83,6 +131,10 @@ export default function NavTree({
 
     const [selectedElement, setSelectedElement] = useState(null)
 
+    const viewer = useStore((state) => state.viewer)
+
+    const hiddenElements = useStore((state) => state.hiddenElements)
+
     const handleSelectionClick = (event) => {
       handleSelection(event)
       setSelectedElement(element)
@@ -92,12 +144,15 @@ export default function NavTree({
 
     useEffect(() => {
       if (selectedElement) {
+        if (hiddenElements.includes(selectedElement.expressID)) {
+          return
+        }
         const newPath =
               `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
         window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(newPath)
       }
-    }, [selectedElement, navigate])
+    }, [selectedElement, navigate, hiddenElements])
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -117,12 +172,19 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <Typography
-          variant='tree'
-          onClick={handleSelectionClick}
-        >
-          {label}
-        </Typography>
+        <div style={{width: '80%'}}>
+          <Typography
+            variant='tree'
+            onClick={handleSelectionClick}
+          >
+            {label}
+          </Typography>
+          {viewer.isolator.canBeHidden(element.expressID) &&
+            <div style={{display: 'contents'}}>
+              <HideIcon isolator={viewer.isolator} elementId={element.expressID}/>
+            </div>
+          }
+        </div>
       </div>
     )
   })

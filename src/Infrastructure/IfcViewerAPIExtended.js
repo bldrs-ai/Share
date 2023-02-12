@@ -1,14 +1,11 @@
-
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import {Matrix4} from 'three'
 import IfcHighlighter from './IfcHighlighter'
+import IfcIsolator from './IfcIsolator'
+
 
 /** Class IfcViewerAPIExtended*/
 export default class IfcViewerAPIExtended extends IfcViewerAPI {
-  currentSelectionSubsets = []
-  ids = []
-  ifcModel = null
-
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -16,6 +13,7 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
+    this.isolator = new IfcIsolator(this.context, this)
   }
   /**
    * Gets the expressId of the element that the mouse is pointing at
@@ -27,13 +25,8 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     if (!found) {
       return null
     }
-    const mesh = found.object
-    if (found.faceIndex === undefined) {
-      return null
-    }
-    const ifcManager = this.IFC
-    const id = ifcManager.loader.ifcManager.getExpressId(mesh.geometry, found.faceIndex)
-    return {modelID: mesh.modelID, id}
+    const id = this.getPickedItemId(found)
+    return {modelID: found.object.modelID, id}
   }
 
   /**
@@ -51,13 +44,14 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   async setSelection(modelID, expressIds, focusSelection) {
     this._selectedExpressIds = expressIds
+    const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
       // if not specified, only focus on item if it was the first one to be selected
-      focusSelection = this._selectedExpressIds.length === 1
+      focusSelection = toBeSelected.length === 1
     }
-    if (this._selectedExpressIds.length !== 0) {
+    if (toBeSelected.length !== 0) {
       try {
-        await this.pickIfcItemsByID(modelID, this._selectedExpressIds, focusSelection, true)
+        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, false, true)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
         console.error(e)
@@ -86,30 +80,22 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
         USE_FAST_BOOLS: fastBools,
       })
 
-      this.ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
-
-      const rootElement = await this.ifcModel.ifcManager.getSpatialStructure(0, true)
-      this.collectElementsId(rootElement)
-
-      // this createSubset call also adds the subset to the scene
-      const subset = this.IFC.loader.ifcManager.createSubset({
-        modelID: 0,
-        scene: this.context.getScene(),
-        ids: this.ids,
-        removePrevious: true,
-      })
-      this.context.items.pickableIfcModels.push(subset)
+      const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
+      this.context.getScene().add(ifcModel)
+      this.context.items.ifcModels.push(ifcModel)
+      this.context.items.pickableIfcModels.push(ifcModel)
+      await this.isolator.setModel(ifcModel)
 
       if (firstModel) {
         // eslint-disable-next-line new-cap
-        const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(this.ifcModel.modelID)
+        const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
         const matrix = new Matrix4().fromArray(matrixArr)
         this.IFC.loader.ifcManager.setupCoordinationMatrix(matrix)
       }
       if (fitToFrame) {
         this.IFC.context.fitToFrame()
       }
-      return this.ifcModel
+      return ifcModel
     } catch (err) {
       console.error('Error loading IFC.')
       console.error(err)
@@ -120,63 +106,35 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
   }
 
   /**
-   * Collect elements ids.
+   * Highlights the item pointed by the cursor.
    *
-   * @param {object} IFC spatial root element
    */
-  collectElementsId(element) {
-    element.children.forEach((e) => {
-      this.collectElementsId(e)
-    })
-    if (element.children.length === 0) {
-      this.ids.push(element.expressID)
+  async highlightIfcItem() {
+    const found = this.context.castRayIfc()
+    if (!found) {
+      this.IFC.selector.preselection.toggleVisibility(false)
+      return
+    }
+    const id = this.getPickedItemId(found)
+    if (this.isolator.canBePickedInScene(id)) {
+      await this.IFC.selector.preselection.pick(found)
     }
   }
 
-  /**
-   * hide selected elements
-   *
-   */
-  hideSelectedElements() {
-    this.currentSelectionSubsets.forEach((subset) => {
-      this.context.getScene().remove(subset)
-    })
-    this.getSelectedIds().forEach((id) => {
-      this.IFC.loader.ifcManager.removeFromSubset(0, [id])
-    })
-  }
 
   /**
-   * unhide elements
    *
-   */
-  unHideAllElements() {
-    this.currentSelectionSubsets.forEach((subset) => {
-      this.context.getScene().remove(subset)
-    })
-    this.context.getScene().remove(this.subset)
-    this.context.getScene().add(this.ifcModel)
-  }
-
-  /**
-   * Pick elements by their ids
+   * Highlights the item pointed by the cursor.
    *
-   * @param {number} modelID
-   * @param {Array} elements ids
-   * @param {boolean} focus selection
-   * @param {boolean} remove previous selection
+   * @param {object} picked item
+   * @return {number} element id
    */
-  async pickByID(modelID, ids, focusSelection = false, removePrevious = true) {
-    if (removePrevious) {
-      this.IFC.selector.selection.modelIDs.clear()
+  getPickedItemId(picked) {
+    const mesh = picked.object
+    if (picked.faceIndex === undefined) {
+      return null
     }
-    this.IFC.selector.selection.modelIDs.add(modelID)
-    const selected = this.IFC.selector.selection.newSelection(modelID, ids, removePrevious)
-    this.currentSelectionSubsets.push(selected)
-    selected.visible = true
-    selected.renderOrder = this.IFC.selector.selection.renderOrder
-    if (focusSelection) {
-      await this.IFC.selector.selection.focusSelection(selected)
-    }
+    const ifcManager = this.IFC
+    return ifcManager.loader.ifcManager.getExpressId(mesh.geometry, picked.faceIndex)
   }
 }

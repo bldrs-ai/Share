@@ -14,7 +14,7 @@ import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import {ColorModeContext} from '../Context/ColorMode'
-import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import IfcViewerAPIExtended from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
@@ -251,9 +251,8 @@ export default function CadView({
     setIsLoading(true)
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
-    const loadedModel = await viewer.IFC.loadIfcUrl(
+    const loadedModel = await viewer.loadIfcUrl(
         ifcURL,
-        !urlHasCameraParams(), // fitToFrame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -513,20 +512,19 @@ export default function CadView({
       // add a plane
       if (event.code === 'KeyQ') {
         viewer.clipper.createPlane()
-      }
-      // delete all planes
-      if (event.code === 'KeyW') {
+      } else if (event.code === 'KeyW') {
         viewer.clipper.deletePlane()
-      }
-      if (event.code === 'KeyA' ||
+      } else if (event.code === 'KeyA' ||
         event.code === 'Escape') {
         selectItemsInScene([])
-      }
-      if (event.code === 'KeyH') {
-        viewer.hideSelectedElements()
-      }
-      if (event.code === 'KeyU') {
-        viewer.unHideAllElements()
+      } else if (event.code === 'KeyH') {
+        viewer.isolator.hideSelectedElements()
+      } else if (event.code === 'KeyU') {
+        viewer.isolator.unHideAllElements()
+      } else if (event.code === 'KeyI') {
+        viewer.isolator.toggleIsolationMode()
+      } else if (event.code === 'KeyR') {
+        viewer.isolator.toggleRevealHiddenElements()
       }
     }
   }
@@ -676,24 +674,24 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPIExtended({
+  const viewer = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created:', v)
+  debug().log('CadView#initViewer: viewer created:', viewer)
 
   // Path to web-ifc.wasm in serving directory.
-  v.IFC.setWasmPath('./static/js/')
-  v.clipper.active = true
-  v.clipper.orthogonalY = false
+  viewer.IFC.setWasmPath('./static/js/')
+  viewer.clipper.active = true
+  viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    v.prePickIfcItem()
+    viewer.highlightIfcItem()
   }
 
-  v.container = container
-  return v
+  viewer.container = container
+  return viewer
 }
 
 const getGitHubDownloadURL = async (url, accessToken) => {

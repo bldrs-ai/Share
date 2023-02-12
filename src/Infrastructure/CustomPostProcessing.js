@@ -16,7 +16,7 @@ export default function createComposer(renderer, scene, camera) {
   const composer = new EffectComposer(renderer)
   composer.addPass(new RenderPass(scene, camera))
 
-  const effectOptions = {
+  const selectionEffectOptions = {
     blendFunction: BlendFunction.SCREEN,
     edgeStrength: 1.5,
     pulseSpeed: 0.0,
@@ -29,9 +29,25 @@ export default function createComposer(renderer, scene, camera) {
     opacity: 1,
   }
 
-  const outlineEffect = new OutlineEffect(scene, camera, effectOptions)
-  const outlinePass = new EffectPass(camera, outlineEffect)
-  composer.addPass(outlinePass)
+  const isolationEffectOptions = {
+    blendFunction: BlendFunction.SCREEN,
+    edgeStrength: 5,
+    pulseSpeed: 0.0,
+    visibleEdgeColor: 0x00FFFF,
+    hiddenEdgeColor: 0x00FFFF,
+    height: window.innerHeight,
+    windth: window.innerWidth,
+    blur: false,
+    xRay: true,
+    opacity: 1,
+  }
 
-  return {composer, outlineEffect}
+  const selectionOutlineEffect = new OutlineEffect(scene, camera, selectionEffectOptions)
+  const isolationOutlineEffect = new OutlineEffect(scene, camera, isolationEffectOptions)
+  const selectionOutlinePass = new EffectPass(camera, selectionOutlineEffect)
+  const isolationOutlinePass = new EffectPass(camera, isolationOutlineEffect)
+  composer.addPass(selectionOutlinePass)
+  composer.addPass(isolationOutlinePass)
+
+  return {composer, selectionOutlineEffect, isolationOutlineEffect}
 }
