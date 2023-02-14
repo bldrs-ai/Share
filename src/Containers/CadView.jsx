@@ -612,7 +612,6 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   return (
     isMobile ? (
       <>
@@ -625,17 +624,15 @@ function OperationsGroupAndDrawer({deselectItems}) {
         >
           <OperationsGroup deselectItems={deselectItems}/>
         </Box>
-        {isDrawerOpen &&
-         <Box
-           sx={{
-             position: 'absolute',
-             bottom: 0,
-             width: '100%',
-           }}
-         >
-           <SideDrawer/>
-         </Box>
-        }
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            width: '100%',
+          }}
+        >
+          <SideDrawer/>
+        </Box>
       </>
     ) : (
       <Box
@@ -649,7 +646,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         }}
       >
         <OperationsGroup deselectItems={deselectItems}/>
-        {isDrawerOpen && <SideDrawer/>}
+        <SideDrawer/>
       </Box>
     )
   )

@@ -21,7 +21,6 @@ export default class Utils {
    */
   getSelectedElementIds(state) {
     const elementIds = []
-    // console.log(state.selectedElements)
     if (state.selectedElements === null || state.selectedElements.length === 0) {
       return elementIds
     }

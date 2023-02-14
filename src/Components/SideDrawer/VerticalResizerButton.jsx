@@ -145,7 +145,6 @@ export default function VerticalResizerButton({
       setSidebarHeight(expansionSidebarHeight)
     } else {
       const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min(window.innerHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
-      console.log(defaultHeight, window.innerHeight, MOBILE_HEIGHT)
       setSidebarHeight(defaultHeight)
     }
   }, [isExpanded, setSidebarHeight])
