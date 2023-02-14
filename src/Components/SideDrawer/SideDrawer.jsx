@@ -43,6 +43,7 @@ export default function SideDrawer() {
     if (noteHash !== undefined) {
       const extractedCommentId = noteHash.split(':')[1]
       setSelectedNoteId(Number(extractedCommentId))
+      console.log('isDrawerOpen: ', isDrawerOpen)
       if (!isDrawerOpen) {
         openDrawer()
         openNotes()
@@ -68,7 +69,7 @@ export default function SideDrawer() {
   return (
     <Box
       sx={Object.assign({
-        display: 'flex',
+        display: isDrawerOpen ? 'flex' : 'none',
         flexDirection: 'row',
       }, isMobile ? {
         width: '100%',
