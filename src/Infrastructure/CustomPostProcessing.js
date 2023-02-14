@@ -23,7 +23,7 @@ export default function createComposer(renderer, scene, camera) {
     visibleEdgeColor: 0xc7c7c7,
     hiddenEdgeColor: 0xff9b00,
     height: window.innerHeight,
-    windth: window.innerWidth,
+    width: window.innerWidth,
     blur: false,
     xRay: true,
     opacity: 1,
