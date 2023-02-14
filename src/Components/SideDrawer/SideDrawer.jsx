@@ -43,7 +43,6 @@ export default function SideDrawer() {
     if (noteHash !== undefined) {
       const extractedCommentId = noteHash.split(':')[1]
       setSelectedNoteId(Number(extractedCommentId))
-      console.log('isDrawerOpen: ', isDrawerOpen)
       if (!isDrawerOpen) {
         openDrawer()
         openNotes()
