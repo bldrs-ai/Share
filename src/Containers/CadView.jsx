@@ -2,6 +2,7 @@ import React, {useContext, useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import {useDoubleTap} from 'use-double-tap'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
@@ -23,6 +24,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
+import PlaceMark from '../Infrastructure/PlaceMark'
 
 
 /**
@@ -81,6 +83,8 @@ export default function CadView({
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const placeMark = useStore((state) => state.placeMark)
+  const setPlaceMark = useStore((state) => state.setPlaceMark)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -207,6 +211,9 @@ export default function CadView({
     await onModel(tmpModelRef)
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
+    const newPlaceMark = new PlaceMark(viewer.context)
+    debug().log('CadView#onViewer: newPlaceMark: ', newPlaceMark)
+    setPlaceMark(newPlaceMark)
   }
 
 
@@ -327,6 +334,7 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
@@ -526,11 +534,18 @@ export default function CadView({
 
   const addThemeListener = () => {
     colorMode.addThemeChangeListener((newMode, theme) => {
-      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
-      setViewer(intializedViewer)
-      setViewerStore(intializedViewer)
+      const initializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
+      setViewer(initializedViewer)
+      setViewerStore(initializedViewer)
     })
   }
+
+
+  const onDoubleTap = useDoubleTap((e) => {
+    if (placeMark) {
+      placeMark.onDoubleTap(e)
+    }
+  })
 
 
   return (
@@ -556,6 +571,7 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
+        {...onDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
