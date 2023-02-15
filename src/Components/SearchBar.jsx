@@ -3,21 +3,20 @@ import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
-import debug from '../utils/debug'
+import useTheme from '@mui/styles/useTheme'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
-import useTheme from '../theme/Theme'
+import debug from '../utils/debug'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
-import ClearIcon from '../assets/icons/Clear.svg'
 import {handleBeforeUnload} from '../utils/event'
+import ClearIcon from '../assets/icons/Clear.svg'
 
 
 /**
  * Search bar component
  *
- * @param {Function} onClickMenuCb callback
- * @param {boolean} showNavPanel toggle
- * @return {React.Component} The SearchBar react component
+ * @property {Function} fileOpen callback for OpenModelControl
+ * @return {React.Component}
  */
 export default function SearchBar({fileOpen}) {
   const location = useLocation()
@@ -122,7 +121,7 @@ export default function SearchBar({fileOpen}) {
           error={true}
           placeholder={'Search / Insert GitHub link'}
           sx={{
-            ...theme.theme.typography.tree,
+            ...theme.typography.tree,
             'marginTop': '4px',
             'marginLeft': '8px',
             '& input::placeholder': {

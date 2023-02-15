@@ -1,19 +1,17 @@
 import React from 'react'
-import Snackbar from '@mui/material/Snackbar'
 import MuiAlert from '@mui/material/Alert'
-import {useTheme} from '@mui/styles'
+import Snackbar from '@mui/material/Snackbar'
+import useTheme from '@mui/styles/useTheme'
 
 
 /**
- * @param {string} message
- * @param {string} type
- * @param {Function} open
+ * @property {string} message Message for user
+ * @property {string} severity Alert severity
+ * @property {Function} open Progress callback
  * @return {object}
  */
-export default function SnackBarMessage({message, type, open}) {
+export default function SnackBarMessage({message, severity, open}) {
   const theme = useTheme()
-
-
   return (
     <Snackbar
       open={open}
@@ -35,7 +33,7 @@ export default function SnackBarMessage({message, type, open}) {
             overflowWrap: 'anywhere',
           },
         }}
-        severity={type}
+        severity={severity}
         elevation={0}
         icon={false}
       >
