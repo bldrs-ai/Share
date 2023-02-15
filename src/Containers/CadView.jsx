@@ -32,6 +32,7 @@ import SearchIndex from './SearchIndex'
 export const searchIndex = new SearchIndex()
 let count = 0
 
+const useViewRules = window.location.href.match(/(view=CH.SIA380-1.heatmap)/ig)?.length > 0
 
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
@@ -671,6 +672,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   const v = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
+    useViewRules: useViewRules,
   })
   debug().log('CadView#initViewer: viewer created:', v)
 
