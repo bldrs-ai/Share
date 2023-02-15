@@ -1,21 +1,20 @@
 import React, {useEffect, useMemo, useRef} from 'react'
-import CssBaseline from '@mui/material/CssBaseline'
 import {useNavigate, useParams} from 'react-router-dom'
+import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
-import CadView from './Containers/CadView'
-import useStore from './store/useStore'
-import Styles from './Styles'
-import useShareTheme from './Theme'
-import debug from './utils/debug'
-import {ColorModeContext} from './Context/ColorMode'
-import {handleBeforeUnload} from './utils/event'
 // TODO: This isn't used.
 // If icons-material isn't imported somewhere, mui dies
 /* eslint-disable */
 import AccountCircle from '@mui/icons-material/AccountCircle'
-import WidgetApi from "./WidgetApi/WidgetApi";
-import {searchIndex} from './Containers/CadView';
 /* eslint-enable */
+import CadView, {searchIndex} from './Containers/CadView'
+import {ColorModeContext} from './Context/ColorMode'
+import Styles from './Styles'
+import WidgetApi from './WidgetApi/WidgetApi'
+import useStore from './store/useStore'
+import useShareTheme from './theme/Theme'
+import debug from './utils/debug'
+import {handleBeforeUnload} from './utils/event'
 
 
 /**

@@ -1,7 +1,8 @@
-import useTheme from '../Theme'
-import {ThemeProvider} from '@mui/material/styles'
 import React from 'react'
+import {ThemeProvider} from '@mui/material/styles'
 import {ColorModeContext} from '../Context/ColorMode'
+import useTheme from '../theme/Theme'
+
 
 /**
  * @param {object} children React component(s)
