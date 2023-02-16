@@ -1,17 +1,11 @@
 import {
-  AxesHelper,
   EventDispatcher,
   Raycaster,
   Vector2,
 } from 'three'
-// import svgToDataURL from 'svg-to-dataurl'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
 import {getSVGGroup} from '../utils/svg'
-// import PlaceMarkOffIcon from '../assets/icons/PlaceMarkOff.svg'
-
-
-// const placeMarkOffIconUrl = svgToDataURL(PlaceMarkOffIcon)
 
 
 /**
@@ -31,11 +25,10 @@ export default class PlaceMark extends EventDispatcher {
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
+    const _placeMarks = []
 
 
     _domElement.style.touchAction = 'none' // disable touch scroll
-    // eslint-disable-next-line no-magic-numbers
-    _scene.add(new AxesHelper(100))
 
 
     /**
@@ -82,10 +75,11 @@ export default class PlaceMark extends EventDispatcher {
       _raycaster.intersectObjects(_objects, true, _intersections)
       debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
       if (_intersections.length > 0) {
-        getSVGGroup('/icons/PlaceMarkOff.svg').then((group) => {
+        getSVGGroup({url: '/icons/PlaceMarkOff.svg'}).then((group) => {
           group.position.copy(_intersections[0].point)
           debug().log('PlaceMark#onDoubleTap#getSVGGroup: ', group)
           _scene.add(group)
+          _placeMarks.push(group)
           debug().log('PlaceMark#onDoubleTap#getSVGGroup: _scene: ', _scene)
         })
         return true
