@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import {IFCPRODUCTDEFINITIONSHAPE, IFCPROPERTYSET, IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
 import IfcColor from './IfcColor'
@@ -115,15 +116,60 @@ function bindCompileViewFunction(parser) {
     // Get only sets containing PSet_vyzn.Verlust
     const objectsAndPropVal = psetObjects.map((a) =>
       ({o: a.RelatedObjects[0]?.expressID,
-        p: a.RelatingPropertyDefinition.HasProperties?.find((s) => s.Name.value === 'Verlust')?.NominalValue?.value * 1}))
-        .filter((x) => x.p)
+        p: a.RelatingPropertyDefinition.HasProperties?.find(
+            (s) => s.Name.value === 'Verlust' ||
+             s.Name.value === 'SIA380-1.TransmissionHeatLoss')?.NominalValue?.value * 1})).filter((x) => x.p)
+
     const valArr = objectsAndPropVal.map((a) => a.p)
-    // const min = Math.min(valArr)
+    const min = Math.min(valArr)
     const max = Math.max(...valArr)
-    const entries = objectsAndPropVal.map((a) => [a.o, new IfcColor( (a.p) / (1.0 * max))])
-    const viewSettings = new IfcCustomViewSettings(undefined, Object.fromEntries(entries))
+    const entries = objectsAndPropVal.map((a) => [a.o, getElementColor(min, max, a)])
+    console.log('entries', entries)
+    const viewSettings = new IfcCustomViewSettings(new IfcColor(0.96, 0.96, 0.96), Object.fromEntries(entries))
+
     this._overrideStyles = viewSettings
   }
 
   return compileViewFunction.bind(parser)
+}
+
+
+/** */
+function getElementColor(min, max, a) {
+  const baseColor = new IfcColor(0.96, 0.96, 0.96)
+  if (a.p === 0) {
+    return baseColor
+  } else if (a.p > 0) {
+    return interpolateColors(baseColor, parseColor('#EB3324'), a.p, 0, max)
+  } else if (a.p < 0) {
+    return interpolateColors(baseColor, parseColor('#22B14C'), -1 * a.p, 0, -1 * min)
+  }
+  return baseColor
+}
+
+
+/** */
+function changeValueScale(value, min, max, targetMin, targetMax) {
+  const ratio = (value - min) * 1.0 / (max-min)
+  const result = targetMin + (ratio * (targetMax - targetMin))
+  return result
+}
+
+
+/** */
+function parseColor(hexColor) {
+  const parsed = hexColor.substr(1).split(/(?=(?:..)*$)/)
+      .map((a) => parseInt(a, 16) / 256)
+      .map((a) => Math.round(a * 1000) / 1000)
+  return new IfcColor(...parsed)
+}
+
+
+/** */
+function interpolateColors(startColor, targetColor, value, min, max) {
+  const r = changeValueScale(value, min, max, startColor.x, targetColor.x)
+  const g = changeValueScale(value, min, max, startColor.y, targetColor.y)
+  const b = changeValueScale(value, min, max, startColor.z, targetColor.z)
+  const result = new IfcColor(r, g, b)
+  return result
 }
