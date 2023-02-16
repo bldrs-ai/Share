@@ -85,6 +85,7 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
+  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -169,9 +170,9 @@ export default function CadView({
     const initializedViewer = initViewer(
         pathPrefix,
         (theme &&
-         theme.palette &&
-         theme.palette.scene &&
-         theme.palette.scene.background) || '0xabcdef')
+        theme.palette &&
+        theme.palette.scene &&
+        theme.palette.scene.background) || '0xabcdef')
     setViewer(initializedViewer)
     setViewerStore(initializedViewer)
   }
@@ -209,11 +210,12 @@ export default function CadView({
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
-    selectElementBasedOnFilepath(pathToLoad)
-    setModelReady(true)
     const newPlaceMark = new PlaceMark(viewer.context)
+    newPlaceMark.setObjects([tmpModelRef])
     debug().log('CadView#onViewer: newPlaceMark: ', newPlaceMark)
     setPlaceMark(newPlaceMark)
+    selectElementBasedOnFilepath(pathToLoad)
+    setModelReady(true)
   }
 
 
@@ -543,7 +545,10 @@ export default function CadView({
 
   const onDoubleTap = useDoubleTap((e) => {
     if (placeMark) {
-      placeMark.onDoubleTap(e)
+      const caught = placeMark.onDoubleTap(e)
+      if (caught) {
+        setPlaceMarkActivated(false)
+      }
     }
   })
 
@@ -591,14 +596,14 @@ export default function CadView({
         }}
         >
           {isSearchBarVisible &&
-          <SearchBar
-            fileOpen={loadLocalFile}
-          />}
+            <SearchBar
+              fileOpen={loadLocalFile}
+            />}
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
           }
-          { isNavPanelOpen &&
+          {isNavPanelOpen &&
             isNavigationPanelVisible &&
             <NavPanel
               model={model}
@@ -701,11 +706,13 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   return v
 }
 
+
 const getGitHubDownloadURL = async (url, accessToken) => {
   const repo = parseGitHubRepositoryURL(url)
   const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
   return downloadURL
 }
+
 
 const getFinalURL = async (url, accessToken) => {
   const u = new URL(url)
@@ -723,6 +730,7 @@ const getFinalURL = async (url, accessToken) => {
       return url
   }
 }
+
 
 /**
  * @param {string} filepath

@@ -23,7 +23,6 @@ export default class PlaceMark extends EventDispatcher {
     // const _scene = context.getScene()
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
-    let _activated = false
     let _objects = []
 
 
@@ -42,14 +41,17 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
+    this.activated = false
+
+
     this.activate = () => {
-      _activated = true
+      this.activated = true
       _domElement.style.cursor = 'alias'
     }
 
 
     this.deactivate = () => {
-      _activated = false
+      this.activated = false
       _domElement.style.cursor = 'default'
     }
 
@@ -61,16 +63,24 @@ export default class PlaceMark extends EventDispatcher {
 
     this.onDoubleTap = (event) => {
       debug().log('PlaceMark#onDoubleTap: ', event)
-      if (!_objects || !_activated) {
+      if (!_objects || !this.activated) {
         return
       }
       updatePointer(event)
-      const _intersections = []
+      // eslint-disable-next-line prefer-const
+      let _intersections = []
       _intersections.length = 0
+      debug().log('PlaceMark#onDoubleTap: _raycaster: ', _raycaster)
+      debug().log('PlaceMark#onDoubleTap: _pointer: ', _pointer)
+      debug().log('PlaceMark#onDoubleTap: _camera: ', _camera)
+      debug().log('PlaceMark#onDoubleTap: _objects: ', _objects)
       _raycaster.setFromCamera(_pointer, _camera)
       _raycaster.intersectObjects(_objects, true, _intersections)
+      debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
       if (_intersections.length > 0) {
-        this.deactivate()
+        return true
+      } else {
+        return false
       }
     }
   }
