@@ -3,8 +3,14 @@ import {
   Raycaster,
   Vector2,
 } from 'three'
+// import svgToDataURL from 'svg-to-dataurl'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
+import {getSVGGroup} from '../utils/svg'
+// import PlaceMarkOffIcon from '../assets/icons/PlaceMarkOff.svg'
+
+
+// const placeMarkOffIconUrl = svgToDataURL(PlaceMarkOffIcon)
 
 
 /**
@@ -67,17 +73,15 @@ export default class PlaceMark extends EventDispatcher {
         return
       }
       updatePointer(event)
-      // eslint-disable-next-line prefer-const
-      let _intersections = []
+      const _intersections = []
       _intersections.length = 0
-      debug().log('PlaceMark#onDoubleTap: _raycaster: ', _raycaster)
-      debug().log('PlaceMark#onDoubleTap: _pointer: ', _pointer)
-      debug().log('PlaceMark#onDoubleTap: _camera: ', _camera)
-      debug().log('PlaceMark#onDoubleTap: _objects: ', _objects)
       _raycaster.setFromCamera(_pointer, _camera)
       _raycaster.intersectObjects(_objects, true, _intersections)
       debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
       if (_intersections.length > 0) {
+        getSVGGroup('/icons/PlaceMarkOff.svg').then((res) => {
+          debug().log('PlaceMark#onDoubleTap: getSVGGroup: ', res)
+        })
         return true
       } else {
         return false
