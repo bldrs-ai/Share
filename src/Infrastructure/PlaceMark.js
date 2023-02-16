@@ -1,4 +1,5 @@
 import {
+  AxesHelper,
   EventDispatcher,
   Raycaster,
   Vector2,
@@ -25,14 +26,16 @@ export default class PlaceMark extends EventDispatcher {
     debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
+    const _scene = context.getScene()
     // const _renderer = context.getRenderer()
-    // const _scene = context.getScene()
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
 
 
     _domElement.style.touchAction = 'none' // disable touch scroll
+    // eslint-disable-next-line no-magic-numbers
+    _scene.add(new AxesHelper(100))
 
 
     /**
@@ -79,8 +82,11 @@ export default class PlaceMark extends EventDispatcher {
       _raycaster.intersectObjects(_objects, true, _intersections)
       debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
       if (_intersections.length > 0) {
-        getSVGGroup('/icons/PlaceMarkOff.svg').then((res) => {
-          debug().log('PlaceMark#onDoubleTap: getSVGGroup: ', res)
+        getSVGGroup('/icons/PlaceMarkOff.svg').then((group) => {
+          group.position.copy(_intersections[0].point)
+          debug().log('PlaceMark#onDoubleTap#getSVGGroup: ', group)
+          _scene.add(group)
+          debug().log('PlaceMark#onDoubleTap#getSVGGroup: _scene: ', _scene)
         })
         return true
       } else {
