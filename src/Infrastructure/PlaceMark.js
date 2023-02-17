@@ -90,7 +90,7 @@ export default class PlaceMark extends EventDispatcher {
       //   _scene.add(group)
       //   _placeMarks.push(group)
       // })
-      getSVGMesh({url: '/icons/PlaceMark.svg'}).then((mesh) => {
+      getSVGMesh({url: '/icons/PlaceMark.svg', color: 'red'}).then((mesh) => {
         debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
         mesh.position.copy(point)
         _scene.add(mesh)

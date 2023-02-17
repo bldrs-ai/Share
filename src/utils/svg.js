@@ -125,21 +125,21 @@ export const getSVGGroup = async ({
 export const getSVGMesh = async ({
   url,
   radius = 2,
+  color = 'black',
 }) => {
   assertDefined(url)
   const svgData = await fileLoader.loadAsync(url)
   const parser = new DOMParser()
   const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
-  debug().log('getSVGMesh: width: ', svg.width)
-  debug().log('getSVGMesh: height: ', svg.height)
+  svg.setAttribute('fill', color)
+  const newSvgData = (new XMLSerializer()).serializeToString(svg)
   const canvas = document.createElement('canvas')
   canvas.width = svg.width.baseVal.value
   canvas.height = svg.height.baseVal.value
-  debug().log('getSVGMesh: canvas: ', canvas)
   const ctx = canvas.getContext('2d')
   return new Promise((resolve, reject) => {
     const img = document.createElement('img')
-    img.setAttribute('src', `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(svgData)))}`)
+    img.setAttribute('src', `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`)
     img.onload = function() {
       ctx.drawImage(img, 0, 0)
       const texture = new Texture(canvas)
@@ -149,7 +149,6 @@ export const getSVGMesh = async ({
       const material = new MeshBasicMaterial({map: texture})
       material.map.minFilter = LinearFilter
       const mesh = new Mesh(geometry, material)
-      debug().log('getSVGMesh: mesh: ', mesh)
       resolve(mesh)
     }
   })
