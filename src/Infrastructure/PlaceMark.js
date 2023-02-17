@@ -6,7 +6,7 @@ import {
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-import {getSVGGroup} from '../utils/svg'
+import {getSVGMesh} from '../utils/svg'
 
 
 /**
@@ -84,11 +84,17 @@ export default class PlaceMark extends EventDispatcher {
     }
 
     this.putDown = (point) => {
-      getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
-        group.position.copy(point)
-        debug().log('PlaceMark#drop#getSVGGroup: ', group)
-        _scene.add(group)
-        _placeMarks.push(group)
+      // getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
+      //   group.position.copy(point)
+      //   debug().log('PlaceMark#putDown#getSVGGroup: ', group)
+      //   _scene.add(group)
+      //   _placeMarks.push(group)
+      // })
+      getSVGMesh({url: '/icons/PlaceMark.svg'}).then((mesh) => {
+        debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
+        mesh.position.copy(point)
+        _scene.add(mesh)
+        _placeMarks.push(mesh)
       })
     }
   }

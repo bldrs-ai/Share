@@ -1,10 +1,26 @@
-import {Box3, Color, DoubleSide, Group, LoadingManager, Mesh, MeshBasicMaterial, ShapeGeometry} from 'three'
+import {
+  Texture,
+  Box3,
+  Color,
+  DoubleSide,
+  Group,
+  LoadingManager,
+  Mesh,
+  MeshBasicMaterial,
+  ShapeGeometry,
+  FileLoader,
+  LinearFilter,
+  CircleGeometry,
+} from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
+import {assertDefined} from './assert'
 import debug from './debug'
 
 
 const svgLoadingManager = new LoadingManager()
 const svgLoader = new SVGLoader(svgLoadingManager)
+const fileLoadingManager = new LoadingManager()
+const fileLoader = new FileLoader(fileLoadingManager)
 
 
 export const getSVGGroup = async ({
@@ -103,4 +119,38 @@ export const getSVGGroup = async ({
   group.scale.y *= - 1
   svgGroup.add(group)
   return svgGroup
+}
+
+
+export const getSVGMesh = async ({
+  url,
+  radius = 2,
+}) => {
+  assertDefined(url)
+  const svgData = await fileLoader.loadAsync(url)
+  const parser = new DOMParser()
+  const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
+  debug().log('getSVGMesh: width: ', svg.width)
+  debug().log('getSVGMesh: height: ', svg.height)
+  const canvas = document.createElement('canvas')
+  canvas.width = svg.width.baseVal.value
+  canvas.height = svg.height.baseVal.value
+  debug().log('getSVGMesh: canvas: ', canvas)
+  const ctx = canvas.getContext('2d')
+  return new Promise((resolve, reject) => {
+    const img = document.createElement('img')
+    img.setAttribute('src', `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(svgData)))}`)
+    img.onload = function() {
+      ctx.drawImage(img, 0, 0)
+      const texture = new Texture(canvas)
+      texture.needsUpdate = true
+      // eslint-disable-next-line no-magic-numbers
+      const geometry = new CircleGeometry(radius, 50)
+      const material = new MeshBasicMaterial({map: texture})
+      material.map.minFilter = LinearFilter
+      const mesh = new Mesh(geometry, material)
+      debug().log('getSVGMesh: mesh: ', mesh)
+      resolve(mesh)
+    }
+  })
 }
