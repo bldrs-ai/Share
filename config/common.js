@@ -39,6 +39,7 @@ export const build = {
     'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
     'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI || null),
     'process.env.AUTH0_DOMAIN': JSON.stringify(process.env.AUTH0_DOMAIN),
+    'process.env.GITHUB_API_TOKEN': JSON.stringify(process.env.GITHUB_API_TOKEN),
     'process.env.GITHUB_BASE_URL': JSON.stringify(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
     'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
     'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
