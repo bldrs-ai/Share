@@ -20,6 +20,16 @@ export function getCookieBoolean(name, defaultValue) {
 
 
 /**
+ * @param {string} name Name of the setting
+ * @param {boolean} value
+ */
+export function setCookieBoolean(name, value) {
+  assertDefined(name, value)
+  setCookie(name, value)
+}
+
+
+/**
  * @param {string} name Name of the cookie
  * @return {boolean} True iff the cookie is set
  */
