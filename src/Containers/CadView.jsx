@@ -26,6 +26,8 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
+import {addHashParams, getEncodedParam} from '../utils/location'
+import {PLACE_MARK_PREFIX} from '../utils/constants'
 
 
 /**
@@ -552,7 +554,8 @@ export default function CadView({
       if (point && placeMarkNoteId) {
         debug().log('CadView#onDoubleTap: point: ', point)
         debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
-        const placeMarkHash = `m:x=${point.x},y=${point.y},z=${point.z}`
+        addHashParams(window.location, PLACE_MARK_PREFIX, point, true)
+        const placeMarkHash = getEncodedParam(point, true)
         debug().log('CadView#onDoubleTap: placeMarkHash: ', placeMarkHash)
         setPlaceMarkActivated(false)
         // saveLabel({
