@@ -31,6 +31,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -60,6 +63,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -93,6 +99,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     render(
         <ShareMock>
           <CadView
@@ -123,6 +132,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
@@ -161,6 +173,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     render(
         <ShareMock>
           <CadView
@@ -198,6 +213,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElements(selectedIdsAsString)
@@ -251,6 +269,9 @@ describe('CadView', () => {
     }
     const viewer = new IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
     const {result} = renderHook(() => useStore((state) => state))
     const {getByTitle} = render(
         <ShareMock>
