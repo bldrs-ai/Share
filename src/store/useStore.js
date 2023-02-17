@@ -1,4 +1,4 @@
-import create from 'zustand'
+import {create} from 'zustand'
 import createIFCSlice from './IFCSlice'
 import createNotesSlice from './NotesSlice'
 import createUISlice from './UISlice'

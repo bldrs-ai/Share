@@ -13,7 +13,7 @@ import LogoB from '../../assets/LogoB.svg'
 /**
  * Button to toggle About panel on and off
  *
- * @return {React.ReactElement}
+ * @return {React.Component}
  */
 export default function AboutControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({

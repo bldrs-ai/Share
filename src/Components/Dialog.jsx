@@ -1,5 +1,5 @@
 import React from 'react'
-import DialogActions from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
@@ -19,24 +19,22 @@ import CloseIcon from '../assets/icons/Close.svg'
  * @property {Function} actionCb Callback for action button
  * @property {React.ReactElement} content Content of the dialog
  * @property {React.ReactElement} actionIcon Optional icon for the action button
- * @return {object} React component
+ * @return {React.Component}
  */
 export default function Dialog({
   icon,
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  content,
   actionTitle,
   actionCb,
-  content,
   actionIcon,
 }) {
   assertDefined(
       icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
       actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
-
-
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -55,9 +53,9 @@ export default function Dialog({
         }}
       >
         <TooltipIconButton
-          icon={<CloseIcon className='closeButton'/>}
-          onClick={close}
           title='Close'
+          onClick={close}
+          icon={<CloseIcon className={'closeButton'}/>}
         />
       </div>
       <DialogContent>

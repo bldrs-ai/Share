@@ -1,14 +1,14 @@
 import React from 'react'
-import AddCircle from '@mui/icons-material/AddCircle'
-import ArrowBack from '@mui/icons-material/ArrowBack'
-import ArrowForward from '@mui/icons-material/ArrowForward'
-import Check from '@mui/icons-material/Check'
-import {TooltipToggleButton} from '../../Components/Buttons'
+import AddCircle from '@mui/material/AddCircle'
+import ArrowBack from '@mui/material/ArrowBack'
+import ArrowForward from '@mui/material/ArrowForward'
+import Check from '@mui/material/Check'
+import {TooltipIconButton} from '../../Components/Buttons'
 
 
 export default {
-  title: 'BLDRS UI/Buttons/TooltipToggleButton',
-  component: TooltipToggleButton,
+  title: 'BLDRS UI/Buttons/TooltipIconButton',
+  component: TooltipIconButton,
   argTypes: {
     icon: {
       options: ['add', 'back', 'check', 'forward'],
@@ -46,7 +46,7 @@ export default {
         'top-start': 'top-start',
         'top': 'top',
       },
-      defaultValue: 'left',
+      defaultValue: 'right',
     },
 
     size: {
@@ -60,9 +60,15 @@ export default {
       },
       defaultValue: 'medium',
     },
+
+    dataTestId: {
+      control: {
+        type: 'text',
+      },
+    },
   },
   args: {
-    title: 'Only Appears on Hover',
+    title: 'Only Appears on Hover2',
   },
   parameters: {
     backgrounds: {
@@ -73,7 +79,7 @@ export default {
 
 const Template = (args) => {
   return (
-    <TooltipToggleButton
+    <TooltipIconButton
       {...args}
     />
   )
