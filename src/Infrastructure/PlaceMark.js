@@ -76,7 +76,7 @@ export default class PlaceMark extends EventDispatcher {
       debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
 
       if (_intersections.length > 0) {
-        getSVGGroup({url: '/icons/PlaceMarkOff.svg'}).then((group) => {
+        getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
           group.position.copy(_intersections[0].point)
           debug().log('PlaceMark#onDoubleTap#getSVGGroup: ', group)
           _scene.add(group)

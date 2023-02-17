@@ -89,8 +89,12 @@ export const getSVGGroup = async ({
   if (!width && !height) {
     scaleX = scaleY = 1
   }
-  width = scaleX * groupSize.x
-  height = scaleY * groupSize.y
+  if (!width) {
+    width = scaleX * groupSize.x
+  }
+  if (!height) {
+    height = scaleY * groupSize.y
+  }
   debug().log('svg#getSVGGroup: group scales: ', scaleX, scaleY, width, height)
   group.scale.x = scaleX
   group.scale.y = scaleY

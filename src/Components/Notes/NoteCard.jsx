@@ -23,9 +23,10 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
-import PlaceMarkOffIcon from '../../assets/icons/PlaceMarkOff.svg'
-import PlaceMarkOnIcon from '../../assets/icons/PlaceMarkOn.svg'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import debug from '../../utils/debug'
+import {ColorModeContext} from '../../Context/ColorMode'
+import {useContext} from 'react'
 
 
 /**
@@ -233,6 +234,7 @@ const CardActions = ({
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
+  const colorMode = useContext(ColorModeContext)
 
 
   useEffect(() => {
@@ -290,13 +292,20 @@ const CardActions = ({
             icon={<ShareIcon/>}
           />
         }
-        <TooltipIconButton
-          title='Place Mark'
-          size='small'
-          placement='bottom'
-          onClick={toggleActivate}
-          icon={placeMarkActivated ? <PlaceMarkOnIcon/> : <PlaceMarkOffIcon/>}
-        />
+        <Box sx={{
+          '& svg': {
+            fill: placeMarkActivated ? 'red' : colorMode.isDay() ? 'black' : 'white',
+          },
+        }}
+        >
+          <TooltipIconButton
+            title='Place Mark'
+            size='small'
+            placement='bottom'
+            onClick={toggleActivate}
+            icon={<PlaceMarkIcon/>}
+          />
+        </Box>
       </Box>
       <Box sx={{
         display: 'flex',
