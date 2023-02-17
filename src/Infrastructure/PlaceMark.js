@@ -7,6 +7,7 @@ import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {getSVGMesh} from '../utils/svg'
+// import createComposer from './CustomPostProcessing'
 
 
 /**
@@ -23,6 +24,7 @@ export default class PlaceMark extends EventDispatcher {
     const _camera = context.getCamera()
     const _scene = context.getScene()
     // const _renderer = context.getRenderer()
+    // const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -31,6 +33,7 @@ export default class PlaceMark extends EventDispatcher {
 
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
+    // context.renderer.update = newUpdateFunction(context, composer)
 
 
     const updatePointer = (event) => {
@@ -106,7 +109,25 @@ export default class PlaceMark extends EventDispatcher {
         }
         _scene.add(mesh)
         _placeMarks.push(mesh)
+        // outlineEffect.setSelection(_placeMarks)
       })
     }
   }
 }
+
+
+// const newUpdateFunction = (context, composer) => {
+//   /**
+//    * Overrides the default update function in the context renderer
+//    *
+//    * @param {number} _delta
+//    */
+//   function newUpdateFn(_delta) {
+//     // eslint-disable-next-line no-invalid-this
+//     if (this.blocked || !context) {
+//       return
+//     }
+//     composer.render()
+//   }
+//   return newUpdateFn.bind(context.renderer)
+// }
