@@ -59,7 +59,7 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.drop = (event) => {
+    this.onDrop = (event) => {
       debug().log('PlaceMark#drop: ', event)
       if (!_objects || !this.activated) {
         return
@@ -73,19 +73,23 @@ export default class PlaceMark extends EventDispatcher {
 
       if (_intersections.length > 0) {
         const intersectPoint = _intersections[0].point
-        getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
-          group.position.copy(intersectPoint)
-          debug().log('PlaceMark#drop#getSVGGroup: ', group)
-          _scene.add(group)
-          _placeMarks.push(group)
-        })
         intersectPoint.x = floatStrTrim(intersectPoint.x)
         intersectPoint.y = floatStrTrim(intersectPoint.y)
         intersectPoint.z = floatStrTrim(intersectPoint.z)
+        this.putDown(intersectPoint)
         return intersectPoint
       } else {
         return null
       }
+    }
+
+    this.putDown = (point) => {
+      getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
+        group.position.copy(point)
+        debug().log('PlaceMark#drop#getSVGGroup: ', group)
+        _scene.add(group)
+        _placeMarks.push(group)
+      })
     }
   }
 }

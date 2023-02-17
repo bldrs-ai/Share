@@ -542,7 +542,7 @@ export default function CadView({
 
   const dropPlaceMark = (event) => {
     if (placeMark) {
-      const point = placeMark.drop(event)
+      const point = placeMark.onDrop(event)
       if (point && placeMarkNoteId) {
         debug().log('CadView#onDoubleTap: point: ', point)
         debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
