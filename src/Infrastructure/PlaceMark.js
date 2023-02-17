@@ -5,6 +5,7 @@ import {
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
+import {floatStrTrim} from '../utils/strings'
 import {getSVGGroup} from '../utils/svg'
 
 
@@ -71,13 +72,17 @@ export default class PlaceMark extends EventDispatcher {
       debug().log('PlaceMark#drop: _intersections: ', _intersections)
 
       if (_intersections.length > 0) {
+        const intersectPoint = _intersections[0].point
         getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
-          group.position.copy(_intersections[0].point)
+          group.position.copy(intersectPoint)
           debug().log('PlaceMark#drop#getSVGGroup: ', group)
           _scene.add(group)
           _placeMarks.push(group)
         })
-        return _intersections[0].point
+        intersectPoint.x = floatStrTrim(intersectPoint.x)
+        intersectPoint.y = floatStrTrim(intersectPoint.y)
+        intersectPoint.z = floatStrTrim(intersectPoint.z)
+        return intersectPoint
       } else {
         return null
       }
