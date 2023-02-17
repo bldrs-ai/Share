@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react'
-import {Color, MeshLambertMaterial} from 'three'
+import {Color, MeshLambertMaterial, Vector3} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {useDoubleTap} from 'use-double-tap'
@@ -26,9 +26,10 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getEncodedParam} from '../utils/location'
+import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
 import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {addSceneLayer} from './SceneLayer'
+import {floatStrTrim} from '../utils/strings'
 
 
 /**
@@ -570,6 +571,21 @@ export default function CadView({
       dropPlaceMark(event)
     }
   }
+
+
+  useEffect(() => {
+    const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
+    if (placeMarkHash && placeMark) {
+      debug().log('CadView: placeMarkHash: ', placeMarkHash)
+      const pos = getObjectParams(placeMarkHash)
+      debug().log('CadView: pos: ', pos)
+      placeMark.putDown(new Vector3(
+          floatStrTrim(pos.x),
+          floatStrTrim(pos.y),
+          floatStrTrim(pos.z),
+      ))
+    }
+  }, [location, placeMark])
 
 
   return (
