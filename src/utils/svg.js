@@ -146,7 +146,7 @@ export const getSVGMesh = async ({
       texture.needsUpdate = true
       // eslint-disable-next-line no-magic-numbers
       const geometry = new CircleGeometry(radius, 50)
-      const material = new MeshBasicMaterial({map: texture})
+      const material = new MeshBasicMaterial({map: texture, side: DoubleSide})
       material.map.minFilter = LinearFilter
       const mesh = new Mesh(geometry, material)
       resolve(mesh)

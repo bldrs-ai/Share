@@ -216,6 +216,7 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
+    debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     const newPlaceMark = new PlaceMark(viewer.context)
     newPlaceMark.setObjects([tmpModelRef])
@@ -579,13 +580,16 @@ export default function CadView({
       debug().log('CadView: placeMarkHash: ', placeMarkHash)
       const pos = getObjectParams(placeMarkHash)
       debug().log('CadView: pos: ', pos)
-      placeMark.putDown(new Vector3(
-          floatStrTrim(pos.x),
-          floatStrTrim(pos.y),
-          floatStrTrim(pos.z),
-      ))
+      placeMark.putDown({
+        point: new Vector3(
+            floatStrTrim(pos.x),
+            floatStrTrim(pos.y),
+            floatStrTrim(pos.z),
+        ),
+      })
     }
-  }, [location, placeMark])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [placeMark])
 
 
   return (

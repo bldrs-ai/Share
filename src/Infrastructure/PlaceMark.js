@@ -60,7 +60,7 @@ export default class PlaceMark extends EventDispatcher {
 
 
     this.onDrop = (event) => {
-      debug().log('PlaceMark#drop: ', event)
+      debug().log('PlaceMark#onDrop: ', event)
       if (!_objects || !this.activated) {
         return
       }
@@ -69,30 +69,37 @@ export default class PlaceMark extends EventDispatcher {
       _intersections.length = 0
       _raycaster.setFromCamera(_pointer, _camera)
       _raycaster.intersectObjects(_objects, true, _intersections)
-      debug().log('PlaceMark#drop: _intersections: ', _intersections)
+      debug().log('PlaceMark#onDrop: _intersections: ', _intersections)
 
       if (_intersections.length > 0) {
-        const intersectPoint = _intersections[0].point
+        const intersectPoint = _intersections[0].point.clone()
         intersectPoint.x = floatStrTrim(intersectPoint.x)
         intersectPoint.y = floatStrTrim(intersectPoint.y)
         intersectPoint.z = floatStrTrim(intersectPoint.z)
-        this.putDown(intersectPoint)
+        const point = intersectPoint.clone().add(_intersections[0].face.normal.clone())
+        const lookAt = point.clone().add(_intersections[0].face.normal.clone())
+        this.putDown({point, lookAt})
         return intersectPoint
       } else {
         return null
       }
     }
 
-    this.putDown = (point) => {
+    this.putDown = ({point, lookAt}) => {
       // getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
-      //   group.position.copy(point)
       //   debug().log('PlaceMark#putDown#getSVGGroup: ', group)
+      //   group.position.copy(point)
       //   _scene.add(group)
       //   _placeMarks.push(group)
       // })
+      debug().log('PlaceMark#putDown: point: ', point)
+      debug().log('PlaceMark#putDown: lookAt: ', lookAt)
       getSVGMesh({url: '/icons/PlaceMark.svg', color: 'red'}).then((mesh) => {
         debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
         mesh.position.copy(point)
+        if (lookAt) {
+          mesh.lookAt(lookAt)
+        }
         _scene.add(mesh)
         _placeMarks.push(mesh)
       })
