@@ -14,7 +14,7 @@ const Template = (args) => {
       headerContent={<OpenDialogHeaderContent/>}
       bodyContent={<OpenDialogBodyContent/>}
       headerText={'Open file'}
-      isDialogDisplayed={ true }
+      isDialogDisplayed={true}
       setIsDialogDisplayed={() => debug().log('setIsDialogDisplayed')}
     />
   )
