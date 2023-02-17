@@ -25,8 +25,6 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import debug from '../../utils/debug'
-import {ColorModeContext} from '../../Context/ColorMode'
-import {useContext} from 'react'
 
 
 /**
@@ -234,7 +232,6 @@ const CardActions = ({
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
-  const colorMode = useContext(ColorModeContext)
 
 
   useEffect(() => {
@@ -294,7 +291,7 @@ const CardActions = ({
         }
         <Box sx={{
           '& svg': {
-            fill: placeMarkActivated ? 'red' : colorMode.isDay() ? 'black' : 'white',
+            fill: placeMarkActivated ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
           },
         }}
         >
