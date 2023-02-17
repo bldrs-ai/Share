@@ -1,9 +1,8 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import {useTheme} from '@mui/styles'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
-import {ColorModeContext} from '../Context/ColorMode'
 import {assertDefined} from '../utils/assert'
 import {hexToRgba} from '../utils/color'
 import AboutControl from './About/AboutControl'
@@ -35,8 +34,6 @@ export default function OperationsGroup({deselectItems}) {
   const cutPlanes = useStore((state) => state.cutPlanes)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
-  const colorMode = useContext(ColorModeContext)
-
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
@@ -124,9 +121,9 @@ export default function OperationsGroup({deselectItems}) {
       {isSettingsVisible &&
        <ButtonGroup orientation='vertical'>
          <TooltipIconButton
-           title={`${colorMode.isDay() ? 'Night' : 'Day'} theme`}
-           onClick={() => colorMode.toggleColorMode()}
-           icon={colorMode.isDay() ? <MoonIcon/> : <SunIcon/>}
+           title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
+           onClick={() => theme.toggleColorMode()}
+           icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
          />
          <AboutControl/>
        </ButtonGroup>

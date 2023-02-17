@@ -1,6 +1,6 @@
 import React from 'react'
 import Switch from '@mui/material/Switch'
-import {useTheme} from '@mui/styles'
+import useTheme from '@mui/styles/useTheme'
 
 
 /**
@@ -8,12 +8,10 @@ import {useTheme} from '@mui/styles'
  *
  * @property {Function} onChange callback
  * @property {boolean} checked react state
- * @return {React.ReactElement} React component
+ * @return {React.ReactComponent}
  */
 export default function Toggle({onChange, checked}) {
   const theme = useTheme()
-
-
   return (
     <Switch
       checked={checked}

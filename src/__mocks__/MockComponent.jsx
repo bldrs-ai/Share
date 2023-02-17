@@ -1,21 +1,17 @@
-import useTheme from '../Theme'
-import {ThemeProvider} from '@mui/material/styles'
 import React from 'react'
-import {ColorModeContext} from '../Context/ColorMode'
+import {ThemeProvider} from '@mui/material/styles'
+import useShareTheme from '../theme/Theme'
+
 
 /**
- * @param {object} children React component(s)
- * @return {React.Component} React component
+ * @property {object} children React component(s)
+ * @return {React.Component}
  */
 export const MockComponent = ({children}) => {
-  const {theme, colorMode} = useTheme()
-
   return (
-    <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
-        {children}
-      </ThemeProvider>
-    </ColorModeContext.Provider>
+    <ThemeProvider theme={useShareTheme()}>
+      {children}
+    </ThemeProvider>
   )
 }
 

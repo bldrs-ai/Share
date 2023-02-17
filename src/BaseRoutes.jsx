@@ -49,7 +49,9 @@ export default function BaseRoutes({testElt = null}) {
       navigation(targetURL)
     }
 
-    if (!isLoading && isAuthenticated) {
+    if (process.env.NODE_ENV === 'development' && process.env.GITHUB_API_TOKEN) {
+      setAccessToken(process.env.GITHUB_API_TOKEN)
+    } else if (!isLoading && isAuthenticated) {
       getAccessTokenSilently({
         authorizationParams: {
           audience: 'https://api.github.com/',
