@@ -27,7 +27,7 @@ import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitH
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
-import {PLACE_MARK_PREFIX} from '../utils/constants'
+import {PLACE_MARK_LOOK_PREFIX, PLACE_MARK_POS_PREFIX} from '../utils/constants'
 import {addSceneLayer} from './SceneLayer'
 import {floatStrTrim} from '../utils/strings'
 
@@ -544,18 +544,21 @@ export default function CadView({
 
   const dropPlaceMark = (event) => {
     if (placeMark) {
-      const point = placeMark.onDrop(event)
-      if (point && placeMarkNoteId) {
+      const {point, lookAt} = placeMark.onDrop(event)
+      if (point && lookAt && placeMarkNoteId) {
         debug().log('CadView#onDoubleTap: point: ', point)
         debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
-        addHashParams(window.location, PLACE_MARK_PREFIX, point, true)
-        const placeMarkHash = getEncodedParam(point, true)
-        debug().log('CadView#onDoubleTap: placeMarkHash: ', placeMarkHash)
+        addHashParams(window.location, PLACE_MARK_POS_PREFIX, point, true)
+        const placeMarkPosHash = getEncodedParam(point, true)
+        debug().log('CadView#onDoubleTap: placeMarkPosHash: ', placeMarkPosHash)
+        addHashParams(window.location, PLACE_MARK_LOOK_PREFIX, lookAt, true)
+        const placeMarkLookHash = getEncodedParam(point, true)
+        debug().log('CadView#onDoubleTap: placeMarkLookHash: ', placeMarkLookHash)
         setPlaceMarkActivated(false)
         // saveLabel({
         //   repository,
         //   labelName: `PlaceMark${placeMarkNoteId}`,
-        //   labelDescription: placeMarkHash,
+        //   labelDescription: placeMarkPosHash,
         // })
       }
     }
@@ -575,16 +578,25 @@ export default function CadView({
 
 
   useEffect(() => {
-    const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
-    if (placeMarkHash && placeMark) {
-      debug().log('CadView: placeMarkHash: ', placeMarkHash)
-      const pos = getObjectParams(placeMarkHash)
-      debug().log('CadView: pos: ', pos)
+    const placeMarkPosHash = getHashParams(location, PLACE_MARK_POS_PREFIX)
+    const placeMarkLookHash = getHashParams(location, PLACE_MARK_LOOK_PREFIX)
+    if (placeMarkPosHash && placeMarkLookHash && placeMark) {
+      debug().log('CadView: placeMarkPosHash: ', placeMarkPosHash)
+      const point = getObjectParams(placeMarkPosHash)
+      debug().log('CadView: point: ', point)
+      debug().log('CadView: placeMarkLookHash: ', placeMarkLookHash)
+      const lookAt = getObjectParams(placeMarkLookHash)
+      debug().log('CadView: lookAt: ', lookAt)
       placeMark.putDown({
         point: new Vector3(
-            floatStrTrim(pos.x),
-            floatStrTrim(pos.y),
-            floatStrTrim(pos.z),
+            floatStrTrim(point.x),
+            floatStrTrim(point.y),
+            floatStrTrim(point.z),
+        ),
+        lookAt: new Vector3(
+            floatStrTrim(lookAt.x),
+            floatStrTrim(lookAt.y),
+            floatStrTrim(lookAt.z),
         ),
       })
     }

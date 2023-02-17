@@ -79,13 +79,13 @@ export default class PlaceMark extends EventDispatcher {
         const point = intersectPoint.clone().add(_intersections[0].face.normal.clone())
         const lookAt = point.clone().add(_intersections[0].face.normal.clone())
         this.putDown({point, lookAt})
-        return intersectPoint
+        return {point, lookAt}
       } else {
         return null
       }
     }
 
-    this.putDown = ({point, lookAt}) => {
+    this.putDown = ({point, lookAt, color = 'red'}) => {
       // getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
       //   debug().log('PlaceMark#putDown#getSVGGroup: ', group)
       //   group.position.copy(point)
@@ -94,7 +94,7 @@ export default class PlaceMark extends EventDispatcher {
       // })
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      getSVGMesh({url: '/icons/PlaceMark.svg', color: 'red'}).then((mesh) => {
+      getSVGMesh({url: '/icons/PlaceMark.svg', color}).then((mesh) => {
         debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
         mesh.position.copy(point)
         if (lookAt) {
