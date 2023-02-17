@@ -135,7 +135,8 @@ export const getSVGMesh = async ({
   const newSvgData = (new XMLSerializer()).serializeToString(svg)
   const canvas = document.createElement('canvas')
   canvas.width = svg.width.baseVal.value
-  canvas.height = svg.height.baseVal.value
+  // eslint-disable-next-line no-magic-numbers
+  canvas.height = svg.height.baseVal.value - 150
   const ctx = canvas.getContext('2d')
   return new Promise((resolve, reject) => {
     const img = document.createElement('img')
