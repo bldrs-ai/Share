@@ -22,7 +22,7 @@ export function addSceneLayer(sceneContext) {
   // axes.scale.multiplyScalar(axesScale)
   // sceneLayer.add(axes)
 
-  // Demo: optional animatinl
+  // Demo: optional animation
   // anim = () => {...}
   // TODO(pablo): These no longer work; reference only.
   // sceneContext.ifcCamera.targetItem(axes.position)
