@@ -63,8 +63,8 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.onDoubleTap = (event) => {
-      debug().log('PlaceMark#onDoubleTap: ', event)
+    this.drop = (event) => {
+      debug().log('PlaceMark#drop: ', event)
       if (!_objects || !this.activated) {
         return
       }
@@ -73,12 +73,12 @@ export default class PlaceMark extends EventDispatcher {
       _intersections.length = 0
       _raycaster.setFromCamera(_pointer, _camera)
       _raycaster.intersectObjects(_objects, true, _intersections)
-      debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
+      debug().log('PlaceMark#drop: _intersections: ', _intersections)
 
       if (_intersections.length > 0) {
         getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
           group.position.copy(_intersections[0].point)
-          debug().log('PlaceMark#onDoubleTap#getSVGGroup: ', group)
+          debug().log('PlaceMark#drop#getSVGGroup: ', group)
           _scene.add(group)
           _placeMarks.push(group)
         })

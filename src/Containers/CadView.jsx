@@ -550,7 +550,7 @@ export default function CadView({
 
   const onDoubleTap = useDoubleTap((e) => {
     if (placeMark) {
-      const point = placeMark.onDoubleTap(e)
+      const point = placeMark.drop(e)
       if (point && placeMarkNoteId) {
         debug().log('CadView#onDoubleTap: point: ', point)
         debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
