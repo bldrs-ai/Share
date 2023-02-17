@@ -94,7 +94,11 @@ export default class PlaceMark extends EventDispatcher {
       // })
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      getSVGMesh({url: '/icons/PlaceMark.svg', color}).then((mesh) => {
+      getSVGMesh({
+        url: '/icons/PlaceMark.svg',
+        color,
+        bottomOffset: 150,
+      }).then((mesh) => {
         debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
         mesh.position.copy(point)
         if (lookAt) {

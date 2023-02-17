@@ -126,6 +126,7 @@ export const getSVGMesh = async ({
   url,
   radius = 2,
   color = 'black',
+  bottomOffset = 0,
 }) => {
   assertDefined(url)
   const svgData = await fileLoader.loadAsync(url)
@@ -145,8 +146,7 @@ export const getSVGMesh = async ({
       ctx.drawImage(img, 0, 0)
       const texture = new Texture(canvas)
       texture.needsUpdate = true
-      // eslint-disable-next-line no-magic-numbers
-      const geometry = new CircleGeometry(radius, 50)
+      const geometry = new CircleGeometry(radius, bottomOffset)
       const material = new MeshBasicMaterial({map: texture, side: DoubleSide})
       material.map.minFilter = LinearFilter
       const mesh = new Mesh(geometry, material)
