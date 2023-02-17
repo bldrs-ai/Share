@@ -23,6 +23,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
+import {addSceneLayer} from './SceneLayer'
 
 
 /**
@@ -666,6 +667,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
   v.clipper.orthogonalY = false
+  addSceneLayer(v.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
