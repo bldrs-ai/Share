@@ -16,7 +16,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
-    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, options.useViewRules ? ['Rule'] : [])
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, options?.useViewRules ? ['Rule'] : [])
   }
 
 

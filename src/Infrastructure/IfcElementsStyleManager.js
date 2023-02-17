@@ -1,4 +1,3 @@
-/* eslint-disable no-magic-numbers */
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import {IFCPRODUCTDEFINITIONSHAPE, IFCPROPERTYSET, IFCRELDEFINESBYPROPERTIES} from 'web-ifc'
 import IfcColor from './IfcColor'
@@ -94,6 +93,7 @@ function newInitializeLoadingStateFunction(parser) {
 
 
 /* eslint-disable new-cap */
+/* eslint-disable no-magic-numbers */
 /**
  * Returns a new compileViewFunction function that calculates the custom view
  *
@@ -123,9 +123,9 @@ function bindCompileViewFunction(parser) {
     const valArr = objectsAndPropVal.map((a) => a.p)
     const min = Math.min(valArr)
     const max = Math.max(...valArr)
-    const entries = objectsAndPropVal.map((a) => [a.o, getElementColor(min, max, a)])
-    console.log('entries', entries)
-    const viewSettings = new IfcCustomViewSettings(new IfcColor(0.96, 0.96, 0.96), Object.fromEntries(entries))
+    const entries = objectsAndPropVal.map((a) => [a.o, calculateElementColor(min, max, a)])
+    const defaultElementsColor = new IfcColor(0.96, 0.96, 0.96)
+    const viewSettings = new IfcCustomViewSettings(defaultElementsColor, Object.fromEntries(entries))
 
     this._overrideStyles = viewSettings
   }
@@ -134,8 +134,15 @@ function bindCompileViewFunction(parser) {
 }
 
 
-/** */
-function getElementColor(min, max, a) {
+/**
+ * get element color based on its value
+ *
+ * @param {number} min
+ * @param {number} max
+ * @param {number} a
+ * @return {IfcColor} the color
+ */
+function calculateElementColor(min, max, a) {
   const baseColor = new IfcColor(0.96, 0.96, 0.96)
   if (a.p === 0) {
     return baseColor
@@ -148,15 +155,12 @@ function getElementColor(min, max, a) {
 }
 
 
-/** */
-function changeValueScale(value, min, max, targetMin, targetMax) {
-  const ratio = (value - min) * 1.0 / (max-min)
-  const result = targetMin + (ratio * (targetMax - targetMin))
-  return result
-}
-
-
-/** */
+/**
+ * Convert Hex Color string to IfcColor Object
+ *
+ * @param {string} hexColor the color in string format '#C7C7C7'
+ * @return {IfcColor} the IfcColor object
+ */
 function parseColor(hexColor) {
   const parsed = hexColor.substr(1).split(/(?=(?:..)*$)/)
       .map((a) => parseInt(a, 16) / 256)
@@ -165,11 +169,37 @@ function parseColor(hexColor) {
 }
 
 
-/** */
+/**
+ * get a color that lies on the scale between two colors
+ *
+ * @param {IfcColor} startColor
+ * @param {IfcColor} targetColor
+ * @param {number} value
+ * @param {number} min value
+ * @param {number} max value
+ * @return {IfcColor} color on the scale between the start color and max color
+ */
 function interpolateColors(startColor, targetColor, value, min, max) {
   const r = changeValueScale(value, min, max, startColor.x, targetColor.x)
   const g = changeValueScale(value, min, max, startColor.y, targetColor.y)
   const b = changeValueScale(value, min, max, startColor.z, targetColor.z)
   const result = new IfcColor(r, g, b)
+  return result
+}
+
+
+/**
+ * convert value from one value scale to another
+ *
+ * @param {number} value
+ * @param {number} min
+ * @param {number} max
+ * @param {number} targetMin
+ * @param {number} targetMax
+ * @return {number} the new value
+ */
+function changeValueScale(value, min, max, targetMin, targetMax) {
+  const ratio = (value - min) * 1.0 / (max - min)
+  const result = targetMin + (ratio * (targetMax - targetMin))
   return result
 }
