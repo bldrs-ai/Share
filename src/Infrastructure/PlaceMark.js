@@ -9,7 +9,7 @@ import {getSVGGroup} from '../utils/svg'
 
 
 /**
- * PlaceMark
+ * PlaceMark to share notes
  */
 export default class PlaceMark extends EventDispatcher {
   /**
@@ -28,22 +28,17 @@ export default class PlaceMark extends EventDispatcher {
     const _placeMarks = []
 
 
+    this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
 
 
-    /**
-     * @param {Event} event
-     */
-    function updatePointer(event) {
+    const updatePointer = (event) => {
       const rect = _domElement.getBoundingClientRect()
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
       _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
       _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
     }
-
-
-    this.activated = false
 
 
     this.activate = () => {

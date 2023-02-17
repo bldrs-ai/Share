@@ -548,9 +548,9 @@ export default function CadView({
   }
 
 
-  const onDoubleTap = useDoubleTap((e) => {
+  const dropPlaceMark = (event) => {
     if (placeMark) {
-      const point = placeMark.drop(e)
+      const point = placeMark.drop(event)
       if (point && placeMarkNoteId) {
         debug().log('CadView#onDoubleTap: point: ', point)
         debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
@@ -565,7 +565,19 @@ export default function CadView({
         // })
       }
     }
+  }
+
+
+  const onDoubleTap = useDoubleTap((event) => {
+    debug().log('CadView#onDoubleTap: ', event)
   })
+
+
+  const onSingleTap = (event) => {
+    if (event.shiftKey) {
+      dropPlaceMark(event)
+    }
+  }
 
 
   return (
@@ -591,6 +603,7 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
+        onMouseDown={onSingleTap}
         {...onDoubleTap}
       />
       <SnackBarMessage
