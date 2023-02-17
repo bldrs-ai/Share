@@ -133,6 +133,7 @@ export async function getComment(repository, issueId, commentId, accessToken = '
   }
 }
 
+
 /**
  * Retrieves the contents download URL for a GitHub repository path
  *
@@ -164,6 +165,7 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
   return contents.data.download_url
 }
+
 
 /**
  * Parses a GitHub repository URL and returns a structure
@@ -203,6 +205,23 @@ export const parseGitHubRepositoryURL = (githubURL) => {
     path: path,
   }
 }
+
+
+export const saveLabel = async ({repository, labelName, labelDescription, color = '000000'}) => {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('GitHub#saveLabel: repository: ', repository)
+  const res = await octokit.request(`POST /repos/{owner}/{repo}/labels`, {
+    owner: repository.orgName,
+    repo: repository.name,
+    name: labelName,
+    description: labelDescription,
+    color,
+  })
+  debug().log('GitHub#saveLabel: res: ', res)
+  return res
+}
+
 
 // DO NOT EXPORT ANY BELOW //
 /**

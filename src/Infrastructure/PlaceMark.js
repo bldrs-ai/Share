@@ -74,17 +74,17 @@ export default class PlaceMark extends EventDispatcher {
       _raycaster.setFromCamera(_pointer, _camera)
       _raycaster.intersectObjects(_objects, true, _intersections)
       debug().log('PlaceMark#onDoubleTap: _intersections: ', _intersections)
+
       if (_intersections.length > 0) {
         getSVGGroup({url: '/icons/PlaceMarkOff.svg'}).then((group) => {
           group.position.copy(_intersections[0].point)
           debug().log('PlaceMark#onDoubleTap#getSVGGroup: ', group)
           _scene.add(group)
           _placeMarks.push(group)
-          debug().log('PlaceMark#onDoubleTap#getSVGGroup: _scene: ', _scene)
         })
-        return true
+        return _intersections[0].point
       } else {
-        return false
+        return null
       }
     }
   }

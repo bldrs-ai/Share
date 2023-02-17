@@ -22,7 +22,7 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
 
@@ -81,11 +81,13 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const placeMarkNoteId = useStore((state) => state.placeMarkNoteId)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -545,9 +547,18 @@ export default function CadView({
 
   const onDoubleTap = useDoubleTap((e) => {
     if (placeMark) {
-      const caught = placeMark.onDoubleTap(e)
-      if (caught) {
+      const point = placeMark.onDoubleTap(e)
+      if (point && placeMarkNoteId) {
+        debug().log('CadView#onDoubleTap: point: ', point)
+        debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
+        const placeMarkHash = `m:x=${point.x},y=${point.y},z=${point.z}`
+        debug().log('CadView#onDoubleTap: placeMarkHash: ', placeMarkHash)
         setPlaceMarkActivated(false)
+        saveLabel({
+          repository,
+          labelName: `PlaceMark${placeMarkNoteId}`,
+          labelDescription: placeMarkHash,
+        })
       }
     }
   })

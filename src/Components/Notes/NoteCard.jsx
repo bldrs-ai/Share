@@ -182,6 +182,7 @@ export default function NoteCard({
       </CardContent>
       {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
+          id={id}
           selectCard={selectCard}
           numberOfComments={numberOfComments}
           embeddedCameras={embeddedCameraParams}
@@ -218,6 +219,7 @@ const ShowMore = ({onClick, expandText}) => {
 
 
 const CardActions = ({
+  id,
   onClickCamera,
   onClickShare,
   numberOfComments,
@@ -227,6 +229,7 @@ const CardActions = ({
   const placeMark = useStore((state) => state.placeMark)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const setPlaceMarkNoteId = useStore((state) => state.setPlaceMarkNoteId)
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
@@ -245,6 +248,7 @@ const CardActions = ({
 
   const toggleActivate = () => {
     setPlaceMarkActivated(!placeMarkActivated)
+    setPlaceMarkNoteId(id)
   }
 
 
