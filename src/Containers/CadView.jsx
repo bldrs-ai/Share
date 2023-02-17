@@ -22,6 +22,7 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
+// eslint-disable-next-line no-unused-vars
 import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
@@ -81,7 +82,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const repository = useStore((state) => state.repository)
+  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const placeMark = useStore((state) => state.placeMark)
@@ -554,11 +555,11 @@ export default function CadView({
         const placeMarkHash = `m:x=${point.x},y=${point.y},z=${point.z}`
         debug().log('CadView#onDoubleTap: placeMarkHash: ', placeMarkHash)
         setPlaceMarkActivated(false)
-        saveLabel({
-          repository,
-          labelName: `PlaceMark${placeMarkNoteId}`,
-          labelDescription: placeMarkHash,
-        })
+        // saveLabel({
+        //   repository,
+        //   labelName: `PlaceMark${placeMarkNoteId}`,
+        //   labelDescription: placeMarkHash,
+        // })
       }
     }
   })
