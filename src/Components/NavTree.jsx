@@ -43,6 +43,10 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
+  /**
+   * Determines if the tree node has a hide icon.
+   */
+  hasHideIcon: PropTypes.bool.isRequired,
 }
 
 /**
@@ -50,17 +54,18 @@ const NavTreePropTypes = {
  * @param {number} IFC element id
  * @return {object} React component
  */
-function HideIcon({isolator, elementId}) {
+function HideIcon({elementId}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
+  const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
-    const toBeHidden = isolator.flattenChildren(elementId)
+    const toBeHidden = viewer.isolator.flattenChildren(elementId)
     if (!isHidden) {
-      isolator.hideElementsById(toBeHidden)
+      viewer.isolator.hideElementsById(toBeHidden)
     } else {
-      isolator.unHideElementsById(toBeHidden)
+      viewer.isolator.unHideElementsById(toBeHidden)
     }
   }
 
@@ -93,6 +98,7 @@ export default function NavTree({
       icon: iconProp,
       expansionIcon,
       displayIcon,
+      hasHideIcon,
     } = props
 
     const {
@@ -112,8 +118,6 @@ export default function NavTree({
     const handleExpansionClick = (event) => handleExpansion(event)
 
     const [selectedElement, setSelectedElement] = useState(null)
-
-    const viewer = useStore((state) => state.viewer)
 
     const hiddenElements = useStore((state) => state.hiddenElements)
 
@@ -161,9 +165,9 @@ export default function NavTree({
           >
             {label}
           </Typography>
-          {viewer.isolator.canBeHidden(element.expressID) &&
+          {hasHideIcon &&
             <div style={{display: 'contents'}}>
-              <HideIcon isolator={viewer.isolator} elementId={element.expressID}/>
+              <HideIcon elementId={element.expressID}/>
             </div>
           }
         </div>
@@ -171,24 +175,26 @@ export default function NavTree({
     )
   })
 
-
   CustomContent.propTypes = NavTreePropTypes
-
 
   const CustomTreeItem = (props) => {
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
+  const viewer = useStore((state) => state.viewerStore)
+
+  const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
   let i = 0
-
-
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName({properties: model}, element)}
+      ContentProps={{
+        hasHideIcon: hasHideIcon,
+      }}
     >
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {

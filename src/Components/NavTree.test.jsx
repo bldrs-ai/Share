@@ -1,18 +1,32 @@
 import React from 'react'
-import {render} from '@testing-library/react'
+import {act, render, renderHook} from '@testing-library/react'
+import useStore from '../store/useStore'
 import ShareMock from '../ShareMock'
-import {MockViewer, newMockStringValueElt} from '../utils/IfcMock.test'
+import {newMockStringValueElt} from '../utils/IfcMock.test'
 import NavTree from './NavTree'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import {actAsyncFlush} from '../utils/tests'
 
 
-test('NavTree for single element', () => {
-  const testLabel = 'Test node label'
-  const {getByText} = render(
-      <ShareMock>
-        <NavTree
-          viewer={new MockViewer}
-          element={newMockStringValueElt(testLabel)}
-        />
-      </ShareMock>)
-  expect(getByText(testLabel)).toBeInTheDocument()
+describe('CadView', () => {
+  afterEach(() => {
+    jest.clearAllMocks()
+  })
+
+  it('NavTree for single element', async () => {
+    const testLabel = 'Test node label'
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = new IfcViewerAPIExtended()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+    })
+    const {getByText} = render(
+        <ShareMock>
+          <NavTree
+            element={newMockStringValueElt(testLabel)}
+          />
+        </ShareMock>)
+    await actAsyncFlush()
+    expect(getByText(testLabel)).toBeInTheDocument()
+  })
 })

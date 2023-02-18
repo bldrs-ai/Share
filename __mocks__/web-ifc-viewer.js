@@ -1,4 +1,5 @@
 import {Vector3} from 'three'
+import {makeTestTree} from '../src/utils/TreeUtils.test'
 
 
 jest.mock('../src/Infrastructure/IfcHighlighter')
@@ -8,13 +9,16 @@ const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 // are not present in the instantiated IfcViewerAPIExtended.
 const loadedModel = {
   ifcManager: {
-    getSpatialStructure: jest.fn(),
+    getSpatialStructure: jest.fn((eltId) => (makeTestTree())),
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),
   geometry: {
     boundingBox: {
       getCenter: jest.fn(),
+    },
+    attributes: {
+      expressID: 123,
     },
   },
 }
@@ -64,6 +68,11 @@ const impl = {
       },
     },
   },
+  isolator: {
+    canBeHidden: jest.fn(() => {
+      return true
+    }),
+  },
   clipper: {
     active: false,
     deleteAllPlanes: jest.fn(() => {
@@ -87,6 +96,9 @@ const impl = {
     getRenderer: jest.fn(),
     getScene: jest.fn(),
     getCamera: jest.fn(),
+    getClippingPlanes: jest.fn(() => {
+      return []
+    }),
   },
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {

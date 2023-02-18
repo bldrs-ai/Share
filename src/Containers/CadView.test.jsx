@@ -7,7 +7,6 @@ import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, * as AllCadView from './CadView'
-import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
 
 
 const mockedUseNavigate = jest.fn()
@@ -31,8 +30,6 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
-    const viewer = IfcViewerAPIExtended()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -61,8 +58,7 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -88,15 +84,13 @@ describe('CadView', () => {
 
 
   it('sets up camera and cutting plan from URL,', async () => {
-    const testTree = makeTestTree()
     const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const viewer = new IfcViewerAPIExtended()
     render(
         <ShareMock>
           <CadView
@@ -126,8 +120,7 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
@@ -165,9 +158,6 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `/haus.ifc`,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
-
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
           <CadView
@@ -180,7 +170,6 @@ describe('CadView', () => {
     )
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
           <CadView
@@ -197,15 +186,13 @@ describe('CadView', () => {
 
 
   it('select multiple elements and then clears selection, then reselect', async () => {
-    const testTree = makeTestTree()
     const selectedIds = [0, 1]
     const selectedIdsAsString = ['0', '1']
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
+    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElements(selectedIdsAsString)
@@ -251,15 +238,12 @@ describe('CadView', () => {
 
 
   it('can clear selection using Escape key', async () => {
-    const testTree = makeTestTree()
     const selectedIdsAsString = ['0', '1']
     const elementCount = 2
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = new IfcViewerAPIExtended()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(testTree)
     const {result} = renderHook(() => useStore((state) => state))
     const {getByTitle} = render(
         <ShareMock>
@@ -293,10 +277,9 @@ describe('CadView', () => {
         <ShareMock>
           <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'} modelPath={modelPath}/>
         </ShareMock>)
-    const viewerMock = __getIfcViewerAPIMockSingleton()
-    expect(viewerMock.IFC.context.getCamera).toHaveBeenCalled()
-    expect(viewerMock.IFC.context.getRenderer).toHaveBeenCalled()
-    expect(viewerMock.IFC.context.getScene).toHaveBeenCalled()
+    expect(viewer.IFC.context.getCamera).toHaveBeenCalled()
+    expect(viewer.IFC.context.getRenderer).toHaveBeenCalled()
+    expect(viewer.IFC.context.getScene).toHaveBeenCalled()
     await actAsyncFlush()
   })
 })

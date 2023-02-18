@@ -5,7 +5,7 @@ import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
 
 /**
- *  Provides hiding, unhiding, isolation, and unisolation functionality
+ *  Provides hiding, unhiding, isolation, and unisolation functionalities
  */
 export default class IfcIsolator {
   subsetCustomId = 'Bldrs::Share::Isolator'
@@ -24,8 +24,9 @@ export default class IfcIsolator {
   tempIsolationModeOn = false
   revealHiddenElementsMode = false
   hiddenMaterial = null
+
   /**
-   * Instantiate a new instance of IfcIsolator
+   * Instantiates a new instance of IfcIsolator
    *
    * @param {IfcContext} context of the viewer
    * @param {IfcViewerAPIExtended} viewer
