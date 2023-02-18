@@ -23,7 +23,6 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import debug from '../../utils/debug'
 
 
@@ -225,30 +224,9 @@ const CardActions = ({
   selectCard,
   embeddedCameras,
   selected}) => {
-  const placeMark = useStore((state) => state.placeMark)
-  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
-  const setPlaceMarkNoteId = useStore((state) => state.setPlaceMarkNoteId)
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
-
-
-  useEffect(() => {
-    if (placeMark) {
-      if (placeMarkActivated) {
-        placeMark.activate()
-      } else {
-        placeMark.deactivate()
-      }
-    }
-  }, [placeMark, placeMarkActivated])
-
-
-  const toggleActivate = () => {
-    setPlaceMarkActivated(!placeMarkActivated)
-    setPlaceMarkNoteId(id)
-  }
 
 
   return (
@@ -289,20 +267,6 @@ const CardActions = ({
             icon={<ShareIcon/>}
           />
         }
-        <Box sx={{
-          '& svg': {
-            fill: placeMarkActivated ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
-          },
-        }}
-        >
-          <TooltipIconButton
-            title='Place Mark'
-            size='small'
-            placement='bottom'
-            onClick={toggleActivate}
-            icon={<PlaceMarkIcon/>}
-          />
-        </Box>
       </Box>
       <Box sx={{
         display: 'flex',
