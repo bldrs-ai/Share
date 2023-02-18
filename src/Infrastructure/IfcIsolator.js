@@ -364,7 +364,7 @@ export default class IfcIsolator {
       color,
       opacity,
       transparent: true,
-      depthTest: false,
+      depthTest: true,
       side: DoubleSide,
       clippingPlanes: planes,
     })
