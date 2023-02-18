@@ -178,6 +178,10 @@ export default class IfcIsolator {
     }
     const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
+    if (this.revealHiddenElementsMode) {
+      this.revealHiddenElementsMode = false
+      this.toggleRevealHiddenElements()
+    }
   }
 
   /**
