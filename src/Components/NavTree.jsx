@@ -51,43 +51,25 @@ const NavTreePropTypes = {
  * @return {object} React component
  */
 function HideIcon({isolator, elementId}) {
-  const [isHidden, setIsHidden] = useState(false)
-  const [isIsolated, setIsIsolated] = useState(false)
-  const [isDisabled, setIsDisabled] = useState(false)
-  const hiddenElements = useStore((state) => state.hiddenElements)
+  const isHidden = useStore((state) => state.hiddenElements[elementId])
+  const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const isolatedElements = useStore((state) => state.isolatedElements)
-  const [id] = useState(elementId)
-
-  useEffect(() => {
-    setIsHidden(hiddenElements.includes(id))
-  }, [hiddenElements, id])
-
-  useEffect(() => {
-    setIsIsolated(isolatedElements.includes(id))
-  }, [isolatedElements, id])
-
-  useEffect(() => {
-    setIsDisabled(isTempIsolationModeOn)
-  }, [isTempIsolationModeOn])
 
   const toggleHide = () => {
+    const toBeHidden = isolator.flattenChildren(elementId)
     if (!isHidden) {
-      setIsHidden(true)
-      isolator.hideElementsById(id)
+      isolator.hideElementsById(toBeHidden)
     } else {
-      setIsHidden(false)
-      isolator.unHideElementsById(id)
+      isolator.unHideElementsById(toBeHidden)
     }
   }
 
   const iconStyle = {float: 'right', margin: '4px'}
-  if (isDisabled && !isIsolated) {
+  if (isTempIsolationModeOn && !isIsolated) {
     iconStyle.opacity = 0.3
   }
   const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
-
-  return <FontAwesomeIcon disabled={isDisabled} style={iconStyle} onClick={toggleHide} icon={icon}/>
+  return <FontAwesomeIcon disabled={isTempIsolationModeOn} style={iconStyle} onClick={toggleHide} icon={icon}/>
 }
 
 /**
@@ -144,7 +126,7 @@ export default function NavTree({
 
     useEffect(() => {
       if (selectedElement) {
-        if (hiddenElements.includes(selectedElement.expressID)) {
+        if (hiddenElements[selectedElement.expressID]) {
           return
         }
         const newPath =

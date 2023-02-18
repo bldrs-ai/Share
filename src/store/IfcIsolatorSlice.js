@@ -7,9 +7,24 @@
  */
 export default function createIsolatorSlice(set, get) {
   return {
-    hiddenElements: [],
-    isolatedElements: [],
+    hiddenElements: {},
+    isolatedElements: {},
     isTempIsolationModeOn: false,
+
+    updateHiddenStatus: (elementId, isHidden) =>
+      set((state) => ({
+        hiddenElements: {
+          ...state.hiddenElements, [elementId]: isHidden,
+        },
+      })),
+
+    updateIsolatedStatus: (elementId, isIsolated) =>
+      set((state) => ({
+        isolatedElements: {
+          ...state.isolatedElements, [elementId]: isIsolated,
+        },
+      })),
+
 
     setHiddenElements: (elements) => set(() => ({hiddenElements: elements})),
     setIsolatedElements: (elements) => set(() => ({isolatedElements: elements})),
