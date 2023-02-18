@@ -1,7 +1,8 @@
-import React, {useContext, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
@@ -13,8 +14,7 @@ import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
-import {ColorModeContext} from '../Context/ColorMode'
-import IfcViewerAPIExtended from '../Infrastructure/IfcViewerAPIExtended'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
@@ -23,6 +23,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
+import {addSceneLayer} from './SceneLayer'
 
 
 /**
@@ -60,7 +61,7 @@ export default function CadView({
   const [expandedElements, setExpandedElements] = useState([])
 
   // UI elts
-  const colorMode = useContext(ColorModeContext)
+  const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -161,21 +162,22 @@ export default function CadView({
   function onModelPath() {
     setIsNavPanelOpen(false)
     setShowSearchBar(false)
-    const theme = colorMode.getTheme()
-    const initializedViewer = initViewer(
-        pathPrefix,
-        (theme &&
-         theme.palette &&
-         theme.palette.scene &&
-         theme.palette.scene.background) || '0xabcdef')
-    setViewer(initializedViewer)
-    setViewerStore(initializedViewer)
+    // TODO(pablo): First arg isn't used for first time, and then it's
+    // newMode for the themeChangeListeners, which is also unused.
+    const initViewerCb = (any, themeArg) => {
+      const initializedViewer = initViewer(
+          pathPrefix,
+          assertDefined(themeArg.palette.scene.background))
+      setViewer(initializedViewer)
+      setViewerStore(initializedViewer)
+    }
+    initViewerCb(undefined, theme)
+    theme.addThemeChangeListener(initViewerCb)
   }
 
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    const theme = colorMode.getTheme()
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -201,7 +203,6 @@ export default function CadView({
       viewer.IFC.selector.selection.material = selectMat
     }
 
-    addThemeListener()
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
     await onModel(tmpModelRef)
@@ -253,6 +254,7 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.loadIfcUrl(
         ifcURL,
+        !urlHasCameraParams(), // fit to frame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -267,8 +269,9 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${ filepath}`)
-        },
-        !urlHasCameraParams())
+        })
+    await viewer.isolator.setModel(loadedModel)
+
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
@@ -530,15 +533,6 @@ export default function CadView({
   }
 
 
-  const addThemeListener = () => {
-    colorMode.addThemeChangeListener((newMode, theme) => {
-      const intializedViewer = initViewer(pathPrefix, theme.palette.scene.background)
-      setViewer(intializedViewer)
-      setViewerStore(intializedViewer)
-    })
-  }
-
-
   return (
     <Box
       sx={{
@@ -565,7 +559,7 @@ export default function CadView({
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
-        type={'info'}
+        severity={'info'}
         open={isLoading || snackMessage !== null}
       />
       {showSearchBar && (
@@ -618,7 +612,6 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   return (
     isMobile ? (
       <>
@@ -631,17 +624,15 @@ function OperationsGroupAndDrawer({deselectItems}) {
         >
           <OperationsGroup deselectItems={deselectItems}/>
         </Box>
-        {isDrawerOpen &&
-         <Box
-           sx={{
-             position: 'absolute',
-             bottom: 0,
-             width: '100%',
-           }}
-         >
-           <SideDrawer/>
-         </Box>
-        }
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            width: '100%',
+          }}
+        >
+          <SideDrawer/>
+        </Box>
       </>
     ) : (
       <Box
@@ -655,7 +646,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         }}
       >
         <OperationsGroup deselectItems={deselectItems}/>
-        {isDrawerOpen && <SideDrawer/>}
+        <SideDrawer/>
       </Box>
     )
   )
@@ -684,6 +675,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
+  addSceneLayer(viewer.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

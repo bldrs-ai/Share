@@ -1,13 +1,13 @@
 import React, {useState} from 'react'
+import * as reactRouting from 'react-router-dom'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
-import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
-import useStore from '../store/useStore'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import ShareMock from '../ShareMock'
+import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import CadView from './CadView'
-import * as AllCadView from './CadView'
-import * as reactRouting from 'react-router-dom'
+import CadView, * as AllCadView from './CadView'
+import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
 
 
 const mockedUseNavigate = jest.fn()
@@ -20,16 +20,18 @@ jest.mock('react-router-dom', () => {
   }
 })
 
+
 describe('CadView', () => {
   afterEach(() => {
     jest.clearAllMocks()
   })
 
+
   it('renders with mock IfcViewerAPIExtended', async () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
-    const viewer = __getIfcViewerAPIExtendedMockSingleton()
+    const viewer = IfcViewerAPIExtended()
     viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     const {result} = renderHook(() => useState(modelPath))
     render(
@@ -47,6 +49,7 @@ describe('CadView', () => {
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
   })
+
 
   it('renders and selects the element ID from URL', async () => {
     const testTree = makeTestTree()
@@ -83,6 +86,7 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+
   it('sets up camera and cutting plan from URL,', async () => {
     const testTree = makeTestTree()
     const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
@@ -113,6 +117,7 @@ describe('CadView', () => {
     expect(createPlanMock).toHaveBeenCalled()
     await actAsyncFlush()
   })
+
 
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
@@ -151,6 +156,7 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
     jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('/haus.ifc')
@@ -188,6 +194,7 @@ describe('CadView', () => {
     expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
     await actAsyncFlush()
   })
+
 
   it('select multiple elements and then clears selection, then reselect', async () => {
     const testTree = makeTestTree()
@@ -242,6 +249,7 @@ describe('CadView', () => {
     expect(setSelectionCalls).toEqual(expectedCall)
   })
 
+
   it('can clear selection using Escape key', async () => {
     const testTree = makeTestTree()
     const selectedIdsAsString = ['0', '1']
@@ -270,6 +278,25 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toHaveLength(elementCount)
     fireEvent.keyDown(getByTitle('Section'), {key: 'Escape', code: 'Escape', charCode: 27})
     expect(result.current.selectedElements).toHaveLength(0)
+    await actAsyncFlush()
+  })
+
+
+  it('SceneLayer accesses IFC camera, renderer and scene camera', async () => {
+    const modelPath = {
+      filepath: `/index.ifc`,
+    }
+    const viewer = new IfcViewerAPIExtended()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    renderHook(() => useState(modelPath))
+    render(
+        <ShareMock>
+          <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'} modelPath={modelPath}/>
+        </ShareMock>)
+    const viewerMock = __getIfcViewerAPIMockSingleton()
+    expect(viewerMock.IFC.context.getCamera).toHaveBeenCalled()
+    expect(viewerMock.IFC.context.getRenderer).toHaveBeenCalled()
+    expect(viewerMock.IFC.context.getScene).toHaveBeenCalled()
     await actAsyncFlush()
   })
 })

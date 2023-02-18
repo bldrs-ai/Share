@@ -1,5 +1,5 @@
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import IfcViewerAPIExtended from './IfcViewerAPIExtended'
+import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'

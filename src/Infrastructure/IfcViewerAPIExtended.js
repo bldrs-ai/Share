@@ -1,11 +1,13 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
-import {Matrix4} from 'three'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
+import IfcViewsManager from './IfcElementsStyleManager'
+import IfcCustomViewSettings from './IfcCustomViewSettings'
 
-
-/** Class IfcViewerAPIExtended*/
-export default class IfcViewerAPIExtended extends IfcViewerAPI {
+/**
+ * Extending the original IFCViewerFunctionality
+ */
+export class IfcViewerAPIExtended extends IfcViewerAPI {
   // TODO: might be usefull if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
@@ -14,7 +16,24 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
     this.isolator = new IfcIsolator(this.context, this)
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser)
   }
+
+  /**
+   * Loads the given IFC in the current scene.
+   *
+   * @param {string} url IFC as URL.
+   * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
+   * @param {Function(event)} onProgress (optional) a callback function to report on downloading progress
+   * @param {Function} onError (optional) a callback function to report on loading errors
+   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
+   * @return {IfcModel} ifcModel object
+   */
+  async loadIfcUrl(url, fitToFrame, onProgress, onError, customViewSettings) {
+    this.viewsManager.setViewSettings(customViewSettings)
+    return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
+  }
+
   /**
    * Gets the expressId of the element that the mouse is pointing at
    *
@@ -35,6 +54,7 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
    * @return {number[]} the selected express ids in the scene
    */
   getSelectedIds = () => [...this._selectedExpressIds]
+
 
   /**
    * sets the current selected expressIds in the scene
@@ -59,49 +79,6 @@ export default class IfcViewerAPIExtended extends IfcViewerAPI {
     } else {
       this.highlighter.setHighlighted(null)
       this.IFC.selector.unpickIfcItems()
-    }
-  }
-
-  /**
-   * Loads the given IFC in the current scene.
-   *
-   * @param {string} url IFC as URL.
-   * @param {object} onProgress (optional) a callback function to report on downloading progress
-   * @param {object} onError (optional) a callback function to report on loading errors
-   * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
-   */
-  async loadIfcUrl(url, onProgress, onError, fitToFrame = false) {
-    try {
-      const firstModel = Boolean(this.IFC.context.items.ifcModels.length === 0)
-      const settings = this.IFC.loader.ifcManager.state.webIfcSettings
-      const fastBools = (settings === null || settings === void 0 ? void 0 : settings.USE_FAST_BOOLS) || true
-      await this.IFC.loader.ifcManager.applyWebIfcConfig({
-        COORDINATE_TO_ORIGIN: firstModel,
-        USE_FAST_BOOLS: fastBools,
-      })
-
-      const ifcModel = await this.IFC.loader.loadAsync(url, onProgress)
-      this.context.getScene().add(ifcModel)
-      this.context.items.ifcModels.push(ifcModel)
-      this.context.items.pickableIfcModels.push(ifcModel)
-      await this.isolator.setModel(ifcModel)
-
-      if (firstModel) {
-        // eslint-disable-next-line new-cap
-        const matrixArr = await this.IFC.loader.ifcManager.ifcAPI.GetCoordinationMatrix(ifcModel.modelID)
-        const matrix = new Matrix4().fromArray(matrixArr)
-        this.IFC.loader.ifcManager.setupCoordinationMatrix(matrix)
-      }
-      if (fitToFrame) {
-        this.IFC.context.fitToFrame()
-      }
-      return ifcModel
-    } catch (err) {
-      console.error('Error loading IFC.')
-      console.error(err)
-      if (onError) {
-        onError(err)
-      }
     }
   }
 

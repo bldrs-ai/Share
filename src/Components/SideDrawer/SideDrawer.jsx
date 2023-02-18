@@ -68,7 +68,7 @@ export default function SideDrawer() {
   return (
     <Box
       sx={Object.assign({
-        display: 'flex',
+        display: isDrawerOpen ? 'flex' : 'none',
         flexDirection: 'row',
       }, isMobile ? {
         width: '100%',
