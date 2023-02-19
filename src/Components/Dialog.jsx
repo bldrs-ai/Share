@@ -3,9 +3,8 @@ import DialogActions from '@mui/material/DialogContent'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
-import {RectangularButton, TooltipIconButton} from '../Components/Buttons'
+import {RectangularButton, CloseButton} from '../Components/Buttons'
 import {assertDefined} from '../utils/assert'
-import CloseIcon from '../assets/icons/Close.svg'
 
 
 /**
@@ -51,14 +50,10 @@ export default function Dialog({
           position: 'absolute',
           right: 0,
           margin: '0.5em',
-          opacity: 0.5,
+          zIndex: 100,
         }}
       >
-        <TooltipIconButton
-          icon={<CloseIcon className='closeButton'/>}
-          onClick={close}
-          title='Close'
-        />
+        <CloseButton onClick={close}/>
       </div>
       <DialogContent>
         <Typography
