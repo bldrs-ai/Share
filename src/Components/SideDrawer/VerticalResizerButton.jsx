@@ -171,7 +171,8 @@ export default function VerticalResizerButton({
     >
       <Paper
         sx={{
-          padding: `${verticalPadding}px ${gripSize}px`,
+          paddingBottom: `${verticalPadding}px ${gripSize}px`,
+          paddingTop: `10px`,
           display: 'flex',
           width: '150px',
           alignItems: 'center',
