@@ -50,10 +50,10 @@ export default function Dialog({
         <div
           style={{
             position: 'absolute',
+            top: 0,
             right: 0,
             margin: '0.5em',
             zIndex: 1000,
-            border: '1px solid red',
           }}
         >
           <CloseButton onClick={close}/>
