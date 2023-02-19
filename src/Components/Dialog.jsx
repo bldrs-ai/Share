@@ -45,18 +45,19 @@ export default function Dialog({
       }}
       PaperProps={{variant: 'control'}}
     >
-      <div
-        style={{
-          position: 'absolute',
-          right: 0,
-          margin: '0.5em',
-          zIndex: 1000,
-          border: '1px solid red',
-        }}
-      >
-        <CloseButton onClick={close}/>
-      </div>
+
       <DialogContent>
+        <div
+          style={{
+            position: 'absolute',
+            right: 0,
+            margin: '0.5em',
+            zIndex: 1000,
+            border: '1px solid red',
+          }}
+        >
+          <CloseButton onClick={close}/>
+        </div>
         <Typography
           variant='h1'
           sx={{
