@@ -30,8 +30,6 @@ export default function VerticalResizerButton({
   const theme = useTheme()
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
-  // eslint-disable-next-line no-magic-numbers
-  const verticalPadding = 20
 
   const startResizing = useCallback(() => {
     setIsResizing(true)
@@ -171,10 +169,10 @@ export default function VerticalResizerButton({
     >
       <Paper
         sx={{
-          paddingBottom: `${verticalPadding}px ${gripSize}px`,
-          paddingTop: `10px`,
-          display: 'flex',
           width: '150px',
+          paddingTop: `10px`,
+          paddingBottom: '40px',
+          display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: `${gripSize}px`,
