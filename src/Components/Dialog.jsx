@@ -53,7 +53,7 @@ export default function Dialog({
             top: 0,
             right: 0,
             margin: '0.5em',
-            zIndex: 1000,
+            opacity: .5,
           }}
         >
           <CloseButton onClick={close}/>
