@@ -88,7 +88,6 @@ export default function SideDrawer() {
           display: 'flex',
           flexDirection: 'row',
           width: '100%',
-          borderLeft: isMobile ? 'none' : `solid 1px ${borderColor}`,
           borderRadius: 0,
           background: theme.palette.primary.background,
         }}
