@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {MOBILE_HEIGHT} from '../../utils/constants'
 import {isNumber} from '../../utils/strings'
@@ -168,7 +169,7 @@ export default function VerticalResizerButton({
         }),
       }}
     >
-      <Box
+      <Paper
         sx={{
           padding: `${verticalPadding}px ${gripSize}px`,
           display: 'flex',
@@ -178,6 +179,7 @@ export default function VerticalResizerButton({
           gap: `${gripSize}px`,
           background: theme.palette.primary.background,
         }}
+        elevation={0}
         ref={resizerRef}
         data-testid="y_resizer"
         onMouseDown={startResizing}
@@ -195,7 +197,7 @@ export default function VerticalResizerButton({
             }}
           />,
         )}
-      </Box>
+      </Paper>
     </Box>
   )
 }
