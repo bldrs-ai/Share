@@ -42,7 +42,7 @@ export const getSVGGroup = async ({
         opacity: path.userData.style.fillOpacity,
         transparent: true,
         side: THREE.DoubleSide,
-        depthWrite: false,
+        // depthWrite: false,
         wireframe: fillShapesWireframe,
       })
       const shapes = SVGLoader.createShapes(path)
@@ -61,7 +61,7 @@ export const getSVGGroup = async ({
         opacity: path.userData.style.strokeOpacity,
         transparent: true,
         side: THREE.DoubleSide,
-        depthWrite: false,
+        // depthWrite: false,
         wireframe: strokesWireframe,
       })
 
