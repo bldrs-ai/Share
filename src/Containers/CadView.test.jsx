@@ -7,7 +7,6 @@ import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, * as AllCadView from './CadView'
-import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
 
 
 const mockedUseNavigate = jest.fn()
@@ -281,6 +280,9 @@ describe('CadView', () => {
   })
 
 
+  // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
+  /*
+  import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
   it('SceneLayer accesses IFC camera, renderer and scene camera', async () => {
     const modelPath = {
       filepath: `/index.ifc`,
@@ -298,4 +300,5 @@ describe('CadView', () => {
     expect(viewerMock.IFC.context.getScene).toHaveBeenCalled()
     await actAsyncFlush()
   })
+  */
 })
