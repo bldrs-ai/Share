@@ -1,26 +1,13 @@
-import {
-  Texture,
-  Box3,
-  Color,
-  DoubleSide,
-  Group,
-  LoadingManager,
-  Mesh,
-  MeshBasicMaterial,
-  ShapeGeometry,
-  FileLoader,
-  LinearFilter,
-  CircleGeometry,
-} from 'three'
+import * as THREE from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
 import debug from './debug'
 
 
-const svgLoadingManager = new LoadingManager()
+const svgLoadingManager = new THREE.LoadingManager()
 const svgLoader = new SVGLoader(svgLoadingManager)
-const fileLoadingManager = new LoadingManager()
-const fileLoader = new FileLoader(fileLoadingManager)
+const fileLoadingManager = new THREE.LoadingManager()
+const fileLoader = new THREE.FileLoader(fileLoadingManager)
 
 
 export const getSVGGroup = async ({
@@ -34,8 +21,8 @@ export const getSVGGroup = async ({
 }) => {
   const svgData = await svgLoader.loadAsync(url)
   const paths = svgData.paths
-  const group = new Group()
-  const svgGroup = new Group()
+  const group = new THREE.Group()
+  const svgGroup = new THREE.Group()
 
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
@@ -43,11 +30,11 @@ export const getSVGGroup = async ({
     const strokeColor = path.userData.style.stroke
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
-      const material = new MeshBasicMaterial({
-        color: new Color().setStyle(fillColor).convertSRGBToLinear(),
+      const material = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setStyle(fillColor).convertSRGBToLinear(),
         opacity: path.userData.style.fillOpacity,
         transparent: true,
-        side: DoubleSide,
+        side: THREE.DoubleSide,
         depthWrite: false,
         wireframe: fillShapesWireframe,
       })
@@ -55,18 +42,18 @@ export const getSVGGroup = async ({
 
       for (let j = 0; j < shapes.length; j++) {
         const shape = shapes[j]
-        const geometry = new ShapeGeometry(shape)
-        const mesh = new Mesh(geometry, material)
+        const geometry = new THREE.ShapeGeometry(shape)
+        const mesh = new THREE.Mesh(geometry, material)
         group.add(mesh)
       }
     }
 
     if (drawStrokes && strokeColor !== undefined && strokeColor !== 'none') {
-      const material = new MeshBasicMaterial({
-        color: new Color().setStyle(strokeColor).convertSRGBToLinear(),
+      const material = new THREE.MeshBasicMaterial({
+        color: new THREE.Color().setStyle(strokeColor).convertSRGBToLinear(),
         opacity: path.userData.style.strokeOpacity,
         transparent: true,
-        side: DoubleSide,
+        side: THREE.DoubleSide,
         depthWrite: false,
         wireframe: strokesWireframe,
       })
@@ -76,14 +63,14 @@ export const getSVGGroup = async ({
         const geometry = SVGLoader.pointsToStroke(subPath.getPoints(), path.userData.style)
 
         if (geometry) {
-          const mesh = new Mesh(geometry, material)
+          const mesh = new THREE.Mesh(geometry, material)
           group.add(mesh)
         }
       }
     }
   }
 
-  const groupBox3 = new Box3()
+  const groupBox3 = new THREE.Box3()
   groupBox3.setFromObject(group)
   debug().log('svg#getSVGGroup: groupBox3: ', groupBox3)
   const groupSize = groupBox3.max.sub(groupBox3.min)
@@ -144,13 +131,13 @@ export const getSVGMesh = async ({
     img.setAttribute('src', `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`)
     img.onload = function() {
       ctx.drawImage(img, 0, 0)
-      const texture = new Texture(canvas)
+      const texture = new THREE.Texture(canvas)
       texture.needsUpdate = true
       // eslint-disable-next-line no-magic-numbers
-      const geometry = new CircleGeometry(radius, 50)
-      const material = new MeshBasicMaterial({map: texture, side: DoubleSide})
-      material.map.minFilter = LinearFilter
-      const mesh = new Mesh(geometry, material)
+      const geometry = new THREE.CircleGeometry(radius, 50)
+      const material = new THREE.MeshBasicMaterial({map: texture, side: THREE.DoubleSide})
+      material.map.minFilter = THREE.LinearFilter
+      const mesh = new THREE.Mesh(geometry, material)
       resolve(mesh)
     }
   })
