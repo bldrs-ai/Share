@@ -1,6 +1,7 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {MOBILE_HEIGHT} from '../../utils/constants'
 import {isNumber} from '../../utils/strings'
@@ -29,8 +30,6 @@ export default function VerticalResizerButton({
   const theme = useTheme()
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
-  // eslint-disable-next-line no-magic-numbers
-  const verticalPadding = (thickness - gripSize) / 2
 
   const startResizing = useCallback(() => {
     setIsResizing(true)
@@ -145,7 +144,6 @@ export default function VerticalResizerButton({
       setSidebarHeight(expansionSidebarHeight)
     } else {
       const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min(window.innerHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
-      console.log(defaultHeight, window.innerHeight, MOBILE_HEIGHT)
       setSidebarHeight(defaultHeight)
     }
   }, [isExpanded, setSidebarHeight])
@@ -169,15 +167,18 @@ export default function VerticalResizerButton({
         }),
       }}
     >
-      <Box
+      <Paper
         sx={{
-          padding: `${verticalPadding}px ${gripSize}px`,
+          width: '150px',
+          paddingTop: `10px`,
+          paddingBottom: '40px',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           gap: `${gripSize}px`,
           background: theme.palette.primary.background,
         }}
+        elevation={0}
         ref={resizerRef}
         data-testid="y_resizer"
         onMouseDown={startResizing}
@@ -195,7 +196,7 @@ export default function VerticalResizerButton({
             }}
           />,
         )}
-      </Box>
+      </Paper>
     </Box>
   )
 }

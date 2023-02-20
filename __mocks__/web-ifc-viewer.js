@@ -25,13 +25,15 @@ const impl = {
   _loadedModel: loadedModel,
   IFC: {
     context: {
+      getCamera: jest.fn(),
+      getRenderer: jest.fn(),
+      getScene: jest.fn(),
       ifcCamera: {
         cameraControls: {
           setPosition: jest.fn((x, y, z) => {
             return {}
           }),
           getPosition: jest.fn((x, y, z) => {
-            // eslint-disable-next-line no-magic-numbers
             const position = [0, 0, 0]
             return position
           }),
@@ -39,7 +41,6 @@ const impl = {
             return {}
           }),
           getTarget: jest.fn((x, y, z) => {
-            // eslint-disable-next-line no-magic-numbers
             const target = [0, 0, 0]
             return target
           }),

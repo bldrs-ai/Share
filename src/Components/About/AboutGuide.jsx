@@ -1,22 +1,20 @@
-import React, {useContext} from 'react'
+import React from 'react'
 import Box from '@mui/material/Box'
-import {useTheme} from '@mui/styles'
-import {ColorModeContext} from '../../Context/ColorMode'
+import useTheme from '@mui/styles/useTheme'
 import CutPlaneIcon from '../../assets/icons/CutPlane.svg'
 import ListIcon from '../../assets/icons/List.svg'
+import LogoBuildings from '../../assets/Logo_Buildings.svg'
 import NotesIcon from '../../assets/icons/Notes.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
-import LogoBuildings from '../../assets/Logo_Buildings.svg'
 
 
 /**
  * A miniature view of the App to show as a guide in the About dialog.
  *
- * @return {React.ReactElement}
+ * @return {React.ReactComponent}
  */
 export default function AboutGuide() {
   const theme = useTheme()
-  const colorMode = useContext(ColorModeContext)
   return (
     <Box
       sx={{
@@ -27,8 +25,7 @@ export default function AboutGuide() {
         margin: '2em 0',
         padding: '.5em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
-        backgroundColor: colorMode.isDay() ? '#E8E8E8' : '#353535',
-        // border: `1px solid ${colorMode.isDay() ? 'Grey' : '#4C4C4C'}`,
+        backgroundColor: theme.palette.primary.background,
       }}
     >
       <Box

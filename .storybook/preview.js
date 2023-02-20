@@ -1,7 +1,8 @@
 import {createContext} from 'react'
 import {addDecorator} from '@storybook/react'
 import {ThemeProvider} from '@mui/material/styles'
-import useTheme from '../src/Theme'
+import useShareTheme from '../src/theme/Theme'
+
 
 export const parameters = {
   actions: { argTypesRegex: "^on[A-Z].*" },
@@ -13,15 +14,11 @@ export const parameters = {
   },
 }
 
-addDecorator((Story) => {
-  const {theme, colorMode} = useTheme()
-  const ColorModeContext = createContext({toggleColorMode: () => {}})
 
+addDecorator((Story) => {
   return (
-    <ColorModeContext.Provider value={colorMode}>
-      <ThemeProvider theme={theme}>
-        {Story()}
-      </ThemeProvider>
-    </ColorModeContext.Provider>
+    <ThemeProvider theme={useShareTheme()}>
+      {Story()}
+    </ThemeProvider>
   )
 })

@@ -68,7 +68,7 @@ export default function SideDrawer() {
   return (
     <Box
       sx={Object.assign({
-        display: 'flex',
+        display: isDrawerOpen ? 'flex' : 'none',
         flexDirection: 'row',
       }, isMobile ? {
         width: '100%',
@@ -88,8 +88,8 @@ export default function SideDrawer() {
           display: 'flex',
           flexDirection: 'row',
           width: '100%',
-          borderLeft: isMobile ? 'none' : `solid 1px ${borderColor}`,
           borderRadius: 0,
+          background: theme.palette.primary.background,
         }}
         ref={sidebarRef}
         onMouseDown={(e) => e.preventDefault()}

@@ -3,13 +3,13 @@ import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import useTheme from '../Theme'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
+import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
+import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/icons/CutPlane.svg'
-import {floatStrTrim, isNumeric} from '../utils/strings'
-import debug from '../utils/debug'
 
 
 const PLANE_PREFIX = 'p'
@@ -115,9 +115,10 @@ export default function CutPlaneMenu() {
             transform: 'translateX(-50px)',
           },
           sx: {
+            'color': theme.palette.primary.contrastText,
             '& .Mui-selected': {
-              color: theme.theme.palette.secondary.main,
-              fontWeight: 600,
+              color: theme.palette.primary.highlight,
+              fontWeight: 800,
             },
           },
         }}
