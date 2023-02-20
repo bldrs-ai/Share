@@ -6,7 +6,8 @@ import {
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-import {getSVGMesh} from '../utils/svg'
+// eslint-disable-next-line no-unused-vars
+import {getSVGGroup, getSVGMesh} from '../utils/svg'
 // import createComposer from './CustomPostProcessing'
 
 
@@ -89,27 +90,33 @@ export default class PlaceMark extends EventDispatcher {
     }
 
     this.putDown = ({point, lookAt, color = 'red'}) => {
-      // getSVGGroup({url: '/icons/PlaceMark.svg'}).then((group) => {
-      //   debug().log('PlaceMark#putDown#getSVGGroup: ', group)
-      //   group.position.copy(point)
-      //   _scene.add(group)
-      //   _placeMarks.push(group)
-      // })
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      getSVGMesh({
+      getSVGGroup({
         url: '/icons/PlaceMark.svg',
-        color,
-      }).then((mesh) => {
-        debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
-        mesh.position.copy(point)
+        fillColor: 'red',
+      }).then((group) => {
+        debug().log('PlaceMark#putDown#getSVGGroup: ', group)
+        group.position.copy(point)
         if (lookAt) {
-          mesh.lookAt(lookAt)
+          group.lookAt(lookAt)
         }
-        _scene.add(mesh)
-        _placeMarks.push(mesh)
-        // outlineEffect.setSelection(_placeMarks)
+        _scene.add(group)
+        _placeMarks.push(group)
       })
+      // getSVGMesh({
+      //   url: '/icons/PlaceMark.svg',
+      //   fillColor: 'red',
+      // }).then((mesh) => {
+      //   debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
+      //   mesh.position.copy(point)
+      //   if (lookAt) {
+      //     mesh.lookAt(lookAt)
+      //   }
+      //   _scene.add(mesh)
+      //   _placeMarks.push(mesh)
+      //   // outlineEffect.setSelection(_placeMarks)
+      // })
     }
   }
 }

@@ -12,6 +12,8 @@ const fileLoader = new THREE.FileLoader(fileLoadingManager)
 
 export const getSVGGroup = async ({
   url,
+  fillColor,
+  strokeColor,
   width = 2,
   height = 0,
   drawStrokes = true,
@@ -20,14 +22,19 @@ export const getSVGGroup = async ({
   fillShapesWireframe = false,
 }) => {
   const svgData = await svgLoader.loadAsync(url)
+  debug().log('svg#getSVGGroup: svgData: ', svgData)
   const paths = svgData.paths
   const group = new THREE.Group()
   const svgGroup = new THREE.Group()
 
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
-    const fillColor = path.userData.style.fill
-    const strokeColor = path.userData.style.stroke
+    if (!fillColor) {
+      fillColor = path.userData.style.fill
+    }
+    if (!strokeColor) {
+      strokeColor = path.userData.style.stroke
+    }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
       const material = new THREE.MeshBasicMaterial({
@@ -111,8 +118,8 @@ export const getSVGGroup = async ({
 
 export const getSVGMesh = async ({
   url,
+  fillColor,
   radius = 2,
-  color = 'black',
 }) => {
   assertDefined(url)
   const svgData = await fileLoader.loadAsync(url)
@@ -120,7 +127,9 @@ export const getSVGMesh = async ({
   const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
   debug().log('svg#getSVGMesh: svg.width: ', svg.width)
   debug().log('svg#getSVGMesh: svg.height: ', svg.height)
-  svg.setAttribute('fill', color)
+  if (fillColor) {
+    svg.setAttribute('fill', fillColor)
+  }
   const newSvgData = (new XMLSerializer()).serializeToString(svg)
   const canvas = document.createElement('canvas')
   canvas.width = svg.width.baseVal.value
