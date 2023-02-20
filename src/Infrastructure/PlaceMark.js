@@ -1,4 +1,8 @@
-import * as THREE from 'three'
+import {
+  EventDispatcher,
+  Raycaster,
+  Vector2,
+} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
@@ -11,7 +15,7 @@ import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
 /**
  * PlaceMark to share notes
  */
-export default class PlaceMark extends THREE.EventDispatcher {
+export default class PlaceMark extends EventDispatcher {
   /**
    * @param {IfcContext} context
    */
@@ -23,8 +27,8 @@ export default class PlaceMark extends THREE.EventDispatcher {
     const _scene = context.getScene()
     // const _renderer = context.getRenderer()
     // const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
-    const _raycaster = new THREE.Raycaster()
-    const _pointer = new THREE.Vector2()
+    const _raycaster = new Raycaster()
+    const _pointer = new Vector2()
     let _objects = []
     const _placeMarks = []
 
