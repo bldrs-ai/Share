@@ -10,7 +10,21 @@ const fileLoadingManager = new THREE.LoadingManager()
 const fileLoader = new THREE.FileLoader(fileLoadingManager)
 
 
-export const getSVGGroup = async ({
+/**
+ * Generate group using svg file
+ *
+ * @param {string} url svg file url starting from `public` folder
+ * @param {string} fillColor color to fill group
+ * @param {string} strokeColor color to draw strokes
+ * @param {number} width
+ * @param {number} height
+ * @param {boolean} drawStrokes
+ * @param {boolean} drawFillShapes
+ * @param {boolean} strokesWireframe
+ * @param {boolean} fillShapesWireframe
+ * @return {number} svg based group
+ */
+export async function getSVGGroup({
   url,
   fillColor,
   strokeColor,
@@ -20,7 +34,7 @@ export const getSVGGroup = async ({
   drawFillShapes = true,
   strokesWireframe = false,
   fillShapesWireframe = false,
-}) => {
+}) {
   const svgData = await svgLoader.loadAsync(url)
   debug().log('svg#getSVGGroup: svgData: ', svgData)
   const paths = svgData.paths
@@ -116,11 +130,19 @@ export const getSVGGroup = async ({
 }
 
 
-export const getSVGMesh = async ({
+/**
+ * Generate mesh using svg file
+ *
+ * @param {string} url svg file url starting from `public` folder
+ * @param {string} fillColor color to fill mesh
+ * @param {number} radius
+ * @return {number} svg based mesh
+ */
+export async function getSVGMesh({
   url,
   fillColor,
   radius = 2,
-}) => {
+}) {
   assertDefined(url)
   const svgData = await fileLoader.loadAsync(url)
   const parser = new DOMParser()
@@ -153,12 +175,21 @@ export const getSVGMesh = async ({
 }
 
 
-export const getSVGSprite = async ({
+/**
+ * Generate sprite using svg file
+ *
+ * @param {string} url svg file url starting from `public` folder
+ * @param {string} fillColor color to fill sprite
+ * @param {number} width
+ * @param {number} height
+ * @return {number} svg based sprite
+ */
+export async function getSVGSprite({
   url,
   fillColor,
   width = 0,
   height = 0,
-}) => {
+}) {
   assertDefined(url)
   if (width <= 0) {
     width = height
