@@ -126,18 +126,18 @@ export const getSVGMesh = async ({
   url,
   radius = 2,
   color = 'black',
-  bottomOffset = 0,
 }) => {
   assertDefined(url)
   const svgData = await fileLoader.loadAsync(url)
   const parser = new DOMParser()
   const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
+  debug().log('svg#getSVGMesh: svg.width: ', svg.width)
+  debug().log('svg#getSVGMesh: svg.height: ', svg.height)
   svg.setAttribute('fill', color)
   const newSvgData = (new XMLSerializer()).serializeToString(svg)
   const canvas = document.createElement('canvas')
   canvas.width = svg.width.baseVal.value
-  // eslint-disable-next-line no-magic-numbers
-  canvas.height = svg.height.baseVal.value - 150
+  canvas.height = svg.height.baseVal.value
   const ctx = canvas.getContext('2d')
   return new Promise((resolve, reject) => {
     const img = document.createElement('img')
@@ -146,7 +146,8 @@ export const getSVGMesh = async ({
       ctx.drawImage(img, 0, 0)
       const texture = new Texture(canvas)
       texture.needsUpdate = true
-      const geometry = new CircleGeometry(radius, bottomOffset)
+      // eslint-disable-next-line no-magic-numbers
+      const geometry = new CircleGeometry(radius, 50)
       const material = new MeshBasicMaterial({map: texture, side: DoubleSide})
       material.map.minFilter = LinearFilter
       const mesh = new Mesh(geometry, material)
