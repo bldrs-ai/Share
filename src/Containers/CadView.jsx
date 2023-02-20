@@ -488,19 +488,29 @@ export default function CadView({
     if (!item) {
       return
     }
+    selectWithShiftClickEvents(event.shiftKey, item.id)
+  }
+
+  /**
+   * Select/Deselect items in the scene using shift+click
+   *
+   * @param {boolean} shiftKey the click event
+   * @param {number} expressId the express id of the element
+   */
+  function selectWithShiftClickEvents(shiftKey, expressId) {
     let newSelection = []
-    if (event.shiftKey) {
+    if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
-      const indexOfItem = selectedInViewer.indexOf(item.id)
+      const indexOfItem = selectedInViewer.indexOf(expressId)
       const alreadySelected = indexOfItem !== -1
       if (alreadySelected) {
         selectedInViewer.splice(indexOfItem, 1)
       } else {
-        selectedInViewer.push(item.id)
+        selectedInViewer.push(expressId)
       }
       newSelection = selectedInViewer
     } else {
-      newSelection = [item.id]
+      newSelection = [expressId]
     }
     selectItemsInScene(newSelection)
   }
@@ -582,6 +592,7 @@ export default function CadView({
               defaultExpandedElements={defaultExpandedElements}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
               }

@@ -1,13 +1,10 @@
-import React, {useEffect, useState} from 'react'
+import React from 'react'
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
-import {useNavigate} from 'react-router-dom'
 import {reifyName} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
-import {computeElementPathIds} from '../utils/TreeUtils'
-import {handleBeforeUnload} from '../utils/event'
 
 
 const NavTreePropTypes = {
@@ -53,6 +50,7 @@ export default function NavTree({
   model,
   element,
   pathPrefix,
+  selectWithShiftClickEvents,
 }) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
@@ -81,23 +79,11 @@ export default function NavTree({
 
     const handleExpansionClick = (event) => handleExpansion(event)
 
-    const [selectedElement, setSelectedElement] = useState(null)
-
     const handleSelectionClick = (event) => {
       handleSelection(event)
-      setSelectedElement(element)
+      selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
-    const navigate = useNavigate()
-
-    useEffect(() => {
-      if (selectedElement) {
-        const newPath =
-              `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        navigate(newPath)
-      }
-    }, [selectedElement, navigate])
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -155,6 +141,7 @@ export default function NavTree({
                 model={model}
                 element={child}
                 pathPrefix={pathPrefix}
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
               />
             </React.Fragment>
           )
