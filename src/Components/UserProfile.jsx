@@ -25,7 +25,18 @@ const UserProfile = ({size = 'medium'}) => {
 
   return isAuthenticated && (
     <>
-      <IconButton className={'no-hover'} {...bindTrigger(popupState)}>
+      <IconButton
+        className={'no-hover'}
+        {...bindTrigger(popupState)}
+        sx={{
+          'width': '50px',
+          'height': '50px',
+          'border': 'none',
+          '&.Mui-selected, &.Mui-selected:hover': {
+            opacity: .8,
+          },
+        }}
+      >
         <Avatar
           alt={user.name}
           src={user.picture}

@@ -20,6 +20,16 @@ export function getCookieBoolean(name, defaultValue) {
 
 
 /**
+ * @param {string} name Name of the setting
+ * @param {boolean} value
+ */
+export function setCookieBoolean(name, value) {
+  assertDefined(name, value)
+  setCookie(name, value)
+}
+
+
+/**
  * @param {string} name Name of the cookie
  * @return {boolean} True iff the cookie is set
  */
@@ -65,14 +75,4 @@ export function setCookie(name, value, exdays = 7) {
   d.setTime(d.getTime() + (exdays * msInDay))
   const expires = `expires=${ d.toUTCString()}`
   document.cookie = `${name}=${value};${expires};path=/`
-}
-
-
-/**
- * @property {string} component Component name for setter
- * @property {string} name Name of the cookie
- * @property {string} value Value of the cookie
- */
-export function setBoolean({component, name, value}) {
-  setCookie(name, value)
 }

@@ -1,6 +1,10 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
+import IfcViewsManager from './IfcElementsStyleManager'
+import IfcCustomViewSettings from './IfcCustomViewSettings'
 
+
+/* eslint-disable jsdoc/no-undefined-types */
 /**
  * Extending the original IFCViewerFunctionality
  */
@@ -12,6 +16,23 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser)
+  }
+
+
+  /**
+   * Loads the given IFC in the current scene.
+   *
+   * @param {string} url IFC as URL.
+   * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
+   * @param {Function(event)} onProgress (optional) a callback function to report on downloading progress
+   * @param {Function} onError (optional) a callback function to report on loading errors
+   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
+   * @return {IfcModel} ifcModel object
+   */
+  async loadIfcUrl(url, fitToFrame, onProgress, onError, customViewSettings) {
+    this.viewsManager.setViewSettings(customViewSettings)
+    return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
   }
   /**
    * Gets the expressId of the element that the mouse is pointing at
@@ -31,12 +52,15 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const id = ifcManager.loader.ifcManager.getExpressId(mesh.geometry, found.faceIndex)
     return {modelID: mesh.modelID, id}
   }
+
+
   /**
    * gets a copy of the current selected expressIds in the scene
    *
    * @return {number[]} the selected express ids in the scene
    */
   getSelectedIds = () => [...this._selectedExpressIds]
+
 
   /**
    * sets the current selected expressIds in the scene

@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
+import {CloseButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
@@ -68,8 +69,16 @@ export function NotesPanel() {
  */
 export function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   return (
-    <PanelWithTitle title={'Properties'} includeGutter={includeGutter}>
+    <PanelWithTitle title={'Properties'}
+      controlsGroup={
+        <CloseButton
+          onClick={toggleIsPropertiesOn}
+        />
+      }
+      includeGutter={includeGutter}
+    >
       {selectedElement ?
        <ItemProperties/> :
        <Typography variant='p'>Please select an element</Typography>
