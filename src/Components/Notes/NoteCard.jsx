@@ -23,7 +23,6 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
-import debug from '../../utils/debug'
 
 
 /**
@@ -75,7 +74,6 @@ export default function NoteCard({
             CAMERA_PREFIX)
         return encoded && parseHashParams(encoded)
       })
-  debug().log('NoteCard#embeddedCameraParams: ', embeddedCameraParams)
   const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
   const isMobile = useIsMobile()
 
@@ -169,18 +167,17 @@ export default function NoteCard({
       >
         <ReactMarkdown>{body}</ReactMarkdown>
         {textOverflow &&
-          <ShowMore
-            expandText={expandText}
-            onClick={(event) => {
-              event.preventDefault()
-              setExpandText(!expandText)
-            }}
-          />
+         <ShowMore
+           expandText={expandText}
+           onClick={(event) => {
+             event.preventDefault()
+             setExpandText(!expandText)
+           }}
+         />
         }
       </CardContent>
       {embeddedCameraParams || numberOfComments > 0 ?
         <CardActions
-          id={id}
           selectCard={selectCard}
           numberOfComments={numberOfComments}
           embeddedCameras={embeddedCameraParams}
@@ -217,7 +214,6 @@ const ShowMore = ({onClick, expandText}) => {
 
 
 const CardActions = ({
-  id,
   onClickCamera,
   onClickShare,
   numberOfComments,
@@ -227,8 +223,6 @@ const CardActions = ({
   const [shareIssue, setShareIssue] = useState(false)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
-
-
   return (
     <Box
       sx={{

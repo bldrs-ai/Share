@@ -35,7 +35,6 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
-        debug().log('Notes#fetchNotes: issuesData: ', issuesData)
         let issueIndex = 0
         issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {

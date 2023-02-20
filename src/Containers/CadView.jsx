@@ -22,8 +22,7 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-// eslint-disable-next-line no-unused-vars
-import {getDownloadURL, parseGitHubRepositoryURL, saveLabel} from '../utils/GitHub'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
@@ -556,11 +555,6 @@ export default function CadView({
         const placeMarkHash = getEncodedParam(markArr)
         debug().log('CadView#dropPlaceMark: placeMarkHash: ', placeMarkHash)
         setPlaceMarkActivated(false)
-        // saveLabel({
-        //   repository,
-        //   labelName: `PlaceMark${placeMarkNoteId}`,
-        //   labelDescription: placeMarkPosHash,
-        // })
       }
     }
   }
