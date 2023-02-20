@@ -160,7 +160,6 @@ export default function HorizonResizerButton({
         flexDirection: 'column',
         justifyContent: 'center',
         alignItems: 'center',
-        cursor: 'col-resize',
         resize: 'horizontal',
         ...(isOnLeft ? {
           left: 0,
@@ -178,6 +177,7 @@ export default function HorizonResizerButton({
           justifyContent: 'center',
           gap: `${gripSize}px`,
           background: theme.palette.primary.background,
+          cursor: 'col-resize',
         }}
         ref={resizerRef}
         data-testid="x_resizer"
