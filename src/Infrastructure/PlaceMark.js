@@ -1,20 +1,17 @@
-import {
-  EventDispatcher,
-  Raycaster,
-  Vector2,
-} from 'three'
+import * as THREE from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
+import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 // eslint-disable-next-line no-unused-vars
-import {getSVGGroup, getSVGMesh} from '../utils/svg'
+import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
 // import createComposer from './CustomPostProcessing'
 
 
 /**
  * PlaceMark to share notes
  */
-export default class PlaceMark extends EventDispatcher {
+export default class PlaceMark extends THREE.EventDispatcher {
   /**
    * @param {IfcContext} context
    */
@@ -26,8 +23,8 @@ export default class PlaceMark extends EventDispatcher {
     const _scene = context.getScene()
     // const _renderer = context.getRenderer()
     // const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
-    const _raycaster = new Raycaster()
-    const _pointer = new Vector2()
+    const _raycaster = new THREE.Raycaster()
+    const _pointer = new THREE.Vector2()
     let _objects = []
     const _placeMarks = []
 
@@ -80,7 +77,9 @@ export default class PlaceMark extends EventDispatcher {
         intersectPoint.x = floatStrTrim(intersectPoint.x)
         intersectPoint.y = floatStrTrim(intersectPoint.y)
         intersectPoint.z = floatStrTrim(intersectPoint.z)
-        const point = intersectPoint.clone().add(_intersections[0].face.normal.clone())
+        const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
+        debug().log('PlaceMark#onDrop: offset: ', offset)
+        const point = intersectPoint.clone().add(offset)
         const lookAt = point.clone().add(_intersections[0].face.normal.clone())
         this.putDown({point, lookAt})
         return {point, lookAt}
@@ -92,31 +91,42 @@ export default class PlaceMark extends EventDispatcher {
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      getSVGGroup({
-        url: '/icons/PlaceMark.svg',
-        fillColor: 'red',
-      }).then((group) => {
-        debug().log('PlaceMark#putDown#getSVGGroup: ', group)
-        group.position.copy(point)
-        if (lookAt) {
-          group.lookAt(lookAt)
-        }
-        _scene.add(group)
-        _placeMarks.push(group)
-      })
+      // getSVGGroup({
+      //   url: '/icons/PlaceMark.svg',
+      //   fillColor: 'red',
+      // }).then((group) => {
+      //   debug().log('PlaceMark#putDown#getSVGGroup: group: ', group)
+      //   group.position.copy(point)
+      //   if (lookAt) {
+      //     group.lookAt(lookAt)
+      //   }
+      //   _scene.add(group)
+      //   _placeMarks.push(group)
+      // })
       // getSVGMesh({
       //   url: '/icons/PlaceMark.svg',
       //   fillColor: 'red',
       // }).then((mesh) => {
-      //   debug().log('PlaceMark#putDown#getSVGMesh: ', mesh)
+      //   debug().log('PlaceMark#putDown#getSVGMesh: mesh: ', mesh)
       //   mesh.position.copy(point)
       //   if (lookAt) {
       //     mesh.lookAt(lookAt)
       //   }
       //   _scene.add(mesh)
       //   _placeMarks.push(mesh)
-      //   // outlineEffect.setSelection(_placeMarks)
       // })
+      getSVGSprite({
+        url: '/icons/PlaceMark.svg',
+        fillColor: 'red',
+        width: 2,
+        height: 3.6,
+      }).then((sprite) => {
+        debug().log('PlaceMark#putDown#getSVGMesh: sprite: ', sprite)
+        sprite.position.copy(point)
+        _scene.add(sprite)
+        _placeMarks.push(sprite)
+        // outlineEffect.setSelection(_placeMarks)
+      })
     }
   }
 }
