@@ -547,14 +547,14 @@ export default function CadView({
     if (placeMark) {
       const {point, lookAt} = placeMark.onDrop(event)
       if (point && lookAt && placeMarkNoteId) {
-        debug().log('CadView#onDoubleTap: point: ', point)
-        debug().log('CadView#onDoubleTap: placeMarkNoteId: ', placeMarkNoteId)
+        debug().log('CadView#dropPlaceMark: point: ', point)
+        debug().log('CadView#dropPlaceMark: placeMarkNoteId: ', placeMarkNoteId)
         let markArr = roundCoord(...point)
         markArr = markArr.concat(roundCoord(...lookAt))
-        debug().log('CadView#onDoubleTap: markArr: ', markArr)
+        debug().log('CadView#dropPlaceMark: markArr: ', markArr)
         addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
         const placeMarkHash = getEncodedParam(markArr)
-        debug().log('CadView#onDoubleTap: placeMarkHash: ', placeMarkHash)
+        debug().log('CadView#dropPlaceMark: placeMarkHash: ', placeMarkHash)
         setPlaceMarkActivated(false)
         // saveLabel({
         //   repository,
