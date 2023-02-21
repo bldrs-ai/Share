@@ -24,7 +24,7 @@ export default function AboutGuide() {
         fontSize: '0.8em',
         borderRadius: '10px',
         margin: '2em 0',
-        padding: '.5em 1em .5em .5em',
+        padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
         backgroundColor: theme.palette.primary.background,
       }}
@@ -44,14 +44,13 @@ export default function AboutGuide() {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '17px',
+            lineHeight: '15px',
           },
           '& a': {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '17px',
-            fontWeight: 'bold',
+            lineHeight: '20px',
           },
         }}
       >
@@ -67,13 +66,13 @@ export default function AboutGuide() {
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1506392033'
             target='_new'
           >
-            <OpenIcon/> ← Open
+            <OpenIcon/> ← <span style={{textDecoration: 'underline'}}>Open</span>
           </a>
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
             target='_new'
           >
-              Share → <ShareIcon/>
+            <span style={{textDecoration: 'underline'}}>Share</span> → <ShareIcon/>
           </a>
         </Box>
         <div>Notes → <NotesIcon/></div>
@@ -89,7 +88,6 @@ export default function AboutGuide() {
           '& svg': {
             width: '130px',
             height: '100px',
-            opacity: .9,
           },
         }}
       >
