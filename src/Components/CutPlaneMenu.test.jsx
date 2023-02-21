@@ -19,9 +19,9 @@ describe('CutPlaneMenu', () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
     fireEvent.click(sectionButton)
-    expect(getByText('section - x')).toBeInTheDocument()
-    expect(getByText('plan - y')).toBeInTheDocument()
-    expect(getByText('section - z')).toBeInTheDocument()
+    expect(getByText('X - Section')).toBeInTheDocument()
+    expect(getByText('Y - Plan')).toBeInTheDocument()
+    expect(getByText('Z - Section')).toBeInTheDocument()
   })
 
 
@@ -34,7 +34,7 @@ describe('CutPlaneMenu', () => {
       result.current.setViewerStore(viewer)
     })
     fireEvent.click(sectionButton)
-    const xDirection = getByText('section - x')
+    const xDirection = getByText('X - Section')
     fireEvent.click(xDirection)
     const callCreatePlanes = viewer.clipper.createFromNormalAndCoplanarPoint.mock.calls
     expect(callCreatePlanes.length).toBe(1)

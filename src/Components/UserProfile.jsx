@@ -18,8 +18,6 @@ import GitHubIcon from '@mui/icons-material/GitHub'
 
 const UserProfile = ({size = 'medium'}) => {
   const {user, isAuthenticated, logout} = useAuth0()
-  console.log('user', user)
-  console.log('isAuthenticated', isAuthenticated)
   const popupState = usePopupState({
     variant: 'popup',
     popupId: 'user-profile',

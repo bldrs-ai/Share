@@ -125,15 +125,15 @@ export default function CutPlaneMenu() {
       >
         <MenuItem onClick={() => togglePlane({direction: 'x'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        >section - x
+        >X - Section
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        >plan - y
+        >Y - Plan
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        >section - z
+        >Z - Section
         </MenuItem>
       </Menu>
     </>

@@ -26,7 +26,7 @@ export default function SnackBarMessage({message, severity, open}) {
           'left': '-6px',
           '@media (max-width: 900px)': {
             left: '18px',
-            bottom: '60px',
+            bottom: '80px',
             width: '305px',
             inlineSize: '305px',
             overflow: 'visible',
