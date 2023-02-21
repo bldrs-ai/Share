@@ -8,8 +8,7 @@ import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-// eslint-disable-next-line no-unused-vars
-import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
+import {getSVGSprite} from '../utils/svg'
 
 
 /**
@@ -94,30 +93,6 @@ export default class PlaceMark extends EventDispatcher {
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      // getSVGGroup({
-      //   url: '/icons/PlaceMark.svg',
-      //   fillColor: 'red',
-      // }).then((group) => {
-      //   debug().log('PlaceMark#putDown#getSVGGroup: group: ', group)
-      //   group.position.copy(point)
-      //   if (lookAt) {
-      //     group.lookAt(lookAt)
-      //   }
-      //   _markScene.add(group)
-      //   _placeMarks.push(group)
-      // })
-      // getSVGMesh({
-      //   url: '/icons/PlaceMark.svg',
-      //   fillColor: 'red',
-      // }).then((mesh) => {
-      //   debug().log('PlaceMark#putDown#getSVGMesh: mesh: ', mesh)
-      //   mesh.position.copy(point)
-      //   if (lookAt) {
-      //     mesh.lookAt(lookAt)
-      //   }
-      //   _markScene.add(mesh)
-      //   _placeMarks.push(mesh)
-      // })
       getSVGSprite({
         url: '/icons/PlaceMark.svg',
         fillColor: 'red',
