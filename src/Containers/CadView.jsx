@@ -27,8 +27,6 @@ import SearchIndex from './SearchIndex'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
 import {PLACE_MARK_PREFIX} from '../utils/constants'
-// eslint-disable-next-line no-unused-vars
-import {addSceneLayer} from './SceneLayer'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 
@@ -752,7 +750,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.clipper.active = true
   v.clipper.orthogonalY = false
   // TODO(https://github.com/bldrs-ai/Share/issues/622): this breaks postprocessing
-  // addSceneLayer(v.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
