@@ -119,7 +119,6 @@ export default class PlaceMark extends EventDispatcher {
       }
       _renderer.autoClear = false
       context.updateAllComponents()
-      // _renderer.autoClear = true
       if (this.anim) {
         this.anim()
       }

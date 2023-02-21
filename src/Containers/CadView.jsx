@@ -553,12 +553,11 @@ export default function CadView({
 
   const dropPlaceMark = (event) => {
     if (placeMark) {
-      const {point, lookAt} = placeMark.onDrop(event)
-      if (point && lookAt && placeMarkNoteId) {
+      const {point} = placeMark.onDrop(event)
+      if (point && placeMarkNoteId) {
         debug().log('CadView#dropPlaceMark: point: ', point)
         debug().log('CadView#dropPlaceMark: placeMarkNoteId: ', placeMarkNoteId)
-        let markArr = roundCoord(...point)
-        markArr = markArr.concat(roundCoord(...lookAt))
+        const markArr = roundCoord(...point)
         debug().log('CadView#dropPlaceMark: markArr: ', markArr)
         addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
         const placeMarkHash = getEncodedParam(markArr)
@@ -592,11 +591,6 @@ export default function CadView({
             floatStrTrim(markArr[0]),
             floatStrTrim(markArr[1]),
             floatStrTrim(markArr[2]),
-        ),
-        lookAt: new Vector3(
-            floatStrTrim(markArr[3]),
-            floatStrTrim(markArr[4]),
-            floatStrTrim(markArr[5]),
         ),
       })
     }
