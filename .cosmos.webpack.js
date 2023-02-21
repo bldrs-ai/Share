@@ -1,5 +1,19 @@
+const path = require('path')
+
+
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  devServer: {
+    publicPath: '/',
+    contentBase: path.join(__dirname, 'dist'),
+    compress: true,
+    port: 8000,
+  },
+  output: {
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist'),
+    publicPath: '/sb/',
+  },
   module: {
     rules: [
       {
