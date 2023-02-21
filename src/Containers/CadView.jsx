@@ -1,8 +1,7 @@
 import React, {useEffect, useState} from 'react'
-import {Color, MeshLambertMaterial, Vector3} from 'three'
+import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import {useDoubleTap} from 'use-double-tap'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
@@ -24,11 +23,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
-import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
-import {PLACE_MARK_PREFIX} from '../utils/constants'
-import {floatStrTrim} from '../utils/strings'
-import {roundCoord} from '../utils/math'
+import {usePlaceMark} from '../hooks/usePlaceMark'
 
 
 /**
@@ -88,10 +83,6 @@ export default function CadView({
   // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
-  const placeMark = useStore((state) => state.placeMark)
-  const setPlaceMark = useStore((state) => state.setPlaceMark)
-  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
-  const placeMarkNoteId = useStore((state) => state.placeMarkNoteId)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -99,6 +90,9 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+
+  // Place Mark
+  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark() // Todo
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -217,10 +211,10 @@ export default function CadView({
     const tmpModelRef = await loadIfc(pathToLoad)
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
-    const newPlaceMark = new PlaceMark({context: viewer.context})
-    newPlaceMark.setObjects([tmpModelRef])
-    debug().log('CadView#onViewer: newPlaceMark: ', newPlaceMark)
-    setPlaceMark(newPlaceMark)
+    createPlaceMark({
+      context: viewer.context,
+      oppositeObjects: [tmpModelRef],
+    })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
   }
@@ -549,53 +543,6 @@ export default function CadView({
       }
     }
   }
-
-
-  const dropPlaceMark = (event) => {
-    if (placeMark) {
-      const {point} = placeMark.onDrop(event)
-      if (point && placeMarkNoteId) {
-        debug().log('CadView#dropPlaceMark: point: ', point)
-        debug().log('CadView#dropPlaceMark: placeMarkNoteId: ', placeMarkNoteId)
-        const markArr = roundCoord(...point)
-        debug().log('CadView#dropPlaceMark: markArr: ', markArr)
-        addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-        const placeMarkHash = getEncodedParam(markArr)
-        debug().log('CadView#dropPlaceMark: placeMarkHash: ', placeMarkHash)
-        setPlaceMarkActivated(false)
-      }
-    }
-  }
-
-
-  const onDoubleTap = useDoubleTap((event) => {
-    debug().log('CadView#onDoubleTap: ', event)
-  })
-
-
-  const onSingleTap = (event) => {
-    if (event.shiftKey) {
-      dropPlaceMark(event)
-    }
-  }
-
-
-  useEffect(() => {
-    const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
-    if (placeMarkHash && placeMark) {
-      debug().log('CadView: placeMarkHash: ', placeMarkHash)
-      const markArr = getObjectParams(placeMarkHash)
-      debug().log('CadView: markArr: ', markArr)
-      placeMark.putDown({
-        point: new Vector3(
-            floatStrTrim(markArr[0]),
-            floatStrTrim(markArr[1]),
-            floatStrTrim(markArr[2]),
-        ),
-      })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [placeMark])
 
 
   return (
