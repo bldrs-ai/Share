@@ -59,6 +59,11 @@ const impl = {
         material: null,
       },
     },
+    loader: {
+      ifcManager: {
+        parser: {},
+      },
+    },
   },
   clipper: {
     active: false,
@@ -89,6 +94,7 @@ const impl = {
   }),
   setSelection: jest.fn(),
   pickIfcItemsByID: jest.fn(),
+  loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

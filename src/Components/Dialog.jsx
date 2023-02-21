@@ -3,9 +3,8 @@ import DialogActions from '@mui/material/DialogContent'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
-import {RectangularButton, TooltipIconButton} from '../Components/Buttons'
+import {RectangularButton, CloseButton} from '../Components/Buttons'
 import {assertDefined} from '../utils/assert'
-import CloseIcon from '../assets/icons/Close.svg'
 
 
 /**
@@ -46,21 +45,19 @@ export default function Dialog({
       }}
       PaperProps={{variant: 'control'}}
     >
-      <div
-        style={{
-          position: 'absolute',
-          right: 0,
-          margin: '0.5em',
-          opacity: 0.5,
-        }}
-      >
-        <TooltipIconButton
-          icon={<CloseIcon className='closeButton'/>}
-          onClick={close}
-          title='Close'
-        />
-      </div>
+
       <DialogContent>
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+            margin: '0.5em',
+            opacity: .5,
+          }}
+        >
+          <CloseButton onClick={close}/>
+        </div>
         <Typography
           variant='h1'
           sx={{
