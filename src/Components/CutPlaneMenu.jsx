@@ -117,7 +117,7 @@ export default function CutPlaneMenu() {
           sx: {
             'color': theme.palette.primary.contrastText,
             '& .Mui-selected': {
-              color: theme.palette.primary.highlight,
+              color: theme.palette.secondary.main,
               fontWeight: 800,
             },
           },
