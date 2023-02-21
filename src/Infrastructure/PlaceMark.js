@@ -1,6 +1,7 @@
 import {
   EventDispatcher,
   Raycaster,
+  Scene,
   Vector2,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
@@ -23,7 +24,8 @@ export default class PlaceMark extends EventDispatcher {
     debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
-    const _scene = context.getScene()
+    const _renderer = context.getRenderer()
+    const _markScene = new Scene()
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -34,7 +36,7 @@ export default class PlaceMark extends EventDispatcher {
     _domElement.style.touchAction = 'none' // disable touch scroll
 
 
-    const updatePointer = (event) => {
+    this.updatePointer = (event) => {
       const rect = _domElement.getBoundingClientRect()
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
       _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -65,7 +67,7 @@ export default class PlaceMark extends EventDispatcher {
       if (!_objects || !this.activated) {
         return
       }
-      updatePointer(event)
+      this.updatePointer(event)
       const _intersections = []
       _intersections.length = 0
       _raycaster.setFromCamera(_pointer, _camera)
@@ -101,7 +103,7 @@ export default class PlaceMark extends EventDispatcher {
       //   if (lookAt) {
       //     group.lookAt(lookAt)
       //   }
-      //   _scene.add(group)
+      //   _markScene.add(group)
       //   _placeMarks.push(group)
       // })
       // getSVGMesh({
@@ -113,7 +115,7 @@ export default class PlaceMark extends EventDispatcher {
       //   if (lookAt) {
       //     mesh.lookAt(lookAt)
       //   }
-      //   _scene.add(mesh)
+      //   _markScene.add(mesh)
       //   _placeMarks.push(mesh)
       // })
       getSVGSprite({
@@ -124,9 +126,36 @@ export default class PlaceMark extends EventDispatcher {
       }).then((sprite) => {
         debug().log('PlaceMark#putDown#getSVGMesh: sprite: ', sprite)
         sprite.position.copy(point)
-        _scene.add(sprite)
+        _markScene.add(sprite)
         _placeMarks.push(sprite)
       })
     }
+
+
+    /**
+     * This is a custom render pass that allows both IFC.js's scene and a new Three.js scene to be rendered on the same canvas
+     */
+    this.renderPatch = () => {
+      if (context.isThisBeingDisposed) {
+        return
+      }
+      if (context.stats) {
+        context.stats.begin()
+      }
+      _renderer.autoClear = false
+      context.updateAllComponents()
+      // _renderer.autoClear = true
+      if (this.anim) {
+        this.anim()
+      }
+      _renderer.render(_markScene, _camera)
+      if (context.stats) {
+        context.stats.end()
+      }
+      requestAnimationFrame(context.render)
+    }
+
+
+    context.render = this.renderPatch
   }
 }

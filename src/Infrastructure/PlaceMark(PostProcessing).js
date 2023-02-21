@@ -143,8 +143,7 @@ const newUpdateFunction = (context, composer) => {
    * @param {number} _delta
    */
   function newUpdateFn(_delta) {
-    // eslint-disable-next-line no-invalid-this
-    if (this.blocked || !context) {
+    if (!context) {
       return
     }
     composer.render()

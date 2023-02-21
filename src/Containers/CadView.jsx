@@ -29,7 +29,6 @@ import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '..
 import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
-import {addSceneLayer} from './SceneLayer'
 
 
 /**
@@ -750,8 +749,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
   v.clipper.orthogonalY = false
-  // TODO(https://github.com/bldrs-ai/Share/issues/622): this breaks postprocessing
-  addSceneLayer(v.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
