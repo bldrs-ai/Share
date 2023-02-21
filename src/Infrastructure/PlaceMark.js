@@ -9,7 +9,6 @@ import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 // eslint-disable-next-line no-unused-vars
 import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
-import createComposer from './CustomPostProcessing'
 
 
 /**
@@ -25,8 +24,6 @@ export default class PlaceMark extends EventDispatcher {
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
     const _scene = context.getScene()
-    const _renderer = context.getRenderer()
-    const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -35,7 +32,6 @@ export default class PlaceMark extends EventDispatcher {
 
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
-    context.renderer.update = newUpdateFunction(context, composer)
 
 
     const updatePointer = (event) => {
@@ -92,6 +88,7 @@ export default class PlaceMark extends EventDispatcher {
       }
     }
 
+
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
@@ -129,25 +126,7 @@ export default class PlaceMark extends EventDispatcher {
         sprite.position.copy(point)
         _scene.add(sprite)
         _placeMarks.push(sprite)
-        outlineEffect.setSelection(_placeMarks)
       })
     }
   }
-}
-
-
-const newUpdateFunction = (context, composer) => {
-  /**
-   * Overrides the default update function in the context renderer
-   *
-   * @param {number} _delta
-   */
-  function newUpdateFn(_delta) {
-    // eslint-disable-next-line no-invalid-this
-    if (this.blocked || !context) {
-      return
-    }
-    composer.render()
-  }
-  return newUpdateFn.bind(context.renderer)
 }

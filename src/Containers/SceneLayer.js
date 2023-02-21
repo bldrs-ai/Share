@@ -1,6 +1,6 @@
 import {assertDefined} from '../utils/assert.js'
 import debug from '../utils/debug.js'
-import {Scene} from 'three'
+import {AmbientLight, AxesHelper, Scene} from 'three'
 
 
 /**
@@ -15,12 +15,11 @@ export function addSceneLayer(sceneContext) {
   const sceneLayer = new Scene()
 
   // Demo: add scene object
-  // import {AmbientLight, AxesHelper} from 'three'
-  // sceneLayer.add(new AmbientLight())
-  // const axes = new AxesHelper()
-  // const axesScale = 100
-  // axes.scale.multiplyScalar(axesScale)
-  // sceneLayer.add(axes)
+  sceneLayer.add(new AmbientLight())
+  const axes = new AxesHelper()
+  const axesScale = 100
+  axes.scale.multiplyScalar(axesScale)
+  sceneLayer.add(axes)
 
   // Demo: optional animation
   // anim = () => {...}
@@ -43,9 +42,10 @@ export function addSceneLayer(sceneContext) {
     if (sceneContext.stats) {
       sceneContext.stats.begin()
     }
-    ifcRenderer.autoClear = true
+    // ifcRenderer.autoClear = true
     sceneContext.updateAllComponents()
-    ifcRenderer.autoClear = false
+    // ifcRenderer.autoClear = false
+    // ifcRenderer.clearDepth()
     // TODO(pablo): Maybe also? ifcRenderer.clearDepth();
 
     // Demo: optional animation

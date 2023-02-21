@@ -21,7 +21,7 @@ export default class PlaceMark extends EventDispatcher {
    */
   constructor({
     context,
-    hexOutlineColor = 0x0000ff,
+    hexOutlineColor = 0x00ff00,
     insetOutline = true,
     thickness = 5,
   }) {
