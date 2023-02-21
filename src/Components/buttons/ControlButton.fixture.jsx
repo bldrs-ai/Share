@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {ControlButton} from '../../Components/Buttons'
-import Announcement from '@mui/icons/Announcement'
+import Announcement from '@mui/icons-material/Announcement'
 import Dialog from '../../Components/Dialog'
 
 

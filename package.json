@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r631",
+  "version": "1.0.0-r636",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,7 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn build-share",
+    "build": "yarn build-share && yarn build-cosmos",
     "build-cosmos": "cosmos-export --config .cosmos.config.json && shx mkdir -p docs && shx mv cosmos-export docs/sb",
     "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
