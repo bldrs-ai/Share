@@ -1,4 +1,5 @@
 import {
+  Color,
   EventDispatcher,
   Raycaster,
   Vector2,
@@ -9,7 +10,6 @@ import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 // eslint-disable-next-line no-unused-vars
 import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
-import createComposer from './CustomPostProcessing'
 
 
 /**
@@ -19,31 +19,42 @@ export default class PlaceMark extends EventDispatcher {
   /**
    * @param {IfcContext} context
    */
-  constructor({context}) {
+  constructor({
+    context,
+    hexOutlineColor = 0x0000ff,
+    insetOutline = true,
+    thickness = 5,
+  }) {
     super()
     debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
     const _scene = context.getScene()
-    const _renderer = context.getRenderer()
-    const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
     const _placeMarks = []
+    let _materialShader
+    const _outlineColor = new Color(hexOutlineColor)
+    const _thicknessUniform = {value: thickness}
 
 
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
-    context.renderer.update = newUpdateFunction(context, composer)
 
 
-    const updatePointer = (event) => {
-      const rect = _domElement.getBoundingClientRect()
+    window.addEventListener('resize', () => {
+      const elRect = _domElement.getBoundingClientRect()
+      _materialShader.uniforms.resolution.value.set(elRect.width, elRect.height)
+    })
+
+
+    this.updatePointer = (event) => {
+      const elRect = _domElement.getBoundingClientRect()
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      _pointer.x = ((event.clientX - elRect.left) / elRect.width) * 2 - 1
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+      _pointer.y = (-(event.clientY - elRect.top) / elRect.height) * 2 + 1
     }
 
 
@@ -69,7 +80,7 @@ export default class PlaceMark extends EventDispatcher {
       if (!_objects || !this.activated) {
         return
       }
-      updatePointer(event)
+      this.updatePointer(event)
       const _intersections = []
       _intersections.length = 0
       _raycaster.setFromCamera(_pointer, _camera)
@@ -91,6 +102,7 @@ export default class PlaceMark extends EventDispatcher {
         return null
       }
     }
+
 
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
@@ -126,28 +138,76 @@ export default class PlaceMark extends EventDispatcher {
         height: 3.6,
       }).then((sprite) => {
         debug().log('PlaceMark#putDown#getSVGMesh: sprite: ', sprite)
+        if (insetOutline) {
+          sprite.material.defines = {INSET_OUTLINE: 1}
+        }
+        sprite.material.onBeforeCompile = this.onBeforeCompile
         sprite.position.copy(point)
         _scene.add(sprite)
         _placeMarks.push(sprite)
-        outlineEffect.setSelection(_placeMarks)
       })
     }
-  }
-}
 
 
-const newUpdateFunction = (context, composer) => {
-  /**
-   * Overrides the default update function in the context renderer
-   *
-   * @param {number} _delta
-   */
-  function newUpdateFn(_delta) {
-    // eslint-disable-next-line no-invalid-this
-    if (this.blocked || !context) {
-      return
+    this.onBeforeCompile = (shader) => {
+      const elRect = _domElement.getBoundingClientRect()
+
+      shader.uniforms.outlineColor = {value: _outlineColor}
+      shader.uniforms.outlineThickness = _thicknessUniform
+      shader.uniforms.resolution = {value: new Vector2(elRect.width, elRect.height)}
+
+      shader.fragmentShader = `uniform vec3 outlineColor;\n${shader.fragmentShader}`
+      shader.fragmentShader = `uniform float outlineThickness;\n${shader.fragmentShader}`
+      shader.fragmentShader = `uniform vec2 resolution;\n${shader.fragmentShader}`
+
+      shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <map_fragment>',
+          [
+            '#ifdef USE_MAP',
+
+            ' vec4 texelColor = mapTexelToLinear( texture2D( map, vUv ) );',
+
+            ' texelColor = mapTexelToLinear( texelColor );',
+
+            ' vec2 texel = vec2( 1.0 / resolution.y, 1.0 / resolution.y );',
+
+            ' #define OFFSET_COUNT 8',
+            ' vec2 offsets[OFFSET_COUNT];',
+            ' offsets[0] = vec2( 0, 1 );',
+            ' offsets[1] = vec2( 0, -1 );',
+            ' offsets[2] = vec2( 1, 0 );',
+            ' offsets[3] = vec2( -1, 0 );',
+            ' offsets[4] = vec2( -1, 1 );',
+            ' offsets[5] = vec2( 1, -1 );',
+            ' offsets[6] = vec2( 1, 1 );',
+            ' offsets[7] = vec2( -1, -1 );',
+
+            '#ifdef INSET_OUTLINE',
+
+            ' float a = 1.0;',
+            ' for( int i = 0; i < OFFSET_COUNT; i ++ ) {',
+            '  float val = texture2D( map, vUv + texel * offsets[i] * outlineThickness ).a;',
+            '  a *= val;',
+            ' }',
+
+            ' texelColor.rgb = mix( outlineColor, texelColor.rgb, a );',
+            '#else',
+
+            ' float a = 0.0;',
+            ' for( int i = 0; i < OFFSET_COUNT; i ++ ) {',
+            '  float val = texture2D( map, vUv + texel * offsets[i] * outlineThickness ).a;',
+            '  a = max(a, val);',
+            ' }',
+            ' texelColor = mix( vec4(outlineColor, a), texelColor, texelColor.a );',
+            '#endif',
+
+            ' diffuseColor *= texelColor;',
+
+            '#endif',
+          ].join('\n'),
+      )
+
+      _materialShader = shader
     }
-    composer.render()
   }
-  return newUpdateFn.bind(context.renderer)
 }

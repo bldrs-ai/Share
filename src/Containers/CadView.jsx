@@ -219,7 +219,7 @@ export default function CadView({
     const tmpModelRef = await loadIfc(pathToLoad)
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
-    const newPlaceMark = new PlaceMark(viewer.context)
+    const newPlaceMark = new PlaceMark({context: viewer.context})
     newPlaceMark.setObjects([tmpModelRef])
     debug().log('CadView#onViewer: newPlaceMark: ', newPlaceMark)
     setPlaceMark(newPlaceMark)
