@@ -216,10 +216,11 @@ export async function getSVGSprite({
     width = height = 1
   }
   const svgData = await fileLoader.loadAsync(url)
+  debug().log('svg#getSVGSprite: svgData: ', svgData)
   const parser = new DOMParser()
   const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
-  debug().log('svg#getSVGMesh: svg.width: ', svg.width)
-  debug().log('svg#getSVGMesh: svg.height: ', svg.height)
+  debug().log('svg#getSVGSprite: svg.width: ', svg.width)
+  debug().log('svg#getSVGSprite: svg.height: ', svg.height)
   if (fillColor) {
     svg.setAttribute('fill', fillColor)
   }
@@ -230,7 +231,9 @@ export async function getSVGSprite({
   const ctx = canvas.getContext('2d')
   return new Promise((resolve, reject) => {
     const img = document.createElement('img')
-    img.setAttribute('src', `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`)
+    const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
+    debug().log('svg#getSVGSprite: dataUrl: ', dataUrl)
+    img.setAttribute('src', dataUrl)
     img.onload = function() {
       ctx.drawImage(img, 0, 0)
       const texture = new Texture(canvas)
