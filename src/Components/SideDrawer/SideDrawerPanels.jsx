@@ -50,11 +50,11 @@ function PanelWithTitle(props) {
 
 /** @return {React.Component} */
 export function NotesPanel() {
-  const createNote = useStore((state) => state.createNote)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
 
   let title = selectedNoteId ? 'Note' : 'Notes'
-  if (createNote) {
+  if (isCreateNoteActive) {
     title = 'Add a note'
   }
 

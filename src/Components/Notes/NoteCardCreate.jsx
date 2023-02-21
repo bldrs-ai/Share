@@ -14,18 +14,10 @@ import Submit from '../../assets/icons/Submit.svg'
 
 
 /**
- * Note card
+ * Note card create
  *
- * @param {number} id note id
- * @param {number} index note index
- * @param {string} username username of the note author
- * @param {string} title note title
- * @param {string} avatarUrl user avatarUrl
- * @param {string} body note body
- * @param {string} date note date
- * @param {number} numberOfComments number of replies to the note - referred to as comments in GH
- * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
- * @param {boolean} isComment Comments/replies are formatted differently
+ * @param {string} username
+ * @param {string} avatarUrl
  * @return {object} React component
  */
 export default function NoteCardCreate({
@@ -33,7 +25,7 @@ export default function NoteCardCreate({
   avatarUrl = '',
 }) {
   const repository = useStore((state) => state.repository)
-  const createNoteOff = useStore((state) => state.createNoteOff)
+  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const {user, isAuthenticated} = useAuth0()
@@ -47,8 +39,8 @@ export default function NoteCardCreate({
    * create issue takes in the title and body of the note
    *
    */
-  function createNote() {
-    // TODO:Oleg noteIndex is used for note number :: need to introduce internal index system
+  function isCreateNoteActive() {
+    // TODO(Oleg) noteIndex is used for note number :: need to introduce internal index system
     let noteIndex
     if (createdNotes) {
       noteIndex = Object.keys(createdNotes).length
@@ -60,7 +52,7 @@ export default function NoteCardCreate({
       body,
     }
     postIssue(repository, issuePayload, accessToken)
-    createNoteOff()
+    toggleIsCreateNoteActive()
     const localNote = {
       index: noteIndex,
       id: noteIndex,
@@ -131,13 +123,13 @@ export default function NoteCardCreate({
           />
         </Box>
       </CardContent>
-      <CardActions createNote={createNote}/>
+      <CardActions isCreateNoteActive={isCreateNoteActive}/>
     </Paper>
   )
 }
 
 
-const CardActions = ({createNote}) => {
+const CardActions = ({isCreateNoteActive}) => {
   const theme = useTheme()
   return (
     <Box
@@ -155,7 +147,7 @@ const CardActions = ({createNote}) => {
         title='Submit'
         size='small'
         placement='bottom'
-        onClick={createNote}
+        onClick={isCreateNoteActive}
         icon={<Submit style={{width: '15px', height: '15px'}}/>}
       />
     </Box>
