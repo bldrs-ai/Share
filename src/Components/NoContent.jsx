@@ -21,12 +21,14 @@ export default function NoContent({message = 'no content'}) {
       'flexDirection': 'column',
       'justifyContent': 'center',
       'alignItems': 'center',
+      'backgroundColor': 'none',
       '& svg': {
         width: '30px',
         height: '30px',
         fill: theme.palette.primary.secondary,
       },
     }}
+    variant='control'
     >
       <Box>
         <AttentionIcon/>

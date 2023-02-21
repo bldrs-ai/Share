@@ -24,7 +24,7 @@ export default function Notes() {
   const createdNotes = useStore((state) => state.createdNotes)
   const setCreatedNotes = useStore((state) => state.setCreatedNotes)
   const deletedNotes = useStore((state) => state.deletedNotes)
-  const createNote = useStore((state) => state.createNote)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
@@ -97,7 +97,7 @@ export default function Notes() {
     }
     fetchNotes()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setNotes, repository, accessToken, createNote, deletedNotes, synchNotes])
+  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
 
 
   useEffect(() => {
@@ -156,11 +156,11 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
-      {createNote && user && <NoteCardCreate/>}
-      {createNote && !user && <NoContent message={'Please login to create notes.'}/>}
+      {isCreateNoteActive && user && <NoteCardCreate/>}
+      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
       {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && !createNote && <NoContent/> }
-      {notes && !selectedNoteId && !createNote ?
+      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/> }
+      {notes && !selectedNoteId && !isCreateNoteActive ?
        notes.map((note, index) => {
          return (
            <NoteCard
@@ -181,7 +181,7 @@ export default function Notes() {
          )
        }) :
        <>
-         {(filteredNote && !createNote) ?
+         {(filteredNote && !isCreateNoteActive) ?
           <NoteCard
             embeddedUrl={filteredNote.embeddedUrl}
             index={filteredNote.index}
@@ -196,7 +196,7 @@ export default function Notes() {
             imageUrl={filteredNote.imageUrl}
           /> : null
          }
-         {comments && !createNote &&
+         {comments && !isCreateNoteActive &&
           comments.map((comment, index) => {
             return (
               <NoteCard

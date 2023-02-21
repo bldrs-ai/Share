@@ -14,9 +14,8 @@ import PreviousIcon from '../../assets/icons/NavPrev.svg'
 /** @return {React.Component} */
 export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
-  const createNote = useStore((state) => state.createNote)
-  const createNoteOn = useStore((state) => state.createNoteOn)
-  const createNoteOff = useStore((state) => state.createNoteOff)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
@@ -62,7 +61,7 @@ export default function NotesNavBar() {
           },
         }}
       >
-        {selectedNoteId && !createNote &&
+        {selectedNoteId && !isCreateNoteActive &&
          <TooltipIconButton
            title='Back to the list'
            placement='bottom'
@@ -82,7 +81,7 @@ export default function NotesNavBar() {
         alignItems: 'center',
       }}
       >
-        {(notes && selectedNoteId) && !createNote && notes.length > 1 &&
+        {(notes && selectedNoteId) && !isCreateNoteActive && notes.length > 1 &&
           <>
             <TooltipIconButton
               title='Previous Note'
@@ -107,18 +106,18 @@ export default function NotesNavBar() {
       }}
       >
 
-        {!selectedNoteId && (createNote ?
+        {!selectedNoteId && (isCreateNoteActive ?
           <TooltipIconButton
             title='Back to the list'
             placement='bottom'
-            onClick={createNoteOff}
+            onClick={toggleIsCreateNoteActive}
             icon={<BackIcon style={{width: '16px', height: '16px'}}/>}
             size='medium'
           /> :
           <TooltipIconButton
             title='Add a note'
             placement='bottom'
-            onClick={createNoteOn}
+            onClick={toggleIsCreateNoteActive}
             icon={<AddNoteIcon style={{width: '18px', height: '18px'}}/>}
             size='medium'
           />
