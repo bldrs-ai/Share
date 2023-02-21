@@ -1,3 +1,4 @@
+const HtmlWebpackPlugin = require('html-webpack-plugin')
 const path = require('path')
 
 
@@ -10,10 +11,11 @@ module.exports = {
     port: 8000,
   },
   output: {
-    filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist'),
     publicPath: '/sb/',
+    filename: 'index.html',
   },
+  plugins: [new HtmlWebpackPlugin({template: './cosmos.html'})],
   module: {
     rules: [
       {
@@ -28,7 +30,6 @@ module.exports = {
       },
       {
         test: /\.svg$/i,
-        // issuer: /\.[jt]sx?$/,
         use: ['@svgr/webpack'],
       },
     ],
