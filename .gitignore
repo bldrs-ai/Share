@@ -9,6 +9,7 @@
 .vscode
 .idea
 *.log
+/coverage
 
 cypress/videos
 cypress/screenshots
