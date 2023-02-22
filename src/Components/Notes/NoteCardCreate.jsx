@@ -103,16 +103,7 @@ export default function NoteCardCreate({
           backgroundColor: theme.palette.primary.main,
         }}
       />
-      <CardContent
-        sx={{
-          'padding': '0px 20px 0px 20px',
-          'margin': '0px 0px 0px 0px',
-          'minHeight': '100px',
-          '& img': {
-            width: '100%',
-          },
-        }}
-      >
+      <CardContent>
         <Box
           sx={{
             margin: '10px 0px',
