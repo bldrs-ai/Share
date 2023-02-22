@@ -2,6 +2,7 @@ import React, {useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
@@ -18,7 +19,7 @@ import Submit from '../../assets/icons/Submit.svg'
  *
  * @param {string} username
  * @param {string} avatarUrl
- * @return {object} React component
+ * @return {React.Component} React component
  */
 export default function NoteCardCreate({
   username = '',
@@ -96,7 +97,6 @@ export default function NoteCardCreate({
           <Avatar
             alt={user.name}
             src={user.picture}
-            sx={{width: 22, height: 22}}
           /> :
           <Avatar alt={username} src={avatarUrl}/>
         } sx={{
@@ -118,34 +118,16 @@ export default function NoteCardCreate({
           />
         </Box>
       </CardContent>
-      <CardActions isCreateNoteActive={isCreateNoteActive}/>
+      <CardActions>
+        <TooltipIconButton
+          title='Submit'
+          size='small'
+          placement='bottom'
+          onClick={isCreateNoteActive}
+          icon={<Submit style={{width: '15px', height: '15px'}}/>}
+        />
+      </CardActions>
     </Paper>
-  )
-}
-
-
-const CardActions = ({isCreateNoteActive}) => {
-  const theme = useTheme()
-  return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'flex-end',
-        alignItems: 'center',
-        padding: '0px 14px 0px 14px',
-        height: '50px',
-        backgroundColor: theme.palette.primary.main,
-      }}
-    >
-      <TooltipIconButton
-        title='Submit'
-        size='small'
-        placement='bottom'
-        onClick={isCreateNoteActive}
-        icon={<Submit style={{width: '15px', height: '15px'}}/>}
-      />
-    </Box>
   )
 }
 
@@ -156,7 +138,9 @@ const CardActions = ({isCreateNoteActive}) => {
  * @param {string} placeholder input placeholder
  * @param {string} inputText tring to display as input
  * @param {string} setInputText function to save the current input string
- * @return {object} React component
+ * @param {boolean} multiline is multiline input allowed
+ * @param {string} maxLength maximum length of the input string
+ * @return {React.Component} React component
  */
 function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
   return (

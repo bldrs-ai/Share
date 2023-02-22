@@ -1,10 +1,7 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  // postIssue,
 } from './GitHub'
-// import {server} from '../__mocks__/server'
-// import {rest} from 'msw'
 
 
 describe('GitHub', () => {
@@ -57,32 +54,4 @@ describe('GitHub', () => {
       expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md?token=TESTTOKENFORNEWBRANCH')
     })
   })
-
-  // describe('post to Github', () => {
-  //   it('return valid response when an issue is created', async () => {
-  //     const issuePayload = {
-  //       title: 'note title',
-  //       body: 'note body',
-  //     }
-
-  //     const httpOk = 200
-
-  //     server.use(
-  //         rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-  //           return res(
-  //               ctx.status(httpOk),
-  //           )
-  //         }),
-  //     )
-
-  //     // const res = await postIssue({orgName: 'bldrs-ai', name: 'Share', issuePayload})
-  //     const responseFromPostMethod = {
-  //       status: 200,
-  //       url: 'https://api.github.com/repos/bldrs-ai/Share/issues',
-  //       headers: {'x-powered-by': 'msw'},
-  //       data: '',
-  //     }
-  //     expect(res.status).toEqual(200)
-  //   })
-  // })
 })

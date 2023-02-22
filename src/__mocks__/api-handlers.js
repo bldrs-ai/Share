@@ -104,13 +104,4 @@ export const handlers = [
         }),
     )
   }),
-
-  rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-    // if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share' || req.params.issueNumber !== '17') {
-    //   return res(ctx.status(httpNotFound))
-    // }
-    return res(
-        ctx.status(httpOk),
-    )
-  }),
 ]
