@@ -13,6 +13,7 @@ const mockGitHubUser = {
   email: 'testing@example.com',
   email_verified: true,
   sub: 'github|1234567',
+  updated_at: '2023-02-22T17:07:29.123Z',
 }
 
 export const mockedUseAuth0 = jest.mocked(useAuth0, true)
