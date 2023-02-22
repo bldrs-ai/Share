@@ -140,8 +140,10 @@ export default function NoteCard({
 
 
   /**
-   * Copies the issue url which contains the issue id, camera position
-   * and selected element path.
+   * deletes the note
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} noteNumber obtained from github issue
    */
   function deleteNote(repository, accessToken, noteNumber) {
     if (deletedNotes !== null) {
