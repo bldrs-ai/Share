@@ -16,7 +16,7 @@ export const buildDir = path.resolve(__dirname, '..', 'docs')
 export const build = {
   entryPoints: [entryPoint],
   bundle: true,
-  minify: false, // process.env.NODE_ENV === 'production',
+  minify: process.env.MINIFY_BUILD === 'true',
   // https://esbuild.github.io/api/#keep-names
   // We use code identifiers e.g. in ItemProperties for their names
   keepNames: true,
@@ -43,6 +43,7 @@ export const build = {
     'process.env.GITHUB_BASE_URL': JSON.stringify(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
     'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
     'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
+    'process.env.DISABLE_MOCK_SERVICE_WORKER': JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER),
   },
   plugins: [
     progress(),
