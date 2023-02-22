@@ -4,6 +4,11 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 
 
+const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
+const viewRules = {
+  'default': [],
+  'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],
+}
 /* eslint-disable jsdoc/no-undefined-types */
 /**
  * Extending the original IFCViewerFunctionality
@@ -16,7 +21,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
-    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, options?.useViewRules ? ['Rule'] : [])
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
 
