@@ -24,7 +24,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
     this.isolator = new IfcIsolator(this.context, this)
-    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser)
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
   /**
