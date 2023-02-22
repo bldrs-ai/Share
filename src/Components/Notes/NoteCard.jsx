@@ -141,6 +141,7 @@ export default function NoteCard({
 
   /**
    * deletes the note
+   *
    * @param {string} repository
    * @param {string} accessToken
    * @param {number} noteNumber obtained from github issue
