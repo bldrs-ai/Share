@@ -30,7 +30,8 @@ export function interpolateColors(startColor, targetColor, value, min, max) {
   const r = changeValueScale(value, min, max, startColor.x, targetColor.x)
   const g = changeValueScale(value, min, max, startColor.y, targetColor.y)
   const b = changeValueScale(value, min, max, startColor.z, targetColor.z)
-  const result = new IfcColor(r, g, b)
+  const o = changeValueScale(value, min, max, startColor.w, targetColor.w)
+  const result = new IfcColor(r, g, b, o)
   return result
 }
 
