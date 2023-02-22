@@ -9,7 +9,7 @@ import {interpolateColors, parseColor} from './ColorHelperFunctions'
  * The current 'ViewRulesCompiler' file is a just dummy implementation that mimics the compilation of a bunch
  * of rules against the IFC model on loading, and returns a result of 'IfcCustomViewSettings' to be used for
  * overriding model colors.
- * 
+ *
  * The compiler functionality itself, and how the 'ViewRules' are stored and shared or changed will be explored
  * in details in #475, that way it would be more generic and flexible, but for now it's fixed with the
  * predefined view rules in #603
