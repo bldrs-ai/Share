@@ -148,6 +148,7 @@ export default class IfcIsolator {
     useStore.setState({hiddenElements: hiddenIdsObject})
     const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
+    useStore.setState({selectedElements: []})
     this.viewer.setSelection(0, [], false)
   }
 
@@ -178,6 +179,8 @@ export default class IfcIsolator {
     }
     const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
     this.initHideOperationsSubset(toBeShown)
+    const selection = useStore.getState().selectedElements.filter((el) => !this.hiddenIds.includes(Number(el)))
+    useStore.setState({selectedElements: selection})
     if (this.revealHiddenElementsMode) {
       this.revealHiddenElementsMode = false
       this.toggleRevealHiddenElements()
@@ -216,6 +219,8 @@ export default class IfcIsolator {
       const toBeShown = this.ids.filter((el) => !this.hiddenIds.includes(el))
       this.initHideOperationsSubset(toBeShown)
     }
+    const selection = useStore.getState().selectedElements.map((e) => Number(e))
+    this.viewer.setSelection(0, selection, false)
     // reset reveal mode
     if (this.revealHiddenElementsMode) {
       this.revealHiddenElementsMode = false

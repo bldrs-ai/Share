@@ -501,6 +501,9 @@ export default function CadView({
    */
   function selectWithShiftClickEvents(shiftKey, expressId) {
     let newSelection = []
+    if (!viewer.isolator.canBePickedInScene(expressId)) {
+      return
+    }
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
