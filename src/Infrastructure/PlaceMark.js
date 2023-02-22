@@ -1,14 +1,15 @@
 import {
   EventDispatcher,
   Raycaster,
-  Scene,
   Vector2,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-import {getSVGSprite} from '../utils/svg'
+// eslint-disable-next-line no-unused-vars
+import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
+import createComposer from './CustomPostProcessing'
 
 
 /**
@@ -23,8 +24,9 @@ export default class PlaceMark extends EventDispatcher {
     debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
+    const _scene = context.getScene()
     const _renderer = context.getRenderer()
-    const _markScene = new Scene()
+    const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -33,9 +35,10 @@ export default class PlaceMark extends EventDispatcher {
 
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
+    context.renderer.update = newUpdateFunction(context, composer)
 
 
-    this.updatePointer = (event) => {
+    const updatePointer = (event) => {
       const rect = _domElement.getBoundingClientRect()
       // eslint-disable-next-line no-magic-numbers, no-mixed-operators
       _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -66,7 +69,7 @@ export default class PlaceMark extends EventDispatcher {
       if (!_objects || !this.activated) {
         return
       }
-      this.updatePointer(event)
+      updatePointer(event)
       const _intersections = []
       _intersections.length = 0
       _raycaster.setFromCamera(_pointer, _camera)
@@ -89,47 +92,38 @@ export default class PlaceMark extends EventDispatcher {
       }
     }
 
-
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
-      getSVGSprite({
+      getSVGGroup({
         url: '/icons/PlaceMark.svg',
         fillColor: 'red',
-        width: 2,
-        height: 3.6,
-      }).then((sprite) => {
-        debug().log('PlaceMark#putDown#getSVGMesh: sprite: ', sprite)
-        sprite.position.copy(point)
-        _markScene.add(sprite)
-        _placeMarks.push(sprite)
+      }).then((group) => {
+        debug().log('PlaceMark#putDown#getSVGGroup: group: ', group)
+        group.position.copy(point)
+        if (lookAt) {
+          group.lookAt(lookAt)
+        }
+        _scene.add(group)
+        _placeMarks.push(group)
+        outlineEffect.setSelection(_placeMarks)
       })
     }
-
-
-    /**
-     * This is a custom render pass that allows both IFC.js's scene and a new Three.js scene to be rendered on the same canvas
-     */
-    this.renderPatch = () => {
-      if (context.isThisBeingDisposed) {
-        return
-      }
-      if (context.stats) {
-        context.stats.begin()
-      }
-      _renderer.autoClear = false
-      context.updateAllComponents()
-      if (this.anim) {
-        this.anim()
-      }
-      _renderer.render(_markScene, _camera)
-      if (context.stats) {
-        context.stats.end()
-      }
-      requestAnimationFrame(context.render)
-    }
-
-
-    context.render = this.renderPatch
   }
+}
+
+
+const newUpdateFunction = (context, composer) => {
+  /**
+   * Overrides the default update function in the context renderer
+   *
+   * @param {number} _delta
+   */
+  function newUpdateFn(_delta) {
+    if (!context) {
+      return
+    }
+    composer.render()
+  }
+  return newUpdateFn.bind(context.renderer)
 }
