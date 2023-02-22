@@ -35,7 +35,6 @@ export default class PlaceMark extends EventDispatcher {
 
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
-    context.renderer.update = newUpdateFunction(context, composer)
 
 
     const updatePointer = (event) => {
@@ -92,6 +91,7 @@ export default class PlaceMark extends EventDispatcher {
       }
     }
 
+
     this.putDown = ({point, lookAt, color = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt)
@@ -101,29 +101,32 @@ export default class PlaceMark extends EventDispatcher {
       }).then((group) => {
         debug().log('PlaceMark#putDown#getSVGGroup: group: ', group)
         group.position.copy(point)
-        if (lookAt) {
-          group.lookAt(lookAt)
-        }
         _scene.add(group)
         _placeMarks.push(group)
         outlineEffect.setSelection(_placeMarks)
       })
     }
-  }
-}
 
 
-const newUpdateFunction = (context, composer) => {
-  /**
-   * Overrides the default update function in the context renderer
-   *
-   * @param {number} _delta
-   */
-  function newUpdateFn(_delta) {
-    if (!context) {
-      return
+    this.newUpdateFunction = () => {
+      /**
+       * Overrides the default update function in the context renderer
+       *
+       * @param {number} _delta
+       */
+      function newUpdateFn(_delta) {
+        if (!context) {
+          return
+        }
+        _placeMarks.forEach((_placeMark) => {
+          _placeMark.quaternion.copy( _camera.quaternion )
+        })
+        composer.render()
+      }
+      return newUpdateFn.bind(context.renderer)
     }
-    composer.render()
+
+
+    context.renderer.update = this.newUpdateFunction()
   }
-  return newUpdateFn.bind(context.renderer)
 }
