@@ -18,6 +18,7 @@ jest.mock('react-router-dom', () => {
     useLocation: jest.fn(() => defaultLocationValue),
   }
 })
+jest.mock('postprocessing')
 
 
 describe('CadView', () => {

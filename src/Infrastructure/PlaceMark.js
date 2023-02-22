@@ -134,7 +134,7 @@ export default class PlaceMark extends EventDispatcher {
           return
         }
         _placeMarks.forEach((_placeMark) => {
-          _placeMark.quaternion.copy( _camera.quaternion )
+          _placeMark.quaternion.copy(_camera.quaternion)
         })
         composer.render()
       }
@@ -142,6 +142,8 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    context.renderer.update = this.newRendererUpdate()
+    if (context.renderer) {
+      context.renderer.update = this.newRendererUpdate()
+    }
   }
 }
