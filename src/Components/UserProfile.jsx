@@ -47,7 +47,7 @@ const UserProfile = ({size = 'medium'}) => {
       <Menu
         PaperProps={{
           sx: {
-            'filter': 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
+            // 'filter': 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
             'mt': 1.5,
             '& .MuiAvatar-root': {
               width: 32,

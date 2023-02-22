@@ -317,7 +317,7 @@ const CardActions = ({
         }}
       >
         {!isComment && synchedNote &&
-        user && user.name === username &&
+        user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
             size='small'

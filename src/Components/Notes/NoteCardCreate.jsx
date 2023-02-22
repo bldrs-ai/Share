@@ -88,6 +88,8 @@ export default function NoteCardCreate({
             placeholder={'Note Title'}
             inputText={title}
             setInputText={setTitle}
+            multiline={false}
+            maxLength={256}
           />}
         avatar={
           isAuthenticated ?
@@ -120,6 +122,8 @@ export default function NoteCardCreate({
             placeholder={'Note Body'}
             inputText={body}
             setInputText={setBody}
+            multiline={true}
+            maxLength={65000}
           />
         </Box>
       </CardContent>
@@ -163,7 +167,7 @@ const CardActions = ({isCreateNoteActive}) => {
  * @param {string} setInputText function to save the current input string
  * @return {object} React component
  */
-function InputField({placeholder, inputText, setInputText}) {
+function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
   return (
     <InputBase
       value={inputText}
@@ -171,7 +175,8 @@ function InputField({placeholder, inputText, setInputText}) {
       error={true}
       placeholder={placeholder}
       fullWidth
-      multiline
+      multiline={multiline}
+      inputProps={{maxLength: maxLength}}
       sx={{
         '& input::placeholder': {
           opacity: .3,

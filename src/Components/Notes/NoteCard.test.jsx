@@ -1,5 +1,6 @@
 import React from 'react'
 import {render, screen, fireEvent} from '@testing-library/react'
+import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import ShareMock from '../../ShareMock'
 import NoteCard from './NoteCard'
 
@@ -8,6 +9,7 @@ describe('NoteCard', () => {
   it('NoteCard', () => {
     const id = 123
     const index = 123
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     render(
         <ShareMock>
           <NoteCard
@@ -28,6 +30,7 @@ describe('NoteCard', () => {
     const id = 123
     const index = 123
     const commentCount = 10
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     render(<ShareMock><NoteCard id={id} index={index} numberOfComments={commentCount}/></ShareMock>)
     expect(screen.getByText(commentCount)).toBeInTheDocument()
   })
@@ -35,6 +38,7 @@ describe('NoteCard', () => {
   it('Select the note card', () => {
     const id = 123
     const index = 123
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const rendered = render(
         <ShareMock>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
@@ -47,6 +51,7 @@ describe('NoteCard', () => {
   it('Camera Position control', () => {
     const id = 123
     const index = 123
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const rendered = render(
         <ShareMock>
           <NoteCard
@@ -58,4 +63,23 @@ describe('NoteCard', () => {
     const showCamera = rendered.getByTitle('Show the camera view')
     expect(showCamera).toBeInTheDocument()
   })
+
+  // it('Delete button is present', () => {
+  //   const id = 123
+  //   const index = 123
+  //   const username = 'Unit Testing'
+  //   mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+  //   const {getByTitle, debug} = render(
+  //       <ShareMock>
+  //         <NoteCard
+  //           id={id}
+  //           index={index}
+  //           username={username}
+  //           synched={true}
+  //         />
+  //       </ShareMock>)
+  //    debug()
+  //   // expect(getByTitle('Delete')).toBeInTheDocument()
+  // })
 })
