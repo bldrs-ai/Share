@@ -3,7 +3,6 @@ import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
 import {faEye, faEyeSlash, faGlasses} from '@fortawesome/free-solid-svg-icons'
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
-import {useNavigate} from 'react-router-dom'
 import {reifyName} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -88,6 +87,7 @@ export default function NavTree({
   model,
   element,
   pathPrefix,
+  selectWithShiftClickEvents,
 }) {
   const CustomContent = React.forwardRef(function CustomContent(props, ref) {
     const {
@@ -117,28 +117,15 @@ export default function NavTree({
 
     const handleExpansionClick = (event) => handleExpansion(event)
 
-    const [selectedElement, setSelectedElement] = useState(null)
+    // const [selectedElement, setSelectedElement] = useState(null)
 
-    const hiddenElements = useStore((state) => state.hiddenElements)
+    // const hiddenElements = useStore((state) => state.hiddenElements)
 
     const handleSelectionClick = (event) => {
       handleSelection(event)
-      setSelectedElement(element)
+      selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
-    const navigate = useNavigate()
-
-    useEffect(() => {
-      if (selectedElement) {
-        if (hiddenElements[selectedElement.expressID]) {
-          return
-        }
-        const newPath =
-              `${pathPrefix}/${computeElementPathIds(element, (elt) => elt.expressID).join('/')}`
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        navigate(newPath)
-      }
-    }, [selectedElement, navigate, hiddenElements])
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
@@ -205,6 +192,7 @@ export default function NavTree({
                 model={model}
                 element={child}
                 pathPrefix={pathPrefix}
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
               />
             </React.Fragment>
           )

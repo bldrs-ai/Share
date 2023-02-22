@@ -23,7 +23,6 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
-import {addSceneLayer} from './SceneLayer'
 
 
 /**
@@ -491,19 +490,29 @@ export default function CadView({
     if (!item) {
       return
     }
+    selectWithShiftClickEvents(event.shiftKey, item.id)
+  }
+
+  /**
+   * Select/Deselect items in the scene using shift+click
+   *
+   * @param {boolean} shiftKey the click event
+   * @param {number} expressId the express id of the element
+   */
+  function selectWithShiftClickEvents(shiftKey, expressId) {
     let newSelection = []
-    if (event.shiftKey) {
+    if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
-      const indexOfItem = selectedInViewer.indexOf(item.id)
+      const indexOfItem = selectedInViewer.indexOf(expressId)
       const alreadySelected = indexOfItem !== -1
       if (alreadySelected) {
         selectedInViewer.splice(indexOfItem, 1)
       } else {
-        selectedInViewer.push(item.id)
+        selectedInViewer.push(expressId)
       }
       newSelection = selectedInViewer
     } else {
-      newSelection = [item.id]
+      newSelection = [expressId]
     }
     selectItemsInScene(newSelection)
   }
@@ -590,6 +599,7 @@ export default function CadView({
               defaultExpandedElements={defaultExpandedElements}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
               }
@@ -675,7 +685,8 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
-  addSceneLayer(viewer.IFC.context)
+  // TODO(https://github.com/bldrs-ai/Share/issues/622): this breaks postprocessing
+  // addSceneLayer(viewer.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

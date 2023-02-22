@@ -8,7 +8,7 @@ esbuild
     .build(common.build)
     .then((result) => {
       // Remove development resources from non-development builds
-      if (process.env.NODE_ENV !== 'development' && process.env.NODE_ENV !== 'test') {
+      if (process.env.DISABLE_MOCK_SERVICE_WORKER === 'true') {
         unlink(join(common.buildDir, 'mockServiceWorker.js'), (err) => console.log(err))
       }
 

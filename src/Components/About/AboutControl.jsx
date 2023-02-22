@@ -25,7 +25,7 @@ export default function AboutControl() {
 
   return (
     <ControlButton
-      title='About BLDRS'
+      title='About bldrs'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={

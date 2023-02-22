@@ -5,6 +5,13 @@ import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 
+
+const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
+const viewRules = {
+  'default': [],
+  'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],
+}
+/* eslint-disable jsdoc/no-undefined-types */
 /**
  * Extending the original IFCViewerFunctionality
  */

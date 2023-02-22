@@ -117,7 +117,7 @@ export default function CutPlaneMenu() {
           sx: {
             'color': theme.palette.primary.contrastText,
             '& .Mui-selected': {
-              color: theme.palette.primary.highlight,
+              color: theme.palette.secondary.main,
               fontWeight: 800,
             },
           },
@@ -125,15 +125,15 @@ export default function CutPlaneMenu() {
       >
         <MenuItem onClick={() => togglePlane({direction: 'x'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        >X
+        >X - Section
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        >Y
+        >Y - Plan
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        >Z
+        >Z - Section
         </MenuItem>
       </Menu>
     </>

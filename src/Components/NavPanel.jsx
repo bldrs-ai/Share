@@ -24,6 +24,7 @@ export default function NavPanel({
   defaultExpandedElements,
   expandedElements,
   setExpandedElements,
+  selectWithShiftClickEvents,
   pathPrefix,
 }) {
   assertDefined(...arguments)
@@ -71,7 +72,7 @@ export default function NavPanel({
           flexGrow: 1,
         }}
       >
-        <NavTree model={model} element={element} pathPrefix={pathPrefix}/>
+        <NavTree model={model} selectWithShiftClickEvents={selectWithShiftClickEvents} element={element} pathPrefix={pathPrefix}/>
       </TreeView>
     </Paper>
   )
