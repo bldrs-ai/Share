@@ -1,5 +1,6 @@
 import {
   EventDispatcher,
+  Mesh,
   Raycaster,
   Vector2,
 } from 'three'
@@ -7,8 +8,7 @@ import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-// eslint-disable-next-line no-unused-vars
-import {getSVGGroup, getSVGMesh, getSVGSprite} from '../utils/svg'
+import {getSVGGroup} from '../utils/svg'
 import createComposer from './CustomPostProcessing'
 
 
@@ -92,23 +92,38 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.putDown = ({point, lookAt, color = 'red'}) => {
+    this.putDown = ({point, lookAt, fillColor = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
-      debug().log('PlaceMark#putDown: lookAt: ', lookAt)
+      debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       getSVGGroup({
         url: '/icons/PlaceMark.svg',
-        fillColor: 'red',
+        fillColor,
       }).then((group) => {
-        debug().log('PlaceMark#putDown#getSVGGroup: group: ', group)
         group.position.copy(point)
         _scene.add(group)
         _placeMarks.push(group)
-        outlineEffect.setSelection(_placeMarks)
+        debug().log('PlaceMark#putDown#getSVGGroup: _placeMarks: ', _placeMarks)
+        const placeMarkMeshSet = this.getPlaceMarkMeshSet()
+        outlineEffect.setSelection(placeMarkMeshSet)
       })
     }
 
 
-    this.newUpdateFunction = () => {
+    this.getPlaceMarkMeshSet = () => {
+      const placeMarkMeshSet = new Set()
+      _placeMarks.forEach((placeMark) => {
+        placeMark.traverse((child) => {
+          if (child instanceof Mesh) {
+            placeMarkMeshSet.add(child)
+          }
+        })
+      })
+      debug().log('PlaceMark#getPlaceMarkMeshes: placeMarkMeshSet: ', placeMarkMeshSet)
+      return placeMarkMeshSet
+    }
+
+
+    this.newRendererUpdate = () => {
       /**
        * Overrides the default update function in the context renderer
        *
@@ -127,6 +142,6 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    context.renderer.update = this.newUpdateFunction()
+    context.renderer.update = this.newRendererUpdate()
   }
 }
