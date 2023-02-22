@@ -92,7 +92,7 @@ export default function CadView({
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark() // Todo
+  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
