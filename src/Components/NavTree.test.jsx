@@ -41,7 +41,7 @@ describe('NavTree', () => {
     await actAsyncFlush()
     expect(getByText(testLabel)).toBeInTheDocument()
   })
- 
+
   it('should select element on click', async () => {
     const selectElementsMock = jest.fn()
     const testLabel = 'Test node label'

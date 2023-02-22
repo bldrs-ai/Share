@@ -67,11 +67,15 @@ function HideIcon({elementId}) {
   }
 
   const iconStyle = {float: 'right', margin: '4px'}
-  if (isTempIsolationModeOn && !isIsolated) {
-    iconStyle.opacity = 0.3
+  if (isTempIsolationModeOn) {
+    iconStyle.pointerEvents = 'none'
+    if (!isIsolated) {
+      iconStyle.opacity = 0.4
+    }
   }
+
   const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
-  return <FontAwesomeIcon disabled={isTempIsolationModeOn} style={iconStyle} onClick={toggleHide} icon={icon}/>
+  return <FontAwesomeIcon style={iconStyle} onClick={toggleHide} icon={icon}/>
 }
 
 /**

@@ -1,4 +1,3 @@
-/* eslint-disable jsdoc/no-undefined-types */
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
