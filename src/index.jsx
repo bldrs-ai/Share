@@ -33,7 +33,7 @@ Sentry.init({
   tracesSampleRate: 1.0,
 })
 
-if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+if (process.env.DISABLE_MOCK_SERVICE_WORKER !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
