@@ -104,6 +104,8 @@ export default class PlaceMark extends EventDispatcher {
         _placeMarks.push(group)
         debug().log('PlaceMark#putDown#getSVGGroup: _placeMarks: ', _placeMarks)
         const placeMarkMeshSet = this.getPlaceMarkMeshSet()
+        debug().log('PlaceMark#putDown#getSVGGroup: placeMarkMeshSet: ', placeMarkMeshSet)
+        debug().log('PlaceMark#putDown#getSVGGroup: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
         outlineEffect.setSelection(placeMarkMeshSet)
       })
     }
