@@ -240,7 +240,17 @@ export default function CadView({
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
-    if (!isAuthCompleted) {
+    debug().log(`CadView#loadIfc: `, filepath)
+    const uploadedFile = pathPrefix.endsWith('new')
+    const relativeFile = filepath.indexOf('/') === 0
+
+    if (uploadedFile) {
+      filepath = getNewModelRealPath(filepath)
+      debug().log('CadView#loadIfc: parsed blob: ', filepath)
+      window.addEventListener('beforeunload', handleBeforeUnload)
+    }
+
+    if (!uploadedFile && !relativeFile && !isAuthCompleted) {
       setLoadingMessage('Authenticating...')
       if (!isLoading) {
         setIsLoading(true)
@@ -249,22 +259,13 @@ export default function CadView({
       return
     }
 
-    debug().log(`CadView#loadIfc: `, filepath)
-    const uploadedFile = pathPrefix.endsWith('new')
-
-    if (uploadedFile) {
-      filepath = getNewModelRealPath(filepath)
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      window.addEventListener('beforeunload', handleBeforeUnload)
-    }
-
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     if (!isLoading) {
       setIsLoading(true)
     }
 
-    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
+    const ifcURL = (uploadedFile || relativeFile) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.loadIfcUrl(
         ifcURL,
         !urlHasCameraParams(), // fitToFrame
