@@ -57,7 +57,7 @@ export default function Branches() {
     if (branches.length === 0 && modelPath.repo !== undefined) {
       fetchBranches()
     }
-  }, [repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
+  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
 
 
   const handleSelect = (event) => {
