@@ -1,25 +1,47 @@
-import {getSVGGroup, getSVGMesh, getSVGSprite} from './svg'
+import {getSVGGroup} from './svg'
+import {mockLoadedSvgObj, mockShapes} from '../__mocks__/svg'
+import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 
 
-jest.mock('./svg')
+jest.mock('three', () => {
+  return {
+    ...jest.requireActual('three'),
+    Color: jest.fn().mockImplementation(() => {
+      return {
+        setStyle: jest.fn().mockReturnThis(),
+        convertSRGBToLinear: jest.fn().mockReturnThis(),
+      }
+    }),
+    FileLoader: jest.fn().mockImplementation(() => {
+      return {
+        loadAsync: jest.fn().mockImplementation(() => mockLoadedSvgObj),
+      }
+    }),
+  }
+})
+
+
+jest.mock('three/examples/jsm/loaders/SVGLoader', () => {
+  return {
+    ...jest.requireActual('three/examples/jsm/loaders/SVGLoader'),
+    SVGLoader: jest.fn().mockImplementation(() => {
+      return {
+        loadAsync: jest.fn().mockImplementation(() => mockLoadedSvgObj),
+      }
+    }),
+  }
+})
 
 
 describe('svg', () => {
-  it('test getSVGSprite', async () => {
-    getSVGGroup.mockResolvedValue('getSVGGroup')
-    const svgGroup = await getSVGGroup()
-    expect(svgGroup).toBe('getSVGGroup')
-  })
-
-  it('test getSVGSprite', async () => {
-    getSVGMesh.mockResolvedValue('getSVGMesh')
-    const svgMesh = await getSVGMesh()
-    expect(svgMesh).toBe('getSVGMesh')
-  })
-
-  it('test getSVGSprite', async () => {
-    getSVGSprite.mockResolvedValue('getSVGSprite')
-    const svgSprite = await getSVGSprite()
-    expect(svgSprite).toBe('getSVGSprite')
+  it('test getSVGGroup', async () => {
+    SVGLoader.createShapes = jest.fn().mockImplementation(() => {
+      return {
+        ...mockShapes,
+        extractPoints: jest.fn(),
+      }
+    })
+    const svgGroup = await getSVGGroup({url: 'fake'})
+    expect(svgGroup.children.length).toBe(1)
   })
 })
