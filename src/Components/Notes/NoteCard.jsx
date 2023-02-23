@@ -207,8 +207,8 @@ export default function NoteCard({
          />
         }
       </CardContent>
-      {embeddedCameraParams || numberOfComments > 0 ?
-        <CardActions
+      {(embeddedCameraParams || numberOfComments > 0) &&
+        <CardFooter
           id={id}
           issueNumber={issueNumber}
           username={username}
@@ -221,7 +221,7 @@ export default function NoteCard({
           deleteNote={deleteNote}
           isComment={isComment}
           synchedNote={synchedNote}
-        /> : null
+        />
       }
     </Paper>
   )
@@ -250,7 +250,7 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
-const CardActions = ({
+const CardFooter = ({
   id,
   issueNumber,
   username,
