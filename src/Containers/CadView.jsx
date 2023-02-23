@@ -245,7 +245,7 @@ export default function CadView({
       if (!isLoading) {
         setIsLoading(true)
       }
-    } else {
+
       return
     }
 
