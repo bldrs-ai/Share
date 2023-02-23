@@ -10,7 +10,7 @@ import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
 import PanelTitle from '../PanelTitle'
-
+import {AppStoreListing} from './AppStoreListing'
 
 /**
  * @param {object} props React props with children
@@ -104,6 +104,7 @@ export function AppStorePanel() {
       }
     >
       {'Hello from store'}
+      <AppStoreListing/>
     </PanelWithTitle>
   )
 }
