@@ -3,6 +3,7 @@ import {ThemeProvider} from '@mui/material/styles'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import BaseRoutesMock from './BaseRoutesMock.test'
+import {HelmetProvider} from 'react-helmet-async'
 
 
 /**
@@ -19,13 +20,15 @@ export default function ShareMock({initialEntries, children} = {}) {
   }, [setRepository])
 
   return (
-    <BaseRoutesMock
-      initialEntries={initialEntries}
-      contentElt={
-        <ThemeProvider theme={useShareTheme()}>
-          {children}
-        </ThemeProvider>
-      }
-    />
+    <HelmetProvider>
+      <BaseRoutesMock
+        initialEntries={initialEntries}
+        contentElt={
+          <ThemeProvider theme={useShareTheme()}>
+            {children}
+          </ThemeProvider>
+        }
+      />
+    </HelmetProvider>
   )
 }
