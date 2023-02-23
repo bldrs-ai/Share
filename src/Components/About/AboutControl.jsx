@@ -8,6 +8,7 @@ import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
+import {Helmet} from 'react-helmet-async'
 
 
 /**
@@ -72,7 +73,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={<AboutContent/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
-    />)
+    />
+  )
 }
 
 
@@ -84,6 +86,9 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 function AboutContent() {
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
+      <Helmet>
+        <title>About — BLDRS</title>
+      </Helmet>
       <Typography variant='h2' gutterBottom={true}>build every thing together</Typography>
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share

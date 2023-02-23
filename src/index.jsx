@@ -14,7 +14,7 @@ import {Auth0ProviderWithHistory} from './Components/Auth0ProviderWithHistory'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
 import ApplicationError from './Components/ApplicationError'
-import {HelmetProvider} from 'react-helmet-async'
+import {Helmet, HelmetProvider} from 'react-helmet-async'
 
 
 Sentry.init({
@@ -51,6 +51,9 @@ root.render(
     <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
       <FlagsProvider value={flags}>
         <HelmetProvider>
+          <Helmet>
+            <title>BLDRS</title>
+          </Helmet>
           <BrowserRouter>
             <Auth0ProviderWithHistory>
               <BaseRoutes/>
