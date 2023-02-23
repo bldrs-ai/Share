@@ -60,4 +60,7 @@ module.exports = {
     '<rootDir>/src/setupTests.js',
     '@alex_neo/jest-expect-message',
   ],
+  snapshotSerializers: [
+    'jest-three',
+  ],
 }

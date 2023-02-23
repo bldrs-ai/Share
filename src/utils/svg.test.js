@@ -1,3 +1,4 @@
+import {toJSON} from 'jest-three'
 // eslint-disable-next-line no-unused-vars
 import {getSVGGroup, getSVGMesh} from './svg'
 import {mockLoadedSvgObj, mockShapes} from '../__mocks__/svg'
@@ -55,7 +56,7 @@ describe('svg', () => {
       }
     })
     const svgGroup = await getSVGGroup({url: 'fake'})
-    expect(svgGroup.children.length).toBe(1)
+    expect(toJSON(svgGroup)).toMatchSnapshot()
   })
 
   // TODO: Jest doesn't support `onload` of image tag, need to find a solution
