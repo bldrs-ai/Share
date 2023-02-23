@@ -80,6 +80,7 @@ export default function CadView({
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
+  const isAuthCompleted = useStore((state) => state.isAuthCompleted)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
@@ -103,7 +104,7 @@ export default function CadView({
     (async () => {
       await onViewer()
     })()
-  }, [viewer])
+  }, [viewer, isAuthCompleted, accessToken])
 
 
   // searchParams changes in parent (ShareRoutes) from user and
@@ -204,9 +205,11 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
-    await onModel(tmpModelRef)
-    selectElementBasedOnFilepath(pathToLoad)
-    setModelReady(true)
+    if (tmpModelRef) {
+      await onModel(tmpModelRef)
+      selectElementBasedOnFilepath(pathToLoad)
+      setModelReady(true)
+    }
   }
 
 
@@ -237,6 +240,15 @@ export default function CadView({
    * @param {string} filepath
    */
   async function loadIfc(filepath) {
+    if (!isAuthCompleted) {
+      setLoadingMessage('Authenticating...')
+      if (!isLoading) {
+        setIsLoading(true)
+      }
+    } else {
+      return
+    }
+
     debug().log(`CadView#loadIfc: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
 
@@ -248,7 +260,9 @@ export default function CadView({
 
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
-    setIsLoading(true)
+    if (!isLoading) {
+      setIsLoading(true)
+    }
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.loadIfcUrl(
