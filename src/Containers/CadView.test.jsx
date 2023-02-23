@@ -21,6 +21,11 @@ jest.mock('react-router-dom', () => {
 
 
 describe('CadView', () => {
+  beforeAll(() => {
+    const {result} = renderHook(() => useStore((state) => state.setIsAuthCompleted))
+    result.current(true)
+  })
+
   afterEach(() => {
     jest.clearAllMocks()
   })
