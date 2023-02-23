@@ -8,7 +8,7 @@ import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-import {getSVGGroup} from '../utils/svg'
+import {getSvgGroup, loadSvgData} from '../utils/svg'
 import createComposer from './CustomPostProcessing'
 
 
@@ -95,17 +95,15 @@ export default class PlaceMark extends EventDispatcher {
     this.putDown = ({point, lookAt, fillColor = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
-      getSVGGroup({
-        url: '/icons/PlaceMark.svg',
-        fillColor,
-      }).then((group) => {
+      loadSvgData('/icons/PlaceMark.svg').then((svgData) => {
+        const group = getSvgGroup({svgData})
         group.position.copy(point)
         _scene.add(group)
         _placeMarks.push(group)
-        debug().log('PlaceMark#putDown#getSVGGroup: _placeMarks: ', _placeMarks)
+        debug().log('PlaceMark#putDown#getSvgGroup: _placeMarks: ', _placeMarks)
         const placeMarkMeshSet = this.getPlaceMarkMeshSet()
-        debug().log('PlaceMark#putDown#getSVGGroup: placeMarkMeshSet: ', placeMarkMeshSet)
-        debug().log('PlaceMark#putDown#getSVGGroup: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
+        debug().log('PlaceMark#putDown#getSvgGroup: placeMarkMeshSet: ', placeMarkMeshSet)
+        debug().log('PlaceMark#putDown#getSvgGroup: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
         outlineEffect.setSelection(placeMarkMeshSet)
       })
     }

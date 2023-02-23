@@ -1,5 +1,4 @@
 import {
-  LoadingManager,
   FileLoader,
   Group,
   MeshBasicMaterial,
@@ -9,7 +8,6 @@ import {
   Mesh,
   Box3,
   Texture,
-  CircleGeometry,
   LinearFilter,
   SpriteMaterial,
   Sprite,
@@ -19,16 +17,26 @@ import {assertDefined} from './assert'
 import debug from './debug'
 
 
-const svgLoadingManager = new LoadingManager()
-const svgLoader = new SVGLoader(svgLoadingManager)
-const fileLoadingManager = new LoadingManager()
-const fileLoader = new FileLoader(fileLoadingManager)
+const svgLoader = new SVGLoader()
+const fileLoader = new FileLoader()
+
+
+/**
+ * Wrapper for svgLoader.loadAsync
+ *
+ * @param {string} svgUrl
+ * @return {object}
+ */
+export async function loadSvgData(svgUrl) {
+  const svgData = await svgLoader.loadAsync(svgUrl)
+  return svgData
+}
 
 
 /**
  * Generate group using svg file
  *
- * @param {string} url svg file url starting from `public` folder
+ * @param {object} svgData
  * @param {string} fillColor color to fill group
  * @param {string} strokeColor color to draw strokes
  * @param {number} width
@@ -39,8 +47,8 @@ const fileLoader = new FileLoader(fileLoadingManager)
  * @param {boolean} fillShapesWireframe
  * @return {number} svg based group
  */
-export async function getSVGGroup({
-  url,
+export function getSvgGroup({
+  svgData,
   fillColor,
   strokeColor,
   width = 2,
@@ -50,12 +58,10 @@ export async function getSVGGroup({
   strokesWireframe = false,
   fillShapesWireframe = false,
 }) {
-  const svgData = await svgLoader.loadAsync(url)
   debug().log('svg#getSVGGroup: svgData: ', svgData)
   const paths = svgData.paths
   const group = new Group()
   const svgGroup = new Group()
-
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
     if (!fillColor) {
@@ -66,8 +72,11 @@ export async function getSVGGroup({
     }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
+      const color = new Color()
+      color.setStyle(fillColor)
+      color.convertSRGBToLinear()
       const material = new MeshBasicMaterial({
-        color: new Color().setStyle(fillColor).convertSRGBToLinear(),
+        color: color,
         opacity: path.userData.style.fillOpacity,
         transparent: true,
         side: DoubleSide,
@@ -86,8 +95,11 @@ export async function getSVGGroup({
     }
 
     if (drawStrokes && strokeColor !== undefined && strokeColor !== 'none') {
+      const color = new Color()
+      color.setStyle(strokeColor)
+      color.convertSRGBToLinear()
       const material = new MeshBasicMaterial({
-        color: new Color().setStyle(strokeColor).convertSRGBToLinear(),
+        color: color,
         opacity: path.userData.style.strokeOpacity,
         transparent: true,
         side: DoubleSide,
@@ -143,55 +155,6 @@ export async function getSVGGroup({
   group.scale.y *= - 1
   svgGroup.add(group)
   return svgGroup
-}
-
-
-/**
- * Generate mesh using svg file
- *
- * @param {string} url svg file url starting from `public` folder
- * @param {string} fillColor color to fill mesh
- * @param {number} radius
- * @return {number} svg based mesh
- */
-export async function getSVGMesh({
-  url,
-  fillColor,
-  radius = 2,
-}) {
-  assertDefined(url)
-  const svgData = await fileLoader.loadAsync(url)
-  debug().log('svg#getSVGMesh: svgData: ', svgData)
-  const parser = new DOMParser()
-  const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
-  debug().log('svg#getSVGMesh: svg: ', svg)
-  debug().log('svg#getSVGMesh: svg.width: ', svg.width)
-  debug().log('svg#getSVGMesh: svg.height: ', svg.height)
-  if (fillColor) {
-    svg.setAttribute('fill', fillColor)
-  }
-  const newSvgData = (new XMLSerializer()).serializeToString(svg)
-  debug().log('svg#getSVGMesh: newSvgData: ', newSvgData)
-  const canvas = document.createElement('canvas')
-  canvas.width = svg.width?.baseVal?.value
-  canvas.height = svg.height?.baseVal?.value
-  const ctx = canvas.getContext('2d')
-  return new Promise((resolve, reject) => {
-    const image = new Image()
-    const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
-    image.src = dataUrl
-    image.onload = function() {
-      ctx.drawImage(image, 0, 0)
-      const texture = new Texture(canvas)
-      texture.needsUpdate = true
-      // eslint-disable-next-line no-magic-numbers
-      const geometry = new CircleGeometry(radius, 50)
-      const material = new MeshBasicMaterial({map: texture, side: DoubleSide})
-      material.map.minFilter = LinearFilter
-      const mesh = new Mesh(geometry, material)
-      resolve(mesh)
-    }
-  })
 }
 
 

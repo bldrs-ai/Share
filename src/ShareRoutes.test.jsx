@@ -4,6 +4,9 @@ import {
   githubUrlOrPathToSharePath} from './ShareRoutes'
 
 
+jest.mock('three')
+
+
 const path = '/org/repo/branch/file.ifc'
 const pathAbc = '/org/repo/branch/a/b/c/file.ifc'
 const pathBlob = '/org/repo/blob/branch/file.ifc'

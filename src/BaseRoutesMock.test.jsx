@@ -3,6 +3,9 @@ import {MemoryRouter, Routes, Route} from 'react-router-dom'
 import {render} from '@testing-library/react'
 
 
+jest.mock('three')
+
+
 test('mockRoutes', () => {
   const testLabel = 'Test node label'
   const {getByText} = render(<MockRoutes contentElt={testLabel}/>)

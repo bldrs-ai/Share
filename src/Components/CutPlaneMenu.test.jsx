@@ -8,6 +8,9 @@ import model from '../__mocks__/MockModel.js'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
+jest.mock('three')
+
+
 describe('CutPlaneMenu', () => {
   it('Section Button', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
