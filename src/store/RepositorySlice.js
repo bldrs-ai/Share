@@ -11,6 +11,7 @@ export default function createRepositorySlice(set, get) {
     branches: [],
     repository: null,
     accessToken: '',
+    isAuthCompleted: false,
     modelPath: null,
     setRepository: (orgName, repoName) => set(() => ({
       repository: {
@@ -20,6 +21,7 @@ export default function createRepositorySlice(set, get) {
     })),
     setAccessToken: (token) => set(() => ({accessToken: token})),
     setBranches: (branches) => set(() => ({issues: branches})),
+    setIsAuthCompleted: (completed) => set(() => ({isAuthCompleted: completed === true})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
   }
 }
