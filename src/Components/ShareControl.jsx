@@ -14,6 +14,7 @@ import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import ShareIcon from '../assets/icons/Share.svg'
+import {Helmet} from 'react-helmet-async'
 
 
 /**
@@ -142,6 +143,9 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           marginTop: '10px',
         }}
         >
+          <Helmet>
+            <title>Share IFC Model — BLDRS</title>
+          </Helmet>
           <TextField
             value={String(window.location)}
             inputRef={urlTextFieldRef}
