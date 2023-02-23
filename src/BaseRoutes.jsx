@@ -31,7 +31,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix }/`
   const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
-  const setIsAuthCompleted = useStore((state) => state.isAuthCompleted)
+  const setIsAuthCompleted = useStore((state) => state.setIsAuthCompleted)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
