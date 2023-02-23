@@ -9905,6 +9905,13 @@ jest-snapshot@^29.3.1:
     pretty-format "^29.3.1"
     semver "^7.3.5"
 
+jest-three@^1.3.1:
+  version "1.3.1"
+  resolved "https://registry.yarnpkg.com/jest-three/-/jest-three-1.3.1.tgz#5c09f914d624719b4e2c2922f1ba97cdb07de98b"
+  integrity sha512-OlXW5ANV35Y6TL2RCQi313COQu4pL2usgVT2x8pbfrmi+wI3vRXEAN21IPBPJShDTws64PAsiPm6oz+dLIct3w==
+  dependencies:
+    ramda "0.26.1"
+
 jest-util@^26.6.2:
   version "26.6.2"
   resolved "https://registry.npmjs.org/jest-util/-/jest-util-26.6.2.tgz"
@@ -12570,6 +12577,11 @@ queue-microtask@^1.2.2:
   version "1.2.3"
   resolved "https://registry.npmjs.org/queue-microtask/-/queue-microtask-1.2.3.tgz"
   integrity sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==
+
+ramda@0.26.1:
+  version "0.26.1"
+  resolved "https://registry.yarnpkg.com/ramda/-/ramda-0.26.1.tgz#8d41351eb8111c55353617fc3bbffad8e4d35d06"
+  integrity sha512-hLWjpy7EnsDBb0p+Z3B7rPi3GDeRG5ZtiI33kJhTt+ORCd38AbAIjB/9zRIUoeTbE/AVX5ZkU7m6bznsvrf8eQ==
 
 ramda@^0.28.0:
   version "0.28.0"

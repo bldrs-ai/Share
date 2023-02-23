@@ -145,6 +145,8 @@ export default class PlaceMark extends EventDispatcher {
 
 
     if (context.renderer) {
+      // eslint-disable-next-line max-len
+      // This patch applies to https://github.com/IFCjs/web-ifc-viewer/blob/9ce3a42cb8d4ffd5b78b19d56f3b4fad2d1f3c0e/viewer/src/components/context/renderer/renderer.ts#L44
       context.renderer.update = this.newRendererUpdate()
     }
   }
