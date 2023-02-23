@@ -24,6 +24,7 @@ export default function Branches() {
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
   const modelPath = useStore((state) => state.modelPath)
+  const accessToken = useStore((state) => state.accessToken)
   const theme = useTheme()
 
 
@@ -34,7 +35,7 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const branchesData = await getBranches(repository)
+        const branchesData = await getBranches(repository, accessToken)
         const versionPathsTemp = []
         if (branchesData.data.length > 0) {
           setBranches(branchesData.data)
