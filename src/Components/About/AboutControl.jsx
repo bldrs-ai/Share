@@ -55,7 +55,7 @@ export default function AboutControl() {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
- * @return {React.Component} React component
+ * @return {React.ReactElement} React component
  */
 function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
