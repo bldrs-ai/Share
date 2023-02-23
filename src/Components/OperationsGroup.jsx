@@ -16,6 +16,7 @@ import ListIcon from '../assets/icons/List.svg'
 import MoonIcon from '../assets/icons/Moon.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
 import SunIcon from '../assets/icons/Sun.svg'
+import AppStoreIcon from '../assets/icons/AppStore.svg'
 
 
 /**
@@ -28,6 +29,8 @@ import SunIcon from '../assets/icons/Sun.svg'
 export default function OperationsGroup({deselectItems}) {
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const openDrawer = useStore((state) => state.openDrawer)
+  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
+  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
@@ -95,6 +98,12 @@ export default function OperationsGroup({deselectItems}) {
 
       {isModelInteractionGroupVisible &&
        <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title='Open App Store'
+           icon={<AppStoreIcon/>}
+           selected={isAppStoreOpen}
+           onClick={() => toggleAppStoreDrawer()}
+         />
          <TooltipIconButton
            title='Notes'
            icon={<NotesIcon/>}

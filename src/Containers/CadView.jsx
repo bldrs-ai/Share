@@ -10,6 +10,7 @@ import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import AppStoreSideDrawer from '../Components/SideDrawer/AppStoreSideDrawer'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -634,6 +635,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
           }}
         >
           <SideDrawer/>
+          <AppStoreSideDrawer/>
         </Box>
       </>
     ) : (
@@ -649,6 +651,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
       >
         <OperationsGroup deselectItems={deselectItems}/>
         <SideDrawer/>
+        <AppStoreSideDrawer/>
       </Box>
     )
   )
