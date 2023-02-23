@@ -70,7 +70,10 @@ export default function BaseRoutes({testElt = null}) {
         setIsAuthCompleted(true)
       })
     }
-  }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
+  }, [
+    basePath, installPrefix, location, navigation, getAccessTokenSilently,
+    isAuthenticated, isLoading, setAccessToken, setIsAuthCompleted,
+  ])
 
   return (
     <SentryRoutes>
