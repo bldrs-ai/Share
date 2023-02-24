@@ -11,18 +11,19 @@ import {
   LinearFilter,
   SpriteMaterial,
   Sprite,
+  ImageLoader,
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
-import debug from './debug'
 
 
 const svgLoader = new SVGLoader()
 const fileLoader = new FileLoader()
+const imageLoader = new ImageLoader()
 
 
 /**
- * Wrapper for svgLoader.loadAsync
+ * Get svg object from url
  *
  * @param {string} svgUrl
  * @return {object}
@@ -58,7 +59,6 @@ export function getSvgGroupFromObj({
   strokesWireframe = false,
   fillShapesWireframe = false,
 }) {
-  debug().log('svg#getSvgGroupFromObj: svgObj: ', svgObj)
   const paths = svgObj.paths
   const group = new Group()
   const svgGroup = new Group()
@@ -84,7 +84,6 @@ export function getSvgGroupFromObj({
         wireframe: fillShapesWireframe,
       })
       const shapes = SVGLoader.createShapes(path)
-      debug().log('svg#getSvgGroupFromObj: shapes: ', shapes)
 
       for (let j = 0; j < shapes.length; j++) {
         const shape = shapes[j]
@@ -121,9 +120,7 @@ export function getSvgGroupFromObj({
 
   const groupBox3 = new Box3()
   groupBox3.setFromObject(group)
-  debug().log('svg#getSvgGroupFromObj: groupBox3: ', groupBox3)
   const groupSize = groupBox3.max.sub(groupBox3.min)
-  debug().log('svg#getSvgGroupFromObj: groupSize: ', groupSize)
   let scaleX = 0
   let scaleY = 0
   if (width) {
@@ -147,7 +144,6 @@ export function getSvgGroupFromObj({
   if (!height) {
     height = scaleY * groupSize.y
   }
-  debug().log('svg#getSvgGroupFromObj: group scales: ', scaleX, scaleY, width, height)
   group.scale.x = scaleX
   group.scale.y = scaleY
   group.position.x = -width
@@ -177,7 +173,6 @@ export async function getSvgStrFromUrl(svgUrl) {
  * @return {HTMLElement}
  */
 export function getSvgElFromStr(svgStr) {
-  debug().log('svg#getSvgElFromStr: svgStr: ', svgStr)
   const parser = new DOMParser()
   const svgEl = parser.parseFromString(svgStr, 'image/svg+xml').documentElement
   return svgEl
@@ -209,31 +204,22 @@ export async function getSvgSpriteFromEl({
   if (width <= 0 && height <= 0) {
     width = height = 1
   }
-
-  debug().log('svg#getSvgSpriteFromEl: svgEl.width: ', svgEl.width)
-  debug().log('svg#getSvgSpriteFromEl: svgEl.height: ', svgEl.height)
   if (fillColor) {
     svgEl.setAttribute('fill', fillColor)
   }
-  const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
   const canvas = document.createElement('canvas')
   canvas.width = svgEl.width?.baseVal?.value
   canvas.height = svgEl.height?.baseVal?.value
   const ctx = canvas.getContext('2d')
-  return await new Promise((resolve, reject) => {
-    const image = new Image()
-    const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
-    image.src = dataUrl
-    debug().log('svg#getSvgSpriteFromEl: dataUrl: ', dataUrl)
-    image.onload = function() {
-      ctx.drawImage(image, 0, 0)
-      const texture = new Texture(canvas)
-      texture.needsUpdate = true
-      const material = new SpriteMaterial({map: texture, side: DoubleSide})
-      material.map.minFilter = LinearFilter
-      const sprite = new Sprite(material)
-      sprite.scale.set(width, height, 1.0)
-      resolve(sprite)
-    }
-  })
+  const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
+  const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
+  const image = await imageLoader.loadAsync(dataUrl)
+  ctx.drawImage(image, 0, 0)
+  const texture = new Texture(canvas)
+  texture.needsUpdate = true
+  const material = new SpriteMaterial({map: texture, side: DoubleSide})
+  material.map.minFilter = LinearFilter
+  const sprite = new Sprite(material)
+  sprite.scale.set(width, height, 1.0)
+  return sprite
 }
