@@ -3,20 +3,19 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
-import {CloseButton, FullScreenButton} from '../Buttons'
+import {CloseButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
 import PanelTitle from '../PanelTitle'
-import {AppStoreListing} from './AppStoreListing'
 
 /**
  * @param {object} props React props with children
  * @return {React.Component}
  */
-function PanelWithTitle(props) {
+export function PanelWithTitle(props) {
   const titleHeight = '3em'
   const paddingBottom = '0.6em'
   const theme = useTheme()
@@ -83,28 +82,6 @@ export function PropertiesPanel({includeGutter}) {
        <ItemProperties/> :
        <Typography variant='p'>Please select an element</Typography>
       }
-    </PanelWithTitle>
-  )
-}
-
-/** @return {React.Component} */
-export function AppStorePanel() {
-  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  return (
-    <PanelWithTitle title={'App Store'}
-      controlsGroup={
-        <>
-          <Box>
-            <FullScreenButton onClick={toggleAppStoreDrawer}/>
-            <CloseButton
-              onClick={toggleAppStoreDrawer}
-            />
-          </Box>
-        </>
-      }
-    >
-      {'Hello from store'}
-      <AppStoreListing/>
     </PanelWithTitle>
   )
 }

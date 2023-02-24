@@ -9,7 +9,7 @@ import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
-import {AppStorePanel} from './SideDrawerPanels'
+import {AppStorePanel} from './AppStorePanel'
 
 
 /**
@@ -26,11 +26,6 @@ export default function AppStoreSideDrawer() {
   const theme = useTheme()
   const thickness = 10
   const borderOpacity = 0.5
-
-
-  // useEffect(() => {
-  // }, [location])
-
 
   return (
     <Box

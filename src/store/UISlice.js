@@ -25,6 +25,7 @@ export default function createUISlice(set, get) {
     isAppStoreOpen: false,
     appStoreSidebarWidth: MOBILE_WIDTH,
     appStoreSidebarHeight: MOBILE_HEIGHT,
+    selectedStoreApp: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -57,5 +58,6 @@ export default function createUISlice(set, get) {
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),
     setAppStoreSidebarWidth: (newSidebarWidth) => set(() => ({appStoreSidebarWidth: newSidebarWidth})),
     setAppStoreSidebarHeight: (newSidebarHeight) => set(() => ({appStoreSidebarHeight: newSidebarHeight})),
+    setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),
   }
 }
