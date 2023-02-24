@@ -22,6 +22,8 @@ describe('svg', () => {
     const svgCanvas = document.createElement('canvas')
     const svgSprite = getSpriteFromSvgCanvas({svgCanvas})
     deletePropertyRecursive(svgSprite, 'uuid')
+    deletePropertyRecursive(svgSprite, 'images')
+    deletePropertyRecursive(svgSprite, 'image')
     deleteStringValueMatchRecursive(svgSprite, UUID_REGEX)
     expect(svgSprite).toMatchSnapshot()
   })
