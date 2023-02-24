@@ -159,21 +159,33 @@ export function getSvgGroup({
 
 
 /**
+ * Wrapper for fileLoader.loadAsync
+ *
+ * @param {string} svgUrl
+ * @return {string}
+ */
+export async function loadSvgStr(svgUrl) {
+  const svgStr = await fileLoader.loadAsync(svgUrl)
+  return svgStr
+}
+
+
+/**
  * Generate sprite using svg file
  *
- * @param {string} url svg file url starting from `public` folder
+ * @param {string} svgStr
  * @param {string} fillColor color to fill sprite
  * @param {number} width
  * @param {number} height
  * @return {number} svg based sprite
  */
 export async function getSvgSprite({
-  url,
+  svgStr,
   fillColor,
   width = 0,
   height = 0,
 }) {
-  assertDefined(url)
+  assertDefined(svgStr)
   if (width <= 0) {
     width = height
   }
@@ -183,10 +195,9 @@ export async function getSvgSprite({
   if (width <= 0 && height <= 0) {
     width = height = 1
   }
-  const svgData = await fileLoader.loadAsync(url)
-  debug().log('svg#getSvgSprite: svgData: ', svgData)
+  debug().log('svg#getSvgSprite: svgStr: ', svgStr)
   const parser = new DOMParser()
-  const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
+  const svg = parser.parseFromString(svgStr, 'image/svg+xml').documentElement
   debug().log('svg#getSvgSprite: svg.width: ', svg.width)
   debug().log('svg#getSvgSprite: svg.height: ', svg.height)
   if (fillColor) {
@@ -197,7 +208,7 @@ export async function getSvgSprite({
   canvas.width = svg.width.baseVal.value
   canvas.height = svg.height.baseVal.value
   const ctx = canvas.getContext('2d')
-  return new Promise((resolve, reject) => {
+  return await new Promise((resolve, reject) => {
     const image = new Image()
     const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
     image.src = dataUrl
