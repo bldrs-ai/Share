@@ -106,8 +106,17 @@ export async function closeIssue(repository, issueNumber, accessToken = '') {
  * @param {object} repository
  * @return {object} the branches.
  */
-export async function getBranches(repository) {
-  const branches = await getGitHub(repository, 'branches')
+export async function getBranches(repository, accessToken = '') {
+  const args = {}
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const branches = await getGitHub(repository, 'branches', args)
   debug().log('GitHub: branches: ', branches)
   return branches
 }
