@@ -25,7 +25,7 @@ const fileLoader = new FileLoader()
  * Wrapper for svgLoader.loadAsync
  *
  * @param {string} svgUrl
- * @return {SVGResult}
+ * @return {object}
  */
 export async function getSvgObjFromUrl(svgUrl) {
   const svgObj = await svgLoader.loadAsync(svgUrl)
@@ -217,8 +217,8 @@ export async function getSvgSpriteFromEl({
   }
   const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
   const canvas = document.createElement('canvas')
-  canvas.width = svgEl.width.baseVal.value
-  canvas.height = svgEl.height.baseVal.value
+  canvas.width = svgEl.width?.baseVal?.value
+  canvas.height = svgEl.height?.baseVal?.value
   const ctx = canvas.getContext('2d')
   return await new Promise((resolve, reject) => {
     const image = new Image()
