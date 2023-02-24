@@ -1,6 +1,7 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
+  postIssue,
 } from './GitHub'
 
 
@@ -54,4 +55,15 @@ describe('GitHub', () => {
       expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md?token=TESTTOKENFORNEWBRANCH')
     })
   })
+
+  describe('post to github', () => {
+    it('successfully post issue', async () => {
+      try {
+        await postIssue('pablo-mayrgundter', {title: 'title', body: 'body'}, 'accesstoken')
+      } catch (e) {
+        console.log('error')
+      }
+    })
+  })
 })
+

@@ -78,7 +78,7 @@ export async function postIssue(repository, payload, accessToken = '') {
  * Close Github issue
  *
  * @param {object} repository
- * @param {object} payload issue payload shall contain title and body
+ * @param {object} issueNumber issue number
  * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
  */
@@ -286,6 +286,7 @@ async function postGitHub(repository, path, args = {}) {
     repo: repository.name,
     ...args,
   })
+  console.log('response', res)
 
   return res
 }

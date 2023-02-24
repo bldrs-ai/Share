@@ -37,10 +37,10 @@ export default function NoteCardCreate({
 
 
   /**
-   * create issue takes in the title and body of the note
+   * create issue takes in the title and body of the note from the state
    *
    */
-  function isCreateNoteActive() {
+  function createNote() {
     // TODO(Oleg) noteIndex is used for note number :: need to introduce internal index system
     let noteIndex
     if (createdNotes) {
@@ -123,7 +123,7 @@ export default function NoteCardCreate({
           title='Submit'
           size='small'
           placement='bottom'
-          onClick={isCreateNoteActive}
+          onClick={createNote}
           icon={<Submit style={{width: '15px', height: '15px'}}/>}
         />
       </CardActions>
@@ -139,7 +139,7 @@ export default function NoteCardCreate({
  * @param {string} inputText tring to display as input
  * @param {string} setInputText function to save the current input string
  * @param {boolean} multiline is multiline input allowed
- * @param {string} maxLength maximum length of the input string
+ * @param {number} maxLength maximum length of the input string
  * @return {React.Component} React component
  */
 function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
