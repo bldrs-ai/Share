@@ -155,27 +155,28 @@ export function getSvgGroupFromObj({
 
 
 /**
- * Get svg string data from url
+ * Get svg canvas
  *
  * @param {string} svgUrl
- * @return {string}
+ * @param {string} fillColor
+ * @return {object}
  */
-export async function getSvgStrFromUrl(svgUrl) {
+export async function getSvgCanvas({svgUrl, fillColor}) {
   const svgStr = await fileLoader.loadAsync(svgUrl)
-  return svgStr
-}
-
-
-/**
- * Get svg element from string
- *
- * @param {string} svgStr
- * @return {HTMLElement}
- */
-export function getSvgElFromStr(svgStr) {
   const parser = new DOMParser()
   const svgEl = parser.parseFromString(svgStr, 'image/svg+xml').documentElement
-  return svgEl
+  if (fillColor) {
+    svgEl.setAttribute('fill', fillColor)
+  }
+  const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
+  const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
+  const imageTag = await imageLoader.loadAsync(dataUrl)
+  const canvas = document.createElement('canvas')
+  canvas.width = svgEl.width?.baseVal?.value
+  canvas.height = svgEl.height?.baseVal?.value
+  const ctx = canvas.getContext('2d')
+  ctx.drawImage(imageTag, 0, 0)
+  return canvas
 }
 
 
@@ -188,13 +189,12 @@ export function getSvgElFromStr(svgStr) {
  * @param {number} height
  * @return {number} svg based sprite
  */
-export async function getSvgSpriteFromEl({
-  svgEl,
-  fillColor,
+export function getSpriteFromSvgCanvas({
+  svgCanvas,
   width = 0,
   height = 0,
 }) {
-  assertDefined(svgEl)
+  assertDefined(svgCanvas)
   if (width <= 0) {
     width = height
   }
@@ -204,18 +204,7 @@ export async function getSvgSpriteFromEl({
   if (width <= 0 && height <= 0) {
     width = height = 1
   }
-  if (fillColor) {
-    svgEl.setAttribute('fill', fillColor)
-  }
-  const canvas = document.createElement('canvas')
-  canvas.width = svgEl.width?.baseVal?.value
-  canvas.height = svgEl.height?.baseVal?.value
-  const ctx = canvas.getContext('2d')
-  const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
-  const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
-  const image = await imageLoader.loadAsync(dataUrl)
-  ctx.drawImage(image, 0, 0)
-  const texture = new Texture(canvas)
+  const texture = new Texture(svgCanvas)
   texture.needsUpdate = true
   const material = new SpriteMaterial({map: texture, side: DoubleSide})
   material.map.minFilter = LinearFilter
