@@ -12,11 +12,6 @@ import {server} from './__mocks__/server'
 disableDebug()
 
 
-// TODO(pablo): This mock suppresses "WARNING: Multiple instances of
-// Three.js being imported", but why is it being included if
-// web-ifc-viewer is being mocked?
-jest.mock('three')
-
 // Establish API mocking before all tests.
 beforeAll(() => server.listen())
 

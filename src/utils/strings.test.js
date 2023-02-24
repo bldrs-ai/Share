@@ -1,5 +1,11 @@
 /* eslint-disable no-magic-numbers */
-import {findUrls, isNumeric, floatStrTrim, isNumber} from './strings'
+import {
+  findUrls,
+  floatStrTrim,
+  isNumber,
+  isNumeric,
+  matchUuid,
+} from './strings'
 
 
 describe('strings', () => {
@@ -65,5 +71,12 @@ describe('strings', () => {
     expect(floatStrTrim('12.300')).toStrictEqual(12.3)
     expect(floatStrTrim('12.000')).toStrictEqual(12)
     expect(floatStrTrim('-4.500826166251047')).toStrictEqual(-4.501)
+  })
+
+
+  it('matchUuid', () => {
+    expect(matchUuid('marry had a little lamb')).toBe(false)
+    expect(matchUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
+    expect(matchUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
   })
 })

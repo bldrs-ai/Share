@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r631",
+  "version": "1.0.0-r713",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -42,6 +42,7 @@
     "@octokit/rest": "^19.0.3",
     "@sentry/react": "^7.31.1",
     "@sentry/tracing": "^7.31.1",
+    "canvas": "^2.11.0",
     "clsx": "^1.2.1",
     "material-ui-popup-state": "^5.0.4",
     "matrix-widget-api": "^1.1.1",

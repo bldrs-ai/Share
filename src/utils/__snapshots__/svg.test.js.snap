@@ -1,0 +1,511 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
+{
+  "materials": [
+    {
+      "color": 16777215,
+      "colorWrite": true,
+      "depthFunc": 3,
+      "depthTest": true,
+      "depthWrite": true,
+      "map": undefined,
+      "side": 2,
+      "sizeAttenuation": true,
+      "stencilFail": 7680,
+      "stencilFunc": 519,
+      "stencilFuncMask": 255,
+      "stencilRef": 0,
+      "stencilWrite": false,
+      "stencilWriteMask": 255,
+      "stencilZFail": 7680,
+      "stencilZPass": 7680,
+      "transparent": true,
+      "type": "SpriteMaterial",
+      "uuid": undefined,
+      "wireframeLinecap": undefined,
+      "wireframeLinejoin": undefined,
+    },
+  ],
+  "metadata": {
+    "generator": "Object3D.toJSON",
+    "type": "Object",
+    "version": 4.5,
+  },
+  "object": {
+    "layers": 1,
+    "material": undefined,
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ],
+    "type": "Sprite",
+    "uuid": undefined,
+  },
+  "textures": [
+    {
+      "anisotropy": 1,
+      "center": [
+        0,
+        0,
+      ],
+      "encoding": 3000,
+      "flipY": true,
+      "format": 1023,
+      "magFilter": 1006,
+      "mapping": 300,
+      "minFilter": 1006,
+      "name": "",
+      "offset": [
+        0,
+        0,
+      ],
+      "premultiplyAlpha": false,
+      "repeat": [
+        1,
+        1,
+      ],
+      "rotation": 0,
+      "type": 1009,
+      "unpackAlignment": 4,
+      "uuid": undefined,
+      "wrap": [
+        1001,
+        1001,
+      ],
+    },
+  ],
+}
+`;
+
+exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
+{
+  "geometries": [
+    {
+      "curveSegments": 12,
+      "shapes": [
+        undefined,
+      ],
+      "type": "ShapeGeometry",
+      "uuid": undefined,
+    },
+  ],
+  "materials": [
+    {
+      "color": 0,
+      "colorWrite": true,
+      "depthFunc": 3,
+      "depthTest": true,
+      "depthWrite": true,
+      "reflectivity": 1,
+      "refractionRatio": 0.98,
+      "side": 2,
+      "stencilFail": 7680,
+      "stencilFunc": 519,
+      "stencilFuncMask": 255,
+      "stencilRef": 0,
+      "stencilWrite": false,
+      "stencilWriteMask": 255,
+      "stencilZFail": 7680,
+      "stencilZPass": 7680,
+      "transparent": true,
+      "type": "MeshBasicMaterial",
+      "uuid": undefined,
+    },
+  ],
+  "metadata": {
+    "generator": "Object3D.toJSON",
+    "type": "Object",
+    "version": 4.5,
+  },
+  "object": {
+    "children": [
+      {
+        "children": [
+          {
+            "geometry": undefined,
+            "layers": 1,
+            "material": undefined,
+            "matrix": [
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+              0,
+              0,
+              0,
+              0,
+              1,
+            ],
+            "type": "Mesh",
+            "uuid": undefined,
+          },
+        ],
+        "layers": 1,
+        "matrix": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+          0,
+          0,
+          0,
+          0,
+          1,
+        ],
+        "type": "Group",
+        "uuid": undefined,
+      },
+    ],
+    "layers": 1,
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ],
+    "type": "Group",
+    "uuid": undefined,
+  },
+  "shapes": [
+    {
+      "arcLengthDivisions": 200,
+      "autoClose": false,
+      "currentPoint": [
+        0,
+        0,
+      ],
+      "curves": [
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "CubicBezierCurve",
+          "v0": [
+            349.82,
+            44.801,
+          ],
+          "v1": [
+            272.496,
+            44.801,
+          ],
+          "v2": [
+            210,
+            107.375,
+          ],
+          "v3": [
+            210,
+            184.801,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "CubicBezierCurve",
+          "v0": [
+            210,
+            184.801,
+          ],
+          "v1": [
+            210,
+            202.582,
+          ],
+          "v2": [
+            215.184,
+            225.164,
+          ],
+          "v3": [
+            221.199,
+            240.801,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "LineCurve",
+          "v1": [
+            221.199,
+            240.801,
+          ],
+          "v2": [
+            349.999,
+            515.201,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "LineCurve",
+          "v1": [
+            349.999,
+            515.201,
+          ],
+          "v2": [
+            478.799,
+            240.801,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "CubicBezierCurve",
+          "v0": [
+            478.799,
+            240.801,
+          ],
+          "v1": [
+            484.846,
+            225.156,
+          ],
+          "v2": [
+            489.998,
+            202.59,
+          ],
+          "v3": [
+            489.998,
+            184.801,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "CubicBezierCurve",
+          "v0": [
+            489.998,
+            184.801,
+          ],
+          "v1": [
+            489.998,
+            107.375,
+          ],
+          "v2": [
+            427.15,
+            44.801,
+          ],
+          "v3": [
+            349.818,
+            44.801,
+          ],
+        },
+        {
+          "arcLengthDivisions": 200,
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "LineCurve",
+          "v1": [
+            349.818,
+            44.801,
+          ],
+          "v2": [
+            349.82,
+            44.801,
+          ],
+        },
+      ],
+      "holes": [
+        {
+          "arcLengthDivisions": 200,
+          "autoClose": false,
+          "currentPoint": [
+            0,
+            0,
+          ],
+          "curves": [
+            {
+              "arcLengthDivisions": 200,
+              "metadata": {
+                "generator": "Curve.toJSON",
+                "type": "Curve",
+                "version": 4.5,
+              },
+              "type": "CubicBezierCurve",
+              "v0": [
+                349.996,
+                117.602,
+              ],
+              "v1": [
+                387.113,
+                117.602,
+              ],
+              "v2": [
+                417.195,
+                147.637,
+              ],
+              "v3": [
+                417.195,
+                184.801,
+              ],
+            },
+            {
+              "arcLengthDivisions": 200,
+              "metadata": {
+                "generator": "Curve.toJSON",
+                "type": "Curve",
+                "version": 4.5,
+              },
+              "type": "CubicBezierCurve",
+              "v0": [
+                417.195,
+                184.801,
+              ],
+              "v1": [
+                417.195,
+                221.965,
+              ],
+              "v2": [
+                387.113,
+                252,
+              ],
+              "v3": [
+                349.996,
+                252,
+              ],
+            },
+            {
+              "arcLengthDivisions": 200,
+              "metadata": {
+                "generator": "Curve.toJSON",
+                "type": "Curve",
+                "version": 4.5,
+              },
+              "type": "CubicBezierCurve",
+              "v0": [
+                349.996,
+                252,
+              ],
+              "v1": [
+                312.879,
+                252,
+              ],
+              "v2": [
+                282.797,
+                221.965,
+              ],
+              "v3": [
+                282.797,
+                184.801,
+              ],
+            },
+            {
+              "arcLengthDivisions": 200,
+              "metadata": {
+                "generator": "Curve.toJSON",
+                "type": "Curve",
+                "version": 4.5,
+              },
+              "type": "CubicBezierCurve",
+              "v0": [
+                282.797,
+                184.801,
+              ],
+              "v1": [
+                282.797,
+                147.637,
+              ],
+              "v2": [
+                312.879,
+                117.602,
+              ],
+              "v3": [
+                349.996,
+                117.602,
+              ],
+            },
+            {
+              "arcLengthDivisions": 200,
+              "metadata": {
+                "generator": "Curve.toJSON",
+                "type": "Curve",
+                "version": 4.5,
+              },
+              "type": "LineCurve",
+              "v1": [
+                349.996,
+                117.602,
+              ],
+              "v2": [
+                349.996,
+                117.602,
+              ],
+            },
+          ],
+          "metadata": {
+            "generator": "Curve.toJSON",
+            "type": "Curve",
+            "version": 4.5,
+          },
+          "type": "Path",
+        },
+      ],
+      "type": "Shape",
+      "uuid": undefined,
+    },
+  ],
+}
+`;
