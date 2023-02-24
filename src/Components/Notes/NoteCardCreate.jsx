@@ -135,11 +135,11 @@ export default function NoteCardCreate({
 /**
  * Input
  *
- * @param {string} placeholder input placeholder
- * @param {string} inputText tring to display as input
- * @param {string} setInputText function to save the current input string
- * @param {boolean} multiline is multiline input allowed
- * @param {number} maxLength maximum length of the input string
+ * @property {string} placeholder input placeholder
+ * @property {string} inputText tring to display as input
+ * @property {string} setInputText function to save the current input string
+ * @property {boolean} multiline is multiline input allowed
+ * @property {number} maxLength maximum length of the input string
  * @return {React.Component} React component
  */
 function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
