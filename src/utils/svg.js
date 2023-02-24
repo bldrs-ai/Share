@@ -25,18 +25,18 @@ const fileLoader = new FileLoader()
  * Wrapper for svgLoader.loadAsync
  *
  * @param {string} svgUrl
- * @return {object}
+ * @return {SVGResult}
  */
-export async function loadSvgData(svgUrl) {
-  const svgData = await svgLoader.loadAsync(svgUrl)
-  return svgData
+export async function getSvgObjFromUrl(svgUrl) {
+  const svgObj = await svgLoader.loadAsync(svgUrl)
+  return svgObj
 }
 
 
 /**
  * Generate group using svg file
  *
- * @param {object} svgData
+ * @param {object} svgObj
  * @param {string} fillColor color to fill group
  * @param {string} strokeColor color to draw strokes
  * @param {number} width
@@ -47,8 +47,8 @@ export async function loadSvgData(svgUrl) {
  * @param {boolean} fillShapesWireframe
  * @return {number} svg based group
  */
-export function getSvgGroup({
-  svgData,
+export function getSvgGroupFromObj({
+  svgObj,
   fillColor,
   strokeColor,
   width = 2,
@@ -58,8 +58,8 @@ export function getSvgGroup({
   strokesWireframe = false,
   fillShapesWireframe = false,
 }) {
-  debug().log('svg#getSVGGroup: svgData: ', svgData)
-  const paths = svgData.paths
+  debug().log('svg#getSvgGroupFromObj: svgObj: ', svgObj)
+  const paths = svgObj.paths
   const group = new Group()
   const svgGroup = new Group()
   for (let i = 0; i < paths.length; i++) {
@@ -84,7 +84,7 @@ export function getSvgGroup({
         wireframe: fillShapesWireframe,
       })
       const shapes = SVGLoader.createShapes(path)
-      debug().log('svg#getSVGGroup: shapes: ', shapes)
+      debug().log('svg#getSvgGroupFromObj: shapes: ', shapes)
 
       for (let j = 0; j < shapes.length; j++) {
         const shape = shapes[j]
@@ -121,9 +121,9 @@ export function getSvgGroup({
 
   const groupBox3 = new Box3()
   groupBox3.setFromObject(group)
-  debug().log('svg#getSVGGroup: groupBox3: ', groupBox3)
+  debug().log('svg#getSvgGroupFromObj: groupBox3: ', groupBox3)
   const groupSize = groupBox3.max.sub(groupBox3.min)
-  debug().log('svg#getSVGGroup: groupSize: ', groupSize)
+  debug().log('svg#getSvgGroupFromObj: groupSize: ', groupSize)
   let scaleX = 0
   let scaleY = 0
   if (width) {
@@ -147,7 +147,7 @@ export function getSvgGroup({
   if (!height) {
     height = scaleY * groupSize.y
   }
-  debug().log('svg#getSVGGroup: group scales: ', scaleX, scaleY, width, height)
+  debug().log('svg#getSvgGroupFromObj: group scales: ', scaleX, scaleY, width, height)
   group.scale.x = scaleX
   group.scale.y = scaleY
   group.position.x = -width
@@ -159,33 +159,47 @@ export function getSvgGroup({
 
 
 /**
- * Wrapper for fileLoader.loadAsync
+ * Get svg string data from url
  *
  * @param {string} svgUrl
  * @return {string}
  */
-export async function loadSvgStr(svgUrl) {
+export async function getSvgStrFromUrl(svgUrl) {
   const svgStr = await fileLoader.loadAsync(svgUrl)
   return svgStr
 }
 
 
 /**
- * Generate sprite using svg file
+ * Get svg element from string
  *
  * @param {string} svgStr
+ * @return {HTMLElement}
+ */
+export function getSvgElFromStr(svgStr) {
+  debug().log('svg#getSvgElFromStr: svgStr: ', svgStr)
+  const parser = new DOMParser()
+  const svgEl = parser.parseFromString(svgStr, 'image/svg+xml').documentElement
+  return svgEl
+}
+
+
+/**
+ * Generate sprite using svg file
+ *
+ * @param {string} svgEl
  * @param {string} fillColor color to fill sprite
  * @param {number} width
  * @param {number} height
  * @return {number} svg based sprite
  */
-export async function getSvgSprite({
-  svgStr,
+export async function getSvgSpriteFromEl({
+  svgEl,
   fillColor,
   width = 0,
   height = 0,
 }) {
-  assertDefined(svgStr)
+  assertDefined(svgEl)
   if (width <= 0) {
     width = height
   }
@@ -195,24 +209,22 @@ export async function getSvgSprite({
   if (width <= 0 && height <= 0) {
     width = height = 1
   }
-  debug().log('svg#getSvgSprite: svgStr: ', svgStr)
-  const parser = new DOMParser()
-  const svg = parser.parseFromString(svgStr, 'image/svg+xml').documentElement
-  debug().log('svg#getSvgSprite: svg.width: ', svg.width)
-  debug().log('svg#getSvgSprite: svg.height: ', svg.height)
+
+  debug().log('svg#getSvgSpriteFromEl: svgEl.width: ', svgEl.width)
+  debug().log('svg#getSvgSpriteFromEl: svgEl.height: ', svgEl.height)
   if (fillColor) {
-    svg.setAttribute('fill', fillColor)
+    svgEl.setAttribute('fill', fillColor)
   }
-  const newSvgData = (new XMLSerializer()).serializeToString(svg)
+  const newSvgData = (new XMLSerializer()).serializeToString(svgEl)
   const canvas = document.createElement('canvas')
-  canvas.width = svg.width.baseVal.value
-  canvas.height = svg.height.baseVal.value
+  canvas.width = svgEl.width.baseVal.value
+  canvas.height = svgEl.height.baseVal.value
   const ctx = canvas.getContext('2d')
   return await new Promise((resolve, reject) => {
     const image = new Image()
     const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
     image.src = dataUrl
-    debug().log('svg#getSvgSprite: dataUrl: ', dataUrl)
+    debug().log('svg#getSvgSpriteFromEl: dataUrl: ', dataUrl)
     image.onload = function() {
       ctx.drawImage(image, 0, 0)
       const texture = new Texture(canvas)
