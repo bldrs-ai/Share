@@ -96,7 +96,7 @@ export default class PlaceMark extends EventDispatcher {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       loadSvgData('/icons/PlaceMark.svg').then((svgData) => {
-        const group = getSvgGroup({svgData})
+        const group = getSvgGroup({svgData, fillColor})
         group.position.copy(point)
         _scene.add(group)
         _placeMarks.push(group)
