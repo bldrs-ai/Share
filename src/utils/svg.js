@@ -167,7 +167,7 @@ export function getSvgGroup({
  * @param {number} height
  * @return {number} svg based sprite
  */
-export async function getSVGSprite({
+export async function getSvgSprite({
   url,
   fillColor,
   width = 0,
@@ -184,11 +184,11 @@ export async function getSVGSprite({
     width = height = 1
   }
   const svgData = await fileLoader.loadAsync(url)
-  debug().log('svg#getSVGSprite: svgData: ', svgData)
+  debug().log('svg#getSvgSprite: svgData: ', svgData)
   const parser = new DOMParser()
   const svg = parser.parseFromString(svgData, 'image/svg+xml').documentElement
-  debug().log('svg#getSVGSprite: svg.width: ', svg.width)
-  debug().log('svg#getSVGSprite: svg.height: ', svg.height)
+  debug().log('svg#getSvgSprite: svg.width: ', svg.width)
+  debug().log('svg#getSvgSprite: svg.height: ', svg.height)
   if (fillColor) {
     svg.setAttribute('fill', fillColor)
   }
@@ -201,7 +201,7 @@ export async function getSVGSprite({
     const image = new Image()
     const dataUrl = `data:image/svg+xml;base64,${window.btoa(unescape(encodeURIComponent(newSvgData)))}`
     image.src = dataUrl
-    debug().log('svg#getSVGSprite: dataUrl: ', dataUrl)
+    debug().log('svg#getSvgSprite: dataUrl: ', dataUrl)
     image.onload = function() {
       ctx.drawImage(image, 0, 0)
       const texture = new Texture(canvas)

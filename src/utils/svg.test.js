@@ -1,4 +1,5 @@
 import {deletePropertyRecursive, deleteStringValueMatchRecursive} from './objects'
+import {UUID_REGEX} from './strings'
 import {getSvgGroup} from './svg'
 
 
@@ -13,7 +14,7 @@ describe('svg', () => {
     const svgData = svgLoader.parse(svgBuf)
     const svgGroup = getSvgGroup({svgData})
     deletePropertyRecursive(svgGroup, 'uuid')
-    deleteStringValueMatchRecursive(svgGroup, /[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+/)
+    deleteStringValueMatchRecursive(svgGroup, UUID_REGEX)
     expect(svgGroup).toMatchSnapshot()
   })
 })
