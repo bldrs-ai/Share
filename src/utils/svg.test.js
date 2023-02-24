@@ -16,10 +16,4 @@ describe('svg', () => {
     deleteStringValueMatchRecursive(svgGroup, /[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+/)
     expect(svgGroup).toMatchSnapshot()
   })
-
-  // TODO: Jest doesn't support `onload` of image tag, need to find a solution
-  /*
-  it('test getSVGMesh', async () => {
-    const svgMesh = await getSVGMesh({url: 'fake'})
-  })*/
 })
