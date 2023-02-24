@@ -1,5 +1,104 @@
 // Jest Snapshot v1, https://goo.gl/fbAQLP
 
+exports[`svg getSpriteFromSvgCanvas snapshot of PlaceMarkSvg matches 1`] = `
+{
+  "images": [
+    {
+      "url": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASwAAACWCAYAAABkW7XSAAAABmJLR0QA/wD/AP+gvaeTAAAAxUlEQVR4nO3BMQEAAADCoPVPbQhfoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAOA1v9QAATX68/0AAAAASUVORK5CYII=",
+      "uuid": "7E1CA331-5BA5-4B8F-A0E8-BFCE5C48D46F",
+    },
+  ],
+  "materials": [
+    {
+      "color": 16777215,
+      "colorWrite": true,
+      "depthFunc": 3,
+      "depthTest": true,
+      "depthWrite": true,
+      "map": undefined,
+      "side": 2,
+      "sizeAttenuation": true,
+      "stencilFail": 7680,
+      "stencilFunc": 519,
+      "stencilFuncMask": 255,
+      "stencilRef": 0,
+      "stencilWrite": false,
+      "stencilWriteMask": 255,
+      "stencilZFail": 7680,
+      "stencilZPass": 7680,
+      "transparent": true,
+      "type": "SpriteMaterial",
+      "uuid": undefined,
+      "wireframeLinecap": undefined,
+      "wireframeLinejoin": undefined,
+    },
+  ],
+  "metadata": {
+    "generator": "Object3D.toJSON",
+    "type": "Object",
+    "version": 4.5,
+  },
+  "object": {
+    "layers": 1,
+    "material": undefined,
+    "matrix": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      1,
+    ],
+    "type": "Sprite",
+    "uuid": undefined,
+  },
+  "textures": [
+    {
+      "anisotropy": 1,
+      "center": [
+        0,
+        0,
+      ],
+      "encoding": 3000,
+      "flipY": true,
+      "format": 1023,
+      "image": "7E1CA331-5BA5-4B8F-A0E8-BFCE5C48D46F",
+      "magFilter": 1006,
+      "mapping": 300,
+      "minFilter": 1006,
+      "name": "",
+      "offset": [
+        0,
+        0,
+      ],
+      "premultiplyAlpha": false,
+      "repeat": [
+        1,
+        1,
+      ],
+      "rotation": 0,
+      "type": 1009,
+      "unpackAlignment": 4,
+      "uuid": undefined,
+      "wrap": [
+        1001,
+        1001,
+      ],
+    },
+  ],
+}
+`;
+
 exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
 {
   "geometries": [
@@ -417,5 +516,3 @@ exports[`svg getSvgGroupFromObj snapshot of PlaceMarkSvg matches 1`] = `
   ],
 }
 `;
-
-exports[`svg getSvgSpriteFromEl snapshot of PlaceMarkSvg matches 1`] = `Promise {}`;
