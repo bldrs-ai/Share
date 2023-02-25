@@ -42,6 +42,33 @@ describe('NavTree', () => {
     expect(getByText(testLabel)).toBeInTheDocument()
   })
 
+  it('Can hide element by eye icon', async () => {
+    const selectElementsMock = jest.fn()
+    const testLabel = 'Test node label'
+    const ifcElementMock = newMockStringValueElt(testLabel)
+    const {result} = renderHook(() => useStore((state) => state))
+    const viewer = new IfcViewerAPIExtended()
+    await act(() => {
+      result.current.setViewerStore(viewer)
+      result.current.updateHiddenStatus(1, false)
+    })
+    viewer.isolator.canBeHidden.mockReturnValue(true)
+    viewer.isolator.flattenChildren.mockReturnValue([ifcElementMock.expressID])
+    const {getByText, getByTestId} = render(
+        <NavTree
+          element={ifcElementMock}
+          pathPrefix={'/share/v/p/index.ifc'}
+          selectWithShiftClickEvents={selectElementsMock}
+        />)
+    const root = await getByText(testLabel)
+    const hideIcon = await getByTestId('hide-icon')
+    expect(root).toBeInTheDocument()
+    expect(hideIcon).toBeInTheDocument()
+    fireEvent.click(hideIcon)
+    expect(viewer.isolator.canBeHidden.mock.calls).toHaveLength(1)
+    expect(viewer.isolator.hideElementsById).toHaveBeenLastCalledWith([ifcElementMock.expressID])
+  })
+
   it('should select element on click', async () => {
     const selectElementsMock = jest.fn()
     const testLabel = 'Test node label'

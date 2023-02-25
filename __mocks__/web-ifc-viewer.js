@@ -3,6 +3,7 @@ import {makeTestTree} from '../src/utils/TreeUtils.test'
 
 
 jest.mock('../src/Infrastructure/IfcHighlighter')
+jest.mock('../src/Infrastructure/IfcIsolator')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 // Not sure why this is required, but otherwise these internal fields
@@ -67,11 +68,6 @@ const impl = {
         parser: {},
       },
     },
-  },
-  isolator: {
-    canBeHidden: jest.fn(() => {
-      return true
-    }),
   },
   clipper: {
     active: false,

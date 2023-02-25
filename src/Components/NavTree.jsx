@@ -43,7 +43,7 @@ const NavTreePropTypes = {
   /**
    * Determines if the tree node has a hide icon.
    */
-  hasHideIcon: PropTypes.bool.isRequired,
+  hasHideIcon: PropTypes.bool,
 }
 
 /**
@@ -55,7 +55,7 @@ function HideIcon({elementId}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const viewer = useStore((state) => state.viewer)
+  const viewer = useStore((state) => state.viewerStore)
 
   const toggleHide = () => {
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
@@ -75,7 +75,7 @@ function HideIcon({elementId}) {
   }
 
   const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
-  return <FontAwesomeIcon style={iconStyle} onClick={toggleHide} icon={icon}/>
+  return <FontAwesomeIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide} icon={icon}/>
 }
 
 /**
@@ -119,15 +119,10 @@ export default function NavTree({
 
     const handleExpansionClick = (event) => handleExpansion(event)
 
-    // const [selectedElement, setSelectedElement] = useState(null)
-
-    // const hiddenElements = useStore((state) => state.hiddenElements)
-
     const handleSelectionClick = (event) => {
       handleSelection(event)
       selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
-
 
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
