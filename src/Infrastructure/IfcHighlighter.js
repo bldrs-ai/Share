@@ -1,8 +1,7 @@
-import {EffectComposer} from 'postprocessing'
+import {EffectComposer, BlendFunction} from 'postprocessing'
 import {Mesh} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import createComposer from './CustomPostProcessing'
-
+import CustomPostProcessor from './CustomPostProcessor'
 
 /**
  *  Overrides the default render functionality in the viewer
@@ -11,21 +10,26 @@ import createComposer from './CustomPostProcessing'
 export default class IfcHighlighter {
   highlightedMeshes = null
   _selectionOutlineEffect = null
-  _isolationOutlineEffect = null
+
   /**
    * constructs new class
    *
    * @param {IfcContext} context of the viewer
    */
   constructor(context) {
-    // override the viewer rendering pipeline
-    const renderer = context.getRenderer()
-    const scene = context.getScene()
-    const camera = context.getCamera()
-    const {composer, selectionOutlineEffect, isolationOutlineEffect} = createComposer(renderer, scene, camera)
-    this._selectionOutlineEffect = selectionOutlineEffect
-    this._isolationOutlineEffect = isolationOutlineEffect
-    context.renderer.update = newUpdateFunction(context, composer)
+    this._selectionOutlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('highlighter', {
+      blendFunction: BlendFunction.SCREEN,
+      edgeStrength: 1.5,
+      pulseSpeed: 0.0,
+      visibleEdgeColor: 0xc7c7c7,
+      hiddenEdgeColor: 0xff9b00,
+      height: window.innerHeight,
+      windth: window.innerWidth,
+      blur: false,
+      xRay: true,
+      opacity: 1,
+    })
+    context.renderer.update = newUpdateFunction(context, CustomPostProcessor.getInstance.getComposer)
   }
 
 
@@ -36,15 +40,6 @@ export default class IfcHighlighter {
    */
   setHighlighted(meshes) {
     this._selectionOutlineEffect.setSelection(meshes ?? [])
-  }
-
-  /**
-   * Outlines temporary isolated elements in scene
-   *
-   * @param {Mesh[]} geometry meshes
-   */
-  setIsolated(meshes) {
-    this._isolationOutlineEffect.setSelection(meshes ?? [])
   }
 }
 

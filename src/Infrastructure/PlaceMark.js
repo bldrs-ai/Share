@@ -9,7 +9,8 @@ import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
-import createComposer from './CustomPostProcessing'
+import CustomPostProcessor from './CustomPostProcessor'
+import {BlendFunction} from 'postprocessing'
 
 
 /**
@@ -25,8 +26,19 @@ export default class PlaceMark extends EventDispatcher {
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
     const _scene = context.getScene()
-    const _renderer = context.getRenderer()
-    const {composer, selectionOutlineEffect} = createComposer(_renderer, _scene, _camera)
+    const outlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('placemark', {
+      blendFunction: BlendFunction.SCREEN,
+      edgeStrength: 1.5,
+      pulseSpeed: 0.0,
+      visibleEdgeColor: 0xc7c7c7,
+      hiddenEdgeColor: 0xff9b00,
+      height: window.innerHeight,
+      windth: window.innerWidth,
+      blur: false,
+      xRay: true,
+      opacity: 1,
+    })
+    const composer = CustomPostProcessor.getInstance.getComposer
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -104,7 +116,7 @@ export default class PlaceMark extends EventDispatcher {
         const placeMarkMeshSet = this.getPlaceMarkMeshSet()
         debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
         debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
-        selectionOutlineEffect.setSelection(placeMarkMeshSet)
+        outlineEffect.setSelection(placeMarkMeshSet)
       })
     }
 

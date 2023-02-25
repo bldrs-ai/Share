@@ -3,6 +3,7 @@ import IfcHighlighter from './IfcHighlighter'
 import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
+import CustomPostProcessor from './CustomPostProcessor'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -21,6 +22,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   /**  */
   constructor(options) {
     super(options)
+    const renderer = this.context.getRenderer()
+    const scene = this.context.getScene()
+    const camera = this.context.getCamera()
+    CustomPostProcessor.createInstance(renderer, scene, camera)
     this.highlighter = new IfcHighlighter(this.context)
     this.isolator = new IfcIsolator(this.context, this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])

@@ -3,6 +3,8 @@ import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
+import CustomPostProcessor from './CustomPostProcessor'
+import {BlendFunction} from 'postprocessing'
 
 /**
  *  Provides hiding, unhiding, isolation, and unisolation functionalities
@@ -24,6 +26,7 @@ export default class IfcIsolator {
   tempIsolationModeOn = false
   revealHiddenElementsMode = false
   hiddenMaterial = null
+  isolationOutlineEffect = null
 
   /**
    * Instantiates a new instance of IfcIsolator
@@ -35,6 +38,18 @@ export default class IfcIsolator {
     this.context = context
     this.viewer = viewer
     this.initHiddenMaterial()
+    this.isolationOutlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('isolator', {
+      blendFunction: BlendFunction.SCREEN,
+      edgeStrength: 5,
+      pulseSpeed: 0.0,
+      visibleEdgeColor: 0x00FFFF,
+      hiddenEdgeColor: 0x00FFFF,
+      height: window.innerHeight,
+      windth: window.innerWidth,
+      blur: false,
+      xRay: true,
+      opacity: 1,
+    })
   }
 
   /**
@@ -121,7 +136,7 @@ export default class IfcIsolator {
       customID: this.subsetCustomId,
     })
     this.context.items.pickableIfcModels.push(this.isolationSubset)
-    this.viewer.highlighter.setIsolated([this.isolationSubset])
+    this.isolationOutlineEffect.setSelection([this.isolationSubset])
   }
 
   /**
@@ -358,7 +373,7 @@ export default class IfcIsolator {
       this.context.getScene().add(this.ifcModel)
       this.context.items.pickableIfcModels.push(this.ifcModel)
     }
-    this.viewer.highlighter.setIsolated([])
+    this.isolationOutlineEffect.setSelection([])
   }
 
   /**
