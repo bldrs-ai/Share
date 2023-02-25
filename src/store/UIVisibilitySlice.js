@@ -14,7 +14,7 @@ export default function createUIVisibilitySlice(set, get) {
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
 
-    isAboutDialogSuppressed: true,
+    isAboutDialogSuppressed: false,
 
     setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
