@@ -1,0 +1,51 @@
+<!-- ORIGINAL SOURCE: https://javascriptbit.com/transfer-data-between-parent-window-iframe-channel-messaging-api/ -->
+
+<form id="iframe-form">
+  <label for="iframe-message"
+    >Send message to the parent
+    <input id="iframe-message" type="text" />
+  </label>
+  <button type="submit">Send</button>
+</form>
+<h2>Message received is shown here:</h2>
+<div id="message-from-parent"></div>
+</body>
+<script>
+
+  // child.js
+(function () {
+  var port2;
+
+  // Listen for the intial port transfer message
+  window.addEventListener("message", initPort);
+
+  // Setup the transfered port
+  function initPort(e) {
+    if (e.data === "init") {
+      port2 = e.ports[0];
+      port2.onmessage = onMessage;
+    } else {
+      var msgObj = e.data;
+      onMessage({
+        data: msgObj
+      });
+    }
+  }
+
+  // Handle messages received on port2
+  function onMessage(e) {
+    console.log(e)
+    var $messageContainer = document.querySelector("#message-from-parent");
+    $messageContainer.textContent = e.data.response;
+  }
+
+  // Sending message to the parent
+  var $form = document.querySelector("#iframe-form");
+  $form.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var message = document.querySelector("#iframe-message").value;
+    port2.postMessage(message);
+  });
+})();
+ 
+</script>
