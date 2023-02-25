@@ -135,7 +135,7 @@ describe('bldrs inside iframe', () => {
   })
 
 
-  it('should hide about dialog SuppressAboutDialogHandler-message emitted', () => {
+  it('should suppress about dialog SuppressAboutDialogHandler message with true value emitted', () => {
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
     const msg = {
       isSuppressed: true,
@@ -147,7 +147,7 @@ describe('bldrs inside iframe', () => {
   })
 
 
-  it('should hide about dialog SuppressAboutDialogHandler-message emitted', () => {
+  it('should not suppress about dialog SuppressAboutDialogHandler message with false value emitted', () => {
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
     const msg = {
       isSuppressed: false,
