@@ -10,7 +10,7 @@ import {
 /**
  * Create Postprocessing Effect Composer
  *
- * @return {object} containing both {composer, outlineEffect }
+ * @return {object} containing both {composer, selectionOutlineEffect, isolationOutlineEffect }
  */
 export default function createComposer(renderer, scene, camera) {
   const composer = new EffectComposer(renderer)

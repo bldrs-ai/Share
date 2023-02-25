@@ -101,3 +101,15 @@ export function floatStrTrim(str, floatDigits = 3) {
   }
   return val
 }
+
+
+export const UUID_REGEX = new RegExp(/[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+/)
+
+
+/**
+ * @param {string} str The string to match
+ * @return {boolean} True iff str looks like ADD77535-D1B6-49A9-915B-41343B08BF83
+ */
+export function matchUuid(str) {
+  return str.match(UUID_REGEX) !== null
+}

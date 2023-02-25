@@ -1,16 +1,14 @@
-import {Vector3} from 'three'
-import {makeTestTree} from '../src/utils/TreeUtils.test'
-
-
+jest.mock('three')
 jest.mock('../src/Infrastructure/IfcHighlighter')
 jest.mock('../src/Infrastructure/IfcIsolator')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
+
 
 // Not sure why this is required, but otherwise these internal fields
 // are not present in the instantiated IfcViewerAPIExtended.
 const loadedModel = {
   ifcManager: {
-    getSpatialStructure: jest.fn((eltId) => (makeTestTree())),
+    getSpatialStructure: jest.fn(),
     getProperties: jest.fn((eltId) => ({})),
   },
   getIfcType: jest.fn(),
@@ -79,7 +77,7 @@ const impl = {
     }),
     planes: [{
       plane: {
-        normal: new Vector3(1, 0, 0),
+        normal: jest.fn(),
         constant: 10,
       },
     }],

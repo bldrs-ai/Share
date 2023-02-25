@@ -1,6 +1,7 @@
 import React from 'react'
 import {ThemeProvider} from '@mui/material/styles'
 import useShareTheme from '../theme/Theme'
+import {HelmetProvider} from 'react-helmet-async'
 
 
 /**
@@ -9,9 +10,11 @@ import useShareTheme from '../theme/Theme'
  */
 export const MockComponent = ({children}) => {
   return (
-    <ThemeProvider theme={useShareTheme()}>
-      {children}
-    </ThemeProvider>
+    <HelmetProvider>
+      <ThemeProvider theme={useShareTheme()}>
+        {children}
+      </ThemeProvider>
+    </HelmetProvider>
   )
 }
 

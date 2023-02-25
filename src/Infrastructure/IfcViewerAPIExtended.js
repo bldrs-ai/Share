@@ -15,7 +15,7 @@ const viewRules = {
  * Extending the original IFCViewerFunctionality
  */
 export class IfcViewerAPIExtended extends IfcViewerAPI {
-  // TODO: might be usefull if we used a Set as well to handle large selections,
+  // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
   /**  */

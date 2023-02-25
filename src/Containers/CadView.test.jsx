@@ -18,9 +18,23 @@ jest.mock('react-router-dom', () => {
     useLocation: jest.fn(() => defaultLocationValue),
   }
 })
+jest.mock('postprocessing')
 
 
 describe('CadView', () => {
+  let viewer
+
+
+  // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
+  beforeEach(() => {
+    viewer = new IfcViewerAPIExtended()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    viewer.context.getDomElement = jest.fn(() => {
+      return document.createElement('div')
+    })
+  })
+
+
   afterEach(() => {
     jest.clearAllMocks()
   })
@@ -53,12 +67,10 @@ describe('CadView', () => {
     const targetEltId = testTree.children[0].expressID
     const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
-
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useState(modelPath))
     render(
         <ShareMock>
@@ -90,7 +102,6 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = new IfcViewerAPIExtended()
     render(
         <ShareMock>
           <CadView
@@ -120,7 +131,6 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
@@ -192,7 +202,6 @@ describe('CadView', () => {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
-    const viewer = new IfcViewerAPIExtended()
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElements(selectedIdsAsString)
@@ -273,8 +282,6 @@ describe('CadView', () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
-    const viewer = new IfcViewerAPIExtended()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     renderHook(() => useState(modelPath))
     render(
         <ShareMock>
