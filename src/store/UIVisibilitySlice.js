@@ -14,6 +14,8 @@ export default function createUIVisibilitySlice(set, get) {
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
 
+    isAboutDialogSuppressed: true,
+
     setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsNavigationPanelVisibile: (isVisible) => set(() => ({isNavigationPanelVisible: isVisible})),
@@ -21,5 +23,7 @@ export default function createUIVisibilitySlice(set, get) {
     setIsCollaborationGroupVisibile: (isVisible) => set(() => ({isCollaborationGroupVisible: isVisible})),
     setIsModelInteractionGroupVisibile: (isVisible) => set(() => ({isModelInteractionGroupVisible: isVisible})),
     setIsSettingsVisibile: (isVisible) => set(() => ({isSettingsVisible: isVisible})),
+
+    setIsAboutDialogSuppressed: (isSuppressed) => set(() => ({isAboutDialogSuppressed: isSuppressed})),
   }
 }
