@@ -9,6 +9,7 @@ import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardMedia from '@mui/material/CardMedia'
 import {CardActionArea} from '@mui/material'
+import {IFrameCommunicationChannel} from './AppStoreMessagesHandler'
 
 
 const StoreData = [
@@ -103,7 +104,15 @@ export function AppStoreIFrame({
       height: '100%',
     }}
     >
-      <iframe id='app-host' title={item.name} src={item.action} width='100%' height='100%'/>
+      <iframe id='app-host' title={item.name} src={item.action} width='100%' height='100%' onLoad={ConnectPort2ToIFrame}/>
     </Box>
   )
+}
+
+
+/**
+ * Creates a message channel between the current context and the hosted IFrame
+ */
+function ConnectPort2ToIFrame(event) {
+  new IFrameCommunicationChannel(event.target)
 }
