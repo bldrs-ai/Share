@@ -214,6 +214,7 @@ export default function CadView({
     createPlaceMark({
       context: viewer.context,
       oppositeObjects: [tmpModelRef],
+      postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)

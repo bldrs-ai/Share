@@ -1,6 +1,7 @@
 jest.mock('three')
 jest.mock('../src/Infrastructure/IfcHighlighter')
 jest.mock('../src/Infrastructure/IfcIsolator')
+jest.mock('../src/Infrastructure/CustomPostProcessor')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 

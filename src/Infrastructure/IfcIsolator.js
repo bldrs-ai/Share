@@ -3,7 +3,6 @@ import {IfcViewerAPIExtended} from './IfcViewerAPIExtended'
 import {unsortedArraysAreEqual, arrayRemove} from '../utils/arrays'
 import {Mesh, MeshLambertMaterial, DoubleSide} from 'three'
 import useStore from '../store/useStore'
-import CustomPostProcessor from './CustomPostProcessor'
 import {BlendFunction} from 'postprocessing'
 
 /**
@@ -38,7 +37,7 @@ export default class IfcIsolator {
     this.context = context
     this.viewer = viewer
     this.initHiddenMaterial()
-    this.isolationOutlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('isolator', {
+    this.isolationOutlineEffect = viewer.postProcessor.createOutlineEffect({
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 5,
       pulseSpeed: 0.0,

@@ -25,8 +25,8 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const renderer = this.context.getRenderer()
     const scene = this.context.getScene()
     const camera = this.context.getCamera()
-    CustomPostProcessor.createInstance(renderer, scene, camera)
-    this.highlighter = new IfcHighlighter(this.context)
+    this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
+    this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }

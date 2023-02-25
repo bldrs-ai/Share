@@ -9,7 +9,6 @@ import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
-import CustomPostProcessor from './CustomPostProcessor'
 import {BlendFunction} from 'postprocessing'
 
 
@@ -20,13 +19,13 @@ export default class PlaceMark extends EventDispatcher {
   /**
    * @param {IfcContext} context
    */
-  constructor({context}) {
+  constructor({context, postProcessor}) {
     super()
     debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
     const _scene = context.getScene()
-    const outlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('placemark', {
+    const outlineEffect = postProcessor.createOutlineEffect({
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 1.5,
       pulseSpeed: 0.0,
@@ -38,7 +37,7 @@ export default class PlaceMark extends EventDispatcher {
       xRay: true,
       opacity: 1,
     })
-    const composer = CustomPostProcessor.getInstance.getComposer
+    const composer = postProcessor.getComposer
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []

@@ -15,9 +15,10 @@ export default class IfcHighlighter {
    * constructs new class
    *
    * @param {IfcContext} context of the viewer
+   * @param {CustomPostProcessor} the post-processor
    */
-  constructor(context) {
-    this._selectionOutlineEffect = CustomPostProcessor.getInstance.createOutlineEffect('highlighter', {
+  constructor(context, postProcessor) {
+    this._selectionOutlineEffect = postProcessor.createOutlineEffect({
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 1.5,
       pulseSpeed: 0.0,
@@ -29,7 +30,7 @@ export default class IfcHighlighter {
       xRay: true,
       opacity: 1,
     })
-    context.renderer.update = newUpdateFunction(context, CustomPostProcessor.getInstance.getComposer)
+    context.renderer.update = newUpdateFunction(context, postProcessor.getComposer)
   }
 
 
