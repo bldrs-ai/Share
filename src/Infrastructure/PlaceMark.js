@@ -26,7 +26,7 @@ export default class PlaceMark extends EventDispatcher {
     const _camera = context.getCamera()
     const _scene = context.getScene()
     const _renderer = context.getRenderer()
-    const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
+    const {composer, selectionOutlineEffect} = createComposer(_renderer, _scene, _camera)
     const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
@@ -104,7 +104,7 @@ export default class PlaceMark extends EventDispatcher {
         const placeMarkMeshSet = this.getPlaceMarkMeshSet()
         debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
         debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
-        outlineEffect.setSelection(placeMarkMeshSet)
+        selectionOutlineEffect.setSelection(placeMarkMeshSet)
       })
     }
 

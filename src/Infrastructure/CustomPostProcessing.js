@@ -46,6 +46,7 @@ export default function createComposer(renderer, scene, camera) {
   const isolationOutlineEffect = new OutlineEffect(scene, camera, isolationEffectOptions)
   const selectionOutlinePass = new EffectPass(camera, selectionOutlineEffect)
   const isolationOutlinePass = new EffectPass(camera, isolationOutlineEffect)
+
   composer.addPass(selectionOutlinePass)
   composer.addPass(isolationOutlinePass)
 
