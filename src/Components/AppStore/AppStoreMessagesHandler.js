@@ -36,6 +36,9 @@ export class IFrameCommunicationChannel {
       case 'get.selectedElements':
         this.sendMessage(event.data, useStore.getState().selectedElements)
       break;
+      case 'get.loadedFile':
+        this.sendMessage(event.data, useStore.getState().loadedFileInfo)
+      break;
     } 
   }
 

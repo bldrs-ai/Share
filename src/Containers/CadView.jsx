@@ -85,7 +85,7 @@ export default function CadView({
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
-
+  const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
@@ -305,6 +305,7 @@ export default function CadView({
         (event) => {
           debug().log('CadView#loadLocalFile#event:', event)
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          setLoadedFileInfo({source: 'local', info: event.target.files})
           debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]

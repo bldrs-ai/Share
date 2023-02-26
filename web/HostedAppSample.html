@@ -1,50 +1,98 @@
 <!-- ORIGINAL SOURCE: https://javascriptbit.com/transfer-data-between-parent-window-iframe-channel-messaging-api/ -->
 
-<form id="iframe-form">
-  <label for="iframe-message"
-    >Send message to the parent
-    <input id="iframe-message" type="text" />
-  </label>
-  <button type="submit">Send</button>
-</form>
-<h2>Message received is shown here:</h2>
-<div id="message-from-parent"></div>
-</body>
-<script>
+<html lang="en">
 
-  // child.js
-(function () {
-  var port2;
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hosted App Sample</title>
+</head>
 
-  // Listen for the intial port transfer message
-  window.addEventListener("message", initPort);
+<body style="background-color: whitesmoke">
+  <form id="iframe-form">
+    <label for="iframe-message">Send message to the parent
+      <input id="iframe-message" type="text" />
+    </label>
+    <button type="submit">Send</button>
+  </form>
+  <button id="loadfile" type="">loadfile</button>
+  <h2>Message received is shown here:</h2>
+  <div id="message-from-parent"></div>
 
-  // Setup the transfered port
-  function initPort(e) {
-    if (e.data === "init") {
-      port2 = e.ports[0];
-      port2.onmessage = onMessage;
-    } else {
-      var msgObj = e.data;
-      onMessage({
-        data: msgObj
+
+  <script>
+    // child.js
+    (function () {
+      var port2;
+      // Listen for the intial port transfer message
+      window.addEventListener("message", initPort);
+
+      // Setup the transfered port
+      function initPort(e) {
+        if (e.data === "init") {
+          port2 = e.ports[0];
+          port2.onmessage = onMessage;
+        } else {
+          var msgObj = e.data;
+          onMessage({
+            data: msgObj
+          });
+        }
+      }
+
+      // Handle messages received on port2
+      function onMessage(e) {
+        console.log(e)
+        var $messageContainer = document.querySelector("#message-from-parent");
+        $messageContainer.textContent = e.data.response;
+        if(e.data.action ==='get.loadedFile' && e.data.response.source ==='local') {
+          readLocalFile(e.data.response.info[0], (r)=> { 
+            console.log(r.length)
+            $messageContainer.textContent = r
+          })
+        }
+      }
+
+      // Sending message to the parent
+      var $form = document.querySelector("#iframe-form");
+      $form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var message = document.querySelector("#iframe-message").value;
+        port2.postMessage(message);
       });
-    }
-  }
 
-  // Handle messages received on port2
-  function onMessage(e) {
-    var $messageContainer = document.querySelector("#message-from-parent");
-    $messageContainer.textContent = e.data.response;
-  }
+      // Sending message to the parent
+      var loadfileBtn = document.querySelector("#loadfile");
+      loadfileBtn.addEventListener("click", function (e) {
+        e.preventDefault();
+        // var message = document.querySelector("#iframe-message").value;
+        port2.postMessage('get.loadedFile');
+      });
 
-  // Sending message to the parent
-  var $form = document.querySelector("#iframe-form");
-  $form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var message = document.querySelector("#iframe-message").value;
-    port2.postMessage(message);
-  });
-})();
- 
-</script>
+
+      function readLocalFile(file, callback) {
+        if (!file) {
+          return;
+        }
+        let reader = new FileReader();
+        reader.onload = function (e) {
+          let contents = e.target.result;
+          callback(contents)
+        };
+        reader.readAsText(file);
+      }
+
+    })();
+
+
+    /*
+    var xmlhttp = new XMLHttpRequest();
+    xmlhttp.open('GET', 'blob:link', true);
+    xmlhttp.setRequestHeader('Content-type','application/x-www-form-urlencoded');
+    xmlhttp.responseType = 'arraybuffer/blob';
+    xmlhttp.send();*/
+  </script>
+</body>
+
+</html>
