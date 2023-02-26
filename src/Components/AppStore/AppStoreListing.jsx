@@ -10,34 +10,9 @@ import CardContent from '@mui/material/CardContent'
 import CardMedia from '@mui/material/CardMedia'
 import {CardActionArea} from '@mui/material'
 import {IFrameCommunicationChannel} from './AppStoreMessagesHandler'
+import AppStoreData from './AppStoreData.json'
 
 
-const StoreData = [
-  {
-    appName: 'vyzn',
-    description: 'Perform environemental analysis on your model',
-    image: 'https://www.vyzn.tech/wp-content/themes/stuiq-base/assets/images/logo.svg',
-    action: 'http://127.0.0.1:5500/web/HostedAppSample.html',
-  },
-  // {
-  //   appName: 'vyzn',
-  //   description: 'Perform environemental analysis on your model',
-  //   image: 'https://www.vyzn.tech/wp-content/themes/stuiq-base/assets/images/logo.svg',
-  //   action: 'http://127.0.0.1:5500/#/?widgetId=bldrs-share&userId=ai.bldrs-share',
-  // },
-  // {
-  //   appName: 'vyzn',
-  //   description: 'Perform environemental analysis on your model',
-  //   image: 'https://www.vyzn.tech/wp-content/themes/stuiq-base/assets/images/logo.svg',
-  //   action: 'http://127.0.0.1:5500/#/?widgetId=bldrs-share&userId=ai.bldrs-share',
-  // },
-  // {
-  //   appName: 'vyzn',
-  //   description: 'Perform environemental analysis on your model',
-  //   image: 'https://www.vyzn.tech/wp-content/themes/stuiq-base/assets/images/logo.svg',
-  //   action: 'http://127.0.0.1:5500/#/?widgetId=bldrs-share&userId=ai.bldrs-share',
-  // },
-]
 /** @return {React.Component} */
 export function AppStoreListing() {
   const theme = useTheme()
@@ -45,7 +20,7 @@ export function AppStoreListing() {
   return (
     <>
       <Grid container spacing={2}>
-        {StoreData.map((item, index) => (
+        {AppStoreData.map((item, index) => (
           <Grid item={true} xs={6} sm={6} md={6} key={index}>
             <AppStoreEntry
               clickHandler={setSelectedStoreApp}
@@ -76,6 +51,11 @@ export function AppStoreEntry({
             height="140"
             image={item.image}
             alt={item.name}
+            sx={{
+              objectFit: 'unset',
+              background: '#f0f0f0',
+              padding: '1em',
+            }}
           />
           <CardContent>
             <Typography variant="h5" component="div">
