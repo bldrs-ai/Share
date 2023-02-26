@@ -1,15 +1,12 @@
-import React, {useEffect, useRef} from 'react'
-import {useLocation} from 'react-router-dom'
+import React, {useRef} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
-import {hexToRgba} from '../../utils/color'
-import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from '../SideDrawer/HorizonResizerButton'
 import VerticalResizerButton from '../SideDrawer/VerticalResizerButton'
-import {AppStorePanel} from './AppStorePanel'
+import {AppPreviewPanel, AppStorePanel} from './AppStorePanel'
 
 
 /**
@@ -25,7 +22,7 @@ export default function AppStoreSideDrawer() {
   const sidebarRef = useRef(null)
   const theme = useTheme()
   const thickness = 10
-  const borderOpacity = 0.5
+  const selectedStoreApp = useStore((state) => state.selectedStoreApp)
 
   return (
     <Box
@@ -90,7 +87,10 @@ export default function AppStoreSideDrawer() {
               overflowY: 'auto',
             }}
           >
-            <AppStorePanel/>
+            {!selectedStoreApp ?
+            <AppStorePanel/> :
+            <AppPreviewPanel item={selectedStoreApp}/>
+            }
           </Box>
         </Box>
       </Paper>

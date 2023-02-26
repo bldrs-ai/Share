@@ -6,6 +6,7 @@ import {assertDefined} from '../utils/assert'
 import {useIsMobile} from './Hooks'
 import CloseIcon from '../assets/icons/Close.svg'
 import ExpandIcon from '../assets/icons/Expand.svg'
+import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
@@ -126,6 +127,22 @@ export function FullScreenButton({onClick}) {
       title='Full screen'
       onClick={onClick}
       icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
+      size='medium'
+    />
+  )
+}
+
+
+/**
+ * @property {Function} onClick Handler for close event.
+ * @return {React.Component}
+ */
+export function BackButton({onClick}) {
+  return (
+    <TooltipIconButton
+      title='Back'
+      onClick={onClick}
+      icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
     />
   )
