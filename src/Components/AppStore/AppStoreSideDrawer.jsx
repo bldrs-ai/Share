@@ -7,8 +7,8 @@ import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
-import HorizonResizerButton from './HorizonResizerButton'
-import VerticalResizerButton from './VerticalResizerButton'
+import HorizonResizerButton from '../SideDrawer/HorizonResizerButton'
+import VerticalResizerButton from '../SideDrawer/VerticalResizerButton'
 import {AppStorePanel} from './AppStorePanel'
 
 

@@ -34,7 +34,6 @@
 
   // Handle messages received on port2
   function onMessage(e) {
-    console.log(e)
     var $messageContainer = document.querySelector("#message-from-parent");
     $messageContainer.textContent = e.data.response;
   }

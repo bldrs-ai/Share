@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import {CloseButton, FullScreenButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {AppStoreListing, AppStoreIFrame} from './AppStoreListing'
-import {PanelWithTitle} from './SideDrawerPanels'
+import {PanelWithTitle} from '../SideDrawer/SideDrawerPanels'
 
 
 
