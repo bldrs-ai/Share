@@ -3,7 +3,6 @@ import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Grid from '@mui/material/Unstable_Grid2'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
@@ -15,7 +14,6 @@ import AppStoreData from './AppStoreData.json'
 
 /** @return {React.Component} */
 export function AppStoreListing() {
-  const theme = useTheme()
   const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)
   return (
     <>

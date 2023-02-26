@@ -288,6 +288,7 @@ export default function CadView({
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
+      updateLoadedFileInfo(uploadedFile, ifcURL)
       return loadedModel
     }
 
@@ -535,6 +536,25 @@ export default function CadView({
     }
   }
 
+
+  /**
+   * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {string} ifcUrl the final ifcUrl that was passed to the viewer
+   */
+  function updateLoadedFileInfo(uploadedFile, ifcUrl) {
+    if (uploadedFile) {
+      return
+    }
+    const githubRegex = /(raw.githubusercontent|github.com)/gi
+    if (ifcUrl.indexOf('/') === 0) {
+      setLoadedFileInfo({source: 'share', info: {
+        url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
+      }})
+    } else if (githubRegex.test(ifcUrl)) {
+      setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
+    }
+  }
 
   return (
     <Box

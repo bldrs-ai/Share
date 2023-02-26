@@ -23,7 +23,7 @@
 
   <script>
     // child.js
-    (function () {
+    (async function () {
       var port2;
       // Listen for the intial port transfer message
       var msgHandlers = {}
@@ -68,13 +68,18 @@
         port2.postMessage('getLoadedFile');
       });
 
-      msgHandlers['getLoadedFile'] = (response) => {
+      msgHandlers['getLoadedFile'] = async (response) => {
         if (!response) $messageContainer.textContent = "Received empty data"
         if (response.source === 'local') {
           readLocalFile(response.info[0], (r) => {
             $messageContainer.textContent = r
           })
-        }
+        } else if (response.source === 'github') {
+          $messageContainer.textContent = await (await fetch(response.info.url)).text()
+        } 
+        else if (response.source === 'share') {
+          $messageContainer.textContent = await (await fetch(response.info.url)).text()
+        } 
       }
       msgHandlers['getSelectedElements'] = (response) => {
         if (!response) $messageContainer.textContent = "Received empty data"
