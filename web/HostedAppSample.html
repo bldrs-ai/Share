@@ -1,4 +1,4 @@
-<!-- ORIGINAL SOURCE: https://javascriptbit.com/transfer-data-between-parent-window-iframe-channel-messaging-api/ -->
+<!-- was based on example: https://javascriptbit.com/transfer-data-between-parent-window-iframe-channel-messaging-api/ -->
 
 <html lang="en">
 
@@ -26,8 +26,9 @@
     (function () {
       var port2;
       // Listen for the intial port transfer message
+      var msgHandlers = {}
+      var $messageContainer = document.querySelector("#message-from-parent");
       window.addEventListener("message", initPort);
-
       // Setup the transfered port
       function initPort(e) {
         if (e.data === "init") {
@@ -44,13 +45,11 @@
       // Handle messages received on port2
       function onMessage(e) {
         console.log(e)
-        var $messageContainer = document.querySelector("#message-from-parent");
-        $messageContainer.textContent = e.data.response;
-        if(e.data.action ==='get.loadedFile' && e.data.response.source ==='local') {
-          readLocalFile(e.data.response.info[0], (r)=> { 
-            console.log(r.length)
-            $messageContainer.textContent = r
-          })
+        $messageContainer.textContent = `Processing response of type ${e.data.action}`;
+        
+        if (e?.data?.action && msgHandlers[e.data.action]
+          && typeof msgHandlers[e.data.action] === 'function') {
+          msgHandlers[e.data.action](e.data.response)
         }
       }
 
@@ -66,24 +65,34 @@
       var loadfileBtn = document.querySelector("#loadfile");
       loadfileBtn.addEventListener("click", function (e) {
         e.preventDefault();
-        // var message = document.querySelector("#iframe-message").value;
-        port2.postMessage('get.loadedFile');
+        port2.postMessage('getLoadedFile');
       });
 
-
-      function readLocalFile(file, callback) {
-        if (!file) {
-          return;
+      msgHandlers['getLoadedFile'] = (response) => {
+        if (!response) $messageContainer.textContent = "Received empty data"
+        if (response.source === 'local') {
+          readLocalFile(response.info[0], (r) => {
+            $messageContainer.textContent = r
+          })
         }
-        let reader = new FileReader();
-        reader.onload = function (e) {
-          let contents = e.target.result;
-          callback(contents)
-        };
-        reader.readAsText(file);
       }
-
+      msgHandlers['getSelectedElements'] = (response) => {
+        if (!response) $messageContainer.textContent = "Received empty data"
+        $messageContainer.textContent = response
+      }
     })();
+
+    function readLocalFile(file, callback) {
+      if (!file) {
+        return;
+      }
+      let reader = new FileReader();
+      reader.onload = function (e) {
+        let contents = e.target.result;
+        callback(contents)
+      };
+      reader.readAsText(file);
+    }
 
 
     /*

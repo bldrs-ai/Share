@@ -32,14 +32,16 @@ export class IFrameCommunicationChannel {
    * @param {*} event the data received from the iframe
    */
   messageHandler = (event) => {
-    switch(event.data) {
-      case 'get.selectedElements':
-        this.sendMessage(event.data, useStore.getState().selectedElements)
-      break;
-      case 'get.loadedFile':
+    switch (event.data) {
+      case 'getLoadedFile':
         this.sendMessage(event.data, useStore.getState().loadedFileInfo)
-      break;
-    } 
+        break
+      case 'getSelectedElements':
+        this.sendMessage(event.data, useStore.getState().selectedElements)
+        break
+      default:
+        break
+    }
   }
 
   /**
