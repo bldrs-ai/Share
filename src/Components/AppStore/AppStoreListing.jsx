@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useCallback} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Grid from '@mui/material/Unstable_Grid2'
@@ -73,6 +73,14 @@ export function AppStoreEntry({
 export function AppStoreIFrame({
   item,
 }) {
+  const appFrameRef = useCallback((elt) => {
+    if (elt) {
+      elt.addEventListener('load', () => {
+        new IFrameCommunicationChannel(elt)
+      })
+    }
+  }, [])
+
   return (
     <Box sx={{
       display: 'flex',
@@ -82,15 +90,13 @@ export function AppStoreIFrame({
       height: '100%',
     }}
     >
-      <iframe id='app-host' title={item.name} src={item.action} width='100%' height='100%' onLoad={ConnectPort2ToIFrame}/>
+      <iframe
+        ref={appFrameRef}
+        title={item.name}
+        src={item.action}
+        width='100%'
+        height='100%'
+      />
     </Box>
   )
-}
-
-
-/**
- * Creates a message channel between the current context and the hosted IFrame
- */
-function ConnectPort2ToIFrame(event) {
-  new IFrameCommunicationChannel(event.target)
 }
