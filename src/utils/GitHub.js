@@ -15,7 +15,9 @@ export async function getIssues(repository, accessToken = '') {
   const args = {}
   if (accessToken.length > 0) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
       ...args.headers,
     }
   }
@@ -42,9 +44,7 @@ export async function getIssue(repository, issueId, accessToken = '') {
 
   if (accessToken.length > 0) {
     args.headers = {
-      'authorization': `Bearer ${accessToken}`,
-      'if-modified-since': '',
-      'if-none-match': '',
+      authorization: `Bearer ${accessToken}`,
       ...args.headers,
     }
   }
