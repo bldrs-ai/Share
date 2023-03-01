@@ -97,7 +97,7 @@ export default function AboutGuide({setIsDialogDisplayed}) {
         >
           <a
             // eslint-disable-next-line max-len
-            href='https://deploy-preview-638--bldrs-share.netlify.app/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:71.223,-22.129,-55.609,7.344,-10.301,0.934::i:1605191024'
+            href='https://deploy-preview-638--bldrs-share.netlify.app/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:74.096,-15.214,-50.874,-0.156,-10.555,-7.485::i:1605443723'
             onClick={onClickLink}
           >
             <div style={{textDecoration: 'underline'}}>About</div>
