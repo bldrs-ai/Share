@@ -170,7 +170,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
       <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
       <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-      <MenuItem value={6}><Typography variant='p'>Logo</Typography></MenuItem>
+      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
     </TextField>
   )
 }
