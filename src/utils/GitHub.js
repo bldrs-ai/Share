@@ -42,7 +42,9 @@ export async function getIssue(repository, issueId, accessToken = '') {
 
   if (accessToken.length > 0) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
       ...args.headers,
     }
   }
