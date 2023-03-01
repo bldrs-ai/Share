@@ -70,7 +70,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent/>}
+      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
     />
@@ -83,7 +83,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  *
  * @return {React.ReactElement} React component
  */
-function AboutContent() {
+function AboutContent({setIsDialogDisplayed}) {
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
       <Helmet>
@@ -93,7 +93,7 @@ function AboutContent() {
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>
-      <AboutGuide/>
+      <AboutGuide setIsDialogDisplayed={setIsDialogDisplayed}/>
       <PrivacyControl/>
     </Box>)
 }

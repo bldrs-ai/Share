@@ -14,8 +14,15 @@ import ShareIcon from '../../assets/icons/Share.svg'
  *
  * @return {React.ReactComponent}
  */
-export default function AboutGuide() {
+export default function AboutGuide({setIsDialogDisplayed}) {
   const theme = useTheme()
+
+  /**
+   * Close About dialog when a link is clicked
+   */
+  function onClickLink() {
+    setIsDialogDisplayed(false)
+  }
   return (
     <Box
       sx={{
@@ -65,15 +72,15 @@ export default function AboutGuide() {
         >
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1506392033'
-            target='_new'
+            onClick={onClickLink}
           >
             <OpenIcon/> ← <span style={{textDecoration: 'underline'}}>Open</span>
           </a>
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
-            target='_new'
+            onClick={onClickLink}
           >
-            <span style={{textDecoration: 'underline'}}>Share</span> → <ShareIcon/>
+            <span style={{textDecoration: 'underline'}} >Share</span> → <ShareIcon/>
           </a>
         </Box>
         <div>Notes → <NotesIcon/></div>
@@ -90,7 +97,7 @@ export default function AboutGuide() {
         >
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-93.79,4.24,100.38,-43.48,15.73,-4.34::i:1148362525'
-            target='_new'
+            onClick={onClickLink}
           >
             <div style={{textDecoration: 'underline'}}>About</div>
           </a>
