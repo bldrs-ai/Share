@@ -118,6 +118,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc',
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
@@ -169,6 +170,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
       <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
       <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+      <MenuItem value={6}><Typography variant='p'>Logo</Typography></MenuItem>
     </TextField>
   )
 }

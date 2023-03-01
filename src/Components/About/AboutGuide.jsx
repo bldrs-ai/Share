@@ -81,14 +81,28 @@ export default function AboutGuide() {
           Properties → <ListIcon/>
         </div>
         <div>Section → <CutPlaneIcon/></div>
+        <Box
+          sx={{
+            position: 'relative',
+            bottom: '-3.9em',
+            right: '0em',
+          }}
+        >
+          <a
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-93.79,4.24,100.38,-43.48,15.73,-4.34::i:1148362525'
+            target='_new'
+          >
+            <div style={{textDecoration: 'underline'}}>About</div>
+          </a>
+        </Box>
       </Box>
       <Box
         sx={{
           'float': 'right',
-          'margin': '-1em 4em 0em 0em',
+          'margin': '-2.8em 7.5em 0em 0em',
           '& svg': {
-            width: '130px',
-            height: '100px',
+            width: '140px',
+            height: '110px',
           },
         }}
       >
