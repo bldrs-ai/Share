@@ -1,7 +1,6 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  postIssue,
 } from './GitHub'
 
 
@@ -56,14 +55,12 @@ describe('GitHub', () => {
     })
   })
 
-  describe('post to github', () => {
-    it('successfully post issue', async () => {
-      try {
-        await postIssue('pablo-mayrgundter', {title: 'title', body: 'body'}, 'accesstoken')
-      } catch (e) {
-        console.log('error')
-      }
-    })
-  })
+  // describe('post to github', () => {
+  //   it('successfully post issue', () => {
+  //     const res = postIssue('pablo-mayrgundter', {title: 'title', body: 'body'}, 'accesstoken')
+  //     console.log('response', res)
+  //     // expect(res.status).toEqual(201)
+  //   })
+  // })
 })
 

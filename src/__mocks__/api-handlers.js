@@ -107,8 +107,9 @@ export const handlers = [
 ]
 
 rest.post('https://api.github.com/repos/:org/:repo/issues/', (req, res, ctx) => {
-  console.log('in the github post')
-  return res(
-      ctx.status(httpOk),
-  )
+  const {repo, payload, accessTocken} = req.params
+  console.log('repo', repo)
+  console.log('payload', payload)
+  console.log('accessTocken', accessTocken)
+  console.log('req', req)
 })
