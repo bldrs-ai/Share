@@ -73,7 +73,8 @@ export async function postIssue(repository, payload, accessToken = '') {
       ...args.headers,
     }
   }
-  await postGitHub(repository, 'issues', args)
+  const res = await postGitHub(repository, 'issues', args)
+  return res
 }
 
 /**
@@ -288,8 +289,6 @@ async function postGitHub(repository, path, args = {}) {
     repo: repository.name,
     ...args,
   })
-  console.log('response', res)
-
   return res
 }
 

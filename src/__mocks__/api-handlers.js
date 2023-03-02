@@ -4,6 +4,7 @@ import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
 
 const httpOk = 200
 const httpNotFound = 404
+const created = 201
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
@@ -104,12 +105,19 @@ export const handlers = [
         }),
     )
   }),
-]
 
-rest.post('https://api.github.com/repos/:org/:repo/issues/', (req, res, ctx) => {
-  const {repo, payload, accessTocken} = req.params
-  console.log('repo', repo)
-  console.log('payload', payload)
-  console.log('accessTocken', accessTocken)
-  console.log('req', req)
-})
+  rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+    const {org, repo} = req.params
+    if (org !== 'bldrs-ai' || repo !== 'Share') {
+      return res(
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
+      )
+    }
+    return res(
+        ctx.status(created),
+    )
+  }),
+]
