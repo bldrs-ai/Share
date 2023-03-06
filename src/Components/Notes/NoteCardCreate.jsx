@@ -31,8 +31,8 @@ export default function NoteCardCreate({
   const [body, setBody] = useState('')
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
-  const createdNotes = useStore((state) => state.createdNotes)
-  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
+  // const createdNotes = useStore((state) => state.createdNotes)
+  // const setCreatedNotes = useStore((state) => state.setCreatedNotes)
   const theme = useTheme()
 
 
@@ -43,35 +43,35 @@ export default function NoteCardCreate({
    */
   function createNote() {
     // TODO(Oleg) noteIndex is used for note number :: need to introduce internal index system
-    let noteIndex
-    if (createdNotes) {
-      noteIndex = Object.keys(createdNotes).length
-    } else {
-      noteIndex = 1
-    }
+    // let noteIndex
+    // if (createdNotes) {
+    //   noteIndex = Object.keys(createdNotes).length
+    // } else {
+    //   noteIndex = 1
+    // }
     const issuePayload = {
       title,
       body,
     }
     postIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
-    const localNote = {
-      index: noteIndex,
-      id: noteIndex,
-      number: noteIndex,
-      title: title,
-      body: body,
-      date: new Date().toISOString(),
-      username: user ? user.name : 'username',
-      avatarUrl: user ? user.picture : '',
-      numberOfComments: '',
-      synchedNote: false,
-    }
-    if (createdNotes === null) {
-      setCreatedNotes([localNote])
-    } else {
-      setCreatedNotes([localNote, ...createdNotes])
-    }
+    // const localNote = {
+    //   index: noteIndex,
+    //   id: noteIndex,
+    //   number: noteIndex,
+    //   title: title,
+    //   body: body,
+    //   date: new Date().toISOString(),
+    //   username: user ? user.name : 'username',
+    //   avatarUrl: user ? user.picture : '',
+    //   numberOfComments: '',
+    //   synchedNote: false,
+    // }
+    // if (createdNotes === null) {
+    //   setCreatedNotes([localNote])
+    // } else {
+    //   setCreatedNotes([localNote, ...createdNotes])
+    // }
   }
 
   return (
