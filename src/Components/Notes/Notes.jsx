@@ -136,8 +136,7 @@ export default function Notes() {
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredNote, repository, setComments, accessToken])
+  }, [filteredNote, repository, setComments, accessToken, selectedNoteId])
 
 
   useEffect(() => {
