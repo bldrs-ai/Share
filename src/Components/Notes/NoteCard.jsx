@@ -66,10 +66,10 @@ export default function NoteCard({
   const cameraControls = useStore((state) => state.cameraControls)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const deletedNotes = useStore((state) => state.deletedNotes)
-  const notes = useStore((state) => state.notes)
-  const setNotes = useStore((state) => state.setNotes)
-  const setDeletedNotes = useStore((state) => state.setDeletedNotes)
+  // const deletedNotes = useStore((state) => state.deletedNotes)
+  // const notes = useStore((state) => state.notes)
+  // const setNotes = useStore((state) => state.setNotes)
+  // const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
@@ -147,14 +147,14 @@ export default function NoteCard({
    * @param {number} noteNumber obtained from github issue
    */
   function deleteNote(repository, accessToken, noteNumber) {
-    if (deletedNotes !== null) {
-      const localDeletedNotes = [...deletedNotes, noteNumber]
-      setDeletedNotes(localDeletedNotes)
-    } else {
-      setDeletedNotes([noteNumber])
-    }
-    const filterDeletedNote = notes.filter((note) => note.number !== noteNumber)
-    setNotes(filterDeletedNote)
+    // if (deletedNotes !== null) {
+    //   const localDeletedNotes = [...deletedNotes, noteNumber]
+    //   setDeletedNotes(localDeletedNotes)
+    // } else {
+    //   setDeletedNotes([noteNumber])
+    // }
+    // const filterDeletedNote = notes.filter((note) => note.number !== noteNumber)
+    // setNotes(filterDeletedNote)
     closeIssue(repository, noteNumber, accessToken)
   }
 
@@ -319,7 +319,8 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {!isComment && synchedNote &&
+        {!isComment &&
+        // synchedNote &&
         user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
