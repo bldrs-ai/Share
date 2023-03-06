@@ -23,7 +23,7 @@ export default function Notes() {
   const setNotes = useStore((state) => state.setNotes)
   // const createdNotes = useStore((state) => state.createdNotes)
   // const setCreatedNotes = useStore((state) => state.setCreatedNotes)
-  // const deletedNotes = useStore((state) => state.deletedNotes)
+  const deleteNote = useStore((state) => state.deletedNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
@@ -74,7 +74,7 @@ export default function Notes() {
 
     fetchNotes()
     console.log('fetch is triggered')
-  }, [setNotes, repository, accessToken, isCreateNoteActive])
+  }, [setNotes, repository, accessToken, isCreateNoteActive, deleteNote])
 
 
   useEffect(() => {
@@ -133,8 +133,8 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
-      {isCreateNoteActive && user && <NoteCardCreate/>}
-      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
+      {isCreateNoteActive && !user && <NoteCardCreate/>}
+      {/* {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>} */}
       {notes === null && <Loader type={'linear'}/> }
       {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/> }
       {notes && !selectedNoteId && !isCreateNoteActive ?

@@ -71,6 +71,7 @@ export default function NoteCard({
   // const setNotes = useStore((state) => state.setNotes)
   // const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const toggleDeleteNote = useStore((state) => state.toggleDeleteNote)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -155,6 +156,7 @@ export default function NoteCard({
     // }
     // const filterDeletedNote = notes.filter((note) => note.number !== noteNumber)
     // setNotes(filterDeletedNote)
+    toggleDeleteNote()
     closeIssue(repository, noteNumber, accessToken)
   }
 
