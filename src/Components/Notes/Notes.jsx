@@ -23,6 +23,7 @@ export default function Notes() {
     notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
+  const drawer = useStore((state) => state.drawer)
 
 
   useEffect(() => {
@@ -106,6 +107,13 @@ export default function Notes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredNote, repository, setComments, accessToken])
 
+
+  useEffect(() => {
+    if (drawer) {
+      drawer.scrollTop = 0
+    }
+  }, [drawer, selectedNoteId])
+
   return (
     <Paper
       elevation={0}
@@ -116,62 +124,62 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
-      {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && <NoContent/> }
+      {notes === null && <Loader type={'linear'}/>}
+      {notes && notes.length === 0 && <NoContent/>}
       {notes && !selectedNoteId ?
-       notes.map((issue, index) => {
-         return (
-           <NoteCard
-             embeddedUrl={issue.embeddedUrl}
-             index={issue.index}
-             id={issue.id}
-             key={index}
-             title={issue.title}
-             date={issue.date}
-             body={issue.body}
-             username={issue.username}
-             numberOfComments={issue.numberOfComments}
-             avatarUrl={issue.avatarUrl}
-             imageUrl={issue.imageUrl}
-           />
-         )
-       }) :
-       <>
-         {filteredNote ?
-          <NoteCard
-            embeddedUrl={filteredNote.embeddedUrl}
-            index={filteredNote.index}
-            id={filteredNote.id}
-            key={filteredNote.id}
-            title={filteredNote.title}
-            date={filteredNote.date}
-            body={filteredNote.body}
-            username={filteredNote.username}
-            numberOfComments={filteredNote.numberOfComments}
-            avatarUrl={filteredNote.avatarUrl}
-            imageUrl={filteredNote.imageUrl}
-          /> : null
-         }
-         {comments &&
-          comments.map((comment, index) => {
-            return (
-              <NoteCard
-                embeddedUrl={comment.embeddedUrl}
-                isComment={true}
-                index=''
-                id={comment.id}
-                key={comment.id}
-                title={index + 1}
-                date={comment.date}
-                body={comment.body}
-                username={comment.username}
-                avatarUrl={comment.avatarUrl}
-                imageUrl={comment.imageUrl}
-              />
-            )
-          })
-         }
-       </>
+        notes.map((issue, index) => {
+          return (
+            <NoteCard
+              embeddedUrl={issue.embeddedUrl}
+              index={issue.index}
+              id={issue.id}
+              key={index}
+              title={issue.title}
+              date={issue.date}
+              body={issue.body}
+              username={issue.username}
+              numberOfComments={issue.numberOfComments}
+              avatarUrl={issue.avatarUrl}
+              imageUrl={issue.imageUrl}
+            />
+          )
+        }) :
+        <>
+          {filteredNote ?
+            <NoteCard
+              embeddedUrl={filteredNote.embeddedUrl}
+              index={filteredNote.index}
+              id={filteredNote.id}
+              key={filteredNote.id}
+              title={filteredNote.title}
+              date={filteredNote.date}
+              body={filteredNote.body}
+              username={filteredNote.username}
+              numberOfComments={filteredNote.numberOfComments}
+              avatarUrl={filteredNote.avatarUrl}
+              imageUrl={filteredNote.imageUrl}
+            /> : null
+          }
+          {comments &&
+            comments.map((comment, index) => {
+              return (
+                <NoteCard
+                  embeddedUrl={comment.embeddedUrl}
+                  isComment={true}
+                  index=''
+                  id={comment.id}
+                  key={comment.id}
+                  title={index + 1}
+                  date={comment.date}
+                  body={comment.body}
+                  username={comment.username}
+                  avatarUrl={comment.avatarUrl}
+                  imageUrl={comment.imageUrl}
+                />
+              )
+            })
+          }
+        </>
       }
     </Paper>
   )
