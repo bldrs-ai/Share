@@ -19,11 +19,11 @@ export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
   const notes = useStore((state) => state.notes)
-  const synchNotes = useStore((state) => state.synchNotes)
+  // const synchNotes = useStore((state) => state.synchNotes)
   const setNotes = useStore((state) => state.setNotes)
-  const createdNotes = useStore((state) => state.createdNotes)
-  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
-  const deletedNotes = useStore((state) => state.deletedNotes)
+  // const createdNotes = useStore((state) => state.createdNotes)
+  // const setCreatedNotes = useStore((state) => state.setCreatedNotes)
+  // const deletedNotes = useStore((state) => state.deletedNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
@@ -45,7 +45,7 @@ export default function Notes() {
         const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
         let issueIndex = 0
-        issuesData.data.slice(0).map((issue, index) => {
+        issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
@@ -60,44 +60,20 @@ export default function Notes() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
-            synchedNote: true,
           })
         })
-
-        let synchedCreatedNotes = []
-        if (createdNotes !== null) {
-          synchedCreatedNotes =
-          createdNotes.filter(
-              (createdNote) => !fetchedNotes.some(
-                  (fetchedNote) =>
-                    createdNote.title === fetchedNote.title &&
-                    createdNote.body === fetchedNote.body ),
-          )
-          // update the list of created notes
-          setCreatedNotes(synchedCreatedNotes)
-        }
-
-        const combinedSynchedNotes = [
-          ...synchedCreatedNotes,
-          ...fetchedNotes,
-        ]
-
-        if (deletedNotes !== null) {
-          const filteredDeleted =
-          combinedSynchedNotes.filter(
-              (synchedNote) => !deletedNotes.includes(synchedNote.number),
-          )
-          setNotes(filteredDeleted)
+        if (fetchedNotes.length > 0) {
+          setNotes(fetchedNotes)
         } else {
-          setNotes(combinedSynchedNotes)
+          setNotes([])
         }
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
     }
+
     fetchNotes()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
+  }, [setNotes, repository, accessToken])
 
 
   useEffect(() => {
