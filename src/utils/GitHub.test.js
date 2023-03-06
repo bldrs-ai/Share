@@ -1,12 +1,11 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  // postIssue,
+  postIssue,
 } from './GitHub'
-// import {server} from '../__mocks__/server'
-// import {rest} from 'msw'
 
 
+const httpCreated = 201
 describe('GitHub', () => {
   describe('parseGitHubRepositoryURL', () => {
     it('throws an error if given a non-qualified URL', () => {
@@ -58,31 +57,11 @@ describe('GitHub', () => {
     })
   })
 
-  // describe('post to Github', () => {
-  //   it('return valid response when an issue is created', async () => {
-  //     const issuePayload = {
-  //       title: 'note title',
-  //       body: 'note body',
-  //     }
-
-  //     const httpOk = 200
-
-  //     server.use(
-  //         rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-  //           return res(
-  //               ctx.status(httpOk),
-  //           )
-  //         }),
-  //     )
-
-  //     // const res = await postIssue({orgName: 'bldrs-ai', name: 'Share', issuePayload})
-  //     const responseFromPostMethod = {
-  //       status: 200,
-  //       url: 'https://api.github.com/repos/bldrs-ai/Share/issues',
-  //       headers: {'x-powered-by': 'msw'},
-  //       data: '',
-  //     }
-  //     expect(res.status).toEqual(200)
-  //   })
-  // })
+  describe('post to github', () => {
+    it('successfully post note as an issue', async () => {
+      const res = await postIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
+      expect(res.status).toEqual(httpCreated)
+    })
+  })
 })
+

@@ -4,6 +4,7 @@ import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
 
 const httpOk = 200
 const httpNotFound = 404
+const httpCreated = 201
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
@@ -106,11 +107,17 @@ export const handlers = [
   }),
 
   rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-    // if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share' || req.params.issueNumber !== '17') {
-    //   return res(ctx.status(httpNotFound))
-    // }
+    const {org, repo} = req.params
+    if (org !== 'bldrs-ai' || repo !== 'Share') {
+      return res(
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
+      )
+    }
     return res(
-        ctx.status(httpOk),
+        ctx.status(httpCreated),
     )
   }),
 ]

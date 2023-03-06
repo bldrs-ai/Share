@@ -64,22 +64,21 @@ describe('NoteCard', () => {
     expect(showCamera).toBeInTheDocument()
   })
 
-  // it('Delete button is present', () => {
-  //   const id = 123
-  //   const index = 123
-  //   const username = 'Unit Testing'
-  //   mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+  it('Delete button is present', () => {
+    const id = 123
+    const index = 123
+    const username = 'testing'
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
-  //   const {getByTitle, debug} = render(
-  //       <ShareMock>
-  //         <NoteCard
-  //           id={id}
-  //           index={index}
-  //           username={username}
-  //           synched={true}
-  //         />
-  //       </ShareMock>)
-  //    debug()
-  //   // expect(getByTitle('Delete')).toBeInTheDocument()
-  // })
+    const {getByTitle} = render(
+        <ShareMock>
+          <NoteCard
+            id={id}
+            index={index}
+            username={username}
+            synched={true}
+          />
+        </ShareMock>)
+    expect(getByTitle('Delete')).toBeInTheDocument()
+  })
 })

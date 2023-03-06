@@ -69,7 +69,7 @@ export default function NotesNavBar() {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={<BackIcon style={{width: '16px', height: '16px'}}/>}
+           icon={<BackIcon/>}
          />
         }
       </Box>

@@ -15,7 +15,9 @@ export async function getIssues(repository, accessToken = '') {
   const args = {}
   if (accessToken.length > 0) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
       ...args.headers,
     }
   }
@@ -71,14 +73,15 @@ export async function postIssue(repository, payload, accessToken = '') {
       ...args.headers,
     }
   }
-  await postGitHub(repository, 'issues', args)
+  const res = await postGitHub(repository, 'issues', args)
+  return res
 }
 
 /**
  * Close Github issue
  *
  * @param {object} repository
- * @param {object} payload issue payload shall contain title and body
+ * @param {object} issueNumber issue number
  * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
  */
@@ -295,7 +298,6 @@ async function postGitHub(repository, path, args = {}) {
     repo: repository.name,
     ...args,
   })
-
   return res
 }
 

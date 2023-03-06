@@ -140,8 +140,11 @@ export default function NoteCard({
 
 
   /**
-   * Copies the issue url which contains the issue id, camera position
-   * and selected element path.
+   * deletes the note
+   *
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} noteNumber obtained from github issue
    */
   function deleteNote(repository, accessToken, noteNumber) {
     if (deletedNotes !== null) {
@@ -204,8 +207,8 @@ export default function NoteCard({
          />
         }
       </CardContent>
-      {embeddedCameraParams || numberOfComments > 0 ?
-        <CardActions
+      {(embeddedCameraParams || numberOfComments > 0) &&
+        <CardFooter
           id={id}
           issueNumber={issueNumber}
           username={username}
@@ -218,7 +221,7 @@ export default function NoteCard({
           deleteNote={deleteNote}
           isComment={isComment}
           synchedNote={synchedNote}
-        /> : null
+        />
       }
     </Paper>
   )
@@ -247,7 +250,7 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
-const CardActions = ({
+const CardFooter = ({
   id,
   issueNumber,
   username,

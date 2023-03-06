@@ -6,8 +6,7 @@ import NoteCardCreate from './NoteCardCreate'
 
 describe('NoteCardCreate', () => {
   it('NoteCardCreate', () => {
-    const {getByPlaceholderText, getByTitle, debug} = render(<ShareMock><NoteCardCreate/></ShareMock>)
-    debug()
+    const {getByPlaceholderText, getByTitle} = render(<ShareMock><NoteCardCreate/></ShareMock>)
     expect(getByPlaceholderText('Note Body')).toBeInTheDocument()
     expect(getByPlaceholderText('Note Title')).toBeInTheDocument()
     expect(getByTitle('Submit')).toBeInTheDocument()
