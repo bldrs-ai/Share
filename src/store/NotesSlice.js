@@ -22,7 +22,7 @@ export default function createNotesSlice(set, get) {
     setNotes: (notes) => set(() => ({notes: notes})),
     toggleSynchNotes: () => set((state) => ({synchNotes: !state.synchNotes})),
     toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),
-    toggleDeleteNote: () => set((state) => ({isCreateNoteActive: !state.deleteNote})),
+    toggleDeleteNote: () => set((state) => ({deleteNote: !state.deleteNote})),
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
     setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
     setComments: (comments) => set(() => ({comments: comments})),
