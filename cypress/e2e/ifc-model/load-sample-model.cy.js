@@ -17,12 +17,12 @@ describe('sample models', () => {
     })
 
     it('should display the sample models dialog', () => {
-      cy.findByTestId('open-ifc').realClick()
+      cy.findByRole('button', {name: 'Open IFC'}).realClick()
       cy.findByRole('dialog').contains('Sample Projects')
     })
 
     it('should load the Momentum model when selected', () => {
-      cy.findByTestId('open-ifc').realClick()
+      cy.findByRole('button', {name: 'Open IFC'}).realClick()
       cy.findByLabelText('Sample Projects').realClick()
       cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
       cy.findByRole('listbox').within(() => {
