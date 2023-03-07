@@ -3,7 +3,7 @@ describe('home page', () => {
     it('should display the about dialog', () => {
       cy.clearCookies()
       cy.visit('/')
-      cy.findByRole('dialog', {timeout: 300000})
+      cy.findByRole('dialog')
           .should('exist')
           .should('be.visible')
           .contains('build every thing together')
@@ -15,7 +15,7 @@ describe('home page', () => {
     it('should NOT display the about dialog', () => {
       cy.setCookie('isFirstTime', 'false')
       cy.visit('/')
-      cy.findByRole('dialog', {timeout: 300000})
+      cy.findByRole('dialog')
           .should('not.exist')
     })
   })
