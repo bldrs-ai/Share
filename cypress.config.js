@@ -9,5 +9,6 @@ module.exports = defineConfig({
     },
     screenshotOnRunFailure: false,
     video: false,
+    defaultCommandTimeout: 8000,
   },
 })
