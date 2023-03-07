@@ -22,6 +22,7 @@ export default function createUISlice(set, get) {
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
+    drawer: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -51,5 +52,6 @@ export default function createUISlice(set, get) {
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
     setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
+    setDrawer: (newDrawer) => set(() => ({drawer: newDrawer})),
   }
 }
