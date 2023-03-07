@@ -22,7 +22,6 @@ export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const theme = useTheme()
 
-
   return (
     <Box
       sx={{
@@ -39,7 +38,6 @@ export default function OpenModelControl({fileOpen}) {
           icon={<OpenIcon/>}
           placement={'top'}
           selected={isDialogDisplayed}
-          dataTestId='open-ifc'
         />
       </Paper>
       {isDialogDisplayed &&

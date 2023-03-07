@@ -24,17 +24,17 @@ export function TooltipIconButton({
   placement = 'left',
   selected = false,
   size = 'medium',
-  dataTestId = '',
 }) {
   assertDefined(title, onClick, icon)
   const isMobile = useIsMobile()
+
   return (
     <>
       {isMobile ?
        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
          {icon}
        </ToggleButton> :
-       <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
+       <Tooltip title={title} describeChild placement={placement}>
          <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
            {icon}
          </ToggleButton>
