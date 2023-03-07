@@ -9,6 +9,12 @@ import {disableDebug} from './utils/debug'
 import {server} from './__mocks__/server'
 
 
+// TODO(pablo): this is somehow implicitly referenced in all tests,
+// but wasn't included when we added it in #633.  This is a quick fixup.
+// eslint-disable-next-line
+import {Canvas} from 'canvas'
+
+
 disableDebug()
 
 
