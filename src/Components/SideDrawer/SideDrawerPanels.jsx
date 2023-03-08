@@ -31,7 +31,7 @@ export function PanelWithTitle(props) {
           borderBottom: `solid 1px ${headerBorderColor}`,
         }}
       >
-        <PanelTitle title={props.title} controlsGroup={props.controlsGroup}/>
+        <PanelTitle title={props.title} iconSrc={props.iconSrc} controlsGroup={props.controlsGroup}/>
       </Box>
       <Box
         sx={{

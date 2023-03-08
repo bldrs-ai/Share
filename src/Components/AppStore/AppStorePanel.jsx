@@ -32,6 +32,7 @@ export function AppPreviewPanel({item}) {
   const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)
   return (
     <PanelWithTitle title={item.appName}
+      iconSrc={item.icon}
       controlsGroup={
         <>
           <Box>
