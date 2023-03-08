@@ -1,12 +1,12 @@
 import React from 'react'
 import {render,
-  // act, renderHook,
+  act, renderHook,
   screen, fireEvent} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
-// import useStore from '../../store/useStore'
+import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
 import NoteCard from './NoteCard'
-// import {MOCK_NOTES} from './Notes.test'
+import {MOCK_NOTES} from '../../utils/GitHub'
 
 
 describe('NoteCard', () => {
@@ -86,37 +86,36 @@ describe('NoteCard', () => {
     expect(getByTitle('Delete')).toBeInTheDocument()
   })
 
-  // it('Delete is working', async () => {
-  //   const id = 123
-  //   const index = 123
-  //   const username = 'testing'
-  //   const title = 'Title'
-  //   const noteNumber = 1
-  //   const date = ''
-  //   const synchedNote = true
-  //   const {result} = renderHook(() => useStore((state) => state))
+  it('Delete is working', async () => {
+    const id = 123
+    const index = 123
+    const username = 'testing'
+    const title = 'Title'
+    const noteNumber = 1
+    const date = ''
+    const synchedNote = true
+    const {result} = renderHook(() => useStore((state) => state))
 
-  //   mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
-  //   await act(() => {
-  //     result.current.setNotes(MOCK_NOTES)
-  //     result.current.setRepository('bldrs-ai', 'Share')
-  //   })
-  //   const {getByTitle} = render(
-  //       <ShareMock>
-  //         <NoteCard
-  //           id={id}
-  //           index={index}
-  //           username={username}
-  //           synched={true}
-  //           noteNumber={noteNumber}
-  //           title={title}
-  //           date={date}
-  //           synchedNote={synchedNote}
-  //         />
-  //       </ShareMock>)
-  //   const deleteButton = getByTitle('Delete')
-  //   expect(deleteButton).toBeInTheDocument()
-  //   // fireEvent.click(deleteButton)
-  // })
+    await act(() => {
+      result.current.setNotes(MOCK_NOTES)
+    })
+    const {getByTitle} = render(
+        <ShareMock>
+          <NoteCard
+            id={id}
+            index={index}
+            username={username}
+            synched={true}
+            noteNumber={noteNumber}
+            title={title}
+            date={date}
+            synchedNote={synchedNote}
+          />
+        </ShareMock>)
+    const deleteButton = getByTitle('Delete')
+    expect(deleteButton).toBeInTheDocument()
+    fireEvent.click(deleteButton)
+  })
 })

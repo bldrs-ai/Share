@@ -94,7 +94,6 @@ export default function NoteCard({
     }
   }, [isMobile])
 
-
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
@@ -153,10 +152,6 @@ export default function NoteCard({
     } else {
       setDeletedNotes([noteNumber])
     }
-    console.log('repository', repository)
-    console.log('accessToken', accessToken)
-    console.log('noteNumber', noteNumber)
-    console.log('notes', notes)
 
     const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(filterDeletedNote)

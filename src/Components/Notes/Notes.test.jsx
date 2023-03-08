@@ -105,7 +105,7 @@ describe('IssueControl', () => {
 })
 
 
-export const MOCK_NOTES = [
+const MOCK_NOTES = [
   {
     embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
     index: 0,
