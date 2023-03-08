@@ -2,9 +2,11 @@ import {
   getDownloadURL,
   parseGitHubRepositoryURL,
   postIssue,
+  closeIssue,
 } from './GitHub'
 
 
+const httpOK = 200
 const httpCreated = 201
 describe('GitHub', () => {
   describe('parseGitHubRepositoryURL', () => {
@@ -62,6 +64,9 @@ describe('GitHub', () => {
       const res = await postIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
       expect(res.status).toEqual(httpCreated)
     })
+    it('successfully delete the note by closing the issue', async () => {
+      const res = await closeIssue({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
+      expect(res.status).toEqual(httpOK)
+    })
   })
 })
-
