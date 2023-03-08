@@ -144,6 +144,7 @@ export default function NoteCard({
    * @param {string} repository
    * @param {string} accessToken
    * @param {number} noteNumber obtained from github issue
+   * @return {object} return github return object
    */
   function deleteNote(repository, accessToken, noteNumberToDelete) {
     if (deletedNotes !== null) {
@@ -155,7 +156,9 @@ export default function NoteCard({
 
     const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(filterDeletedNote)
-    closeIssue(repository, noteNumberToDelete, accessToken)
+    const closeResponse = closeIssue(repository, noteNumberToDelete, accessToken)
+    console.log('closeResponse', closeResponse)
+    return closeResponse
   }
 
   const dateParts = date.split('T')
