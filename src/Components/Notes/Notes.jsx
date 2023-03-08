@@ -167,7 +167,7 @@ export default function Notes() {
              index={note.index}
              id={note.id}
              key={index}
-             issueNumber={note.number}
+             noteNumber={note.number}
              title={note.title}
              date={note.date}
              body={note.body}

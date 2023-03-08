@@ -1,8 +1,12 @@
 import React from 'react'
-import {render, screen, fireEvent} from '@testing-library/react'
+import {render,
+  // act, renderHook,
+  screen, fireEvent} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
+// import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
 import NoteCard from './NoteCard'
+// import {MOCK_NOTES} from './Notes.test'
 
 
 describe('NoteCard', () => {
@@ -81,4 +85,42 @@ describe('NoteCard', () => {
         </ShareMock>)
     expect(getByTitle('Delete')).toBeInTheDocument()
   })
+
+  // it('Delete is working', async () => {
+  //   const id = 123
+  //   const index = 123
+  //   const username = 'testing'
+  //   const title = 'Title'
+  //   const issueNumber = ''
+  //   // const avatarUrl = ''
+  //   // const body = ''
+  //   const date = ''
+  //   // const numberOfComments = null
+  //   // const expandedImage = true
+  //   // const isComment = false
+  //   const synchedNote = true
+  //   const {result} = renderHook(() => useStore((state) => state))
+
+  //   mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+  //   await act(() => {
+  //     result.current.setNotes(MOCK_NOTES)
+  //   })
+  //   const {getByTitle} = render(
+  //       <ShareMock>
+  //         <NoteCard
+  //           id={id}
+  //           index={index}
+  //           username={username}
+  //           synched={true}
+  //           issueNumber={issueNumber}
+  //           title={title}
+  //           date={date}
+  //           synchedNote={synchedNote}
+  //         />
+  //       </ShareMock>)
+  //   const deleteButton = getByTitle('Delete')
+  //   expect(deleteButton).toBeInTheDocument()
+  //   // fireEvent.click(deleteButton)
+  // })
 })

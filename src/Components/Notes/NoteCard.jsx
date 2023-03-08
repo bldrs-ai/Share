@@ -49,7 +49,7 @@ export default function NoteCard({
   index = null,
   username = '',
   title = 'Title',
-  issueNumber = '',
+  noteNumber = '',
   avatarUrl = '',
   body = '',
   date = '',
@@ -146,13 +146,18 @@ export default function NoteCard({
    * @param {string} accessToken
    * @param {number} noteNumber obtained from github issue
    */
-  function deleteNote(repository, accessToken, noteNumber) {
+  function deleteNote(repository, accessToken, noteNumberToDelete) {
     if (deletedNotes !== null) {
       const localDeletedNotes = [...deletedNotes, noteNumber]
       setDeletedNotes(localDeletedNotes)
     } else {
       setDeletedNotes([noteNumber])
     }
+    console.log('repository', repository)
+    console.log('accessToken', accessToken)
+    console.log('noteNumber', noteNumber)
+    console.log('notes', notes)
+
     const filterDeletedNote = notes.filter((note) => note.number !== noteNumber)
     setNotes(filterDeletedNote)
     closeIssue(repository, noteNumber, accessToken)
@@ -210,7 +215,7 @@ export default function NoteCard({
       {(embeddedCameraParams || numberOfComments > 0) &&
         <CardFooter
           id={id}
-          issueNumber={issueNumber}
+          noteNumber={noteNumber}
           username={username}
           selectCard={selectCard}
           numberOfComments={numberOfComments}
@@ -252,7 +257,7 @@ const ShowMore = ({onClick, expandText}) => {
 
 const CardFooter = ({
   id,
-  issueNumber,
+  noteNumber,
   username,
   onClickCamera,
   onClickShare,
@@ -326,7 +331,7 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={() => {
-              deleteNote(repository, accessToken, issueNumber)
+              deleteNote(repository, accessToken, noteNumber)
             }}
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
