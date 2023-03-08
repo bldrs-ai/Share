@@ -158,9 +158,9 @@ export default function NoteCard({
     console.log('noteNumber', noteNumber)
     console.log('notes', notes)
 
-    const filterDeletedNote = notes.filter((note) => note.number !== noteNumber)
+    const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(filterDeletedNote)
-    closeIssue(repository, noteNumber, accessToken)
+    closeIssue(repository, noteNumberToDelete, accessToken)
   }
 
   const dateParts = date.split('T')

@@ -91,13 +91,8 @@ describe('NoteCard', () => {
   //   const index = 123
   //   const username = 'testing'
   //   const title = 'Title'
-  //   const issueNumber = ''
-  //   // const avatarUrl = ''
-  //   // const body = ''
+  //   const noteNumber = 1
   //   const date = ''
-  //   // const numberOfComments = null
-  //   // const expandedImage = true
-  //   // const isComment = false
   //   const synchedNote = true
   //   const {result} = renderHook(() => useStore((state) => state))
 
@@ -105,6 +100,7 @@ describe('NoteCard', () => {
 
   //   await act(() => {
   //     result.current.setNotes(MOCK_NOTES)
+  //     result.current.setRepository('bldrs-ai', 'Share')
   //   })
   //   const {getByTitle} = render(
   //       <ShareMock>
@@ -113,7 +109,7 @@ describe('NoteCard', () => {
   //           index={index}
   //           username={username}
   //           synched={true}
-  //           issueNumber={issueNumber}
+  //           noteNumber={noteNumber}
   //           title={title}
   //           date={date}
   //           synchedNote={synchedNote}
