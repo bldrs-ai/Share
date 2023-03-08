@@ -12,7 +12,7 @@ import CircularProgress from '@mui/material/CircularProgress'
  */
 export default function Loader({type = 'linear'}) {
   return (
-    <Box sx={{width: '100%', alignItems: 'center', padding: '.5em 0'}}>
+    <Box sx={{width: '100%', alignItems: 'center'}}>
       {type === 'linear' &&
         <LinearProgress color="success" sx={{height: '8px', width: '100%', borderRadius: '5px'}}/>
       }

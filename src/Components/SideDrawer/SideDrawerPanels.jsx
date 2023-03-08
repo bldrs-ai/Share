@@ -59,9 +59,16 @@ function PanelWithTitle(props) {
 
 /** @return {React.Component} */
 export function NotesPanel() {
-  // TODO(pablo): const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  let title = selectedNoteId ? 'Note' : 'Notes'
+  if (isCreateNoteActive) {
+    title = 'Add a note'
+  }
+
   return (
-    <PanelWithTitle title={'Notes'} controlsGroup={<NotesNavBar/>} includeGutter={true}>
+    <PanelWithTitle title={title} controlsGroup={<NotesNavBar/>} includeGutter={true}>
       <Notes/>
     </PanelWithTitle>
   )
