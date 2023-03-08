@@ -146,7 +146,7 @@ export default function NoteCard({
    * @param {number} noteNumber obtained from github issue
    * @return {object} return github return object
    */
-  function deleteNote(repository, accessToken, noteNumberToDelete) {
+  async function deleteNote(repository, accessToken, noteNumberToDelete) {
     if (deletedNotes !== null) {
       const localDeletedNotes = [...deletedNotes, noteNumber]
       setDeletedNotes(localDeletedNotes)
@@ -156,8 +156,7 @@ export default function NoteCard({
 
     const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(filterDeletedNote)
-    const closeResponse = closeIssue(repository, noteNumberToDelete, accessToken)
-    console.log('closeResponse', closeResponse)
+    const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
     return closeResponse
   }
 

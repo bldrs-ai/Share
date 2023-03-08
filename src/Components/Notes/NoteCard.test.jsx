@@ -116,6 +116,7 @@ describe('NoteCard', () => {
         </ShareMock>)
     const deleteButton = getByTitle('Delete')
     expect(deleteButton).toBeInTheDocument()
-    fireEvent.click(deleteButton)
+    const res = fireEvent.click(deleteButton)
+    expect(res).toBe(true)
   })
 })

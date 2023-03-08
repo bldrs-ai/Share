@@ -653,7 +653,6 @@ export const MOCK_MODEL_PATH_LOCAL = {
   eltPath: '',
 }
 
-
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
 const octokit = new Octokit({
