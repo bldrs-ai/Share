@@ -99,12 +99,6 @@ export default function OperationsGroup({deselectItems}) {
       {isModelInteractionGroupVisible &&
        <ButtonGroup orientation='vertical'>
          <TooltipIconButton
-           title='Open App Store'
-           icon={<AppStoreIcon/>}
-           selected={isAppStoreOpen}
-           onClick={() => toggleAppStoreDrawer()}
-         />
-         <TooltipIconButton
            title='Notes'
            icon={<NotesIcon/>}
            selected={isNotesOn}
@@ -129,6 +123,12 @@ export default function OperationsGroup({deselectItems}) {
 
       {isSettingsVisible &&
        <ButtonGroup orientation='vertical'>
+         <TooltipIconButton
+           title='Open App Store'
+           icon={<AppStoreIcon/>}
+           selected={isAppStoreOpen}
+           onClick={() => toggleAppStoreDrawer()}
+         />
          <TooltipIconButton
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}
