@@ -39,6 +39,7 @@ export default function OperationsGroup({deselectItems}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
 
+
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null ||
