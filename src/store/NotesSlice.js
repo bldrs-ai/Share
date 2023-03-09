@@ -16,8 +16,8 @@ export default function createNotesSlice(set, get) {
     selectedNoteId: null,
     selectedNoteIndex: null,
     placeMark: null,
+    placeMarkId: null,
     placeMarkActivated: false,
-    placeMarkNoteId: null,
     setNotes: (notes) => set(() => ({notes: notes})),
     toggleSynchNotes: () => set((state) => ({synchNotes: !state.synchNotes})),
     toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),
@@ -27,7 +27,7 @@ export default function createNotesSlice(set, get) {
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
     setPlaceMark: (newPlaceMark) => set(() => ({placeMark: newPlaceMark})),
+    setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setPlaceMarkActivated: (newPlaceMarkActivated) => set(() => ({placeMarkActivated: newPlaceMarkActivated})),
-    setPlaceMarkNoteId: (newPlaceMarkNoteId) => set(() => ({placeMarkNoteId: newPlaceMarkNoteId})),
   }
 }

@@ -66,7 +66,7 @@ export default class PlaceMark extends EventDispatcher {
     this.onDrop = (event) => {
       debug().log('PlaceMark#onDrop: ', event)
       if (!_objects || !this.activated) {
-        return
+        return {}
       }
       updatePointer(event)
       const _intersections = []
@@ -87,7 +87,7 @@ export default class PlaceMark extends EventDispatcher {
         this.putDown({point, lookAt})
         return {point, lookAt}
       } else {
-        return null
+        return {}
       }
     }
 

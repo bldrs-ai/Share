@@ -18,8 +18,9 @@ import {roundCoord} from '../utils/math'
 export function usePlaceMark() {
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const setPlaceMarkId = useStore((state) => state.setPlaceMarkId)
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
-  const placeMarkNoteId = useStore((state) => state.placeMarkNoteId)
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
@@ -38,19 +39,20 @@ export function usePlaceMark() {
   const onSceneSingleTap = (event) => {
     if (event.shiftKey) {
       dropPlaceMark(event)
+      deactivatePlaceMark()
     }
   }
 
 
-  const setPlaceMarkActive = (flag) => {
+  const togglePlaceMarkActive = (id) => {
     if (placeMark) {
-      if (flag) {
-        placeMark.activate()
+      if (placeMarkId === id && placeMark.activated) {
+        deactivatePlaceMark()
       } else {
-        placeMark.deactivate()
+        activatePlaceMark()
       }
-      setPlaceMarkActivated(flag)
     }
+    setPlaceMarkId(id)
   }
 
 
@@ -71,14 +73,25 @@ export function usePlaceMark() {
   }, [placeMark])
 
 
-  const dropPlaceMark = (event) => {
-    setPlaceMarkActive(true) // To test place mark drop feature without icon
+  const activatePlaceMark = () => {
+    placeMark.activate()
+    setPlaceMarkActivated(true)
+  }
 
+
+  const deactivatePlaceMark = () => {
+    placeMark.deactivate()
+    setPlaceMarkActivated(false)
+  }
+
+
+  const dropPlaceMark = (event) => {
     if (placeMark) {
       const {point} = placeMark.onDrop(event)
-      if (point && placeMarkNoteId) {
+
+      if (point && placeMarkId) {
         debug().log('usePlaceMark#dropPlaceMark: point: ', point)
-        debug().log('usePlaceMark#dropPlaceMark: placeMarkNoteId: ', placeMarkNoteId)
+        debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
         const markArr = roundCoord(...point)
         debug().log('usePlaceMark#dropPlaceMark: markArr: ', markArr)
         addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
@@ -86,10 +99,8 @@ export function usePlaceMark() {
         debug().log('usePlaceMark#dropPlaceMark: placeMarkHash: ', placeMarkHash)
       }
     }
-
-    setPlaceMarkActive(false) // To test place mark drop feature without icon
   }
 
 
-  return {createPlaceMark, onSceneSingleTap, onSceneDoubleTap, setPlaceMarkActive}
+  return {createPlaceMark, onSceneSingleTap, onSceneDoubleTap, togglePlaceMarkActive}
 }

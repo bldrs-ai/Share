@@ -28,6 +28,7 @@ import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
 
 
 /**
@@ -72,6 +73,7 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -94,6 +96,7 @@ export default function NoteCard({
       setExpandImage(false)
     }
   }, [isMobile])
+
 
   useEffect(() => {
     if (selected && firstCamera) {
@@ -161,8 +164,11 @@ export default function NoteCard({
     return closeResponse
   }
 
+
   const dateParts = date.split('T')
   const theme = useTheme()
+
+
   return (
     <Paper
       elevation={1}
@@ -233,6 +239,8 @@ export default function NoteCard({
 
 const ShowMore = ({onClick, expandText}) => {
   const theme = useTheme()
+
+
   return (
     <Box
       sx={{
@@ -270,9 +278,14 @@ const CardFooter = ({
   const repository = useStore((state) => state.repository)
   const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
   const accessToken = useStore((state) => state.accessToken)
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
+  const {togglePlaceMarkActive} = usePlaceMark()
+
 
   return (
     <Box
@@ -322,16 +335,25 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
+        {/* {!isComment && synchedNote && user && user.nickname === username && */}
+        {/* TODO(Ron): Replace bottom line with above line when place mark URL store is completed */}
         {!isComment &&
-          <TooltipIconButton
-            title='PlaceMark'
-            size='small'
-            placement='bottom'
-            onClick={() => {
-              // TODO(Ron)
-            }}
-            icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
-          />
+          <Box sx={{
+            '& svg': {
+              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
+            },
+          }}
+          >
+            <TooltipIconButton
+              title='Place Mark'
+              size='small'
+              placement='bottom'
+              onClick={() => {
+                togglePlaceMarkActive(id)
+              }}
+              icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+            />
+          </Box>
         }
         {!isComment && synchedNote && user && user.nickname === username &&
           <TooltipIconButton
