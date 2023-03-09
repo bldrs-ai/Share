@@ -67,12 +67,12 @@ export default function Notes() {
         let synchedCreatedNotes = []
         if (createdNotes !== null) {
           synchedCreatedNotes =
-          createdNotes.filter(
-              (createdNote) => !fetchedNotes.some(
-                  (fetchedNote) =>
-                    createdNote.title === fetchedNote.title &&
-                    createdNote.body === fetchedNote.body ),
-          )
+            createdNotes.filter(
+                (createdNote) => !fetchedNotes.some(
+                    (fetchedNote) =>
+                      createdNote.title === fetchedNote.title &&
+                  createdNote.body === fetchedNote.body),
+            )
           // update the list of created notes
           setCreatedNotes(synchedCreatedNotes)
         }
@@ -84,9 +84,9 @@ export default function Notes() {
 
         if (deletedNotes !== null) {
           const filteredDeleted =
-          combinedSynchedNotes.filter(
-              (synchedNote) => !deletedNotes.includes(synchedNote.number),
-          )
+            combinedSynchedNotes.filter(
+                (synchedNote) => !deletedNotes.includes(synchedNote.number),
+            )
           setNotes(filteredDeleted)
         } else {
           setNotes(combinedSynchedNotes)
@@ -96,7 +96,7 @@ export default function Notes() {
       }
     }
     fetchNotes()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
 
 
@@ -157,64 +157,64 @@ export default function Notes() {
     >
       {isCreateNoteActive && user && <NoteCardCreate/>}
       {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
-      {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/> }
+      {notes === null && <Loader type={'linear'}/>}
+      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
       {notes && !selectedNoteId && !isCreateNoteActive ?
-       notes.map((note, index) => {
-         return (
-           <NoteCard
-             embeddedUrl={note.embeddedUrl}
-             index={note.index}
-             id={note.id}
-             key={index}
-             noteNumber={note.number}
-             title={note.title}
-             date={note.date}
-             body={note.body}
-             username={note.username}
-             numberOfComments={note.numberOfComments}
-             avatarUrl={note.avatarUrl}
-             imageUrl={note.imageUrl}
-             synchedNote={note.synchedNote}
-           />
-         )
-       }) :
-       <>
-         {(filteredNote && !isCreateNoteActive) ?
-          <NoteCard
-            embeddedUrl={filteredNote.embeddedUrl}
-            index={filteredNote.index}
-            id={filteredNote.id}
-            key={filteredNote.id}
-            title={filteredNote.title}
-            date={filteredNote.date}
-            body={filteredNote.body}
-            username={filteredNote.username}
-            numberOfComments={filteredNote.numberOfComments}
-            avatarUrl={filteredNote.avatarUrl}
-            imageUrl={filteredNote.imageUrl}
-          /> : null
-         }
-         {comments && !isCreateNoteActive &&
-          comments.map((comment, index) => {
-            return (
-              <NoteCard
-                embeddedUrl={comment.embeddedUrl}
-                isComment={true}
-                index=''
-                id={comment.id}
-                key={comment.id}
-                title={index + 1}
-                date={comment.date}
-                body={comment.body}
-                username={comment.username}
-                avatarUrl={comment.avatarUrl}
-                imageUrl={comment.imageUrl}
-              />
-            )
-          })
-         }
-       </>
+        notes.map((note, index) => {
+          return (
+            <NoteCard
+              embeddedUrl={note.embeddedUrl}
+              index={note.index}
+              id={note.id}
+              key={index}
+              noteNumber={note.number}
+              title={note.title}
+              date={note.date}
+              body={note.body}
+              username={note.username}
+              numberOfComments={note.numberOfComments}
+              avatarUrl={note.avatarUrl}
+              imageUrl={note.imageUrl}
+              synchedNote={note.synchedNote}
+            />
+          )
+        }) :
+        <>
+          {(filteredNote && !isCreateNoteActive) ?
+            <NoteCard
+              embeddedUrl={filteredNote.embeddedUrl}
+              index={filteredNote.index}
+              id={filteredNote.id}
+              key={filteredNote.id}
+              title={filteredNote.title}
+              date={filteredNote.date}
+              body={filteredNote.body}
+              username={filteredNote.username}
+              numberOfComments={filteredNote.numberOfComments}
+              avatarUrl={filteredNote.avatarUrl}
+              imageUrl={filteredNote.imageUrl}
+            /> : null
+          }
+          {comments && !isCreateNoteActive &&
+            comments.map((comment, index) => {
+              return (
+                <NoteCard
+                  embeddedUrl={comment.embeddedUrl}
+                  isComment={true}
+                  index=''
+                  id={comment.id}
+                  key={comment.id}
+                  title={index + 1}
+                  date={comment.date}
+                  body={comment.body}
+                  username={comment.username}
+                  avatarUrl={comment.avatarUrl}
+                  imageUrl={comment.imageUrl}
+                />
+              )
+            })
+          }
+        </>
       }
     </Paper>
   )

@@ -200,13 +200,13 @@ export default function NoteCard({
       >
         <ReactMarkdown>{body}</ReactMarkdown>
         {textOverflow &&
-         <ShowMore
-           expandText={expandText}
-           onClick={(event) => {
-             event.preventDefault()
-             setExpandText(!expandText)
-           }}
-         />
+          <ShowMore
+            expandText={expandText}
+            onClick={(event) => {
+              event.preventDefault()
+              setExpandText(!expandText)
+            }}
+          />
         }
       </CardContent>
       {(embeddedCameraParams || numberOfComments > 0) &&
@@ -322,7 +322,7 @@ const CardFooter = ({
         }}
       >
         {!isComment && synchedNote &&
-        user && user.nickname === username &&
+          user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
             size='small'
