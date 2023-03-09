@@ -27,6 +27,7 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 
 
 /**
@@ -321,8 +322,18 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {!isComment && synchedNote &&
-          user && user.nickname === username &&
+        {!isComment &&
+          <TooltipIconButton
+            title='PlaceMark'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              // TODO(Ron)
+            }}
+            icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        }
+        {!isComment && synchedNote && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
             size='small'

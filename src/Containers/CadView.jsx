@@ -92,7 +92,7 @@ export default function CadView({
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -568,8 +568,8 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSingleTap}
-        {...onDoubleTap}
+        onMouseDown={onSceneSingleTap}
+        {...onSceneDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
