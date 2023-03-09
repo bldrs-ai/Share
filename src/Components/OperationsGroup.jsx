@@ -70,10 +70,10 @@ export default function OperationsGroup({deselectItems}) {
       sx={{
         'display': 'flex',
         'flexDirection': 'column',
-        'padding': '1em',
         'backgroundColor': `${bgColor}`,
+        'padding': '1em',
         '@media (max-width: 900px)': {
-          margin: '1em 0.5em 0 0',
+          padding: '1em 0.5em',
         },
         '.MuiButtonGroup-root + .MuiButtonGroup-root': {
           marginTop: '0.5em',
