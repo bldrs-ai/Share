@@ -588,7 +588,7 @@ export default function CadView({
             const issueNumber = placeMarkNote.number
             const res = await postComment(repository, issueNumber, {
               body: 'window.location.href',
-            })
+            }, accessToken)
             console.log('onSceneSingleTap: res: ', res)
           })
         }}
