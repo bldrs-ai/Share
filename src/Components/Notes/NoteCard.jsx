@@ -1,4 +1,4 @@
-/* eslint-disable max-len */
+
 /* eslint-disable no-unused-vars */
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
@@ -294,36 +294,35 @@ const CardFooter = ({
   const {togglePlaceMarkActive} = usePlaceMark()
 
 
-  // useEffect(() => {
-  //   if (!id || !notes || !repository) {
-  //     return
-  //   }
-  //   const fetchPlaceMarkUrls = async () => {
-  //     try {
-  //       const newPlaceMarkUrlsObj = {}
-  //       const placeMarkNote = notes.find((note) => note.id === id)
-  //       const comments = await getComments(repository, placeMarkNote.id)
-  //       // // TODO(Ron): Replace to real functionality
-  //       // const comments = [
-  //       //   {id: 1, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-71.387,8.62,13.648'},
-  //       //   {id: 2, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-46.49,9.038,1'},
-  //       //   {id: 3, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-23.263,10.531,1'},
-  //       // ]
+  useEffect(() => {
+    if (!id || !notes || !repository) {
+      return
+    }
+    console.log('NoteCard: first render is passed')
+    const fetchPlaceMarkUrls = async () => {
+      try {
+        const newPlaceMarkUrlsObj = {}
+        const placeMarkNote = notes.find((note) => note.id === id)
+        console.log('NoteCard: placeMarkNote: ', placeMarkNote)
+        const comments = await getComments(repository, placeMarkNote.id)
+        console.log('NoteCard: comments: ', comments)
 
-  //       comments.forEach((comment) => {
-  //         const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-  //         if (placeMarkUrls && placeMarkUrls.length) {
-  //           newPlaceMarkUrlsObj[comment.id] = placeMarkUrls[0]
-  //         }
-  //       })
+        comments.forEach((comment) => {
+          const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+          if (placeMarkUrls && placeMarkUrls.length) {
+            newPlaceMarkUrlsObj[comment.id] = placeMarkUrls[0]
+          }
+        })
 
-  //       setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
-  //     } catch {
-  //       setPlaceMarkUrlsObj({})
-  //     }
-  //   }
-  //   fetchPlaceMarkUrls()
-  // }, [id, notes, repository])
+        console.log('NoteCard: newPlaceMarkUrlsObj: ', newPlaceMarkUrlsObj)
+        setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
+      } catch {
+        setPlaceMarkUrlsObj({})
+      }
+    }
+    fetchPlaceMarkUrls()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
 
   return (
@@ -364,8 +363,6 @@ const CardFooter = ({
             icon={<ShareIcon/>}
           />
         }
-        {/* TODO(Ron): Replace to real functionality */}
-        {/* {!isComment && */}
         {!isComment && synchedNote && user && user.nickname === username &&
           <Box sx={{
             '& svg': {

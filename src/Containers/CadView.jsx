@@ -571,7 +571,7 @@ export default function CadView({
         }}
         id='viewer-container'
         onMouseDown={(event) => {
-          onSceneSingleTap(event, () => {
+          onSceneSingleTap(event, async () => {
             console.log('onSceneSingleTap')
             if (!repository || !placeMarkId) {
               return
@@ -586,9 +586,10 @@ export default function CadView({
             }
             console.log('onSceneSingleTap: `placeMarkNote` condition is passed')
             const issueNumber = placeMarkNote.number
-            postComment(repository, issueNumber, {
+            const res = await postComment(repository, issueNumber, {
               body: window.location.href,
             })
+            console.log('onSceneSingleTap: res: ', res)
           })
         }}
         {...onSceneDoubleTap}
