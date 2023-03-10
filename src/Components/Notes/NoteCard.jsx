@@ -399,7 +399,7 @@ const CardFooter = ({
               size='small'
               placement='bottom'
               onClick={() => {
-                deleteComment(repository, markId)
+                deleteComment(repository, markId, accessToken)
                 const newPlaceMarkUrlsObj = filterObject(placeMarkUrlsObj, (url, urlId) => urlId !== markId)
                 setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
               }}
