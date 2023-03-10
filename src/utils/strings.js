@@ -74,6 +74,20 @@ export function findUrls(str) {
 
 
 /**
+ * @param {string} str
+ * @return {Array<string>} url matches
+ */
+export function findMarkdownUrls(str) {
+  const urlRegex = new RegExp(/\[[\w ]*\]https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
+  const urls = str.match(urlRegex)
+  if (urls === null) {
+    return []
+  }
+  return urls
+}
+
+
+/**
  * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
  * - '0' -> 0
  * - '12.34567' -> 12.346
