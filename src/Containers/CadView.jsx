@@ -572,13 +572,19 @@ export default function CadView({
         id='viewer-container'
         onMouseDown={(event) => {
           onSceneSingleTap(event, () => {
+            console.log('onSceneSingleTap')
             if (!repository || !placeMarkId) {
               return
             }
+            console.log('onSceneSingleTap: `repository` `placeMarkId` condition is passed')
             const placeMarkNote = notes.find((note) => note.id === placeMarkId)
+            console.log('onSceneSingleTap: notes: ', notes)
+            console.log('onSceneSingleTap: placeMarkId: ', placeMarkId)
+            console.log('onSceneSingleTap: placeMarkNote: ', placeMarkNote)
             if (!placeMarkNote) {
               return
             }
+            console.log('onSceneSingleTap: `placeMarkNote` condition is passed')
             const issueNumber = placeMarkNote.number
             postComment(repository, issueNumber, {
               body: window.location.href,
