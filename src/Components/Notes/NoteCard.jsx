@@ -34,6 +34,7 @@ import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {PLACE_MARK_PREFIX} from '../../utils/constants'
 import {filterObject} from '../../utils/objects'
+import debug from '../../utils/debug'
 
 
 /**
@@ -293,19 +294,19 @@ const CardFooter = ({
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
 
-
+  // Below displays icons of place marks saved on notes list
   // useEffect(() => {
   //   if (!id || !notes || !repository) {
   //     return
   //   }
-  //   console.log('NoteCard: first render is passed')
+  //   debug().log('NoteCard#useEffect#[]: first render is passed')
   //   const fetchPlaceMarkUrls = async () => {
   //     try {
   //       const newPlaceMarkUrlsObj = {}
   //       const placeMarkNote = notes.find((note) => note.id === id)
-  //       console.log('NoteCard: placeMarkNote: ', placeMarkNote)
+  //       debug().log('NoteCard#useEffect#[]: placeMarkNote: ', placeMarkNote)
   //       const comments = await getComments(repository, placeMarkNote.id)
-  //       console.log('NoteCard: comments: ', comments)
+  //       debug().log('NoteCard#useEffect#[]: comments: ', comments)
 
   //       comments.forEach((comment) => {
   //         const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
@@ -314,7 +315,7 @@ const CardFooter = ({
   //         }
   //       })
 
-  //       console.log('NoteCard: newPlaceMarkUrlsObj: ', newPlaceMarkUrlsObj)
+  //       debug().log('NoteCard#useEffect#[]: newPlaceMarkUrlsObj: ', newPlaceMarkUrlsObj)
   //       setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
   //     } catch {
   //       setPlaceMarkUrlsObj({})

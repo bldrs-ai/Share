@@ -572,24 +572,24 @@ export default function CadView({
         id='viewer-container'
         onMouseDown={(event) => {
           onSceneSingleTap(event, async () => {
-            console.log('onSceneSingleTap')
+            debug().log('CadView#onSceneSingleTap')
             if (!repository || !placeMarkId) {
               return
             }
-            console.log('onSceneSingleTap: `repository` `placeMarkId` condition is passed')
+            debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
             const placeMarkNote = notes.find((note) => note.id === placeMarkId)
-            console.log('onSceneSingleTap: notes: ', notes)
-            console.log('onSceneSingleTap: placeMarkId: ', placeMarkId)
-            console.log('onSceneSingleTap: placeMarkNote: ', placeMarkNote)
+            debug().log('CadView#onSceneSingleTap: notes: ', notes)
+            debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)
+            debug().log('CadView#onSceneSingleTap: placeMarkNote: ', placeMarkNote)
             if (!placeMarkNote) {
               return
             }
-            console.log('onSceneSingleTap: `placeMarkNote` condition is passed')
+            debug().log('CadView#onSceneSingleTap: `placeMarkNote` condition is passed')
             const issueNumber = placeMarkNote.number
-            const res = await postComment(repository, issueNumber, {
+            const saveRes = await postComment(repository, issueNumber, {
               body: `[placemark](${window.location.href})`,
             }, accessToken)
-            console.log('onSceneSingleTap: res: ', res)
+            debug().log('CadView#onSceneSingleTap: saveRes: ', saveRes)
           })
         }}
         {...onSceneDoubleTap}

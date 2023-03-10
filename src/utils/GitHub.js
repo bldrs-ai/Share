@@ -98,9 +98,9 @@ export async function closeIssue(repository, issueNumber, accessToken = '') {
       ...args.headers,
     }
   }
-  console.log('in the close issue')
-  const res = await patchGitHub(repository, `issues/${issueNumber}`, args)
-  return res
+  const patchRes = await patchGitHub(repository, `issues/${issueNumber}`, args)
+  debug().log('GitHub#closeIssue: patchRes: ', patchRes)
+  return patchRes
 }
 
 
@@ -348,17 +348,17 @@ async function getGitHub(repository, path, args = {}) {
  * @return {object} The object at the resource
  */
 async function postGitHub(repository, path, args = {}) {
-  console.log('postGitHub: args: ', args)
+  debug().log('GitHub#postGitHub: args: ', args)
   assertDefined(repository.orgName)
   assertDefined(repository.name)
   const requestStr = `POST /repos/{org}/{repo}/${path}`
-  console.log('postGitHub: requestStr: ', requestStr)
+  debug().log('GitHub#postGitHub: requestStr: ', requestStr)
   const requestObj = {
     org: repository.orgName,
     repo: repository.name,
     ...args,
   }
-  console.log('postGitHub: requestObj: ', requestObj)
+  debug().log('GitHub#postGitHub: requestObj: ', requestObj)
   const res = await octokit.request(requestStr, requestObj)
   return res
 }
