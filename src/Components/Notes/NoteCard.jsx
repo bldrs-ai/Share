@@ -294,35 +294,35 @@ const CardFooter = ({
   const {togglePlaceMarkActive} = usePlaceMark()
 
 
-  useEffect(() => {
-    if (!id || !notes || !repository) {
-      return
-    }
-    console.log('NoteCard: first render is passed')
-    const fetchPlaceMarkUrls = async () => {
-      try {
-        const newPlaceMarkUrlsObj = {}
-        const placeMarkNote = notes.find((note) => note.id === id)
-        console.log('NoteCard: placeMarkNote: ', placeMarkNote)
-        const comments = await getComments(repository, placeMarkNote.id)
-        console.log('NoteCard: comments: ', comments)
+  // useEffect(() => {
+  //   if (!id || !notes || !repository) {
+  //     return
+  //   }
+  //   console.log('NoteCard: first render is passed')
+  //   const fetchPlaceMarkUrls = async () => {
+  //     try {
+  //       const newPlaceMarkUrlsObj = {}
+  //       const placeMarkNote = notes.find((note) => note.id === id)
+  //       console.log('NoteCard: placeMarkNote: ', placeMarkNote)
+  //       const comments = await getComments(repository, placeMarkNote.id)
+  //       console.log('NoteCard: comments: ', comments)
 
-        comments.forEach((comment) => {
-          const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-          if (placeMarkUrls && placeMarkUrls.length) {
-            newPlaceMarkUrlsObj[comment.id] = placeMarkUrls[0]
-          }
-        })
+  //       comments.forEach((comment) => {
+  //         const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+  //         if (placeMarkUrls && placeMarkUrls.length) {
+  //           newPlaceMarkUrlsObj[comment.id] = placeMarkUrls[0]
+  //         }
+  //       })
 
-        console.log('NoteCard: newPlaceMarkUrlsObj: ', newPlaceMarkUrlsObj)
-        setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
-      } catch {
-        setPlaceMarkUrlsObj({})
-      }
-    }
-    fetchPlaceMarkUrls()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  //       console.log('NoteCard: newPlaceMarkUrlsObj: ', newPlaceMarkUrlsObj)
+  //       setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
+  //     } catch {
+  //       setPlaceMarkUrlsObj({})
+  //     }
+  //   }
+  //   fetchPlaceMarkUrls()
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [])
 
 
   return (
