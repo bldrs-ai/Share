@@ -587,7 +587,7 @@ export default function CadView({
             console.log('onSceneSingleTap: `placeMarkNote` condition is passed')
             const issueNumber = placeMarkNote.number
             const res = await postComment(repository, issueNumber, {
-              body: 'window.location.href',
+              body: `[placemark]${window.location.href}`,
             }, accessToken)
             console.log('onSceneSingleTap: res: ', res)
           })
