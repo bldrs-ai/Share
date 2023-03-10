@@ -58,7 +58,7 @@ export function usePlaceMark() {
 
 
   useEffect(() => {
-    // TODO(Ron): Put down all place marks later
+    // TODO(Ron): Put down all place marks
     const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
     if (placeMarkHash && placeMark) {
       debug().log('usePlaceMark: placeMarkHash: ', placeMarkHash)

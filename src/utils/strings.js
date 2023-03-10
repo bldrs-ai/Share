@@ -1,3 +1,5 @@
+import {getHashParamsFromHashStr} from './location'
+
 /**
  * Convert string to integer.
  *
@@ -75,15 +77,21 @@ export function findUrls(str) {
 
 /**
  * @param {string} str
+ * @param {string} prefix
  * @return {Array<string>} url matches
  */
-export function findMarkdownUrls(str) {
-  const urlRegex = new RegExp(/\[[\w ]*\]https?:\/\/[^/ ()]+(?:\/[^ ()]*)?/gi)
-  const urls = str.match(urlRegex)
-  if (urls === null) {
-    return []
-  }
-  return urls
+export function findMarkdownUrls(str, prefix) {
+  const markdownUrls = findUrls(str)
+      .filter((url) => {
+        if (url.indexOf('#') === -1) {
+          return false
+        }
+        const encoded = getHashParamsFromHashStr(
+            url.substring(url.indexOf('#') + 1),
+            prefix)
+        return !!encoded
+      })
+  return markdownUrls
 }
 
 

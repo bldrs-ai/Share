@@ -11,8 +11,9 @@ import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
-import {findUrls} from '../../utils/strings'
-import {closeIssue} from '../../utils/GitHub'
+import {findMarkdownUrls, findUrls} from '../../utils/strings'
+
+import {closeIssue, deleteComment, getComments} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
 import {
   CAMERA_PREFIX,
@@ -29,6 +30,8 @@ import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
+import {PLACE_MARK_PREFIX} from '../../utils/constants'
+import {filterObject} from '../../utils/objects'
 
 
 /**
@@ -275,16 +278,51 @@ const CardFooter = ({
   isComment,
   synchedNote}) => {
   const [shareIssue, setShareIssue] = useState(false)
+  const [placeMarkUrlsObj, setPlaceMarkUrlsObj] = useState({})
   const repository = useStore((state) => state.repository)
   const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
 
+  const notes = useStore((state) => state.notes)
+
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
+
+
+  useEffect(() => {
+    if (!id || !notes || !repository) {
+      return
+    }
+    const fetchPlaceMarkUrls = async () => {
+      try {
+        const newPlaceMarkUrlsObj = {}
+        const placeMarkNote = notes.find((note) => note.id === id)
+        const comments = await getComments(repository, placeMarkNote.id)
+        // // TODO(Ron): Replace to real functionality
+        // const comments = [
+        //   {id: 1, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-71.387,8.62,13.648'},
+        //   {id: 2, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-46.49,9.038,1'},
+        //   {id: 3, body: 'http://localhost:8080/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::m:-23.263,10.531,1'},
+        // ]
+
+        comments.forEach((comment) => {
+          const placeMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+          if (placeMarkUrls && placeMarkUrls.length) {
+            newPlaceMarkUrlsObj[comment.id] = placeMarkUrls[0]
+          }
+        })
+
+        setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
+      } catch {
+        setPlaceMarkUrlsObj({})
+      }
+    }
+    fetchPlaceMarkUrls()
+  }, [id, notes, repository])
 
 
   return (
@@ -325,9 +363,9 @@ const CardFooter = ({
             icon={<ShareIcon/>}
           />
         }
-        {/* {!isComment && synchedNote && user && user.nickname === username && */}
-        {/* TODO(Ron): Replace bottom line with above line when place mark URL store is completed */}
-        {!isComment &&
+        {/* TODO(Ron): Replace to real functionality */}
+        {/* {!isComment && */}
+        {!isComment && synchedNote && user && user.nickname === username &&
           <Box sx={{
             '& svg': {
               fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
@@ -355,6 +393,23 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
+        {!isComment && Object.keys(placeMarkUrlsObj).map((markId) => {
+          return (
+            <TooltipIconButton
+              key={markId}
+              title='Place Mark'
+              size='small'
+              placement='bottom'
+              onClick={() => {
+                deleteComment(repository, markId)
+                const newPlaceMarkUrlsObj = filterObject(placeMarkUrlsObj, (url, urlId) => urlId !== markId)
+                setPlaceMarkUrlsObj(newPlaceMarkUrlsObj)
+              }}
+              icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+            />
+          )
+        })
+        }
         {!isComment && synchedNote && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'

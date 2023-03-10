@@ -92,3 +92,16 @@ export function deleteStringValueMatchRecursive(obj, regex) {
       },
   )
 }
+
+
+/**
+ * Filter object
+ *
+ * @param {object} obj
+ * @param {Function} callback
+ * @return {object}
+ */
+export function filterObject(obj, callback) {
+  return Object.fromEntries(Object.entries(obj).
+      filter(([key, val]) => callback(val, key)))
+}

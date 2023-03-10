@@ -199,6 +199,7 @@ export async function getComment(repository, issueId, commentId, accessToken = '
  * below for the expected structure.
  *
  * @param {object} repository
+ * @param {number} issueNumber
  * @param {object} payload issue payload shall contain title and body
  * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
@@ -215,6 +216,30 @@ export async function postComment(repository, issueNumber, payload, accessToken 
     }
   }
   const res = await postGitHub(repository, `issues/{issue_number}/comments`, args)
+  return res
+}
+
+
+/**
+ * Delete comment from github
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @param {string} commentId
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function deleteComment(repository, commentId, accessToken = '') {
+  const args = {
+    comment_id: commentId,
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  const res = await deleteGitHub(repository, `issues/comments/{comment_id}`, args)
   return res
 }
 
@@ -305,14 +330,11 @@ export const parseGitHubRepositoryURL = (githubURL) => {
 async function getGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
-
-  debug().log('Dispatching GitHub request for repo:', repository)
   const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
   })
-
   return res
 }
 
@@ -328,8 +350,27 @@ async function getGitHub(repository, path, args = {}) {
 async function postGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
-  debug().log('Dispatching GitHub request for repo:', repository)
   const res = await octokit.request(`POST /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  })
+  return res
+}
+
+
+/**
+ * Delete the resource to the GitHub
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args for posting
+ * @return {object} Result
+ */
+async function deleteGitHub(repository, path, args = {}) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  const res = await octokit.request(`DELETE /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
