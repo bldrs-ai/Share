@@ -111,6 +111,7 @@ export default function Notes() {
         const commentsArr = []
 
         const commentsData = await getComments(repository, selectedNote.number, accessToken)
+        debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
         if (commentsData) {
           commentsData.map((comment) => {
             commentsArr.push({
