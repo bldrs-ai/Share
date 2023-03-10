@@ -348,6 +348,7 @@ async function getGitHub(repository, path, args = {}) {
  * @return {object} The object at the resource
  */
 async function postGitHub(repository, path, args = {}) {
+  console.log('postGitHub: args: ', args)
   assertDefined(repository.orgName)
   assertDefined(repository.name)
   const requestStr = `POST /repos/{org}/{repo}/${path}`
