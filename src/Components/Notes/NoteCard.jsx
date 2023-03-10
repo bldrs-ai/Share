@@ -392,7 +392,7 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {!isComment && Object.keys(placeMarkUrlsObj).map((markId) => {
+        {/* {!isComment && Object.keys(placeMarkUrlsObj).map((markId) => {
           return (
             <TooltipIconButton
               key={markId}
@@ -408,7 +408,7 @@ const CardFooter = ({
             />
           )
         })
-        }
+        } */}
         {!isComment && synchedNote && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
