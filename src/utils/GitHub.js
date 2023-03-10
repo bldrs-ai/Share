@@ -350,11 +350,15 @@ async function getGitHub(repository, path, args = {}) {
 async function postGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
-  const res = await octokit.request(`POST /repos/{org}/{repo}/${path}`, {
+  const requestStr = `POST /repos/{org}/{repo}/${path}`
+  console.log('postGitHub: requestStr: ', requestStr)
+  const requestObj = {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  })
+  }
+  console.log('postGitHub: requestObj: ', requestObj)
+  const res = await octokit.request(requestStr, requestObj)
   return res
 }
 
