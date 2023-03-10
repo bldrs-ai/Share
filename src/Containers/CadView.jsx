@@ -568,7 +568,11 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSceneSingleTap}
+        onMouseDown={(event) => {
+          onSceneSingleTap(event, () => {
+            // TODO(Ron): Store place mark url
+          })
+        }}
         {...onSceneDoubleTap}
       />
       <SnackBarMessage

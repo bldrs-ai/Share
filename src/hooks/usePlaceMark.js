@@ -4,7 +4,7 @@ import {useDoubleTap} from 'use-double-tap'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getEncodedParam, getHashParams, getObjectParams} from '../utils/location'
+import {addHashParams, getHashParams, getObjectParams} from '../utils/location'
 import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
@@ -36,10 +36,11 @@ export function usePlaceMark() {
   })
 
 
-  const onSceneSingleTap = (event) => {
+  const onSceneSingleTap = (event, callback) => {
     if (event.shiftKey) {
       dropPlaceMark(event)
       deactivatePlaceMark()
+      callback()
     }
   }
 
@@ -57,6 +58,7 @@ export function usePlaceMark() {
 
 
   useEffect(() => {
+    // TODO(Ron): Put down all place marks later
     const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
     if (placeMarkHash && placeMark) {
       debug().log('usePlaceMark: placeMarkHash: ', placeMarkHash)
@@ -90,13 +92,8 @@ export function usePlaceMark() {
       const {point} = placeMark.onDrop(event)
 
       if (point && placeMarkId) {
-        debug().log('usePlaceMark#dropPlaceMark: point: ', point)
-        debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
         const markArr = roundCoord(...point)
-        debug().log('usePlaceMark#dropPlaceMark: markArr: ', markArr)
         addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-        const placeMarkHash = getEncodedParam(markArr)
-        debug().log('usePlaceMark#dropPlaceMark: placeMarkHash: ', placeMarkHash)
       }
     }
   }
