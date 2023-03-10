@@ -325,16 +325,6 @@ const CardFooter = ({
             icon={<ShareIcon/>}
           />
         }
-      </Box>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginRight: '4px',
-        }}
-      >
         {/* {!isComment && synchedNote && user && user.nickname === username && */}
         {/* TODO(Ron): Replace bottom line with above line when place mark URL store is completed */}
         {!isComment &&
@@ -355,6 +345,16 @@ const CardFooter = ({
             />
           </Box>
         }
+      </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: '4px',
+        }}
+      >
         {!isComment && synchedNote && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete'
