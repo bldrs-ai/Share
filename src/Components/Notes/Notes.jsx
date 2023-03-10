@@ -155,8 +155,8 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
-      {isCreateNoteActive && !user && <NoteCardCreate/>}
-      {/* {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>} */}
+      {isCreateNoteActive && user && <NoteCardCreate/>}
+      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
       {notes === null && <Loader type={'linear'}/>}
       {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
       {notes && !selectedNoteId && !isCreateNoteActive ?
