@@ -21,7 +21,7 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {getDownloadURL, parseGitHubRepositoryURL, postComment} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 
@@ -80,8 +80,10 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
+  const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const notes = useStore((state) => state.notes)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
@@ -570,7 +572,17 @@ export default function CadView({
         id='viewer-container'
         onMouseDown={(event) => {
           onSceneSingleTap(event, () => {
-            // TODO(Ron): Store place mark url
+            if (!repository || !placeMarkId) {
+              return
+            }
+            const placeMarkNote = notes.find((note) => note.id === placeMarkId)
+            if (!placeMarkNote) {
+              return
+            }
+            const issueNumber = placeMarkNote.number
+            postComment(repository, issueNumber, {
+              body: window.location.href,
+            })
           })
         }}
         {...onSceneDoubleTap}

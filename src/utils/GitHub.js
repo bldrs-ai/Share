@@ -54,6 +54,7 @@ export async function getIssue(repository, issueId, accessToken = '') {
   return issue
 }
 
+
 /**
  * Post issue to github
  * below for the expected structure.
@@ -76,6 +77,7 @@ export async function postIssue(repository, payload, accessToken = '') {
   const res = await postGitHub(repository, 'issues', args)
   return res
 }
+
 
 /**
  * Close Github issue
@@ -101,6 +103,7 @@ export async function closeIssue(repository, issueNumber, accessToken = '') {
   return res
 }
 
+
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
  * below for the expected structure.
@@ -122,6 +125,7 @@ export async function getBranches(repository, accessToken = '') {
   debug().log('GitHub: branches: ', branches)
   return branches
 }
+
 
 /**
  * The comments should have the following structure:
@@ -152,6 +156,7 @@ export async function getComments(repository, issueId, accessToken = '') {
     debug().log('Empty comments!')
   }
 }
+
 
 /**
  * The comments should have the following structure:
@@ -188,6 +193,32 @@ export async function getComment(repository, issueId, commentId, accessToken = '
   }
 }
 
+
+/**
+ * Post issue to github
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @param {object} payload issue payload shall contain title and body
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function postComment(repository, issueNumber, payload, accessToken = '') {
+  const args = {
+    ...payload,
+    issue_number: issueNumber,
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  const res = await postGitHub(repository, `issues/{issue_number}/comments`, args)
+  return res
+}
+
+
 /**
  * Retrieves the contents download URL for a GitHub repository path
  *
@@ -219,6 +250,7 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
   return contents.data.download_url
 }
+
 
 /**
  * Parses a GitHub repository URL and returns a structure
@@ -259,6 +291,7 @@ export const parseGitHubRepositoryURL = (githubURL) => {
   }
 }
 
+
 // DO NOT EXPORT ANY BELOW //
 /**
  * Fetch the resource at the given path from GitHub, substituting in
@@ -283,6 +316,7 @@ async function getGitHub(repository, path, args = {}) {
   return res
 }
 
+
 /**
  * Post the resource to the GitHub
  *
@@ -303,6 +337,7 @@ async function postGitHub(repository, path, args = {}) {
   return res
 }
 
+
 /**
  * Patch the resource
  *
@@ -322,6 +357,7 @@ async function patchGitHub(repository, path, args = {}) {
   })
   return res
 }
+
 
 export const MOCK_NOTE = {
   embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
