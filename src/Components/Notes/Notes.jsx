@@ -187,6 +187,7 @@ export default function Notes() {
               index={filteredNote.index}
               id={filteredNote.id}
               key={filteredNote.id}
+              noteNumber={filteredNote.number}
               title={filteredNote.title}
               date={filteredNote.date}
               body={filteredNote.body}
@@ -205,6 +206,7 @@ export default function Notes() {
                   index=''
                   id={comment.id}
                   key={comment.id}
+                  noteNumber={comment.number}
                   title={index + 1}
                   date={comment.date}
                   body={comment.body}
@@ -220,4 +222,3 @@ export default function Notes() {
     </Paper>
   )
 }
-
