@@ -24,6 +24,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL, postComment} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {floatStrTrim} from '../utils/strings'
 
 
 /**
@@ -84,6 +85,7 @@ export default function CadView({
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
@@ -577,6 +579,13 @@ export default function CadView({
               return
             }
             debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
+            const newNotes = notes.map((note) => {
+              if (note.id === placeMarkId) {
+                note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+              }
+              return note
+            })
+            setNotes(newNotes)
             const placeMarkNote = notes.find((note) => note.id === placeMarkId)
             debug().log('CadView#onSceneSingleTap: notes: ', notes)
             debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)

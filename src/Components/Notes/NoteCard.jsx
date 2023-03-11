@@ -11,7 +11,7 @@ import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
-import {findUrls} from '../../utils/strings'
+import {findUrls, floatStrTrim} from '../../utils/strings'
 import {closeIssue, deleteComment} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
 import {
@@ -76,6 +76,7 @@ export default function NoteCard({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const placeMarkId = useStore((state) => state.placeMarkId)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -178,6 +179,13 @@ export default function NoteCard({
   async function removeComment(repository, accessToken, commentId) {
     const newComments = comments.filter((comment) => comment.id !== commentId)
     setComments(newComments)
+    const newNotes = notes.map((note) => {
+      if (note.id === placeMarkId) {
+        note.numberOfComments = floatStrTrim(note.numberOfComments) - 1
+      }
+      return note
+    })
+    setNotes(newNotes)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     return deleteRes
