@@ -390,7 +390,7 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={() => {
-              removeComment(repository, accessToken, noteNumber)
+              removeComment(repository, accessToken, id)
             }}
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
