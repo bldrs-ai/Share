@@ -375,11 +375,15 @@ async function postGitHub(repository, path, args = {}) {
 async function deleteGitHub(repository, path, args = {}) {
   assertDefined(repository.orgName)
   assertDefined(repository.name)
-  const res = await octokit.request(`DELETE /repos/{org}/{repo}/${path}`, {
+  const requestStr = `DELETE /repos/{org}/{repo}/${path}`
+  debug().log('GitHub#deleteGitHub: requestStr: ', requestStr)
+  const requestObj = {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  })
+  }
+  debug().log('GitHub#deleteGitHub: requestObj: ', requestObj)
+  const res = await octokit.request(requestStr, requestObj)
   return res
 }
 
