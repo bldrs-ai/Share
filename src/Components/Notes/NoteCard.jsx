@@ -182,7 +182,11 @@ export default function NoteCard({
     }
 
     const filterDeletedNote = notes.filter((note) => note.number !== commentNumber)
-    const commentId = notes.filter((note) => note.number === commentNumber)[0].id
+    debug().log('NoteCard#removeComment: notes: ', notes)
+    debug().log('NoteCard#removeComment: commentNumber: ', commentNumber)
+    const removedNotes = notes.filter((note) => note.number === commentNumber)
+    debug().log('NoteCard#removeComment: removedNotes: ', removedNotes)
+    const commentId = removedNotes[0].id
     setNotes(filterDeletedNote)
     debug().log('NoteCard#removeComment: commentId: ', commentId)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
