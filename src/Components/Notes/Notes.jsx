@@ -116,8 +116,6 @@ export default function Notes() {
           commentsData.map((comment) => {
             commentsArr.push({
               id: comment.id,
-              number: comment.number,
-              title: comment.title,
               body: comment.body,
               date: comment.created_at,
               username: comment.user.login,
@@ -164,7 +162,6 @@ export default function Notes() {
         notes.map((note, index) => {
           return (
             <NoteCard
-              embeddedUrl={note.embeddedUrl}
               index={note.index}
               id={note.id}
               key={index}
@@ -175,7 +172,6 @@ export default function Notes() {
               username={note.username}
               numberOfComments={note.numberOfComments}
               avatarUrl={note.avatarUrl}
-              imageUrl={note.imageUrl}
               synchedNote={note.synchedNote}
             />
           )
@@ -183,7 +179,6 @@ export default function Notes() {
         <>
           {(filteredNote && !isCreateNoteActive) ?
             <NoteCard
-              embeddedUrl={filteredNote.embeddedUrl}
               index={filteredNote.index}
               id={filteredNote.id}
               key={filteredNote.id}
@@ -194,25 +189,20 @@ export default function Notes() {
               username={filteredNote.username}
               numberOfComments={filteredNote.numberOfComments}
               avatarUrl={filteredNote.avatarUrl}
-              imageUrl={filteredNote.imageUrl}
             /> : null
           }
           {comments && !isCreateNoteActive &&
-            comments.map((comment, index) => {
+            comments.map((comment) => {
               return (
                 <NoteCard
-                  embeddedUrl={comment.embeddedUrl}
-                  isComment={true}
-                  index=''
-                  id={comment.id}
                   key={comment.id}
-                  noteNumber={comment.number}
-                  title={index + 1}
-                  date={comment.date}
+                  isComment={true}
+                  id={comment.id}
+                  index=''
                   body={comment.body}
+                  date={comment.date}
                   username={comment.username}
                   avatarUrl={comment.avatarUrl}
-                  imageUrl={comment.imageUrl}
                 />
               )
             })

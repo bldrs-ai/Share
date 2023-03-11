@@ -74,6 +74,8 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -170,25 +172,12 @@ export default function NoteCard({
    *
    * @param {string} repository
    * @param {string} accessToken
-   * @param {number} commentNumber
+   * @param {number} commentId
    * @return {object} return github return object
    */
-  async function removeComment(repository, accessToken, commentNumber) {
-    if (deletedNotes !== null) {
-      const localDeletedNotes = [...deletedNotes, noteNumber]
-      setDeletedNotes(localDeletedNotes)
-    } else {
-      setDeletedNotes([noteNumber])
-    }
-
-    const filterDeletedNote = notes.filter((note) => note.number !== commentNumber)
-    debug().log('NoteCard#removeComment: notes: ', notes)
-    debug().log('NoteCard#removeComment: commentNumber: ', commentNumber)
-    const removedNotes = notes.filter((note) => note.number === commentNumber)
-    debug().log('NoteCard#removeComment: removedNotes: ', removedNotes)
-    const commentId = removedNotes[0].id
-    setNotes(filterDeletedNote)
-    debug().log('NoteCard#removeComment: commentId: ', commentId)
+  async function removeComment(repository, accessToken, commentId) {
+    const newComments = comments.filter((comment) => comment.id !== commentId)
+    setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     return deleteRes
