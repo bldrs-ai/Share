@@ -177,6 +177,8 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function removeComment(repository, accessToken, commentId) {
+    const deleteRes = await deleteComment(repository, commentId, accessToken)
+    debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     const newComments = comments.filter((comment) => comment.id !== commentId)
     setComments(newComments)
     const newNotes = notes.map((note) => {
@@ -186,8 +188,6 @@ export default function NoteCard({
       return note
     })
     setNotes(newNotes)
-    const deleteRes = await deleteComment(repository, commentId, accessToken)
-    debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     return deleteRes
   }
 

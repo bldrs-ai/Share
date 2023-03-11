@@ -579,13 +579,6 @@ export default function CadView({
               return
             }
             debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
-            const newNotes = notes.map((note) => {
-              if (note.id === placeMarkId) {
-                note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
-              }
-              return note
-            })
-            setNotes(newNotes)
             const placeMarkNote = notes.find((note) => note.id === placeMarkId)
             debug().log('CadView#onSceneSingleTap: notes: ', notes)
             debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)
@@ -599,6 +592,13 @@ export default function CadView({
               body: `[placemark](${window.location.href})`,
             }, accessToken)
             debug().log('CadView#onSceneSingleTap: saveRes: ', saveRes)
+            const newNotes = notes.map((note) => {
+              if (note.id === placeMarkId) {
+                note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+              }
+              return note
+            })
+            setNotes(newNotes)
           })
         }}
         {...onSceneDoubleTap}
