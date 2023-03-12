@@ -3,7 +3,7 @@ import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
-// import useStore from '../store/useStore'
+import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CloseIcon from '../assets/icons/Close.svg'
 
@@ -29,26 +29,33 @@ export function TooltipIconButton({
   openLocal = undefined,
 }) {
   assertDefined(title, onClick, icon)
-  // const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
+  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
   const isMobile = useIsMobile()
-  console.log('openLocal', openLocal)
   return (
     <>
       {isMobile ?
        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
          {icon}
        </ToggleButton> :
-       <Tooltip
-         title={title}
-         describeChild
-         placement={placement}
-         data-testid={dataTestId}
-         //  open={openLocal !== undefined ? openLocal : isTooltipsOpen}
-       >
-         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-           {icon}
-         </ToggleButton>
-       </Tooltip>
+        <Tooltip
+          title={title}
+          describeChild
+          placement={placement}
+          data-testid={dataTestId}
+          open={openLocal !== undefined ? openLocal : isTooltipsOpen}
+        >
+          <Tooltip
+            title={title}
+            describeChild
+            placement={placement}
+            data-testid={dataTestId}
+            open={openLocal !== undefined ? openLocal : isTooltipsOpen}
+          >
+            <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+              {icon}
+            </ToggleButton>
+          </Tooltip>
+        </Tooltip>
       }
     </>
   )

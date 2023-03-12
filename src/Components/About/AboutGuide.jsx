@@ -1,8 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import CutPlaneIcon from '../../assets/icons/CutPlane.svg'
-import ListIcon from '../../assets/icons/List.svg'
 import LogoBuildings from '../../assets/Logo_Buildings.svg'
 import NotesIcon from '../../assets/icons/Notes.svg'
 import OpenIcon from '../../assets/icons/Open.svg'
@@ -41,8 +39,8 @@ export default function AboutGuide({setIsDialogDisplayed}) {
           'float': 'right',
           'margin': '.4em 0em 0em 0em',
           '& svg': {
-            width: '13px',
-            height: '13px',
+            width: '18px',
+            height: '18px',
             verticalAlign: 'middle',
             lineHeight: '15px',
             fill: theme.palette.primary.contrastText,
@@ -51,8 +49,8 @@ export default function AboutGuide({setIsDialogDisplayed}) {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '16px',
-            fontSize: '14px',
+            lineHeight: '24px',
+            fontSize: '18px',
           },
           '& a': {
             textAlign: 'right',
@@ -83,11 +81,14 @@ export default function AboutGuide({setIsDialogDisplayed}) {
             <span style={{textDecoration: 'underline'}} >Share</span> → <ShareIcon/>
           </a>
         </Box>
-        <div>Notes → <NotesIcon/></div>
         <div>
-          Properties → <ListIcon/>
+          <a
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
+            onClick={onClickLink}
+          >
+            <span style={{textDecoration: 'underline'}} >Notes</span>  → <NotesIcon/>
+          </a>
         </div>
-        <div>Section → <CutPlaneIcon/></div>
         <Box
           sx={{
             position: 'relative',
@@ -107,7 +108,7 @@ export default function AboutGuide({setIsDialogDisplayed}) {
       <Box
         sx={{
           'float': 'right',
-          'margin': '-2.8em 7.5em 0em 0em',
+          'margin': '-1.8em 6.5em 0em 0em',
           '& svg': {
             width: '140px',
             height: '110px',

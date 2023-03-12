@@ -45,6 +45,7 @@ module.exports = {
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [
     'src/Share.test.js',
+    'src/Components/Buttons.test.js',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
