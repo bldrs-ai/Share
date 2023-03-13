@@ -72,13 +72,13 @@ export default function AboutGuide({setIsDialogDisplayed}) {
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1506392033'
             onClick={onClickLink}
           >
-            <OpenIcon/> ← <span style={{textDecoration: 'underline'}}>Open</span>
+            <OpenIcon/> ← <span>Open</span>
           </a>
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
             onClick={onClickLink}
           >
-            <span style={{textDecoration: 'underline'}} >Share</span> → <ShareIcon/>
+            <span>Share</span> → <ShareIcon/>
           </a>
         </Box>
         <div>
@@ -86,7 +86,7 @@ export default function AboutGuide({setIsDialogDisplayed}) {
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
             onClick={onClickLink}
           >
-            <span style={{textDecoration: 'underline'}} >Notes</span>  → <NotesIcon/>
+            <span>Notes</span>  → <NotesIcon/>
           </a>
         </div>
         <Box
