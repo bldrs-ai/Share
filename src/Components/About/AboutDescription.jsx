@@ -39,15 +39,18 @@ export default function AboutDescription({setIsDialogDisplayed}) {
           padding: '10px 10px',
         }}
       >
-        <Typography variant={'h3'}>
-          Bldrs.ai is an open workspace to access and opearate 3D information models.
+        <Typography variant={'h5'}>
+          Cross-functional online collaboration unlocks team flow,
+          productivity and creativity.
+          Open workspaces, open standards and open source code is the most powerful way to work.
+          Cooperation is the unfair advantage.
         </Typography>
-        <Typography variant={'h3'}>
+        {/* <Typography variant={'h3'}>
           - Connect to Github account
         </Typography>
         <Typography variant={'h3'}>
           - Use notes to collaborate
-        </Typography>
+        </Typography> */}
         <Box
           sx={{
             marginRight: '-6px',
