@@ -36,15 +36,6 @@ export default class PlaceMark extends EventDispatcher {
     _domElement.style.touchAction = 'none' // disable touch scroll
 
 
-    const updatePointer = (event) => {
-      const rect = _domElement.getBoundingClientRect()
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
-    }
-
-
     this.activate = () => {
       this.activated = true
       _domElement.style.cursor = 'alias'
@@ -62,47 +53,41 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
+    this.onSceneDoubleClick = (event) => {
+      let res = {}
+
+      switch (event.button) {
+        case 0: // Main button (left button)
+          res = dropPlaceMark(event)
+          break
+        case 1: // Wheel button (middle button if present)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // Secondary button (right button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // Fourth button (back button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 4: // Fifth button (forward button)
+          break
+        default:
+          break
+      }
+
+      return res
+    }
+
+
     this.onSceneClick = (event) => {
       let res = {}
 
       switch (event.button) {
         case 0: // Main button (left button)
           if (event.shiftKey) {
-            if (_objects && this.activated) {
-              updatePointer(event)
-              const _intersections = []
-              _intersections.length = 0
-              raycaster.setFromCamera(_pointer, _camera)
-              raycaster.intersectObjects(_objects, true, _intersections)
-              debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
-
-              if (_intersections.length > 0) {
-                const intersectPoint = _intersections[0].point.clone()
-                intersectPoint.x = floatStrTrim(intersectPoint.x)
-                intersectPoint.y = floatStrTrim(intersectPoint.y)
-                intersectPoint.z = floatStrTrim(intersectPoint.z)
-                const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-                debug().log('PlaceMark#onSceneClick: offset: ', offset)
-                const point = intersectPoint.clone().add(offset)
-                const lookAt = point.clone().add(_intersections[0].face.normal.clone())
-                const promiseGroup = this.putDown({point, lookAt})
-                res = {point, lookAt, promiseGroup}
-              }
-            }
+            res = dropPlaceMark(event)
           } else {
-            debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
-
-            if (_placeMarks.length) {
-              updatePointer(event)
-              const _intersections = []
-              _intersections.length = 0
-              raycaster.setFromCamera(_pointer, _camera)
-              raycaster.intersectObjects(_placeMarks, true, _intersections)
-              debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
-              if (_intersections.length) {
-                res = {url: _intersections[0].object?.userData?.url}
-              }
-            }
+            res = getPlaceMarkInfo()
           }
           break
         case 1: // Wheel button (middle button if present)
@@ -134,7 +119,7 @@ export default class PlaceMark extends EventDispatcher {
           _scene.add(group)
           _placeMarks.push(group)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
-          const placeMarkMeshSet = this.getPlaceMarkMeshSet()
+          const placeMarkMeshSet = getPlaceMarkMeshSet()
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
           outlineEffect.setSelection(placeMarkMeshSet)
@@ -144,7 +129,65 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.getPlaceMarkMeshSet = () => {
+    const updatePointer = (event) => {
+      const rect = _domElement.getBoundingClientRect()
+      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
+      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
+      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+    }
+
+
+    const dropPlaceMark = (event) => {
+      let res = {}
+
+      if (_objects && this.activated) {
+        updatePointer(event)
+        const _intersections = []
+        _intersections.length = 0
+        raycaster.setFromCamera(_pointer, _camera)
+        raycaster.intersectObjects(_objects, true, _intersections)
+        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+
+        if (_intersections.length > 0) {
+          const intersectPoint = _intersections[0].point.clone()
+          intersectPoint.x = floatStrTrim(intersectPoint.x)
+          intersectPoint.y = floatStrTrim(intersectPoint.y)
+          intersectPoint.z = floatStrTrim(intersectPoint.z)
+          const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
+          debug().log('PlaceMark#onSceneClick: offset: ', offset)
+          const point = intersectPoint.clone().add(offset)
+          const lookAt = point.clone().add(_intersections[0].face.normal.clone())
+          const promiseGroup = this.putDown({point, lookAt})
+          res = {point, lookAt, promiseGroup}
+        }
+      }
+
+      return res
+    }
+
+
+    const getPlaceMarkInfo = () => {
+      let res = {}
+      debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
+
+      if (_placeMarks.length) {
+        updatePointer(event)
+        const _intersections = []
+        _intersections.length = 0
+        raycaster.setFromCamera(_pointer, _camera)
+        raycaster.intersectObjects(_placeMarks, true, _intersections)
+        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+        if (_intersections.length) {
+          res = {url: _intersections[0].object?.userData?.url}
+        }
+      }
+
+      return res
+    }
+
+
+    const getPlaceMarkMeshSet = () => {
       const placeMarkMeshSet = new Set()
       _placeMarks.forEach((placeMark) => {
         placeMark.traverse((child) => {
@@ -158,7 +201,7 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.newRendererUpdate = () => {
+    const newRendererUpdate = () => {
       /**
        * Overrides the default update function in the context renderer
        *
@@ -180,7 +223,7 @@ export default class PlaceMark extends EventDispatcher {
     if (context.renderer) {
       // eslint-disable-next-line max-len
       // This patch applies to https://github.com/IFCjs/web-ifc-viewer/blob/9ce3a42cb8d4ffd5b78b19d56f3b4fad2d1f3c0e/viewer/src/components/context/renderer/renderer.ts#L44
-      context.renderer.update = this.newRendererUpdate()
+      context.renderer.update = newRendererUpdate()
     }
   }
 }

@@ -9,6 +9,7 @@ import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup} from '../utils/svg'
+import {postComment} from '../utils/GitHub'
 
 
 /**
@@ -22,6 +23,10 @@ export function usePlaceMark() {
   const placeMarkId = useStore((state) => state.placeMarkId)
   const setPlaceMarkId = useStore((state) => state.setPlaceMarkId)
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const repository = useStore((state) => state.repository)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
+  const accessToken = useStore((state) => state.accessToken)
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
@@ -32,8 +37,77 @@ export function usePlaceMark() {
   }
 
 
-  const onSceneDoubleTap = useDoubleTap((event) => {
-    debug().log('usePlaceMark#onSceneDoubleTap: event: ', event)
+  const dropPlaceMark = async ({point, promiseGroup}) => {
+    if (point && promiseGroup && placeMarkId) {
+      const svgGroup = await promiseGroup
+      debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
+      const markArr = roundCoord(...point)
+      addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+      debug().log('usePlaceMark#dropPlaceMark: window.location.href: ', window.location.href)
+      addUserDataInGroup(svgGroup, {
+        url: window.location.href,
+      })
+    }
+
+    deactivatePlaceMark()
+    if (!repository || !placeMarkId) {
+      return
+    }
+    debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
+    const placeMarkNote = notes.find((note) => note.id === placeMarkId)
+    debug().log('usePlaceMark#dropPlaceMark: notes: ', notes)
+    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
+    debug().log('usePlaceMark#dropPlaceMark: placeMarkNote: ', placeMarkNote)
+    if (!placeMarkNote) {
+      return
+    }
+    debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
+    const issueNumber = placeMarkNote.number
+    const saveRes = await postComment(repository, issueNumber, {
+      body: `[placemark](${window.location.href})`,
+    }, accessToken)
+    debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
+    const newNotes = notes.map((note) => {
+      if (note.id === placeMarkId) {
+        note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+      }
+      return note
+    })
+    setNotes(newNotes)
+  }
+
+
+  const openData = ({url}) => { // Comment in this case
+    debug().log('usePlaceMark#openData: url: ', url)
+    if (url) {
+      window.location.href = url
+    }
+  }
+
+
+  const onSceneDoubleTap = useDoubleTap(async (event) => {
+    if (placeMark) {
+      const res = placeMark.onSceneClick(event)
+
+      switch (event.button) {
+        case 0: // Main button (left button)
+          await dropPlaceMark(res)
+          break
+        case 1: // Wheel button (middle button if present)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // Secondary button (right button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // Fourth button (back button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 4: // Fifth button (forward button)
+          break
+        default:
+          break
+      }
+    }
   })
 
 
@@ -44,20 +118,9 @@ export function usePlaceMark() {
       switch (event.button) {
         case 0: // Main button (left button)
           if (event.shiftKey) {
-            const {point, promiseGroup} = res
-
-            if (point && promiseGroup && placeMarkId) {
-              const svgGroup = await promiseGroup
-              debug().log('usePlaceMark#onSceneSingleTap: svgGroup: ', svgGroup)
-              const markArr = roundCoord(...point)
-              addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-              debug().log('usePlaceMark#onSceneSingleTap: window.location.href: ', window.location.href)
-              addUserDataInGroup(svgGroup, {
-                url: window.location.href,
-              })
-            }
-
-            deactivatePlaceMark()
+            await dropPlaceMark(res)
+          } else {
+            openData(res)
           }
           break
         case 1: // Wheel button (middle button if present)

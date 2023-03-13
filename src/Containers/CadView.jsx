@@ -21,10 +21,9 @@ import useStore from '../store/useStore'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL, postComment} from '../utils/GitHub'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
-import {floatStrTrim} from '../utils/strings'
 
 
 /**
@@ -81,11 +80,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
-  const placeMarkId = useStore((state) => state.placeMarkId)
-  const notes = useStore((state) => state.notes)
-  const setNotes = useStore((state) => state.setNotes)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
@@ -573,57 +568,7 @@ export default function CadView({
         }}
         id='viewer-container'
         onMouseDown={(event) => {
-          onSceneSingleTap(event, async (res) => {
-            switch (event.button) {
-              case 0: // Main button (left button)
-                if (event.shiftKey) {
-                  if (!repository || !placeMarkId) {
-                    return
-                  }
-                  debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
-                  const placeMarkNote = notes.find((note) => note.id === placeMarkId)
-                  debug().log('CadView#onSceneSingleTap: notes: ', notes)
-                  debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)
-                  debug().log('CadView#onSceneSingleTap: placeMarkNote: ', placeMarkNote)
-                  if (!placeMarkNote) {
-                    return
-                  }
-                  debug().log('CadView#onSceneSingleTap: `placeMarkNote` condition is passed')
-                  const issueNumber = placeMarkNote.number
-                  const saveRes = await postComment(repository, issueNumber, {
-                    body: `[placemark](${window.location.href})`,
-                  }, accessToken)
-                  debug().log('CadView#onSceneSingleTap: saveRes: ', saveRes)
-                  const newNotes = notes.map((note) => {
-                    if (note.id === placeMarkId) {
-                      note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
-                    }
-                    return note
-                  })
-                  setNotes(newNotes)
-                } else {
-                  // TODO(Ron): Open linked comment
-                  debug().log('CadView#onSceneSingleTap: res: ', res)
-                  if (res.url) {
-                    window.location.href = res.url
-                  }
-                }
-                break
-              case 1: // Wheel button (middle button if present)
-                break
-              // eslint-disable-next-line no-magic-numbers
-              case 2: // Secondary button (right button)
-                break
-              // eslint-disable-next-line no-magic-numbers
-              case 3: // Fourth button (back button)
-                break
-              // eslint-disable-next-line no-magic-numbers
-              case 4: // Fifth button (forward button)
-                break
-              default:
-                break
-            }
-          })
+          onSceneSingleTap(event)
         }}
         {...onSceneDoubleTap}
       />

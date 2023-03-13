@@ -15,6 +15,7 @@ import {
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
+import {DEFAULT_PLACE_MARK_HEIGHT} from './constants'
 
 
 const svgLoader = new SVGLoader()
@@ -52,8 +53,8 @@ export function getSvgGroupFromObj({
   svgObj,
   fillColor,
   strokeColor,
-  width = 2,
-  height = 0,
+  width = 0,
+  height = DEFAULT_PLACE_MARK_HEIGHT,
   drawStrokes = true,
   drawFillShapes = true,
   strokesWireframe = false,
