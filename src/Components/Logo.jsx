@@ -44,6 +44,7 @@ export default function Logo({onClick}) {
         icon={<LogoIcon/>}
         onClick={onClick}
         openLocal={false}
+        noInfo={true}
       />
     </Box>
   )

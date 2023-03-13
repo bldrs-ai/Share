@@ -36,12 +36,11 @@ export default function AboutDescription({setIsDialogDisplayed}) {
     >
       <Box
         sx={{
-          padding: '5px 10px',
+          padding: '10px 10px',
         }}
       >
-        <Typography varinnt>
-          Bldrs.ai is an environment to access and opearate 3D information models which contain
-          semantic information about the world.
+        <Typography variant={'h3'}>
+          Bldrs.ai is an open workspace to access and opearate 3D information models.
         </Typography>
         <Box
           sx={{
@@ -49,18 +48,20 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'flex-end',
+            position: 'relative',
+            top: '4em',
           }}
         >
           <a
             // eslint-disable-next-line max-len
-            href='https://deploy-preview-638--bldrs-share.netlify.app/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::i:1506392033'
             onClick={onClickLink}
           >
             <div style={{textDecoration: 'underline', marginLeft: '10px'}}>Guide</div>
           </a>
           <a
             // eslint-disable-next-line max-len
-            href='https://deploy-preview-638--bldrs-share.netlify.app/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
+            href='https://bldrs.ai/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
             onClick={onClickLink}
           >
             <div style={{textDecoration: 'underline', marginLeft: '10px'}}>Team</div>

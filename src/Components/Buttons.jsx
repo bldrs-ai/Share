@@ -16,7 +16,7 @@ import CloseIcon from '../assets/icons/Close.svg'
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} dataTestId Internal attribute for component testing. Default: ''
- * @property {boolean} noInfo Internal attribute for component testing. Default: ''
+ * @property {boolean} noInfo
  * @return {React.Component} React component
  */
 export function TooltipIconButton({

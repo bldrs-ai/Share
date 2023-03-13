@@ -5,7 +5,8 @@ import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import AboutGuide from './AboutGuide'
+// import AboutGuide from './AboutGuide'
+import AboutDescription from './AboutDescription'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
@@ -98,7 +99,7 @@ function AboutContent({setIsDialogDisplayed}) {
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>
-      <AboutGuide setIsDialogDisplayed={setIsDialogDisplayed}/>
+      <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
       <PrivacyControl/>
     </Box>)
 }
