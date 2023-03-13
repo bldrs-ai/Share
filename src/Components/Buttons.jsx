@@ -3,6 +3,7 @@ import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
+import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CloseIcon from '../assets/icons/Close.svg'
 
@@ -15,6 +16,7 @@ import CloseIcon from '../assets/icons/Close.svg'
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} dataTestId Internal attribute for component testing. Default: ''
+ * @property {boolean} noInfo
  * @return {React.Component} React component
  */
 export function TooltipIconButton({
@@ -25,20 +27,38 @@ export function TooltipIconButton({
   selected = false,
   size = 'medium',
   dataTestId = '',
+  noInfo = false,
 }) {
   assertDefined(title, onClick, icon)
   const isMobile = useIsMobile()
+  const [openLocal, setOpenLocal] = React.useState(false)
+  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
+  const open = !noInfo ? isTooltipsOpen : false
+  const handleClose = () => {
+    setOpenLocal(false)
+  }
+  const handleOpen = () => {
+    setOpenLocal(true)
+  }
   return (
     <>
       {isMobile ?
        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
          {icon}
        </ToggleButton> :
-       <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
-         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-           {icon}
-         </ToggleButton>
-       </Tooltip>
+        <Tooltip
+          open={openLocal || open}
+          onClose={handleClose}
+          onOpen={handleOpen}
+          title={title}
+          describeChild
+          placement={placement}
+          data-testid={dataTestId}
+        >
+          <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+            {icon}
+          </ToggleButton>
+        </Tooltip>
       }
     </>
   )
@@ -89,6 +109,7 @@ export function CloseButton({onClick}) {
       placement='bottom'
       icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
+      noInfo={true}
     />
   )
 }

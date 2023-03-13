@@ -43,6 +43,7 @@ export default function Logo({onClick}) {
         placement="right"
         icon={<LogoIcon/>}
         onClick={onClick}
+        noInfo={true}
       />
     </Box>
   )
