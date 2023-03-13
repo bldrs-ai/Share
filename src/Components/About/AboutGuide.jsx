@@ -1,6 +1,8 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
+import CutPlaneIcon from '../../assets/icons/CutPlane.svg'
+import ListIcon from '../../assets/icons/List.svg'
 import LogoBuildings from '../../assets/Logo_Buildings.svg'
 import NotesIcon from '../../assets/icons/Notes.svg'
 import OpenIcon from '../../assets/icons/Open.svg'
@@ -12,15 +14,8 @@ import ShareIcon from '../../assets/icons/Share.svg'
  *
  * @return {React.ReactComponent}
  */
-export default function AboutGuide({setIsDialogDisplayed}) {
+export default function AboutGuide() {
   const theme = useTheme()
-
-  /**
-   * Close About dialog when a link is clicked
-   */
-  function onClickLink() {
-    setIsDialogDisplayed(false)
-  }
   return (
     <Box
       sx={{
@@ -39,8 +34,8 @@ export default function AboutGuide({setIsDialogDisplayed}) {
           'float': 'right',
           'margin': '.4em 0em 0em 0em',
           '& svg': {
-            width: '18px',
-            height: '18px',
+            width: '13px',
+            height: '13px',
             verticalAlign: 'middle',
             lineHeight: '15px',
             fill: theme.palette.primary.contrastText,
@@ -49,8 +44,8 @@ export default function AboutGuide({setIsDialogDisplayed}) {
             textAlign: 'right',
             verticalAlign: 'middle',
             whiteSpace: 'nowrap',
-            lineHeight: '24px',
-            fontSize: '18px',
+            lineHeight: '16px',
+            fontSize: '14px',
           },
           '& a': {
             textAlign: 'right',
@@ -70,48 +65,30 @@ export default function AboutGuide({setIsDialogDisplayed}) {
         >
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1506392033'
-            onClick={onClickLink}
+            target='_new'
           >
-            <OpenIcon/> ← <span>Open</span>
+            <OpenIcon/> ← <span style={{textDecoration: 'underline'}}>Open</span>
           </a>
           <a
             href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
-            onClick={onClickLink}
+            target='_new'
           >
-            <span>Share</span> → <ShareIcon/>
+            <span style={{textDecoration: 'underline'}}>Share</span> → <ShareIcon/>
           </a>
         </Box>
+        <div>Notes → <NotesIcon/></div>
         <div>
-          <a
-            href='https://bldrs.ai/share/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34::i:1493510953'
-            onClick={onClickLink}
-          >
-            <span>Notes</span>  → <NotesIcon/>
-          </a>
+          Properties → <ListIcon/>
         </div>
-        <Box
-          sx={{
-            position: 'relative',
-            bottom: '-3.9em',
-            right: '0em',
-          }}
-        >
-          <a
-            // eslint-disable-next-line max-len
-            href='https://deploy-preview-638--bldrs-share.netlify.app/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
-            onClick={onClickLink}
-          >
-            <div style={{textDecoration: 'underline'}}>Team</div>
-          </a>
-        </Box>
+        <div>Section → <CutPlaneIcon/></div>
       </Box>
       <Box
         sx={{
           'float': 'right',
-          'margin': '-1.8em 6.5em 0em 0em',
+          'margin': '-1em 4em 0em 0em',
           '& svg': {
-            width: '140px',
-            height: '110px',
+            width: '130px',
+            height: '100px',
           },
         }}
       >
