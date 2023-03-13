@@ -353,7 +353,9 @@ const CardFooter = ({
             icon={<ShareIcon/>}
           />
         }
-        {!isComment && synchedNote && user && user.nickname === username &&
+        {
+          !isComment &&
+          // synchedNote && user && user.nickname === username &&
           <Box sx={{
             '& svg': {
               fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',

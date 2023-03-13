@@ -32,15 +32,27 @@ export function usePlaceMark() {
 
 
   const onSceneDoubleTap = useDoubleTap((event) => {
-    debug().log('usePlaceMark#onSceneDoubleTap: ', event)
+    debug().log('usePlaceMark#onSceneDoubleTap: event: ', event)
   })
 
 
   const onSceneSingleTap = (event, callback) => {
-    if (event.shiftKey) {
-      dropPlaceMark(event)
-      deactivatePlaceMark()
-      callback()
+    if (placeMark) {
+      debug().log('usePlaceMark#onSceneSingleTap: placeMark: ', placeMark)
+      const {point} = placeMark.onSceneClick(event)
+
+      if (event.shiftKey) {
+        if (point && placeMarkId) {
+          const markArr = roundCoord(...point)
+          addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+        }
+
+        deactivatePlaceMark()
+      }
+
+      if (callback) {
+        callback()
+      }
     }
   }
 
@@ -61,9 +73,9 @@ export function usePlaceMark() {
     // TODO(Ron): Put down all place marks
     const placeMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
     if (placeMarkHash && placeMark) {
-      debug().log('usePlaceMark: placeMarkHash: ', placeMarkHash)
+      debug().log('usePlaceMark#useEffect: placeMarkHash: ', placeMarkHash)
       const markArr = getObjectParams(placeMarkHash)
-      debug().log('usePlaceMark: markArr: ', markArr)
+      debug().log('usePlaceMark#useEffect: markArr: ', markArr)
       placeMark.putDown({
         point: new Vector3(
             floatStrTrim(markArr[0]),
@@ -84,18 +96,6 @@ export function usePlaceMark() {
   const deactivatePlaceMark = () => {
     placeMark.deactivate()
     setPlaceMarkActivated(false)
-  }
-
-
-  const dropPlaceMark = (event) => {
-    if (placeMark) {
-      const {point} = placeMark.onDrop(event)
-
-      if (point && placeMarkId) {
-        const markArr = roundCoord(...point)
-        addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-      }
-    }
   }
 
 

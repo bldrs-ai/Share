@@ -63,30 +63,37 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.onDrop = (event) => {
-      debug().log('PlaceMark#onDrop: ', event)
-      if (!_objects || !this.activated) {
-        return {}
-      }
-      updatePointer(event)
-      const _intersections = []
-      _intersections.length = 0
-      _raycaster.setFromCamera(_pointer, _camera)
-      _raycaster.intersectObjects(_objects, true, _intersections)
-      debug().log('PlaceMark#onDrop: _intersections: ', _intersections)
+    this.onSceneClick = (event) => {
+      debug().log('PlaceMark#onSceneClick: ', event)
 
-      if (_intersections.length > 0) {
-        const intersectPoint = _intersections[0].point.clone()
-        intersectPoint.x = floatStrTrim(intersectPoint.x)
-        intersectPoint.y = floatStrTrim(intersectPoint.y)
-        intersectPoint.z = floatStrTrim(intersectPoint.z)
-        const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-        debug().log('PlaceMark#onDrop: offset: ', offset)
-        const point = intersectPoint.clone().add(offset)
-        const lookAt = point.clone().add(_intersections[0].face.normal.clone())
-        this.putDown({point, lookAt})
-        return {point, lookAt}
+      if (event.shiftKey) {
+        if (!_objects || !this.activated) {
+          return {}
+        }
+        updatePointer(event)
+        const _intersections = []
+        _intersections.length = 0
+        _raycaster.setFromCamera(_pointer, _camera)
+        _raycaster.intersectObjects(_objects, true, _intersections)
+        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+
+        if (_intersections.length > 0) {
+          const intersectPoint = _intersections[0].point.clone()
+          intersectPoint.x = floatStrTrim(intersectPoint.x)
+          intersectPoint.y = floatStrTrim(intersectPoint.y)
+          intersectPoint.z = floatStrTrim(intersectPoint.z)
+          const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
+          debug().log('PlaceMark#onSceneClick: offset: ', offset)
+          const point = intersectPoint.clone().add(offset)
+          const lookAt = point.clone().add(_intersections[0].face.normal.clone())
+          this.putDown({point, lookAt})
+          return {point, lookAt}
+        } else {
+          return {}
+        }
       } else {
+        // TODO(Ron): Select place mark in scene
+        debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
         return {}
       }
     }

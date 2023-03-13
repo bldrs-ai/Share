@@ -575,30 +575,35 @@ export default function CadView({
         onMouseDown={(event) => {
           onSceneSingleTap(event, async () => {
             debug().log('CadView#onSceneSingleTap')
-            if (!repository || !placeMarkId) {
-              return
-            }
-            debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
-            const placeMarkNote = notes.find((note) => note.id === placeMarkId)
-            debug().log('CadView#onSceneSingleTap: notes: ', notes)
-            debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)
-            debug().log('CadView#onSceneSingleTap: placeMarkNote: ', placeMarkNote)
-            if (!placeMarkNote) {
-              return
-            }
-            debug().log('CadView#onSceneSingleTap: `placeMarkNote` condition is passed')
-            const issueNumber = placeMarkNote.number
-            const saveRes = await postComment(repository, issueNumber, {
-              body: `[placemark](${window.location.href})`,
-            }, accessToken)
-            debug().log('CadView#onSceneSingleTap: saveRes: ', saveRes)
-            const newNotes = notes.map((note) => {
-              if (note.id === placeMarkId) {
-                note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+
+            if (event.shiftKey) {
+              if (!repository || !placeMarkId) {
+                return
               }
-              return note
-            })
-            setNotes(newNotes)
+              debug().log('CadView#onSceneSingleTap: `repository` `placeMarkId` condition is passed')
+              const placeMarkNote = notes.find((note) => note.id === placeMarkId)
+              debug().log('CadView#onSceneSingleTap: notes: ', notes)
+              debug().log('CadView#onSceneSingleTap: placeMarkId: ', placeMarkId)
+              debug().log('CadView#onSceneSingleTap: placeMarkNote: ', placeMarkNote)
+              if (!placeMarkNote) {
+                return
+              }
+              debug().log('CadView#onSceneSingleTap: `placeMarkNote` condition is passed')
+              const issueNumber = placeMarkNote.number
+              const saveRes = await postComment(repository, issueNumber, {
+                body: `[placemark](${window.location.href})`,
+              }, accessToken)
+              debug().log('CadView#onSceneSingleTap: saveRes: ', saveRes)
+              const newNotes = notes.map((note) => {
+                if (note.id === placeMarkId) {
+                  note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+                }
+                return note
+              })
+              setNotes(newNotes)
+            } else {
+              // TODO(Ron): Select place mark in scene
+            }
           })
         }}
         {...onSceneDoubleTap}
