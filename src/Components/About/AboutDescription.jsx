@@ -42,6 +42,12 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         <Typography variant={'h3'}>
           Bldrs.ai is an open workspace to access and opearate 3D information models.
         </Typography>
+        <Typography variant={'h3'}>
+          - Connect to Github account
+        </Typography>
+        <Typography variant={'h3'}>
+          - Use notes to collaborate
+        </Typography>
         <Box
           sx={{
             marginRight: '-6px',
@@ -49,7 +55,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '4em',
+            top: '1.4em',
           }}
         >
           <a
