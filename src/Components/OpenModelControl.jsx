@@ -40,7 +40,7 @@ export default function OpenModelControl({fileOpen}) {
           placement={'right'}
           selected={isDialogDisplayed}
           dataTestId='open-ifc'
-          openLocal={false}
+          noInfo={true}
         />
       </Paper>
       {isDialogDisplayed &&
