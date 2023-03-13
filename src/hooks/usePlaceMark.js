@@ -8,6 +8,7 @@ import {addHashParams, getHashParams, getObjectParams} from '../utils/location'
 import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
+import {addUserDataInGroup} from '../utils/svg'
 
 
 /**
@@ -36,22 +37,46 @@ export function usePlaceMark() {
   })
 
 
-  const onSceneSingleTap = (event, callback) => {
+  const onSceneSingleTap = async (event, callback) => {
     if (placeMark) {
-      debug().log('usePlaceMark#onSceneSingleTap: placeMark: ', placeMark)
-      const {point} = placeMark.onSceneClick(event)
+      const res = placeMark.onSceneClick(event)
 
-      if (event.shiftKey) {
-        if (point && placeMarkId) {
-          const markArr = roundCoord(...point)
-          addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-        }
+      switch (event.button) {
+        case 0: // Main button (left button)
+          if (event.shiftKey) {
+            const {point, promiseGroup} = res
 
-        deactivatePlaceMark()
+            if (point && promiseGroup && placeMarkId) {
+              const svgGroup = await promiseGroup
+              debug().log('usePlaceMark#onSceneSingleTap: svgGroup: ', svgGroup)
+              const markArr = roundCoord(...point)
+              addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+              debug().log('usePlaceMark#onSceneSingleTap: window.location.href: ', window.location.href)
+              addUserDataInGroup(svgGroup, {
+                url: window.location.href,
+              })
+            }
+
+            deactivatePlaceMark()
+          }
+          break
+        case 1: // Wheel button (middle button if present)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // Secondary button (right button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // Fourth button (back button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 4: // Fifth button (forward button)
+          break
+        default:
+          break
       }
 
       if (callback) {
-        callback()
+        callback(res)
       }
     }
   }

@@ -1,7 +1,6 @@
 import {
   EventDispatcher,
   Mesh,
-  Raycaster,
   Vector2,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
@@ -9,6 +8,7 @@ import {PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
+import {raycaster} from '../utils/constants'
 import createComposer from './CustomPostProcessing'
 
 
@@ -27,7 +27,6 @@ export default class PlaceMark extends EventDispatcher {
     const _scene = context.getScene()
     const _renderer = context.getRenderer()
     const {composer, outlineEffect} = createComposer(_renderer, _scene, _camera)
-    const _raycaster = new Raycaster()
     const _pointer = new Vector2()
     let _objects = []
     const _placeMarks = []
@@ -64,54 +63,83 @@ export default class PlaceMark extends EventDispatcher {
 
 
     this.onSceneClick = (event) => {
-      debug().log('PlaceMark#onSceneClick: ', event)
+      let res = {}
 
-      if (event.shiftKey) {
-        if (!_objects || !this.activated) {
-          return {}
-        }
-        updatePointer(event)
-        const _intersections = []
-        _intersections.length = 0
-        _raycaster.setFromCamera(_pointer, _camera)
-        _raycaster.intersectObjects(_objects, true, _intersections)
-        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+      switch (event.button) {
+        case 0: // Main button (left button)
+          if (event.shiftKey) {
+            if (_objects && this.activated) {
+              updatePointer(event)
+              const _intersections = []
+              _intersections.length = 0
+              raycaster.setFromCamera(_pointer, _camera)
+              raycaster.intersectObjects(_objects, true, _intersections)
+              debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
 
-        if (_intersections.length > 0) {
-          const intersectPoint = _intersections[0].point.clone()
-          intersectPoint.x = floatStrTrim(intersectPoint.x)
-          intersectPoint.y = floatStrTrim(intersectPoint.y)
-          intersectPoint.z = floatStrTrim(intersectPoint.z)
-          const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-          debug().log('PlaceMark#onSceneClick: offset: ', offset)
-          const point = intersectPoint.clone().add(offset)
-          const lookAt = point.clone().add(_intersections[0].face.normal.clone())
-          this.putDown({point, lookAt})
-          return {point, lookAt}
-        } else {
-          return {}
-        }
-      } else {
-        // TODO(Ron): Select place mark in scene
-        debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
-        return {}
+              if (_intersections.length > 0) {
+                const intersectPoint = _intersections[0].point.clone()
+                intersectPoint.x = floatStrTrim(intersectPoint.x)
+                intersectPoint.y = floatStrTrim(intersectPoint.y)
+                intersectPoint.z = floatStrTrim(intersectPoint.z)
+                const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
+                debug().log('PlaceMark#onSceneClick: offset: ', offset)
+                const point = intersectPoint.clone().add(offset)
+                const lookAt = point.clone().add(_intersections[0].face.normal.clone())
+                const promiseGroup = this.putDown({point, lookAt})
+                res = {point, lookAt, promiseGroup}
+              }
+            }
+          } else {
+            debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
+
+            if (_placeMarks.length) {
+              updatePointer(event)
+              const _intersections = []
+              _intersections.length = 0
+              raycaster.setFromCamera(_pointer, _camera)
+              raycaster.intersectObjects(_placeMarks, true, _intersections)
+              debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+              if (_intersections.length) {
+                res = {url: _intersections[0].object?.userData?.url}
+              }
+            }
+          }
+          break
+        case 1: // Wheel button (middle button if present)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 2: // Secondary button (right button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 3: // Fourth button (back button)
+          break
+        // eslint-disable-next-line no-magic-numbers
+        case 4: // Fifth button (forward button)
+          break
+        default:
+          break
       }
+
+      return res
     }
 
 
     this.putDown = ({point, lookAt, fillColor = 'red'}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
-      getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-        const group = getSvgGroupFromObj({svgObj, fillColor})
-        group.position.copy(point)
-        _scene.add(group)
-        _placeMarks.push(group)
-        debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
-        const placeMarkMeshSet = this.getPlaceMarkMeshSet()
-        debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
-        debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
-        outlineEffect.setSelection(placeMarkMeshSet)
+      return new Promise((resolve, reject) => {
+        getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
+          const group = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark'})
+          group.position.copy(point)
+          _scene.add(group)
+          _placeMarks.push(group)
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
+          const placeMarkMeshSet = this.getPlaceMarkMeshSet()
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
+          outlineEffect.setSelection(placeMarkMeshSet)
+          resolve(group)
+        })
       })
     }
 

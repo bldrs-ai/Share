@@ -354,7 +354,7 @@ const CardFooter = ({
           />
         }
         {
-          !isComment &&
+          !isComment && selected &&
           // synchedNote && user && user.nickname === username &&
           <Box sx={{
             '& svg': {

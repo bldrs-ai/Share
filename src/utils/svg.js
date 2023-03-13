@@ -212,3 +212,22 @@ export function getSpriteFromSvgCanvas({
   sprite.scale.set(width, height, 1.0)
   return sprite
 }
+
+
+/**
+ * Generate sprite using svg file
+ *
+ * @param {Group} group
+ * @param {object} userData color to fill sprite
+ */
+export function addUserDataInGroup(group, userData) {
+  assertDefined(group, userData)
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.userData = {
+        ...child.userData,
+        ...userData,
+      }
+    }
+  })
+}
