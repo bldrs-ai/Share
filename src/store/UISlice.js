@@ -53,5 +53,6 @@ export default function createUISlice(set, get) {
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
     setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
+    setDrawer: (newDrawer) => set(() => ({drawer: newDrawer})),
   }
 }
