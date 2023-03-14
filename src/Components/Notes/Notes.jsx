@@ -44,8 +44,9 @@ export default function Notes() {
       try {
         const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect#fetchNotes: issuesData: ', issuesData)
         let issueIndex = 0
-        issuesData.data.slice(0).map((issue, index) => {
+        issuesData.data.map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
