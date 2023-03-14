@@ -37,57 +37,9 @@ export function usePlaceMark() {
   }
 
 
-  const dropPlaceMark = async ({point, promiseGroup}) => {
-    if (point && promiseGroup && placeMarkId) {
-      const svgGroup = await promiseGroup
-      debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
-      const markArr = roundCoord(...point)
-      addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-      debug().log('usePlaceMark#dropPlaceMark: window.location.href: ', window.location.href)
-      addUserDataInGroup(svgGroup, {
-        url: window.location.href,
-      })
-    }
-
-    deactivatePlaceMark()
-    if (!repository || !placeMarkId) {
-      return
-    }
-    debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
-    const placeMarkNote = notes.find((note) => note.id === placeMarkId)
-    debug().log('usePlaceMark#dropPlaceMark: notes: ', notes)
-    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
-    debug().log('usePlaceMark#dropPlaceMark: placeMarkNote: ', placeMarkNote)
-    if (!placeMarkNote) {
-      return
-    }
-    debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
-    const issueNumber = placeMarkNote.number
-    const saveRes = await postComment(repository, issueNumber, {
-      body: `[placemark](${window.location.href})`,
-    }, accessToken)
-    debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
-    const newNotes = notes.map((note) => {
-      if (note.id === placeMarkId) {
-        note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
-      }
-      return note
-    })
-    setNotes(newNotes)
-  }
-
-
-  const openData = ({url}) => { // Comment in this case
-    debug().log('usePlaceMark#openData: url: ', url)
-    if (url) {
-      window.location.href = url
-    }
-  }
-
-
   const onSceneDoubleTap = useDoubleTap(async (event) => {
     if (placeMark) {
-      const res = placeMark.onSceneClick(event)
+      const res = placeMark.onSceneDoubleClick(event)
 
       switch (event.button) {
         case 0: // Main button (left button)
@@ -187,5 +139,53 @@ export function usePlaceMark() {
   }
 
 
-  return {createPlaceMark, onSceneSingleTap, onSceneDoubleTap, togglePlaceMarkActive}
+  const dropPlaceMark = async ({point, promiseGroup}) => {
+    if (point && promiseGroup && placeMarkId) {
+      const svgGroup = await promiseGroup
+      debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
+      const markArr = roundCoord(...point)
+      addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+      debug().log('usePlaceMark#dropPlaceMark: window.location.href: ', window.location.href)
+      addUserDataInGroup(svgGroup, {
+        url: window.location.href,
+      })
+    }
+
+    deactivatePlaceMark()
+    if (!repository || !placeMarkId) {
+      return
+    }
+    debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
+    const placeMarkNote = notes.find((note) => note.id === placeMarkId)
+    debug().log('usePlaceMark#dropPlaceMark: notes: ', notes)
+    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
+    debug().log('usePlaceMark#dropPlaceMark: placeMarkNote: ', placeMarkNote)
+    if (!placeMarkNote) {
+      return
+    }
+    debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
+    const issueNumber = placeMarkNote.number
+    const saveRes = await postComment(repository, issueNumber, {
+      body: `[placemark](${window.location.href})`,
+    }, accessToken)
+    debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
+    const newNotes = notes.map((note) => {
+      if (note.id === placeMarkId) {
+        note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+      }
+      return note
+    })
+    setNotes(newNotes)
+  }
+
+
+  const openData = ({url}) => { // Comment in this case
+    debug().log('usePlaceMark#openData: url: ', url)
+    if (url) {
+      window.location.href = url
+    }
+  }
+
+
+  return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive}
 }

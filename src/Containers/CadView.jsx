@@ -24,6 +24,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {getAllHashParams} from '../utils/location'
 
 
 /**
@@ -438,7 +439,9 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        const curHashParams = getAllHashParams()
+        debug().log('CadView#selectItemsInScene: curHashParams: ', curHashParams)
+        navigate(`${pathPrefix}${repoFilePath}/${path}#${curHashParams}`)
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual

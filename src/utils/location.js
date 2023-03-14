@@ -218,6 +218,7 @@ export function removeHashParams(location, name, paramKeys = []) {
   }
 }
 
+
 /**
  * Removes the given named hash param.
  *
@@ -229,4 +230,14 @@ export function removeHashParams(location, name, paramKeys = []) {
  */
 export function navigateBaseOnModelPath(org, repo, branchName, filePath) {
   return `/share/v/gh/${org}/${repo}/${branchName}${filePath}`
+}
+
+
+/**
+ * @return {string|undefined}
+ */
+export function getAllHashParams() {
+  const splitHref = window.location.href.split('#')
+  const allHashParams = splitHref[1]
+  return allHashParams
 }
