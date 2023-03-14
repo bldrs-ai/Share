@@ -6,9 +6,9 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
+import {handleBeforeUnload} from '../utils/event'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
-import {handleBeforeUnload} from '../utils/event'
 import ClearIcon from '../assets/icons/Clear.svg'
 
 
@@ -28,8 +28,8 @@ export default function SearchBar({fileOpen}) {
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
   const widthPerChar = 6.5
-  const padding = 130
-  const calculatedInputWidth = (Number(inputText.length) * widthPerChar) + padding
+  const minWidthPx = 125
+  const widthPx = (Number(inputText.length) * widthPerChar) + minWidthPx
   // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const theme = useTheme()
@@ -87,8 +87,12 @@ export default function SearchBar({fileOpen}) {
   }
 
 
+  // The container and paper are set to 100% width to fill the
+  // container SearchBar shares with NavPanel.  This is an easier way
+  // to have them share the same width, which is now set in the parent
+  // container (CadView).
   return (
-    <Box>
+    <Box sx={{width: '100%'}}>
       <Paper
         component='form'
         onSubmit={onSubmit}
@@ -96,17 +100,14 @@ export default function SearchBar({fileOpen}) {
         variant='control'
         sx={{
           'display': 'flex',
-          'minWidth': '300px',
-          'width': `${calculatedInputWidth}px`,
+          'minWidth': '100%',
+          'width': `${widthPx}px`,
           'height': '56px',
-          'maxWidth': '700px',
           'alignItems': 'center',
           'opacity': .8,
-          'padding': '2px 6px 2px 6px',
+          'padding': '2px 6px',
           '@media (max-width: 900px)': {
-            minWidth: '300px',
-            width: '300px',
-            maxWidth: '300px',
+            width: '100%',
           },
           '& .MuiInputBase-root': {
             flex: 1,

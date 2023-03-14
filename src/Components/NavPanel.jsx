@@ -41,14 +41,13 @@ export default function NavPanel({
       sx={{
         'marginTop': '14px',
         'overflow': 'auto',
-        'width': '300px',
+        'width': '100%',
         'opacity': .8,
         'justifyContent': 'space-around',
         'alignItems': 'center',
         'maxHeight': '400px',
         '@media (max-width: 900px)': {
           maxHeight: '150px',
-          width: '300px',
           top: '86px',
         },
       }}

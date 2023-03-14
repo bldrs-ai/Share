@@ -6,6 +6,7 @@ import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
+import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -547,6 +548,11 @@ export default function CadView({
   }
 
 
+  const windowDimensions = useWindowDimensions()
+  const spacingBetweenSearchAndOpsGroupPx = 20
+  const operationsGroupWidthPx = 60
+  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const searchAndNavMaxWidthPx = 300
   return (
     <Box
       sx={{
@@ -582,14 +588,19 @@ export default function CadView({
       />
       {showSearchBar && (
         <Box sx={{
-          position: 'absolute',
-          top: `1em`,
-          left: '1em',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          alignItems: 'flex-start',
-          maxHeight: '95%',
+          'position': 'absolute',
+          'top': `1em`,
+          'left': '1em',
+          'display': 'flex',
+          'flexDirection': 'column',
+          'justifyContent': 'flex-start',
+          'alignItems': 'flex-start',
+          'maxHeight': '95%',
+          'width': '275px',
+          '@media (max-width: 900px)': {
+            width: `${searchAndNavWidthPx}px`,
+            maxWidth: `${searchAndNavMaxWidthPx}px`,
+          },
         }}
         >
           {isSearchBarVisible &&
