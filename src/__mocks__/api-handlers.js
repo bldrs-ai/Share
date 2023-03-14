@@ -137,4 +137,10 @@ export const handlers = [
         ctx.status(httpOk),
     )
   }),
+
+  rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+    )
+  }),
 ]

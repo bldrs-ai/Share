@@ -188,6 +188,7 @@ export async function getComment(repository, issueId, commentId, accessToken = '
   }
 }
 
+
 /**
  * Retrieves the contents download URL for a GitHub repository path
  *
@@ -219,6 +220,75 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
   return contents.data.download_url
 }
+
+
+/**
+ * Retrieves organizations associated with the user
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getOrganizations(accessToken = '') {
+  const res = await octokit.request(`/user/orgs`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+
+/**
+ * Retrieves repositories associated with an organization
+ *
+ * @param {string} [org]
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getRepositories(org, accessToken = '') {
+  const res = await octokit.request('GET /orgs/{org}/repos', {
+    org,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+/**
+ * Retrieves repositories associated with the authenticated user
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getUserRepositories(username, accessToken = '') {
+  const res = await octokit.request('GET /users/{username}/repos', {
+    username,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+
+/**
+ * Retrieves files associated with a repository
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getFiles(repo, owner, accessToken = '') {
+  const res = await octokit.request('/repos/{owner}/{repo}/contents', {
+    owner,
+    repo,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
 
 /**
  * Parses a GitHub repository URL and returns a structure
@@ -258,6 +328,7 @@ export const parseGitHubRepositoryURL = (githubURL) => {
     path: path,
   }
 }
+
 
 // DO NOT EXPORT ANY BELOW //
 /**

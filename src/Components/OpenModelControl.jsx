@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
@@ -6,12 +6,16 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import useTheme from '@mui/styles/useTheme'
+import {useAuth0} from '@auth0/auth0-react'
+import useStore from '../store/useStore'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
 import OpenIcon from '../assets/icons/Open.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import {handleBeforeUnload} from '../utils/event'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
+import {RectangularButton} from '../Components/Buttons'
 
 
 /**
@@ -20,10 +24,28 @@ import {handleBeforeUnload} from '../utils/event'
  * @return {React.ReactElement}
  */
 export default function OpenModelControl({fileOpen}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(true)
+  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const [orgNamesArr, setOrgNamesArray] = useState(['loading'])
+  const {user} = useAuth0()
   const theme = useTheme()
-
-
+  const accessToken = useStore((state) => state.accessToken)
+  useEffect(() => {
+    /**
+     * Asynchronously fetch organizations
+     *
+     * @return {Array} organizations
+     */
+    async function fetchOrganizations() {
+      const orgs = await getOrganizations(accessToken)
+      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      const orgNames = [...orgNamesFetched, user ? user.nickname : 'my own repo']
+      setOrgNamesArray(orgNames)
+      console.log('in the fetch Organizations', orgs)
+      return orgs
+    }
+    fetchOrganizations()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   return (
     <Box
       sx={{
@@ -48,6 +70,7 @@ export default function OpenModelControl({fileOpen}) {
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
           fileOpen={fileOpen}
+          orgNamesArr={orgNamesArr}
         />
       }
     </Box>
@@ -60,16 +83,44 @@ export default function OpenModelControl({fileOpen}) {
  * @param {Function} setIsDialogDisplayed
  * @return {object} React component
  */
-function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
+function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
+  const {isAuthenticated, user} = useAuth0()
+  // const isAuthenticated = true
+  const [selectedOrg, setSelectedOrg] = useState('')
+  const [selectedRepo, setSelectedRepo] = useState('')
+  const [selectedFile, setSelectedFile] = useState('')
+  const [repoNamesArr, setRepoNamesArr] = useState(['loading'])
+  const [filesArr, setFilesArr] = useState(['loading'])
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const accessToken = useStore((state) => state.accessToken)
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
   }
-  const list = [
-    {0: 'one'},
-    {1: 'two'},
-    {2: 'three'},
-  ]
+  const selectOrg = async (org) => {
+    setSelectedOrg(org)
+    let repos
+    if (orgNamesArr[org] === user.nickname) {
+      repos = await getUserRepositories(user.nickname, accessToken)
+    } else {
+      repos = await getRepositories(orgNamesArr[org], accessToken)
+    }
+    const repoNames = Object.keys(repos).map((key) => repos[key].name)
+    setRepoNamesArr(repoNames)
+  }
+  const selectRepo = async (repo) => {
+    setSelectedRepo(repo)
+    const owner = orgNamesArr[selectedOrg]
+    const files = await getFiles(repoNamesArr[repo], owner, accessToken)
+    const fileNames = Object.keys(files).map((key) => files[key].name)
+    setFilesArr(fileNames)
+  }
+  const navigateToFile = () => {
+    if (filesArr[selectedFile].includes('.ifc')) {
+      navigate({pathname: `/share/v/gh/${orgNamesArr[selectedOrg]}/${repoNamesArr[selectedRepo]}/main/${filesArr[selectedFile]}`})
+    }
+  }
   return (
     <Dialog
       icon={<OpenIcon/>}
@@ -97,13 +148,36 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
               wiki
             </a> to learn more about GitHub hosting.
           </p>
+          {isAuthenticated ?
           <Box>
-            <Selector label={'Organization'} list={list}/>
-            <Selector label={'Repository'} list={list}/>
-            <Selector label={'File'} list={list}/>
-            <Selector label={'Branch'} list={list}/>
+            <Selector label={'Organization'} list={orgNamesArr} selected={selectedOrg} setSelected={selectOrg}/>
+            <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepo} setSelected={selectRepo} testId={'Repository'}/>
+            <Selector label={'File'} list={filesArr} selected={selectedFile} setSelected={setSelectedFile} testId={'File'}/>
+            {selectedFile !== '' &&
+              <Box sx={{textAlign: 'center', marginTop: '4px'}}>
+                <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
+              </Box>
+            }
+          </Box> :
+          <Box
+            sx={{
+              color: theme.palette.primary.contrastText,
+              backgroundColor: theme.palette.scene.background,
+              borderRadius: '10px',
+              padding: '16px 16px 16px 16px',
+            }}
+          >
+            Please login to get access to your files on GitHub
           </Box>
-          <p>Models opened from local drive cannot yet be saved or shared.</p>
+          }
+          <Box
+            sx={{
+              marginTop: '1em',
+              fontSize: '.8em',
+            }}
+          >
+            * Local files cannot yet be saved or shared.
+          </Box>
         </Box>
       }
     />
@@ -129,6 +203,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc',
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
@@ -180,6 +255,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
       <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
       <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
       <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
     </TextField>
   )
 }
