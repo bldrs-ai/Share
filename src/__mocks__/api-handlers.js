@@ -4,6 +4,7 @@ import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
 
 const httpOk = 200
 const httpNotFound = 404
+const httpCreated = 201
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
@@ -102,6 +103,38 @@ export const handlers = [
             html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
           },
         }),
+    )
+  }),
+
+  rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+    const {org, repo} = req.params
+    if (org !== 'bldrs-ai' || repo !== 'Share') {
+      return res(
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
+      )
+    }
+    return res(
+        ctx.status(httpCreated),
+    )
+  }),
+
+  rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
+    const {org, repo} = req.params
+    console.log('in the patch mock')
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
+      console.log('in the if')
+      return res(
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
+      )
+    }
+    return res(
+        ctx.status(httpOk),
     )
   }),
 ]
