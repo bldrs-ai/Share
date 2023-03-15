@@ -140,7 +140,7 @@ export function usePlaceMark() {
 
 
   const dropPlaceMark = async ({point, promiseGroup}) => {
-    if (point && promiseGroup && placeMarkId) {
+    if (point && promiseGroup) {
       const svgGroup = await promiseGroup
       debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
       const markArr = roundCoord(...point)
@@ -152,7 +152,7 @@ export function usePlaceMark() {
     }
 
     deactivatePlaceMark()
-    if (!repository || !placeMarkId) {
+    if (!repository) {
       return
     }
     debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')

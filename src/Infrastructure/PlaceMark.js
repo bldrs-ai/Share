@@ -140,6 +140,7 @@ export default class PlaceMark extends EventDispatcher {
 
     const dropPlaceMark = (event) => {
       let res = {}
+      // this.activated = true // To test without notes
 
       if (_objects && this.activated) {
         updatePointer(event)
@@ -147,7 +148,7 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         raycaster.setFromCamera(_pointer, _camera)
         raycaster.intersectObjects(_objects, true, _intersections)
-        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+        debug().log('PlaceMark#dropPlaceMark: _intersections: ', _intersections)
 
         if (_intersections.length > 0) {
           const intersectPoint = _intersections[0].point.clone()
@@ -155,7 +156,7 @@ export default class PlaceMark extends EventDispatcher {
           intersectPoint.y = floatStrTrim(intersectPoint.y)
           intersectPoint.z = floatStrTrim(intersectPoint.z)
           const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-          debug().log('PlaceMark#onSceneClick: offset: ', offset)
+          debug().log('PlaceMark#dropPlaceMark: offset: ', offset)
           const point = intersectPoint.clone().add(offset)
           const lookAt = point.clone().add(_intersections[0].face.normal.clone())
           const promiseGroup = this.putDown({point, lookAt})
@@ -169,7 +170,7 @@ export default class PlaceMark extends EventDispatcher {
 
     const getPlaceMarkInfo = () => {
       let res = {}
-      debug().log('PlaceMark#onSceneClick: _placeMarks: ', _placeMarks)
+      debug().log('PlaceMark#getPlaceMarkInfo: _placeMarks: ', _placeMarks)
 
       if (_placeMarks.length) {
         updatePointer(event)
@@ -177,7 +178,7 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         raycaster.setFromCamera(_pointer, _camera)
         raycaster.intersectObjects(_placeMarks, true, _intersections)
-        debug().log('PlaceMark#onSceneClick: _intersections: ', _intersections)
+        debug().log('PlaceMark#getPlaceMarkInfo: _intersections: ', _intersections)
         if (_intersections.length) {
           res = {url: _intersections[0].object?.userData?.url}
         }

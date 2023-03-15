@@ -42,11 +42,6 @@ export default function Notes() {
       return
     }
 
-    if (!accessToken) {
-      debug().warn('IssuesControl#Notes: 2, no access token defined')
-      return
-    }
-
 
     const fetchNotes = async () => {
       try {
