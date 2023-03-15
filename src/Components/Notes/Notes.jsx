@@ -42,6 +42,12 @@ export default function Notes() {
       return
     }
 
+    if (!accessToken) {
+      debug().warn('IssuesControl#Notes: 2, no access token defined')
+      return
+    }
+
+
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
@@ -125,7 +131,7 @@ export default function Notes() {
       }
     }
     fetchNotes()
-  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes])
+  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes])
 
 
   useEffect(() => {
