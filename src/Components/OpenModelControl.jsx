@@ -161,10 +161,9 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           </Box> :
           <Box
             sx={{
-              color: theme.palette.primary.contrastText,
               backgroundColor: theme.palette.scene.background,
               borderRadius: '10px',
-              padding: '16px 16px 16px 16px',
+              padding: '16px 12px 18px 12px',
             }}
           >
             Please login to get access to your files on GitHub
