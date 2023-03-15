@@ -3,6 +3,7 @@ import {
   parseGitHubRepositoryURL,
   postIssue,
   closeIssue,
+  getOrganizations,
 } from './GitHub'
 
 
@@ -67,6 +68,12 @@ describe('GitHub', () => {
     it('successfully delete the note by closing the issue', async () => {
       const res = await closeIssue({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
       expect(res.status).toEqual(httpOK)
+    })
+  })
+  describe('get models from github', () => {
+    it('successfullly get organizations', async () => {
+      const res = await getOrganizations()
+      expect(res.oragnizations).toEqual('list of orgs')
     })
   })
 })

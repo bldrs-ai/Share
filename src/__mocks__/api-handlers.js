@@ -123,9 +123,7 @@ export const handlers = [
 
   rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
     const {org, repo} = req.params
-    console.log('in the patch mock')
     if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
-      console.log('in the if')
       return res(
           ctx.status(httpNotFound),
           ctx.json({
@@ -141,6 +139,9 @@ export const handlers = [
   rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
     return res(
         ctx.status(httpOk),
+        ctx.json({
+          oragnizations: 'list of orgs',
+        }),
     )
   }),
 ]
