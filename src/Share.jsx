@@ -97,9 +97,9 @@ export function navToDefault(navigate, appPrefix) {
   const mediaSizeTabletWith = 900
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (window.innerWidth <= mediaSizeTabletWith) {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-158.5,-86,165.36,-39.36,18.57,-5.33`)
+    navigate(`${appPrefix}/v/p/index.ifc#c:-150.147,-85.796,167.057,-32.603,17.373,-1.347`)
   } else {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-111.37,14.94,90.63,-43.48,15.73,-4.34`)
+    navigate(`${appPrefix}/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972`)
   }
 }
 

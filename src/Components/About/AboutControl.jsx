@@ -8,6 +8,8 @@ import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
+import {Helmet} from 'react-helmet-async'
+import useStore from '../../store/useStore'
 
 
 /**
@@ -16,16 +18,17 @@ import LogoB from '../../assets/LogoB.svg'
  * @return {React.Component}
  */
 export default function AboutControl() {
+  const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
+
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
     name: 'isFirstTime',
     defaultValue: true,
   }))
 
-
   return (
     <ControlButton
-      title='About BLDRS'
+      title='About bldrs'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={
@@ -38,7 +41,7 @@ export default function AboutControl() {
       }
       dialog={
         <AboutDialog
-          isDialogDisplayed={isDialogDisplayed}
+          isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
           setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
             setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
@@ -55,7 +58,7 @@ export default function AboutControl() {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
- * @return {React.Component} React component
+ * @return {React.ReactElement} React component
  */
 function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
@@ -72,7 +75,8 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={<AboutContent/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
-    />)
+    />
+  )
 }
 
 
@@ -84,6 +88,9 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 function AboutContent() {
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
+      <Helmet>
+        <title>About — BLDRS</title>
+      </Helmet>
       <Typography variant='h2' gutterBottom={true}>build every thing together</Typography>
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share

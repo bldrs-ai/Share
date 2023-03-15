@@ -22,11 +22,11 @@ export default function SnackBarMessage({message, severity, open}) {
           'backgroundColor': theme.palette.primary.background,
           'color': theme.palette.primary.contrastText,
           'position': 'relative',
-          'bottom': '90px',
+          'bottom': '60px',
           'left': '-6px',
           '@media (max-width: 900px)': {
             left: '18px',
-            bottom: '100px',
+            bottom: '80px',
             width: '305px',
             inlineSize: '305px',
             overflow: 'visible',

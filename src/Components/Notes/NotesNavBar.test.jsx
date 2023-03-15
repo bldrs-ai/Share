@@ -44,4 +44,16 @@ describe('IssueControl', () => {
     fireEvent.click(nextButton)
     expect(getByTitle('Next Note')).toBeInTheDocument()
   })
+
+  it('Navigate to create note', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByTitle} = render(<ShareMock><NotesNavBar/></ShareMock>)
+    await act(() => {
+      result.current.setSelectedNoteId(null)
+    })
+    const addNote = getByTitle('Add a note')
+    expect(addNote).toBeInTheDocument()
+    fireEvent.click(addNote)
+    expect(getByTitle('Back to the list')).toBeInTheDocument()
+  })
 })

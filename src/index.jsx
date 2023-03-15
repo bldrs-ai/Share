@@ -14,6 +14,7 @@ import {Auth0ProviderWithHistory} from './Components/Auth0ProviderWithHistory'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
 import ApplicationError from './Components/ApplicationError'
+import {Helmet, HelmetProvider} from 'react-helmet-async'
 
 
 Sentry.init({
@@ -33,7 +34,7 @@ Sentry.init({
   tracesSampleRate: 1.0,
 })
 
-if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+if (process.env.DISABLE_MOCK_SERVICE_WORKER !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
@@ -49,11 +50,16 @@ const root = createRoot(document.getElementById('root'))
 root.render(
     <Sentry.ErrorBoundary fallback={<ApplicationError/>}>
       <FlagsProvider value={flags}>
-        <BrowserRouter>
-          <Auth0ProviderWithHistory>
-            <BaseRoutes/>
-          </Auth0ProviderWithHistory>
-        </BrowserRouter>
+        <HelmetProvider>
+          <Helmet>
+            <title>BLDRS</title>
+          </Helmet>
+          <BrowserRouter>
+            <Auth0ProviderWithHistory>
+              <BaseRoutes/>
+            </Auth0ProviderWithHistory>
+          </BrowserRouter>
+        </HelmetProvider>
       </FlagsProvider>
     </Sentry.ErrorBoundary>,
 )

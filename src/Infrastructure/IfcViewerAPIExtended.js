@@ -4,19 +4,24 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 
 
+const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
+const viewRules = {
+  'default': [],
+  'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],
+}
 /* eslint-disable jsdoc/no-undefined-types */
 /**
  * Extending the original IFCViewerFunctionality
  */
 export class IfcViewerAPIExtended extends IfcViewerAPI {
-  // TODO: might be usefull if we used a Set as well to handle large selections,
+  // TODO: might be useful if we used a Set as well to handle large selections,
   // but for now array is more performant for small numbers
   _selectedExpressIds = []
   /**  */
   constructor(options) {
     super(options)
     this.highlighter = new IfcHighlighter(this.context)
-    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser)
+    this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
 
 

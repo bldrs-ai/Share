@@ -8,6 +8,9 @@ import model from '../__mocks__/MockModel.js'
 import {__getIfcViewerAPIMockSingleton} from 'web-ifc-viewer'
 
 
+jest.mock('three')
+
+
 describe('CutPlaneMenu', () => {
   it('Section Button', () => {
     const {getByTitle} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
@@ -19,9 +22,9 @@ describe('CutPlaneMenu', () => {
     const {getByTitle, getByText} = render(<ShareMock><CutPlaneMenu/></ShareMock>)
     const sectionButton = getByTitle('Section')
     fireEvent.click(sectionButton)
-    expect(getByText('X')).toBeInTheDocument()
-    expect(getByText('Y')).toBeInTheDocument()
-    expect(getByText('Z')).toBeInTheDocument()
+    expect(getByText('X - Section')).toBeInTheDocument()
+    expect(getByText('Y - Plan')).toBeInTheDocument()
+    expect(getByText('Z - Section')).toBeInTheDocument()
   })
 
 
@@ -34,7 +37,7 @@ describe('CutPlaneMenu', () => {
       result.current.setViewerStore(viewer)
     })
     fireEvent.click(sectionButton)
-    const xDirection = getByText('X')
+    const xDirection = getByText('X - Section')
     fireEvent.click(xDirection)
     const callCreatePlanes = viewer.clipper.createFromNormalAndCoplanarPoint.mock.calls
     expect(callCreatePlanes.length).toBe(1)
