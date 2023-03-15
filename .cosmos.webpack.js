@@ -15,7 +15,7 @@ module.exports = {
     publicPath: '/sb/',
     filename: 'index.html',
   },
-  plugins: [new HtmlWebpackPlugin({template: './cosmos.html'})],
+  plugins: [],
   module: {
     rules: [
       {
