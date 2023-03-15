@@ -4,6 +4,8 @@ import {
   postIssue,
   closeIssue,
   getOrganizations,
+  getRepositories,
+  getFiles,
 } from './GitHub'
 
 
@@ -74,6 +76,14 @@ describe('GitHub', () => {
     it('successfullly get organizations', async () => {
       const res = await getOrganizations()
       expect(res.oragnizations).toEqual('list of orgs')
+    })
+    it('successfullly get repositories', async () => {
+      const res = await getRepositories('bldrs-ai')
+      expect(res.oragnizations).toEqual('list of repositories')
+    })
+    it('successfullly get files', async () => {
+      const res = await getFiles('Share', 'pablo-mayrgundter')
+      expect(res.oragnizations).toEqual('list of files')
     })
   })
 })

@@ -159,15 +159,16 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               </Box>
             }
           </Box> :
-          <Box
+          <Typography
+            variant={'h4'}
             sx={{
               backgroundColor: theme.palette.scene.background,
-              borderRadius: '10px',
-              padding: '16px 12px 18px 12px',
+              borderRadius: '5px',
+              padding: '12px',
             }}
           >
             Please login to get access to your files on GitHub
-          </Box>
+          </Typography>
           }
           <Box
             sx={{
