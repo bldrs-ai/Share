@@ -8,6 +8,8 @@ import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
+import {findMarkdownUrls} from '../../utils/strings'
+import {PLACE_MARK_PREFIX} from '../../utils/constants'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -46,11 +48,13 @@ export default function Notes() {
         const issuesData = await getIssues(repository, accessToken)
         debug().log('Notes#useEffect#fetchNotes: issuesData: ', issuesData)
         let issueIndex = 0
+
         issuesData.data.map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
           }
+
           fetchedNotes.push({
             index: issueIndex++,
             id: issue.id,
@@ -66,6 +70,7 @@ export default function Notes() {
         })
 
         let synchedCreatedNotes = []
+
         if (createdNotes !== null) {
           synchedCreatedNotes =
             createdNotes.filter(
@@ -83,22 +88,44 @@ export default function Notes() {
           ...fetchedNotes,
         ]
 
+        let newNotes = []
+
         if (deletedNotes !== null) {
           const filteredDeleted =
             combinedSynchedNotes.filter(
                 (synchedNote) => !deletedNotes.includes(synchedNote.number),
             )
-          setNotes(filteredDeleted)
+          newNotes = filteredDeleted
         } else {
-          setNotes(combinedSynchedNotes)
+          newNotes = combinedSynchedNotes
         }
+
+        setNotes(newNotes)
+
+        const placeMarkChunks = await Promise.all(newNotes.map(async (newNote) => {
+          let placeMarkUrls = []
+
+          if (newNote.number) {
+            const commentsRes = await getComments(repository, newNote.number, accessToken)
+            commentsRes.forEach((comment) => {
+              if (comment.body) {
+                const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+                placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
+              }
+            })
+          }
+
+          debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
+          return placeMarkUrls
+        }))
+
+        debug().log('Notes#useEffect#fetchNotes: placeMarkChunks: ', placeMarkChunks)
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
     }
     fetchNotes()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
+  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes])
 
 
   useEffect(() => {

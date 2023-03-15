@@ -25,7 +25,7 @@ export function usePlaceMark() {
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
-  const setNotes = useStore((state) => state.setNotes)
+  // const setNotes = useStore((state) => state.setNotes)
   const accessToken = useStore((state) => state.accessToken)
 
 
@@ -169,13 +169,13 @@ export function usePlaceMark() {
       body: `[placemark](${window.location.href})`,
     }, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
-    const newNotes = notes.map((note) => {
-      if (note.id === placeMarkId) {
-        note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
-      }
-      return note
-    })
-    setNotes(newNotes)
+    // const newNotes = notes.map((note) => {
+    //   if (note.id === placeMarkId) {
+    //     note.numberOfComments = floatStrTrim(note.numberOfComments) + 1
+    //   }
+    //   return note
+    // })
+    // setNotes(newNotes)
   }
 
 

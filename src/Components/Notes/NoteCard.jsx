@@ -11,6 +11,7 @@ import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
+// eslint-disable-next-line no-unused-vars
 import {findUrls, floatStrTrim} from '../../utils/strings'
 import {closeIssue, deleteComment} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
@@ -70,13 +71,13 @@ export default function NoteCard({
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const deletedNotes = useStore((state) => state.deletedNotes)
-  const notes = useStore((state) => state.notes)
-  const setNotes = useStore((state) => state.setNotes)
+  // const notes = useStore((state) => state.notes)
+  // const setNotes = useStore((state) => state.setNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
-  const placeMarkId = useStore((state) => state.placeMarkId)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
+  // const placeMarkId = useStore((state) => state.placeMarkId)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -161,8 +162,8 @@ export default function NoteCard({
       setDeletedNotes([noteNumber])
     }
 
-    const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
-    setNotes(filterDeletedNote)
+    // const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
+    // setNotes(filterDeletedNote)
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
     return closeResponse
   }
@@ -179,15 +180,15 @@ export default function NoteCard({
   async function removeComment(repository, accessToken, commentId) {
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
-    const newComments = comments.filter((comment) => comment.id !== commentId)
-    setComments(newComments)
-    const newNotes = notes.map((note) => {
-      if (note.id === placeMarkId) {
-        note.numberOfComments = floatStrTrim(note.numberOfComments) - 1
-      }
-      return note
-    })
-    setNotes(newNotes)
+    // const newComments = comments.filter((comment) => comment.id !== commentId)
+    // setComments(newComments)
+    // const newNotes = notes.map((note) => {
+    //   if (note.id === placeMarkId) {
+    //     note.numberOfComments = floatStrTrim(note.numberOfComments) - 1
+    //   }
+    //   return note
+    // })
+    // setNotes(newNotes)
     return deleteRes
   }
 
