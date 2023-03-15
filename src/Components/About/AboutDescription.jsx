@@ -26,11 +26,11 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         height: '160px',
         fontSize: '.9em',
         fontWeight: 'bold',
-        borderRadius: '10px',
+        borderRadius: '3px',
         margin: '2em 0',
         padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
-        backgroundColor: theme.palette.scene.background,
+        border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
     >
@@ -40,10 +40,10 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         }}
       >
         <Typography variant={'h5'}>
-          Cross-functional online collaboration unlocks team flow,
-          productivity and creativity.
-          Open workspaces, open standards and open source code is the most powerful way to work.
-          Cooperation is the unfair advantage.
+            Cross-functional online collaboration unlocks team flow,
+            productivity and creativity.
+            Open workspaces, open standards and open source code is the most powerful way to work.
+            Cooperation is the unfair advantage.
         </Typography>
         <Box
           sx={{
@@ -56,21 +56,21 @@ export default function AboutDescription({setIsDialogDisplayed}) {
           }}
         >
           <a
-            // eslint-disable-next-line max-len
-            href='https://bldrs.ai/share/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972::i:1506392033'
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-113.444,0.464,81.43,-23.595,24.522,10.88::i:1493510953'
             onClick={onClickLink}
           >
-            <div style={{textDecoration: 'underline', marginLeft: '10px'}}>Guide</div>
+            <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Guide</Typography>
           </a>
           <a
             // eslint-disable-next-line max-len
             href='https://bldrs.ai/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
             onClick={onClickLink}
           >
-            <div style={{textDecoration: 'underline', marginLeft: '10px'}}>Team</div>
+            <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Team</Typography>
           </a>
         </Box>
       </Box>
     </Box>
   )
 }
+

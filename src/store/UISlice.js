@@ -32,6 +32,7 @@ export default function createUISlice(set, get) {
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsTooltipsOpen: () => set((state) => ({isTooltipsOpen: !state.isTooltipsOpen})),
+    turnOffIsTooltipsOpen: () => set(() => ({isTooltipsOpen: false})),
     closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
