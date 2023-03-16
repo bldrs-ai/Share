@@ -113,7 +113,7 @@ export default function Notes() {
     }
 
     fetchNotes()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes])
 
 
@@ -221,6 +221,7 @@ export default function Notes() {
                   date={comment.date}
                   username={comment.username}
                   avatarUrl={comment.avatarUrl}
+                  synchedNote={true}
                 />
               )
             })
