@@ -75,8 +75,8 @@ export default function NoteCard({
   // const setNotes = useStore((state) => state.setNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  // const comments = useStore((state) => state.comments)
-  // const setComments = useStore((state) => state.setComments)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   // const placeMarkId = useStore((state) => state.placeMarkId)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
@@ -180,8 +180,8 @@ export default function NoteCard({
   async function removeComment(repository, accessToken, commentId) {
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
-    // const newComments = comments.filter((comment) => comment.id !== commentId)
-    // setComments(newComments)
+    const newComments = comments.filter((comment) => comment.id !== commentId)
+    setComments(newComments)
     // const newNotes = notes.map((note) => {
     //   if (note.id === placeMarkId) {
     //     note.numberOfComments = floatStrTrim(note.numberOfComments) - 1
