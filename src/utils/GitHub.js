@@ -11,19 +11,9 @@ import {assertDefined} from './assert'
  * @param {string} accessToken Github API OAuth access token
  * @return {Array} The issue array of issue objects.
  */
-export async function getIssues(repository, accessToken = '') {
-  const args = {}
-  if (accessToken.length > 0) {
-    args.headers = {
-      'authorization': `Bearer ${accessToken}`,
-      'if-modified-since': '',
-      'if-none-match': '',
-      ...args.headers,
-    }
-  }
-
-  const issues = await getGitHub(repository, 'issues', args)
-  debug().log('GitHub: issue: ', repository, issues)
+export async function getIssues(repository) {
+  const issues = await getGitHub(repository, 'issues')
+  debug().log('GitHub#getIssues: issues: ', issues)
   return issues
 }
 
@@ -318,6 +308,8 @@ export const parseGitHubRepositoryURL = (githubURL) => {
 
 
 // DO NOT EXPORT ANY BELOW //
+
+
 /**
  * Fetch the resource at the given path from GitHub, substituting in
  * the given args.
