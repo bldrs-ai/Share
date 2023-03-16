@@ -1,7 +1,7 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  postIssue,
+  createIssue,
   closeIssue,
 } from './GitHub'
 
@@ -61,7 +61,7 @@ describe('GitHub', () => {
 
   describe('post to github', () => {
     it('successfully post note as an issue', async () => {
-      const res = await postIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
+      const res = await createIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
       expect(res.status).toEqual(httpCreated)
     })
     it('successfully delete the note by closing the issue', async () => {

@@ -10,7 +10,7 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
-import {postIssue} from '../../utils/GitHub'
+import {createIssue} from '../../utils/GitHub'
 import Submit from '../../assets/icons/Submit.svg'
 
 
@@ -53,7 +53,7 @@ export default function NoteCardCreate({
       title,
       body,
     }
-    postIssue(repository, issuePayload, accessToken)
+    createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
     const localNote = {
       index: noteIndex,
