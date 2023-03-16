@@ -113,7 +113,8 @@ export default function Notes() {
     }
 
     fetchNotes()
-  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes])
 
 
   useEffect(() => {
