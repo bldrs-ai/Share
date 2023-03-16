@@ -31,11 +31,12 @@ export default function Notes() {
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
-  const accessToken = useStore((state) => state.accessToken)
   const drawer = useStore((state) => state.drawer)
 
 
   useEffect(() => {
+    debug().log('Notes#useEffect#fetchNotes')
+
     if (!repository) {
       debug().warn('IssuesControl#Notes: 1, no repo defined')
       return
@@ -114,10 +115,12 @@ export default function Notes() {
 
     fetchNotes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes])
+  }, [repository, setNotes, isCreateNoteActive, deletedNotes, synchNotes])
 
 
   useEffect(() => {
+    debug().log('Notes#useEffect#fetchComments')
+
     if (!repository) {
       debug().warn('IssuesControl#Notes: 2, no repo defined')
       return
@@ -127,7 +130,7 @@ export default function Notes() {
       const fetchComments = async (selectedNote) => {
         try {
           const commentsArr = []
-          const commentsData = await getIssueComments(repository, selectedNote.number, accessToken)
+          const commentsData = await getIssueComments(repository, selectedNote.number)
           debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
 
           if (commentsData) {
@@ -152,7 +155,7 @@ export default function Notes() {
     }
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open using the link
-  }, [filteredNote, repository, setComments, accessToken, selectedNoteId, synchNotes])
+  }, [filteredNote, repository, setComments, selectedNoteId, synchNotes])
 
 
   useEffect(() => {
