@@ -50,7 +50,6 @@ describe('IssueControl', () => {
 
     await act(() => {
       result.current.setSelectedNoteId(Number(extractedNoteId))
-      result.current.setAccessToken('access token')
     })
 
     const expectedText = 'Local issue - some text is here to test - Id:1257156364'
@@ -58,14 +57,10 @@ describe('IssueControl', () => {
   })
 
   it('Issue rendered based on issue ID in URL', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
     const {findByText} = render(
         <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
           <Notes/>
         </ShareMock>)
-    await act(() => {
-      result.current.setAccessToken('access token')
-    })
     const expectedText = 'Local issue - some text is here to test - Id:1257156364'
     expect(await findByText(expectedText)).toBeVisible()
   })
