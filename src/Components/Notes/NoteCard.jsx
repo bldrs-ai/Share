@@ -340,8 +340,7 @@ const CardFooter = ({
           />
         }
         {
-          !isComment && selected &&
-          // synchedNote && user && user.nickname === username &&
+          !isComment && selected && synchedNote && user && user.nickname === username &&
           <Box sx={{
             '& svg': {
               fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
