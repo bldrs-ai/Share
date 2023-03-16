@@ -9,7 +9,7 @@ import {PLACE_MARK_PREFIX} from '../utils/constants'
 import {floatStrTrim} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup} from '../utils/svg'
-import {postComment} from '../utils/GitHub'
+import {createComment} from '../utils/GitHub'
 
 
 /**
@@ -165,7 +165,7 @@ export function usePlaceMark() {
     }
     debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
-    const saveRes = await postComment(repository, issueNumber, {
+    const saveRes = await createComment(repository, issueNumber, {
       body: `[placemark](${window.location.href})`,
     }, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)

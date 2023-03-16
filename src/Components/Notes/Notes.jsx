@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getComments} from '../../utils/GitHub'
+import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -44,11 +44,10 @@ export default function Notes() {
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
-        const issuesData = await getIssues(repository, accessToken)
-        debug().log('Notes#useEffect#fetchNotes: issuesData: ', issuesData)
+        const issueArr = await getIssues(repository, accessToken)
         let issueIndex = 0
 
-        issuesData.data.map((issue, index) => {
+        issueArr.map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
@@ -103,7 +102,7 @@ export default function Notes() {
           let placeMarkUrls = []
 
           if (newNote.number && accessToken) {
-            const commentsRes = await getComments(repository, newNote.number, accessToken)
+            const commentsRes = await getIssueComments(repository, newNote.number, accessToken)
 
             commentsRes.forEach((comment) => {
               if (comment.body) {
@@ -137,7 +136,7 @@ export default function Notes() {
       const fetchComments = async (selectedNote) => {
         try {
           const commentsArr = []
-          const commentsData = await getComments(repository, selectedNote.number, accessToken)
+          const commentsData = await getIssueComments(repository, selectedNote.number, accessToken)
           debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
 
           if (commentsData) {

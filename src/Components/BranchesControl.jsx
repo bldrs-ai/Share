@@ -36,14 +36,12 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const branchesData = await getBranches(repository, accessToken)
+        const newBranches = await getBranches(repository, accessToken)
         const versionPathsTemp = []
-        if (branchesData.data.length > 0) {
-          setBranches(branchesData.data)
-        }
-        branchesData.data.map((branch, i) => {
+        setBranches(newBranches)
+        newBranches.map((branch, i) => {
           if (branch.name === modelPath.branch) {
-            // select the current branch
+            // Select the current branch
             setSelected(i)
           }
           const versionPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, branch.name, modelPath.filepath)

@@ -5,64 +5,36 @@ import {assertDefined} from './assert'
 
 
 /**
- * Fetch all of the issues from GitHub.
- *
  * @param {object} repository
- * @param {string} accessToken Github API OAuth access token
- * @return {Array} The issue array of issue objects.
+ * @return {Array}
  */
 export async function getIssues(repository) {
-  const issues = await getGitHub(repository, 'issues')
-  debug().log('GitHub#getIssues: issues: ', issues)
-  return issues
+  if (!repository) {
+    return
+  }
+  const res = await getGitHub(repository, 'issues')
+  const issueArr = res.data
+  debug().log('GitHub#getIssues: issueArr: ', issueArr)
+  return issueArr
 }
 
 
 /**
- * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
- * below for the expected structure.
- *
- * @param {object} repository
- * @param {number} issueId
- * @param {string} accessToken Github API OAuth access token
- * @return {object} The issue object.
- */
-export async function getIssue(repository, issueId, accessToken = '') {
-  const args = {
-    issue_number: issueId,
-  }
-
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
-
-  const issue = await getGitHub(repository, 'issues/{issue_number}', args)
-  debug().log('GitHub: issue: ', issue)
-  return issue
-}
-
-
-/**
- * Post issue to github
- * below for the expected structure.
- *
  * @param {object} repository
  * @param {object} payload issue payload shall contain title and body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} The issue object.
+ * @return {object} result
  */
-export async function postIssue(repository, payload, accessToken = '') {
+export async function createIssue(repository, payload, accessToken) {
+  if (!repository || !payload || !accessToken) {
+    return
+  }
   const args = {
     ...payload,
   }
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
+  args.headers = {
+    authorization: `Bearer ${accessToken}`,
+    ...args.headers,
   }
   const res = await postGitHub(repository, 'issues', args)
   return res
@@ -70,81 +42,110 @@ export async function postIssue(repository, payload, accessToken = '') {
 
 
 /**
- * Close Github issue
- *
  * @param {object} repository
- * @param {object} issueNumber issue number
- * @param {string} accessToken Github API OAuth access token
- * @return {object} The issue object.
+ * @param {number} issueNumber
+ * @return {object}
  */
-export async function closeIssue(repository, issueNumber, accessToken = '') {
-  const args = {
-    issue_number: issueNumber,
-    state: 'closed',
+export async function getIssue(repository, issueNumber) {
+  if (!repository || !issueNumber) {
+    return
   }
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
-  const patchRes = await patchGitHub(repository, `issues/${issueNumber}`, args)
-  debug().log('GitHub#closeIssue: patchRes: ', patchRes)
-  return patchRes
+  const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber})
+  debug().log('GitHub#getIssue: issue: ', issue)
+  return issue
 }
 
 
 /**
- * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
- * below for the expected structure.
- *
  * @param {object} repository
- * @return {object} the branches.
+ * @param {object} issueNumber
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} result
  */
-export async function getBranches(repository, accessToken = '') {
-  const args = {}
-
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
+export async function closeIssue(repository, issueNumber, accessToken) {
+  if (!repository || !issueNumber || !accessToken) {
+    return
   }
+  const args = {
+    issueNumber,
+    state: 'closed',
+  }
+  args.headers = {
+    authorization: `Bearer ${accessToken}`,
+    ...args.headers,
+  }
+  const res = await patchGitHub(repository, `issues/{issueNumber}`, args)
+  debug().log('GitHub#closeIssue: res: ', res)
+  return res
+}
 
-  const branches = await getGitHub(repository, 'branches', args)
-  debug().log('GitHub: branches: ', branches)
+
+/**
+ * @param {object} repository
+ * @return {Array}
+ */
+export async function getBranches(repository) {
+  if (!repository) {
+    return
+  }
+  const res = await getGitHub(repository, 'branches')
+  const branches = res.data
+  debug().log('GitHub#getBranches: branches: ', branches)
   return branches
 }
 
 
 /**
- * The comments should have the following structure:
- *
  * @param {object} repository
- * @param {number} issueId
- * @param {string} accessToken Github API OAuth access token
- * @return {Array} The comments array.
+ * @return {Array}
  */
-export async function getComments(repository, issueId, accessToken = '') {
-  const args = {
-    issue_number: issueId,
+export async function getComments(repository) {
+  if (!repository) {
+    return
   }
+  const res = await getGitHub(repository, 'issues/comments')
+  const comments = res.data
+  debug().log('GitHub#getComments: comments: ', comments)
+  return comments
+}
 
+
+/**
+ * @param {object} repository
+ * @param {number} commentId
+ * @return {object}
+ */
+export async function getComment(repository, commentId) {
+  if (!repository || !commentId) {
+    return
+  }
+  const comment = await getGitHub(repository, 'issues/comments/{commentId}', {commentId})
+  debug().log('GitHub#getComment: comment: ', comment)
+  return comment
+}
+
+
+/**
+ * @param {object} repository
+ * @param {string} commentId
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} result
+ */
+export async function deleteComment(repository, commentId, accessToken) {
+  if (!repository || !commentId || !accessToken) {
+    return
+  }
+  const args = {
+    commentId,
+  }
   if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
     }
   }
-
-  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
-  debug().log('GitHub: comments: ', comments)
-
-  if (comments && comments.data && comments.data.length > 0) {
-    return comments.data
-  } else {
-    debug().log('Empty comments!')
-  }
+  const res = await deleteGitHub(repository, `issues/comments/{commentId}`, args)
+  return res
 }
 
 
@@ -152,35 +153,28 @@ export async function getComments(repository, issueId, accessToken = '') {
  * The comments should have the following structure:
  *
  * @param {object} repository
- * @param {number} issueId
- * @param {number} commentId
+ * @param {number} issueNumber
  * @param {string} accessToken Github API OAuth access token
- * @return {object} The comment object.
+ * @return {Array}
  */
-export async function getComment(repository, issueId, commentId, accessToken = '') {
+export async function getIssueComments(repository, issueNumber,
+    // accessToken = '',
+) {
   const args = {
-    issue_number: issueId,
+    issueNumber,
   }
 
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
+  // if (accessToken) {
+  //   args.headers = {
+  //     authorization: `Bearer ${accessToken}`,
+  //     ...args.headers,
+  //   }
+  // }
 
-  const comments = await getGitHub(repository, 'issues/{issue_number}/comments', args)
-  debug().log('GitHub: comments: ', comments)
-
-  if (comments && comments.data && comments.data.length > 0) {
-    if (commentId > comments.data.length) {
-      console.error(`Given commentId(${commentId}) is out of range(${comments.data.length}): `)
-      return
-    }
-    return comments.data[commentId]
-  } else {
-    console.warn('Empty comments!')
-  }
+  const res = await getGitHub(repository, 'issues/{issueNumber}/comments', args)
+  const comments = res.data
+  debug().log('GitHub#getIssueComments: comments: ', comments)
+  return comments
 }
 
 
@@ -194,42 +188,23 @@ export async function getComment(repository, issueId, commentId, accessToken = '
  * @param {string} accessToken Github API OAuth access token
  * @return {object} The issue object.
  */
-export async function postComment(repository, issueNumber, payload, accessToken = '') {
+export async function createComment(repository, issueNumber, payload, accessToken) {
+  if (!repository || !issueNumber || !payload || !accessToken) {
+    return
+  }
   const args = {
     ...payload,
-    issue_number: issueNumber,
+    issueNumber,
   }
+
   if (accessToken.length > 0) {
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
     }
   }
-  const res = await postGitHub(repository, `issues/{issue_number}/comments`, args)
-  return res
-}
 
-
-/**
- * Delete comment from github
- * below for the expected structure.
- *
- * @param {object} repository
- * @param {string} commentId
- * @param {string} accessToken Github API OAuth access token
- * @return {object} The issue object.
- */
-export async function deleteComment(repository, commentId, accessToken = '') {
-  const args = {
-    comment_id: commentId,
-  }
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
-  const res = await deleteGitHub(repository, `issues/comments/{comment_id}`, args)
+  const res = await postGitHub(repository, `issues/{issueNumber}/comments`, args)
   return res
 }
 
