@@ -150,9 +150,8 @@ export default function Notes() {
       fetchComments(filteredNote)
     }
 
-    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
-    // using the link
-  }, [filteredNote, repository, setComments, accessToken, selectedNoteId])
+    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open using the link
+  }, [filteredNote, repository, setComments, accessToken, selectedNoteId, synchNotes])
 
 
   useEffect(() => {
