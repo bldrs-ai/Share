@@ -1,4 +1,4 @@
-import React, {useEffect, useCallback} from 'react'
+import React, {useEffect} from 'react'
 import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
@@ -29,119 +29,10 @@ export default function Notes() {
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredNote = (notes && selectedNoteId) ?
-    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+  const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const drawer = useStore((state) => state.drawer)
-
-
-  const fetchNotes = useCallback(async () => {
-    try {
-      const fetchedNotes = []
-      const issuesData = await getIssues(repository, accessToken)
-      debug().log('Notes#useEffect#fetchNotes: issuesData: ', issuesData)
-      let issueIndex = 0
-
-      issuesData.data.map((issue, index) => {
-        if (issue.body === null) {
-          debug().warn(`issue ${index} has no body: `, issue)
-          return null
-        }
-
-        fetchedNotes.push({
-          index: issueIndex++,
-          id: issue.id,
-          number: issue.number,
-          title: issue.title,
-          body: issue.body,
-          date: issue.created_at,
-          username: issue.user.login,
-          avatarUrl: issue.user.avatar_url,
-          numberOfComments: issue.comments,
-          synchedNote: true,
-        })
-      })
-
-      let synchedCreatedNotes = []
-
-      if (createdNotes !== null) {
-        synchedCreatedNotes =
-          createdNotes.filter(
-              (createdNote) => !fetchedNotes.some(
-                  (fetchedNote) =>
-                    createdNote.title === fetchedNote.title &&
-                createdNote.body === fetchedNote.body),
-          )
-        // update the list of created notes
-        setCreatedNotes(synchedCreatedNotes)
-      }
-
-      const combinedSynchedNotes = [
-        ...synchedCreatedNotes,
-        ...fetchedNotes,
-      ]
-
-      let newNotes = []
-
-      if (deletedNotes !== null) {
-        const filteredDeleted =
-          combinedSynchedNotes.filter(
-              (synchedNote) => !deletedNotes.includes(synchedNote.number),
-          )
-        newNotes = filteredDeleted
-      } else {
-        newNotes = combinedSynchedNotes
-      }
-
-      setNotes(newNotes)
-
-      const placeMarkUrlPromises = newNotes.map(async (newNote) => {
-        let placeMarkUrls = []
-
-        if (newNote.number && accessToken) {
-          const commentsRes = await getComments(repository, newNote.number, accessToken)
-          commentsRes.forEach((comment) => {
-            if (comment.body) {
-              const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-              placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
-            }
-          })
-        }
-
-        debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
-        return placeMarkUrls
-      })
-
-      debug().log('Notes#useEffect#fetchNotes: placeMarkUrlPromises: ', placeMarkUrlPromises)
-    } catch (e) {
-      debug().warn('failed to fetch notes', e)
-    }
-  }, [accessToken, createdNotes, deletedNotes, repository, setCreatedNotes, setNotes])
-
-
-  const fetchComments = useCallback(async (selectedNote) => {
-    try {
-      const commentsArr = []
-
-      const commentsData = await getComments(repository, selectedNote.number, accessToken)
-      debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
-      if (commentsData) {
-        commentsData.map((comment) => {
-          commentsArr.push({
-            id: comment.id,
-            body: comment.body,
-            date: comment.created_at,
-            username: comment.user.login,
-            avatarUrl: comment.user.avatar_url,
-          })
-        })
-      }
-      setComments(commentsArr)
-    } catch {
-      debug().log('failed to fetch comments')
-    }
-  }, [accessToken, repository, setComments])
 
 
   useEffect(() => {
@@ -150,8 +41,90 @@ export default function Notes() {
       return
     }
 
+    const fetchNotes = async () => {
+      try {
+        const fetchedNotes = []
+        const issuesData = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect#fetchNotes: issuesData: ', issuesData)
+        let issueIndex = 0
+
+        issuesData.data.map((issue, index) => {
+          if (issue.body === null) {
+            debug().warn(`issue ${index} has no body: `, issue)
+            return null
+          }
+
+          fetchedNotes.push({
+            index: issueIndex++,
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            date: issue.created_at,
+            username: issue.user.login,
+            avatarUrl: issue.user.avatar_url,
+            numberOfComments: issue.comments,
+            synchedNote: true,
+          })
+        })
+
+        let synchedCreatedNotes = []
+
+        if (createdNotes !== null) {
+          synchedCreatedNotes = createdNotes.filter(
+              (createdNote) => !fetchedNotes.some(
+                  (fetchedNote) =>
+                    createdNote.title === fetchedNote.title &&
+                createdNote.body === fetchedNote.body),
+          )
+          // update the list of created notes
+          setCreatedNotes(synchedCreatedNotes)
+        }
+
+        const combinedSynchedNotes = [
+          ...synchedCreatedNotes,
+          ...fetchedNotes,
+        ]
+
+        let newNotes = []
+
+        if (deletedNotes !== null) {
+          const filteredDeleted = combinedSynchedNotes.filter(
+              (synchedNote) => !deletedNotes.includes(synchedNote.number),
+          )
+          newNotes = filteredDeleted
+        } else {
+          newNotes = combinedSynchedNotes
+        }
+
+        setNotes(newNotes)
+
+        const placeMarkUrlPromises = newNotes.map(async (newNote) => {
+          let placeMarkUrls = []
+
+          if (newNote.number && accessToken) {
+            const commentsRes = await getComments(repository, newNote.number, accessToken)
+
+            commentsRes.forEach((comment) => {
+              if (comment.body) {
+                const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+                placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
+              }
+            })
+          }
+
+          debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
+          return placeMarkUrls
+        })
+
+        debug().log('Notes#useEffect#fetchNotes: placeMarkUrlPromises: ', placeMarkUrlPromises)
+      } catch (e) {
+        debug().warn('failed to fetch notes', e)
+      }
+    }
+
     fetchNotes()
-  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes, fetchNotes])
+  }, [repository, accessToken, setNotes, isCreateNoteActive, deletedNotes, synchNotes, createdNotes, setCreatedNotes])
 
 
   useEffect(() => {
@@ -161,12 +134,36 @@ export default function Notes() {
     }
 
     if (selectedNoteId !== null) {
+      const fetchComments = async (selectedNote) => {
+        try {
+          const commentsArr = []
+          const commentsData = await getComments(repository, selectedNote.number, accessToken)
+          debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
+
+          if (commentsData) {
+            commentsData.map((comment) => {
+              commentsArr.push({
+                id: comment.id,
+                body: comment.body,
+                date: comment.created_at,
+                username: comment.user.login,
+                avatarUrl: comment.user.avatar_url,
+              })
+            })
+          }
+
+          setComments(commentsArr)
+        } catch {
+          debug().log('failed to fetch comments')
+        }
+      }
+
       fetchComments(filteredNote)
     }
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
-  }, [filteredNote, repository, setComments, accessToken, selectedNoteId, fetchComments])
+  }, [filteredNote, repository, setComments, accessToken, selectedNoteId])
 
 
   useEffect(() => {
