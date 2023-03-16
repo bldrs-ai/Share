@@ -32,6 +32,7 @@ export default function Notes() {
   const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const drawer = useStore((state) => state.drawer)
+  const accessToken = useStore((state) => state.accessToken)
 
 
   useEffect(() => {
@@ -45,7 +46,7 @@ export default function Notes() {
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
-        const issueArr = await getIssues(repository)
+        const issueArr = await getIssues(repository, accessToken)
         let issueIndex = 0
 
         issueArr.map((issue, index) => {
@@ -99,7 +100,7 @@ export default function Notes() {
 
         setNotes(newNotes)
 
-        const allComments = await getComments(repository)
+        const allComments = await getComments(repository, accessToken)
         let placeMarkUrls = []
         allComments.forEach((comment) => {
           if (comment.body) {
@@ -130,7 +131,7 @@ export default function Notes() {
       const fetchComments = async (selectedNote) => {
         try {
           const commentsArr = []
-          const commentsData = await getIssueComments(repository, selectedNote.number)
+          const commentsData = await getIssueComments(repository, selectedNote.number, accessToken)
           debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
 
           if (commentsData) {
@@ -155,7 +156,7 @@ export default function Notes() {
     }
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open using the link
-  }, [filteredNote, repository, setComments, selectedNoteId, synchNotes])
+  }, [filteredNote, repository, setComments, selectedNoteId, synchNotes, accessToken])
 
 
   useEffect(() => {

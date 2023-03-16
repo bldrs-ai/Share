@@ -6,13 +6,11 @@ import {assertDefined} from './assert'
 
 /**
  * @param {object} repository
+ * @param {string} accessToken
  * @return {Array}
  */
-export async function getIssues(repository) {
-  if (!repository) {
-    return
-  }
-  const res = await getGitHub(repository, 'issues')
+export async function getIssues(repository, accessToken) {
+  const res = await getGitHub(repository, 'issues', {}, accessToken)
   const issueArr = res.data
   debug().log('GitHub#getIssues: issueArr: ', issueArr)
   return issueArr
@@ -26,17 +24,8 @@ export async function getIssues(repository) {
  * @return {object} result
  */
 export async function createIssue(repository, payload, accessToken) {
-  if (!repository || !payload || !accessToken) {
-    return
-  }
-  const args = {
-    ...payload,
-  }
-  args.headers = {
-    authorization: `Bearer ${accessToken}`,
-    ...args.headers,
-  }
-  const res = await postGitHub(repository, 'issues', args)
+  const res = await postGitHub(repository, 'issues', payload, accessToken)
+  debug().log('GitHub#createIssue: res: ', res)
   return res
 }
 
@@ -44,13 +33,11 @@ export async function createIssue(repository, payload, accessToken) {
 /**
  * @param {object} repository
  * @param {number} issueNumber
+ * @param {string} accessToken
  * @return {object}
  */
-export async function getIssue(repository, issueNumber) {
-  if (!repository || !issueNumber) {
-    return
-  }
-  const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber})
+export async function getIssue(repository, issueNumber, accessToken) {
+  const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
   debug().log('GitHub#getIssue: issue: ', issue)
   return issue
 }
@@ -63,18 +50,11 @@ export async function getIssue(repository, issueNumber) {
  * @return {object} result
  */
 export async function closeIssue(repository, issueNumber, accessToken) {
-  if (!repository || !issueNumber || !accessToken) {
-    return
-  }
   const args = {
     issueNumber,
     state: 'closed',
   }
-  args.headers = {
-    authorization: `Bearer ${accessToken}`,
-    ...args.headers,
-  }
-  const res = await patchGitHub(repository, `issues/{issueNumber}`, args)
+  const res = await patchGitHub(repository, `issues/{issueNumber}`, args, accessToken)
   debug().log('GitHub#closeIssue: res: ', res)
   return res
 }
@@ -82,13 +62,11 @@ export async function closeIssue(repository, issueNumber, accessToken) {
 
 /**
  * @param {object} repository
+ * @param {string} accessToken
  * @return {Array}
  */
-export async function getBranches(repository) {
-  if (!repository) {
-    return
-  }
-  const res = await getGitHub(repository, 'branches')
+export async function getBranches(repository, accessToken) {
+  const res = await getGitHub(repository, 'branches', {}, accessToken)
   const branches = res.data
   debug().log('GitHub#getBranches: branches: ', branches)
   return branches
@@ -97,13 +75,11 @@ export async function getBranches(repository) {
 
 /**
  * @param {object} repository
+ * @param {string} accessToken
  * @return {Array}
  */
-export async function getComments(repository) {
-  if (!repository) {
-    return
-  }
-  const res = await getGitHub(repository, 'issues/comments')
+export async function getComments(repository, accessToken) {
+  const res = await getGitHub(repository, 'issues/comments', {}, accessToken)
   const comments = res.data
   debug().log('GitHub#getComments: comments: ', comments)
   return comments
@@ -113,13 +89,11 @@ export async function getComments(repository) {
 /**
  * @param {object} repository
  * @param {number} commentId
+ * @param {string} accessToken
  * @return {object}
  */
-export async function getComment(repository, commentId) {
-  if (!repository || !commentId) {
-    return
-  }
-  const comment = await getGitHub(repository, 'issues/comments/{commentId}', {commentId})
+export async function getComment(repository, commentId, accessToken) {
+  const comment = await getGitHub(repository, 'issues/comments/{commentId}', {commentId}, accessToken)
   debug().log('GitHub#getComment: comment: ', comment)
   return comment
 }
@@ -132,19 +106,7 @@ export async function getComment(repository, commentId) {
  * @return {object} result
  */
 export async function deleteComment(repository, commentId, accessToken) {
-  if (!repository || !commentId || !accessToken) {
-    return
-  }
-  const args = {
-    commentId,
-  }
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
-  const res = await deleteGitHub(repository, `issues/comments/{commentId}`, args)
+  const res = await deleteGitHub(repository, `issues/comments/{commentId}`, {commentId}, accessToken)
   return res
 }
 
@@ -154,13 +116,11 @@ export async function deleteComment(repository, commentId, accessToken) {
  *
  * @param {object} repository
  * @param {number} issueNumber
+ * @param {string} accessToken
  * @return {Array}
  */
-export async function getIssueComments(repository, issueNumber) {
-  const args = {
-    issueNumber,
-  }
-  const res = await getGitHub(repository, 'issues/{issueNumber}/comments', args)
+export async function getIssueComments(repository, issueNumber, accessToken) {
+  const res = await getGitHub(repository, 'issues/{issueNumber}/comments', {issueNumber}, accessToken)
   const comments = res.data
   debug().log('GitHub#getIssueComments: comments: ', comments)
   return comments
@@ -178,22 +138,11 @@ export async function getIssueComments(repository, issueNumber) {
  * @return {object} result
  */
 export async function createComment(repository, issueNumber, payload, accessToken) {
-  if (!repository || !issueNumber || !payload || !accessToken) {
-    return
-  }
   const args = {
     ...payload,
     issueNumber,
   }
-
-  if (accessToken.length > 0) {
-    args.headers = {
-      authorization: `Bearer ${accessToken}`,
-      ...args.headers,
-    }
-  }
-
-  const res = await postGitHub(repository, `issues/{issueNumber}/comments`, args)
+  const res = await postGitHub(repository, `issues/{issueNumber}/comments`, args, accessToken)
   return res
 }
 
@@ -212,8 +161,7 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
     path: path,
     ref: ref,
   }
-
-  if (accessToken.length > 0) {
+  if (accessToken) {
     args.headers = {
       'authorization': `Bearer ${accessToken}`,
       'if-modified-since': '',
@@ -221,12 +169,10 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
       ...args.headers,
     }
   }
-
   const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args)
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
     throw new Error('No contents returned from github')
   }
-
   return contents.data.download_url
 }
 
@@ -278,9 +224,14 @@ export const parseGitHubRepositoryURL = (githubUrl) => {
  * @param {object} args The args to substitute
  * @return {object} The object at the resource
  */
-async function getGitHub(repository, path, args = {}) {
-  assertDefined(repository.orgName)
-  assertDefined(repository.name)
+async function getGitHub(repository, path, args = {}, accessToken = '') {
+  assertDefined(repository.orgName, repository.name)
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
   const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
@@ -298,10 +249,15 @@ async function getGitHub(repository, path, args = {}) {
  * @param {object} args The args for posting
  * @return {object} The object at the resource
  */
-async function postGitHub(repository, path, args = {}) {
+async function postGitHub(repository, path, args = {}, accessToken = '') {
   debug().log('GitHub#postGitHub: args: ', args)
-  assertDefined(repository.orgName)
-  assertDefined(repository.name)
+  assertDefined(repository.orgName, repository.name)
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
   const requestStr = `POST /repos/{org}/{repo}/${path}`
   debug().log('GitHub#postGitHub: requestStr: ', requestStr)
   const requestObj = {
@@ -323,9 +279,14 @@ async function postGitHub(repository, path, args = {}) {
  * @param {object} args The args for posting
  * @return {object} Result
  */
-async function deleteGitHub(repository, path, args = {}) {
-  assertDefined(repository.orgName)
-  assertDefined(repository.name)
+async function deleteGitHub(repository, path, args = {}, accessToken = '') {
+  assertDefined(repository.orgName, repository.name)
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
   const requestStr = `DELETE /repos/{org}/{repo}/${path}`
   debug().log('GitHub#deleteGitHub: requestStr: ', requestStr)
   const requestObj = {
@@ -347,9 +308,14 @@ async function deleteGitHub(repository, path, args = {}) {
  * @param {object} args The args for patching
  * @return {object} The object at the resource
  */
-async function patchGitHub(repository, path, args = {}) {
-  assertDefined(repository.orgName)
-  assertDefined(repository.name)
+async function patchGitHub(repository, path, args = {}, accessToken = '') {
+  assertDefined(repository.orgName, repository.name)
+  if (accessToken) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
   debug().log('Dispatching GitHub request for repo:', repository)
   const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,

@@ -36,7 +36,7 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const newBranches = await getBranches(repository)
+        const newBranches = await getBranches(repository, accessToken)
         const versionPathsTemp = []
         setBranches(newBranches)
         newBranches.map((branch, i) => {
