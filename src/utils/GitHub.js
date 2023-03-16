@@ -154,23 +154,12 @@ export async function deleteComment(repository, commentId, accessToken) {
  *
  * @param {object} repository
  * @param {number} issueNumber
- * @param {string} accessToken Github API OAuth access token
  * @return {Array}
  */
-export async function getIssueComments(repository, issueNumber,
-    // accessToken = '',
-) {
+export async function getIssueComments(repository, issueNumber) {
   const args = {
     issueNumber,
   }
-
-  // if (accessToken) {
-  //   args.headers = {
-  //     authorization: `Bearer ${accessToken}`,
-  //     ...args.headers,
-  //   }
-  // }
-
   const res = await getGitHub(repository, 'issues/{issueNumber}/comments', args)
   const comments = res.data
   debug().log('GitHub#getIssueComments: comments: ', comments)
@@ -186,7 +175,7 @@ export async function getIssueComments(repository, issueNumber,
  * @param {number} issueNumber
  * @param {object} payload issue payload shall contain title and body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} The issue object.
+ * @return {object} result
  */
 export async function createComment(repository, issueNumber, payload, accessToken) {
   if (!repository || !issueNumber || !payload || !accessToken) {
@@ -214,9 +203,9 @@ export async function createComment(repository, issueNumber, payload, accessToke
  *
  * @param {object} repository
  * @param {string} path
- * @param {string} [ref]
- * @param {string} [accessToken]
- * @return {Promise} Promise URL to the contents
+ * @param {string} ref
+ * @param {string} accessToken
+ * @return {string}
  */
 export async function getDownloadURL(repository, path, ref = '', accessToken = '') {
   const args = {
@@ -235,7 +224,7 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
   const contents = await getGitHub(repository, 'contents/{path}?ref={ref}', args)
   if (!contents || !contents.data || !contents.data.download_url || !contents.data.download_url.length > 0) {
-    throw new Error('No contents returned from GitHub')
+    throw new Error('No contents returned from github')
   }
 
   return contents.data.download_url
@@ -243,23 +232,20 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
 
 /**
- * Parses a GitHub repository URL and returns a structure
+ * Parses a github repository url and returns a structure
  *
- * @param {string} githubURL
- * @return {object} A repository path object.
+ * @param {string} githubUrl
+ * @return {object} A repository path object
  */
-export const parseGitHubRepositoryURL = (githubURL) => {
-  if (githubURL.indexOf('://') === -1) {
+export const parseGitHubRepositoryURL = (githubUrl) => {
+  if (githubUrl.indexOf('://') === -1) {
     throw new Error('URL must be fully qualified and contain scheme')
   }
-
-  const url = new URL(githubURL)
-
+  const url = new URL(githubUrl)
   const host = url.host.toLowerCase()
   if (host !== 'github.com' && host !== 'raw.githubusercontent.com') {
     throw new Error('Not a valid GitHub repository URL')
   }
-
   const pathParts = [
     '(?<owner>[^/]+)',
     '(?<repository>[^/]+)',
@@ -270,7 +256,6 @@ export const parseGitHubRepositoryURL = (githubURL) => {
   if (match === null) {
     throw new Error('Could not match GitHub repository URL')
   }
-
   const {groups: {owner, repository, ref, path}} = match
   return {
     url: url,
@@ -286,8 +271,7 @@ export const parseGitHubRepositoryURL = (githubURL) => {
 
 
 /**
- * Fetch the resource at the given path from GitHub, substituting in
- * the given args.
+ * Fetch the resource at the given path from GitHub, substituting in the given args
  *
  * @param {object} repository
  * @param {object} path The resource path with arg substitution markers

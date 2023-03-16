@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getIssueComments} from '../../utils/GitHub'
+import {getIssues, getIssueComments, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -44,7 +44,7 @@ export default function Notes() {
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
-        const issueArr = await getIssues(repository, accessToken)
+        const issueArr = await getIssues(repository)
         let issueIndex = 0
 
         issueArr.map((issue, index) => {
@@ -98,25 +98,15 @@ export default function Notes() {
 
         setNotes(newNotes)
 
-        const placeMarkUrlPromises = newNotes.map(async (newNote) => {
-          let placeMarkUrls = []
-
-          if (newNote.number && accessToken) {
-            const commentsRes = await getIssueComments(repository, newNote.number, accessToken)
-
-            commentsRes.forEach((comment) => {
-              if (comment.body) {
-                const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-                placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
-              }
-            })
+        const allComments = await getComments(repository)
+        let placeMarkUrls = []
+        allComments.forEach((comment) => {
+          if (comment.body) {
+            const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+            placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
           }
-
-          debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
-          return placeMarkUrls
         })
-
-        debug().log('Notes#useEffect#fetchNotes: placeMarkUrlPromises: ', placeMarkUrlPromises)
+        debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
