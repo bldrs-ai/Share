@@ -8,8 +8,6 @@ import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
-import {findMarkdownUrls} from '../../utils/strings'
-import {PLACE_MARK_PREFIX} from '../../utils/constants'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -99,23 +97,6 @@ export default function Notes() {
         }
 
         setNotes(newNotes)
-
-        const promises = newNotes.map(async (newNote) => {
-          const issueComments = await getIssueComments(repository, newNote.number, accessToken)
-          let placeMarkUrls = []
-
-          issueComments.forEach((comment) => {
-            if (comment.body) {
-              const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-              placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
-            }
-          })
-
-          return placeMarkUrls
-        })
-
-        const totalPlaceMarkUrls = (await Promise.all(promises)).flat()
-        debug().log('Notes#useEffect#fetchNotes: totalPlaceMarkUrls: ', totalPlaceMarkUrls)
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }

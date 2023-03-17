@@ -109,12 +109,12 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.putDown = ({point, lookAt, fillColor = 'red'}) => {
+    this.putDown = ({point, lookAt, fillColor = 'black', height}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       return new Promise((resolve, reject) => {
         getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-          const group = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark'})
+          const group = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
           group.position.copy(point)
           _scene.add(group)
           _placeMarks.push(group)
