@@ -278,7 +278,7 @@ export default function CadView({
           console.warn('CadView#loadIfc$onError', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
-          setAlertMessage(`Could not load file: ${ filepath}`)
+          setAlertMessage(`Could not load file: ${filepath}`)
         })
     await viewer.isolator.setModel(loadedModel)
 
