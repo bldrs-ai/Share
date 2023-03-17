@@ -4,12 +4,14 @@ import {useDoubleTap} from 'use-double-tap'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getHashParams, getHashParamsFromHashStr, getObjectParams} from '../utils/location'
+import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams} from '../utils/location'
 import {ACTIVE_PLACE_MARK_HEIGHT, INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup} from '../utils/svg'
 import {createComment, getIssueComments} from '../utils/GitHub'
+import {arrayDiff} from '../utils/arrays'
+import {assertDefined} from '../utils/assert'
 
 
 const placeMarkGroupMap = new Map()
@@ -77,7 +79,7 @@ export function usePlaceMark() {
           if (event.shiftKey) {
             await dropPlaceMark(res)
           } else {
-            openData(res)
+            selectPlaceMark(res)
           }
           break
         case 1: // Wheel button (middle button if present)
@@ -116,11 +118,10 @@ export function usePlaceMark() {
 
   useEffect(() => {
     (async () => {
-      debug().log('usePlaceMark#useEffect: renderCount: ', ++renderCount)
-
       if (!Array.isArray(notes) || !repository || !placeMark) {
         return
       }
+      debug().log('usePlaceMark#useEffect: renderCount: ', ++renderCount)
 
       const promises1 = notes.map(async (note) => {
         const issueComments = await getIssueComments(repository, note.number, accessToken)
@@ -138,50 +139,72 @@ export function usePlaceMark() {
 
       const totalPlaceMarkUrls = (await Promise.all(promises1)).flat()
       debug().log('usePlaceMark#useEffect: totalPlaceMarkUrls: ', totalPlaceMarkUrls)
-      const placeMarkHashUrlMap = new Map()
+      const totalPlaceMarkHashUrlMap = new Map()
 
       totalPlaceMarkUrls.forEach((url) => {
-        const hash = getHashParamsFromHashStr(url)
-        placeMarkHashUrlMap.set(hash, url)
+        debug().log('usePlaceMark#useEffect: url: ', url)
+        const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
+        totalPlaceMarkHashUrlMap.set(hash, url)
       })
 
-      debug().log('usePlaceMark#useEffect: placeMarkHashUrlMap: ', placeMarkHashUrlMap)
-      const placeMarkHashes = placeMarkHashUrlMap.keys()
-      debug().log('usePlaceMark#useEffect: placeMarkHashes: ', placeMarkHashes)
+      debug().log('usePlaceMark#useEffect: totalPlaceMarkHashUrlMap: ', totalPlaceMarkHashUrlMap)
+      const totalPlaceMarkHashes = Array.from(totalPlaceMarkHashUrlMap.keys())
+      debug().log('usePlaceMark#useEffect: totalPlaceMarkHashes: ', totalPlaceMarkHashes)
       const activePlaceMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
       debug().log('usePlaceMark#useEffect: activePlaceMarkHash: ', activePlaceMarkHash)
-      const inactivePlaceMarkHashes = placeMarkHashes.filter((hash) => hash !== activePlaceMarkHash)
+      const inactivePlaceMarkHashes = totalPlaceMarkHashes.filter((hash) => hash !== activePlaceMarkHash)
       debug().log('usePlaceMark#useEffect: inactivePlaceMarkHashes: ', inactivePlaceMarkHashes)
 
       if (activePlaceMarkHash) {
-        const markArr = getObjectParams(activePlaceMarkHash)
-        debug().log('usePlaceMark#useEffect: markArr: ', markArr)
-        const svgGroup = await placeMark.putDown({
-          point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-          fillColor: 'red',
-          height: ACTIVE_PLACE_MARK_HEIGHT,
-        })
-        addUserDataInGroup(svgGroup, {url: window.location.href})
-        debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
-        placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
+        const activeGroup = placeMarkGroupMap.get(activePlaceMarkHash)
+
+        if (activeGroup) {
+          setPlaceMarkStatus(activeGroup, true)
+        } else {
+          // Drop active place mark mesh if it's not existed in scene
+          const markArr = getObjectParams(activePlaceMarkHash)
+          debug().log('usePlaceMark#useEffect: markArr: ', markArr)
+          const svgGroup = await placeMark.putDown({
+            point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            fillColor: 'red',
+            height: ACTIVE_PLACE_MARK_HEIGHT,
+          })
+          addUserDataInGroup(svgGroup, {url: window.location.href})
+          debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
+          placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
+        }
       }
 
       const promises2 = inactivePlaceMarkHashes.map(async (hash) => {
-        const markArr = getObjectParams(hash)
-        debug().log('usePlaceMark#useEffect: markArr: ', markArr)
-        const svgGroup = await placeMark.putDown({
-          point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-          fillColor: 'black',
-          height: INACTIVE_PLACE_MARK_HEIGHT,
-        })
-        addUserDataInGroup(svgGroup, {url: placeMarkHashUrlMap.get(hash)})
-        debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
-        placeMarkGroupMap.set(hash, svgGroup)
+        const svgGroup = placeMarkGroupMap.get(hash)
+        if (svgGroup) {
+          setPlaceMarkStatus(svgGroup, false)
+        } else {
+          // Drop inactive place mark mesh if it's not existed in scene
+          const markArr = getObjectParams(hash)
+          debug().log('usePlaceMark#useEffect: markArr: ', markArr)
+          const newSvgGroup = await placeMark.putDown({
+            point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            fillColor: 'black',
+            height: INACTIVE_PLACE_MARK_HEIGHT,
+          })
+          addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
+          debug().log('usePlaceMark#useEffect: newSvgGroup: ', newSvgGroup)
+          placeMarkGroupMap.set(hash, newSvgGroup)
+        }
       })
 
       await Promise.all(promises2)
+
+      // Remove unnecessary place mark meshes
+      const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
+      const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
+      debug().log('usePlaceMark#useEffect: deletedPlaceMarkHashes: ', deletedPlaceMarkHashes)
+      deletedPlaceMarkHashes.forEach((hash) => {
+        placeMark.disposePlaceMark(placeMarkGroupMap.get(hash))
+      })
     })()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [notes])
 
 
@@ -231,13 +254,26 @@ export function usePlaceMark() {
   }
 
 
-  const openData = ({url}) => { // Comment in this case
-    debug().log('usePlaceMark#openData: url: ', url)
-    if (url) {
-      window.location.href = url
+  const selectPlaceMark = (svgGroup) => {
+    assertDefined(svgGroup)
+    debug().log('usePlaceMark#selectPlaceMark: svgGroup: ', svgGroup)
+    if (svgGroup?.userData?.url) {
+      // window.location.href = svgGroup.userData.url // Comment to test locally
     }
+    setPlaceMarkStatus(svgGroup, true)
   }
 
 
   return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive}
+}
+
+const setPlaceMarkStatus = (svgGroup, isActive) => {
+  assertDefined(svgGroup, isActive)
+  svgGroup.userData.isActive = isActive
+  resetPlaceMarkColors()
+}
+
+const resetPlaceMarkColors = () => {
+  // TODO(Ron): Reset place mark colors
+  debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
 }

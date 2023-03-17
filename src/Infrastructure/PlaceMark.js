@@ -87,7 +87,7 @@ export default class PlaceMark extends EventDispatcher {
           if (event.shiftKey) {
             res = dropPlaceMark(event)
           } else {
-            res = getPlaceMarkInfo()
+            res = getPlaceMarkGroup()
           }
           break
         case 1: // Wheel button (middle button if present)
@@ -114,18 +114,31 @@ export default class PlaceMark extends EventDispatcher {
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       return new Promise((resolve, reject) => {
         getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-          const group = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
-          group.position.copy(point)
-          _scene.add(group)
-          _placeMarks.push(group)
+          const svgGroup = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
+          svgGroup.position.copy(point)
+          _scene.add(svgGroup)
+          _placeMarks.push(svgGroup)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
           const placeMarkMeshSet = getPlaceMarkMeshSet()
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
           outlineEffect.setSelection(placeMarkMeshSet)
-          resolve(group)
+          resolve(svgGroup)
         })
       })
+    }
+
+
+    this.disposePlaceMark = (svgGroup) => {
+      debug().log('PlaceMark#disposePlaceMark: before place marks count: ', _placeMarks.length)
+      const index = _placeMarks.indexOf(svgGroup)
+
+      if (index > -1) {
+        _placeMarks.splice(index, 1)
+        _scene.remove(svgGroup)
+      }
+
+      debug().log('PlaceMark#disposePlaceMark: after place marks count: ', _placeMarks.length)
     }
 
 
@@ -168,9 +181,9 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    const getPlaceMarkInfo = () => {
+    const getPlaceMarkGroup = () => {
       let res = {}
-      debug().log('PlaceMark#getPlaceMarkInfo: _placeMarks: ', _placeMarks)
+      debug().log('PlaceMark#getPlaceMarkGroup: _placeMarks: ', _placeMarks)
 
       if (_placeMarks.length) {
         updatePointer(event)
@@ -178,9 +191,9 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         raycaster.setFromCamera(_pointer, _camera)
         raycaster.intersectObjects(_placeMarks, true, _intersections)
-        debug().log('PlaceMark#getPlaceMarkInfo: _intersections: ', _intersections)
+        debug().log('PlaceMark#getPlaceMarkGroup: _intersections: ', _intersections)
         if (_intersections.length) {
-          res = {url: _intersections[0].object?.userData?.url}
+          res = _intersections[0].object
         }
       }
 
