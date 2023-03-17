@@ -1,7 +1,13 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
+  createIssue,
+  closeIssue,
 } from './GitHub'
+
+
+const httpOK = 200
+const httpCreated = 201
 
 
 describe('GitHub', () => {
@@ -52,6 +58,17 @@ describe('GitHub', () => {
     it('returns a valid download URL when given a different Git ref', async () => {
       const downloadURL = await getDownloadURL({orgName: 'bldrs-ai', name: 'Share'}, 'README.md', 'a-new-branch')
       expect(downloadURL).toEqual('https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md?token=TESTTOKENFORNEWBRANCH')
+    })
+  })
+
+  describe('post to github', () => {
+    it('successfully post note as an issue', async () => {
+      const res = await createIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
+      expect(res.status).toEqual(httpCreated)
+    })
+    it('successfully delete the note by closing the issue', async () => {
+      const res = await closeIssue({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
+      expect(res.status).toEqual(httpOK)
     })
   })
 })

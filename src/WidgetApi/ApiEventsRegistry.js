@@ -1,6 +1,7 @@
 import LoadModelEventHandler from './event-handlers/LoadModelEventHandler'
 import SelectElementsEventHandler from './event-handlers/SelectElementsEventHandler'
 import UIComponentsVisibilityEventHandler from './event-handlers/UIComponentsVisibilityEventHandler'
+import SuppressAboutDialogHandler from './event-handlers/SuppressAboutDialogHandler'
 import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementSelectionChangedEventDispatcher'
 import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
 
@@ -37,6 +38,7 @@ class ApiEventsRegistry {
       new LoadModelEventHandler(this.apiConnection, this.navigation),
       new SelectElementsEventHandler(this.apiConnection, this.searchIndex),
       new UIComponentsVisibilityEventHandler(this.apiConnection),
+      new SuppressAboutDialogHandler(this.apiConnection),
     ]
     for (const event of events) {
       this.apiConnection.on(`action:${event.name}`, event.handler.bind(event))

@@ -38,7 +38,9 @@ export default function Branches() {
       try {
         const newBranches = await getBranches(repository, accessToken)
         const versionPathsTemp = []
-        setBranches(newBranches)
+        if (newBranches.length > 0) {
+          setBranches(newBranches)
+        }
         newBranches.map((branch, i) => {
           if (branch.name === modelPath.branch) {
             // Select the current branch
