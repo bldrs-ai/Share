@@ -283,9 +283,16 @@ const resetPlaceMarkColors = () => {
   debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
   placeMarkGroupMap.forEach((svgGroup) => {
     debug().log('usePlaceMark#resetPlaceMarkColors: svgGroup: ', svgGroup)
-    const color = svgGroup.userData.isActive ? 'red' : 'black'
+    let color = 'black'
+    const scale = tempVec3.clone().set(1, 1, 1)
+    if (svgGroup.userData.isActive) {
+      color = 'red'
+      // eslint-disable-next-line no-magic-numbers
+      scale.multiplyScalar(2)
+    }
     debug().log('usePlaceMark#resetPlaceMarkColors: color: ', color)
     setGroupColor(svgGroup, color)
+    svgGroup.scale.copy(scale.clone())
     svgGroup.userData.isActive = false
   })
 }
