@@ -1,5 +1,6 @@
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
+import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
@@ -11,6 +12,7 @@ import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
+import {closeIssue} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
 import {
   CAMERA_PREFIX,
@@ -23,6 +25,8 @@ import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
+import DeleteIcon from '../../assets/icons/Delete.svg'
+import SynchIcon from '../../assets/icons/Synch.svg'
 
 
 /**
@@ -45,12 +49,14 @@ export default function NoteCard({
   index = null,
   username = '',
   title = 'Title',
+  noteNumber = '',
   avatarUrl = '',
   body = '',
   date = '',
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
+  synchedNote = true,
 }) {
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
@@ -60,6 +66,10 @@ export default function NoteCard({
   const cameraControls = useStore((state) => state.cameraControls)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const deletedNotes = useStore((state) => state.deletedNotes)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
+  const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
@@ -83,7 +93,6 @@ export default function NoteCard({
       setExpandImage(false)
     }
   }, [isMobile])
-
 
   useEffect(() => {
     if (selected && firstCamera) {
@@ -127,6 +136,30 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+
+
+  /**
+   * deletes the note
+   *
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} noteNumber obtained from github issue
+   * @return {object} return github return object
+   */
+  async function deleteNote(repository, accessToken, noteNumberToDelete) {
+    if (deletedNotes !== null) {
+      const localDeletedNotes = [...deletedNotes, noteNumber]
+      setDeletedNotes(localDeletedNotes)
+    } else {
+      setDeletedNotes([noteNumber])
+    }
+
+    const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
+    setNotes(filterDeletedNote)
+    const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
+    return closeResponse
+  }
+
   const dateParts = date.split('T')
   const theme = useTheme()
   return (
@@ -176,15 +209,21 @@ export default function NoteCard({
          />
         }
       </CardContent>
-      {embeddedCameraParams || numberOfComments > 0 ?
-        <CardActions
+      {(embeddedCameraParams || numberOfComments > 0) &&
+        <CardFooter
+          id={id}
+          noteNumber={noteNumber}
+          username={username}
           selectCard={selectCard}
           numberOfComments={numberOfComments}
           embeddedCameras={embeddedCameraParams}
           selected={selected}
           onClickCamera={showCameraView}
           onClickShare={shareIssue}
-        /> : null
+          deleteNote={deleteNote}
+          isComment={isComment}
+          synchedNote={synchedNote}
+        />
       }
     </Paper>
   )
@@ -213,16 +252,27 @@ const ShowMore = ({onClick, expandText}) => {
 }
 
 
-const CardActions = ({
+const CardFooter = ({
+  id,
+  noteNumber,
+  username,
   onClickCamera,
   onClickShare,
   numberOfComments,
   selectCard,
   embeddedCameras,
-  selected}) => {
+  selected,
+  deleteNote,
+  isComment,
+  synchedNote}) => {
   const [shareIssue, setShareIssue] = useState(false)
+  const repository = useStore((state) => state.repository)
+  const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
+  const accessToken = useStore((state) => state.accessToken)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
+  const {user} = useAuth0()
+
   return (
     <Box
       sx={{
@@ -248,6 +298,7 @@ const CardActions = ({
             placement='bottom'
             onClick={onClickCamera}
             icon={<CameraIcon/>}
+            aboutInfo={false}
           />}
         {selected &&
           <TooltipIconButton
@@ -262,32 +313,56 @@ const CardActions = ({
           />
         }
       </Box>
-      <Box sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginRight: '4px',
-      }}
-      role='button'
-      tabIndex={0}
-      onClick={selectCard}
-      onKeyPress={selectCard}
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: '4px',
+        }}
       >
+        {!isComment && synchedNote &&
+        user && user.nickname === username &&
+          <TooltipIconButton
+            title='Delete'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              deleteNote(repository, accessToken, noteNumber)
+            }}
+            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        }
+        {!synchedNote &&
+          <TooltipIconButton
+            title='Synch to GitHub'
+            size='small'
+            placement='bottom'
+            onClick={() => toggleSynchNotes()}
+            icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        }
         {numberOfComments > 0 &&
-          <Box sx={{
-            width: '20px',
-            height: '20px',
-            borderRadius: '50%',
-            backgroundColor: theme.palette.primary.main,
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            fontSize: '12px',
-            color: theme.palette.primary.contrastText,
-            cursor: 'pointer',
-          }}
+          <Box
+            sx={{
+              width: '20px',
+              height: '20px',
+              marginLeft: '4px',
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: theme.palette.primary.contrastText,
+              cursor: 'pointer',
+            }}
+            role='button'
+            tabIndex={0}
+            onClick={selectCard}
+            onKeyPress={selectCard}
           >
             {numberOfComments}
           </Box>

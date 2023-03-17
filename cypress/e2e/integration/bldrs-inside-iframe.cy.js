@@ -35,17 +35,17 @@ describe('bldrs inside iframe', () => {
     cy.clearCookies()
     cy.visit(SYSTEM_UNDER_TEST)
     cy.get('iframe').iframe().as('iframe')
-    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
   })
 
   it('should emit ready-messsage when page load completes', () => {
-    // cy.get('@iframe').find('[data-ifc-model="1"]')
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
 
   it('should load model when LoadModel-message emitted', () => {
     const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
     const modelRootNodeName = 'Proxy with extruded box'
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
 
     // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
     // cy.get('#messagesCount').contains('1') //First loaded message
@@ -67,6 +67,7 @@ describe('bldrs inside iframe', () => {
   })
 
   it('should select element when SelectElements-message emitted', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
     // cy.get('@iframe').find('[data-ifc-model="1"]').should('exist')
@@ -82,6 +83,7 @@ describe('bldrs inside iframe', () => {
 
   it('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
     const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     cy.get('@iframe').findByText(/bldrs/i).click()
     cy.get('@iframe').findByText(/build/i).click()
@@ -116,6 +118,7 @@ describe('bldrs inside iframe', () => {
   })
 
   it('should hide UI components when UIComponentsVisibility-message emitted', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UIComponentsVisibility')
     const msg = {
       navigationPanel: false,
@@ -129,5 +132,29 @@ describe('bldrs inside iframe', () => {
     cy.get('@iframe').findByRole('button', {name: /Properties/}).should('not.exist')
     cy.get('@iframe').findByRole('button', {name: /Section/}).should('not.exist')
     cy.get('@iframe').findByRole('button', {name: /Clear/}).should('not.exist')
+  })
+
+
+  it('should suppress about dialog SuppressAboutDialogHandler message with true value emitted', () => {
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
+    const msg = {
+      isSuppressed: true,
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    cy.get('@iframe').findByRole('dialog', {timeout: 300000}).should('not.exist')
+  })
+
+
+  it('should not suppress about dialog SuppressAboutDialogHandler message with false value emitted', () => {
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SuppressAboutDialog')
+    const msg = {
+      isSuppressed: false,
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    cy.get('@iframe').findByRole('dialog', {timeout: 300000}).should('exist')
   })
 })
