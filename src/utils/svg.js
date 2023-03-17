@@ -2,7 +2,6 @@ import {
   FileLoader,
   Group,
   MeshBasicMaterial,
-  Color,
   DoubleSide,
   ShapeGeometry,
   Mesh,
@@ -15,6 +14,7 @@ import {
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
+import {tempColor} from './constants'
 
 
 const svgLoader = new SVGLoader()
@@ -72,9 +72,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
-      const color = new Color()
-      color.setStyle(fillColor)
-      color.convertSRGBToLinear()
+      const color = tempColor.clone().setStyle(fillColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.fillOpacity,
@@ -94,9 +92,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawStrokes && strokeColor !== undefined && strokeColor !== 'none') {
-      const color = new Color()
-      color.setStyle(strokeColor)
-      color.convertSRGBToLinear()
+      const color = tempColor.clone().setStyle(strokeColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.strokeOpacity,
