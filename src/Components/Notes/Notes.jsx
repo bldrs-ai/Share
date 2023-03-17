@@ -45,7 +45,7 @@ export default function Notes() {
         const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
         let issueIndex = 0
-        issuesData.data.slice(0).map((issue, index) => {
+        issuesData.data.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
