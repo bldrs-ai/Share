@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getIssueComments, getComments} from '../../utils/GitHub'
+import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -100,15 +100,22 @@ export default function Notes() {
 
         setNotes(newNotes)
 
-        const allComments = await getComments(repository, accessToken)
-        let placeMarkUrls = []
-        allComments.forEach((comment) => {
-          if (comment.body) {
-            const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-            placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
-          }
+        const promises = newNotes.map(async (newNote) => {
+          const issueComments = await getIssueComments(repository, newNote.number, accessToken)
+          let placeMarkUrls = []
+
+          issueComments.forEach((comment) => {
+            if (comment.body) {
+              const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+              placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
+            }
+          })
+
+          return placeMarkUrls
         })
-        debug().log('Notes#useEffect#fetchNotes: placeMarkUrls: ', placeMarkUrls)
+
+        const totalPlaceMarkUrls = (await Promise.all(promises)).flat()
+        debug().log('Notes#useEffect#fetchNotes: totalPlaceMarkUrls: ', totalPlaceMarkUrls)
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
