@@ -263,7 +263,7 @@ export function usePlaceMark() {
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
-      // window.location.href = url // Comment to test locally
+      window.location.href = url
     }
   }
 
