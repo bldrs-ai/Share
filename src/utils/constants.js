@@ -1,4 +1,5 @@
 import {Color} from 'three'
+import {Group} from 'three'
 import {Vector3} from 'three'
 import {Raycaster} from 'three'
 
@@ -13,3 +14,4 @@ export const INACTIVE_PLACE_MARK_HEIGHT = 0.5
 export const raycaster = new Raycaster()
 export const tempVec3 = new Vector3()
 export const tempColor = new Color()
+export const tempGroup = new Group()

@@ -14,7 +14,7 @@ import {
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
-import {tempColor} from './constants'
+import {tempColor, tempGroup} from './constants'
 
 
 const svgLoader = new SVGLoader()
@@ -60,8 +60,8 @@ export function getSvgGroupFromObj({
   fillShapesWireframe = false,
 }) {
   const paths = svgObj.paths
-  const group = new Group()
-  const svgGroup = new Group()
+  const group = tempGroup.clone()
+  const svgGroup = tempGroup.clone()
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
     if (!fillColor) {
