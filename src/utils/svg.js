@@ -227,3 +227,17 @@ export function addUserDataInGroup(group, userData) {
     }
   })
 }
+
+
+/**
+ * @param {Group} group
+ * @param {string} color
+ */
+export function setGroupColor(group, color) {
+  assertDefined(group, color)
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.material.color = tempColor.clone().set(color)
+    }
+  })
+}

@@ -8,7 +8,7 @@ import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams} fro
 import {ACTIVE_PLACE_MARK_HEIGHT, INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
-import {addUserDataInGroup} from '../utils/svg'
+import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {createComment, getIssueComments} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
@@ -78,8 +78,8 @@ export function usePlaceMark() {
         case 0: // Main button (left button)
           if (event.shiftKey) {
             await dropPlaceMark(res)
-          } else {
-            selectPlaceMark(res)
+          } else if (res.url) {
+            selectPlaceMark(res.url)
           }
           break
         case 1: // Wheel button (middle button if present)
@@ -254,13 +254,17 @@ export function usePlaceMark() {
   }
 
 
-  const selectPlaceMark = (svgGroup) => {
-    assertDefined(svgGroup)
-    debug().log('usePlaceMark#selectPlaceMark: svgGroup: ', svgGroup)
-    if (svgGroup?.userData?.url) {
-      // window.location.href = svgGroup.userData.url // Comment to test locally
+  const selectPlaceMark = (url) => {
+    assertDefined(url)
+    debug().log('usePlaceMark#selectPlaceMark: url: ', url)
+    const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
+    debug().log('usePlaceMark#selectPlaceMark: hash: ', hash)
+    const svgGroup = placeMarkGroupMap.get(hash)
+
+    if (svgGroup) {
+      setPlaceMarkStatus(svgGroup, true)
+      // window.location.href = url // Comment to test locally
     }
-    setPlaceMarkStatus(svgGroup, true)
   }
 
 
@@ -269,11 +273,19 @@ export function usePlaceMark() {
 
 const setPlaceMarkStatus = (svgGroup, isActive) => {
   assertDefined(svgGroup, isActive)
+  debug().log('usePlaceMark#setPlaceMarkStatus: svgGroup: ', svgGroup)
+  debug().log('usePlaceMark#setPlaceMarkStatus: isActive: ', isActive)
   svgGroup.userData.isActive = isActive
   resetPlaceMarkColors()
 }
 
 const resetPlaceMarkColors = () => {
-  // TODO(Ron): Reset place mark colors
   debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
+  placeMarkGroupMap.forEach((svgGroup) => {
+    debug().log('usePlaceMark#resetPlaceMarkColors: svgGroup: ', svgGroup)
+    const color = svgGroup.userData.isActive ? 'red' : 'black'
+    debug().log('usePlaceMark#resetPlaceMarkColors: color: ', color)
+    setGroupColor(svgGroup, color)
+    svgGroup.userData.isActive = false
+  })
 }

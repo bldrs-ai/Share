@@ -193,7 +193,7 @@ export default class PlaceMark extends EventDispatcher {
         raycaster.intersectObjects(_placeMarks, true, _intersections)
         debug().log('PlaceMark#getPlaceMarkGroup: _intersections: ', _intersections)
         if (_intersections.length) {
-          res = _intersections[0].object
+          res = {url: _intersections[0].object?.userData?.url}
         }
       }
 
