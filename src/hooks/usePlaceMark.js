@@ -5,7 +5,7 @@ import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams} from '../utils/location'
-import {ACTIVE_PLACE_MARK_HEIGHT, INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
+import {INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -159,17 +159,16 @@ export function usePlaceMark() {
         const activeGroup = placeMarkGroupMap.get(activePlaceMarkHash)
 
         if (activeGroup) {
-          setPlaceMarkStatus(activeGroup, true)
+          addUserDataInGroup(activeGroup, {isActive: true})
         } else {
           // Drop active place mark mesh if it's not existed in scene
           const markArr = getObjectParams(activePlaceMarkHash)
           debug().log('usePlaceMark#useEffect: markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-            fillColor: 'red',
-            height: ACTIVE_PLACE_MARK_HEIGHT,
+            height: INACTIVE_PLACE_MARK_HEIGHT,
           })
-          addUserDataInGroup(svgGroup, {url: window.location.href})
+          addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
           placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
         }
@@ -178,14 +177,13 @@ export function usePlaceMark() {
       const promises2 = inactivePlaceMarkHashes.map(async (hash) => {
         const svgGroup = placeMarkGroupMap.get(hash)
         if (svgGroup) {
-          setPlaceMarkStatus(svgGroup, false)
+          addUserDataInGroup(svgGroup, {isActive: false})
         } else {
           // Drop inactive place mark mesh if it's not existed in scene
           const markArr = getObjectParams(hash)
           debug().log('usePlaceMark#useEffect: markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-            fillColor: 'black',
             height: INACTIVE_PLACE_MARK_HEIGHT,
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
@@ -195,6 +193,7 @@ export function usePlaceMark() {
       })
 
       await Promise.all(promises2)
+      resetPlaceMarkColors()
 
       // Remove unnecessary place mark meshes
       const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
@@ -260,6 +259,7 @@ export function usePlaceMark() {
     const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
     debug().log('usePlaceMark#selectPlaceMark: hash: ', hash)
     const svgGroup = placeMarkGroupMap.get(hash)
+    debug().log('usePlaceMark#selectPlaceMark: svgGroup: ', svgGroup)
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)

@@ -226,6 +226,10 @@ export function addUserDataInGroup(group, userData) {
       }
     }
   })
+  group.userData = {
+    ...group.userData,
+    ...userData,
+  }
 }
 
 
