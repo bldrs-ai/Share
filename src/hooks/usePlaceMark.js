@@ -5,7 +5,7 @@ import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams} from '../utils/location'
-import {INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
+import {PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -166,7 +166,6 @@ export function usePlaceMark() {
           debug().log('usePlaceMark#useEffect: markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-            height: INACTIVE_PLACE_MARK_HEIGHT,
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
@@ -184,7 +183,6 @@ export function usePlaceMark() {
           debug().log('usePlaceMark#useEffect: markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
-            height: INACTIVE_PLACE_MARK_HEIGHT,
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
           debug().log('usePlaceMark#useEffect: newSvgGroup: ', newSvgGroup)
@@ -229,10 +227,13 @@ export function usePlaceMark() {
       addUserDataInGroup(svgGroup, {
         url: window.location.href,
       })
+      const hash = getHashParamsFromUrl(window.location.href, PLACE_MARK_PREFIX)
+      placeMarkGroupMap.set(hash, svgGroup)
+      setPlaceMarkStatus(svgGroup, true)
     }
 
     deactivatePlaceMark()
-    if (!repository) {
+    if (!repository || !Array.isArray(notes)) {
       return
     }
     debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
@@ -263,7 +264,7 @@ export function usePlaceMark() {
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
-      window.location.href = url
+      window.location.href = url // Change location hash
     }
   }
 
@@ -283,7 +284,7 @@ const resetPlaceMarkColors = () => {
   debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
   placeMarkGroupMap.forEach((svgGroup) => {
     debug().log('usePlaceMark#resetPlaceMarkColors: svgGroup: ', svgGroup)
-    let color = 'black'
+    let color = 'grey'
     const scale = tempVec3.clone().set(1, 1, 1)
     if (svgGroup.userData.isActive) {
       color = 'red'

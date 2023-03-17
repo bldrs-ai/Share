@@ -4,7 +4,7 @@ import {
   Vector2,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import {PLACE_MARK_DISTANCE} from '../utils/constants'
+import {INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
@@ -109,7 +109,7 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    this.putDown = ({point, lookAt, fillColor = 'black', height}) => {
+    this.putDown = ({point, lookAt, fillColor = 'black', height = INACTIVE_PLACE_MARK_HEIGHT}) => {
       debug().log('PlaceMark#putDown: point: ', point)
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       return new Promise((resolve, reject) => {
