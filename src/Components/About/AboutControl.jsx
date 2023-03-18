@@ -5,7 +5,6 @@ import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import {useIsMobile} from '../Hooks'
 import AboutDescription from './AboutDescription'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
@@ -26,18 +25,12 @@ export default function AboutControl() {
     name: 'isFirstTime',
     defaultValue: true,
   }))
-  const isMobile = useIsMobile()
-  const displayTooltip = () => isMobile ? turnOffIsTooltipsOpen() : toggleIsTooltipsOpen()
-  const toggleIsTooltipsOpen = useStore((state) => state.toggleIsTooltipsOpen)
-  const turnOffIsTooltipsOpen = useStore((state) => state.turnOffIsTooltipsOpen)
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
-    displayTooltip()
   }
   const setIsDialogDisplayedForDialog = () => {
     setIsDialogDisplayed(false)
     setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
-    displayTooltip()
   }
 
   return (
@@ -56,11 +49,7 @@ export default function AboutControl() {
       dialog={
         <AboutDialog
           isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
-          setIsDialogDisplayed={() => {
-            setIsDialogDisplayed(false)
-            setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
-            toggleIsTooltipsOpen()
-          }}
+          setIsDialogDisplayed={setIsDialogDisplayedForDialog}
         />
       }
     />
