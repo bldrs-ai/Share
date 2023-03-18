@@ -116,7 +116,7 @@ export default function Branches() {
             }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label='Project Iterations'
+            label='Git Branches / Project Versions'
             value={selected}
             select
             role="button"
