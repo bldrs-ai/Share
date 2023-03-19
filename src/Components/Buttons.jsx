@@ -1,6 +1,5 @@
 import React from 'react'
 import Button from '@mui/material/Button'
-import useTheme from '@mui/styles/useTheme'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
@@ -30,7 +29,6 @@ export function TooltipIconButton({
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
-  const theme = useTheme()
   const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
   const open = aboutInfo ? isTooltipsOpen : false
   const handleClose = () => {
@@ -50,13 +48,6 @@ export function TooltipIconButton({
         placement={placement}
         data-testid={dataTestId}
         PopperProps={{style: {zIndex: 0}}}
-        componentsProps={{tooltip:
-          {style: {
-            backgroundColor: theme.palette.primary.main,
-            color: theme.palette.primary.contrastText,
-            height: '26px'}}}
-        }
-
       >
         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
           {icon}
