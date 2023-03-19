@@ -8,9 +8,12 @@ const httpCreated = 201
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-    if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share') {
+    const {org, repo} = req.params
+
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
       return res(ctx.status(httpNotFound))
     }
+
     return res(
         ctx.status(httpOk),
         ctx.json(MOCK_ISSUES.data),
@@ -18,9 +21,12 @@ export const handlers = [
   }),
 
   rest.get('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
-    if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share' || req.params.issueNumber !== '17') {
+    const {org, repo, issueNumber} = req.params
+
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
       return res(ctx.status(httpNotFound))
     }
+
     return res(
         ctx.status(httpOk),
         ctx.json(MOCK_COMMENTS.data),
@@ -30,6 +36,7 @@ export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/contents/:path', (req, res, ctx) => {
     const {org, repo, path} = req.params
     const ref = req.url.searchParams.get('ref')
+
     if (org !== 'bldrs-ai' || repo !== 'Share' || path !== 'README.md') {
       return res(
           ctx.status(httpNotFound),
@@ -39,12 +46,15 @@ export const handlers = [
           }),
       )
     }
+
     let downloadURL = 'https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md'
+
     if (ref === 'main') {
       downloadURL += '?token=MAINBRANCHCONTENT'
     } else if (ref === 'a-new-branch') {
       downloadURL += '?token=TESTTOKENFORNEWBRANCH'
     }
+
     return res(
         ctx.status(httpOk),
         ctx.set({
@@ -103,6 +113,7 @@ export const handlers = [
 
   rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
     const {org, repo} = req.params
+
     if (org !== 'bldrs-ai' || repo !== 'Share') {
       return res(
           ctx.status(httpNotFound),
@@ -111,24 +122,28 @@ export const handlers = [
           }),
       )
     }
+
     return res(
         ctx.status(httpCreated),
     )
   }),
 
   rest.post('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
-    const {org, repo} = req.params
-    if (org !== 'bldrs-ai' || repo !== 'Share') {
+    const {org, repo, issueNumber} = req.params
+
+    if (org !== 'bldrs-ai' || repo !== 'Share' || !issueNumber) {
       return res(ctx.status(httpNotFound))
     }
+
     return res(
         ctx.status(httpCreated),
     )
   }),
 
   rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
-    const {org, repo} = req.params
-    if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
+    const {org, repo, issueNumber} = req.params
+
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
       return res(
           ctx.status(httpNotFound),
           ctx.json({
@@ -136,16 +151,19 @@ export const handlers = [
           }),
       )
     }
+
     return res(
         ctx.status(httpOk),
     )
   }),
 
   rest.delete('https://api.github.com/repos/:org/:repo/issues/comments/:commentId', (req, res, ctx) => {
-    const {org, repo} = req.params
-    if (org !== 'bldrs-ai' || repo !== 'Share') {
+    const {org, repo, commentId} = req.params
+
+    if (org !== 'bldrs-ai' || repo !== 'Share' || !commentId) {
       return res(ctx.status(httpNotFound))
     }
+
     return res(
         ctx.status(httpOk),
     )
