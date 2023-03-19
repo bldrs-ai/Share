@@ -120,13 +120,13 @@ export default function SearchBar({fileOpen}) {
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search'}
+          placeholder={'Search / Insert GitHub link'}
           sx={{
             ...theme.typography.tree,
             'marginTop': '4px',
-            'marginLeft': '14px',
+            'marginLeft': '8px',
             '& input::placeholder': {
-              opacity: .2,
+              opacity: .3,
             },
           }}
         />

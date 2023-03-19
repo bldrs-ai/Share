@@ -2,15 +2,14 @@ import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
-import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import {useIsMobile} from '../Hooks'
-import AboutDescription from './AboutDescription'
+import AboutGuide from './AboutGuide'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
+import useStore from '../../store/useStore'
 
 
 /**
@@ -26,21 +25,12 @@ export default function AboutControl() {
     name: 'isFirstTime',
     defaultValue: true,
   }))
-  const isMobile = useIsMobile()
-  const displayTooltip = () => isMobile ? turnOffIsTooltipsOpen() : toggleIsTooltipsOpen()
-  const toggleIsTooltipsOpen = useStore((state) => state.toggleIsTooltipsOpen)
-  const turnOffIsTooltipsOpen = useStore((state) => state.turnOffIsTooltipsOpen)
-  const setIsDialogDisplayedLocal = (value) => {
-    setIsDialogDisplayed(value)
-    displayTooltip()
-  }
-
 
   return (
     <ControlButton
-      title='About'
+      title='About bldrs'
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayedLocal}
+      setIsDialogDisplayed={setIsDialogDisplayed}
       icon={
         <AboutIcon
           style={{
@@ -55,7 +45,6 @@ export default function AboutControl() {
           setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
             setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
-            toggleIsTooltipsOpen()
           }}
         />
       }
@@ -83,7 +72,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
+      content={<AboutContent/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
     />
@@ -96,7 +85,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  *
  * @return {React.ReactElement} React component
  */
-function AboutContent({setIsDialogDisplayed}) {
+function AboutContent() {
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
       <Helmet>
@@ -106,7 +95,7 @@ function AboutContent({setIsDialogDisplayed}) {
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>
-      <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
+      <AboutGuide/>
       <PrivacyControl/>
     </Box>)
 }

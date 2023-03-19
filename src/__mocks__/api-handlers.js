@@ -123,6 +123,7 @@ export const handlers = [
 
   rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
     const {org, repo} = req.params
+    console.log('in the patch mock')
     if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
       console.log('in the if')
       return res(
