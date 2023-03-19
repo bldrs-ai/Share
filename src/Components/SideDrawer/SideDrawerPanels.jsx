@@ -1,6 +1,5 @@
 import React, {useRef, useEffect} from 'react'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import {CloseButton} from '../Buttons'
@@ -9,6 +8,7 @@ import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
+import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
 
@@ -97,7 +97,7 @@ export function PropertiesPanel({includeGutter}) {
     >
       {selectedElement ?
         <ItemProperties/> :
-        <Typography variant='p'>Please select an element</Typography>
+        <NoContent message={'Please select an element to access properties'}/>
       }
     </PanelWithTitle>
   )
