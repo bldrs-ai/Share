@@ -385,8 +385,8 @@ const CardFooter = ({
             title='Delete comment'
             size='small'
             placement='bottom'
-            onClick={() => {
-              removeComment(repository, accessToken, id)
+            onClick={async () => {
+              await removeComment(repository, accessToken, id)
             }}
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
