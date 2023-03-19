@@ -172,8 +172,8 @@ export default function NoteCard({
   async function removeComment(repository, accessToken, commentId) {
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
-    toggleSynchNotes()
-    return deleteRes
+    // eslint-disable-next-line no-magic-numbers
+    setTimeout(() => toggleSynchNotes(), 1000)
   }
 
 
