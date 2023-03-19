@@ -37,9 +37,9 @@ export default function OpenModelControl({fileOpen}) {
           title={'Open IFC'}
           onClick={() => setIsDialogDisplayed(true)}
           icon={<OpenIcon/>}
-          placement={'right'}
+          placement={'top'}
           selected={isDialogDisplayed}
-          dataTestId='open-ifc'ß
+          dataTestId='open-ifc'
         />
       </Paper>
       {isDialogDisplayed &&

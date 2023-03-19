@@ -3,7 +3,7 @@ import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
-import useStore from '../store/useStore'
+import {useIsMobile} from './Hooks'
 import CloseIcon from '../assets/icons/Close.svg'
 
 
@@ -25,34 +25,21 @@ export function TooltipIconButton({
   selected = false,
   size = 'medium',
   dataTestId = '',
-  aboutInfo = true,
 }) {
   assertDefined(title, onClick, icon)
-  const [openLocal, setOpenLocal] = React.useState(false)
-  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
-  const open = aboutInfo ? isTooltipsOpen : false
-  const handleClose = () => {
-    setOpenLocal(false)
-  }
-  const handleOpen = () => {
-    setOpenLocal(true)
-  }
+  const isMobile = useIsMobile()
   return (
     <>
-      <Tooltip
-        open={openLocal || open}
-        onClose={handleClose}
-        onOpen={handleOpen}
-        title={title}
-        describeChild
-        placement={placement}
-        data-testid={dataTestId}
-        PopperProps={{style: {zIndex: 0}}}
-      >
-        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-          {icon}
-        </ToggleButton>
-      </Tooltip>
+      {isMobile ?
+       <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+         {icon}
+       </ToggleButton> :
+       <Tooltip title={title} describeChild placement={placement} data-testid={dataTestId}>
+         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+           {icon}
+         </ToggleButton>
+       </Tooltip>
+      }
     </>
   )
 }
@@ -102,7 +89,6 @@ export function CloseButton({onClick}) {
       placement='bottom'
       icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
-      aboutInfo={false}
     />
   )
 }

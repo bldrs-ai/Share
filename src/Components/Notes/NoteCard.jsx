@@ -298,7 +298,6 @@ const CardFooter = ({
             placement='bottom'
             onClick={onClickCamera}
             icon={<CameraIcon/>}
-            aboutInfo={false}
           />}
         {selected &&
           <TooltipIconButton

@@ -5,7 +5,6 @@ import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {hexToRgba} from '../utils/color'
-import {useIsMobile} from './Hooks'
 import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
@@ -17,7 +16,6 @@ import ListIcon from '../assets/icons/List.svg'
 import MoonIcon from '../assets/icons/Moon.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
 import SunIcon from '../assets/icons/Sun.svg'
-import QuestionIcon from '../assets/icons/Question.svg'
 
 
 /**
@@ -40,13 +38,6 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  const toggleIsTooltipsOpen = useStore((state) => state.toggleIsTooltipsOpen)
-  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
-  const turnOffIsTooltipsOpen = useStore((state) => state.turnOffIsTooltipsOpen)
-  const isMobile = useIsMobile()
-  const turnOffTooltips = () => {
-    return isMobile ? turnOffIsTooltipsOpen() : null
-  }
 
   const isSelected = () => {
     const ifSelected = (
@@ -113,18 +104,11 @@ export default function OperationsGroup({deselectItems}) {
            title='Notes'
            icon={<NotesIcon/>}
            selected={isNotesOn}
-           onClick={() => {
-             turnOffTooltips()
-             toggle('Notes')
-           }
-           }
+           onClick={() => toggle('Notes')}
          />
          <TooltipIconButton
            title='Properties'
-           onClick={() => {
-             turnOffTooltips()
-             toggle('Properties')
-           }}
+           onClick={() => toggle('Properties')}
            selected={isPropertiesOn}
            icon={<ListIcon/>}
          />
@@ -136,7 +120,6 @@ export default function OperationsGroup({deselectItems}) {
            selected={isSelected()}
            icon={<ClearIcon/>}
          />
-
        </ButtonGroup>
       }
 
@@ -146,12 +129,6 @@ export default function OperationsGroup({deselectItems}) {
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}
            icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
-         />
-         <TooltipIconButton
-           title='Help'
-           onClick={() => toggleIsTooltipsOpen()}
-           selected={isTooltipsOpen}
-           icon={<QuestionIcon/>}
          />
          <AboutControl/>
        </ButtonGroup>
