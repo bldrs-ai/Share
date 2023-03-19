@@ -40,12 +40,12 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  const toggleIsTooltipsOpen = useStore((state) => state.toggleIsTooltipsOpen)
-  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
-  const turnOffIsTooltipsOpen = useStore((state) => state.turnOffIsTooltipsOpen)
+  const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
+  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
+  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
-    return isMobile ? turnOffIsTooltipsOpen() : null
+    return isMobile ? turnOffIsHelpTooltips() : null
   }
 
   const isSelected = () => {
@@ -149,8 +149,8 @@ export default function OperationsGroup({deselectItems}) {
          />
          <TooltipIconButton
            title='Help'
-           onClick={() => toggleIsTooltipsOpen()}
-           selected={isTooltipsOpen}
+           onClick={() => toggleIsHelpTooltips()}
+           selected={isHelpTooltips}
            icon={<QuestionIcon/>}
          />
          <AboutControl/>

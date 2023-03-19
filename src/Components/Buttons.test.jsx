@@ -29,7 +29,7 @@ describe('<TooltipIconButton />', () => {
   test('show tooltip when the help is activated', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.toggleIsTooltipsOpen()
+      result.current.toggleIsHelpTooltips()
     })
     const {getByText} = render(
         <MockComponent>

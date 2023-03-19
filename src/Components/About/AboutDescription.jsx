@@ -30,6 +30,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         margin: '2em 0',
         padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
+        backgroundColor: theme.palette.primary.secondary,
         border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
@@ -40,10 +41,10 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         }}
       >
         <Typography variant={'h5'}>
+            Cooperation is the unfair advantage.
             Cross-functional online collaboration unlocks team flow,
             productivity and creativity.
             Open workspaces, open standards and open source code is the most powerful way to work.
-            Cooperation is the unfair advantage.
         </Typography>
         <Box
           sx={{
