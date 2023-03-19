@@ -4,8 +4,8 @@ import {useDoubleTap} from 'use-double-tap'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams} from '../utils/location'
-import {PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
+import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
+import {CAMERA_PREFIX, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -223,6 +223,7 @@ export function usePlaceMark() {
       debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
       const markArr = roundCoord(...point)
       addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+      removeHashParams(window.location, CAMERA_PREFIX)
       debug().log('usePlaceMark#dropPlaceMark: window.location.href: ', window.location.href)
       addUserDataInGroup(svgGroup, {
         url: window.location.href,
