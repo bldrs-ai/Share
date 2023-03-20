@@ -1,5 +1,11 @@
 import {rest} from 'msw'
-import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
+import {
+  MOCK_COMMENTS,
+  MOCK_ISSUES,
+  MOCK_ORGANIZATION,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
+} from '../utils/GitHub'
 
 
 const httpOk = 200
@@ -140,7 +146,7 @@ export const handlers = [
     return res(
         ctx.status(httpOk),
         ctx.json({
-          oragnizations: 'list of orgs',
+          data: [MOCK_ORGANIZATION],
         }),
     )
   }),
@@ -149,15 +155,16 @@ export const handlers = [
     return res(
         ctx.status(httpOk),
         ctx.json({
-          oragnizations: 'list of repositories',
+          data: [MOCK_REPOSITORY],
         }),
     )
   }),
+
   rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
     return res(
         ctx.status(httpOk),
         ctx.json({
-          oragnizations: 'list of files',
+          data: [MOCK_FILES],
         }),
     )
   }),

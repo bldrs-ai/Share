@@ -727,6 +727,41 @@ export const MOCK_MODEL_PATH_LOCAL = {
   eltPath: '',
 }
 
+export const MOCK_ORGANIZATION = {
+  login: 'bldrs-ai',
+  id: 78882658,
+  node_id: 'MDEyOk9yZ2FuaXphdGlvbjc4ODgyNjU4',
+  url: 'https://api.github.com/orgs/bldrs-ai',
+  repos_url: 'https://api.github.com/orgs/bldrs-ai/repos',
+  events_url: 'https://api.github.com/orgs/bldrs-ai/events',
+  hooks_url: 'https://api.github.com/orgs/bldrs-ai/hooks',
+  issues_url: 'https://api.github.com/orgs/bldrs-ai/issues',
+  members_url: 'https://api.github.com/orgs/bldrs-ai/members{/member}',
+  public_members_url: 'https://api.github.com/orgs/bldrs-ai/public_members{/member}',
+  avatar_url: 'https://avatars.githubusercontent.com/u/78882658?v=4',
+  description: 'Build. Every. Thing. Together.',
+}
+
+export const MOCK_REPOSITORY = {
+  id: 337879836,
+  node_id: 'MDEwOlJlcG9zaXRvcnkzMzc4Nzk4MzY=',
+  name: 'Share',
+  full_name: 'bldrs-ai/Share',
+  private: true,
+}
+
+export const MOCK_FILES = {
+  name: 'window.ifc',
+  path: 'window.ifc',
+  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  size: 7299,
+  url: 'https://api.github.com/repos/bldrs-ai/Share/contents/window.ifc?ref=main',
+  html_url: 'https://github.com/bldrs-ai/Share/blob/main/window.ifc',
+  git_url: 'https://api.github.com/repos/bldrs-ai/Share/git/blobs/7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  download_url: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/window.ifc',
+  type: 'file',
+}
+
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
 const octokit = new Octokit({

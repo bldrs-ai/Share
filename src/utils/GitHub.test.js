@@ -6,6 +6,9 @@ import {
   getOrganizations,
   getRepositories,
   getFiles,
+  MOCK_ORGANIZATION,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
 } from './GitHub'
 
 
@@ -75,15 +78,16 @@ describe('GitHub', () => {
   describe('get models from github', () => {
     it('successfullly get organizations', async () => {
       const res = await getOrganizations()
-      expect(res.oragnizations).toEqual('list of orgs')
+      console.log('response from orgs', res.data)
+      expect(res.data).toEqual([MOCK_ORGANIZATION])
     })
     it('successfullly get repositories', async () => {
       const res = await getRepositories('bldrs-ai')
-      expect(res.oragnizations).toEqual('list of repositories')
+      expect(res.data).toEqual([MOCK_REPOSITORY])
     })
     it('successfullly get files', async () => {
       const res = await getFiles('Share', 'pablo-mayrgundter')
-      expect(res.oragnizations).toEqual('list of files')
+      expect(res.data).toEqual([MOCK_FILES])
     })
   })
 })
