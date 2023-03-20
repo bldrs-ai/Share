@@ -19,7 +19,7 @@ export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
   const notes = useStore((state) => state.notes)
-  const synchNotes = useStore((state) => state.synchNotes)
+  const synchSidebar = useStore((state) => state.synchSidebar)
   const setNotes = useStore((state) => state.setNotes)
   const createdNotes = useStore((state) => state.createdNotes)
   const setCreatedNotes = useStore((state) => state.setCreatedNotes)
@@ -63,7 +63,7 @@ export default function Notes() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
-            synchedNote: true,
+            synched: true,
           })
         })
 
@@ -104,7 +104,7 @@ export default function Notes() {
 
     fetchNotes()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, setNotes, isCreateNoteActive, deletedNotes, synchNotes])
+  }, [repository, setNotes, isCreateNoteActive, deletedNotes, synchSidebar])
 
 
   useEffect(() => {
@@ -130,6 +130,7 @@ export default function Notes() {
                 date: comment.created_at,
                 username: comment.user.login,
                 avatarUrl: comment.user.avatar_url,
+                synched: true,
               })
             })
           }
@@ -144,7 +145,7 @@ export default function Notes() {
     }
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open using the link
-  }, [filteredNote, repository, setComments, selectedNoteId, synchNotes, accessToken])
+  }, [filteredNote, repository, setComments, selectedNoteId, synchSidebar, accessToken])
 
 
   useEffect(() => {
@@ -182,7 +183,7 @@ export default function Notes() {
               username={note.username}
               numberOfComments={note.numberOfComments}
               avatarUrl={note.avatarUrl}
-              synchedNote={note.synchedNote}
+              synched={note.synched}
             />
           )
         }) :
@@ -213,7 +214,7 @@ export default function Notes() {
                   date={comment.date}
                   username={comment.username}
                   avatarUrl={comment.avatarUrl}
-                  synchedNote={true}
+                  synched={comment.synched}
                 />
               )
             })

@@ -59,7 +59,7 @@ export default function NoteCard({
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
-  synchedNote = true,
+  synched = true,
 }) {
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
@@ -72,7 +72,8 @@ export default function NoteCard({
   const deletedNotes = useStore((state) => state.deletedNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -170,10 +171,10 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function removeComment(repository, accessToken, commentId) {
+    const newComments = comments.filter((comment) => comment.id !== commentId)
+    setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
-    // eslint-disable-next-line no-magic-numbers
-    setTimeout(() => toggleSynchNotes(), 10000)
   }
 
 
@@ -242,7 +243,7 @@ export default function NoteCard({
           deleteNote={deleteNote}
           removeComment={removeComment}
           isComment={isComment}
-          synchedNote={synchedNote}
+          synched={synched}
         />
       }
     </Paper>
@@ -287,10 +288,10 @@ const CardFooter = ({
   deleteNote,
   removeComment,
   isComment,
-  synchedNote}) => {
+  synched}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const repository = useStore((state) => state.repository)
-  const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
@@ -341,7 +342,7 @@ const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synchedNote && user && user.nickname === username &&
+          !isComment && selected && synched && user && user.nickname === username &&
           <Box sx={{
             '& svg': {
               fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
@@ -369,7 +370,7 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {!isComment && synchedNote && user && user.nickname === username &&
+        {!isComment && synched && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete note'
             size='small'
@@ -381,7 +382,7 @@ const CardFooter = ({
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
         }
-        {isComment && synchedNote && user && user.nickname === username &&
+        {isComment && synched && user && user.nickname === username &&
           <TooltipIconButton
             title='Delete comment'
             size='small'
@@ -392,12 +393,12 @@ const CardFooter = ({
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
         }
-        {!synchedNote &&
+        {!synched &&
           <TooltipIconButton
             title='Synch to GitHub'
             size='small'
             placement='bottom'
-            onClick={() => toggleSynchNotes()}
+            onClick={() => toggleSynchSidebar()}
             icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
           />
         }

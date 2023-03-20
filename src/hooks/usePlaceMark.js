@@ -31,8 +31,9 @@ export function usePlaceMark() {
   const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
-  const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
   const accessToken = useStore((state) => state.accessToken)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const location = useLocation()
 
 
@@ -247,11 +248,20 @@ export function usePlaceMark() {
     }
     debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
-    const saveRes = await createComment(repository, issueNumber, {
+    const newComment = {
       body: `[placemark](${window.location.href})`,
-    }, accessToken)
+    }
+    const newComments = [
+      ...comments,
+      {
+        ...newComment,
+        username: placeMarkNote.username,
+        avatarUrl: placeMarkNote.avatarUrl,
+      },
+    ]
+    setComments(newComments)
+    const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
-    toggleSynchNotes()
   }
 
 
