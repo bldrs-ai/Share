@@ -96,7 +96,6 @@ export async function closeIssue(repository, issueNumber, accessToken = '') {
       ...args.headers,
     }
   }
-  console.log('in the close issue')
   const res = await patchGitHub(repository, `issues/${issueNumber}`, args)
   return res
 }
