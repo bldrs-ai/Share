@@ -34,88 +34,9 @@ export function usePlaceMark() {
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const setNotes = useStore((state) => state.setNotes)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const location = useLocation()
-
-
-  const createPlaceMark = ({context, oppositeObjects}) => {
-    const newPlaceMark = new PlaceMark({context})
-    newPlaceMark.setObjects(oppositeObjects)
-    debug().log('usePlaceMark#createPlaceMark: newPlaceMark: ', newPlaceMark)
-    setPlaceMark(newPlaceMark)
-  }
-
-
-  const onSceneDoubleTap = useDoubleTap(async (event) => {
-    if (placeMark) {
-      const res = placeMark.onSceneDoubleClick(event)
-
-      switch (event.button) {
-        case 0: // Main button (left button)
-          await dropPlaceMark(res)
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 2: // Secondary button (right button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 3: // Fourth button (back button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-    }
-  })
-
-
-  const onSceneSingleTap = async (event, callback) => {
-    if (placeMark) {
-      const res = placeMark.onSceneClick(event)
-
-      switch (event.button) {
-        case 0: // Main button (left button)
-          if (event.shiftKey) {
-            await dropPlaceMark(res)
-          } else if (res.url) {
-            selectPlaceMark(res.url)
-          }
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 2: // Secondary button (right button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 3: // Fourth button (back button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-
-      if (callback) {
-        callback(res)
-      }
-    }
-  }
-
-
-  const togglePlaceMarkActive = (id) => {
-    if (placeMark) {
-      if (placeMarkId === id && placeMark.activated) {
-        deactivatePlaceMark()
-      } else {
-        activatePlaceMark()
-      }
-    }
-    setPlaceMarkId(id)
-  }
 
 
   useEffect(() => {
@@ -144,7 +65,6 @@ export function usePlaceMark() {
       const totalPlaceMarkHashUrlMap = new Map()
 
       totalPlaceMarkUrls.forEach((url) => {
-        debug().log('usePlaceMark#useEffect: url: ', url)
         const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
         totalPlaceMarkHashUrlMap.set(hash, url)
       })
@@ -207,15 +127,72 @@ export function usePlaceMark() {
   }, [synchSidebar])
 
 
-  const activatePlaceMark = () => {
-    placeMark.activate()
-    setPlaceMarkActivated(true)
+  const createPlaceMark = ({context, oppositeObjects}) => {
+    const newPlaceMark = new PlaceMark({context})
+    newPlaceMark.setObjects(oppositeObjects)
+    setPlaceMark(newPlaceMark)
   }
 
 
-  const deactivatePlaceMark = () => {
-    placeMark.deactivate()
-    setPlaceMarkActivated(false)
+  const onSceneDoubleTap = useDoubleTap(async (event) => {
+    if (!placeMark) {
+      return
+    }
+    const res = placeMark.onSceneDoubleClick(event)
+
+    switch (event.button) {
+      case 0: // Main button (left button)
+        await dropPlaceMark(res)
+        break
+      case 1: // Wheel button (middle button if present)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 2: // Secondary button (right button)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 3: // Fourth button (back button)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 4: // Fifth button (forward button)
+        break
+      default:
+        break
+    }
+  })
+
+
+  const onSceneSingleTap = async (event, callback) => {
+    if (!placeMark) {
+      return
+    }
+    const res = placeMark.onSceneClick(event)
+
+    switch (event.button) {
+      case 0: // Main button (left button)
+        if (event.shiftKey) {
+          await dropPlaceMark(res)
+        } else if (res.url) {
+          selectPlaceMark(res.url)
+        }
+        break
+      case 1: // Wheel button (middle button if present)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 2: // Secondary button (right button)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 3: // Fourth button (back button)
+        break
+      // eslint-disable-next-line no-magic-numbers
+      case 4: // Fifth button (forward button)
+        break
+      default:
+        break
+    }
+
+    if (callback) {
+      callback(res)
+    }
   }
 
 
@@ -240,10 +217,8 @@ export function usePlaceMark() {
       return
     }
     debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
-    const placeMarkNote = notes.find((note) => note.id === placeMarkId)
-    debug().log('usePlaceMark#dropPlaceMark: notes: ', notes)
-    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
-    debug().log('usePlaceMark#dropPlaceMark: placeMarkNote: ', placeMarkNote)
+    const newNotes = [...notes]
+    const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
@@ -261,6 +236,11 @@ export function usePlaceMark() {
       },
     ]
     setComments(newComments)
+    placeMarkNote.numberOfComments += 1
+    placeMarkNote.synched = false
+    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
+    debug().log('usePlaceMark#dropPlaceMark: newNotes: ', newNotes)
+    setNotes(newNotes)
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
   }
@@ -278,6 +258,30 @@ export function usePlaceMark() {
       setPlaceMarkStatus(svgGroup, true)
       window.location.href = url // Change location hash
     }
+  }
+
+
+  const togglePlaceMarkActive = (id) => {
+    if (placeMark) {
+      if (placeMarkId === id && placeMark.activated) {
+        deactivatePlaceMark()
+      } else {
+        activatePlaceMark()
+      }
+    }
+    setPlaceMarkId(id)
+  }
+
+
+  const deactivatePlaceMark = () => {
+    placeMark.deactivate()
+    setPlaceMarkActivated(false)
+  }
+
+
+  const activatePlaceMark = () => {
+    placeMark.activate()
+    setPlaceMarkActivated(true)
   }
 
 

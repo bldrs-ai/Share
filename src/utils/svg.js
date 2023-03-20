@@ -245,3 +245,17 @@ export function setGroupColor(group, color) {
     }
   })
 }
+
+/**
+ * @param {Group} group
+ */
+export function disposeGroup(group) {
+  assertDefined(group)
+
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.geometry.dispose()
+      child.material.dispose()
+    }
+  })
+}

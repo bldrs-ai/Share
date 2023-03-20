@@ -7,7 +7,7 @@ import {IfcContext} from 'web-ifc-viewer/dist/components'
 import {INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_DISTANCE} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
-import {getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
+import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
 import {raycaster} from '../utils/constants'
 import createComposer from './CustomPostProcessing'
 
@@ -87,7 +87,7 @@ export default class PlaceMark extends EventDispatcher {
           if (event.shiftKey) {
             res = dropPlaceMark(event)
           } else {
-            res = getPlaceMarkGroup()
+            res = getIntersectionPlaceMarkInfo()
           }
           break
         case 1: // Wheel button (middle button if present)
@@ -106,48 +106,6 @@ export default class PlaceMark extends EventDispatcher {
       }
 
       return res
-    }
-
-
-    this.putDown = ({point, lookAt, fillColor = 'black', height = INACTIVE_PLACE_MARK_HEIGHT}) => {
-      debug().log('PlaceMark#putDown: point: ', point)
-      debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
-      return new Promise((resolve, reject) => {
-        getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-          const svgGroup = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
-          svgGroup.position.copy(point)
-          _scene.add(svgGroup)
-          _placeMarks.push(svgGroup)
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
-          const placeMarkMeshSet = getPlaceMarkMeshSet()
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
-          outlineEffect.setSelection(placeMarkMeshSet)
-          resolve(svgGroup)
-        })
-      })
-    }
-
-
-    this.disposePlaceMark = (svgGroup) => {
-      debug().log('PlaceMark#disposePlaceMark: before place marks count: ', _placeMarks.length)
-      const index = _placeMarks.indexOf(svgGroup)
-
-      if (index > -1) {
-        _placeMarks.splice(index, 1)
-        _scene.remove(svgGroup)
-      }
-
-      debug().log('PlaceMark#disposePlaceMark: after place marks count: ', _placeMarks.length)
-    }
-
-
-    const updatePointer = (event) => {
-      const rect = _domElement.getBoundingClientRect()
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
     }
 
 
@@ -181,9 +139,53 @@ export default class PlaceMark extends EventDispatcher {
     }
 
 
-    const getPlaceMarkGroup = () => {
+    this.putDown = ({point, lookAt, fillColor = 'black', height = INACTIVE_PLACE_MARK_HEIGHT}) => {
+      debug().log('PlaceMark#putDown: point: ', point)
+      debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
+      return new Promise((resolve, reject) => {
+        getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
+          const svgGroup = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
+          svgGroup.position.copy(point)
+          _scene.add(svgGroup)
+          _placeMarks.push(svgGroup)
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
+          const placeMarkMeshSet = getPlaceMarkMeshSet()
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
+          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
+          outlineEffect.setSelection(placeMarkMeshSet)
+          resolve(svgGroup)
+        })
+      })
+    }
+
+
+    this.disposePlaceMark = (svgGroup) => {
+      debug().log('PlaceMark#disposePlaceMark: before place marks count: ', _placeMarks.length)
+      const index = _placeMarks.indexOf(svgGroup)
+
+      if (index > -1) {
+        _placeMarks.splice(index, 1)
+        disposeGroup(svgGroup)
+        _scene.remove(svgGroup)
+      }
+
+      debug().log('PlaceMark#disposePlaceMark: after place marks count: ', _placeMarks.length)
+      debug().log('PlaceMark#disposePlaceMark: _scene: ', _scene)
+    }
+
+
+    const updatePointer = (event) => {
+      const rect = _domElement.getBoundingClientRect()
+      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
+      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
+      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
+      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+    }
+
+
+    const getIntersectionPlaceMarkInfo = () => {
       let res = {}
-      debug().log('PlaceMark#getPlaceMarkGroup: _placeMarks: ', _placeMarks)
+      debug().log('PlaceMark#getIntersectionPlaceMarkInfo: _placeMarks: ', _placeMarks)
 
       if (_placeMarks.length) {
         updatePointer(event)
@@ -191,7 +193,7 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         raycaster.setFromCamera(_pointer, _camera)
         raycaster.intersectObjects(_placeMarks, true, _intersections)
-        debug().log('PlaceMark#getPlaceMarkGroup: _intersections: ', _intersections)
+        debug().log('PlaceMark#getIntersectionPlaceMarkInfo: _intersections: ', _intersections)
         if (_intersections.length) {
           res = {url: _intersections[0].object?.userData?.url}
         }
