@@ -25,7 +25,7 @@ import {RectangularButton} from '../Components/Buttons'
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const [orgNamesArr, setOrgNamesArray] = useState(['loading'])
+  const [orgNamesArr, setOrgNamesArray] = useState(['..'])
   const {user} = useAuth0()
   const theme = useTheme()
   const accessToken = useStore((state) => state.accessToken)
@@ -38,14 +38,14 @@ export default function OpenModelControl({fileOpen}) {
     async function fetchOrganizations() {
       const orgs = await getOrganizations(accessToken)
       const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
-      const orgNames = [...orgNamesFetched, user ? user.nickname : 'my own repo']
+      const orgNames = [...orgNamesFetched, user ? user.nickname : '']
       setOrgNamesArray(orgNames)
-      console.log('in the fetch Organizations', orgs)
       return orgs
     }
     fetchOrganizations()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [accessToken, user])
+
+
   return (
     <Box
       sx={{
@@ -89,15 +89,18 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const [selectedOrg, setSelectedOrg] = useState('')
   const [selectedRepo, setSelectedRepo] = useState('')
   const [selectedFile, setSelectedFile] = useState('')
-  const [repoNamesArr, setRepoNamesArr] = useState(['loading'])
-  const [filesArr, setFilesArr] = useState(['loading'])
+  const [repoNamesArr, setRepoNamesArr] = useState(['...'])
+  const [filesArr, setFilesArr] = useState(['...'])
   const theme = useTheme()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
+
+
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
   }
+
   const selectOrg = async (org) => {
     setSelectedOrg(org)
     let repos
@@ -109,6 +112,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
   }
+
   const selectRepo = async (repo) => {
     setSelectedRepo(repo)
     const owner = orgNamesArr[selectedOrg]
@@ -116,11 +120,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     const fileNames = Object.keys(files).map((key) => files[key].name)
     setFilesArr(fileNames)
   }
+
   const navigateToFile = () => {
     if (filesArr[selectedFile].includes('.ifc')) {
       navigate({pathname: `/share/v/gh/${orgNamesArr[selectedOrg]}/${repoNamesArr[selectedRepo]}/main/${filesArr[selectedFile]}`})
     }
   }
+
   return (
     <Dialog
       icon={<OpenIcon/>}
