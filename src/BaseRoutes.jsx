@@ -78,7 +78,7 @@ export default function BaseRoutes({testElt = null}) {
     const enabledFeature = initialParameters.get('feature')
     const appStoreEnabled = enabledFeature && enabledFeature.toLowerCase() === 'apps'
     setIsAppStoreEnabled(appStoreEnabled)
-  }, [])
+  }, [setIsAppStoreEnabled])
 
   return (
     <SentryRoutes>
