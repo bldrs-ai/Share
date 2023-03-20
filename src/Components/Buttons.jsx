@@ -88,6 +88,7 @@ export function CloseButton({onClick}) {
     <TooltipIconButton
       title='Close'
       onClick={onClick}
+      placement='bottom'
       icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
     />

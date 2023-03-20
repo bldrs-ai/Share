@@ -1,8 +1,7 @@
-import {Vector3} from 'three'
-
-
+jest.mock('three')
 jest.mock('../src/Infrastructure/IfcHighlighter')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
+
 
 // Not sure why this is required, but otherwise these internal fields
 // are not present in the instantiated IfcViewerAPI.
@@ -75,7 +74,7 @@ const impl = {
     }),
     planes: [{
       plane: {
-        normal: new Vector3(1, 0, 0),
+        normal: jest.fn(),
         constant: 10,
       },
     }],

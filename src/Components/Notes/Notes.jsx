@@ -1,11 +1,13 @@
 import React, {useEffect} from 'react'
 import Paper from '@mui/material/Paper'
+import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
+import NoteCardCreate from './NoteCardCreate'
 
 
 /** The prefix to use for the note ID within the URL hash. */
@@ -15,14 +17,21 @@ export const NOTE_PREFIX = 'i'
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const {user} = useAuth0()
   const notes = useStore((state) => state.notes)
+  const synchNotes = useStore((state) => state.synchNotes)
   const setNotes = useStore((state) => state.setNotes)
+  const createdNotes = useStore((state) => state.createdNotes)
+  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
+  const deletedNotes = useStore((state) => state.deletedNotes)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ?
     notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
+  const drawer = useStore((state) => state.drawer)
 
 
   useEffect(() => {
@@ -36,7 +45,7 @@ export default function Notes() {
         const fetchedNotes = []
         const issuesData = await getIssues(repository, accessToken)
         let issueIndex = 0
-        issuesData.data.slice(0).reverse().map((issue, index) => {
+        issuesData.data.slice(0).map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
@@ -51,20 +60,44 @@ export default function Notes() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
+            synchedNote: true,
           })
         })
-        if (fetchedNotes.length > 0) {
-          setNotes(fetchedNotes)
+
+        let synchedCreatedNotes = []
+        if (createdNotes !== null) {
+          synchedCreatedNotes =
+          createdNotes.filter(
+              (createdNote) => !fetchedNotes.some(
+                  (fetchedNote) =>
+                    createdNote.title === fetchedNote.title &&
+                    createdNote.body === fetchedNote.body ),
+          )
+          // update the list of created notes
+          setCreatedNotes(synchedCreatedNotes)
+        }
+
+        const combinedSynchedNotes = [
+          ...synchedCreatedNotes,
+          ...fetchedNotes,
+        ]
+
+        if (deletedNotes !== null) {
+          const filteredDeleted =
+          combinedSynchedNotes.filter(
+              (synchedNote) => !deletedNotes.includes(synchedNote.number),
+          )
+          setNotes(filteredDeleted)
         } else {
-          setNotes([])
+          setNotes(combinedSynchedNotes)
         }
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
     }
-
     fetchNotes()
-  }, [setNotes, repository, accessToken])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
 
 
   useEffect(() => {
@@ -103,8 +136,14 @@ export default function Notes() {
 
     // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
     // using the link
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredNote, repository, setComments, accessToken])
+  }, [filteredNote, repository, setComments, accessToken, selectedNoteId])
+
+
+  useEffect(() => {
+    if (drawer) {
+      drawer.scrollTop = 0
+    }
+  }, [drawer, selectedNoteId])
 
   return (
     <Paper
@@ -116,28 +155,32 @@ export default function Notes() {
         overflow: 'auto',
       }}
     >
+      {isCreateNoteActive && user && <NoteCardCreate/>}
+      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
       {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && <NoContent/> }
-      {notes && !selectedNoteId ?
-       notes.map((issue, index) => {
+      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/> }
+      {notes && !selectedNoteId && !isCreateNoteActive ?
+       notes.map((note, index) => {
          return (
            <NoteCard
-             embeddedUrl={issue.embeddedUrl}
-             index={issue.index}
-             id={issue.id}
+             embeddedUrl={note.embeddedUrl}
+             index={note.index}
+             id={note.id}
              key={index}
-             title={issue.title}
-             date={issue.date}
-             body={issue.body}
-             username={issue.username}
-             numberOfComments={issue.numberOfComments}
-             avatarUrl={issue.avatarUrl}
-             imageUrl={issue.imageUrl}
+             noteNumber={note.number}
+             title={note.title}
+             date={note.date}
+             body={note.body}
+             username={note.username}
+             numberOfComments={note.numberOfComments}
+             avatarUrl={note.avatarUrl}
+             imageUrl={note.imageUrl}
+             synchedNote={note.synchedNote}
            />
          )
        }) :
        <>
-         {filteredNote ?
+         {(filteredNote && !isCreateNoteActive) ?
           <NoteCard
             embeddedUrl={filteredNote.embeddedUrl}
             index={filteredNote.index}
@@ -152,7 +195,7 @@ export default function Notes() {
             imageUrl={filteredNote.imageUrl}
           /> : null
          }
-         {comments &&
+         {comments && !isCreateNoteActive &&
           comments.map((comment, index) => {
             return (
               <NoteCard
@@ -176,3 +219,4 @@ export default function Notes() {
     </Paper>
   )
 }
+

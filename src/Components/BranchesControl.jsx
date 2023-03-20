@@ -1,8 +1,9 @@
 import React, {useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
-import TextField from '@mui/material/TextField'
+import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import debug from '../utils/debug'
@@ -24,6 +25,7 @@ export default function Branches() {
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
   const modelPath = useStore((state) => state.modelPath)
+  const accessToken = useStore((state) => state.accessToken)
   const theme = useTheme()
 
 
@@ -34,7 +36,7 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const branchesData = await getBranches(repository)
+        const branchesData = await getBranches(repository, accessToken)
         const versionPathsTemp = []
         if (branchesData.data.length > 0) {
           setBranches(branchesData.data)
@@ -56,7 +58,7 @@ export default function Branches() {
     if (branches.length === 0 && modelPath.repo !== undefined) {
       fetchBranches()
     }
-  }, [repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
+  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
 
 
   const handleSelect = (event) => {
@@ -70,7 +72,7 @@ export default function Branches() {
 
 
   return (
-    <>
+    <Box sx={{width: '100%'}}>
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
@@ -80,7 +82,7 @@ export default function Branches() {
         >
           <TextField
             sx={{
-              'width': '300px',
+              'width': '100%',
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },
@@ -133,6 +135,6 @@ export default function Branches() {
           </TextField>
         </Paper>
       }
-    </>
+    </Box>
   )
 }

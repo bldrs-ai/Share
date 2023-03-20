@@ -6,6 +6,7 @@ import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
+import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -24,6 +25,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
+import {usePlaceMark} from '../hooks/usePlaceMark'
 
 
 /**
@@ -80,6 +82,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
+  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -89,6 +92,9 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+
+  // Place Mark
+  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -205,7 +211,12 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
+    debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
+    createPlaceMark({
+      context: viewer.context,
+      oppositeObjects: [tmpModelRef],
+    })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
   }
@@ -330,6 +341,7 @@ export default function CadView({
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
+    debug().log('CadView#onModel: rootElt: ', rootElt)
     if (rootElt.expressID === undefined) {
       throw new Error('Model has undefined root express ID')
     }
@@ -556,6 +568,11 @@ export default function CadView({
     }
   }
 
+  const windowDimensions = useWindowDimensions()
+  const spacingBetweenSearchAndOpsGroupPx = 20
+  const operationsGroupWidthPx = 60
+  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const searchAndNavMaxWidthPx = 300
   return (
     <Box
       sx={{
@@ -579,6 +596,8 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
+        onMouseDown={onSingleTap}
+        {...onDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
@@ -587,25 +606,30 @@ export default function CadView({
       />
       {showSearchBar && (
         <Box sx={{
-          position: 'absolute',
-          top: `1em`,
-          left: '1em',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          alignItems: 'flex-start',
-          maxHeight: '95%',
+          'position': 'absolute',
+          'top': `1em`,
+          'left': '1em',
+          'display': 'flex',
+          'flexDirection': 'column',
+          'justifyContent': 'flex-start',
+          'alignItems': 'flex-start',
+          'maxHeight': '95%',
+          'width': '275px',
+          '@media (max-width: 900px)': {
+            width: `${searchAndNavWidthPx}px`,
+            maxWidth: `${searchAndNavMaxWidthPx}px`,
+          },
         }}
         >
           {isSearchBarVisible &&
-          <SearchBar
-            fileOpen={loadLocalFile}
-          />}
+            <SearchBar
+              fileOpen={loadLocalFile}
+            />}
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
           }
-          { isNavPanelOpen &&
+          {isNavPanelOpen &&
             isNavigationPanelVisible &&
             <NavPanel
               model={model}
@@ -701,8 +725,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   v.IFC.setWasmPath('./static/js/')
   v.clipper.active = true
   v.clipper.orthogonalY = false
-  // TODO(https://github.com/bldrs-ai/Share/issues/622): this breaks postprocessing
-  // addSceneLayer(v.IFC.context)
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
@@ -713,11 +735,13 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   return v
 }
 
+
 const getGitHubDownloadURL = async (url, accessToken) => {
   const repo = parseGitHubRepositoryURL(url)
   const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
   return downloadURL
 }
+
 
 const getFinalURL = async (url, accessToken) => {
   const u = new URL(url)
@@ -735,6 +759,7 @@ const getFinalURL = async (url, accessToken) => {
       return url
   }
 }
+
 
 /**
  * @param {string} filepath

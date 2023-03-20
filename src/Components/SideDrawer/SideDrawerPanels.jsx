@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useRef, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
@@ -23,6 +23,14 @@ export function PanelWithTitle(props) {
   const headerBorderOpacity = 0
   const headerBorderColor = hexToRgba(theme.palette.primary.contrastText, headerBorderOpacity)
   const isMobile = useIsMobile()
+  const drawerRef = useRef()
+  const setDrawer = useStore((state) => state.setDrawer)
+
+
+  useEffect(() => {
+    setDrawer(drawerRef.current)
+  }, [setDrawer])
+
   return (
     <Box sx={{height: '100%', overflow: 'hidden'}}>
       <Box
@@ -39,6 +47,7 @@ export function PanelWithTitle(props) {
           overflow: 'auto',
           padding: isMobile ? '0 0.5em 0 0' : '1em 0.5em 1em 0',
         }}
+        ref={drawerRef}
       >
         {props.children}
       </Box>
@@ -49,9 +58,16 @@ export function PanelWithTitle(props) {
 
 /** @return {React.Component} */
 export function NotesPanel() {
-  // TODO(pablo): const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  let title = selectedNoteId ? 'Note' : 'Notes'
+  if (isCreateNoteActive) {
+    title = 'Add a note'
+  }
+
   return (
-    <PanelWithTitle title={'Notes'} controlsGroup={<NotesNavBar/>} includeGutter={true}>
+    <PanelWithTitle title={title} controlsGroup={<NotesNavBar/>} includeGutter={true}>
       <Notes/>
     </PanelWithTitle>
   )
@@ -79,8 +95,8 @@ export function PropertiesPanel({includeGutter}) {
       includeGutter={includeGutter}
     >
       {selectedElement ?
-       <ItemProperties/> :
-       <Typography variant='p'>Please select an element</Typography>
+        <ItemProperties/> :
+        <Typography variant='p'>Please select an element</Typography>
       }
     </PanelWithTitle>
   )

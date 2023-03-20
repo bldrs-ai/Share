@@ -9,13 +9,14 @@ import {disableDebug} from './utils/debug'
 import {server} from './__mocks__/server'
 
 
+// TODO(pablo): this is somehow implicitly referenced in all tests,
+// but wasn't included when we added it in #633.  This is a quick fixup.
+// eslint-disable-next-line
+import {Canvas} from 'canvas'
+
+
 disableDebug()
 
-
-// TODO(pablo): This mock suppresses "WARNING: Multiple instances of
-// Three.js being imported", but why is it being included if
-// web-ifc-viewer is being mocked?
-jest.mock('three')
 
 // Establish API mocking before all tests.
 beforeAll(() => server.listen())

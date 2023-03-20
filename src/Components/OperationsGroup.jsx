@@ -64,14 +64,19 @@ export default function OperationsGroup({deselectItems}) {
   const theme = useTheme()
   const separatorOpacity = 0.1
   const separatorColor = hexToRgba(assertDefined(theme.palette.primary.contrastText), separatorOpacity)
+  // When the model has dark/black colors, then the icons (also dark)
+  // disappear. This keeps them visible.
+  const bgOpacity = 0.2
+  const bgColor = hexToRgba(assertDefined(theme.palette.scene.background), bgOpacity)
   return (
     <Box
       sx={{
         'display': 'flex',
         'flexDirection': 'column',
-        'margin': '1em 1em 0 0',
+        'backgroundColor': `${bgColor}`,
+        'padding': '1em',
         '@media (max-width: 900px)': {
-          margin: '1em 0.5em 0 0',
+          padding: '1em 0.5em',
         },
         '.MuiButtonGroup-root + .MuiButtonGroup-root': {
           marginTop: '0.5em',

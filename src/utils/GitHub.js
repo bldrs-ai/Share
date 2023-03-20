@@ -15,7 +15,9 @@ export async function getIssues(repository, accessToken = '') {
   const args = {}
   if (accessToken.length > 0) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
+      'if-modified-since': '',
+      'if-none-match': '',
       ...args.headers,
     }
   }
@@ -52,6 +54,52 @@ export async function getIssue(repository, issueId, accessToken = '') {
   return issue
 }
 
+/**
+ * Post issue to github
+ * below for the expected structure.
+ *
+ * @param {object} repository
+ * @param {object} payload issue payload shall contain title and body
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function postIssue(repository, payload, accessToken = '') {
+  const args = {
+    ...payload,
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  const res = await postGitHub(repository, 'issues', args)
+  return res
+}
+
+/**
+ * Close Github issue
+ *
+ * @param {object} repository
+ * @param {object} issueNumber issue number
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} The issue object.
+ */
+export async function closeIssue(repository, issueNumber, accessToken = '') {
+  const args = {
+    issue_number: issueNumber,
+    state: 'closed',
+  }
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+  console.log('in the close issue')
+  const res = await patchGitHub(repository, `issues/${issueNumber}`, args)
+  return res
+}
 
 /**
  * Fetch the issue with the given id from GitHub.  See MOCK_ISSUE
@@ -60,12 +108,20 @@ export async function getIssue(repository, issueId, accessToken = '') {
  * @param {object} repository
  * @return {object} the branches.
  */
-export async function getBranches(repository) {
-  const branches = await getGitHub(repository, 'branches')
+export async function getBranches(repository, accessToken = '') {
+  const args = {}
+
+  if (accessToken.length > 0) {
+    args.headers = {
+      authorization: `Bearer ${accessToken}`,
+      ...args.headers,
+    }
+  }
+
+  const branches = await getGitHub(repository, 'branches', args)
   debug().log('GitHub: branches: ', branches)
   return branches
 }
-
 
 /**
  * The comments should have the following structure:
@@ -96,7 +152,6 @@ export async function getComments(repository, issueId, accessToken = '') {
     debug().log('Empty comments!')
   }
 }
-
 
 /**
  * The comments should have the following structure:
@@ -228,6 +283,46 @@ async function getGitHub(repository, path, args = {}) {
   return res
 }
 
+/**
+ * Post the resource to the GitHub
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args for posting
+ * @return {object} The object at the resource
+ */
+async function postGitHub(repository, path, args = {}) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('Dispatching GitHub request for repo:', repository)
+  const res = await octokit.request(`POST /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  })
+  return res
+}
+
+/**
+ * Patch the resource
+ *
+ * @param {object} repository
+ * @param {object} path The resource path with arg substitution markers
+ * @param {object} args The args for patching
+ * @return {object} The object at the resource
+ */
+async function patchGitHub(repository, path, args = {}) {
+  assertDefined(repository.orgName)
+  assertDefined(repository.name)
+  debug().log('Dispatching GitHub request for repo:', repository)
+  const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
+    org: repository.orgName,
+    repo: repository.name,
+    ...args,
+  })
+  return res
+}
+
 export const MOCK_NOTE = {
   embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
   index: 0,
@@ -241,6 +336,35 @@ export const MOCK_NOTE = {
   numberOfComments: 2,
   imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
 }
+
+export const MOCK_NOTES = [
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 10,
+    number: 1,
+    title: 'open_workspace',
+    body: 'BLDRS aims to enable asynchronous workflows by integrating essential communication channels and open standard.',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+  {
+    embeddedUrl: 'url = http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34',
+    index: 0,
+    id: 11,
+    number: 2,
+    title: 'closed_system',
+    body: 'It is common for knowledge workers in the AEC industry to operate within information bubbles.2',
+    date: '2022-06-01T22:10:49Z',
+    username: 'TEST_ISSUE_USERNAME',
+    avatarUrl: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+    numberOfComments: 2,
+    imageUrl: 'https://user-images.githubusercontent.com/3433606/171650424-c9fa4450-684d-4f6c-8657-d80245116a5b.png',
+  },
+]
 
 export const MOCK_ISSUES = {
   data: [
@@ -528,7 +652,6 @@ export const MOCK_MODEL_PATH_LOCAL = {
   filepath: '/4f080237-b4e4-4ede-8885-d498647f15e6.ifc',
   eltPath: '',
 }
-
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
