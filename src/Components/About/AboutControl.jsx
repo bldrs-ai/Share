@@ -9,6 +9,7 @@ import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
+import useStore from '../../store/useStore'
 
 
 /**
@@ -17,12 +18,13 @@ import {Helmet} from 'react-helmet-async'
  * @return {React.ReactElement}
  */
 export default function AboutControl() {
+  const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
+
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
     name: 'isFirstTime',
     defaultValue: true,
   }))
-
 
   return (
     <ControlButton
@@ -39,7 +41,7 @@ export default function AboutControl() {
       }
       dialog={
         <AboutDialog
-          isDialogDisplayed={isDialogDisplayed}
+          isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
           setIsDialogDisplayed={() => {
             setIsDialogDisplayed(false)
             setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
