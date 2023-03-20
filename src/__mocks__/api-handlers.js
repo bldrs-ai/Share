@@ -154,7 +154,6 @@ export const handlers = [
     )
   }),
   rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
-    console.log('in the file api handler')
     return res(
         ctx.status(httpOk),
         ctx.json({
