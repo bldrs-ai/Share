@@ -34,6 +34,7 @@ export function usePlaceMark() {
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const synchSidebar = useStore((state) => state.synchSidebar)
   const location = useLocation()
 
 
@@ -203,7 +204,7 @@ export function usePlaceMark() {
       })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [notes])
+  }, [synchSidebar])
 
 
   const activatePlaceMark = () => {
