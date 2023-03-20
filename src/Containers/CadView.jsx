@@ -576,8 +576,8 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={(event) => {
-          onSceneSingleTap(event)
+        onMouseDown={async (event) => {
+          await onSceneSingleTap(event)
         }}
         {...onSceneDoubleTap}
       />
