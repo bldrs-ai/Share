@@ -22,7 +22,7 @@ export default function createUISlice(set, get) {
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
-    drawer: null,
+    isHelpTooltips: false,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -31,6 +31,8 @@ export default function createUISlice(set, get) {
     closeNotes: () => set(() => ({isNotesOn: false})),
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
+    toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
+    turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
     closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {

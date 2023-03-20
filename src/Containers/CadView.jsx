@@ -645,10 +645,13 @@ function OperationsGroupAndDrawer({deselectItems}) {
   return (
     isMobile ? (
       <>
+        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
+        and their first elements should be same height and offset so they line up naturally..
+        this is a shim for the misalignment you see with tooltips without it */}
         <Box
           sx={{
             position: 'absolute',
-            top: 0,
+            top: 3,
             right: 0,
           }}
         >
