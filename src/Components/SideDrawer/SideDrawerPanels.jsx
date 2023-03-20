@@ -97,7 +97,7 @@ export function PropertiesPanel({includeGutter}) {
     >
       {selectedElement ?
         <ItemProperties/> :
-        <NoContent message={'Please select an element to access properties'}/>
+        <NoContent message={'Please select an element to access properties.'}/>
       }
     </PanelWithTitle>
   )
