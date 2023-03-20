@@ -50,7 +50,6 @@ export async function getIssue(repository, issueId, accessToken = '') {
   }
 
   const issue = await getGitHub(repository, 'issues/{issue_number}', args)
-  console.log('issue', issue)
   debug().log('GitHub: issue: ', issue)
   return issue
 }
@@ -234,7 +233,6 @@ export async function getOrganizations(accessToken = '') {
       authorization: `Bearer ${accessToken}`,
     },
   })
-  console.log('get organizations', res)
   return res.data
 }
 
@@ -253,7 +251,6 @@ export async function getRepositories(org, accessToken = '') {
       authorization: `Bearer ${accessToken}`,
     },
   })
-  console.log('get repositoties', res)
   return res.data
 }
 
@@ -288,7 +285,6 @@ export async function getFiles(repo, owner, accessToken = '') {
       authorization: `Bearer ${accessToken}`,
     },
   })
-  console.log('get files', res)
   return res.data
 }
 

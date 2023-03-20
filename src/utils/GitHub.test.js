@@ -78,7 +78,6 @@ describe('GitHub', () => {
   describe('get models from github', () => {
     it('successfullly get organizations', async () => {
       const res = await getOrganizations()
-      console.log('response from orgs', res.data)
       expect(res.data).toEqual([MOCK_ORGANIZATION])
     })
     it('successfullly get repositories', async () => {
