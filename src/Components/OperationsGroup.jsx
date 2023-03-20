@@ -116,8 +116,7 @@ export default function OperationsGroup({deselectItems}) {
            onClick={() => {
              turnOffTooltips()
              toggle('Notes')
-           }
-           }
+           }}
          />
          <TooltipIconButton
            title='Properties'

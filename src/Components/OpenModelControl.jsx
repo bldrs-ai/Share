@@ -39,7 +39,7 @@ export default function OpenModelControl({fileOpen}) {
           icon={<OpenIcon/>}
           placement={'right'}
           selected={isDialogDisplayed}
-          dataTestId='open-ifc'ß
+          dataTestId='open-ifc'
         />
       </Paper>
       {isDialogDisplayed &&
