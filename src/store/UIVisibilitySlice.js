@@ -15,6 +15,7 @@ export default function createUIVisibilitySlice(set, get) {
     isSettingsVisible: true,
 
     isAboutDialogSuppressed: false,
+    isAppStoreEnabled: false,
 
     setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
@@ -25,5 +26,6 @@ export default function createUIVisibilitySlice(set, get) {
     setIsSettingsVisibile: (isVisible) => set(() => ({isSettingsVisible: isVisible})),
 
     setIsAboutDialogSuppressed: (isSuppressed) => set(() => ({isAboutDialogSuppressed: isSuppressed})),
+    setIsAppStoreEnabled: (isEnabled) => set(() => ({isAppStoreEnabled: isEnabled})),
   }
 }

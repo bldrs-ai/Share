@@ -41,6 +41,7 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+  const isAppStoreEnabled = useStore((state) => state.isAppStoreEnabled)
 
   const isSelected = () => {
     const ifSelected = (
@@ -128,12 +129,14 @@ export default function OperationsGroup({deselectItems}) {
 
       {isSettingsVisible &&
        <ButtonGroup orientation='vertical'>
+         {isAppStoreEnabled &&
          <TooltipIconButton
            title='Open App Store'
            icon={<AppStoreIcon/>}
            selected={isAppStoreOpen}
            onClick={() => toggleAppStoreDrawer()}
          />
+         }
          <TooltipIconButton
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}

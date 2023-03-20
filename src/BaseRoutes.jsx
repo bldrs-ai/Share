@@ -31,6 +31,7 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix }/`
   const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
+  const setIsAppStoreEnabled = useStore((state) => state.setIsAppStoreEnabled)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
@@ -68,6 +69,16 @@ export default function BaseRoutes({testElt = null}) {
       })
     }
   }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
+
+  /**
+   * Store initial query parameters, since they will be cleared by the application on model loading.
+   */
+  useEffect(() => {
+    const initialParameters = new URLSearchParams(window.location.search)
+    const enabledFeature = initialParameters.get('feature')
+    const appStoreEnabled = enabledFeature && enabledFeature.toLowerCase() === 'apps'
+    setIsAppStoreEnabled(appStoreEnabled)
+  }, [])
 
   return (
     <SentryRoutes>
