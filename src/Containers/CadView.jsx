@@ -81,7 +81,6 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -602,7 +601,38 @@ export default function CadView({
           {isSearchBarVisible &&
             <SearchBar
               fileOpen={loadLocalFile}
-            />}
+            />
+          }
+          {
+            modelPath.repo !== undefined &&
+            <Box sx={{
+              'borderRadius': '5px',
+              'width': '275px',
+              'marginTop': '14px',
+              'padding': '4px 0px 4px 24px',
+              'background': theme.palette.primary.background,
+              'color': theme.palette.primary.contrastText,
+              'textOverflow': 'ellipsis',
+              'overflow': 'hidden',
+              'whiteSpace': 'nowrap',
+              '& a': {
+                ...theme.typography.tree,
+                color: theme.palette.primary.contrastText,
+                opacity: .4,
+              },
+            }}
+            >
+              <a href={`https://github.com/${modelPath.org}`} target='_new'>
+                org/
+              </a>
+              <a href={`https://github.com/${modelPath.org}/${modelPath.repo}`} target='_new'>
+                repo/
+              </a>
+              <a href={`https://github.com/${modelPath.org}/${modelPath.repo}/blob/${modelPath.branch}${modelPath.filepath}`} target='_new'>
+                file
+              </a>
+            </Box>
+          }
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
