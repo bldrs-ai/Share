@@ -6,12 +6,12 @@ module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   devServer: {
     publicPath: '/cosmos/',
-    contentBase: path.join(__dirname, 'dist'),
+    contentBase: path.join(__dirname, 'docs'),
     compress: true,
     port: 8000,
   },
   output: {
-    path: path.resolve(__dirname, 'dist'),
+    path: path.resolve(__dirname, 'docs'),
     publicPath: '/cosmos/',
     filename: 'index.html',
   },
