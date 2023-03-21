@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r656",
+  "version": "1.0.0-r657",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,10 +8,11 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn build-share && yarn build-cosmos",
-    "build-cosmos": "rm -rf docs/sb ; cosmos-export --config .cosmos.config.json && shx mkdir -p docs && shx mv cosmos-export docs/sb",
+    "build": "yarn clean && yarn build-share && yarn build-cosmos",
+    "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
     "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
+    "clean": "shx rm -rf docs",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
     "lint": "yarn eslint src && tsc",

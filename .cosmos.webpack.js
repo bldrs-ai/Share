@@ -5,17 +5,17 @@ const path = require('path')
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   devServer: {
-    publicPath: '/',
+    publicPath: '/cosmos/',
     contentBase: path.join(__dirname, 'dist'),
     compress: true,
     port: 8000,
   },
   output: {
     path: path.resolve(__dirname, 'dist'),
-    publicPath: '/sb/',
+    publicPath: '/cosmos/',
     filename: 'index.html',
   },
-  plugins: [],
+  plugins: [new HtmlWebpackPlugin()],
   module: {
     rules: [
       {
