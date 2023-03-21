@@ -7,13 +7,13 @@ import AboutControl from './AboutControl'
 describe('About control tests', () => {
   test('renders the AboutControl button', () => {
     const {getByTitle} = render(<MockComponent><AboutControl/></MockComponent>)
-    const aboutControl = getByTitle('About bldrs')
+    const aboutControl = getByTitle('About')
     expect(aboutControl).toBeInTheDocument()
   })
 
-  test('renders AbotDialog when control is pressed', () => {
+  test('renders AboutDialog when control is pressed', () => {
     const {getByTitle, getByText} = render(<MockComponent><AboutControl/></MockComponent>)
-    const aboutControl = getByTitle('About bldrs')
+    const aboutControl = getByTitle('About')
     fireEvent.click(aboutControl)
     const dialogTitle = getByText('build every thing together')
     expect(dialogTitle).toBeInTheDocument()
