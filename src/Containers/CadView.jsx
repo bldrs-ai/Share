@@ -619,18 +619,23 @@ export default function CadView({
               'textOverflow': 'ellipsis',
               'overflow': 'hidden',
               'whiteSpace': 'nowrap',
-              'opacity': .4,
+              'opacity': .8,
               '& a': {
                 ...theme.typography.tree,
                 color: theme.palette.primary.contrastText,
+                opacity: .5,
+              },
+              '@media (max-width: 900px)': {
+                width: `${searchAndNavWidthPx}px`,
+                maxWidth: `${searchAndNavMaxWidthPx}px`,
               },
             }}
             >
               <a href={`https://github.com/${modelPath.org}`} target='_new'>
-                org/
+                organization/
               </a>
               <a href={`https://github.com/${modelPath.org}/${modelPath.repo}`} target='_new'>
-                repo/
+                repository/
               </a>
               <a href={`https://github.com/${modelPath.org}/${modelPath.repo}/blob/${modelPath.branch}${modelPath.filepath}`} target='_new'>
                 file

@@ -90,7 +90,7 @@ export default function Branches() {
                 color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
               },
               '&:hover .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
@@ -100,7 +100,7 @@ export default function Branches() {
                 color: theme.palette.primary.contrastText,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                borderColor: 'none',
               },
               // TODO(oleg): connect to props
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
@@ -111,7 +111,7 @@ export default function Branches() {
                 color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                borderColor: 'none',
               },
             }}
             onChange={(e) => handleSelect(e)}
