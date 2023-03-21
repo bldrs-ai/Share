@@ -2,6 +2,7 @@ import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import Tooltip from '@mui/material/Tooltip'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
@@ -610,10 +611,12 @@ export default function CadView({
           {
             modelPath.repo !== undefined &&
             <Box sx={{
+              'display': 'flex',
+              'flexDirection': 'row',
               'borderRadius': '5px',
               'width': '275px',
               'marginTop': '14px',
-              'padding': '4px 0px 4px 24px',
+              'padding': '6px 0px 6px 14px',
               'background': theme.palette.primary.background,
               'color': theme.palette.primary.contrastText,
               'textOverflow': 'ellipsis',
@@ -623,7 +626,7 @@ export default function CadView({
               '& a': {
                 ...theme.typography.tree,
                 color: theme.palette.primary.contrastText,
-                opacity: .5,
+                opacity: .4,
               },
               '@media (max-width: 900px)': {
                 width: `${searchAndNavWidthPx}px`,
@@ -631,15 +634,56 @@ export default function CadView({
               },
             }}
             >
-              <a href={`https://github.com/${modelPath.org}`} target='_new'>
-                organization/
-              </a>
-              <a href={`https://github.com/${modelPath.org}/${modelPath.repo}`} target='_new'>
-                repository/
-              </a>
-              <a href={`https://github.com/${modelPath.org}/${modelPath.repo}/blob/${modelPath.branch}${modelPath.filepath}`} target='_new'>
-                file
-              </a>
+              <Tooltip title={modelPath.org} placement={'bottom'}>
+                <Box
+                  sx={{
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <a
+                    href={`https://github.com/${modelPath.org}`}
+                    target='_new'
+                  >
+                    {modelPath.org}
+                  </a>
+                </Box>
+              </Tooltip>
+              <Tooltip title={modelPath.repo} placement={'bottom'}>
+                <Box
+                  sx={{
+                    maxWidth: '60px',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <a
+                    href={`https://github.com/${modelPath.org}/${modelPath.repo}`}
+                    target='_new'
+                  >
+                    /{modelPath.repo}
+                  </a>
+                </Box>
+              </Tooltip>
+              <Tooltip title={modelPath.filepath} placement={'bottom'}>
+                <Box
+                  sx={{
+                    maxWidth: '60px',
+                    textOverflow: 'ellipsis',
+                    overflow: 'hidden',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  <a
+                    href={`https://github.com/${modelPath.org}/${modelPath.repo}/blob/${modelPath.branch}${modelPath.filepath}`}
+                    target='_new'
+                  >
+                    {modelPath.filepath}
+                  </a>
+                </Box>
+              </Tooltip>
             </Box>
           }
 
