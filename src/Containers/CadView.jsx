@@ -605,6 +605,10 @@ export default function CadView({
           }
           {
             modelPath.repo !== undefined &&
+            <BranchesControl location={location}/>
+          }
+          {
+            modelPath.repo !== undefined &&
             <Box sx={{
               'borderRadius': '5px',
               'width': '275px',
@@ -615,10 +619,10 @@ export default function CadView({
               'textOverflow': 'ellipsis',
               'overflow': 'hidden',
               'whiteSpace': 'nowrap',
+              'opacity': .4,
               '& a': {
                 ...theme.typography.tree,
                 color: theme.palette.primary.contrastText,
-                opacity: .4,
               },
             }}
             >
@@ -633,10 +637,7 @@ export default function CadView({
               </a>
             </Box>
           }
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
-          }
+
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
             <NavPanel

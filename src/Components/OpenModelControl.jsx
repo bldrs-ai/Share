@@ -168,8 +168,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Typography
             variant={'h4'}
             sx={{
-              backgroundColor: theme.palette.scene.background,
-              borderRadius: '5px',
+              border: `1px solid ${theme.palette.primary.main}`,
+              borderRadius: '8px',
               padding: '12px',
             }}
           >
