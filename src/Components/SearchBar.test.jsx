@@ -63,6 +63,6 @@ describe( 'SearchBar', () => {
   it('SeachBar', () => {
     // eslint-disable-next-line no-empty-function
     render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
-    expect(screen.getByPlaceholderText('Search / Insert GitHub link')).toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
   })
 })
