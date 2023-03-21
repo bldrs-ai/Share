@@ -78,8 +78,6 @@ export function getComponentOverrides(palette) {
     MuiCardActions: {
       styleOverrides: {
         root: {
-          backgroundColor: 'blue',
-          border: 'solid 3px red',
         },
       },
     },

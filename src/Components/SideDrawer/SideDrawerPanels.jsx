@@ -1,6 +1,5 @@
 import React, {useRef, useEffect} from 'react'
 import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import {CloseButton} from '../Buttons'
@@ -9,6 +8,7 @@ import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
+import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
 
@@ -59,9 +59,16 @@ function PanelWithTitle(props) {
 
 /** @return {React.Component} */
 export function NotesPanel() {
-  // TODO(pablo): const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  let title = selectedNoteId ? 'Note' : 'Notes'
+  if (isCreateNoteActive) {
+    title = 'Add a note'
+  }
+
   return (
-    <PanelWithTitle title={'Notes'} controlsGroup={<NotesNavBar/>} includeGutter={true}>
+    <PanelWithTitle title={title} controlsGroup={<NotesNavBar/>} includeGutter={true}>
       <Notes/>
     </PanelWithTitle>
   )
@@ -90,7 +97,7 @@ export function PropertiesPanel({includeGutter}) {
     >
       {selectedElement ?
         <ItemProperties/> :
-        <Typography variant='p'>Please select an element</Typography>
+        <NoContent message={'Please select an element to access properties.'}/>
       }
     </PanelWithTitle>
   )

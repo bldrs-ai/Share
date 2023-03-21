@@ -24,16 +24,8 @@ export default function InputBar({startAdorment, onSubmit}) {
     <Box>
       <Paper component='form' sx={{
         'display': 'flex',
-        'minWidth': '200px',
-        'width': '288px',
-        'maxWidth': '400px',
         'alignItems': 'center',
         'padding': '2px 2px 2px 2px',
-        '@media (max-width: 900px)': {
-          minWidth: '300px',
-          width: '300px',
-          maxWidth: '300px',
-        },
         '& .MuiInputBase-root': {
           flex: 1,
         },
@@ -50,11 +42,14 @@ export default function InputBar({startAdorment, onSubmit}) {
         >
           {startAdorment}
         </Box>
-        <Divider sx={{
-          height: '36px',
-          alignSelf: 'center',
-          margin: '0px 10px 0px 0px',
-        }} orientation="vertical" flexItem
+        <Divider
+          sx={{
+            height: '36px',
+            alignSelf: 'center',
+            margin: '0px 10px 0px 0px',
+          }}
+          orientation='vertical'
+          flexItem
         />
         <InputBase
           inputRef={searchInputRef}

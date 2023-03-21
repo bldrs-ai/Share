@@ -6,6 +6,7 @@ import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
+import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -560,6 +561,11 @@ export default function CadView({
   }
 
 
+  const windowDimensions = useWindowDimensions()
+  const spacingBetweenSearchAndOpsGroupPx = 20
+  const operationsGroupWidthPx = 60
+  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const searchAndNavMaxWidthPx = 300
   return (
     <Box
       sx={{
@@ -593,14 +599,19 @@ export default function CadView({
       />
       {showSearchBar && (
         <Box sx={{
-          position: 'absolute',
-          top: `1em`,
-          left: '1em',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'flex-start',
-          alignItems: 'flex-start',
-          maxHeight: '95%',
+          'position': 'absolute',
+          'top': `1em`,
+          'left': '1em',
+          'display': 'flex',
+          'flexDirection': 'column',
+          'justifyContent': 'flex-start',
+          'alignItems': 'flex-start',
+          'maxHeight': '95%',
+          'width': '275px',
+          '@media (max-width: 900px)': {
+            width: `${searchAndNavWidthPx}px`,
+            maxWidth: `${searchAndNavMaxWidthPx}px`,
+          },
         }}
         >
           {isSearchBarVisible &&
@@ -645,10 +656,13 @@ function OperationsGroupAndDrawer({deselectItems}) {
   return (
     isMobile ? (
       <>
+        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
+        and their first elements should be same height and offset so they line up naturally..
+        this is a shim for the misalignment you see with tooltips without it */}
         <Box
           sx={{
             position: 'absolute',
-            top: 0,
+            top: 3,
             right: 0,
           }}
         >

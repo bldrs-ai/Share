@@ -92,7 +92,6 @@ export default function SideDrawer() {
           background: theme.palette.primary.background,
         }}
         ref={sidebarRef}
-        onMouseDown={(e) => e.preventDefault()}
       >
         {!isMobile &&
           <HorizonResizerButton
