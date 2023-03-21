@@ -25,7 +25,7 @@ import {RectangularButton} from '../Components/Buttons'
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const [orgNamesArr, setOrgNamesArray] = useState(['..'])
+  const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
   const theme = useTheme()
   const accessToken = useStore((state) => state.accessToken)
@@ -89,8 +89,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const [selectedOrg, setSelectedOrg] = useState('')
   const [selectedRepo, setSelectedRepo] = useState('')
   const [selectedFile, setSelectedFile] = useState('')
-  const [repoNamesArr, setRepoNamesArr] = useState(['...'])
-  const [filesArr, setFilesArr] = useState(['...'])
+  const [repoNamesArr, setRepoNamesArr] = useState([''])
+  const [filesArr, setFilesArr] = useState([''])
   const theme = useTheme()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
