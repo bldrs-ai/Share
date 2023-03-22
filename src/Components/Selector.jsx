@@ -8,6 +8,11 @@ import {handleBeforeUnload} from '../utils/event'
 
 /**
  * @property {Function} setIsDialogDisplayed callback
+ * @property {string} label component title
+ * @property {boolean} selected selected componet control the selected value of the component
+ * @property {Function} setSelected callback to select the element
+ * @property {Array} list list of eleemnt to populate select options
+ * @property {string} testId id for testing
  * @return {React.ReactElement}
  */
 export default function Selector({setIsDialogDisplayed, label, selected, setSelected, list, testId = 'Selector'}) {
