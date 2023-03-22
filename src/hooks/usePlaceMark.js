@@ -34,9 +34,9 @@ export function usePlaceMark() {
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
   const accessToken = useStore((state) => state.accessToken)
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
-  const setNotes = useStore((state) => state.setNotes)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
+  // const setNotes = useStore((state) => state.setNotes)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
@@ -234,19 +234,19 @@ export function usePlaceMark() {
     const newComment = {
       body: `[placemark](${window.location.href})`,
     }
-    const newComments = [
-      ...comments,
-      {
-        ...newComment,
-        username: placeMarkNote.username,
-        avatarUrl: placeMarkNote.avatarUrl,
-      },
-    ]
-    setComments(newComments)
-    placeMarkNote.numberOfComments += 1
-    debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
-    debug().log('usePlaceMark#dropPlaceMark: newNotes: ', newNotes)
-    setNotes(newNotes)
+    // const newComments = [
+    //   ...comments,
+    //   {
+    //     ...newComment,
+    //     username: placeMarkNote.username,
+    //     avatarUrl: placeMarkNote.avatarUrl,
+    //   },
+    // ]
+    // setComments(newComments)
+    // placeMarkNote.numberOfComments += 1
+    // debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
+    // debug().log('usePlaceMark#dropPlaceMark: newNotes: ', newNotes)
+    // setNotes(newNotes)
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
     toggleSynchSidebar()

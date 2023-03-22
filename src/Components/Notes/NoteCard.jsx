@@ -72,8 +72,8 @@ export default function NoteCard({
   const deletedNotes = useStore((state) => state.deletedNotes)
   const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
@@ -172,8 +172,8 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function removeComment(repository, accessToken, commentId) {
-    const newComments = comments.filter((comment) => comment.id !== commentId)
-    setComments(newComments)
+    // const newComments = comments.filter((comment) => comment.id !== commentId)
+    // setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     toggleSynchSidebar()

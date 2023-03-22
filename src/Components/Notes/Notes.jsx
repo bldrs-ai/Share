@@ -50,7 +50,7 @@ export default function Notes() {
         issueArr.map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
-            return null
+            return
           }
 
           fetchedNotes.push({
