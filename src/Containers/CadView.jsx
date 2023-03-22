@@ -25,6 +25,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {groupElementsByTypes} from '../utils/ifc'
 
 
 /**
@@ -78,6 +79,7 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
@@ -353,6 +355,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
+    setElementTypesMap(groupElementsByTypes(rootElt))
     setIsNavPanelOpen(true)
   }
 
@@ -556,7 +559,6 @@ export default function CadView({
       }
     }
   }
-
 
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20

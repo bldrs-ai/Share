@@ -76,7 +76,7 @@ export default function Branches() {
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
-            marginTop: '34px',
+            marginTop: '16px',
             opacity: .8,
           }}
         >
