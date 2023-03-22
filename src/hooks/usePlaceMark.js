@@ -124,7 +124,7 @@ export function usePlaceMark() {
       })
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [synchSidebar])
+  }, [synchSidebar, location])
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
@@ -237,7 +237,6 @@ export function usePlaceMark() {
     ]
     setComments(newComments)
     placeMarkNote.numberOfComments += 1
-    placeMarkNote.synched = false
     debug().log('usePlaceMark#dropPlaceMark: placeMarkId: ', placeMarkId)
     debug().log('usePlaceMark#dropPlaceMark: newNotes: ', newNotes)
     setNotes(newNotes)
