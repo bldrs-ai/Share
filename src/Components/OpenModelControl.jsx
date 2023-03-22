@@ -103,7 +103,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   }
 
   const selectOrg = async (org) => {
-    setSelectedOrg(org)
+    setSelectedOrg(orgNamesArr[org])
     let repos
     if (orgNamesArr[org] === user.nickname) {
       repos = await getUserRepositories(user.nickname, accessToken)
@@ -115,16 +115,19 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   }
 
   const selectRepo = async (repo) => {
-    setSelectedRepo(repo)
+    setSelectedRepo(repoNamesArr[repo])
     const owner = orgNamesArr[selectedOrg]
     const files = await getFiles(repoNamesArr[repo], owner, accessToken)
     const fileNames = Object.keys(files).map((key) => files[key].name)
     setFilesArr(fileNames)
   }
 
+  const selectFile = (file) => {
+    setSelectedFile(setFilesArr[file])
+  }
   const navigateToFile = () => {
     if (filesArr[selectedFile].includes('.ifc')) {
-      navigate({pathname: `/share/v/gh/${orgNamesArr[selectedOrg]}/${repoNamesArr[selectedRepo]}/main/${filesArr[selectedFile]}`})
+      navigate({pathname: `/share/v/gh/${selectedOrg}/${selectedRepo}/main/${selectedFile}`})
     }
   }
 
@@ -159,7 +162,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Box>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrg} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepo} setSelected={selectRepo} testId={'Repository'}/>
-            <Selector label={'File'} list={filesArr} selected={selectedFile} setSelected={setSelectedFile} testId={'File'}/>
+            <Selector label={'File'} list={filesArr} selected={selectedFile} setSelected={selectFile} testId={'File'}/>
             {selectedFile !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
