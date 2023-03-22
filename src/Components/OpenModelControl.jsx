@@ -38,7 +38,7 @@ export default function OpenModelControl({fileOpen}) {
     async function fetchOrganizations() {
       const orgs = await getOrganizations(accessToken)
       const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
-      const orgNames = [...orgNamesFetched, user ? user.nickname : '']
+      const orgNames = [...orgNamesFetched, user && user.nickname]
       setOrgNamesArray(orgNames)
       return orgs
     }
@@ -94,6 +94,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const theme = useTheme()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
+  const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
+  console.log('orgNamesArrWithAt', orgNamesArrWithAt)
 
 
   const openFile = () => {
