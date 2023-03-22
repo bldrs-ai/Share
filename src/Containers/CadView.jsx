@@ -92,6 +92,7 @@ export default function CadView({
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
+
   // Place Mark
   const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
 
@@ -219,6 +220,13 @@ export default function CadView({
     })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
+    // maintain hidden elements if any
+    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
+        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+    if (previouslyHiddenELements.length > 0) {
+      viewer.isolator.unHideAllElements()
+      viewer.isolator.hideElementsById(previouslyHiddenELements)
+    }
   }
 
 
@@ -650,6 +658,7 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
+
   return (
     isMobile ? (
       <>
@@ -716,7 +725,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
-
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
