@@ -95,7 +95,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
-  console.log('orgNamesArrWithAt', orgNamesArrWithAt)
 
 
   const openFile = () => {
@@ -158,7 +157,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           </p>
           {isAuthenticated ?
           <Box>
-            <Selector label={'Organization'} list={orgNamesArr} selected={selectedOrg} setSelected={selectOrg}/>
+            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrg} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepo} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFile} setSelected={setSelectedFile} testId={'File'}/>
             {selectedFile !== '' &&
