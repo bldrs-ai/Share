@@ -94,7 +94,9 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
-
+  const orgName = orgNamesArr[selectedOrgName]
+  const repoName = repoNamesArr[selectedRepoName]
+  const fileName = filesArr[selectedFileName]
 
   const openFile = () => {
     fileOpen()
@@ -124,7 +126,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
       // eslint-disable-next-line max-len
-      navigate({pathname: `/share/v/gh/${orgNamesArr[selectedOrgName]}/${repoNamesArr[selectedRepoName]}/main/${filesArr[selectedFileName]}`})
+      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
     }
   }
 
