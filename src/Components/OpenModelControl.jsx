@@ -86,9 +86,9 @@ export default function OpenModelControl({fileOpen}) {
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
   const {isAuthenticated, user} = useAuth0()
   // const isAuthenticated = true
-  const [selectedOrg, setSelectedOrg] = useState('')
-  const [selectedRepo, setSelectedRepo] = useState('')
-  const [selectedFile, setSelectedFile] = useState('')
+  const [selectedOrgName, setSelectedOrgName] = useState('')
+  const [selectedRepoName, setSelectedRepoName] = useState('')
+  const [selectedFileName, setSelectedFileName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
   const theme = useTheme()
@@ -103,7 +103,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   }
 
   const selectOrg = async (org) => {
-    setSelectedOrg(org)
+    setSelectedOrgName(org)
     let repos
     if (orgNamesArr[org] === user.nickname) {
       repos = await getUserRepositories(user.nickname, accessToken)
@@ -115,16 +115,20 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   }
 
   const selectRepo = async (repo) => {
-    setSelectedRepo(repo)
-    const owner = orgNamesArr[selectedOrg]
+    setSelectedRepoName(repo)
+    const owner = orgNamesArr[selectedOrgName]
     const files = await getFiles(repoNamesArr[repo], owner, accessToken)
     const fileNames = Object.keys(files).map((key) => files[key].name)
     setFilesArr(fileNames)
   }
 
   const navigateToFile = () => {
-    if (filesArr[selectedFile].includes('.ifc')) {
-      navigate({pathname: `/share/v/gh/${orgNamesArr[selectedOrg]}/${repoNamesArr[selectedRepo]}/main/${filesArr[selectedFile]}`})
+    if (filesArr[selectedFileName].includes('.ifc')) {
+      navigate({pathname: `/share/v/gh
+      /${orgNamesArr[selectedOrgName]}
+      /${repoNamesArr[selectedRepoName]}
+      /main
+      /${filesArr[selectedFileName]}`})
     }
   }
 
@@ -157,10 +161,10 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           </p>
           {isAuthenticated ?
           <Box>
-            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrg} setSelected={selectOrg}/>
-            <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepo} setSelected={selectRepo} testId={'Repository'}/>
-            <Selector label={'File'} list={filesArr} selected={selectedFile} setSelected={setSelectedFile} testId={'File'}/>
-            {selectedFile !== '' &&
+            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+            <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
+            <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
+            {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
               </Box>
