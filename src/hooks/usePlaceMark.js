@@ -12,10 +12,12 @@ import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {createComment, getIssueComments} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
+import {isDevMode} from '../utils/common'
 
 
 const placeMarkGroupMap = new Map()
 let renderCount = 0
+let prevSynchSidebar
 
 
 /**
@@ -41,9 +43,10 @@ export function usePlaceMark() {
 
   useEffect(() => {
     (async () => {
-      if (!Array.isArray(notes) || !repository || !placeMark) {
+      if (!Array.isArray(notes) || !notes.length || !repository || !placeMark || prevSynchSidebar === synchSidebar) {
         return
       }
+      prevSynchSidebar = synchSidebar
       debug().log('usePlaceMark#useEffect: renderCount: ', ++renderCount)
 
       const promises1 = notes.map(async (note) => {
@@ -85,12 +88,12 @@ export function usePlaceMark() {
         } else {
           // Drop active place mark mesh if it's not existed in scene
           const markArr = getObjectParams(activePlaceMarkHash)
-          debug().log('usePlaceMark#useEffect: markArr: ', markArr)
+          debug().log('usePlaceMark#useEffect: active markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
-          debug().log('usePlaceMark#useEffect: svgGroup: ', svgGroup)
+          debug().log('usePlaceMark#useEffect: active svgGroup: ', svgGroup)
           placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
         }
       }
@@ -102,29 +105,32 @@ export function usePlaceMark() {
         } else {
           // Drop inactive place mark mesh if it's not existed in scene
           const markArr = getObjectParams(hash)
-          debug().log('usePlaceMark#useEffect: markArr: ', markArr)
+          debug().log('usePlaceMark#useEffect: inactive markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
             point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
-          debug().log('usePlaceMark#useEffect: newSvgGroup: ', newSvgGroup)
+          debug().log('usePlaceMark#useEffect: inactive newSvgGroup: ', newSvgGroup)
           placeMarkGroupMap.set(hash, newSvgGroup)
         }
       })
 
       await Promise.all(promises2)
-      resetPlaceMarkColors()
 
+      if (!isDevMode()) {
       // Remove unnecessary place mark meshes
-      const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
-      const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
-      debug().log('usePlaceMark#useEffect: deletedPlaceMarkHashes: ', deletedPlaceMarkHashes)
-      deletedPlaceMarkHashes.forEach((hash) => {
-        placeMark.disposePlaceMark(placeMarkGroupMap.get(hash))
-      })
+        const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
+        const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
+        debug().log('usePlaceMark#useEffect: deletedPlaceMarkHashes: ', deletedPlaceMarkHashes)
+        deletedPlaceMarkHashes.forEach((hash) => {
+          placeMark.disposePlaceMark(placeMarkGroupMap.get(hash))
+        })
+      }
+
+      resetPlaceMarkColors()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [synchSidebar, location])
+  }, [synchSidebar])
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
@@ -255,7 +261,10 @@ export function usePlaceMark() {
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
-      window.location.href = url // Change location hash
+      console.log('prom: ', process.env.NODE_ENV)
+      if (!isDevMode()) {
+        window.location.href = url // Change location hash
+      }
     }
   }
 
@@ -304,7 +313,7 @@ const resetPlaceMarkColors = () => {
     if (svgGroup.userData.isActive) {
       color = 'red'
       // eslint-disable-next-line no-magic-numbers
-      scale.multiplyScalar(2)
+      scale.multiplyScalar(1.6)
     }
     debug().log('usePlaceMark#resetPlaceMarkColors: color: ', color)
     setGroupColor(svgGroup, color)

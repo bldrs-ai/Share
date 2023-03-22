@@ -10,6 +10,7 @@ import {floatStrTrim} from '../utils/strings'
 import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
 import {raycaster} from '../utils/constants'
 import createComposer from './CustomPostProcessing'
+import {isDevMode} from '../utils/common'
 
 
 /**
@@ -111,7 +112,9 @@ export default class PlaceMark extends EventDispatcher {
 
     const dropPlaceMark = (event) => {
       let res = {}
-      // this.activated = true // To test without notes
+      if (isDevMode()) {
+        this.activated = true
+      }
 
       if (_objects && this.activated) {
         updatePointer(event)

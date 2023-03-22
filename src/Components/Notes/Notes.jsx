@@ -200,6 +200,7 @@ export default function Notes() {
               username={filteredNote.username}
               numberOfComments={filteredNote.numberOfComments}
               avatarUrl={filteredNote.avatarUrl}
+              synched={filteredNote.synched}
             /> : null
           }
           {comments && !isCreateNoteActive &&
