@@ -142,7 +142,7 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <div style={{width: '80%'}}>
+        <div style={{width: '300px'}}>
           <Typography
             variant='tree'
             onClick={handleSelectionClick}
