@@ -38,6 +38,7 @@ export function usePlaceMark() {
   const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const synchSidebar = useStore((state) => state.synchSidebar)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
 
 
@@ -248,6 +249,7 @@ export function usePlaceMark() {
     setNotes(newNotes)
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
+    toggleSynchSidebar()
   }
 
 

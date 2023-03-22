@@ -74,6 +74,7 @@ export default function NoteCard({
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -175,6 +176,7 @@ export default function NoteCard({
     setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
+    toggleSynchSidebar()
   }
 
 

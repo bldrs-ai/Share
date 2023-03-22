@@ -192,7 +192,6 @@ export default function Notes() {
             <NoteCard
               index={filteredNote.index}
               id={filteredNote.id}
-              key={filteredNote.id}
               noteNumber={filteredNote.number}
               title={filteredNote.title}
               date={filteredNote.date}
@@ -204,10 +203,10 @@ export default function Notes() {
             /> : null
           }
           {comments && !isCreateNoteActive &&
-            comments.map((comment) => {
+            comments.map((comment, index) => {
               return (
                 <NoteCard
-                  key={comment.id}
+                  key={index}
                   isComment={true}
                   id={comment.id}
                   index=''
