@@ -85,7 +85,6 @@ export default function OpenModelControl({fileOpen}) {
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
   const {isAuthenticated, user} = useAuth0()
-  // const isAuthenticated = true
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')

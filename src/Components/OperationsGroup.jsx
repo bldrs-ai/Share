@@ -74,7 +74,6 @@ export default function OperationsGroup({deselectItems}) {
   // disappear. This keeps them visible.
   const bgOpacity = 0.2
   const bgColor = hexToRgba(assertDefined(theme.palette.scene.background), bgOpacity)
-  console.log('here')
   return (
     <Box
       sx={{
