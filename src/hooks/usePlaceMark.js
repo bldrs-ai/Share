@@ -9,7 +9,7 @@ import {CAMERA_PREFIX, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
-import {createComment, getIssueComments} from '../utils/GitHub'
+import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
@@ -49,9 +49,10 @@ export function usePlaceMark() {
       }
       prevSynchSidebar = synchSidebar
       debug().log('usePlaceMark#useEffect: renderCount: ', ++renderCount)
+      const issueArr = await getIssues(repository, accessToken)
 
-      const promises1 = notes.map(async (note) => {
-        const issueComments = await getIssueComments(repository, note.number, accessToken)
+      const promises1 = issueArr.map(async (issue) => {
+        const issueComments = await getIssueComments(repository, issue.number, accessToken)
         let placeMarkUrls = []
 
         issueComments.forEach((comment) => {

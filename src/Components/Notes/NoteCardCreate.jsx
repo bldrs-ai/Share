@@ -100,7 +100,9 @@ export default function NoteCardCreate({
           title='Submit'
           size='small'
           placement='bottom'
-          onClick={createNote}
+          onClick={async () => {
+            await createNote()
+          }}
           icon={<Submit style={{width: '15px', height: '15px'}}/>}
         />
       </CardActions>
