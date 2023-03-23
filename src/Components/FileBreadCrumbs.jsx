@@ -55,7 +55,7 @@ export default function FileBreadCrumbs({modelPath}) {
             href={`https://github.com/${modelPath.org}`}
             target='_new'
           >
-            {modelPath.org}
+            {modelPath.org} &gt;
           </a>
         </Box>
       </Tooltip>
@@ -72,7 +72,7 @@ export default function FileBreadCrumbs({modelPath}) {
             href={`https://github.com/${modelPath.org}/${modelPath.repo}`}
             target='_new'
           >
-            &gt; {modelPath.repo}
+            {modelPath.repo}
           </a>
         </Box>
       </Tooltip>
