@@ -105,3 +105,15 @@ export function filterObject(obj, callback) {
   return Object.fromEntries(Object.entries(obj).
       filter(([key, val]) => callback(val, key)))
 }
+
+
+/**
+ * Clone object in depth
+ *
+ * @param {object} obj
+ * @return {object}
+ */
+export function deepCloneObject(obj) {
+  const clonedObj = JSON.parse(JSON.stringify(obj))
+  return clonedObj
+}
