@@ -2,6 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import useTheme from '@mui/styles/useTheme'
+import {useWindowDimensions} from '../Components/Hooks'
 
 
 /**
@@ -10,8 +11,13 @@ import useTheme from '@mui/styles/useTheme'
  * @param {number} searchAndNavMaxWidthPx
  * @return {object} React component
  */
-export default function FileBreadCrumbs({modelPath, searchAndNavWidthPx, searchAndNavMaxWidthPx}) {
+export default function FileBreadCrumbs({modelPath}) {
   const theme = useTheme()
+  const windowDimensions = useWindowDimensions()
+  const spacingBetweenSearchAndOpsGroupPx = 20
+  const operationsGroupWidthPx = 60
+  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const searchAndNavMaxWidthPx = 300
   return (
     <Box sx={{
       'display': 'flex',
