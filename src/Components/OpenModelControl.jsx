@@ -99,6 +99,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   console.log('model path', modelPath)
+  useEffect(() => {
+    if (modelPath) {
+      const org = modelPath.org
+      const selectedOrgIndex = orgNamesArr.indexOf(org)
+      console.log('selected org index', selectedOrgIndex)
+    }
+  }, [modelPath, orgNamesArr])
 
 
   const openFile = () => {
