@@ -178,6 +178,74 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
 
 
 /**
+ * Retrieves organizations associated with the user
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getOrganizations(accessToken = '') {
+  const res = await octokit.request(`/user/orgs`, {
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+
+/**
+ * Retrieves repositories associated with an organization
+ *
+ * @param {string} [org]
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getRepositories(org, accessToken = '') {
+  const res = await octokit.request('GET /orgs/{org}/repos', {
+    org,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+/**
+ * Retrieves repositories associated with the authenticated user
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getUserRepositories(username, accessToken = '') {
+  const res = await octokit.request('GET /users/{username}/repos', {
+    username,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+
+/**
+ * Retrieves files associated with a repository
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getFiles(repo, owner, accessToken = '') {
+  const res = await octokit.request('/repos/{owner}/{repo}/contents', {
+    owner,
+    repo,
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+  return res.data
+}
+
+
+/**
  * Parses a github repository url and returns a structure
  *
  * @param {string} githubUrl
@@ -654,6 +722,41 @@ export const MOCK_MODEL_PATH_GIT = {
 export const MOCK_MODEL_PATH_LOCAL = {
   filepath: '/4f080237-b4e4-4ede-8885-d498647f15e6.ifc',
   eltPath: '',
+}
+
+export const MOCK_ORGANIZATION = {
+  login: 'bldrs-ai',
+  id: 78882658,
+  node_id: 'MDEyOk9yZ2FuaXphdGlvbjc4ODgyNjU4',
+  url: 'https://api.github.com/orgs/bldrs-ai',
+  repos_url: 'https://api.github.com/orgs/bldrs-ai/repos',
+  events_url: 'https://api.github.com/orgs/bldrs-ai/events',
+  hooks_url: 'https://api.github.com/orgs/bldrs-ai/hooks',
+  issues_url: 'https://api.github.com/orgs/bldrs-ai/issues',
+  members_url: 'https://api.github.com/orgs/bldrs-ai/members{/member}',
+  public_members_url: 'https://api.github.com/orgs/bldrs-ai/public_members{/member}',
+  avatar_url: 'https://avatars.githubusercontent.com/u/78882658?v=4',
+  description: 'Build. Every. Thing. Together.',
+}
+
+export const MOCK_REPOSITORY = {
+  id: 337879836,
+  node_id: 'MDEwOlJlcG9zaXRvcnkzMzc4Nzk4MzY=',
+  name: 'Share',
+  full_name: 'bldrs-ai/Share',
+  private: true,
+}
+
+export const MOCK_FILES = {
+  name: 'window.ifc',
+  path: 'window.ifc',
+  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  size: 7299,
+  url: 'https://api.github.com/repos/bldrs-ai/Share/contents/window.ifc?ref=main',
+  html_url: 'https://github.com/bldrs-ai/Share/blob/main/window.ifc',
+  git_url: 'https://api.github.com/repos/bldrs-ai/Share/git/blobs/7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  download_url: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/window.ifc',
+  type: 'file',
 }
 
 // All direct uses of octokit should be private to this file to
