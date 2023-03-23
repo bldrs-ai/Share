@@ -6,7 +6,7 @@ import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import HorizonResizerButton from '../SideDrawer/HorizonResizerButton'
 import VerticalResizerButton from '../SideDrawer/VerticalResizerButton'
-import {AppPreviewPanel, AppStorePanel} from './AppStorePanel'
+import {AppPreviewPanel, AppStorePanel} from './AppStorePanelControl'
 
 
 /**
