@@ -612,8 +612,6 @@ export default function CadView({
             modelPath.repo !== undefined &&
             <FileBreadCrumbs
               modelPath={modelPath}
-              searchAndNavWidthPx={searchAndNavWidthPx}
-              searchAndNavMaxWidthPx={searchAndNavMaxWidthPx}
             />
           }
 
