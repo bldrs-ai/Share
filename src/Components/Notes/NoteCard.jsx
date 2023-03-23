@@ -69,11 +69,7 @@ export default function NoteCard({
   const cameraControls = useStore((state) => state.cameraControls)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const deletedNotes = useStore((state) => state.deletedNotes)
-  const setDeletedNotes = useStore((state) => state.setDeletedNotes)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  // const comments = useStore((state) => state.comments)
-  // const setComments = useStore((state) => state.setComments)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
@@ -88,7 +84,7 @@ export default function NoteCard({
             CAMERA_PREFIX)
         return encoded && parseHashParams(encoded)
       })
-  const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
+  const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const isMobile = useIsMobile()
 
 
@@ -152,13 +148,9 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function deleteNote(repository, accessToken, noteNumberToDelete) {
-    if (deletedNotes !== null) {
-      const localDeletedNotes = [...deletedNotes, noteNumber]
-      setDeletedNotes(localDeletedNotes)
-    } else {
-      setDeletedNotes([noteNumber])
-    }
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
+    setSelectedNoteId(null)
+    toggleSynchSidebar()
     return closeResponse
   }
 
@@ -172,8 +164,6 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function removeComment(repository, accessToken, commentId) {
-    // const newComments = comments.filter((comment) => comment.id !== commentId)
-    // setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     toggleSynchSidebar()
@@ -297,7 +287,6 @@ const CardFooter = ({
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
@@ -377,9 +366,8 @@ const CardFooter = ({
             title='Delete note'
             size='small'
             placement='bottom'
-            onClick={() => {
-              deleteNote(repository, accessToken, noteNumber)
-              setSelectedNoteId(null)
+            onClick={async () => {
+              await deleteNote(repository, accessToken, noteNumber)
             }}
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />

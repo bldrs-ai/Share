@@ -12,6 +12,7 @@ import NoteCardCreate from './NoteCardCreate'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
+let renderCount = 0
 
 
 /** @return {object} List of notes and comments as react component. */
@@ -21,9 +22,6 @@ export default function Notes() {
   const notes = useStore((state) => state.notes)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const setNotes = useStore((state) => state.setNotes)
-  const createdNotes = useStore((state) => state.createdNotes)
-  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
-  const deletedNotes = useStore((state) => state.deletedNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
@@ -34,18 +32,17 @@ export default function Notes() {
 
 
   useEffect(() => {
-    debug().log('Notes#useEffect#fetchNotes')
-
-    if (!repository) {
-      debug().warn('IssuesControl#Notes: 1, no repo defined')
-      return
-    }
-
-    const fetchNotes = async () => {
+    (async () => {
       try {
-        const fetchedNotes = []
-        const issueArr = await getIssues(repository, accessToken)
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+
+        debug().log('Notes#useEffect: renderCount: ', ++renderCount)
+        const newNotes = []
         let issueIndex = 0
+        const issueArr = await getIssues(repository, accessToken)
 
         issueArr.map((issue, index) => {
           if (issue.body === null) {
@@ -53,7 +50,7 @@ export default function Notes() {
             return
           }
 
-          fetchedNotes.push({
+          newNotes.push({
             index: issueIndex++,
             id: issue.id,
             number: issue.number,
@@ -67,85 +64,50 @@ export default function Notes() {
           })
         })
 
-        let synchedCreatedNotes = []
-
-        if (createdNotes !== null) {
-          synchedCreatedNotes = createdNotes.filter(
-              (createdNote) => !fetchedNotes.some(
-                  (fetchedNote) =>
-                    createdNote.title === fetchedNote.title &&
-                createdNote.body === fetchedNote.body),
-          )
-          // update the list of created notes
-          setCreatedNotes(synchedCreatedNotes)
-        }
-
-        const combinedSynchedNotes = [
-          ...synchedCreatedNotes,
-          ...fetchedNotes,
-        ]
-
-        let newNotes = []
-
-        if (deletedNotes !== null) {
-          const filteredDeleted = combinedSynchedNotes.filter(
-              (synchedNote) => !deletedNotes.includes(synchedNote.number),
-          )
-          newNotes = filteredDeleted
-        } else {
-          newNotes = combinedSynchedNotes
-        }
-
         setNotes(newNotes)
       } catch (e) {
         debug().warn('failed to fetch notes', e)
       }
-    }
-
-    fetchNotes()
+    })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, setNotes, isCreateNoteActive, deletedNotes, synchSidebar])
+  }, [repository, synchSidebar])
 
 
   useEffect(() => {
-    debug().log('Notes#useEffect#fetchComments')
-
-    if (!repository) {
-      debug().warn('IssuesControl#Notes: 2, no repo defined')
-      return
-    }
-
-    if (selectedNoteId !== null) {
-      const fetchComments = async (selectedNote) => {
-        try {
-          const commentsArr = []
-          const commentsData = await getIssueComments(repository, selectedNote.number, accessToken)
-          debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
-
-          if (commentsData) {
-            commentsData.map((comment) => {
-              commentsArr.push({
-                id: comment.id,
-                body: comment.body,
-                date: comment.created_at,
-                username: comment.user.login,
-                avatarUrl: comment.user.avatar_url,
-                synched: true,
-              })
-            })
-          }
-
-          setComments(commentsArr)
-        } catch {
-          debug().log('failed to fetch comments')
+    (async () => {
+      try {
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
         }
+        if (!filteredNote) {
+          return
+        }
+        debug().log('Notes#useEffect: renderCount: ', ++renderCount)
+        const commentsArr = []
+        const commentsData = await getIssueComments(repository, filteredNote.number, accessToken)
+        debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
+
+        if (commentsData) {
+          commentsData.map((comment) => {
+            commentsArr.push({
+              id: comment.id,
+              body: comment.body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarUrl: comment.user.avatar_url,
+              synched: true,
+            })
+          })
+        }
+
+        setComments(commentsArr)
+      } catch {
+        debug().log('failed to fetch comments')
       }
-
-      fetchComments(filteredNote)
-    }
-
-    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open using the link
-  }, [filteredNote, repository, setComments, selectedNoteId, synchSidebar, accessToken])
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, selectedNoteId, synchSidebar])
 
 
   useEffect(() => {
@@ -173,9 +135,9 @@ export default function Notes() {
         notes.map((note, index) => {
           return (
             <NoteCard
+              key={index}
               index={note.index}
               id={note.id}
-              key={index}
               noteNumber={note.number}
               title={note.title}
               date={note.date}
