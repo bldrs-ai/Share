@@ -93,10 +93,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const theme = useTheme()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
+  const modelPath = useStore((state) => state.modelPath)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
+  console.log('model path', modelPath)
+
 
   const openFile = () => {
     fileOpen()
