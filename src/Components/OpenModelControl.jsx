@@ -7,15 +7,15 @@ import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import useTheme from '@mui/styles/useTheme'
 import {useAuth0} from '@auth0/auth0-react'
-import useStore from '../store/useStore'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
-import OpenIcon from '../assets/icons/Open.svg'
-import UploadIcon from '../assets/icons/Upload.svg'
+import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
+import OpenIcon from '../assets/icons/Open.svg'
+import UploadIcon from '../assets/icons/Upload.svg'
 
 
 /**
