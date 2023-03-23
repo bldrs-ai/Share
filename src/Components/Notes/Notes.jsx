@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getIssueComments, getIssue} from '../../utils/GitHub'
+import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -79,15 +79,11 @@ export default function Notes() {
           debug().warn('IssuesControl#Notes: 1, no repo defined')
           return
         }
-        if (!selectedNoteId) {
-          return
-        }
-        const issue = await getIssue(repository, selectedNoteId, accessToken)
-        if (!issue || !issue.number) {
+        if (!selectedNoteId || !filteredNote) {
           return
         }
         const newComments = []
-        const commentArr = await getIssueComments(repository, issue.number, accessToken)
+        const commentArr = await getIssueComments(repository, filteredNote.number, accessToken)
         debug().log('Notes#useEffect: commentArr: ', commentArr)
 
         if (commentArr) {
@@ -109,7 +105,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, selectedNoteId, synchSidebar])
+  }, [repository, selectedNoteId, synchSidebar, filteredNote])
 
 
   useEffect(() => {
