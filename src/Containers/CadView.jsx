@@ -275,7 +275,7 @@ export default function CadView({
           }
         },
         (error) => {
-          console.warn('CadView#loadIfc$onError', error)
+          debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
