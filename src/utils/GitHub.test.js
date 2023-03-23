@@ -1,13 +1,17 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  postIssue,
+  createIssue,
   closeIssue,
+  createComment,
+  deleteComment,
 } from './GitHub'
 
 
 const httpOK = 200
 const httpCreated = 201
+
+
 describe('GitHub', () => {
   describe('parseGitHubRepositoryURL', () => {
     it('throws an error if given a non-qualified URL', () => {
@@ -60,12 +64,20 @@ describe('GitHub', () => {
   })
 
   describe('post to github', () => {
-    it('successfully post note as an issue', async () => {
-      const res = await postIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
+    it('successfully create note as an issue', async () => {
+      const res = await createIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
       expect(res.status).toEqual(httpCreated)
     })
     it('successfully delete the note by closing the issue', async () => {
       const res = await closeIssue({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
+      expect(res.status).toEqual(httpOK)
+    })
+    it('successfully create comment', async () => {
+      const res = await createComment({orgName: 'bldrs-ai', name: 'Share'}, 1, {title: 'title', body: 'body'})
+      expect(res.status).toEqual(httpCreated)
+    })
+    it('successfully delete comment', async () => {
+      const res = await deleteComment({orgName: 'bldrs-ai', name: 'Share'}, 1)
       expect(res.status).toEqual(httpOK)
     })
   })

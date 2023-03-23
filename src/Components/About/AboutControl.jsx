@@ -19,7 +19,6 @@ import {Helmet} from 'react-helmet-async'
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
-
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
     name: 'isFirstTime',
@@ -70,7 +69,7 @@ function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6'sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
+          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}
