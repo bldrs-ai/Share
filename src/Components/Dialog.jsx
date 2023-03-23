@@ -14,10 +14,10 @@ import {assertDefined} from '../utils/assert'
  * @property {string} headerText Short message describing the operation
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
+ * @property {React.ReactElement} content Content of the dialog
  * @property {string} actionTitle Title for the action button
  * @property {Function} actionCb Callback for action button
- * @property {React.ReactElement} content Content of the dialog
- * @property {React.ReactElement} actionIcon Optional icon for the action button
+ * @property {React.ReactElement} [actionIcon] Optional icon for the action button
  * @return {React.Component}
  */
 export default function Dialog({
@@ -77,6 +77,7 @@ export default function Dialog({
         sx={{
           overflowY: 'hidden',
           padding: '0em 0em 2em 0em',
+          margin: '0 auto',
         }}
       >
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
