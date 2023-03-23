@@ -610,9 +610,7 @@ export default function CadView({
           }
           {
             modelPath.repo !== undefined &&
-            <FileBreadCrumbs
-              modelPath={modelPath}
-            />
+            <FileBreadCrumbs modelPath={modelPath}/>
           }
 
           {isNavPanelOpen &&

@@ -2,7 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Tooltip from '@mui/material/Tooltip'
 import useTheme from '@mui/styles/useTheme'
-import {useWindowDimensions} from '../Components/Hooks'
+import {useWindowDimensions} from './Hooks'
 
 
 /**
