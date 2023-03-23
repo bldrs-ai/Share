@@ -104,6 +104,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
       const org = modelPath.org
       const selectedOrgIndex = orgNamesArr.indexOf(org)
       console.log('selected org index', selectedOrgIndex)
+      setSelectedOrgName(selectedOrgIndex)
     }
   }, [modelPath, orgNamesArr])
 
