@@ -462,7 +462,7 @@ export default function CadView({
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
       debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
-      return
+      return undefined
     }
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     return pathIds
