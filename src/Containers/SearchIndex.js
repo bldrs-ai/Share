@@ -181,7 +181,6 @@ export default class SearchIndex {
   }
 
   /**
-   *
    * @param {string} expressId
    * @return {string} globalId
    */
@@ -193,11 +192,10 @@ export default class SearchIndex {
         return element['GlobalId'].value
       }
     }
+    return undefined
   }
 
   /**
-   *
-   *
    * @param {string} globalId
    * @return {string} expressId
    */
@@ -209,5 +207,6 @@ export default class SearchIndex {
         return element['expressID'].toString()
       }
     }
+    return undefined
   }
 }

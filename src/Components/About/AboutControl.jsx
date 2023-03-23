@@ -15,7 +15,7 @@ import {Helmet} from 'react-helmet-async'
 /**
  * Button to toggle About panel on and off
  *
- * @return {React.ReactElement}
+ * @return {React.Component}
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
