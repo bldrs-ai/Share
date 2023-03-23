@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getIssueComments} from '../../utils/GitHub'
+import {getIssues, getIssueComments, getIssue} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -12,7 +12,6 @@ import NoteCardCreate from './NoteCardCreate'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
-let renderCount = 0
 
 
 /** @return {object} List of notes and comments as react component. */
@@ -39,10 +38,10 @@ export default function Notes() {
           return
         }
 
-        debug().log('Notes#useEffect: renderCount: ', ++renderCount)
         const newNotes = []
         let issueIndex = 0
         const issueArr = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect: issueArr: ', issueArr)
 
         issueArr.map((issue, index) => {
           if (issue.body === null) {
@@ -66,7 +65,7 @@ export default function Notes() {
 
         setNotes(newNotes)
       } catch (e) {
-        debug().warn('failed to fetch notes', e)
+        debug().warn('failed to fetch notes: ', e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -80,17 +79,20 @@ export default function Notes() {
           debug().warn('IssuesControl#Notes: 1, no repo defined')
           return
         }
-        if (!filteredNote) {
+        if (!selectedNoteId) {
           return
         }
-        debug().log('Notes#useEffect: renderCount: ', ++renderCount)
-        const commentsArr = []
-        const commentsData = await getIssueComments(repository, filteredNote.number, accessToken)
-        debug().log('Notes#useEffect#fetchComments: commentsData: ', commentsData)
+        const issue = await getIssue(repository, selectedNoteId, accessToken)
+        if (!issue || !issue.number) {
+          return
+        }
+        const newComments = []
+        const commentArr = await getIssueComments(repository, issue.number, accessToken)
+        debug().log('Notes#useEffect: commentArr: ', commentArr)
 
-        if (commentsData) {
-          commentsData.map((comment) => {
-            commentsArr.push({
+        if (commentArr) {
+          commentArr.map((comment) => {
+            newComments.push({
               id: comment.id,
               body: comment.body,
               date: comment.created_at,
@@ -101,9 +103,9 @@ export default function Notes() {
           })
         }
 
-        setComments(commentsArr)
-      } catch {
-        debug().log('failed to fetch comments')
+        setComments(newComments)
+      } catch (e) {
+        debug().warn('failed to fetch comments: ', e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
