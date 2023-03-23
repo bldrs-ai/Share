@@ -6,7 +6,7 @@ import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
-import FileBreadCrumbs from '../Components/FileBreadCrumbs'
+// import FileBreadCrumbs from 'src/Components/FileBreadCrumbs.jsx'
 import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
@@ -608,10 +608,10 @@ export default function CadView({
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
           }
-          {
+          {/* {
             modelPath.repo !== undefined &&
             <FileBreadCrumbs modelPath={modelPath}/>
-          }
+          } */}
 
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
