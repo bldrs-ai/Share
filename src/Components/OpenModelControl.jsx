@@ -125,7 +125,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
-      // eslint-disable-next-line max-len
       navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
     }
   }
