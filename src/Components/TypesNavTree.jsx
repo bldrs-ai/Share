@@ -41,10 +41,6 @@ const TypesNavTreePropTypes = {
    * Determines if the tree node has a hide icon.
    */
   hasHideIcon: PropTypes.bool,
-  /**
-   * The name of the type.
-   */
-  typeName: PropTypes.string.isRequired,
 }
 
 /**
@@ -70,7 +66,6 @@ export default function TypesNavTree({
       expansionIcon,
       displayIcon,
       hasHideIcon,
-      typeName,
     } = props
 
     const {
@@ -120,7 +115,7 @@ export default function TypesNavTree({
           </Typography>
           {hasHideIcon &&
             <div style={{display: 'contents'}}>
-              <HideIcon elementId={typeName}/>
+              <HideIcon elementId={nodeId}/>
             </div>
           }
         </div>
@@ -143,7 +138,6 @@ export default function TypesNavTree({
       label={type.name}
       ContentProps={{
         hasHideIcon: type.elements && type.elements.length > 0,
-        typeName: type.name,
       }}
     >
       {type.elements && type.elements.length > 0 ?

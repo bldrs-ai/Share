@@ -28,6 +28,7 @@ export default function NavPanel({
   model,
   element,
   defaultExpandedElements,
+  defaultExpandedTypes,
   expandedElements,
   setExpandedElements,
   expandedTypes,
@@ -140,7 +141,7 @@ export default function NavPanel({
           aria-label='IFC Navigator'
           defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
           defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
-          defaultExpanded={defaultExpandedElements}
+          defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
           expanded={isNavTree ? expandedElements : expandedTypes}
           selected={selectedElements}
           onNodeToggle={(event, nodeIds) => {
