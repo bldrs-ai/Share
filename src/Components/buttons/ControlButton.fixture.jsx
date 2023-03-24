@@ -1,36 +1,32 @@
 import React, {useState} from 'react'
 import {ControlButton} from '../../Components/Buttons'
-import Announcement from '@mui/icons-material/Announcement'
-import Dialog from '../../Components/Dialog'
+import AnnouncementIcon from '@mui/icons-material/Announcement'
 
 
 /**
- * @property {string} title Title of the button
+ * Demo controlled component with open/close.
+ *
  * @return {React.Component}
  */
-export default function ControlButtonFixture({title}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(true)
-  const dialog = (
-    <Dialog
-      icon={<Announcement/>}
-      headerText={'Example Dialog'}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      content={'Example content.'}
-      actionTitle={'Action title.'}
-      actionCb={() => console.log('action callback')}
-      actionIcon={<Announcement/>}
-    />
-  )
-
-
+export default function Control() {
+  const [isDisplayed, setIsDisplayed] = useState(false)
   return (
     <ControlButton
-      title={title}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={<Announcement/>}
-      dialog={dialog}
+      title={'title'}
+      isDialogDisplayed={isDisplayed}
+      setIsDialogDisplayed={setIsDisplayed}
+      icon={<AnnouncementIcon/>}
+      dialog={
+        <div style={{border: 'solid 1px black'}}>
+          {isDisplayed ?
+           <div>
+             <h1>Controlled component</h1>
+             <button onClick={() => setIsDisplayed(false)}>Close</button>
+           </div> :
+           null}
+        </div>
+      }
       placement={'left'}
-    />)
+    />
+  )
 }
