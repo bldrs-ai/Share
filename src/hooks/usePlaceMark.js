@@ -48,7 +48,8 @@ export function usePlaceMark() {
     debug().log('usePlaceMark#useEffect: enabledFeature: ', enabledFeature)
     const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
     debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
-    setIsPlaceMarkEnabled(placeMarkEnabled)
+    // setIsPlaceMarkEnabled(placeMarkEnabled)
+    setIsPlaceMarkEnabled(true)
   }, [setIsPlaceMarkEnabled])
 
 
