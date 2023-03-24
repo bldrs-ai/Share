@@ -153,12 +153,13 @@ export function usePlaceMark() {
   }, [synchSidebar])
 
 
-  const createPlaceMark = ({context, oppositeObjects}) => {
+  const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
+    debug().log('usePlaceMark#createPlaceMark: context: ', context)
     debug().log('usePlaceMark#createPlaceMark: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
     if (!isPlaceMarkEnabled) {
       return
     }
-    const newPlaceMark = new PlaceMark({context})
+    const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
     debug().log('usePlaceMark#createPlaceMark: placeMark is created')
