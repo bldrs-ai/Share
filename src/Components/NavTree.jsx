@@ -1,10 +1,14 @@
 import React from 'react'
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
+import {faEye, faEyeSlash, faGlasses} from '@fortawesome/free-solid-svg-icons'
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
 import {reifyName} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
+import useStore from '../store/useStore'
+import IfcIsolator from '../Infrastructure/IfcIsolator'
 
 
 const NavTreePropTypes = {
@@ -36,8 +40,43 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
+  /**
+   * Determines if the tree node has a hide icon.
+   */
+  hasHideIcon: PropTypes.bool,
 }
 
+/**
+ * @param {IfcIsolator} The IFC isoaltor
+ * @param {number} IFC element id
+ * @return {object} React component
+ */
+function HideIcon({elementId}) {
+  const isHidden = useStore((state) => state.hiddenElements[elementId])
+  const isIsolated = useStore((state) => state.isolatedElements[elementId])
+  const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
+  const viewer = useStore((state) => state.viewerStore)
+
+  const toggleHide = () => {
+    const toBeHidden = viewer.isolator.flattenChildren(elementId)
+    if (!isHidden) {
+      viewer.isolator.hideElementsById(toBeHidden)
+    } else {
+      viewer.isolator.unHideElementsById(toBeHidden)
+    }
+  }
+
+  const iconStyle = {float: 'right', margin: '4px'}
+  if (isTempIsolationModeOn) {
+    iconStyle.pointerEvents = 'none'
+    if (!isIsolated) {
+      iconStyle.opacity = 0.4
+    }
+  }
+
+  const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
+  return <FontAwesomeIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide} icon={icon}/>
+}
 
 /**
  * @param {object} model IFC model
@@ -61,6 +100,7 @@ export default function NavTree({
       icon: iconProp,
       expansionIcon,
       displayIcon,
+      hasHideIcon,
     } = props
 
     const {
@@ -84,7 +124,6 @@ export default function NavTree({
       selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
-
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
@@ -103,34 +142,43 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <Typography
-          variant='tree'
-          onClick={handleSelectionClick}
-        >
-          {label}
-        </Typography>
+        <div style={{width: '300px'}}>
+          <Typography
+            variant='tree'
+            onClick={handleSelectionClick}
+          >
+            {label}
+          </Typography>
+          {hasHideIcon &&
+            <div style={{display: 'contents'}}>
+              <HideIcon elementId={element.expressID}/>
+            </div>
+          }
+        </div>
       </div>
     )
   })
 
-
   CustomContent.propTypes = NavTreePropTypes
-
 
   const CustomTreeItem = (props) => {
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
+  const viewer = useStore((state) => state.viewerStore)
+
+  const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
   let i = 0
-
-
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName({properties: model}, element)}
+      ContentProps={{
+        hasHideIcon: hasHideIcon,
+      }}
     >
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {

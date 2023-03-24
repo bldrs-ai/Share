@@ -22,8 +22,8 @@ export function usePlaceMark() {
   const placeMarkNoteId = useStore((state) => state.placeMarkNoteId)
 
 
-  const createPlaceMark = ({context, oppositeObjects}) => {
-    const newPlaceMark = new PlaceMark({context})
+  const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
+    const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     debug().log('usePlaceMark#createPlaceMark: newPlaceMark: ', newPlaceMark)
     setPlaceMark(newPlaceMark)
