@@ -94,6 +94,7 @@ export default function CadView({
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
+
   // Place Mark
   const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
 
@@ -221,6 +222,13 @@ export default function CadView({
     })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
+    // maintain hidden elements if any
+    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
+        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+    if (previouslyHiddenELements.length > 0) {
+      viewer.isolator.unHideAllElements()
+      viewer.isolator.hideElementsById(previouslyHiddenELements)
+    }
   }
 
 
@@ -469,7 +477,7 @@ export default function CadView({
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
       debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
-      return
+      return undefined
     }
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     return pathIds
@@ -652,9 +660,13 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
+
   return (
     isMobile ? (
       <>
+        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
+        and their first elements should be same height and offset so they line up naturally..
+        this is a shim for the misalignment you see with tooltips without it */}
         <Box
           sx={{
             position: 'absolute',
@@ -715,7 +727,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.IFC.setWasmPath('./static/js/')
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
-
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {

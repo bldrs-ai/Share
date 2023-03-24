@@ -21,7 +21,7 @@ export function TooltipIconButton({
   title,
   onClick,
   icon,
-  placement = 'left',
+  placement = 'right',
   selected = false,
   size = 'medium',
   dataTestId = '',
@@ -29,8 +29,8 @@ export function TooltipIconButton({
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
-  const isTooltipsOpen = useStore((state) => state.isTooltipsOpen)
-  const open = aboutInfo ? isTooltipsOpen : false
+  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
+  const open = aboutInfo ? isHelpTooltips : false
   const handleClose = () => {
     setOpenLocal(false)
   }

@@ -36,12 +36,12 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const branchesData = await getBranches(repository, accessToken)
+        const newBranches = await getBranches(repository, accessToken)
         const versionPathsTemp = []
-        if (branchesData.data.length > 0) {
-          setBranches(branchesData.data)
+        if (newBranches.length > 0) {
+          setBranches(newBranches)
         }
-        branchesData.data.map((branch, i) => {
+        newBranches.map((branch, i) => {
           if (branch.name === modelPath.branch) {
             // select the current branch
             setSelected(i)

@@ -1,4 +1,6 @@
 import React from 'react'
+import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
+import {faEye, faEyeSlash, faGlasses} from '@fortawesome/free-solid-svg-icons'
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
 import {reifyName} from '@bldrs-ai/ifclib'
@@ -38,6 +40,10 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
+  /**
+   * Determines if the tree node has a hide icon.
+   */
+  hasHideIcon: PropTypes.bool,
   /**
    * Determines if the tree node has a hide icon.
    */
@@ -108,7 +114,7 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <div style={{width: '80%'}}>
+        <div style={{width: '300px'}}>
           <Typography
             variant='tree'
             onClick={handleSelectionClick}

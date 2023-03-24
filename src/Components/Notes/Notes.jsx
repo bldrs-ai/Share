@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {getIssues, getComments} from '../../utils/GitHub'
+import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -43,9 +43,9 @@ export default function Notes() {
     const fetchNotes = async () => {
       try {
         const fetchedNotes = []
-        const issuesData = await getIssues(repository, accessToken)
+        const issues = await getIssues(repository, accessToken)
         let issueIndex = 0
-        issuesData.data.slice(0).reverse().map((issue, index) => {
+        issues.slice(0).reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return null
@@ -110,9 +110,9 @@ export default function Notes() {
       try {
         const commentsArr = []
 
-        const commentsData = await getComments(repository, selectedNote.number, accessToken)
-        if (commentsData) {
-          commentsData.map((comment) => {
+        const newComments = await getIssueComments(repository, selectedNote.number, accessToken)
+        if (newComments) {
+          newComments.map((comment) => {
             commentsArr.push({
               id: comment.id,
               number: comment.number,

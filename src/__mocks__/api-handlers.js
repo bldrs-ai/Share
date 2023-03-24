@@ -1,5 +1,11 @@
 import {rest} from 'msw'
-import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
+import {
+  MOCK_COMMENTS,
+  MOCK_ISSUES,
+  MOCK_ORGANIZATION,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
+} from '../utils/GitHub'
 
 
 const httpOk = 200
@@ -8,7 +14,9 @@ const httpCreated = 201
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-    if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share') {
+    const {org, repo} = req.params
+
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
       return res(ctx.status(httpNotFound))
     }
 
@@ -19,7 +27,9 @@ export const handlers = [
   }),
 
   rest.get('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
-    if (req.params.org !== 'pablo-mayrgundter' || req.params.repo !== 'Share' || req.params.issueNumber !== '17') {
+    const {org, repo, issueNumber} = req.params
+
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
       return res(ctx.status(httpNotFound))
     }
 
@@ -44,6 +54,7 @@ export const handlers = [
     }
 
     let downloadURL = 'https://raw.githubusercontent.com/bldrs-ai/Share/main/README.md'
+
     if (ref === 'main') {
       downloadURL += '?token=MAINBRANCHCONTENT'
     } else if (ref === 'a-new-branch') {
@@ -108,6 +119,7 @@ export const handlers = [
 
   rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
     const {org, repo} = req.params
+
     if (org !== 'bldrs-ai' || repo !== 'Share') {
       return res(
           ctx.status(httpNotFound),
@@ -116,6 +128,19 @@ export const handlers = [
           }),
       )
     }
+
+    return res(
+        ctx.status(httpCreated),
+    )
+  }),
+
+  rest.post('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
+    const {org, repo, issueNumber} = req.params
+
+    if (org !== 'bldrs-ai' || repo !== 'Share' || !issueNumber) {
+      return res(ctx.status(httpNotFound))
+    }
+
     return res(
         ctx.status(httpCreated),
     )
@@ -124,7 +149,6 @@ export const handlers = [
   rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
     const {org, repo} = req.params
     if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
-      console.log('in the if')
       return res(
           ctx.status(httpNotFound),
           ctx.json({
@@ -132,8 +156,48 @@ export const handlers = [
           }),
       )
     }
+
     return res(
         ctx.status(httpOk),
+    )
+  }),
+
+  rest.delete('https://api.github.com/repos/:org/:repo/issues/comments/:commentId', (req, res, ctx) => {
+    const {org, repo, commentId} = req.params
+
+    if (org !== 'bldrs-ai' || repo !== 'Share' || !commentId) {
+      return res(ctx.status(httpNotFound))
+    }
+
+    return res(
+        ctx.status(httpOk),
+    )
+  }),
+
+  rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_ORGANIZATION],
+        }),
+    )
+  }),
+
+  rest.get('https://api.github.com/orgs/bldrs-ai/repos', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_REPOSITORY],
+        }),
+    )
+  }),
+
+  rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_FILES],
+        }),
     )
   }),
 ]

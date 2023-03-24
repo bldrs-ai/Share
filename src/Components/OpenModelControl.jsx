@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
@@ -6,11 +6,16 @@ import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import useTheme from '@mui/styles/useTheme'
+import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
+import Selector from './Selector'
+import useStore from '../store/useStore'
+import {handleBeforeUnload} from '../utils/event'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
+import {RectangularButton} from '../Components/Buttons'
 import OpenIcon from '../assets/icons/Open.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
-import {handleBeforeUnload} from '../utils/event'
 
 
 /**
@@ -20,7 +25,25 @@ import {handleBeforeUnload} from '../utils/event'
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const [orgNamesArr, setOrgNamesArray] = useState([''])
+  const {user} = useAuth0()
   const theme = useTheme()
+  const accessToken = useStore((state) => state.accessToken)
+  useEffect(() => {
+    /**
+     * Asynchronously fetch organizations
+     *
+     * @return {Array} organizations
+     */
+    async function fetchOrganizations() {
+      const orgs = await getOrganizations(accessToken)
+      const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
+      const orgNames = [...orgNamesFetched, user && user.nickname]
+      setOrgNamesArray(orgNames)
+      return orgs
+    }
+    fetchOrganizations()
+  }, [accessToken, user])
 
 
   return (
@@ -39,7 +62,7 @@ export default function OpenModelControl({fileOpen}) {
           icon={<OpenIcon/>}
           placement={'right'}
           selected={isDialogDisplayed}
-          dataTestId='open-ifc'ß
+          dataTestId='open-ifc'
         />
       </Paper>
       {isDialogDisplayed &&
@@ -47,6 +70,7 @@ export default function OpenModelControl({fileOpen}) {
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
           fileOpen={fileOpen}
+          orgNamesArr={orgNamesArr}
         />
       }
     </Box>
@@ -59,11 +83,52 @@ export default function OpenModelControl({fileOpen}) {
  * @param {Function} setIsDialogDisplayed
  * @return {object} React component
  */
-function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
+function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
+  const {isAuthenticated, user} = useAuth0()
+  const [selectedOrgName, setSelectedOrgName] = useState('')
+  const [selectedRepoName, setSelectedRepoName] = useState('')
+  const [selectedFileName, setSelectedFileName] = useState('')
+  const [repoNamesArr, setRepoNamesArr] = useState([''])
+  const [filesArr, setFilesArr] = useState([''])
+  const theme = useTheme()
+  const navigate = useNavigate()
+  const accessToken = useStore((state) => state.accessToken)
+  const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
+  const orgName = orgNamesArr[selectedOrgName]
+  const repoName = repoNamesArr[selectedRepoName]
+  const fileName = filesArr[selectedFileName]
+
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
   }
+
+  const selectOrg = async (org) => {
+    setSelectedOrgName(org)
+    let repos
+    if (orgNamesArr[org] === user.nickname) {
+      repos = await getUserRepositories(user.nickname, accessToken)
+    } else {
+      repos = await getRepositories(orgNamesArr[org], accessToken)
+    }
+    const repoNames = Object.keys(repos).map((key) => repos[key].name)
+    setRepoNamesArr(repoNames)
+  }
+
+  const selectRepo = async (repo) => {
+    setSelectedRepoName(repo)
+    const owner = orgNamesArr[selectedOrgName]
+    const files = await getFiles(repoNamesArr[repo], owner, accessToken)
+    const fileNames = Object.keys(files).map((key) => files[key].name)
+    setFilesArr(fileNames)
+  }
+
+  const navigateToFile = () => {
+    if (filesArr[selectedFileName].includes('.ifc')) {
+      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
+    }
+  }
+
   return (
     <Dialog
       icon={<OpenIcon/>}
@@ -81,18 +146,46 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
             textAlign: 'left',
           }}
         >
-          <ModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
-          <p>Models hosted on GitHub are opened by inserting the link to the file into the Search.</p>
+          <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           <p>Visit our {' '}
             <a
               target="_blank"
-              href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+              href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
               rel="noreferrer"
             >
               wiki
-            </a> to learn more.
+            </a> to learn more about GitHub hosting.
           </p>
-          <p>Models opened from local drive cannot yet be saved or shared.</p>
+          {isAuthenticated ?
+          <Box>
+            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+            <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
+            <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
+            {selectedFileName !== '' &&
+              <Box sx={{textAlign: 'center', marginTop: '4px'}}>
+                <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
+              </Box>
+            }
+          </Box> :
+          <Typography
+            variant={'h4'}
+            sx={{
+              backgroundColor: theme.palette.scene.background,
+              borderRadius: '5px',
+              padding: '12px',
+            }}
+          >
+            Please login to get access to your files on GitHub
+          </Typography>
+          }
+          <Box
+            sx={{
+              marginTop: '1em',
+              fontSize: '.8em',
+            }}
+          >
+            * Local files cannot yet be saved or shared.
+          </Box>
         </Box>
       }
     />
@@ -104,7 +197,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) {
  * @property {Function} setIsDialogDisplayed callback
  * @return {React.ReactElement}
  */
-function ModelFileSelector({setIsDialogDisplayed}) {
+function SampleModelFileSelector({setIsDialogDisplayed}) {
   const navigate = useNavigate()
   const [selected, setSelected] = useState('')
   const theme = useTheme()
@@ -118,6 +211,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc',
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
@@ -169,6 +263,7 @@ function ModelFileSelector({setIsDialogDisplayed}) {
       <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
       <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
       <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
     </TextField>
   )
 }

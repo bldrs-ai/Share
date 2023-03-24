@@ -1,5 +1,5 @@
 import React from 'react'
-import DialogActions from '@mui/material/DialogContent'
+import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
@@ -18,24 +18,22 @@ import {assertDefined} from '../utils/assert'
  * @property {Function} actionCb Callback for action button
  * @property {React.ReactElement} content Content of the dialog
  * @property {React.ReactElement} actionIcon Optional icon for the action button
- * @return {object} React component
+ * @return {React.Component}
  */
 export default function Dialog({
   icon,
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  content,
   actionTitle,
   actionCb,
-  content,
   actionIcon,
 }) {
   assertDefined(
       icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
       actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
-
-
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -46,7 +44,6 @@ export default function Dialog({
       }}
       PaperProps={{variant: 'control'}}
     >
-
       <DialogContent>
         <div
           style={{
@@ -80,6 +77,8 @@ export default function Dialog({
         sx={{
           overflowY: 'hidden',
           padding: '0em 0em 2em 0em',
+          display: 'flex',
+          justifyContent: 'center',
         }}
       >
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
