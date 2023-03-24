@@ -4,7 +4,6 @@ import Avatar from '@mui/material/Avatar'
 import MenuItem from '@mui/material/MenuItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import Divider from '@mui/material/Divider'
-import Logout from '@mui/icons-material/Logout'
 import Typography from '@mui/material/Typography'
 import {
   usePopupState,
@@ -14,6 +13,7 @@ import {
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import LogoutIcon from '@mui/icons-material/Logout'
 
 
 const UserProfile = ({size = 'medium'}) => {
@@ -82,7 +82,7 @@ const UserProfile = ({size = 'medium'}) => {
         <Divider/>
         <MenuItem onClick={() => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})}>
           <ListItemIcon>
-            <Logout/>
+            <LogoutIcon/>
             <Typography sx={{paddingLeft: '11px'}}>
               Logout
             </Typography>

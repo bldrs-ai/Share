@@ -33,7 +33,7 @@ export const build = {
   format: 'esm',
   sourcemap: true,
   platform: 'browser',
-  target: ['chrome58', 'firefox57', 'safari11', 'edge18'],
+  target: ['chrome58', 'firefox57', 'safari11', 'edge18', 'es2020'],
   logLevel: 'info',
   define: {
     'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
