@@ -287,6 +287,7 @@ const CardFooter = ({
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const isPlaceMarkEnabled = useStore((state) => state.isPlaceMarkEnabled)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
@@ -333,7 +334,8 @@ const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && user && user.nickname === username &&
+          !isComment && selected && synched && isPlaceMarkEnabled &&
+          user && user.nickname === username &&
           <Box sx={{
             '& svg': {
               fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',

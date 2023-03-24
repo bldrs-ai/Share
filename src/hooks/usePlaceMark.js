@@ -36,7 +36,18 @@ export function usePlaceMark() {
   const accessToken = useStore((state) => state.accessToken)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
+  const isPlaceMarkEnabled = useStore((state) => state.isPlaceMarkEnabled)
+  const setIsPlaceMarkEnabled = useStore((state) => state.setIsPlaceMarkEnabled)
   const location = useLocation()
+
+
+  useEffect(() => {
+    const initialParameters = new URLSearchParams(window.location.search)
+    const enabledFeature = initialParameters.get('feature')
+    const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
+    debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
+    setIsPlaceMarkEnabled(placeMarkEnabled)
+  }, [setIsPlaceMarkEnabled])
 
 
   useEffect(() => {
@@ -117,7 +128,7 @@ export function usePlaceMark() {
       await Promise.all(promises2)
 
       if (!isDevMode()) {
-      // Remove unnecessary place mark meshes
+        // Remove unnecessary place mark meshes
         const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
         const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
         debug().log('usePlaceMark#useEffect: deletedPlaceMarkHashes: ', deletedPlaceMarkHashes)
@@ -133,9 +144,13 @@ export function usePlaceMark() {
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     const newPlaceMark = new PlaceMark({context})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
+    debug().log('usePlaceMark#createPlaceMark: placeMark is created')
   }
 
 
@@ -147,7 +162,7 @@ export function usePlaceMark() {
 
     switch (event.button) {
       case 0: // Main button (left button)
-        await dropPlaceMark(res)
+        await savePlaceMark(res)
         break
       case 1: // Wheel button (middle button if present)
         break
@@ -175,7 +190,7 @@ export function usePlaceMark() {
     switch (event.button) {
       case 0: // Main button (left button)
         if (event.shiftKey) {
-          await dropPlaceMark(res)
+          await savePlaceMark(res)
         } else if (res.url) {
           selectPlaceMark(res.url)
         }
@@ -201,14 +216,17 @@ export function usePlaceMark() {
   }
 
 
-  const dropPlaceMark = async ({point, promiseGroup}) => {
+  const savePlaceMark = async ({point, promiseGroup}) => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     if (point && promiseGroup) {
       const svgGroup = await promiseGroup
-      debug().log('usePlaceMark#dropPlaceMark: svgGroup: ', svgGroup)
+      debug().log('usePlaceMark#savePlaceMark: svgGroup: ', svgGroup)
       const markArr = roundCoord(...point)
       addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
       removeHashParams(window.location, CAMERA_PREFIX)
-      debug().log('usePlaceMark#dropPlaceMark: window.location.href: ', window.location.href)
+      debug().log('usePlaceMark#savePlaceMark: window.location.href: ', window.location.href)
       addUserDataInGroup(svgGroup, {
         url: window.location.href,
       })
@@ -221,24 +239,27 @@ export function usePlaceMark() {
     if (!repository || !Array.isArray(notes)) {
       return
     }
-    debug().log('usePlaceMark#dropPlaceMark: `repository` `placeMarkId` condition is passed')
+    debug().log('usePlaceMark#savePlaceMark: `repository` `placeMarkId` condition is passed')
     const newNotes = [...notes]
     const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
-    debug().log('usePlaceMark#dropPlaceMark: `placeMarkNote` condition is passed')
+    debug().log('usePlaceMark#savePlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
     const newComment = {
       body: `[placemark](${window.location.href})`,
     }
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
-    debug().log('usePlaceMark#dropPlaceMark: saveRes: ', saveRes)
+    debug().log('usePlaceMark#savePlaceMark: saveRes: ', saveRes)
     toggleSynchSidebar()
   }
 
 
   const selectPlaceMark = (url) => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     assertDefined(url)
     debug().log('usePlaceMark#selectPlaceMark: url: ', url)
     const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
@@ -248,7 +269,6 @@ export function usePlaceMark() {
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
-      console.log('prom: ', process.env.NODE_ENV)
       if (!isDevMode()) {
         window.location.href = url // Change location hash
       }
@@ -257,6 +277,9 @@ export function usePlaceMark() {
 
 
   const togglePlaceMarkActive = (id) => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     if (placeMark) {
       if (placeMarkId === id && placeMark.activated) {
         deactivatePlaceMark()
@@ -269,12 +292,18 @@ export function usePlaceMark() {
 
 
   const deactivatePlaceMark = () => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     placeMark.deactivate()
     setPlaceMarkActivated(false)
   }
 
 
   const activatePlaceMark = () => {
+    if (!isPlaceMarkEnabled) {
+      return
+    }
     placeMark.activate()
     setPlaceMarkActivated(true)
   }
