@@ -5,7 +5,7 @@ import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
-import {CAMERA_PREFIX, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
+import {CAMERA_PREFIX, FEATURE_PREFIX, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -42,15 +42,21 @@ export function usePlaceMark() {
 
 
   useEffect(() => {
-    const initialParameters = new URLSearchParams(window.location.search)
-    debug().log('usePlaceMark#useEffect: initialParameters: ', initialParameters)
-    const enabledFeature = initialParameters.get('feature')
-    debug().log('usePlaceMark#useEffect: enabledFeature: ', enabledFeature)
-    const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
-    debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
+    // const initialParameters = new URLSearchParams(window.location.search)
+    // const enabledFeature = initialParameters.get('feature')
+    // debug().log('usePlaceMark#useEffect: enabledFeature: ', enabledFeature)
+    // const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
+    // debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
     // setIsPlaceMarkEnabled(placeMarkEnabled)
-    setIsPlaceMarkEnabled(true)
-  }, [setIsPlaceMarkEnabled])
+    const featureHashParams = getHashParams(location, FEATURE_PREFIX)
+    debug().log('usePlaceMark#useEffect: featureHashParams: ', featureHashParams)
+    const featureObjectParams = getObjectParams(featureHashParams)
+    const featureValue = Object.keys(featureObjectParams)[0]
+    debug().log('usePlaceMark#useEffect: featureValue: ', featureValue)
+    const placeMarkEnabled = featureValue === 'placemark'
+    debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
+    setIsPlaceMarkEnabled(placeMarkEnabled)
+  }, [location, setIsPlaceMarkEnabled])
 
 
   useEffect(() => {
