@@ -292,6 +292,9 @@ const CardFooter = ({
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
+  debug().log('NoteCard#CardFooter: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
+  debug().log('NoteCard#CardFooter: user: ', user)
+  debug().log('NoteCard#CardFooter: username: ', username)
 
 
   return (
