@@ -42,18 +42,19 @@ export function usePlaceMark() {
 
 
   useEffect(() => {
-    // const initialParameters = new URLSearchParams(window.location.search)
-    // const enabledFeature = initialParameters.get('feature')
-    // debug().log('usePlaceMark#useEffect: enabledFeature: ', enabledFeature)
-    // const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
-    // debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
-    // setIsPlaceMarkEnabled(placeMarkEnabled)
-    const featureHashParams = getHashParams(location, FEATURE_PREFIX)
-    debug().log('usePlaceMark#useEffect: featureHashParams: ', featureHashParams)
-    const featureObjectParams = getObjectParams(featureHashParams)
-    const featureValue = Object.keys(featureObjectParams)[0]
-    debug().log('usePlaceMark#useEffect: featureValue: ', featureValue)
-    const placeMarkEnabled = featureValue === 'placemark'
+    const initialParameters = new URLSearchParams(window.location.search)
+    const enabledFeature = initialParameters.get('feature')
+    let placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
+
+    if (!placeMarkEnabled) {
+      const featureHashParams = getHashParams(location, FEATURE_PREFIX)
+      const featureObjectParams = getObjectParams(featureHashParams)
+      const featureValue = Object.keys(featureObjectParams)[0]
+      if (featureValue) {
+        placeMarkEnabled = featureValue.toLowerCase() === 'placemark'
+      }
+    }
+
     debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
     setIsPlaceMarkEnabled(placeMarkEnabled)
   }, [location, setIsPlaceMarkEnabled])
