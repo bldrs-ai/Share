@@ -32,7 +32,7 @@ export default function HideIcon({elementId}) {
     }
   }
 
-  const iconStyle = {float: 'right', margin: '4px'}
+  const iconStyle = {float: 'right', margin: '4px', opacity: 0.7}
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
     if (!isIsolated) {

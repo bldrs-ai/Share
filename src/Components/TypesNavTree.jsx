@@ -91,7 +91,6 @@ export default function TypesNavTree({
 
     const handleSelectionClick = (event) => {
       handleSelection(event)
-      // selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
     return (
@@ -112,7 +111,7 @@ export default function TypesNavTree({
         >
           {icon}
         </Box>
-        <div style={{width: '80%'}}>
+        <div style={{width: '300px'}}>
           <Typography
             variant='tree'
             onClick={handleSelectionClick}
@@ -143,7 +142,7 @@ export default function TypesNavTree({
       nodeId={type.name}
       label={type.name}
       ContentProps={{
-        hasHideIcon: true,
+        hasHideIcon: type.elements && type.elements.length > 0,
         typeName: type.name,
       }}
     >
@@ -151,14 +150,13 @@ export default function TypesNavTree({
     type.elements.map((e) => {
       const childKey = `${pathPrefix}-${i++}`
       return (
-        <React.Fragment key={childKey}>
-          <NavTree
-            model={model}
-            element={e}
-            pathPrefix={pathPrefix}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-          />
-        </React.Fragment>
+        <NavTree
+          key={childKey}
+          model={model}
+          element={e}
+          pathPrefix={pathPrefix}
+          selectWithShiftClickEvents={selectWithShiftClickEvents}
+        />
       )
     }) : null}
     </CustomTreeItem>)

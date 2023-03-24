@@ -61,6 +61,8 @@ export default function CadView({
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
+  const [expandedTypes, setExpandedTypes] = useState([])
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   // UI elts
   const theme = useTheme()
@@ -637,6 +639,10 @@ export default function CadView({
               defaultExpandedElements={defaultExpandedElements}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              expandedTypes={expandedTypes}
+              setExpandedTypes={setExpandedTypes}
+              navigationMode={navigationMode}
+              setNavigationMode={setNavigationMode}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)

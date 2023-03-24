@@ -45,8 +45,6 @@ export function groupElementsByTypes(element, elementTypes) {
   if (elementTypes === undefined) {
     elementTypes = []
   }
-  console.log(element.Name)
-  console.log(element.LongName)
   const lookup = elementTypes.filter((t) => t.name === type)
   if (lookup.length === 0) {
     elementTypes.push({

@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import TreeView from '@mui/lab/TreeView'
 import NavTree from './NavTree'
@@ -30,6 +30,10 @@ export default function NavPanel({
   defaultExpandedElements,
   expandedElements,
   setExpandedElements,
+  expandedTypes,
+  setExpandedTypes,
+  navigationMode,
+  setNavigationMode,
   selectWithShiftClickEvents,
   pathPrefix,
 }) {
@@ -39,12 +43,11 @@ export default function NavPanel({
   // no error.  Not sure of a better way to pre-open the first few
   // nodes besides hardcoding.
 
-  const [viewType, setViewType] = useState('spatial-tree')
   const elementTypesMap = useStore((state) => state.elementTypesMap)
 
   const onTreeViewChanged = (event, value) => {
     if (value !== null) {
-      setViewType(value)
+      setNavigationMode(value)
     }
   }
 
@@ -64,6 +67,8 @@ export default function NavPanel({
       },
     },
   }))
+
+  const isNavTree = navigationMode === 'spatial-tree'
 
   return (
     <div style={{
@@ -89,7 +94,7 @@ export default function NavPanel({
         </span>
         <StyledToggleButtonGroup
           exclusive
-          value={viewType}
+          value={navigationMode}
           size="small"
           onChange={onTreeViewChanged}
         >
@@ -136,10 +141,14 @@ export default function NavPanel({
           defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
           defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
           defaultExpanded={defaultExpandedElements}
-          expanded={expandedElements}
+          expanded={isNavTree ? expandedElements : expandedTypes}
           selected={selectedElements}
           onNodeToggle={(event, nodeIds) => {
-            setExpandedElements(nodeIds)
+            if (isNavTree) {
+              setExpandedElements(nodeIds)
+            } else {
+              setExpandedTypes(nodeIds)
+            }
           }}
           key='tree'
           sx={{
@@ -150,12 +159,13 @@ export default function NavPanel({
             flexGrow: 1,
           }}
         >
-          {viewType === 'spatial-tree' ?
+          {isNavTree ?
           <NavTree model={model} selectWithShiftClickEvents={selectWithShiftClickEvents} element={element} pathPrefix={pathPrefix}/> :
           <TypesNavTree
             model={model}
             types={elementTypesMap}
-            selectWithShiftClickEvents={selectWithShiftClickEvents} pathPrefix={pathPrefix}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+            pathPrefix={pathPrefix}
           />}
         </TreeView>
       </Paper>
