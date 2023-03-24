@@ -1,5 +1,11 @@
 import {rest} from 'msw'
-import {MOCK_COMMENTS, MOCK_ISSUES} from '../utils/GitHub'
+import {
+  MOCK_COMMENTS,
+  MOCK_ISSUES,
+  MOCK_ORGANIZATION,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
+} from '../utils/GitHub'
 
 
 const httpOk = 200
@@ -141,9 +147,8 @@ export const handlers = [
   }),
 
   rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
-    const {org, repo, issueNumber} = req.params
-
-    if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
+    const {org, repo} = req.params
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
       return res(
           ctx.status(httpNotFound),
           ctx.json({
@@ -166,6 +171,33 @@ export const handlers = [
 
     return res(
         ctx.status(httpOk),
+    )
+  }),
+
+  rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_ORGANIZATION],
+        }),
+    )
+  }),
+
+  rest.get('https://api.github.com/orgs/bldrs-ai/repos', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_REPOSITORY],
+        }),
+    )
+  }),
+
+  rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
+    return res(
+        ctx.status(httpOk),
+        ctx.json({
+          data: [MOCK_FILES],
+        }),
     )
   }),
 ]

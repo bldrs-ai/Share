@@ -2,11 +2,6 @@ import React, {useEffect, useMemo, useRef} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
-// TODO: This isn't used.
-// If icons-material isn't imported somewhere, mui dies
-/* eslint-disable */
-import AccountCircle from '@mui/icons-material/AccountCircle'
-/* eslint-enable */
 import Styles from './Styles'
 import CadView, {searchIndex} from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'

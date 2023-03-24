@@ -5,6 +5,12 @@ import {
   closeIssue,
   createComment,
   deleteComment,
+  getOrganizations,
+  getRepositories,
+  getFiles,
+  MOCK_ORGANIZATION,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
 } from './GitHub'
 
 
@@ -82,6 +88,20 @@ describe('GitHub', () => {
     it('successfully delete comment', async () => {
       const res = await deleteComment({orgName: 'bldrs-ai', name: 'Share'}, 1)
       expect(res.status).toEqual(httpOK)
+    })
+  })
+  describe('get models from github', () => {
+    it('successfullly get organizations', async () => {
+      const res = await getOrganizations()
+      expect(res.data).toEqual([MOCK_ORGANIZATION])
+    })
+    it('successfullly get repositories', async () => {
+      const res = await getRepositories('bldrs-ai')
+      expect(res.data).toEqual([MOCK_REPOSITORY])
+    })
+    it('successfullly get files', async () => {
+      const res = await getFiles('Share', 'pablo-mayrgundter')
+      expect(res.data).toEqual([MOCK_FILES])
     })
   })
 })
