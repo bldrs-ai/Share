@@ -9,27 +9,30 @@ import {toTitleCase} from './strings'
 export function prettyType(type) {
   const ifcPrefix = 'IFC'
   switch (type) {
-    case 'IFCANNOTATION': return 'Note'
-    case 'IFCBEAM': return 'Beam'
-    case 'IFCBUILDING': return 'Building'
-    case 'IFCBUILDINGSTOREY': return 'Storey'
+    case 'IFCREINFORCINGBAR': return 'Reinforcing Bar'
+    case 'IFCREINFORCINGMESH': return 'Reinforcing Mesh'
+    case 'IFCTENDONANCHOR': return 'Tendon Anchor'
+    case 'IFCBUILDINGSTOREY': return 'Building Storey'
+    case 'IFCELEMENTASSEMBLY': return 'Element Assembly'
+    case 'IFCBUILDINGELEMENTPART': return 'Building Element Part'
+    case 'IFCELECTRICAPPLIANCE': return 'Electric Appliance'
+    case 'IFCRAMPFLIGHT': return 'Ramp Flight'
+    case 'IFCSANITARYTERMINAL': return 'Sanitary Terminal'
     case 'IFCBUILDINGELEMENTPROXY': return 'Element (generic proxy)'
-    case 'IFCCOLUMN': return 'Column'
-    case 'IFCCOVERING': return 'Covering'
-    case 'IFCDOOR': return 'Door'
+    case 'IFCSTAIRFLIGHT': return 'Stair Flight'
+    case 'IFCBUILDINGELEMENTCOMPONENT': return 'Building Element Component'
     case 'IFCFLOWSEGMENT': return 'Flow Segment'
     case 'IFCFLOWTERMINAL': return 'Flow Terminal'
-    case 'IFCPROJECT': return 'Project'
-    case 'IFCRAILING': return 'Railing'
-    case 'IFCROOF': return 'Roof'
-    case 'IFCSITE': return 'Site'
-    case 'IFCSLAB': return 'Slab'
-    case 'IFCSPACE': return 'Space'
-    case 'IFCWALL': return 'Wall'
+    case 'IFCFLOWFITTING': return 'Flow Fitting'
     case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)'
-    case 'IFCWINDOW': return 'Window'
-    default:
-      return toTitleCase(type.substring(ifcPrefix.length))
+    case 'IFCCURTAINWALL': return 'Curtain Wall'
+    default: {
+      let titleCased = toTitleCase(type.substring(ifcPrefix.length))
+      if (titleCased.endsWith('element')) {
+        titleCased = `${titleCased.replace('element', '')} Element`
+      }
+      return titleCased
+    }
   }
 }
 
