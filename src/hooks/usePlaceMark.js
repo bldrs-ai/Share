@@ -43,7 +43,9 @@ export function usePlaceMark() {
 
   useEffect(() => {
     const initialParameters = new URLSearchParams(window.location.search)
+    debug().log('usePlaceMark#useEffect: initialParameters: ', initialParameters)
     const enabledFeature = initialParameters.get('feature')
+    debug().log('usePlaceMark#useEffect: enabledFeature: ', enabledFeature)
     const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
     debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
     setIsPlaceMarkEnabled(placeMarkEnabled)
@@ -144,6 +146,7 @@ export function usePlaceMark() {
 
 
   const createPlaceMark = ({context, oppositeObjects}) => {
+    debug().log('usePlaceMark#createPlaceMark: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
     if (!isPlaceMarkEnabled) {
       return
     }
