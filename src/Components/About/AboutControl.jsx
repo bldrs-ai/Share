@@ -27,6 +27,8 @@ export default function AboutControl() {
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
   }
+
+  // eslint-disable-next-line no-unused-vars
   const setIsDialogDisplayedForDialog = () => {
     setIsDialogDisplayed(false)
     setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
