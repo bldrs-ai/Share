@@ -1,4 +1,4 @@
-import React, {useRef} from 'react'
+import React, {useRef, useEffect} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
@@ -6,7 +6,7 @@ import {useIsMobile} from '../Hooks'
 import useStore from '../../store/useStore'
 import HorizonResizerButton from '../SideDrawer/HorizonResizerButton'
 import VerticalResizerButton from '../SideDrawer/VerticalResizerButton'
-import {AppPreviewPanel, AppStorePanel} from './AppStorePanelControl'
+import {AppPreviewPanel, AppStorePanel} from './AppStorePanel'
 
 
 /**
@@ -22,7 +22,20 @@ export default function AppStoreSideDrawer() {
   const sidebarRef = useRef(null)
   const theme = useTheme()
   const thickness = 10
+  const setIsAppStoreEnabled = useStore((state) => state.setIsAppStoreEnabled)
   const selectedStoreApp = useStore((state) => state.selectedStoreApp)
+
+
+  /**
+   * Store initial query parameters settings,
+   * since they will be cleared by the application on state change.
+   */
+  useEffect(() => {
+    const initialParameters = new URLSearchParams(window.location.search)
+    const enabledFeature = initialParameters.get('feature')
+    const appStoreEnabled = enabledFeature && enabledFeature.toLowerCase() === 'apps'
+    setIsAppStoreEnabled(appStoreEnabled)
+  }, [setIsAppStoreEnabled])
 
   return (
     <Box
