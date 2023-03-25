@@ -57,12 +57,13 @@ export function usePlaceMark() {
 
     debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
     setIsPlaceMarkEnabled(placeMarkEnabled)
-  }, [location, setIsPlaceMarkEnabled])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
 
   useEffect(() => {
     (async () => {
-      if (!Array.isArray(notes) || !notes.length || !repository || !placeMark || prevSynchSidebar === synchSidebar) {
+      if (!repository || !placeMark || prevSynchSidebar === synchSidebar) {
         return
       }
       prevSynchSidebar = synchSidebar
@@ -257,7 +258,7 @@ export function usePlaceMark() {
     debug().log('usePlaceMark#savePlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
     const newComment = {
-      body: `[placemark](${window.location.href}?feature=placemark)`,
+      body: `[placemark](${window.location.href})`,
     }
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#savePlaceMark: saveRes: ', saveRes)
