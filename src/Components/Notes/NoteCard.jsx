@@ -154,7 +154,7 @@ export default function NoteCard({
   async function deleteNote(repository, accessToken, noteNumberToDelete) {
     const newNotes = notes.map((note) => ({
       ...note,
-      synched: note.number !== noteNumberToDelete,
+      synched: (note.number !== noteNumberToDelete) && note.synched,
     }))
     setNotes(newNotes)
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
@@ -175,7 +175,7 @@ export default function NoteCard({
   async function removeComment(repository, accessToken, commentId) {
     const newComments = comments.map((comment) => ({
       ...comment,
-      synched: comment.id !== commentId,
+      synched: (comment.id !== commentId) && comment.synched,
     }))
     setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
