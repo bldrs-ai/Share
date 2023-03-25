@@ -43,7 +43,7 @@ export default function Notes() {
         const issueArr = await getIssues(repository, accessToken)
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 
-        issueArr.map((issue, index) => {
+        issueArr.reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
             return

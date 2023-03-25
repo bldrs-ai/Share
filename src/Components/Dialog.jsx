@@ -77,6 +77,8 @@ export default function Dialog({
         sx={{
           overflowY: 'hidden',
           padding: '0em 0em 2em 0em',
+          display: 'flex',
+          justifyContent: 'center',
         }}
       >
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>

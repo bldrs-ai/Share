@@ -24,3 +24,17 @@ export function arrayDiff(a, b) {
     return diff
   }
 }
+
+
+/**
+ * check if two arrays are equal.
+ *
+ * @param {object[]} array
+ * @param {object} element to remove
+ * @return {object[]} new array after removing the element
+ */
+export function arrayRemove(arr, element) {
+  return arr.filter(function(ele) {
+    return ele !== element
+  })
+}
