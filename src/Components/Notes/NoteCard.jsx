@@ -71,6 +71,10 @@ export default function NoteCard({
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -148,6 +152,11 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function deleteNote(repository, accessToken, noteNumberToDelete) {
+    const newNotes = notes.map((note) => ({
+      ...note,
+      synched: note.number !== noteNumberToDelete,
+    }))
+    setNotes(newNotes)
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
     setSelectedNoteId(null)
     toggleSynchSidebar()
@@ -164,6 +173,11 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function removeComment(repository, accessToken, commentId) {
+    const newComments = comments.map((comment) => ({
+      ...comment,
+      synched: comment.id !== commentId,
+    }))
+    setComments(newComments)
     const deleteRes = await deleteComment(repository, commentId, accessToken)
     debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
     toggleSynchSidebar()
