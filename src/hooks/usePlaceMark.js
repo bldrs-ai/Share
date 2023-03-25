@@ -156,9 +156,6 @@ export function usePlaceMark() {
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
     debug().log('usePlaceMark#createPlaceMark: context: ', context)
     debug().log('usePlaceMark#createPlaceMark: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
-    if (!isPlaceMarkEnabled) {
-      return
-    }
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
@@ -260,7 +257,7 @@ export function usePlaceMark() {
     debug().log('usePlaceMark#savePlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
     const newComment = {
-      body: `[placemark](${window.location.href})`,
+      body: `[placemark](${window.location.href}?feature=placemark)`,
     }
     const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
     debug().log('usePlaceMark#savePlaceMark: saveRes: ', saveRes)
