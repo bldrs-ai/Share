@@ -8,7 +8,6 @@ import {
   getOrganizations,
   getRepositories,
   getFiles,
-  MOCK_ORGANIZATION,
   MOCK_REPOSITORY,
   MOCK_FILES,
 } from './GitHub'
@@ -89,11 +88,6 @@ describe('GitHub', () => {
   })
 
   describe('get models from github', () => {
-    it('successfully get organizations', async () => {
-      const res = await getOrganizations()
-      expect(res.data).toEqual([MOCK_ORGANIZATION])
-    })
-
     it('successfully get repositories', async () => {
       const res = await getRepositories('bldrs-ai')
       expect(res.data).toEqual([MOCK_REPOSITORY])
@@ -102,6 +96,21 @@ describe('GitHub', () => {
     it('successfully get files', async () => {
       const res = await getFiles('Share', 'pablo-mayrgundter')
       expect(res.data).toEqual([MOCK_FILES])
+    })
+  })
+
+  describe('getOrganizations', () => {
+    it('encounters an exception if no access token is provided', () => {
+      expect(async () => await getOrganizations())
+          .toThrowError('GitHub access token is required for this call')
+    })
+
+    it('receives a list of organizations', async () => {
+      const orgs = await getOrganizations()
+      expect(orgs).toHaveLength(1)
+
+      const org = orgs[0]
+      expect(org.login).toEqual('bldrs-ai')
     })
   })
 })
