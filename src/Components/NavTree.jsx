@@ -66,11 +66,17 @@ function HideIcon({elementId}) {
     }
   }
 
-  const iconStyle = {float: 'right', margin: '4px'}
+  // Eyes are hidden by default, enabled when tree becomes focused.
+  const iconStyle = {
+    float: 'right',
+    margin: '4px',
+    opacity: 0.3,
+    visibility: 'hidden',
+  }
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
-    if (!isIsolated) {
-      iconStyle.opacity = 0.4
+    if (isIsolated) {
+      iconStyle.opacity = 1
     }
   }
 
