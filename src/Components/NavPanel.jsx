@@ -70,7 +70,6 @@ export default function NavPanel({
   }))
 
   const isNavTree = navigationMode === 'spatial-tree'
-
   return (
     <div style={{
       width: '100%',
@@ -138,7 +137,7 @@ export default function NavPanel({
         }}
       >
         <TreeView
-          aria-label='IFC Navigator'
+          aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
           defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
           defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
           defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
