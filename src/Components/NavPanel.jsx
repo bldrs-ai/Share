@@ -152,15 +152,23 @@ export default function NavPanel({
           }}
           key='tree'
           sx={{
-            padding: '14px 0',
-            maxWidth: '400px',
-            overflowY: 'auto',
-            overflowX: 'hidden',
-            flexGrow: 1,
+            'padding': '14px 0',
+            'maxWidth': '400px',
+            'overflowY': 'auto',
+            'overflowX': 'hidden',
+            'flexGrow': 1,
+            '&:focus svg, &:hover svg': {
+              visibility: 'visible !important',
+            },
           }}
         >
           {isNavTree ?
-          <NavTree model={model} selectWithShiftClickEvents={selectWithShiftClickEvents} element={element} pathPrefix={pathPrefix}/> :
+          <NavTree
+            model={model}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+            element={element}
+            pathPrefix={pathPrefix}
+          /> :
           <TypesNavTree
             model={model}
             types={elementTypesMap}
