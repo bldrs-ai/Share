@@ -106,7 +106,7 @@ describe('GitHub', () => {
     })
 
     it('receives a list of organizations', async () => {
-      const orgs = await getOrganizations()
+      const orgs = await getOrganizations('testtoken')
       expect(orgs).toHaveLength(1)
 
       const org = orgs[0]
