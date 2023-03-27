@@ -16,14 +16,14 @@ class AbstractApiConnection {
    * starts the api.
    */
   start() {
-    throw new Error('start() is not implemented')
+    console.warn('start() is not implemented')
   }
 
   /**
    * stops the api.
    */
   stop() {
-    throw new Error('stop() is not implemented')
+    console.warn('stop() is not implemented')
   }
 
   /**
@@ -33,7 +33,7 @@ class AbstractApiConnection {
    * @param {object} data
    */
   send(eventName, data) {
-    throw new Error('send() is not implemented')
+    console.warn('send() is not implemented')
   }
 
   /**
@@ -42,7 +42,7 @@ class AbstractApiConnection {
    * @param {string[]} capabilities
    */
   requestCapabilities(capabilities) {
-    throw new Error('requestCapabilities() is not implemented')
+    console.warn('requestCapabilities() is not implemented')
   }
 
   /**

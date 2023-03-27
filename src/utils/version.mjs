@@ -23,4 +23,4 @@ pkgJson.version = `${version}-r${__versionString__}`
 const pkgJsonStr = JSON.stringify(pkgJson, null, '  ')
 
 // Outputs to console for capture by file redirect in the calling script.
-console.log(pkgJsonStr) // eslint-disable-line no-console
+console.log(pkgJsonStr)
