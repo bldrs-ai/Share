@@ -85,7 +85,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
         await this.pickIfcItemsByID(modelID, this._selectedExpressIds, focusSelection, true)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
-        debug().log('IfcViewerAPIExtended#setSelection$onError: ', e)
+        debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
       }
     } else {
       this.highlighter.setHighlighted(null)
