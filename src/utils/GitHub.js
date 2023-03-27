@@ -183,12 +183,17 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
  * @param {string} [accessToken]
  * @return {Promise} the list of organization
  */
-export async function getOrganizations(accessToken = '') {
+export async function getOrganizations(accessToken) {
+  if (!accessToken) {
+    throw new Error('GitHub access token is required for this call')
+  }
+
   const res = await octokit.request(`/user/orgs`, {
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
   })
+
   return res.data
 }
 
