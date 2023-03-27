@@ -112,3 +112,29 @@ export function newMockStringValueElt(label, id = 1) {
     },
   }
 }
+
+/**
+ * Create a mock type with one element with the given label and type.
+ *
+ * @param {string} label
+ * @param {string} type
+ * @param {number} id Express ID for the element.
+ * @return {object[]} array of mocked types with one type
+ */
+export function newMockTypes(label, type, id = 1) {
+  return [
+    {
+      name: type,
+      elements: [
+        {
+          children: [],
+          expressID: id,
+          elements: {
+            type: 1,
+            value: label,
+          },
+        },
+      ],
+    },
+  ]
+}

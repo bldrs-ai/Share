@@ -27,6 +27,9 @@ export function prettyType(type) {
     case 'IFCWALLSTANDARDCASE': return 'Wall (std. case)'
     case 'IFCCURTAINWALL': return 'Curtain Wall'
     default: {
+      if (!type) {
+        return ''
+      }
       let titleCased = toTitleCase(type.substring(ifcPrefix.length))
       if (titleCased.endsWith('element')) {
         titleCased = `${titleCased.replace('element', '')} Element`

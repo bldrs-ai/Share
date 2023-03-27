@@ -147,7 +147,7 @@ export default function CadView({
         }
         const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
         if (types.length > 0) {
-          setExpandedTypes(types)
+          setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
       } else {
         setSelectedElement(null)
