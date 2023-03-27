@@ -92,6 +92,7 @@ export default function CadView({
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
+
   // Place Mark
   const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
 
@@ -215,9 +216,17 @@ export default function CadView({
     createPlaceMark({
       context: viewer.context,
       oppositeObjects: [tmpModelRef],
+      postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
+    // maintain hidden elements if any
+    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
+        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+    if (previouslyHiddenELements.length > 0) {
+      viewer.isolator.unHideAllElements()
+      viewer.isolator.hideElementsById(previouslyHiddenELements)
+    }
   }
 
 
@@ -264,7 +273,7 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.loadIfcUrl(
         ifcURL,
-        !urlHasCameraParams(), // fitToFrame
+        !urlHasCameraParams(), // fit to frame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -280,6 +289,7 @@ export default function CadView({
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
         })
+    await viewer.isolator.setModel(loadedModel)
 
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -302,6 +312,7 @@ export default function CadView({
     }
 
     debug().error('CadView#loadIfc: Model load failed!')
+    return loadedModel
   }
 
 
@@ -434,6 +445,7 @@ export default function CadView({
     try {
       // Update The Component state
       setSelectedElements(resultIDs.map((id) => `${id}`))
+
       // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
@@ -510,6 +522,9 @@ export default function CadView({
    */
   function selectWithShiftClickEvents(shiftKey, expressId) {
     let newSelection = []
+    if (!viewer.isolator.canBePickedInScene(expressId)) {
+      return
+    }
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
@@ -533,14 +548,19 @@ export default function CadView({
       // add a plane
       if (event.code === 'KeyQ') {
         viewer.clipper.createPlane()
-      }
-      // delete all planes
-      if (event.code === 'KeyW') {
+      } else if (event.code === 'KeyW') {
         viewer.clipper.deletePlane()
-      }
-      if (event.code === 'KeyA' ||
+      } else if (event.code === 'KeyA' ||
         event.code === 'Escape') {
         selectItemsInScene([])
+      } else if (event.code === 'KeyH') {
+        viewer.isolator.hideSelectedElements()
+      } else if (event.code === 'KeyU') {
+        viewer.isolator.unHideAllElements()
+      } else if (event.code === 'KeyI') {
+        viewer.isolator.toggleIsolationMode()
+      } else if (event.code === 'KeyR') {
+        viewer.isolator.toggleRevealHiddenElements()
       }
     }
   }
@@ -638,6 +658,7 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
+
   return (
     isMobile ? (
       <>
@@ -694,24 +715,24 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPIExtended({
+  const viewer = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created:', v)
+  debug().log('CadView#initViewer: viewer created:', viewer)
 
   // Path to web-ifc.wasm in serving directory.
-  v.IFC.setWasmPath('./static/js/')
-  v.clipper.active = true
-  v.clipper.orthogonalY = false
+  viewer.IFC.setWasmPath('./static/js/')
+  viewer.clipper.active = true
+  viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    v.prePickIfcItem()
+    viewer.highlightIfcItem()
   }
 
-  v.container = container
-  return v
+  viewer.container = container
+  return viewer
 }
 
 
