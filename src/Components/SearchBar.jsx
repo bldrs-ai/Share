@@ -66,6 +66,7 @@ export default function SearchBar({fileOpen}) {
         window.removeEventListener('beforeunload', handleBeforeUnload)
         navigate(modelPath, {replace: true})
       } catch (e) {
+        console.error(e)
         setError(`Please enter a valid url. Click on the LINK icon to learn more.`)
       }
       return

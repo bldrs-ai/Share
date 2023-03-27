@@ -39,7 +39,6 @@ if (process.env.DISABLE_MOCK_SERVICE_WORKER !== 'true') {
   worker.start({
     onUnhandledRequest(req) {
       if (req.url.host === 'api.github.com') {
-        // eslint-disable-next-line no-console
         console.error(`Found an unhandled ${req.method} request to ${req.url}`)
       }
     },

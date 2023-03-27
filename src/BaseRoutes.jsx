@@ -63,6 +63,8 @@ export default function BaseRoutes({testElt = null}) {
         if (err.error !== 'login_required') {
           throw err
         }
+
+        console.log(err.error)
       })
     }
   }, [basePath, installPrefix, location, navigation, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
