@@ -101,7 +101,7 @@ describe('GitHub', () => {
 
   describe('getOrganizations', () => {
     it('encounters an exception if no access token is provided', () => {
-      expect(() => getOrganizations())
+      expect(() => getOrganizations()).rejects
           .toThrowError('GitHub access token is required for this call')
     })
 
