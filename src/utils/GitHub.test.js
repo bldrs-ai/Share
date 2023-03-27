@@ -87,16 +87,19 @@ describe('GitHub', () => {
       expect(res.status).toEqual(httpOK)
     })
   })
+
   describe('get models from github', () => {
-    it('successfullly get organizations', async () => {
+    it('successfully get organizations', async () => {
       const res = await getOrganizations()
       expect(res.data).toEqual([MOCK_ORGANIZATION])
     })
-    it('successfullly get repositories', async () => {
+
+    it('successfully get repositories', async () => {
       const res = await getRepositories('bldrs-ai')
       expect(res.data).toEqual([MOCK_REPOSITORY])
     })
-    it('successfullly get files', async () => {
+
+    it('successfully get files', async () => {
       const res = await getFiles('Share', 'pablo-mayrgundter')
       expect(res.data).toEqual([MOCK_FILES])
     })
