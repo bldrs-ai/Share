@@ -113,6 +113,59 @@ export function newMockStringValueElt(label, id = 1) {
   }
 }
 
+
+/**
+ * Create a hirerachy of elements with the given type label.
+ *
+ * @param {string} label
+ * @return {object} The hirerachy root element
+ */
+export function newMockElementHirerachyWithType(label) {
+  return {
+    children: [{
+      children: [{
+        children: [],
+        expressID: 3,
+        type: label,
+        Name: {
+          type: 3,
+          value: '3',
+        },
+      },
+      {
+        children: [],
+        expressID: 4,
+        type: label,
+        Name: {
+          type: 4,
+          value: '4',
+        },
+      }],
+      expressID: 6,
+      type: label,
+      Name: {
+        type: 6,
+        value: '6',
+      },
+    },
+    {
+      children: [],
+      expressID: 7,
+      type: label,
+      Name: {
+        type: 7,
+        value: '7',
+      },
+    }],
+    expressID: 2,
+    type: label,
+    Name: {
+      type: 2,
+      value: '2',
+    },
+  }
+}
+
 /**
  * Create a mock type with one element with the given label and type.
  *
