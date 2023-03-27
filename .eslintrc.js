@@ -12,6 +12,7 @@ module.exports = {
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
     'plugin:jsx-a11y/recommended',
+    'plugin:storybook/recommended',
     'plugin:jsdoc/recommended',
     'plugin:cypress/recommended',
   ],
@@ -100,6 +101,9 @@ module.exports = {
     'jsdoc/require-param-type': 'off',
     'require-await': 'error',
     'linebreak-style': ['error', 'unix'],
+    'no-console': 'error',
+    'no-alert': 'error',
+    'no-debugger': 'error'
   },
   settings: {
     react: {

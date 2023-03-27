@@ -15,7 +15,7 @@ import {Helmet} from 'react-helmet-async'
 /**
  * Button to toggle About panel on and off
  *
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
@@ -27,8 +27,6 @@ export default function AboutControl() {
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
   }
-
-  // eslint-disable-next-line no-unused-vars
   const setIsDialogDisplayedForDialog = () => {
     setIsDialogDisplayed(false)
     setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
@@ -65,7 +63,7 @@ export default function AboutControl() {
  * @param {Function} setIsDialogDisplayed
  * @return {React.ReactElement} React component
  */
-export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={

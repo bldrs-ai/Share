@@ -35,5 +35,5 @@ export function isAnalyticsAllowed() {
  */
 export function setIsAnalyticsAllowed(isAllowed) {
   assertDefined(isAllowed)
-  Functional.setCookieBoolean('isAnalyticsAllowed', isAllowed)
+  Functional.setCookieBoolean({component: 'cookies', name: 'isAnalyticsAllowed', value: isAllowed})
 }

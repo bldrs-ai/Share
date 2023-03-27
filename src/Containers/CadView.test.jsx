@@ -28,7 +28,7 @@ describe('CadView', () => {
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
   beforeEach(() => {
     viewer = new IfcViewerAPIExtended()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
@@ -40,7 +40,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended', async () => {
+  it('renders with mock IfcViewerAPI', async () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
@@ -57,8 +57,8 @@ describe('CadView', () => {
     )
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
-    await actAsyncFlush()
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
   })
 
 
@@ -81,16 +81,16 @@ describe('CadView', () => {
             modelPath={result.current[0]}
           />
         </ShareMock>)
-    await actAsyncFlush()
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await actAsyncFlush()
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
-    expect(getPropsCalls[0][1]).toBe(targetEltId) // call 1, arg 2
+    expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
-    expect(getPropsCalls[1][1]).toBe(0) // call 2, arg 2
+    expect(getPropsCalls[1][1]).toBe(targetEltId) // call 2, arg 2
     await actAsyncFlush()
   })
 
@@ -178,9 +178,9 @@ describe('CadView', () => {
           />
         </ShareMock>,
     )
-    await actAsyncFlush()
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
           <CadView
@@ -191,8 +191,8 @@ describe('CadView', () => {
           />
         </ShareMock>,
     )
-    await actAsyncFlush()
     expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
+    await actAsyncFlush()
   })
 
 
@@ -288,9 +288,10 @@ describe('CadView', () => {
         <ShareMock>
           <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'} modelPath={modelPath}/>
         </ShareMock>)
-    expect(viewer.IFC.context.getCamera).toHaveBeenCalled()
-    expect(viewer.IFC.context.getRenderer).toHaveBeenCalled()
-    expect(viewer.IFC.context.getScene).toHaveBeenCalled()
+    const viewerMock = __getIfcViewerAPIMockSingleton()
+    expect(viewerMock.IFC.context.getCamera).toHaveBeenCalled()
+    expect(viewerMock.IFC.context.getRenderer).toHaveBeenCalled()
+    expect(viewerMock.IFC.context.getScene).toHaveBeenCalled()
     await actAsyncFlush()
   })
   */

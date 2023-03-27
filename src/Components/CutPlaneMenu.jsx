@@ -156,7 +156,7 @@ export function removePlanes(viewer) {
 
 
 /**
- * Helper method to get the location of cut plane from the center of the model.
+ * helper method to get the location of cut plane from the center of the model
  *
  * @param {object} viewer
  * @param {object} ifcModel
@@ -184,7 +184,6 @@ export function getPlanesOffset(viewer, ifcModel) {
     })
     return planesOffset
   }
-  return undefined
 }
 
 

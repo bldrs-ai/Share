@@ -59,7 +59,7 @@ export function getCookie(name, defaultValue) {
       return propValue
     }
   }
-  return `${defaultValue}`
+  return `${defaultValue }`
 }
 
 

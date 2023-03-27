@@ -1,7 +1,8 @@
-import {EffectComposer, BlendFunction} from 'postprocessing'
+import {EffectComposer} from 'postprocessing'
 import {Mesh} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import CustomPostProcessor from './CustomPostProcessor'
+import createComposer from './CustomPostProcessing'
+
 
 /**
  *  Overrides the default render functionality in the viewer
@@ -9,38 +10,30 @@ import CustomPostProcessor from './CustomPostProcessor'
  */
 export default class IfcHighlighter {
   highlightedMeshes = null
-  _selectionOutlineEffect = null
-
+  _outlineEffect = null
   /**
    * constructs new class
    *
    * @param {IfcContext} context of the viewer
-   * @param {CustomPostProcessor} the post-processor
    */
-  constructor(context, postProcessor) {
-    this._selectionOutlineEffect = postProcessor.createOutlineEffect({
-      blendFunction: BlendFunction.SCREEN,
-      edgeStrength: 1.5,
-      pulseSpeed: 0.0,
-      visibleEdgeColor: 0xc7c7c7,
-      hiddenEdgeColor: 0xff9b00,
-      height: window.innerHeight,
-      windth: window.innerWidth,
-      blur: false,
-      xRay: true,
-      opacity: 1,
-    })
-    context.renderer.update = newUpdateFunction(context, postProcessor.getComposer)
+  constructor(context) {
+    // override the viewer rendering pipeline
+    const renderer = context.getRenderer()
+    const scene = context.getScene()
+    const camera = context.getCamera()
+    const {composer, outlineEffect} = createComposer(renderer, scene, camera)
+    this._outlineEffect = outlineEffect
+    context.renderer.update = newUpdateFunction(context, composer)
   }
 
 
   /**
    * Highlights and outlines meshes in scene
    *
-   * @param {Mesh[]} geometry meshes
+   * @param {Mesh} geometry meshes
    */
   setHighlighted(meshes) {
-    this._selectionOutlineEffect.setSelection(meshes ?? [])
+    this._outlineEffect.setSelection(meshes ?? [])
   }
 }
 

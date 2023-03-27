@@ -2,6 +2,11 @@ import React, {useEffect, useMemo, useRef} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
+// TODO: This isn't used.
+// If icons-material isn't imported somewhere, mui dies
+/* eslint-disable */
+import AccountCircle from '@mui/icons-material/AccountCircle'
+/* eslint-enable */
 import Styles from './Styles'
 import CadView, {searchIndex} from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
@@ -63,7 +68,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
     } else {
-      console.warn('No repository set for project!', pathPrefix)
+      debug().warn('No repository set for project!, ', pathPrefix)
     }
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
@@ -105,7 +110,7 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
- * Returns a reference to an IFC model file.  For use by IfcViewerAPIExtended.load.
+ * Returns a reference to an IFC model file.  For use by IfcViewerAPI.load.
  *
  * Format is either a reference within this project's serving directory:
  *   {filepath: '/file.ifc'}

@@ -1,9 +1,8 @@
 import {IfcViewerAPI} from 'web-ifc-viewer'
 import IfcHighlighter from './IfcHighlighter'
-import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
-import CustomPostProcessor from './CustomPostProcessor'
+import debug from '../utils/debug'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -22,14 +21,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   /**  */
   constructor(options) {
     super(options)
-    const renderer = this.context.getRenderer()
-    const scene = this.context.getScene()
-    const camera = this.context.getCamera()
-    this.postProcessor = new CustomPostProcessor(renderer, scene, camera)
-    this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
-    this.isolator = new IfcIsolator(this.context, this)
+    this.highlighter = new IfcHighlighter(this.context)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
   }
+
 
   /**
    * Loads the given IFC in the current scene.
@@ -45,7 +40,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.viewsManager.setViewSettings(customViewSettings)
     return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
   }
-
   /**
    * Gets the expressId of the element that the mouse is pointing at
    *
@@ -56,9 +50,15 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     if (!found) {
       return null
     }
-    const id = this.getPickedItemId(found)
-    return {modelID: found.object.modelID, id}
+    const mesh = found.object
+    if (found.faceIndex === undefined) {
+      return null
+    }
+    const ifcManager = this.IFC
+    const id = ifcManager.loader.ifcManager.getExpressId(mesh.geometry, found.faceIndex)
+    return {modelID: mesh.modelID, id}
   }
+
 
   /**
    * gets a copy of the current selected expressIds in the scene
@@ -76,54 +76,20 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    */
   async setSelection(modelID, expressIds, focusSelection) {
     this._selectedExpressIds = expressIds
-    const toBeSelected = this._selectedExpressIds.filter((id) => this.isolator.canBePickedInScene(id))
     if (typeof focusSelection === 'undefined') {
       // if not specified, only focus on item if it was the first one to be selected
-      focusSelection = toBeSelected.length === 1
+      focusSelection = this._selectedExpressIds.length === 1
     }
-    if (toBeSelected.length !== 0) {
+    if (this._selectedExpressIds.length !== 0) {
       try {
-        await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, false, true)
+        await this.pickIfcItemsByID(modelID, this._selectedExpressIds, focusSelection, true)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
-        console.error(e)
+        debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
       }
     } else {
       this.highlighter.setHighlighted(null)
       this.IFC.selector.unpickIfcItems()
     }
-  }
-
-  /**
-   * Highlights the item pointed by the cursor.
-   *
-   */
-  async highlightIfcItem() {
-    const found = this.context.castRayIfc()
-    if (!found) {
-      this.IFC.selector.preselection.toggleVisibility(false)
-      return
-    }
-    const id = this.getPickedItemId(found)
-    if (this.isolator.canBePickedInScene(id)) {
-      await this.IFC.selector.preselection.pick(found)
-    }
-  }
-
-
-  /**
-   *
-   * Highlights the item pointed by the cursor.
-   *
-   * @param {object} picked item
-   * @return {number} element id
-   */
-  getPickedItemId(picked) {
-    const mesh = picked.object
-    if (picked.faceIndex === undefined) {
-      return null
-    }
-    const ifcManager = this.IFC
-    return ifcManager.loader.ifcManager.getExpressId(mesh.geometry, picked.faceIndex)
   }
 }

@@ -21,7 +21,7 @@ export function TooltipIconButton({
   title,
   onClick,
   icon,
-  placement = 'right',
+  placement = 'left',
   selected = false,
   size = 'medium',
   dataTestId = '',

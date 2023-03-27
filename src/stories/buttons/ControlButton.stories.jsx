@@ -1,27 +1,32 @@
 import React from 'react'
-import AddCircle from '@mui/material/AddCircle'
-import ArrowBack from '@mui/material/ArrowBack'
-import ArrowForward from '@mui/material/ArrowForward'
-import Check from '@mui/material/Check'
-import {TooltipIconButton} from '../../Components/Buttons'
+import {useArgs} from '@storybook/addons'
+import {ControlButton} from '../../Components/Buttons'
+import AddCircle from '@mui/icons-material/AddCircle'
+import Announcement from '@mui/icons-material/Announcement'
+import ArrowBack from '@mui/icons-material/ArrowBack'
+import ArrowForward from '@mui/icons-material/ArrowForward'
+import Check from '@mui/icons-material/Check'
+import Help from '@mui/icons-material/Help'
+import Dialog from '../../Components/Dialog'
 
 
 export default {
-  title: 'BLDRS UI/Buttons/TooltipIconButton',
-  component: TooltipIconButton,
+  title: 'BLDRS UI/Buttons/ControlButton',
+  component: ControlButton,
   argTypes: {
     icon: {
-      options: ['add', 'back', 'check', 'forward'],
+      options: ['add', 'back', 'check', 'forward', 'help'],
       mapping: {
         add: <AddCircle/>,
         back: <ArrowBack/>,
         check: <Check/>,
         forward: <ArrowForward/>,
+        help: <Help/>,
       },
       control: {
         type: 'select',
       },
-      defaultValue: 'check',
+      defaultValue: 'help',
     },
 
     onClick: {
@@ -60,15 +65,10 @@ export default {
       },
       defaultValue: 'medium',
     },
-
-    dataTestId: {
-      control: {
-        type: 'text',
-      },
-    },
   },
   args: {
-    title: 'Only Appears on Hover2',
+    isDialogDisplayed: true,
+    title: 'Only Appears on Hover',
   },
   parameters: {
     backgrounds: {
@@ -78,8 +78,23 @@ export default {
 }
 
 const Template = (args) => {
+  const [{isDialogDisplayed}, updateArgs] = useArgs()
+  const setIsDialogDisplayed = (v) => updateArgs({isDialogDisplayed: v})
+  const dialog = (
+    <Dialog
+      icon={<Announcement/>}
+      headerText={'Example Dialog'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      content={<>Example content.</>}
+    />
+  )
+
   return (
-    <TooltipIconButton
+    <ControlButton
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      dialog={dialog}
       {...args}
     />
   )
