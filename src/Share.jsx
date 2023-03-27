@@ -3,11 +3,13 @@ import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
 import Styles from './Styles'
+import {CAMERA_PREFIX} from './Components/CameraControl'
 import CadView, {searchIndex} from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
+import {navWith} from './utils/navigate'
 import {handleBeforeUnload} from './utils/event'
 
 
@@ -47,8 +49,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
         return
       }
       if (modelPath === null ||
-        (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
-        (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
+          (modelPath.filepath && modelPath.filepath !== mp.filepath) ||
+          (modelPath.gitpath && modelPath.gitpath !== mp.gitpath)) {
         setModelPath(mp)
         debug().log('Share#onChangeUrlParams: new model path: ', mp)
       }
@@ -96,11 +98,14 @@ export function navToDefault(navigate, appPrefix) {
   // TODO: probe for index.ifc
   const mediaSizeTabletWith = 900
   window.removeEventListener('beforeunload', handleBeforeUnload)
-  if (window.innerWidth <= mediaSizeTabletWith) {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-150.147,-85.796,167.057,-32.603,17.373,-1.347`)
-  } else {
-    navigate(`${appPrefix}/v/p/index.ifc#c:-119.076,0.202,83.165,-44.967,19.4,-4.972`)
-  }
+  const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
+  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
+        `#${CAMERA_PREFIX}:-150.147,-85.796,167.057,-32.603,17.373,-1.347` :
+        `#${CAMERA_PREFIX}:-119.076,0.202,83.165,-44.967,19.4,-4.972`
+  navWith(navigate, defaultPath, {
+    search: location.search,
+    hash: cameraHash,
+  })
 }
 
 
