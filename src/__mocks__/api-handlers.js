@@ -2,7 +2,7 @@ import {rest} from 'msw'
 import {
   MOCK_COMMENTS,
   MOCK_ISSUES,
-  MOCK_ORGANIZATION,
+  MOCK_ORGANIZATIONS,
   MOCK_REPOSITORY,
   MOCK_FILES,
 } from '../utils/GitHub'
@@ -190,9 +190,7 @@ export const handlers = [
 
     return res(
         ctx.status(httpOk),
-        ctx.json({
-          data: [MOCK_ORGANIZATION],
-        }),
+        ctx.json(MOCK_ORGANIZATIONS.data),
     )
   }),
 
