@@ -1,11 +1,12 @@
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
+import {Vector3} from 'three'
 import {useDoubleTap} from 'use-double-tap'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
-import {CAMERA_PREFIX, FEATURE_PREFIX, PLACE_MARK_PREFIX, tempVec3} from '../utils/constants'
+import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -18,6 +19,11 @@ import {isDevMode} from '../utils/common'
 const placeMarkGroupMap = new Map()
 let renderCount = 0
 let prevSynchSidebar
+const tempPos = new Vector3()
+
+
+export const FEATURE_PREFIX = 'f'
+export const PLACE_MARK_PREFIX = 'm'
 
 
 /**
@@ -111,7 +117,7 @@ export function usePlaceMark() {
           const markArr = getObjectParams(activePlaceMarkHash)
           debug().log('usePlaceMark#useEffect: active markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
-            point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            point: tempPos.set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           debug().log('usePlaceMark#useEffect: active svgGroup: ', svgGroup)
@@ -128,7 +134,7 @@ export function usePlaceMark() {
           const markArr = getObjectParams(hash)
           debug().log('usePlaceMark#useEffect: inactive markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
-            point: tempVec3.clone().set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            point: tempPos.set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
           debug().log('usePlaceMark#useEffect: inactive newSvgGroup: ', newSvgGroup)

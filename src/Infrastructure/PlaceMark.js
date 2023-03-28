@@ -2,20 +2,24 @@ import {
   EventDispatcher,
   Mesh,
   Vector2,
+  Vector3,
+  Raycaster,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import {
-  ACTIVE_PLACE_MARK_SCALE,
-  INACTIVE_PLACE_MARK_HEIGHT,
-  PLACE_MARK_DISTANCE,
-  PLACE_MARK_SCALE_FACTOR, tempVec3,
-} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
-import {raycaster} from '../utils/constants'
 import {isDevMode} from '../utils/common'
 import {BlendFunction} from 'postprocessing'
+
+
+const tempScale = new Vector3()
+
+
+export const PLACE_MARK_DISTANCE = 1
+export const INACTIVE_PLACE_MARK_HEIGHT = 1
+export const ACTIVE_PLACE_MARK_SCALE = 1.6
+export const PLACE_MARK_SCALE_FACTOR = 60
 
 
 /**
@@ -47,6 +51,7 @@ export default class PlaceMark extends EventDispatcher {
     const _pointer = new Vector2()
     let _objects = []
     const _placeMarks = []
+    const _raycaster = new Raycaster()
 
 
     this.activated = false
@@ -136,19 +141,19 @@ export default class PlaceMark extends EventDispatcher {
         updatePointer(event)
         const _intersections = []
         _intersections.length = 0
-        raycaster.setFromCamera(_pointer, _camera)
-        raycaster.intersectObjects(_objects, true, _intersections)
+        _raycaster.setFromCamera(_pointer, _camera)
+        _raycaster.intersectObjects(_objects, true, _intersections)
         debug().log('PlaceMark#dropPlaceMark: _intersections: ', _intersections)
 
         if (_intersections.length > 0) {
-          const intersectPoint = _intersections[0].point.clone()
+          const intersectPoint = _intersections[0].point
           intersectPoint.x = floatStrTrim(intersectPoint.x)
           intersectPoint.y = floatStrTrim(intersectPoint.y)
           intersectPoint.z = floatStrTrim(intersectPoint.z)
           const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
           debug().log('PlaceMark#dropPlaceMark: offset: ', offset)
-          const point = intersectPoint.clone().add(offset)
-          const lookAt = point.clone().add(_intersections[0].face.normal.clone())
+          const point = intersectPoint.add(offset)
+          const lookAt = point.add(_intersections[0].face.normal)
           const promiseGroup = this.putDown({point, lookAt})
           res = {point, lookAt, promiseGroup}
         }
@@ -210,8 +215,8 @@ export default class PlaceMark extends EventDispatcher {
         updatePointer(event)
         const _intersections = []
         _intersections.length = 0
-        raycaster.setFromCamera(_pointer, _camera)
-        raycaster.intersectObjects(_placeMarks, true, _intersections)
+        _raycaster.setFromCamera(_pointer, _camera)
+        _raycaster.intersectObjects(_placeMarks, true, _intersections)
         debug().log('PlaceMark#getIntersectionPlaceMarkInfo: _intersections: ', _intersections)
         if (_intersections.length) {
           res = {url: _intersections[0].object?.userData?.url}
@@ -249,13 +254,13 @@ export default class PlaceMark extends EventDispatcher {
 
         _placeMarks.forEach((_placeMark) => {
           _placeMark.quaternion.copy(_camera.quaternion)
-          const dist = _placeMark.position.clone().distanceTo(_camera.position.clone())
+          const dist = _placeMark.position.distanceTo(_camera.position)
           const sideScale = dist / PLACE_MARK_SCALE_FACTOR
-          const scale = tempVec3.clone().set(sideScale, sideScale, sideScale)
+          const scale = tempScale.set(sideScale, sideScale, sideScale)
           if (_placeMark.userData.isActive) {
             scale.multiplyScalar(ACTIVE_PLACE_MARK_SCALE)
           }
-          _placeMark.scale.copy(scale.clone())
+          _placeMark.scale.copy(scale)
         })
 
         composer.render()

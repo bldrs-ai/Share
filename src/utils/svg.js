@@ -11,10 +11,10 @@ import {
   SpriteMaterial,
   Sprite,
   ImageLoader,
+  Color,
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
-import {tempColor, tempGroup} from './constants'
 
 
 const svgLoader = new SVGLoader()
@@ -60,8 +60,10 @@ export function getSvgGroupFromObj({
   fillShapesWireframe = false,
 }) {
   const paths = svgObj.paths
-  const group = tempGroup.clone()
-  const svgGroup = tempGroup.clone()
+  const group = new Group()
+  const svgGroup = new Group()
+  const tempColor = new Color()
+
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
     if (!fillColor) {
@@ -72,7 +74,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
-      const color = tempColor.clone().setStyle(fillColor).convertSRGBToLinear()
+      const color = tempColor.setStyle(fillColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.fillOpacity,
@@ -92,7 +94,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawStrokes && strokeColor !== undefined && strokeColor !== 'none') {
-      const color = tempColor.clone().setStyle(strokeColor).convertSRGBToLinear()
+      const color = tempColor.setStyle(strokeColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.strokeOpacity,
@@ -239,9 +241,10 @@ export function addUserDataInGroup(group, userData) {
  */
 export function setGroupColor(group, color) {
   assertDefined(group, color)
+  const tempColor = new Color()
   group.traverse((child) => {
     if (child instanceof Mesh) {
-      child.material.color = tempColor.clone().set(color)
+      child.material.color = tempColor.set(color)
     }
   })
 }
