@@ -17,7 +17,7 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
  *
  * which when fully expanded becomes:
  *
- *   http://host/share/v/p/indec.ifc
+ *   http://host/share/v/p/index.ifc
  *   http://host/share/v/gh/bldrs-ai/Share/main/public/index.ifc
  *
  * @see https://github.com/bldrs-ai/Share/wiki/Design#ifc-scene-load
