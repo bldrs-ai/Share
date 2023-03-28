@@ -4,9 +4,10 @@ import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-libr
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
+import * as AllLoader from '../utils/loader'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import CadView, * as AllCadView from './CadView'
+import CadView from './CadView'
 
 
 const mockedUseNavigate = jest.fn()
@@ -162,7 +163,7 @@ describe('CadView', () => {
 
   it('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
-    jest.spyOn(AllCadView, 'getNewModelRealPath').mockReturnValue('/haus.ifc')
+    jest.spyOn(AllLoader, 'getUploadedBlobPath').mockReturnValue('/haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
