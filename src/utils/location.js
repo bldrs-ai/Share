@@ -248,10 +248,11 @@ export function navigateBaseOnModelPath(org, repo, branchName, filePath) {
 
 
 /**
+ * @param {string} url
  * @return {string|undefined}
  */
-export function getAllHashParams() {
-  const splitHref = window.location.href.split('#')
+export function getAllHashParams(url) {
+  const splitHref = url ? url.split('#') : window.location.href.split('#')
   const allHashParams = splitHref[1]
   return allHashParams
 }

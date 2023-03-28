@@ -5,7 +5,7 @@ import {useDoubleTap} from 'use-double-tap'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
+import {addHashParams, getAllHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
 import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
@@ -285,7 +285,7 @@ export function usePlaceMark() {
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
       if (!isDevMode()) {
-        window.location.href = url // Change location hash
+        window.location.hash = `#${getAllHashParams(url)}` // Change location hash
       }
     }
   }
