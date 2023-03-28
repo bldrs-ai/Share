@@ -645,25 +645,23 @@ export default function CadView({
             <SearchBar
               fileOpen={loadLocalFile}
             />}
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
-          }
+
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'flex-start',
-              width: '224px',
             }}
           >
             <Box
               sx={{
                 display: 'flex',
                 flexDirection: 'column',
-                justifyContent: 'flex-start',
+                justifyContent: 'space-between',
                 marginTop: '14px',
                 opacity: .5,
+                height: '260px',
+
               }}
             >
               <TooltipIconButton
@@ -713,25 +711,36 @@ export default function CadView({
                 dataTestId='open-ifc'
               />
             </Box>
-            {isNavPanelOpen && navigationMode === 'spatial-tree' &&
-              isNavigationPanelVisible &&
-              <NavPanel
-                model={model}
-                element={rootElement}
-                defaultExpandedElements={defaultExpandedElements}
-                defaultExpandedTypes={defaultExpandedTypes}
-                expandedElements={expandedElements}
-                setExpandedElements={setExpandedElements}
-                expandedTypes={expandedTypes}
-                setExpandedTypes={setExpandedTypes}
-                navigationMode={navigationMode}
-                setNavigationMode={setNavigationMode}
-                selectWithShiftClickEvents={selectWithShiftClickEvents}
-                pathPrefix={
-                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-                }
-              />
-            }
+            <Box
+              sx={{
+                width: '224px',
+              }}
+            >
+              {
+                modelPath.repo !== undefined &&
+                <BranchesControl location={location}/>
+              }
+              {isNavPanelOpen && navigationMode === 'spatial-tree' &&
+                isNavigationPanelVisible &&
+                <NavPanel
+                  model={model}
+                  element={rootElement}
+                  defaultExpandedElements={defaultExpandedElements}
+                  defaultExpandedTypes={defaultExpandedTypes}
+                  expandedElements={expandedElements}
+                  setExpandedElements={setExpandedElements}
+                  expandedTypes={expandedTypes}
+                  setExpandedTypes={setExpandedTypes}
+                  navigationMode={navigationMode}
+                  setNavigationMode={setNavigationMode}
+                  selectWithShiftClickEvents={selectWithShiftClickEvents}
+                  pathPrefix={
+                    pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                  }
+                />
+              }
+
+            </Box>
           </Box>
         </Box>
       )}
