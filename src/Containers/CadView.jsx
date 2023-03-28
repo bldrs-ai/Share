@@ -27,8 +27,11 @@ import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import {TooltipIconButton} from '../Components/Buttons'
+import SearchIcon from '../assets/icons/Search.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
-import ListIcon from '../assets/icons/List.svg'
+import TypeIcon from '../assets/icons/Types.svg'
+import FilePathIcon from '../assets/icons/FilePath.svg'
+import BranchIcon from '../assets/icons/Branch.svg'
 
 
 /**
@@ -653,35 +656,57 @@ export default function CadView({
             }}
           >
             <TooltipIconButton
-              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              title={'Search'}
+              onClick={
+                isNavTree ?
+                () => setNavigationMode('element-type') :
+                () => setNavigationMode('spatial-tree')
+              }
+              icon={<SearchIcon/>}
+              placement={'bottom'}
+              dataTestId='open-ifc'
+            />
+            <TooltipIconButton
+              title={'Spatial Navigation'}
               onClick={
                 isNavTree ?
                 () => setNavigationMode('element-type') :
                 () => setNavigationMode('spatial-tree')
               }
               icon={<TreeIcon/>}
-              placement={'right'}
+              placement={'bottom'}
               dataTestId='open-ifc'
             />
             <TooltipIconButton
-              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              title={'Element Type Navigation'}
               onClick={
                 isNavTree ?
                 () => setNavigationMode('element-type') :
                 () => setNavigationMode('spatial-tree')
               }
-              icon={<ListIcon/>}
-              placement={'right'}
+              icon={<TypeIcon/>}
+              placement={'bottom'}
               dataTestId='open-ifc'
             />
             <TooltipIconButton
-              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              title={'GitHub Model Path'}
               onClick={
                 isNavTree ?
                 () => setNavigationMode('element-type') :
                 () => setNavigationMode('spatial-tree')
               }
-              icon={<ListIcon/>}
+              icon={<FilePathIcon/>}
+              placement={'right'}
+              dataTestId='open-ifc'
+            />
+            <TooltipIconButton
+              title={'GitHub Model Path'}
+              onClick={
+                isNavTree ?
+                () => setNavigationMode('element-type') :
+                () => setNavigationMode('spatial-tree')
+              }
+              icon={<BranchIcon/>}
               placement={'right'}
               dataTestId='open-ifc'
             />
