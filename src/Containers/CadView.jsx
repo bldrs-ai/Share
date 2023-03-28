@@ -27,7 +27,6 @@ import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import {TooltipIconButton} from '../Components/Buttons'
-import SearchIcon from '../assets/icons/Search.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
 import TypeIcon from '../assets/icons/Types.svg'
 import FilePathIcon from '../assets/icons/FilePath.svg'
@@ -652,84 +651,88 @@ export default function CadView({
           }
           <Box
             sx={{
-              marginTop: '14px',
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'flex-start',
+              width: '224px',
             }}
           >
-            <TooltipIconButton
-              title={'Search'}
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={<SearchIcon/>}
-              placement={'bottom'}
-              dataTestId='open-ifc'
-            />
-            <TooltipIconButton
-              title={'Spatial Navigation'}
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={<TreeIcon/>}
-              placement={'bottom'}
-              dataTestId='open-ifc'
-            />
-            <TooltipIconButton
-              title={'Element Type Navigation'}
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={<TypeIcon/>}
-              placement={'bottom'}
-              dataTestId='open-ifc'
-            />
-            <TooltipIconButton
-              title={'GitHub Model Path'}
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={<FilePathIcon/>}
-              placement={'right'}
-              dataTestId='open-ifc'
-            />
-            <TooltipIconButton
-              title={'GitHub Model Path'}
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={<BranchIcon/>}
-              placement={'right'}
-              dataTestId='open-ifc'
-            />
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'flex-start',
+                marginTop: '14px',
+                opacity: .5,
+              }}
+            >
+              <TooltipIconButton
+                title={'Spatial Navigation'}
+                selected={navigationMode === 'element-type'}
+                onClick={
+                  isNavTree ?
+                  () => setNavigationMode('element-type') :
+                  () => setNavigationMode('spatial-tree')
+                }
+                icon={<TreeIcon/>}
+                placement={'right'}
+                dataTestId='open-ifc'
+              />
+              <TooltipIconButton
+                title={'Element Type Navigation'}
+                selected={navigationMode === 'element-type'}
+                onClick={
+                  isNavTree ?
+                  () => setNavigationMode('element-type') :
+                  () => setNavigationMode('spatial-tree')
+                }
+                icon={<TypeIcon/>}
+                placement={'right'}
+                dataTestId='open-ifc'
+              />
+              <TooltipIconButton
+                title={'GitHub Model Path'}
+                onClick={
+                  isNavTree ?
+                  () => setNavigationMode('element-type') :
+                  () => setNavigationMode('spatial-tree')
+                }
+                icon={<FilePathIcon/>}
+                placement={'right'}
+                dataTestId='open-ifc'
+              />
+              <TooltipIconButton
+                title={'Project Version '}
+                onClick={
+                  isNavTree ?
+                  () => setNavigationMode('element-type') :
+                  () => setNavigationMode('spatial-tree')
+                }
+                icon={<BranchIcon/>}
+                placement={'right'}
+                dataTestId='open-ifc'
+              />
+            </Box>
+            {isNavPanelOpen && navigationMode === 'spatial-tree' &&
+              isNavigationPanelVisible &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                defaultExpandedTypes={defaultExpandedTypes}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                expandedTypes={expandedTypes}
+                setExpandedTypes={setExpandedTypes}
+                navigationMode={navigationMode}
+                setNavigationMode={setNavigationMode}
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
+            }
           </Box>
-          {isNavPanelOpen &&
-            isNavigationPanelVisible &&
-            <NavPanel
-              model={model}
-              element={rootElement}
-              defaultExpandedElements={defaultExpandedElements}
-              defaultExpandedTypes={defaultExpandedTypes}
-              expandedElements={expandedElements}
-              setExpandedElements={setExpandedElements}
-              expandedTypes={expandedTypes}
-              setExpandedTypes={setExpandedTypes}
-              navigationMode={navigationMode}
-              setNavigationMode={setNavigationMode}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              pathPrefix={
-                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-              }
-            />
-          }
         </Box>
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
