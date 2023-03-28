@@ -88,6 +88,7 @@ export default function Branches() {
               },
               '& .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: .5,
               },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
@@ -98,6 +99,7 @@ export default function Branches() {
               // TODO(oleg): connect to props
               '&:hover .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: 1,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
