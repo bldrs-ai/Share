@@ -26,6 +26,9 @@ import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import {TooltipIconButton} from '../Components/Buttons'
+import TreeIcon from '../assets/icons/Tree.svg'
+import ListIcon from '../assets/icons/List.svg'
 
 
 /**
@@ -93,6 +96,7 @@ export default function CadView({
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
+  const isNavTree = navigationMode === 'spatial-tree'
 
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
@@ -643,6 +647,45 @@ export default function CadView({
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
           }
+          <Box
+            sx={{
+              marginTop: '14px',
+            }}
+          >
+            <TooltipIconButton
+              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              onClick={
+                isNavTree ?
+                () => setNavigationMode('element-type') :
+                () => setNavigationMode('spatial-tree')
+              }
+              icon={<TreeIcon/>}
+              placement={'right'}
+              dataTestId='open-ifc'
+            />
+            <TooltipIconButton
+              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              onClick={
+                isNavTree ?
+                () => setNavigationMode('element-type') :
+                () => setNavigationMode('spatial-tree')
+              }
+              icon={<ListIcon/>}
+              placement={'right'}
+              dataTestId='open-ifc'
+            />
+            <TooltipIconButton
+              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
+              onClick={
+                isNavTree ?
+                () => setNavigationMode('element-type') :
+                () => setNavigationMode('spatial-tree')
+              }
+              icon={<ListIcon/>}
+              placement={'right'}
+              dataTestId='open-ifc'
+            />
+          </Box>
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
             <NavPanel

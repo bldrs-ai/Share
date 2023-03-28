@@ -4,13 +4,10 @@ import Box from '@mui/material/Box'
 import TreeView from '@mui/lab/TreeView'
 import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
-import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
-import TreeIcon from '../assets/icons/Tree.svg'
-import ListIcon from '../assets/icons/List.svg'
 
 
 /**
@@ -44,7 +41,6 @@ export default function NavPanel({
   // nodes besides hardcoding.
 
   const elementTypesMap = useStore((state) => state.elementTypesMap)
-
   const isNavTree = navigationMode === 'spatial-tree'
   return (
     <div style={{
@@ -74,23 +70,6 @@ export default function NavPanel({
             alignItems: 'flex-start',
           }}
         >
-          <Box
-            sx={{
-              padding: '4px',
-            }}
-          >
-            <TooltipIconButton
-              title={isNavTree ? 'Change to Element Type Navigation' : 'Change to Spatial Type Navigation' }
-              onClick={
-                isNavTree ?
-                () => setNavigationMode('element-type') :
-                () => setNavigationMode('spatial-tree')
-              }
-              icon={isNavTree ? <TreeIcon/> : <ListIcon/>}
-              placement={'right'}
-              dataTestId='open-ifc'
-            />
-          </Box>
           <TreeView
             aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
             defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
