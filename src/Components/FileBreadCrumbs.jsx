@@ -7,8 +7,6 @@ import {useWindowDimensions} from './Hooks'
 
 /**
  * @param {object} modelPath
- * @param {number} searchAndNavWidthPx
- * @param {number} searchAndNavMaxWidthPx
  * @return {object} React component
  */
 export default function FileBreadCrumbs({modelPath}) {
