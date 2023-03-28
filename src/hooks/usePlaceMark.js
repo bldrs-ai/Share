@@ -19,7 +19,6 @@ import {isDevMode} from '../utils/common'
 const placeMarkGroupMap = new Map()
 let renderCount = 0
 let prevSynchSidebar
-const tempPos = new Vector3()
 
 
 export const FEATURE_PREFIX = 'f'
@@ -117,7 +116,7 @@ export function usePlaceMark() {
           const markArr = getObjectParams(activePlaceMarkHash)
           debug().log('usePlaceMark#useEffect: active markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
-            point: tempPos.set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
           debug().log('usePlaceMark#useEffect: active svgGroup: ', svgGroup)
@@ -134,7 +133,7 @@ export function usePlaceMark() {
           const markArr = getObjectParams(hash)
           debug().log('usePlaceMark#useEffect: inactive markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
-            point: tempPos.set(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
+            point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
           debug().log('usePlaceMark#useEffect: inactive newSvgGroup: ', newSvgGroup)

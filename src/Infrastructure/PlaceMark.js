@@ -256,11 +256,11 @@ export default class PlaceMark extends EventDispatcher {
           _placeMark.quaternion.copy(_camera.quaternion)
           const dist = _placeMark.position.distanceTo(_camera.position)
           const sideScale = dist / PLACE_MARK_SCALE_FACTOR
-          const scale = tempScale.set(sideScale, sideScale, sideScale)
+          tempScale.set(sideScale, sideScale, sideScale)
           if (_placeMark.userData.isActive) {
-            scale.multiplyScalar(ACTIVE_PLACE_MARK_SCALE)
+            tempScale.multiplyScalar(ACTIVE_PLACE_MARK_SCALE)
           }
-          _placeMark.scale.copy(scale)
+          _placeMark.scale.copy(tempScale)
         })
 
         composer.render()
