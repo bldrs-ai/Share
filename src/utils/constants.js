@@ -12,7 +12,7 @@ export const PLACE_MARK_PREFIX = 'm'
 export const PLACE_MARK_DISTANCE = 1
 export const INACTIVE_PLACE_MARK_HEIGHT = 1
 export const ACTIVE_PLACE_MARK_SCALE = 1.6
-export const PLACE_MARK_SCALE_FACTOR = 80
+export const PLACE_MARK_SCALE_FACTOR = 60
 
 export const raycaster = new Raycaster()
 export const tempVec3 = new Vector3()

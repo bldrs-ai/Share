@@ -322,13 +322,23 @@ export function usePlaceMark() {
   return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive}
 }
 
+
 const setPlaceMarkStatus = (svgGroup, isActive) => {
   assertDefined(svgGroup, isActive)
   debug().log('usePlaceMark#setPlaceMarkStatus: svgGroup: ', svgGroup)
   debug().log('usePlaceMark#setPlaceMarkStatus: isActive: ', isActive)
+  resetPlaceMarksActive(false)
   svgGroup.userData.isActive = isActive
   resetPlaceMarkColors()
 }
+
+
+const resetPlaceMarksActive = (isActive) => {
+  placeMarkGroupMap.forEach((svgGroup) => {
+    svgGroup.userData.isActive = isActive
+  })
+}
+
 
 const resetPlaceMarkColors = () => {
   debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
