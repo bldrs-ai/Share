@@ -335,15 +335,10 @@ const resetPlaceMarkColors = () => {
   placeMarkGroupMap.forEach((svgGroup) => {
     debug().log('usePlaceMark#resetPlaceMarkColors: svgGroup: ', svgGroup)
     let color = 'grey'
-    const scale = tempVec3.clone().set(1, 1, 1)
     if (svgGroup.userData.isActive) {
       color = 'red'
-      // eslint-disable-next-line no-magic-numbers
-      scale.multiplyScalar(1.6)
     }
     debug().log('usePlaceMark#resetPlaceMarkColors: color: ', color)
     setGroupColor(svgGroup, color)
-    svgGroup.scale.copy(scale.clone())
-    svgGroup.userData.isActive = false
   })
 }

@@ -4,7 +4,12 @@ import {
   Vector2,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import {INACTIVE_PLACE_MARK_HEIGHT, PLACE_MARK_DISTANCE} from '../utils/constants'
+import {
+  ACTIVE_PLACE_MARK_SCALE,
+  INACTIVE_PLACE_MARK_HEIGHT,
+  PLACE_MARK_DISTANCE,
+  PLACE_MARK_SCALE_FACTOR, tempVec3,
+} from '../utils/constants'
 import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
@@ -158,29 +163,29 @@ export default class PlaceMark extends EventDispatcher {
       debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       return new Promise((resolve, reject) => {
         getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
-          const svgGroup = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
-          svgGroup.position.copy(point)
-          _scene.add(svgGroup)
-          _placeMarks.push(svgGroup)
+          const _placeMark = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
+          _placeMark.position.copy(point)
+          _scene.add(_placeMark)
+          _placeMarks.push(_placeMark)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
           const placeMarkMeshSet = getPlaceMarkMeshSet()
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
           debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
           outlineEffect.setSelection(placeMarkMeshSet)
-          resolve(svgGroup)
+          resolve(_placeMark)
         })
       })
     }
 
 
-    this.disposePlaceMark = (svgGroup) => {
+    this.disposePlaceMark = (_placeMark) => {
       debug().log('PlaceMark#disposePlaceMark: before place marks count: ', _placeMarks.length)
-      const index = _placeMarks.indexOf(svgGroup)
+      const index = _placeMarks.indexOf(_placeMark)
 
       if (index > -1) {
         _placeMarks.splice(index, 1)
-        disposeGroup(svgGroup)
-        _scene.remove(svgGroup)
+        disposeGroup(_placeMark)
+        _scene.remove(_placeMark)
       }
 
       debug().log('PlaceMark#disposePlaceMark: after place marks count: ', _placeMarks.length)
@@ -241,11 +246,21 @@ export default class PlaceMark extends EventDispatcher {
         if (!context) {
           return
         }
+
         _placeMarks.forEach((_placeMark) => {
           _placeMark.quaternion.copy(_camera.quaternion)
+          const dist = _placeMark.position.clone().distanceTo(_camera.position.clone())
+          const sideScale = dist / PLACE_MARK_SCALE_FACTOR
+          const scale = tempVec3.clone().set(sideScale, sideScale, sideScale)
+          if (_placeMark.userData.isActive) {
+            scale.multiplyScalar(ACTIVE_PLACE_MARK_SCALE)
+          }
+          _placeMark.scale.copy(scale.clone())
         })
+
         composer.render()
       }
+
       return newUpdateFn.bind(context.renderer)
     }
 
