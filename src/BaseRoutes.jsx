@@ -64,8 +64,6 @@ export default function BaseRoutes({testElt = null}) {
         if (err.error !== 'login_required') {
           throw err
         }
-
-        console.log(err.error)
       }).finally(() => {
         setIsAuthCompleted(true)
       })

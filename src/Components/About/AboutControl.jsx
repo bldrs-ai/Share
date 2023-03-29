@@ -15,11 +15,10 @@ import {Helmet} from 'react-helmet-async'
 /**
  * Button to toggle About panel on and off
  *
- * @return {React.ReactElement}
+ * @return {React.Component}
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
-
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
     name: 'isFirstTime',
@@ -28,6 +27,7 @@ export default function AboutControl() {
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
   }
+
   const setIsDialogDisplayedForDialog = () => {
     setIsDialogDisplayed(false)
     setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
@@ -64,13 +64,13 @@ export default function AboutControl() {
  * @param {Function} setIsDialogDisplayed
  * @return {React.ReactElement} React component
  */
-function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6'sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
+          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}

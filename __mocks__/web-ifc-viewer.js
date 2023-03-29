@@ -1,10 +1,12 @@
 jest.mock('three')
 jest.mock('../src/Infrastructure/IfcHighlighter')
+jest.mock('../src/Infrastructure/IfcIsolator')
+jest.mock('../src/Infrastructure/CustomPostProcessor')
 const ifcjsMock = jest.createMockFromModule('web-ifc-viewer')
 
 
 // Not sure why this is required, but otherwise these internal fields
-// are not present in the instantiated IfcViewerAPI.
+// are not present in the instantiated IfcViewerAPIExtended.
 const loadedModel = {
   ifcManager: {
     getSpatialStructure: jest.fn(),
@@ -14,6 +16,9 @@ const loadedModel = {
   geometry: {
     boundingBox: {
       getCenter: jest.fn(),
+    },
+    attributes: {
+      expressID: 123,
     },
   },
 }
@@ -46,7 +51,6 @@ const impl = {
         },
       },
     },
-    loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
     setWasmPath: jest.fn(),
     selector: {
       unpickIfcItems: jest.fn(),
@@ -87,13 +91,16 @@ const impl = {
     getRenderer: jest.fn(),
     getScene: jest.fn(),
     getCamera: jest.fn(),
+    getClippingPlanes: jest.fn(() => {
+      return []
+    }),
   },
+  loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
   setSelection: jest.fn(),
   pickIfcItemsByID: jest.fn(),
-  loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)
@@ -102,7 +109,7 @@ constructorMock.mockImplementation(() => impl)
 /**
  * @return {object} The single mock instance of IfcViewerAPI.
  */
-function __getIfcViewerAPIMockSingleton() {
+function __getIfcViewerAPIExtendedMockSingleton() {
   return impl
 }
 
@@ -110,5 +117,5 @@ function __getIfcViewerAPIMockSingleton() {
 export {
   ifcjsMock as default,
   constructorMock as IfcViewerAPI,
-  __getIfcViewerAPIMockSingleton,
+  __getIfcViewerAPIExtendedMockSingleton as __getIfcViewerAPIExtendedMockSingleton,
 }
