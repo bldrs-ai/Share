@@ -210,7 +210,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                 fontSize: '.8em',
               }}
             >
-              If you are project administrator
+              To manage project access,
               <br/>
               click&nbsp;
               <a
@@ -220,7 +220,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               >
                 here
               </a>
-              &nbsp;to manage project access
+              &nbsp; if you are a project owner.
             </Box>
           }
           <Box
