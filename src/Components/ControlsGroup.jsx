@@ -39,7 +39,7 @@ export default function ControlsGroup({modelPath}) {
             selected={true}
             icon={<BranchIcon/>}
             placement={'right'}
-            dataTestId='open-ifc'
+            dataTestId='project-version'
           />
         </Box>
       }
@@ -54,7 +54,7 @@ export default function ControlsGroup({modelPath}) {
           selected={true}
           icon={<TreeIcon/>}
           placement={'right'}
-          dataTestId='open-ifc'
+          dataTestId='spatial-elements'
         />
       </Box>
     </Box>
