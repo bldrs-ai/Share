@@ -37,13 +37,13 @@ export default function HideToggleButton({elementId}) {
     marginTop: '2px',
     height: '20px',
     opacity: 0.3,
-    visibility: 'visible',
+    visibility: 'hidden',
   }
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
     if (isIsolated) {
       iconStyle.opacity = 1
-      iconStyle.width = '28px'
+      iconStyle.width = '27px'
     }
   }
 
