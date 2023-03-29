@@ -61,7 +61,6 @@ describe('IssueControl', () => {
         <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
           <Notes/>
         </ShareMock>)
-
     const expectedText = 'Local issue - some text is here to test - Id:1257156364'
     expect(await findByText(expectedText)).toBeVisible()
   })

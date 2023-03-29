@@ -12,7 +12,7 @@ import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
-import {closeIssue} from '../../utils/GitHub'
+import {closeIssue, deleteComment} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
 import {
   CAMERA_PREFIX,
@@ -27,6 +27,9 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
+import debug from '../../utils/debug'
 
 
 /**
@@ -56,7 +59,7 @@ export default function NoteCard({
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
-  synchedNote = true,
+  synched = true,
 }) {
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
@@ -66,11 +69,12 @@ export default function NoteCard({
   const cameraControls = useStore((state) => state.cameraControls)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const deletedNotes = useStore((state) => state.deletedNotes)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
+  const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
-  const setDeletedNotes = useStore((state) => state.setDeletedNotes)
-  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const textOverflow = body.length > bodyWidthChars
@@ -84,7 +88,7 @@ export default function NoteCard({
             CAMERA_PREFIX)
         return encoded && parseHashParams(encoded)
       })
-  const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
+  const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const isMobile = useIsMobile()
 
 
@@ -93,6 +97,7 @@ export default function NoteCard({
       setExpandImage(false)
     }
   }, [isMobile])
+
 
   useEffect(() => {
     if (selected && firstCamera) {
@@ -147,21 +152,42 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function deleteNote(repository, accessToken, noteNumberToDelete) {
-    if (deletedNotes !== null) {
-      const localDeletedNotes = [...deletedNotes, noteNumber]
-      setDeletedNotes(localDeletedNotes)
-    } else {
-      setDeletedNotes([noteNumber])
-    }
-
-    const filterDeletedNote = notes.filter((note) => note.number !== noteNumberToDelete)
-    setNotes(filterDeletedNote)
+    const newNotes = notes.map((note) => ({
+      ...note,
+      synched: (note.number !== noteNumberToDelete) && note.synched,
+    }))
+    setNotes(newNotes)
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
+    setSelectedNoteId(null)
+    toggleSynchSidebar()
     return closeResponse
   }
 
+
+  /**
+   * Remove comment
+   *
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} commentId
+   * @return {object} return github return object
+   */
+  async function removeComment(repository, accessToken, commentId) {
+    const newComments = comments.map((comment) => ({
+      ...comment,
+      synched: (comment.id !== commentId) && comment.synched,
+    }))
+    setComments(newComments)
+    const deleteRes = await deleteComment(repository, commentId, accessToken)
+    debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
+    toggleSynchSidebar()
+  }
+
+
   const dateParts = date.split('T')
   const theme = useTheme()
+
+
   return (
     <Paper
       elevation={1}
@@ -200,13 +226,13 @@ export default function NoteCard({
       >
         <ReactMarkdown>{body}</ReactMarkdown>
         {textOverflow &&
-         <ShowMore
-           expandText={expandText}
-           onClick={(event) => {
-             event.preventDefault()
-             setExpandText(!expandText)
-           }}
-         />
+          <ShowMore
+            expandText={expandText}
+            onClick={(event) => {
+              event.preventDefault()
+              setExpandText(!expandText)
+            }}
+          />
         }
       </CardContent>
       {(embeddedCameraParams || numberOfComments > 0) &&
@@ -221,8 +247,9 @@ export default function NoteCard({
           onClickCamera={showCameraView}
           onClickShare={shareIssue}
           deleteNote={deleteNote}
+          removeComment={removeComment}
           isComment={isComment}
-          synchedNote={synchedNote}
+          synched={synched}
         />
       }
     </Paper>
@@ -232,6 +259,8 @@ export default function NoteCard({
 
 const ShowMore = ({onClick, expandText}) => {
   const theme = useTheme()
+
+
   return (
     <Box
       sx={{
@@ -263,15 +292,24 @@ const CardFooter = ({
   embeddedCameras,
   selected,
   deleteNote,
+  removeComment,
   isComment,
-  synchedNote}) => {
+  synched}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const repository = useStore((state) => state.repository)
-  const toggleSynchNotes = useStore((state) => state.toggleSynchNotes)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const accessToken = useStore((state) => state.accessToken)
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const isPlaceMarkEnabled = useStore((state) => state.isPlaceMarkEnabled)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
+  const {togglePlaceMarkActive} = usePlaceMark()
+  debug().log('NoteCard#CardFooter: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
+  debug().log('NoteCard#CardFooter: user: ', user)
+  debug().log('NoteCard#CardFooter: username: ', username)
+
 
   return (
     <Box
@@ -312,6 +350,26 @@ const CardFooter = ({
             icon={<ShareIcon/>}
           />
         }
+        {
+          !isComment && selected && synched && isPlaceMarkEnabled &&
+          user && user.nickname === username &&
+          <Box sx={{
+            '& svg': {
+              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
+            },
+          }}
+          >
+            <TooltipIconButton
+              title='Place Mark'
+              size='small'
+              placement='bottom'
+              onClick={() => {
+                togglePlaceMarkActive(id)
+              }}
+              icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+            />
+          </Box>
+        }
       </Box>
       <Box
         sx={{
@@ -322,24 +380,34 @@ const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {!isComment && synchedNote &&
-        user && user.nickname === username &&
+        {!isComment && synched && user && user.nickname === username &&
           <TooltipIconButton
-            title='Delete'
+            title='Delete note'
             size='small'
             placement='bottom'
-            onClick={() => {
-              deleteNote(repository, accessToken, noteNumber)
+            onClick={async () => {
+              await deleteNote(repository, accessToken, noteNumber)
             }}
             icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
           />
         }
-        {!synchedNote &&
+        {isComment && synched && user && user.nickname === username &&
+          <TooltipIconButton
+            title='Delete comment'
+            size='small'
+            placement='bottom'
+            onClick={async () => {
+              await removeComment(repository, accessToken, id)
+            }}
+            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        }
+        {!synched &&
           <TooltipIconButton
             title='Synch to GitHub'
             size='small'
             placement='bottom'
-            onClick={() => toggleSynchNotes()}
+            onClick={() => toggleSynchSidebar()}
             icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
           />
         }
