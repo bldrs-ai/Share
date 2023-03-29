@@ -63,7 +63,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       debug().log('Setting default repo pablo-mayrgundter/Share')
       setRepository('pablo-mayrgundter', 'Share')
     } else {
-      console.warn('No repository set for project!', pathPrefix)
+      debug().warn('No repository set for project!, ', pathPrefix)
     }
   }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
 
