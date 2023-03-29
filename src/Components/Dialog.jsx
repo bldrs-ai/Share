@@ -40,7 +40,7 @@ export default function Dialog({
       onClose={close}
       sx={{
         textAlign: 'center',
-        zIndex: 1000,
+        zIndex: 10000,
       }}
       PaperProps={{variant: 'control'}}
     >
