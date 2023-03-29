@@ -21,7 +21,8 @@ import {handleBeforeUnload} from '../utils/event'
 export default function Branches() {
   const navigate = useNavigate()
   const repository = useStore((state) => state.repository)
-  const [branches, setBranches] = useState([])
+  const branches = useStore((state) => state.branches)
+  const setBranches = useStore((state) => state.setBranches)
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
   const modelPath = useStore((state) => state.modelPath)
@@ -58,7 +59,7 @@ export default function Branches() {
     if (branches.length === 0 && modelPath.repo !== undefined) {
       fetchBranches()
     }
-  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
+  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo, setBranches])
 
 
   const handleSelect = (event) => {
