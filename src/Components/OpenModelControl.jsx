@@ -190,31 +190,33 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               padding: '12px',
             }}
           >
-            Please
+            Please&nbsp;
             <Box
               component="span"
               onClick={onClick}
               sx={{
                 // borderBottom: `1px solid ${theme.palette.secondary.main}`,
-                color: theme.palette.secondary.main,
+                color: theme.palette.secondary.contrastText,
                 cursor: 'pointer',
                 textDecoration: 'underline',
               }}
-            >&nbsp;login&nbsp;
+            >login
             </Box>
-            to get access to your files on GitHub
+            &nbsp;to get access to your files on GitHub
           </Typography>
           }
           {isAuthenticated &&
+          selectedOrgName !== undefined &&
+          selectedRepoName !== undefined &&
             <Box
               sx={{
                 marginTop: '1em',
                 fontSize: '.8em',
               }}
             >
-              Click
+              Click&nbsp;
               <a href={`https://github.com/${selectedOrgName}}/${selectedRepoName}/settings/access`}>here</a>
-              to Manage project access
+              &nbsp;to Manage project access
             </Box>
           }
           <Box
