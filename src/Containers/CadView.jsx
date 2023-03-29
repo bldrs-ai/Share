@@ -82,7 +82,6 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -92,6 +91,8 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const isTreeVisible = useStore((state) => state.isTreeVisible)
+  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
 
 
   // Place Mark
@@ -570,7 +571,9 @@ export default function CadView({
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 60
-  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const controlsGroupWidthPx = 70
+  const searchWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const navWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx) - controlsGroupWidthPx
   const searchAndNavMaxWidthPx = 300
   return (
     <Box
@@ -615,7 +618,7 @@ export default function CadView({
           'maxHeight': '95%',
           'width': '340px',
           '@media (max-width: 900px)': {
-            width: `${searchAndNavWidthPx}px`,
+            width: `${searchWidthPx}px`,
             maxWidth: `${searchAndNavMaxWidthPx}px`,
           },
         }}
@@ -631,18 +634,22 @@ export default function CadView({
               justifyContent: 'flex-start',
             }}
           >
-            <ControlsGroup/>
+            <ControlsGroup modelPath={modelPath}/>
             <Box
               sx={{
-                width: '280px',
-                marginLeft: '6px',
+                'width': '280px',
+                'marginLeft': '6px',
+                '@media (max-width: 900px)': {
+                  width: `${navWidthPx}px`,
+                  maxWidth: `${searchAndNavMaxWidthPx}px`,
+                },
               }}
             >
               {
-                modelPath.repo !== undefined &&
+                modelPath.repo !== undefined && isBranchControlVisible &&
                 <BranchesControl location={location}/>
               }
-              {isNavPanelOpen &&
+              {isNavPanelOpen && isTreeVisible &&
                 isNavigationPanelVisible &&
                 <NavPanel
                   model={model}

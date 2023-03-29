@@ -1,7 +1,8 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import {TooltipIconButton} from './Buttons'
-import FilePathIcon from '../assets/icons/FilePath.svg'
+import {useIsMobile} from './Hooks'
+import useStore from '../store/useStore'
 import BranchIcon from '../assets/icons/Branch.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
 
@@ -12,7 +13,13 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function ControlsGroup() {
+export default function ControlsGroup({modelPath}) {
+  const isTreeVisible = useStore((state) => state.isTreeVisible)
+  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
+  const toggleIsTreeVisible = useStore((state) => state.toggleIsTreeVisible)
+  const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
+  const isMobile = useIsMobile()
+
   return (
     <Box
       sx={{
@@ -24,40 +31,31 @@ export default function ControlsGroup() {
         marginLeft: '5px',
       }}
     >
+      {modelPath.repo !== undefined &&
+        <Box
+          sx={{
+            paddingBottom: '13px',
+          }}
+        >
+          <TooltipIconButton
+            title={'Project Version '}
+            onClick={toggleIsBranchControlVisible}
+            selected={!isMobile && isBranchControlVisible}
+            icon={<BranchIcon/>}
+            placement={'right'}
+            dataTestId='open-ifc'
+          />
+        </Box>
+      }
       <Box
         sx={{
-          paddingBottom: '10px',
+          paddingBottom: '13px',
         }}
       >
         <TooltipIconButton
-          title={'GitHub Model Path'}
-          onClick={() => console.log('show')}
-          icon={<FilePathIcon/>}
-          placement={'right'}
-          dataTestId='open-ifc'
-        />
-      </Box>
-      <Box
-        sx={{
-          paddingBottom: '10px',
-        }}
-      >
-        <TooltipIconButton
-          title={'Project Version '}
-          onClick={() => console.log('show')}
-          icon={<BranchIcon/>}
-          placement={'right'}
-          dataTestId='open-ifc'
-        />
-      </Box>
-      <Box
-        sx={{
-          paddingBottom: '10px',
-        }}
-      >
-        <TooltipIconButton
-          title={'Tree'}
-          onClick={() => console.log('show')}
+          title={'Hierarchy of spatial elements'}
+          onClick={toggleIsTreeVisible}
+          selected={!isMobile && isTreeVisible}
           icon={<TreeIcon/>}
           placement={'right'}
           dataTestId='open-ifc'
