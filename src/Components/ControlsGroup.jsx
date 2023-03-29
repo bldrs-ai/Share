@@ -1,7 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import {TooltipIconButton} from './Buttons'
-import {useIsMobile} from './Hooks'
 import useStore from '../store/useStore'
 import BranchIcon from '../assets/icons/Branch.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
@@ -14,11 +13,8 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @return {React.Component}
  */
 export default function ControlsGroup({modelPath}) {
-  const isTreeVisible = useStore((state) => state.isTreeVisible)
-  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   const toggleIsTreeVisible = useStore((state) => state.toggleIsTreeVisible)
   const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
-  const isMobile = useIsMobile()
 
   return (
     <Box
@@ -40,7 +36,7 @@ export default function ControlsGroup({modelPath}) {
           <TooltipIconButton
             title={'Project Version '}
             onClick={toggleIsBranchControlVisible}
-            selected={!isMobile && isBranchControlVisible}
+            selected={true}
             icon={<BranchIcon/>}
             placement={'right'}
             dataTestId='open-ifc'
@@ -55,7 +51,7 @@ export default function ControlsGroup({modelPath}) {
         <TooltipIconButton
           title={'Hierarchy of spatial elements'}
           onClick={toggleIsTreeVisible}
-          selected={!isMobile && isTreeVisible}
+          selected={true}
           icon={<TreeIcon/>}
           placement={'right'}
           dataTestId='open-ifc'
