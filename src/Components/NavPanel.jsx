@@ -64,7 +64,7 @@ export default function NavPanel({
         }}
         key='tree'
         sx={{
-          'padding': '14px 0',
+          'padding': '13px 0',
           'maxWidth': '400px',
           'overflowY': 'auto',
           'overflowX': 'hidden',

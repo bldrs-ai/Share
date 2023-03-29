@@ -76,7 +76,7 @@ export default function Branches() {
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
-            marginTop: '34px',
+            marginTop: '14px',
             opacity: .8,
           }}
         >
@@ -85,9 +85,11 @@ export default function Branches() {
               'width': '100%',
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
+                padding: '13px 0px 13px 16px',
               },
               '& .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: .5,
               },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,
@@ -98,6 +100,7 @@ export default function Branches() {
               // TODO(oleg): connect to props
               '&:hover .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: 1,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
                 borderColor: theme.palette.primary.main,

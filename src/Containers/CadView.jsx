@@ -12,6 +12,7 @@ import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import OperationsGroup from '../Components/OperationsGroup'
+import ControlsGroup from '../Components/ControlsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -612,7 +613,7 @@ export default function CadView({
           'justifyContent': 'flex-start',
           'alignItems': 'flex-start',
           'maxHeight': '95%',
-          'width': '275px',
+          'width': '340px',
           '@media (max-width: 900px)': {
             width: `${searchAndNavWidthPx}px`,
             maxWidth: `${searchAndNavMaxWidthPx}px`,
@@ -623,24 +624,40 @@ export default function CadView({
             <SearchBar
               fileOpen={loadLocalFile}
             />}
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
-          }
-          {isNavPanelOpen &&
-            isNavigationPanelVisible &&
-            <NavPanel
-              model={model}
-              element={rootElement}
-              defaultExpandedElements={defaultExpandedElements}
-              expandedElements={expandedElements}
-              setExpandedElements={setExpandedElements}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              pathPrefix={
-                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'flex-start',
+            }}
+          >
+            <ControlsGroup/>
+            <Box
+              sx={{
+                width: '280px',
+                marginLeft: '6px',
+              }}
+            >
+              {
+                modelPath.repo !== undefined &&
+                <BranchesControl location={location}/>
               }
-            />
-          }
+              {isNavPanelOpen &&
+                isNavigationPanelVisible &&
+                <NavPanel
+                  model={model}
+                  element={rootElement}
+                  defaultExpandedElements={defaultExpandedElements}
+                  expandedElements={expandedElements}
+                  setExpandedElements={setExpandedElements}
+                  selectWithShiftClickEvents={selectWithShiftClickEvents}
+                  pathPrefix={
+                    pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                  }
+                />
+              }
+            </Box>
+          </Box>
         </Box>
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>

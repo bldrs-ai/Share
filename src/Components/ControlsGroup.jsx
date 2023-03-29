@@ -1,8 +1,9 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import {TooltipIconButton} from './Buttons'
-import FilePathIcon from '../assets/icons/Clear.svg'
-import BranchIcon from '../assets/icons/BranchIcon.svg'
+import FilePathIcon from '../assets/icons/FilePath.svg'
+import BranchIcon from '../assets/icons/Branch.svg'
+import TreeIcon from '../assets/icons/Tree.svg'
 
 
 /**
@@ -17,25 +18,51 @@ export default function ControlsGroup() {
       sx={{
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         opacity: .5,
-        height: '260px',
+        marginTop: '14px',
+        marginLeft: '5px',
       }}
     >
-      <TooltipIconButton
-        title={'GitHub Model Path'}
-        onClick={() => console.log('show')}
-        icon={<FilePathIcon/>}
-        placement={'right'}
-        dataTestId='open-ifc'
-      />
-      <TooltipIconButton
-        title={'Project Version '}
-        onClick={() => console.log('show')}
-        icon={<BranchIcon/>}
-        placement={'right'}
-        dataTestId='open-ifc'
-      />
+      <Box
+        sx={{
+          paddingBottom: '10px',
+        }}
+      >
+        <TooltipIconButton
+          title={'GitHub Model Path'}
+          onClick={() => console.log('show')}
+          icon={<FilePathIcon/>}
+          placement={'right'}
+          dataTestId='open-ifc'
+        />
+      </Box>
+      <Box
+        sx={{
+          paddingBottom: '10px',
+        }}
+      >
+        <TooltipIconButton
+          title={'Project Version '}
+          onClick={() => console.log('show')}
+          icon={<BranchIcon/>}
+          placement={'right'}
+          dataTestId='open-ifc'
+        />
+      </Box>
+      <Box
+        sx={{
+          paddingBottom: '10px',
+        }}
+      >
+        <TooltipIconButton
+          title={'Tree'}
+          onClick={() => console.log('show')}
+          icon={<TreeIcon/>}
+          placement={'right'}
+          dataTestId='open-ifc'
+        />
+      </Box>
     </Box>
   )
 }
