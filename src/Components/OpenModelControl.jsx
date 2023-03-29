@@ -100,10 +100,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
-  // eslint-disable-next-line no-console
-  console.log('orgName', orgName)
-  // eslint-disable-next-line no-console
-  console.log('repoName', repoName)
 
   const openFile = () => {
     fileOpen()
