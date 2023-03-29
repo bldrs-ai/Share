@@ -413,7 +413,6 @@ export default function CadView({
       const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
-        console.log(types)
       }
       Privacy.recordEvent('search', {
         search_term: query,
