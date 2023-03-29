@@ -214,8 +214,14 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                 fontSize: '.8em',
               }}
             >
-              Click&nbsp;
-              <a href={`https://github.com/${orgName}}/${repoName}/settings/access`}>here</a>
+              If you are project administrator click&nbsp;
+              <a
+                href={`https://github.com/${orgName}/${repoName}/settings/access`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                here
+              </a>
               &nbsp;to Manage project access
             </Box>
           }
