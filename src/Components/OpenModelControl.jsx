@@ -100,7 +100,10 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
-
+  // eslint-disable-next-line no-console
+  console.log('orgName', orgName)
+  // eslint-disable-next-line no-console
+  console.log('repoName', repoName)
 
   const openFile = () => {
     fileOpen()
@@ -192,8 +195,10 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               component="span"
               onClick={onClick}
               sx={{
-                borderBottom: `1px solid ${theme.palette.secondary.main}`,
+                // borderBottom: `1px solid ${theme.palette.secondary.main}`,
                 color: theme.palette.secondary.main,
+                cursor: 'pointer',
+                textDecoration: 'underline',
               }}
             >&nbsp;login&nbsp;
             </Box>
