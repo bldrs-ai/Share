@@ -220,7 +220,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               >
                 here
               </a>
-              &nbsp; if you are a project owner.
+              &nbsp;if you are a project owner.
             </Box>
           }
           <Box
