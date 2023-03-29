@@ -79,103 +79,106 @@ export default function NavPanel({
         elevation={0}
         variant='control'
         sx={{
-          marginTop: '14px',
-          display: 'flex',
-          opacity: .8,
-          justifyContent: 'flex-end',
-          alignItems: 'center',
-        }}
-      >
-        <span style={{
-          flex: 'auto',
-          marginLeft: '14px',
-        }}
-        >Navigation
-        </span>
-        <StyledToggleButtonGroup
-          exclusive
-          value={navigationMode}
-          size="small"
-          onChange={onTreeViewChanged}
-        >
-          <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
-            <Tooltip
-              title={'Spatial Structure'}
-              describeChild
-              placement={'bottom-end'}
-              PopperProps={{style: {zIndex: 0}}}
-            >
-              <AccountTreeIcon/>
-            </Tooltip>
-          </ToggleButton>
-          <ToggleButton value='element-types' aria-label='element-types'>
-            <Tooltip
-              title={'Element Types'}
-              describeChild
-              placement={'bottom-end'}
-              PopperProps={{style: {zIndex: 0}}}
-            >
-              <ListIcon/>
-            </Tooltip>
-          </ToggleButton>
-        </StyledToggleButtonGroup>
-      </Paper>
-      <Paper
-        elevation={0}
-        variant='control'
-        sx={{
-          'justifyContent': 'space-around',
-          'opacity': .8,
-          'alignItems': 'center',
-          'overflow': 'auto',
           'marginTop': '14px',
+          'overflow': 'auto',
+          'width': '100%',
+          'opacity': .8,
+          'justifyContent': 'space-around',
+          'alignItems': 'center',
           'maxHeight': '400px',
+          '&:focus #togglegrp, &:hover #togglegrp': {
+            visibility: 'visible !important',
+          },
+          '&:focus svg, &:hover svg': {
+            visibility: 'visible !important',
+          },
           '@media (max-width: 900px)': {
             maxHeight: '150px',
             top: '86px',
           },
         }}
       >
-        <TreeView
-          aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
-          defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
-          defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
-          defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
-          expanded={isNavTree ? expandedElements : expandedTypes}
-          selected={selectedElements}
-          onNodeToggle={(event, nodeIds) => {
-            if (isNavTree) {
-              setExpandedElements(nodeIds)
-            } else {
-              setExpandedTypes(nodeIds)
-            }
-          }}
-          key='tree'
-          sx={{
-            'padding': '14px 0',
-            'maxWidth': '400px',
-            'overflowY': 'auto',
-            'overflowX': 'hidden',
-            'flexGrow': 1,
-            '&:focus svg, &:hover svg': {
-              visibility: 'visible !important',
-            },
-          }}
-        >
-          {isNavTree ?
-          <NavTree
-            model={model}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-            element={element}
-            pathPrefix={pathPrefix}
-          /> :
-          <TypesNavTree
-            model={model}
-            types={elementTypesMap}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-            pathPrefix={pathPrefix}
-          />}
-        </TreeView>
+        <div>
+          <StyledToggleButtonGroup
+            exclusive
+            id={'togglegrp'}
+            value={navigationMode}
+            size="small"
+            sx={{
+              'margin-left': '16px',
+              'margin-top': '8px',
+              'visibility': 'hidden',
+
+              '& button': {
+                height: '30px',
+                width: '30px',
+              },
+              '& svg': {
+                height: '20px',
+                width: '20px',
+              },
+            }}
+            onChange={onTreeViewChanged}
+          >
+            <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
+              <Tooltip
+                title={'Spatial Structure'}
+                describeChild
+                placement={'bottom-end'}
+                PopperProps={{style: {zIndex: 0}}}
+              >
+                <AccountTreeIcon/>
+              </Tooltip>
+            </ToggleButton>
+            <ToggleButton value='element-types' aria-label='element-types'>
+              <Tooltip
+                title={'Element Types'}
+                describeChild
+                placement={'bottom-end'}
+                PopperProps={{style: {zIndex: 0}}}
+              >
+                <ListIcon/>
+              </Tooltip>
+            </ToggleButton>
+          </StyledToggleButtonGroup>
+          <TreeView
+            aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
+            defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
+            defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
+            defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
+            expanded={isNavTree ? expandedElements : expandedTypes}
+            selected={selectedElements}
+            onNodeToggle={(event, nodeIds) => {
+              if (isNavTree) {
+                setExpandedElements(nodeIds)
+              } else {
+                setExpandedTypes(nodeIds)
+              }
+            }}
+            key='tree'
+            sx={{
+              padding: '7px 0 14px 0',
+              maxWidth: '400px',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              flexGrow: 1,
+            }}
+          >
+            {isNavTree ?
+            <NavTree
+              model={model}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
+              element={element}
+              pathPrefix={pathPrefix}
+            /> :
+            <TypesNavTree
+              model={model}
+              types={elementTypesMap}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
+              pathPrefix={pathPrefix}
+            />}
+          </TreeView>
+        </div>
       </Paper>
     </div>
   )
