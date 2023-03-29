@@ -42,7 +42,10 @@ export default function OpenModelControl({fileOpen}) {
       setOrgNamesArray(orgNames)
       return orgs
     }
-    fetchOrganizations()
+
+    if (accessToken) {
+      fetchOrganizations()
+    }
   }, [accessToken, user])
 
 

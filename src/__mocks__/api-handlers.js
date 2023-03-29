@@ -2,15 +2,16 @@ import {rest} from 'msw'
 import {
   MOCK_COMMENTS,
   MOCK_ISSUES,
-  MOCK_ORGANIZATION,
+  MOCK_ORGANIZATIONS,
   MOCK_REPOSITORY,
   MOCK_FILES,
 } from '../utils/GitHub'
 
 
 const httpOk = 200
-const httpNotFound = 404
 const httpCreated = 201
+const httpAuthorizationRequired = 401
+const httpNotFound = 404
 
 export const handlers = [
   rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
@@ -175,11 +176,21 @@ export const handlers = [
   }),
 
   rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
+    const authHeader = req.headers.get('authorization')
+
+    if (!authHeader) {
+      return res(
+          ctx.status(httpAuthorizationRequired),
+          ctx.json({
+            message: 'Requires authentication',
+            documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
+          }),
+      )
+    }
+
     return res(
         ctx.status(httpOk),
-        ctx.json({
-          data: [MOCK_ORGANIZATION],
-        }),
+        ctx.json(MOCK_ORGANIZATIONS.data),
     )
   }),
 
