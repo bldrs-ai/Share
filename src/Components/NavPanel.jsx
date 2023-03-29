@@ -105,8 +105,8 @@ export default function NavPanel({
             value={navigationMode}
             size="small"
             sx={{
-              'margin-left': '16px',
-              'margin-top': '8px',
+              'marginLeft': '16px',
+              'marginTop': '8px',
               'visibility': 'hidden',
 
               '& button': {
