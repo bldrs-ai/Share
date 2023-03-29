@@ -6,7 +6,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import useStore from '../store/useStore'
-import HideIcon from './HideIcon'
+import HideToggleButton from './HideToggleButton'
 
 
 const NavTreePropTypes = {
@@ -117,7 +117,7 @@ export default function NavTree({
           </Typography>
           {hasHideIcon &&
             <div style={{display: 'contents'}}>
-              <HideIcon elementId={element.expressID}/>
+              <HideToggleButton elementId={element.expressID}/>
             </div>
           }
         </div>

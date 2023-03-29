@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r654",
+  "version": "1.0.0-r708",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -34,9 +34,6 @@
     "@emotion/react": "^11.10.0",
     "@emotion/styled": "^11.10.0",
     "@iconscout/react-unicons": "^2.0.0",
-    "@fortawesome/fontawesome-svg-core": "^6.3.0",
-    "@fortawesome/free-solid-svg-icons": "^6.3.0",
-    "@fortawesome/react-fontawesome": "^0.2.0",
     "@mui/icons-material": "^5.11.9",
     "@mui/lab": "^5.0.0-alpha.95",
     "@mui/material": "^5.9.2",

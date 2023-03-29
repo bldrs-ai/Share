@@ -1,16 +1,16 @@
 import React from 'react'
-import {FontAwesomeIcon} from '@fortawesome/react-fontawesome'
-import {faEye, faEyeSlash, faGlasses} from '@fortawesome/free-solid-svg-icons'
 import useStore from '../store/useStore'
 import IfcIsolator from '../Infrastructure/IfcIsolator'
-
+import VisibilityIcon from '@mui/icons-material/Visibility'
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+import GlassesIcon from '../assets/icons/Glasses.svg'
 
 /**
  * @param {IfcIsolator} The IFC isoaltor
  * @param {number} IFC element id
  * @return {object} React component
  */
-export default function HideIcon({elementId}) {
+export default function HideToggleButton({elementId}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
@@ -34,17 +34,24 @@ export default function HideIcon({elementId}) {
 
   const iconStyle = {
     float: 'right',
-    margin: '4px',
+    marginTop: '2px',
+    height: '20px',
     opacity: 0.3,
-    visibility: 'hidden',
+    visibility: 'visible',
   }
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
     if (isIsolated) {
       iconStyle.opacity = 1
+      iconStyle.width = '28px'
     }
   }
 
-  const icon = isIsolated ? faGlasses : (!isHidden ? faEye : faEyeSlash)
-  return <FontAwesomeIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide} icon={icon}/>
+  if (isIsolated) {
+    return <GlassesIcon style={iconStyle}/>
+  } else if (!isHidden) {
+    return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+  } else {
+    return <VisibilityOffIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+  }
 }
