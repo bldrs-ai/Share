@@ -14,7 +14,7 @@ describe('Open Model Dialog', () => {
     const {getByTitle, getByText} = render(<ShareMock><OpenModelControl/></ShareMock>)
     const button = getByTitle('Open IFC')
     fireEvent.click(button)
-    const loginText = getByText('Please login to get access to your files on GitHub')
+    const loginText = getByText('login')
     expect(loginText).toBeInTheDocument()
   })
   it('Renders file selector if the user is logged in', async () => {

@@ -87,7 +87,7 @@ export default function OpenModelControl({fileOpen}) {
  * @return {object} React component
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
-  const {isAuthenticated, user} = useAuth0()
+  const {isAuthenticated, user, loginWithRedirect} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
@@ -101,9 +101,18 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
 
+
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
+  }
+
+  const onClick = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
   }
 
   const selectOrg = async (org) => {
@@ -173,12 +182,22 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Typography
             variant={'h4'}
             sx={{
-              backgroundColor: theme.palette.scene.background,
+              border: `1px solid ${theme.palette.primary.main}`,
               borderRadius: '5px',
               padding: '12px',
             }}
           >
-            Please login to get access to your files on GitHub
+            Please
+            <Box
+              component="span"
+              onClick={onClick}
+              sx={{
+                borderBottom: `1px solid ${theme.palette.secondary.main}`,
+                color: theme.palette.secondary.main,
+              }}
+            >&nbsp;login&nbsp;
+            </Box>
+            to get access to your files on GitHub
           </Typography>
           }
           <Box
