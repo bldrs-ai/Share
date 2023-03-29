@@ -206,8 +206,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           </Typography>
           }
           {isAuthenticated &&
-          selectedOrgName !== undefined &&
-          selectedRepoName !== undefined &&
+          orgName !== undefined &&
+          repoName !== undefined &&
             <Box
               sx={{
                 marginTop: '1em',
@@ -215,7 +215,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               }}
             >
               Click&nbsp;
-              <a href={`https://github.com/${selectedOrgName}}/${selectedRepoName}/settings/access`}>here</a>
+              <a href={`https://github.com/${orgName}}/${repoName}/settings/access`}>here</a>
               &nbsp;to Manage project access
             </Box>
           }
