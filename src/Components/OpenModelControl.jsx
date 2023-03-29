@@ -200,6 +200,18 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             to get access to your files on GitHub
           </Typography>
           }
+          {isAuthenticated &&
+            <Box
+              sx={{
+                marginTop: '1em',
+                fontSize: '.8em',
+              }}
+            >
+              Click
+              <a href={`https://github.com/${selectedOrgName}}/${selectedRepoName}/settings/access`}>here</a>
+              to Manage project access
+            </Box>
+          }
           <Box
             sx={{
               marginTop: '1em',
