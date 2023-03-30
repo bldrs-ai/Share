@@ -47,9 +47,9 @@ export default function FileBreadCrumbs({modelPath}) {
       <legend>
         <Typography
           sx={{
-            fontSize: '11px',
+            fontSize: '12px',
             marginLeft: '-2px',
-            opacity: .5}}
+            opacity: 1}}
         >
           Project model path : org/repo/file
         </Typography>
