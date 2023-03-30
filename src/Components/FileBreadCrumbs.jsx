@@ -1,5 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import Tooltip from '@mui/material/Tooltip'
 import useTheme from '@mui/styles/useTheme'
 import {useWindowDimensions} from './Hooks'
@@ -22,13 +23,14 @@ export default function FileBreadCrumbs({modelPath}) {
       'flexDirection': 'row',
       'borderRadius': '5px',
       'width': '275px',
-      'marginTop': '14px',
-      'padding': '6px 0px 6px 14px',
+      'marginTop': '6px',
+      'padding': '6px 0px 16px 14px',
       'background': theme.palette.primary.background,
       'color': theme.palette.primary.contrastText,
       'textOverflow': 'ellipsis',
       'overflow': 'hidden',
       'whiteSpace': 'nowrap',
+      'border': 'none',
       'opacity': .8,
       '& a': {
         ...theme.typography.tree,
@@ -40,7 +42,18 @@ export default function FileBreadCrumbs({modelPath}) {
         maxWidth: `${searchAndNavMaxWidthPx}px`,
       },
     }}
+    component="fieldset"
     >
+      <legend>
+        <Typography
+          sx={{
+            fontSize: '11px',
+            marginLeft: '-2px',
+            opacity: .5}}
+        >
+          Project model path : org/repo/file
+        </Typography>
+      </legend>
       <Tooltip title={modelPath.org} placement={'bottom'}>
         <Box>
           <a
