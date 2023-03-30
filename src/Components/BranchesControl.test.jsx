@@ -43,7 +43,7 @@ describe('BranchControl', () => {
       result.current.setModelPath(MOCK_MODEL_PATH_LOCAL)
     })
     render(<ShareMock><BranchesControl/></ShareMock>)
-    const branchDropDown = screen.queryByText('Git Branches / Project Versions')
+    const branchDropDown = screen.queryByText('Project Versions')
     await waitFor(() => {
       expect(branchDropDown).toBeNull()
     })

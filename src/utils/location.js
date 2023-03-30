@@ -155,6 +155,20 @@ export function getHashParams(location, name) {
 
 
 /**
+ * @param {string} url
+ * @param {string} name prefix of the params to fetch
+ * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
+ */
+export function getHashParamsFromUrl(url, name) {
+  const splitUrl = url.split('#')
+  if (!splitUrl[1]) {
+    return undefined
+  }
+  return getHashParamsFromHashStr(splitUrl[1], name)
+}
+
+
+/**
  * @param {string} hashStr
  * @param {string} name prefix of the params to fetch
  * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
@@ -218,6 +232,7 @@ export function removeHashParams(location, name, paramKeys = []) {
   }
 }
 
+
 /**
  * Removes the given named hash param.
  *
@@ -229,4 +244,15 @@ export function removeHashParams(location, name, paramKeys = []) {
  */
 export function navigateBaseOnModelPath(org, repo, branchName, filePath) {
   return `/share/v/gh/${org}/${repo}/${branchName}${filePath}`
+}
+
+
+/**
+ * @param {string} url
+ * @return {string|undefined}
+ */
+export function getAllHashParams(url) {
+  const splitHref = url ? url.split('#') : window.location.href.split('#')
+  const allHashParams = splitHref[1]
+  return allHashParams
 }

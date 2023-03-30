@@ -1,9 +1,9 @@
 import React, {useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
-import Box from '@mui/material/Box'
-import MenuItem from '@mui/material/MenuItem'
-import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
+import MenuItem from '@mui/material/MenuItem'
+import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import debug from '../utils/debug'
@@ -38,12 +38,12 @@ export default function Branches() {
     }
     const fetchBranches = async () => {
       try {
-        const newBranches = await getBranches(repository, accessToken)
+        const branchesData = await getBranches(repository, accessToken)
         const versionPathsTemp = []
-        if (newBranches.length > 0) {
-          setBranches(newBranches)
+        if (branchesData.length > 0) {
+          setBranches(branchesData)
         }
-        newBranches.map((branch, i) => {
+        branchesData.map((branch, i) => {
           if (branch.name === modelPath.branch) {
             // select the current branch
             setSelected(i)
@@ -52,7 +52,7 @@ export default function Branches() {
           versionPathsTemp.push(versionPath)
         })
         setVersionPaths(versionPathsTemp)
-        if (newBranches.length > 1) {
+        if (branchesData.length > 1) {
           setIsBranches(true)
         } else {
           setIsBranches(false)
@@ -125,7 +125,7 @@ export default function Branches() {
             }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label='Project Iterations'
+            label='Project Versions'
             value={selected}
             select
             role="button"

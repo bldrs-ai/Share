@@ -79,4 +79,16 @@ describe('strings', () => {
     expect(matchUuid('ADD77535D1B649A9915B41343B08BF83')).toBe(false)
     expect(matchUuid('ADD77535-D1B6-49A9-915B-41343B08BF83')).toBe(true)
   })
+
+
+  it('findMarkdownUrls matches test camera string', () => {
+    expect(findUrls(`- [cam 1](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48)
+- [cam 2](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48)
+- [cam 3](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48)
+`)).toStrictEqual([
+      'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48',
+      'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48',
+      'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48',
+    ])
+  })
 })
