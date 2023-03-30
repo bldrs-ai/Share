@@ -18,14 +18,12 @@ export default function createUISlice(set, get) {
     isPropertiesOn: false,
     snackMessage: null,
     cutPlanes: [],
+    isBranches: false,
     levelInstance: null,
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
     isHelpTooltips: false,
-    isTreeVisible: true,
-    isBranchControlVisible: true,
-    isFilePathVisible: true,
     openDrawer: () => set(() => ({isDrawerOpen: true})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
     closeDrawer: () => set(() => ({isDrawerOpen: false})),
@@ -35,11 +33,10 @@ export default function createUISlice(set, get) {
     toggleIsNavPanelOpen: () => set((state) => ({isNavPanelOpen: !state.isNavPanelOpen})),
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
-    toggleIsTreeVisible: () => set((state) => ({isTreeVisible: !state.isTreeVisible})),
-    toggleIsBranchControlVisible: () => set((state) => ({isBranchControlVisible: !state.isBranchControlVisible})),
     turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
     closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
+    setIsBranches: (isBranches) => set(() => ({isBranches: isBranches})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
       if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {

@@ -14,7 +14,7 @@ import TreeIcon from '../assets/icons/Tree.svg'
  */
 export default function ControlsGroup({modelPath}) {
   const toggleIsTreeVisible = useStore((state) => state.toggleIsTreeVisible)
-  const branches = useStore((state) => state.branches)
+  const isBranches = useStore((state) => state.isBranches)
   const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
 
   return (
@@ -29,14 +29,14 @@ export default function ControlsGroup({modelPath}) {
       }}
     >
       {modelPath.repo !== undefined &&
-      branches.length > 1 &&
+      isBranches &&
         <Box
           sx={{
             paddingBottom: '13px',
           }}
         >
           <TooltipIconButton
-            title={'Project Version '}
+            title={'Project Version'}
             onClick={toggleIsBranchControlVisible}
             selected={true}
             icon={<BranchIcon/>}

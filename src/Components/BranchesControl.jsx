@@ -21,8 +21,9 @@ import {handleBeforeUnload} from '../utils/event'
 export default function Branches() {
   const navigate = useNavigate()
   const repository = useStore((state) => state.repository)
-  const branches = useStore((state) => state.branches)
-  const setBranches = useStore((state) => state.setBranches)
+  const isBranches = useStore((state) => state.isBranches)
+  const setIsBranches = useStore((state) => state.setIsBranches)
+  const [branches, setBranches] = useState([])
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
   const modelPath = useStore((state) => state.modelPath)
@@ -51,6 +52,11 @@ export default function Branches() {
           versionPathsTemp.push(versionPath)
         })
         setVersionPaths(versionPathsTemp)
+        if (newBranches.length > 1) {
+          setIsBranches(true)
+        } else {
+          setIsBranches(false)
+        }
       } catch (e) {
         debug().warn('failed to fetch branches', e)
       }
@@ -59,8 +65,7 @@ export default function Branches() {
     if (branches.length === 0 && modelPath.repo !== undefined) {
       fetchBranches()
     }
-  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo, setBranches])
-
+  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo, setIsBranches])
 
   const handleSelect = (event) => {
     const versionNumber = event.target.value
@@ -74,7 +79,7 @@ export default function Branches() {
 
   return (
     <Box sx={{width: '100%'}}>
-      {branches.length > 1 && modelPath.repo !== undefined &&
+      {isBranches && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
             marginTop: '14px',
