@@ -26,6 +26,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {getAllHashParams} from '../utils/location'
 
 
 /**
@@ -97,7 +98,7 @@ export default function CadView({
 
 
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -456,7 +457,9 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        const curHashParams = getAllHashParams()
+        debug().log('CadView#selectItemsInScene: curHashParams: ', curHashParams)
+        navigate(`${pathPrefix}${repoFilePath}/${path}#${curHashParams}`)
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -600,8 +603,10 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSingleTap}
-        {...onDoubleTap}
+        onMouseDown={async (event) => {
+          await onSceneSingleTap(event)
+        }}
+        {...onSceneDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
