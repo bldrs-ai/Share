@@ -191,7 +191,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               component="span"
               onClick={onClick}
               sx={{
-                // borderBottom: `1px solid ${theme.palette.secondary.main}`,
                 color: theme.palette.secondary.contrastText,
                 cursor: 'pointer',
                 textDecoration: 'underline',
@@ -210,7 +209,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                 fontSize: '.8em',
               }}
             >
-              To manage project access,
+              Project Owners:
               <br/>
               click&nbsp;
               <a
@@ -220,7 +219,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               >
                 here
               </a>
-              &nbsp;if you are a project owner.
+              &nbsp;to manage access to the project
             </Box>
           }
           <Box
