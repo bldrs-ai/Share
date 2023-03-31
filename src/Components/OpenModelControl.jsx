@@ -211,7 +211,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             >
               Project Owners:
               <br/>
-              click&nbsp;
+              Click&nbsp;
               <a
                 href={`https://github.com/${orgName}/${repoName}/settings/access`}
                 target="_blank"
