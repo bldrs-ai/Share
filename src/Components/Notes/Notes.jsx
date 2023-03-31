@@ -19,38 +19,37 @@ export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
   const notes = useStore((state) => state.notes)
-  const synchNotes = useStore((state) => state.synchNotes)
+  const synchSidebar = useStore((state) => state.synchSidebar)
   const setNotes = useStore((state) => state.setNotes)
-  const createdNotes = useStore((state) => state.createdNotes)
-  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
-  const deletedNotes = useStore((state) => state.deletedNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
-  const filteredNote = (notes && selectedNoteId) ?
-    notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+  const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
   const repository = useStore((state) => state.repository)
-  const accessToken = useStore((state) => state.accessToken)
   const drawer = useStore((state) => state.drawer)
+  const accessToken = useStore((state) => state.accessToken)
 
 
   useEffect(() => {
-    if (!repository) {
-      debug().warn('IssuesControl#Notes: 1, no repo defined')
-      return
-    }
-
-    const fetchNotes = async () => {
+    (async () => {
       try {
-        const fetchedNotes = []
-        const issues = await getIssues(repository, accessToken)
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+
+        const newNotes = []
         let issueIndex = 0
-        issues.slice(0).reverse().map((issue, index) => {
+        const issueArr = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect: issueArr: ', issueArr)
+
+        issueArr.reverse().map((issue, index) => {
           if (issue.body === null) {
             debug().warn(`issue ${index} has no body: `, issue)
-            return null
+            return
           }
-          fetchedNotes.push({
+
+          newNotes.push({
             index: issueIndex++,
             id: issue.id,
             number: issue.number,
@@ -60,83 +59,53 @@ export default function Notes() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
-            synchedNote: true,
+            synched: true,
           })
         })
 
-        let synchedCreatedNotes = []
-        if (createdNotes !== null) {
-          synchedCreatedNotes =
-          createdNotes.filter(
-              (createdNote) => !fetchedNotes.some(
-                  (fetchedNote) =>
-                    createdNote.title === fetchedNote.title &&
-                    createdNote.body === fetchedNote.body ),
-          )
-          // update the list of created notes
-          setCreatedNotes(synchedCreatedNotes)
-        }
-
-        const combinedSynchedNotes = [
-          ...synchedCreatedNotes,
-          ...fetchedNotes,
-        ]
-
-        if (deletedNotes !== null) {
-          const filteredDeleted =
-          combinedSynchedNotes.filter(
-              (synchedNote) => !deletedNotes.includes(synchedNote.number),
-          )
-          setNotes(filteredDeleted)
-        } else {
-          setNotes(combinedSynchedNotes)
-        }
+        setNotes(newNotes)
       } catch (e) {
-        debug().warn('failed to fetch notes', e)
+        debug().warn('failed to fetch notes: ', e)
       }
-    }
-    fetchNotes()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [setNotes, repository, accessToken, isCreateNoteActive, deletedNotes, synchNotes])
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, synchSidebar])
 
 
   useEffect(() => {
-    if (!repository) {
-      debug().warn('IssuesControl#Notes: 2, no repo defined')
-      return
-    }
-
-    const fetchComments = async (selectedNote) => {
+    (async () => {
       try {
-        const commentsArr = []
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+        if (!selectedNoteId || !filteredNote) {
+          return
+        }
+        const newComments = []
+        const commentArr = await getIssueComments(repository, filteredNote.number, accessToken)
+        debug().log('Notes#useEffect: commentArr: ', commentArr)
 
-        const newComments = await getIssueComments(repository, selectedNote.number, accessToken)
-        if (newComments) {
-          newComments.map((comment) => {
-            commentsArr.push({
+        if (commentArr) {
+          commentArr.map((comment) => {
+            newComments.push({
               id: comment.id,
-              number: comment.number,
-              title: comment.title,
               body: comment.body,
               date: comment.created_at,
               username: comment.user.login,
               avatarUrl: comment.user.avatar_url,
+              synched: true,
             })
           })
         }
-        setComments(commentsArr)
-      } catch {
-        debug().log('failed to fetch comments')
+
+        setComments(newComments)
+      } catch (e) {
+        debug().warn('failed to fetch comments: ', e)
       }
-    }
-
-    if (selectedNoteId !== null) {
-      fetchComments(filteredNote)
-    }
-
-    // this useEffect runs every time notes are fetched to enable fetching the comments when the platform is open
-    // using the link
-  }, [filteredNote, repository, setComments, accessToken, selectedNoteId])
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, selectedNoteId, synchSidebar, filteredNote])
 
 
   useEffect(() => {
@@ -144,6 +113,7 @@ export default function Notes() {
       drawer.scrollTop = 0
     }
   }, [drawer, selectedNoteId])
+
 
   return (
     <Paper
@@ -157,66 +127,60 @@ export default function Notes() {
     >
       {isCreateNoteActive && user && <NoteCardCreate/>}
       {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
-      {notes === null && <Loader type={'linear'}/> }
-      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/> }
+      {notes === null && <Loader type={'linear'}/>}
+      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
       {notes && !selectedNoteId && !isCreateNoteActive ?
-       notes.map((note, index) => {
-         return (
-           <NoteCard
-             embeddedUrl={note.embeddedUrl}
-             index={note.index}
-             id={note.id}
-             key={index}
-             noteNumber={note.number}
-             title={note.title}
-             date={note.date}
-             body={note.body}
-             username={note.username}
-             numberOfComments={note.numberOfComments}
-             avatarUrl={note.avatarUrl}
-             imageUrl={note.imageUrl}
-             synchedNote={note.synchedNote}
-           />
-         )
-       }) :
-       <>
-         {(filteredNote && !isCreateNoteActive) ?
-          <NoteCard
-            embeddedUrl={filteredNote.embeddedUrl}
-            index={filteredNote.index}
-            id={filteredNote.id}
-            key={filteredNote.id}
-            title={filteredNote.title}
-            date={filteredNote.date}
-            body={filteredNote.body}
-            username={filteredNote.username}
-            numberOfComments={filteredNote.numberOfComments}
-            avatarUrl={filteredNote.avatarUrl}
-            imageUrl={filteredNote.imageUrl}
-          /> : null
-         }
-         {comments && !isCreateNoteActive &&
-          comments.map((comment, index) => {
-            return (
-              <NoteCard
-                embeddedUrl={comment.embeddedUrl}
-                isComment={true}
-                index=''
-                id={comment.id}
-                key={comment.id}
-                title={index + 1}
-                date={comment.date}
-                body={comment.body}
-                username={comment.username}
-                avatarUrl={comment.avatarUrl}
-                imageUrl={comment.imageUrl}
-              />
-            )
-          })
-         }
-       </>
+        notes.map((note, index) => {
+          return (
+            <NoteCard
+              key={index}
+              index={note.index}
+              id={note.id}
+              noteNumber={note.number}
+              title={note.title}
+              date={note.date}
+              body={note.body}
+              username={note.username}
+              numberOfComments={note.numberOfComments}
+              avatarUrl={note.avatarUrl}
+              synched={note.synched}
+            />
+          )
+        }) :
+        <>
+          {(filteredNote && !isCreateNoteActive) ?
+            <NoteCard
+              index={filteredNote.index}
+              id={filteredNote.id}
+              noteNumber={filteredNote.number}
+              title={filteredNote.title}
+              date={filteredNote.date}
+              body={filteredNote.body}
+              username={filteredNote.username}
+              numberOfComments={filteredNote.numberOfComments}
+              avatarUrl={filteredNote.avatarUrl}
+              synched={filteredNote.synched}
+            /> : null
+          }
+          {comments && !isCreateNoteActive &&
+            comments.map((comment, index) => {
+              return (
+                <NoteCard
+                  key={index}
+                  isComment={true}
+                  id={comment.id}
+                  index=''
+                  body={comment.body}
+                  date={comment.date}
+                  username={comment.username}
+                  avatarUrl={comment.avatarUrl}
+                  synched={comment.synched}
+                />
+              )
+            })
+          }
+        </>
       }
     </Paper>
   )
 }
-
