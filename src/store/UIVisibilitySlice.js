@@ -13,7 +13,7 @@ export default function createUIVisibilitySlice(set, get) {
     isCollaborationGroupVisible: true,
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
-    isTreeVisible: true,
+    isTreeVisible: false,
     isBranchControlVisible: true,
     isFilePathVisible: true,
     isAboutDialogSuppressed: false,

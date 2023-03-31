@@ -16,6 +16,9 @@ export default function ControlsGroup({modelPath}) {
   const toggleIsTreeVisible = useStore((state) => state.toggleIsTreeVisible)
   const isBranches = useStore((state) => state.isBranches)
   const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
+  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
+  const isTreeVisible = useStore((state) => state.isTreeVisible)
+
 
   return (
     <Box
@@ -23,7 +26,6 @@ export default function ControlsGroup({modelPath}) {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'flex-start',
-        opacity: .5,
         marginTop: '14px',
         marginLeft: '5px',
       }}
@@ -38,7 +40,7 @@ export default function ControlsGroup({modelPath}) {
           <TooltipIconButton
             title={'Project Version'}
             onClick={toggleIsBranchControlVisible}
-            selected={true}
+            selected={isBranchControlVisible}
             icon={<BranchIcon/>}
             placement={'right'}
             dataTestId='project-version'
@@ -53,7 +55,7 @@ export default function ControlsGroup({modelPath}) {
         <TooltipIconButton
           title={'Hierarchy of spatial elements'}
           onClick={toggleIsTreeVisible}
-          selected={true}
+          selected={isTreeVisible}
           icon={<TreeIcon/>}
           placement={'right'}
           dataTestId='spatial-elements'
