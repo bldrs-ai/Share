@@ -118,9 +118,10 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {number} modelID
    * @param {number[]} expressIds express Ids of the elements
    */
-  async preselectItemById(modelId, expressId) {
-    if (this.isolator.canBePickedInScene(expressId)) {
-      await this.IFC.selector.preselection.pickByID(modelId, [expressId], false, true)
+  async preselectElementsByIds(modelId, expressIds) {
+    const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
+    if (filteredIds.length) {
+      await this.IFC.selector.preselection.pickByID(modelId, filteredIds, false, true)
       this.highlightPreselection()
     }
   }
@@ -134,7 +135,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const [targetMesh] = this.IFC.selector.preselection.meshes
     this.highlighter.addToHighlighting(targetMesh)
   }
-
 
   /**
    *
