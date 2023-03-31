@@ -7,9 +7,9 @@ import TreeIcon from '../assets/icons/Tree.svg'
 
 
 /**
- * Controls group contains toggles for fileapth, brnaches, spatial navigation, and element type navigation
+ * Controls group contains toggles for fileapth, branches, spatial navigation, and element type navigation
  *
- * @property {Function} deselectItems deselects currently selected element
+ * @param {Function} modelPath object containing information about the location of the model
  * @return {React.Component}
  */
 export default function ControlsGroup({modelPath}) {
@@ -30,8 +30,7 @@ export default function ControlsGroup({modelPath}) {
         marginLeft: '5px',
       }}
     >
-      {modelPath.repo !== undefined &&
-      isBranches &&
+      {isBranches &&
         <Box
           sx={{
             paddingBottom: '13px',
