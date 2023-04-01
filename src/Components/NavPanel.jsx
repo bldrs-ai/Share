@@ -77,6 +77,7 @@ export default function NavPanel({
     >
       <Paper
         elevation={0}
+        aria-label='Navigation Panel'
         variant='control'
         sx={{
           'marginTop': '14px',
@@ -86,10 +87,10 @@ export default function NavPanel({
           'justifyContent': 'space-around',
           'alignItems': 'center',
           'maxHeight': '400px',
-          '&:focus #togglegrp, &:hover #togglegrp': {
+          '&:hover #togglegrp': {
             visibility: 'visible !important',
           },
-          '&:focus svg, &:hover svg': {
+          '&:hover svg': {
             visibility: 'visible !important',
           },
           '@media (max-width: 900px)': {
@@ -108,7 +109,6 @@ export default function NavPanel({
               'marginLeft': '16px',
               'marginTop': '8px',
               'visibility': 'hidden',
-
               '& button': {
                 height: '30px',
                 width: '30px',
@@ -157,11 +157,14 @@ export default function NavPanel({
             }}
             key='tree'
             sx={{
-              padding: '7px 0 14px 0',
-              maxWidth: '400px',
-              overflowY: 'auto',
-              overflowX: 'hidden',
-              flexGrow: 1,
+              'padding': '7px 0 14px 0',
+              'maxWidth': '400px',
+              'overflowY': 'auto',
+              'overflowX': 'hidden',
+              'flexGrow': 1,
+              '&:focus svg': {
+                visibility: 'visible !important',
+              },
             }}
           >
             {isNavTree ?

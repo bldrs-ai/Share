@@ -52,6 +52,6 @@ export default function HideToggleButton({elementId}) {
   } else if (!isHidden) {
     return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
   } else {
-    return <VisibilityOffIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+    return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
   }
 }
