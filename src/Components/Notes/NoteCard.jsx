@@ -27,6 +27,8 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
+import PhotoCamera from '@mui/icons-material/PhotoCamera'
+import {grey} from '@mui/material/colors'
 
 
 /**
@@ -272,6 +274,8 @@ const CardFooter = ({
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
+  const captureScreenshot = async () => {
+  }
 
   return (
     <Box
@@ -310,6 +314,17 @@ const CardFooter = ({
               setShareIssue(!shareIssue)
             }}
             icon={<ShareIcon/>}
+          />
+        }
+        {selected &&
+          <TooltipIconButton
+            title='Take Screenshot'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              captureScreenshot()
+            }}
+            icon={<PhotoCamera sx={{color: grey[900]}}/>}
           />
         }
       </Box>
