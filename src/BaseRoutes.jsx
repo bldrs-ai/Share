@@ -38,10 +38,7 @@ export default function BaseRoutes({testElt = null}) {
         location.pathname === basePath) {
       const fwdPath = `${installPrefix}/share`
       debug().log('BaseRoutes#useEffect[], forwarding to: ', fwdPath)
-      navWith(navigate, fwdPath, {
-        search: location.search,
-        hash: location.hash,
-      })
+      navWith(navigate, fwdPath)
     }
 
     if (process.env.NODE_ENV === 'development' && process.env.GITHUB_API_TOKEN) {

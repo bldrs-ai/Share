@@ -11,8 +11,8 @@
  * @param {object} options
  */
 export function navWith(navigate, path, options = {
-  search: '',
-  hash: '',
+  search: location.search,
+  hash: location.hash,
 }) {
   const search = options.search || ''
   if (search !== '' && !search.startsWith('?')) {
@@ -23,49 +23,6 @@ export function navWith(navigate, path, options = {
     throw new Error(`Given hash must start with # Got: ${hash}`)
   }
   navigate(`${path}${search}${hash}`)
-}
-
-
-/**
- * Helper for calling navigate that will append location.search to the
- * given path, if present.
- *
- * @param {Function} navigate
- * @param {string} path
- */
-export function navWithSearchState(navigate, path) {
-  navWith(navigate, path, {
-    search: location.search,
-  })
-}
-
-
-/**
- * Helper for calling navigate that will append location.hash to the
- * given path, if present.
- *
- * @param {Function} navigate
- * @param {string} path
- */
-export function navWithHashState(navigate, path) {
-  navWith(navigate, path, {
-    hash: location.hash,
-  })
-}
-
-
-/**
- * Helper for calling navigate that will append location.search and
- * location.hash to the given path, if present.
- *
- * @param {Function} navigate
- * @param {string} path
- */
-export function navWithSearchAndHashState(navigate, path) {
-  navWith(navigate, path, {
-    search: location.search,
-    hash: location.hash,
-  })
 }
 
 

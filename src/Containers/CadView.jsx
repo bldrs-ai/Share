@@ -23,7 +23,7 @@ import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {navWithSearchAndHashState} from '../utils/navigate'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 
@@ -430,7 +430,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navWithSearchAndHashState(navigate, `${pathPrefix}${repoFilePath}`)
+    navWith(navigate, `${pathPrefix}${repoFilePath}`)
   }
 
   /**
@@ -453,7 +453,7 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navWithSearchAndHashState(navigate, `${pathPrefix}${repoFilePath}/${path}`)
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`)
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
