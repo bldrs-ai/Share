@@ -21,7 +21,6 @@ import {
   parseHashParams,
   removeCameraUrlParams,
 } from '../CameraControl'
-import {useIsMobile} from '../Hooks'
 import {NOTE_PREFIX} from './Notes'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
@@ -60,8 +59,6 @@ export default function NoteCard({
 }) {
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
-  // eslint-disable-next-line no-unused-vars
-  const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const cameraControls = useStore((state) => state.cameraControls)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
@@ -85,14 +82,6 @@ export default function NoteCard({
         return encoded && parseHashParams(encoded)
       })
   const firstCamera = embeddedCameraParams[0] // intentionally undefined if empty
-  const isMobile = useIsMobile()
-
-
-  useEffect(() => {
-    if (isMobile) {
-      setExpandImage(false)
-    }
-  }, [isMobile])
 
   useEffect(() => {
     if (selected && firstCamera) {
