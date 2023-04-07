@@ -137,6 +137,7 @@ export default function SearchBar({fileOpen}) {
             onClick={() => {
               setInputText('')
               setError('')
+              navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
             }}
             icon={<ClearIcon/>}
           />
