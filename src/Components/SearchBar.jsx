@@ -6,6 +6,7 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
+import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
@@ -39,13 +40,13 @@ export default function SearchBar({fileOpen}) {
     debug().log('SearchBar#useEffect[searchParams]')
     if (location.search) {
       if (validSearchQuery(searchParams)) {
-        const newInputText = searchParams.get('q')
+        const newInputText = searchParams.get(QUERY_PARAM)
         if (inputText !== newInputText) {
           setInputText(newInputText)
         }
       } else {
         window.removeEventListener('beforeunload', handleBeforeUnload)
-        navigate(location.pathname)
+        navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,6 +136,7 @@ export default function SearchBar({fileOpen}) {
             onClick={() => {
               setInputText('')
               setError('')
+              navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
             }}
             icon={<ClearIcon/>}
           />
@@ -154,6 +156,10 @@ export default function SearchBar({fileOpen}) {
     </Box>
   )
 }
+
+
+/** @type {string} */
+export const QUERY_PARAM = 'q'
 
 
 /**
@@ -178,11 +184,12 @@ export function containsIfcPath(location) {
 /**
  * Returns true iff searchParams query is defined with a string value.
  *
- * @param {object} searchParams Object with a 'q' parameter and optional string value.
+ * @param {object} searchParams Object with a QUERY_PARAM(default='q') parameter
+ * present and optional string value.
  * @return {boolean}
  */
 export function validSearchQuery(searchParams) {
-  const value = searchParams.get('q')
+  const value = searchParams.get(QUERY_PARAM)
   return value !== null && value.length > 0
 }
 
