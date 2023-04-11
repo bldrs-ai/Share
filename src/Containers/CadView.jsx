@@ -82,7 +82,6 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -95,7 +94,7 @@ export default function CadView({
 
 
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -285,7 +284,7 @@ export default function CadView({
           }
         },
         (error) => {
-          console.warn('CadView#loadIfc$onError', error)
+          debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
@@ -595,8 +594,10 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSingleTap}
-        {...onDoubleTap}
+        onMouseDown={async (event) => {
+          await onSceneSingleTap(event)
+        }}
+        {...onSceneDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
