@@ -14,18 +14,18 @@ export default class Utils {
   }
 
   /**
-   * get ids of selected elements.
+   * get global ids of elements.
    *
-   * @param {object} state
-   * @return {string[]} array of GlobalIds.
+   * @param {string[]} array of express ids
+   * @return {string[]} array of global ids
    */
-  getSelectedElementIds(state) {
+  getElementsGlobalIds(elementsExpressIds) {
     const elementIds = []
-    if (state.selectedElements === null || state.selectedElements.length === 0) {
+    if (elementsExpressIds === null || elementsExpressIds.length === 0) {
       return elementIds
     }
 
-    for (const expressId of state.selectedElements) {
+    for (const expressId of elementsExpressIds) {
       const globalId = this.searchIndex.getGlobalIdByExpressId(expressId)
       if (globalId) {
         elementIds.push(globalId)

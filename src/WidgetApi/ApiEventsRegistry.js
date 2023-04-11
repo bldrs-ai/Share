@@ -2,8 +2,12 @@ import LoadModelEventHandler from './event-handlers/LoadModelEventHandler'
 import SelectElementsEventHandler from './event-handlers/SelectElementsEventHandler'
 import UIComponentsVisibilityEventHandler from './event-handlers/UIComponentsVisibilityEventHandler'
 import SuppressAboutDialogHandler from './event-handlers/SuppressAboutDialogHandler'
+import HideElementsEventHandler from './event-handlers/HideElementsEventHandler'
+import UnhideElementsEventHandler from './event-handlers/UnhideElementsEventHandler'
+
 import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementSelectionChangedEventDispatcher'
 import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
+import HiddenElementsEventDispatcher from './event-dispatchers/HiddenElementsEventDispatcher'
 
 /**
  * Api Events are defined here
@@ -39,6 +43,8 @@ class ApiEventsRegistry {
       new SelectElementsEventHandler(this.apiConnection, this.searchIndex),
       new UIComponentsVisibilityEventHandler(this.apiConnection),
       new SuppressAboutDialogHandler(this.apiConnection),
+      new HideElementsEventHandler(this.apiConnection, this.searchIndex),
+      new UnhideElementsEventHandler(this.apiConnection, this.searchIndex),
     ]
     for (const event of events) {
       this.apiConnection.on(`action:${event.name}`, event.handler.bind(event))
@@ -53,6 +59,7 @@ class ApiEventsRegistry {
     const events = [
       new ElementSelectionChangedEventDispatcher(this.apiConnection, this.searchIndex),
       new ModelLoadedEventDispatcher(this.apiConnection),
+      new HiddenElementsEventDispatcher(this.apiConnection, this.searchIndex),
     ]
     this.apiConnection.requestCapabilities(events.map((e) => e.name))
     for (const eventDispatcher of events) {
