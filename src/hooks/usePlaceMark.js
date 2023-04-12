@@ -2,7 +2,6 @@ import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import {useDoubleTap} from 'use-double-tap'
-import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
 import {addHashParams, getAllHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
@@ -14,15 +13,6 @@ import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
-
-
-const placeMarkGroupMap = new Map()
-let renderCount = 0
-let prevSynchSidebar
-
-
-export const FEATURE_PREFIX = 'f'
-export const PLACE_MARK_PREFIX = 'm'
 
 
 /**
@@ -60,7 +50,6 @@ export function usePlaceMark() {
       }
     }
 
-    debug().log('usePlaceMark#useEffect: placeMarkEnabled: ', placeMarkEnabled)
     setIsPlaceMarkEnabled(placeMarkEnabled)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -68,11 +57,10 @@ export function usePlaceMark() {
 
   useEffect(() => {
     (async () => {
-      if (!repository || !placeMark || prevSynchSidebar === synchSidebar) {
+      if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !isPlaceMarkEnabled) {
         return
       }
       prevSynchSidebar = synchSidebar
-      debug().log('usePlaceMark#useEffect: renderCount: ', ++renderCount)
       const issueArr = await getIssues(repository, accessToken)
 
       const promises1 = issueArr.map(async (issue) => {
@@ -90,7 +78,6 @@ export function usePlaceMark() {
       })
 
       const totalPlaceMarkUrls = (await Promise.all(promises1)).flat()
-      debug().log('usePlaceMark#useEffect: totalPlaceMarkUrls: ', totalPlaceMarkUrls)
       const totalPlaceMarkHashUrlMap = new Map()
 
       totalPlaceMarkUrls.forEach((url) => {
@@ -98,13 +85,9 @@ export function usePlaceMark() {
         totalPlaceMarkHashUrlMap.set(hash, url)
       })
 
-      debug().log('usePlaceMark#useEffect: totalPlaceMarkHashUrlMap: ', totalPlaceMarkHashUrlMap)
       const totalPlaceMarkHashes = Array.from(totalPlaceMarkHashUrlMap.keys())
-      debug().log('usePlaceMark#useEffect: totalPlaceMarkHashes: ', totalPlaceMarkHashes)
       const activePlaceMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
-      debug().log('usePlaceMark#useEffect: activePlaceMarkHash: ', activePlaceMarkHash)
       const inactivePlaceMarkHashes = totalPlaceMarkHashes.filter((hash) => hash !== activePlaceMarkHash)
-      debug().log('usePlaceMark#useEffect: inactivePlaceMarkHashes: ', inactivePlaceMarkHashes)
 
       if (activePlaceMarkHash) {
         const activeGroup = placeMarkGroupMap.get(activePlaceMarkHash)
@@ -114,12 +97,10 @@ export function usePlaceMark() {
         } else {
           // Drop active place mark mesh if it's not existed in scene
           const markArr = getObjectParams(activePlaceMarkHash)
-          debug().log('usePlaceMark#useEffect: active markArr: ', markArr)
           const svgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(svgGroup, {url: window.location.href, isActive: true})
-          debug().log('usePlaceMark#useEffect: active svgGroup: ', svgGroup)
           placeMarkGroupMap.set(activePlaceMarkHash, svgGroup)
         }
       }
@@ -131,12 +112,10 @@ export function usePlaceMark() {
         } else {
           // Drop inactive place mark mesh if it's not existed in scene
           const markArr = getObjectParams(hash)
-          debug().log('usePlaceMark#useEffect: inactive markArr: ', markArr)
           const newSvgGroup = await placeMark.putDown({
             point: new Vector3(floatStrTrim(markArr[0]), floatStrTrim(markArr[1]), floatStrTrim(markArr[2])),
           })
           addUserDataInGroup(newSvgGroup, {url: totalPlaceMarkHashUrlMap.get(hash)})
-          debug().log('usePlaceMark#useEffect: inactive newSvgGroup: ', newSvgGroup)
           placeMarkGroupMap.set(hash, newSvgGroup)
         }
       })
@@ -147,7 +126,6 @@ export function usePlaceMark() {
         // Remove unnecessary place mark meshes
         const curPlaceMarkHashes = Array.from(placeMarkGroupMap.keys())
         const deletedPlaceMarkHashes = arrayDiff(curPlaceMarkHashes, totalPlaceMarkHashes)
-        debug().log('usePlaceMark#useEffect: deletedPlaceMarkHashes: ', deletedPlaceMarkHashes)
         deletedPlaceMarkHashes.forEach((hash) => {
           placeMark.disposePlaceMark(placeMarkGroupMap.get(hash))
         })
@@ -160,17 +138,14 @@ export function usePlaceMark() {
 
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
-    debug().log('usePlaceMark#createPlaceMark: context: ', context)
-    debug().log('usePlaceMark#createPlaceMark: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
-    debug().log('usePlaceMark#createPlaceMark: placeMark is created')
   }
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
-    if (!placeMark) {
+    if (!placeMark || !isPlaceMarkEnabled) {
       return
     }
     const res = placeMark.onSceneDoubleClick(event)
@@ -197,7 +172,7 @@ export function usePlaceMark() {
 
 
   const onSceneSingleTap = async (event, callback) => {
-    if (!placeMark) {
+    if (!placeMark || !isPlaceMarkEnabled) {
       return
     }
     const res = placeMark.onSceneClick(event)
@@ -235,13 +210,12 @@ export function usePlaceMark() {
     if (!isPlaceMarkEnabled) {
       return
     }
+
     if (point && promiseGroup) {
       const svgGroup = await promiseGroup
-      debug().log('usePlaceMark#savePlaceMark: svgGroup: ', svgGroup)
       const markArr = roundCoord(...point)
       addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
       removeHashParams(window.location, CAMERA_PREFIX)
-      debug().log('usePlaceMark#savePlaceMark: window.location.href: ', window.location.href)
       addUserDataInGroup(svgGroup, {
         url: window.location.href,
       })
@@ -254,19 +228,16 @@ export function usePlaceMark() {
     if (!repository || !Array.isArray(notes)) {
       return
     }
-    debug().log('usePlaceMark#savePlaceMark: `repository` `placeMarkId` condition is passed')
     const newNotes = [...notes]
     const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
-    debug().log('usePlaceMark#savePlaceMark: `placeMarkNote` condition is passed')
     const issueNumber = placeMarkNote.number
     const newComment = {
       body: `[placemark](${window.location.href})`,
     }
-    const saveRes = await createComment(repository, issueNumber, newComment, accessToken)
-    debug().log('usePlaceMark#savePlaceMark: saveRes: ', saveRes)
+    await createComment(repository, issueNumber, newComment, accessToken)
     toggleSynchSidebar()
   }
 
@@ -276,11 +247,8 @@ export function usePlaceMark() {
       return
     }
     assertDefined(url)
-    debug().log('usePlaceMark#selectPlaceMark: url: ', url)
     const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
-    debug().log('usePlaceMark#selectPlaceMark: hash: ', hash)
     const svgGroup = placeMarkGroupMap.get(hash)
-    debug().log('usePlaceMark#selectPlaceMark: svgGroup: ', svgGroup)
 
     if (svgGroup) {
       setPlaceMarkStatus(svgGroup, true)
@@ -295,6 +263,7 @@ export function usePlaceMark() {
     if (!isPlaceMarkEnabled) {
       return
     }
+
     if (placeMark) {
       if (placeMarkId === id && placeMark.activated) {
         deactivatePlaceMark()
@@ -302,6 +271,7 @@ export function usePlaceMark() {
         activatePlaceMark()
       }
     }
+
     setPlaceMarkId(id)
   }
 
@@ -330,8 +300,6 @@ export function usePlaceMark() {
 
 const setPlaceMarkStatus = (svgGroup, isActive) => {
   assertDefined(svgGroup, isActive)
-  debug().log('usePlaceMark#setPlaceMarkStatus: svgGroup: ', svgGroup)
-  debug().log('usePlaceMark#setPlaceMarkStatus: isActive: ', isActive)
   resetPlaceMarksActive(false)
   svgGroup.userData.isActive = isActive
   resetPlaceMarkColors()
@@ -346,14 +314,17 @@ const resetPlaceMarksActive = (isActive) => {
 
 
 const resetPlaceMarkColors = () => {
-  debug().log('usePlaceMark#resetPlaceMarkColors: placeMarkGroupMap: ', placeMarkGroupMap)
   placeMarkGroupMap.forEach((svgGroup) => {
-    debug().log('usePlaceMark#resetPlaceMarkColors: svgGroup: ', svgGroup)
     let color = 'grey'
     if (svgGroup.userData.isActive) {
       color = 'red'
     }
-    debug().log('usePlaceMark#resetPlaceMarkColors: color: ', color)
     setGroupColor(svgGroup, color)
   })
 }
+
+
+const FEATURE_PREFIX = 'f'
+const PLACE_MARK_PREFIX = 'm'
+const placeMarkGroupMap = new Map()
+let prevSynchSidebar

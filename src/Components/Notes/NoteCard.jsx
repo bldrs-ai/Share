@@ -29,7 +29,6 @@ import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
-import debug from '../../utils/debug'
 
 
 /**
@@ -178,8 +177,7 @@ export default function NoteCard({
       synched: (comment.id !== commentId) && comment.synched,
     }))
     setComments(newComments)
-    const deleteRes = await deleteComment(repository, commentId, accessToken)
-    debug().log('NoteCard#removeComment: deleteRes: ', deleteRes)
+    await deleteComment(repository, commentId, accessToken)
     toggleSynchSidebar()
   }
 
@@ -306,9 +304,6 @@ const CardFooter = ({
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
-  debug().log('NoteCard#CardFooter: isPlaceMarkEnabled: ', isPlaceMarkEnabled)
-  debug().log('NoteCard#CardFooter: user: ', user)
-  debug().log('NoteCard#CardFooter: username: ', username)
 
 
   return (
