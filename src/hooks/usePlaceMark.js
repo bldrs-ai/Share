@@ -39,17 +39,7 @@ export function usePlaceMark() {
   useEffect(() => {
     const initialParameters = new URLSearchParams(window.location.search)
     const enabledFeature = initialParameters.get('feature')
-    let placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
-
-    if (!placeMarkEnabled) {
-      const featureHashParams = getHashParams(location, FEATURE_PREFIX)
-      const featureObjectParams = getObjectParams(featureHashParams)
-      const featureValue = Object.keys(featureObjectParams)[0]
-      if (featureValue) {
-        placeMarkEnabled = featureValue.toLowerCase() === 'placemark'
-      }
-    }
-
+    const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
     setIsPlaceMarkEnabled(placeMarkEnabled)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -324,7 +314,6 @@ const resetPlaceMarkColors = () => {
 }
 
 
-const FEATURE_PREFIX = 'f'
 const PLACE_MARK_PREFIX = 'm'
 const placeMarkGroupMap = new Map()
 let prevSynchSidebar
