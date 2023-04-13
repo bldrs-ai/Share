@@ -75,9 +75,57 @@ export default function ShareRoutes({installPrefix, appPrefix}) {
             />
           }
         />
+        <Route
+          path='v/src/*'
+          element={
+            <FetchFromUrl appPrefix={appPrefix}/>
+          }
+        />
       </Route>
     </Routes>
   )
+}
+
+/**
+ * Fetches an IFC file from a remote URL (https only) and then loads it as a local file.
+ *
+ * Example:
+ * A file located at https://example.org/pathto/myfile.ifc can be loaded into Bldrs via
+ * the following URL http://bldrs.ai/share/v/src/example.org%2Fpathto%2Fmyfile.ifc
+ *
+ * @param {string} appPrefix e.g. /share is the prefix for this component.
+ * @return {(null)}
+ */
+function FetchFromUrl({appPrefix}) {
+  const location = useLocation()
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    const fetchFromUrlAndRedirect = async () => {
+      const locationParts = location.pathname.split('/')
+      const srcIndex = locationParts.indexOf('src')
+      if (srcIndex >= 0) {
+        const urlIndex = srcIndex + 1
+        if (urlIndex < locationParts.length) {
+          const encodedUrl = locationParts.slice(urlIndex).join('/')
+          const decodedUrl = decodeURIComponent(encodedUrl)
+          const fullUrl = `https://${decodedUrl}`
+          const fetchResponse = await fetch(fullUrl)
+          const blob = await fetchResponse.blob()
+
+          let localBlobUrl = URL.createObjectURL(blob)
+          const parts = localBlobUrl.split('/')
+          localBlobUrl = parts[parts.length - 1]
+
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navigate(`${appPrefix}/v/new/${localBlobUrl}.ifc`)
+        }
+      }
+    }
+    fetchFromUrlAndRedirect()
+  })
+
+  return (null)
 }
 
 
