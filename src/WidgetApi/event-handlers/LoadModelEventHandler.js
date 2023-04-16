@@ -27,10 +27,15 @@ class LoadModelEventHandler extends ApiEventHandler {
    * @return {object} the response of the API call
    */
   handler(data) {
-    if (!('githubIfcPath' in data)) {
-      return this.apiConnection.missingArgumentResponse('githubIfcPath')
+    if (!('githubIfcPath' in data) && !('srcPath' in data)) {
+      return this.apiConnection.missingArgumentResponse('githubIfcPath or srcPath')
     }
-    this.navigation(`/share/v/gh/${data.githubIfcPath}`)
+    if ('githubIfcPath' in data) {
+      this.navigation(`/share/v/gh/${data.githubIfcPath}`)
+    } else if('srcPath' in data) {
+      this.navigation(`/share/v/src/${data.srcPath}`)
+    }
+
     return this.apiConnection.successfulResponse({})
   }
 }
