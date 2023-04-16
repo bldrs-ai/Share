@@ -288,6 +288,12 @@ export default function CadView({
       window.addEventListener('beforeunload', handleBeforeUnload)
     }
 
+    if (uploadedFile && filepath.endsWith('index')) {
+      // todo(zein): this is obviously an invalid state and should be fixed at the level of URL change handling
+      // meanwhile we prevent the application from throwing errors at the user
+      return
+    }
+
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
     setIsLoading(true)

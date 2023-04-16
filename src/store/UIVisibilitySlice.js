@@ -14,7 +14,7 @@ export default function createUIVisibilitySlice(set, get) {
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
 
-    isAboutDialogSuppressed: false,
+    isAboutDialogSuppressed: true, // todo(zein): temporary set to false unti this can be disabled ahead of initialization (via URL)
 
     setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
     setIsSearchbarVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
