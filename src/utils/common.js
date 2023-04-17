@@ -1,3 +1,4 @@
+import {assertDefined} from './assert'
 import debug from './debug'
 
 
@@ -14,9 +15,22 @@ export function isDevMode() {
  * @return {boolean}
  */
 export function existInFeature(name) {
+  assertDefined(name)
+  name = name.toLocaleLowerCase()
   const initialParameters = new URLSearchParams(window.location.search)
-  const enabledFeature = initialParameters.get('feature')
-  debug().log('common#existInFeature: enabledFeature: ', enabledFeature)
-  const exist = enabledFeature && enabledFeature.toLowerCase() === name.toLowerCase()
-  return exist
+  const enabledFeatures = initialParameters.get('feature')
+  if (!enabledFeatures) {
+    return false
+  }
+  const enabledFeatureArr = enabledFeatures.split(',')
+  debug().log('common#existInFeature: enabledFeatureArr: ', enabledFeatureArr)
+
+  for (let i = 0; i < enabledFeatureArr.length; i++) {
+    if (enabledFeatureArr[i].toLocaleLowerCase() === name) {
+      debug().log('common#existInFeature: ', true, name)
+      return true
+    }
+  }
+
+  return false
 }
