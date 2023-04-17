@@ -12,7 +12,7 @@ import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
-import {isDevMode} from '../utils/common'
+import {existInFeature, isDevMode} from '../utils/common'
 
 
 /**
@@ -31,23 +31,13 @@ export function usePlaceMark() {
   const accessToken = useStore((state) => state.accessToken)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
-  const isPlaceMarkEnabled = useStore((state) => state.isPlaceMarkEnabled)
-  const setIsPlaceMarkEnabled = useStore((state) => state.setIsPlaceMarkEnabled)
   const location = useLocation()
-
-
-  useEffect(() => {
-    const initialParameters = new URLSearchParams(window.location.search)
-    const enabledFeature = initialParameters.get('feature')
-    const placeMarkEnabled = enabledFeature && enabledFeature.toLowerCase() === 'placemark'
-    setIsPlaceMarkEnabled(placeMarkEnabled)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const existPlaceMarkInFeature = existInFeature('placemark')
 
 
   useEffect(() => {
     (async () => {
-      if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !isPlaceMarkEnabled) {
+      if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !existPlaceMarkInFeature) {
         return
       }
       prevSynchSidebar = synchSidebar
@@ -135,7 +125,7 @@ export function usePlaceMark() {
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
-    if (!placeMark || !isPlaceMarkEnabled) {
+    if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
     const res = placeMark.onSceneDoubleClick(event)
@@ -162,7 +152,7 @@ export function usePlaceMark() {
 
 
   const onSceneSingleTap = async (event, callback) => {
-    if (!placeMark || !isPlaceMarkEnabled) {
+    if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
     const res = placeMark.onSceneClick(event)
@@ -197,7 +187,7 @@ export function usePlaceMark() {
 
 
   const savePlaceMark = async ({point, promiseGroup}) => {
-    if (!isPlaceMarkEnabled) {
+    if (!existPlaceMarkInFeature) {
       return
     }
 
@@ -233,7 +223,7 @@ export function usePlaceMark() {
 
 
   const selectPlaceMark = (url) => {
-    if (!isPlaceMarkEnabled) {
+    if (!existPlaceMarkInFeature) {
       return
     }
     assertDefined(url)
@@ -250,7 +240,7 @@ export function usePlaceMark() {
 
 
   const togglePlaceMarkActive = (id) => {
-    if (!isPlaceMarkEnabled) {
+    if (!existPlaceMarkInFeature) {
       return
     }
 
@@ -267,7 +257,7 @@ export function usePlaceMark() {
 
 
   const deactivatePlaceMark = () => {
-    if (!isPlaceMarkEnabled) {
+    if (!existPlaceMarkInFeature) {
       return
     }
     placeMark.deactivate()
@@ -276,7 +266,7 @@ export function usePlaceMark() {
 
 
   const activatePlaceMark = () => {
-    if (!isPlaceMarkEnabled) {
+    if (!existPlaceMarkInFeature) {
       return
     }
     placeMark.activate()

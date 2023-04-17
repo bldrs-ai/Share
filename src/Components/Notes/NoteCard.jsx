@@ -29,6 +29,7 @@ import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
+import {existInFeature} from '../../utils/common'
 
 
 /**
@@ -299,7 +300,6 @@ const CardFooter = ({
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const isPlaceMarkEnabled = useStore((state) => state.isPlaceMarkEnabled)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
@@ -346,7 +346,7 @@ const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && isPlaceMarkEnabled &&
+          !isComment && selected && synched && existInFeature('placemark') &&
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
