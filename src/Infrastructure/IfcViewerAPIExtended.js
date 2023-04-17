@@ -4,6 +4,7 @@ import IfcIsolator from './IfcIsolator'
 import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
+import debug from '../utils/debug'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -86,7 +87,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
         await this.IFC.selector.pickIfcItemsByID(modelID, toBeSelected, false, true)
         this.highlighter.setHighlighted(this.IFC.selector.selection.meshes)
       } catch (e) {
-        console.error(e)
+        debug().error('IfcViewerAPIExtended#setSelection$onError: ', e)
       }
     } else {
       this.highlighter.setHighlighted(null)
