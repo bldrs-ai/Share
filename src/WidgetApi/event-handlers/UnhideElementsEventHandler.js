@@ -1,11 +1,11 @@
 import useStore from '../../store/useStore'
 import ApiEventHandler from './ApiEventHandler'
 /**
- * Select Elements API event handler
+ * Unhide Elements API event handler
  */
-class SelectElementsEventHandler extends ApiEventHandler {
+class UnhideElementsEventHandler extends ApiEventHandler {
   apiConnection = null
-  name = 'ai.bldrs-share.SelectElements'
+  name = 'ai.bldrs-share.UnhideElements'
 
 
   /**
@@ -35,22 +35,24 @@ class SelectElementsEventHandler extends ApiEventHandler {
       return this.apiConnection.invalidOperationResponse('globalIds can\'t be null')
     }
 
-    const expressIds = []
-
-    if (data.globalIds.length) {
-      for (const globalId of data.globalIds) {
-        const expressId = this.searchIndex.getExpressIdByGlobalId(globalId)
-        if (expressId) {
-          expressIds.push(expressId)
+    if (data.globalIds === '*') {
+      useStore.getState().viewerStore.isolator.unHideAllElements()
+    } else {
+      const expressIds = []
+      if (data.globalIds.length) {
+        for (const globalId of data.globalIds) {
+          const expressId = this.searchIndex.getExpressIdByGlobalId(globalId)
+          if (expressId) {
+            expressIds.push(expressId)
+          }
         }
       }
+
+      useStore.getState().viewerStore.isolator.unHideElementsById(expressIds.map((id) => Number(id)))
     }
-    const toBeSelected = expressIds.map((id) => parseInt(id))
-        .filter((id) => useStore.getState().viewerStore.isolator.canBePickedInScene(id))
-    useStore.setState({selectedElements: toBeSelected})
 
     return this.apiConnection.successfulResponse({})
   }
 }
 
-export default SelectElementsEventHandler
+export default UnhideElementsEventHandler

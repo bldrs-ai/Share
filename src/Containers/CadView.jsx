@@ -19,10 +19,11 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 
@@ -81,7 +82,6 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -94,7 +94,7 @@ export default function CadView({
 
 
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -429,7 +429,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navigate(`${pathPrefix}${repoFilePath}`)
+    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
   /**
@@ -452,7 +452,7 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -594,8 +594,10 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSingleTap}
-        {...onDoubleTap}
+        onMouseDown={async (event) => {
+          await onSceneSingleTap(event)
+        }}
+        {...onSceneDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}

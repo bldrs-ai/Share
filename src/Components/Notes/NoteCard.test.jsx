@@ -83,7 +83,7 @@ describe('NoteCard', () => {
             synched={true}
           />
         </ShareMock>)
-    expect(getByTitle('Delete')).toBeInTheDocument()
+    expect(getByTitle('Delete note')).toBeInTheDocument()
   })
 
   it('Delete is working', async () => {
@@ -114,7 +114,7 @@ describe('NoteCard', () => {
             synchedNote={synchedNote}
           />
         </ShareMock>)
-    const deleteButton = getByTitle('Delete')
+    const deleteButton = getByTitle('Delete note')
     expect(deleteButton).toBeInTheDocument()
     const res = fireEvent.click(deleteButton)
     expect(res).toBe(true)
