@@ -19,13 +19,13 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
-import {getAllHashParams} from '../utils/location'
 
 
 /**
@@ -439,7 +439,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navigate(`${pathPrefix}${repoFilePath}`)
+    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
   /**
@@ -462,9 +462,7 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        const curHashParams = getAllHashParams()
-        debug().log('CadView#selectItemsInScene: curHashParams: ', curHashParams)
-        navigate(`${pathPrefix}${repoFilePath}/${path}#${curHashParams}`)
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
