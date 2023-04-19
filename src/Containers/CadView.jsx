@@ -80,6 +80,7 @@ export default function CadView({
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const selectedElements = useStore((state) => state.selectedElements)
+  const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
@@ -143,6 +144,15 @@ export default function CadView({
       }
     })()
   }, [selectedElements])
+
+
+  useEffect(() => {
+    (async () => {
+      if (Array.isArray(preselectedElementIds) && preselectedElementIds.length && viewer) {
+        await viewer.preselectElementsByIds(0, preselectedElementIds)
+      }
+    })()
+  }, [preselectedElementIds])
 
 
   // Watch for path changes within the model.

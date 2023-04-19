@@ -8,6 +8,8 @@ import UnhideElementsEventHandler from './event-handlers/UnhideElementsEventHand
 import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementSelectionChangedEventDispatcher'
 import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
 import HiddenElementsEventDispatcher from './event-dispatchers/HiddenElementsEventDispatcher'
+import HighlightElementsEventHandler from './event-handlers/HighlightElementsEventHandler'
+
 
 /**
  * Api Events are defined here
@@ -41,6 +43,7 @@ class ApiEventsRegistry {
     const events = [
       new LoadModelEventHandler(this.apiConnection, this.navigation),
       new SelectElementsEventHandler(this.apiConnection, this.searchIndex),
+      new HighlightElementsEventHandler(this.apiConnection, this.searchIndex),
       new UIComponentsVisibilityEventHandler(this.apiConnection),
       new SuppressAboutDialogHandler(this.apiConnection),
       new HideElementsEventHandler(this.apiConnection, this.searchIndex),

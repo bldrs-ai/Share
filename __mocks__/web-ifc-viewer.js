@@ -101,6 +101,7 @@ const impl = {
   }),
   setSelection: jest.fn(),
   pickIfcItemsByID: jest.fn(),
+  preselectElementsByIds: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)
