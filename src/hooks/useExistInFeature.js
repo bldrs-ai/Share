@@ -12,7 +12,6 @@ import debug from '../utils/debug'
 export function useExistInFeature(name) {
   const [existInFeature, setExistInFeature] = useState(false)
   const [searchParams] = useSearchParams()
-  debug().log('useExistInFeature: searchParams: ', searchParams.get('feature'))
 
 
   useEffect(() => {
@@ -26,7 +25,7 @@ export function useExistInFeature(name) {
       return
     }
     const enabledFeatureArr = enabledFeatures.split(',')
-    debug().log('useExistInFeature#useEffect: enabledFeatureArr: ', enabledFeatureArr)
+    debug().log('useExistInFeature#useEffect[name, searchParams]: enabledFeatureArr: ', enabledFeatureArr)
 
     for (let i = 0; i < enabledFeatureArr.length; i++) {
       if (enabledFeatureArr[i].toLowerCase() === lowerName) {
