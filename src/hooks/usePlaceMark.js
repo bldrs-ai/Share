@@ -12,7 +12,8 @@ import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
-import {existInFeature, isDevMode} from '../utils/common'
+import {isDevMode} from '../utils/common'
+import {useExistInFeature} from './useExistInFeature'
 
 
 /**
@@ -32,7 +33,7 @@ export function usePlaceMark() {
   const synchSidebar = useStore((state) => state.synchSidebar)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
-  const existPlaceMarkInFeature = existInFeature('placemark')
+  const existPlaceMarkInFeature = useExistInFeature('placemark')
 
 
   useEffect(() => {
