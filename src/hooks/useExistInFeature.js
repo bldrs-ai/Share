@@ -4,7 +4,7 @@ import debug from '../utils/debug'
 
 
 /**
- * Feature Hook
+ * This hook checks for the existence of a named feature in the URL SearchParams (via react-router), e.g. feature=app,placemark.
  *
  * @param {string} name Feature flag name
  * @return {Function}
