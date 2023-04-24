@@ -12,7 +12,9 @@ import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
-import {existInFeature, isDevMode} from '../utils/common'
+import {isDevMode} from '../utils/common'
+import {useExistInFeature} from './useExistInFeature'
+import debug from '../utils/debug'
 
 
 /**
@@ -32,11 +34,16 @@ export function usePlaceMark() {
   const synchSidebar = useStore((state) => state.synchSidebar)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
-  const existPlaceMarkInFeature = existInFeature('placemark')
+  const existPlaceMarkInFeature = useExistInFeature('placemark')
 
 
   useEffect(() => {
     (async () => {
+      debug().log('usePlaceMark#useEffect[synchSidebar]: repository: ', repository)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: placeMark: ', placeMark)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: prevSynchSidebar: ', prevSynchSidebar)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: synchSidebar: ', synchSidebar)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: existPlaceMarkInFeature: ', existPlaceMarkInFeature)
       if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !existPlaceMarkInFeature) {
         return
       }
@@ -114,10 +121,11 @@ export function usePlaceMark() {
       resetPlaceMarkColors()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [synchSidebar])
+  }, [synchSidebar, placeMark])
 
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
+    debug().log('usePlaceMark#createPlaceMark')
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
@@ -125,6 +133,7 @@ export function usePlaceMark() {
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
+    debug().log('usePlaceMark#onSceneDoubleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -152,6 +161,7 @@ export function usePlaceMark() {
 
 
   const onSceneSingleTap = async (event, callback) => {
+    debug().log('usePlaceMark#onSceneSingleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -240,6 +250,7 @@ export function usePlaceMark() {
 
 
   const togglePlaceMarkActive = (id) => {
+    debug().log('usePlaceMark#togglePlaceMarkActive: id: ', id)
     if (!existPlaceMarkInFeature) {
       return
     }

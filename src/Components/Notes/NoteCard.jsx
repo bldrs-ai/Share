@@ -29,7 +29,7 @@ import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
-import {existInFeature} from '../../utils/common'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
 
 
 /**
@@ -304,6 +304,7 @@ const CardFooter = ({
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
+  const existPlaceMarkInFeature = useExistInFeature('placemark')
 
 
   return (
@@ -346,7 +347,7 @@ const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && existInFeature('placemark') &&
+          !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
