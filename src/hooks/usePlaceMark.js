@@ -121,7 +121,7 @@ export function usePlaceMark() {
       resetPlaceMarkColors()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [synchSidebar])
+  }, [synchSidebar, placeMark])
 
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
