@@ -14,6 +14,7 @@ import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
 import {useExistInFeature} from './useExistInFeature'
+import debug from '../utils/debug'
 
 
 /**
@@ -38,6 +39,11 @@ export function usePlaceMark() {
 
   useEffect(() => {
     (async () => {
+      debug().log('usePlaceMark#useEffect[synchSidebar]: repository: ', repository)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: placeMark: ', placeMark)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: prevSynchSidebar: ', prevSynchSidebar)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: synchSidebar: ', synchSidebar)
+      debug().log('usePlaceMark#useEffect[synchSidebar]: existPlaceMarkInFeature: ', existPlaceMarkInFeature)
       if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !existPlaceMarkInFeature) {
         return
       }
@@ -119,6 +125,7 @@ export function usePlaceMark() {
 
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
+    debug().log('usePlaceMark#createPlaceMark')
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
@@ -126,6 +133,7 @@ export function usePlaceMark() {
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
+    debug().log('usePlaceMark#onSceneDoubleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -153,6 +161,7 @@ export function usePlaceMark() {
 
 
   const onSceneSingleTap = async (event, callback) => {
+    debug().log('usePlaceMark#onSceneSingleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -241,6 +250,7 @@ export function usePlaceMark() {
 
 
   const togglePlaceMarkActive = (id) => {
+    debug().log('usePlaceMark#togglePlaceMarkActive: id: ', id)
     if (!existPlaceMarkInFeature) {
       return
     }
