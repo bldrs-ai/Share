@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
+import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {getIssues, getIssueComments} from '../../utils/GitHub'
@@ -30,6 +31,14 @@ export default function Notes() {
   const drawer = useStore((state) => state.drawer)
   const accessToken = useStore((state) => state.accessToken)
   const [hasError, setHasError] = useState(false)
+  const handleError = (err) => {
+    if (!err) {
+      return
+    }
+
+    Sentry.captureException(err)
+    setHasError(true)
+  }
 
 
   useEffect(() => {
@@ -68,7 +77,7 @@ export default function Notes() {
         setNotes(newNotes)
       } catch (e) {
         debug().warn('failed to fetch notes: ', e)
-        setHasError(true)
+        handleError(e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -105,7 +114,7 @@ export default function Notes() {
         setComments(newComments)
       } catch (e) {
         debug().warn('failed to fetch comments: ', e)
-        setHasError(true)
+        handleError(e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
