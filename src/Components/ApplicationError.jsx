@@ -20,11 +20,12 @@ const ApplicationError = () => {
         We&apos;re not quite sure what went wrong.
       </Typography>
 
-      <Typography>
-        Not to worry. You can <a href={'/'}>click here to start a new session</a>.
+      <Typography sx={{pb: 2, lineHeight: 1.75}}>
+        Not to worry.<br/>
+        You can <a href="/">click here to start a new session</a>.
       </Typography>
 
-      <Logo/>
+      <a href="/"><Logo/></a>
     </Box>
   )
 }

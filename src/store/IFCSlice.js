@@ -13,6 +13,7 @@ export default function createIFCSlice(set, get) {
     selectedElement: null,
     selectedElements: [],
     elementTypesMap: [],
+    preselectedElementIds: null,
     cameraControls: null,
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
@@ -20,6 +21,7 @@ export default function createIFCSlice(set, get) {
     setSelectedElement: (element) => set(() => ({selectedElement: element})),
     setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
+    setPreselectedElementIds: (elementIds) => set(() => ({preselectedElementIds: elementIds})),
     setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
   }
 }

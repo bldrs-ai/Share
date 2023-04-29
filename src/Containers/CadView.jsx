@@ -19,13 +19,13 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
-import {getAllHashParams} from '../utils/location'
 import {groupElementsByTypes} from '../utils/ifc'
 
 
@@ -86,6 +86,7 @@ export default function CadView({
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
+  const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
@@ -154,6 +155,15 @@ export default function CadView({
       }
     })()
   }, [selectedElements])
+
+
+  useEffect(() => {
+    (async () => {
+      if (Array.isArray(preselectedElementIds) && preselectedElementIds.length && viewer) {
+        await viewer.preselectElementsByIds(0, preselectedElementIds)
+      }
+    })()
+  }, [preselectedElementIds])
 
 
   // Watch for path changes within the model.
@@ -445,7 +455,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navigate(`${pathPrefix}${repoFilePath}`)
+    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
   /**
@@ -468,9 +478,7 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        const curHashParams = getAllHashParams()
-        debug().log('CadView#selectItemsInScene: curHashParams: ', curHashParams)
-        navigate(`${pathPrefix}${repoFilePath}/${path}#${curHashParams}`)
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual

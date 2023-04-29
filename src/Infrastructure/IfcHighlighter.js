@@ -42,6 +42,19 @@ export default class IfcHighlighter {
   setHighlighted(meshes) {
     this._selectionOutlineEffect.setSelection(meshes ?? [])
   }
+
+  /**
+   * Highlights and outlines meshes in scene
+   *
+   * @param {Mesh[]} geometry meshes
+   */
+  addToHighlighting(mesh) {
+    const currentSelection = this._selectionOutlineEffect.getSelection()
+    if (mesh && currentSelection.indexOf(mesh) === -1) {
+      currentSelection.add(mesh)
+      // NOTE: the added mesh will be automatically be removed from the scene when the prepick changes
+    }
+  }
 }
 
 

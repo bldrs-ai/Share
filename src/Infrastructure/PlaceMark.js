@@ -6,20 +6,10 @@ import {
   Raycaster,
 } from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import debug from '../utils/debug'
 import {floatStrTrim} from '../utils/strings'
 import {disposeGroup, getSvgGroupFromObj, getSvgObjFromUrl} from '../utils/svg'
 import {isDevMode} from '../utils/common'
 import {BlendFunction} from 'postprocessing'
-
-
-const tempScale = new Vector3()
-
-
-export const PLACE_MARK_DISTANCE = 1
-export const INACTIVE_PLACE_MARK_HEIGHT = 1
-export const ACTIVE_PLACE_MARK_SCALE = 1.6
-export const PLACE_MARK_SCALE_FACTOR = 60
 
 
 /**
@@ -31,10 +21,13 @@ export default class PlaceMark extends EventDispatcher {
    */
   constructor({context, postProcessor}) {
     super()
-    debug().log('PlaceMark#constructor: context: ', context)
     const _domElement = context.getDomElement()
     const _camera = context.getCamera()
     const _scene = context.getScene()
+    const _pointer = new Vector2()
+    let _objects = []
+    const _placeMarks = []
+    const _raycaster = new Raycaster()
     const outlineEffect = postProcessor.createOutlineEffect({
       blendFunction: BlendFunction.SCREEN,
       edgeStrength: 1.5,
@@ -48,10 +41,6 @@ export default class PlaceMark extends EventDispatcher {
       opacity: 1,
     })
     const composer = postProcessor.getComposer
-    const _pointer = new Vector2()
-    let _objects = []
-    const _placeMarks = []
-    const _raycaster = new Raycaster()
 
 
     this.activated = false
@@ -143,7 +132,6 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         _raycaster.setFromCamera(_pointer, _camera)
         _raycaster.intersectObjects(_objects, true, _intersections)
-        debug().log('PlaceMark#dropPlaceMark: _intersections: ', _intersections)
 
         if (_intersections.length > 0) {
           const intersectPoint = _intersections[0].point
@@ -151,7 +139,6 @@ export default class PlaceMark extends EventDispatcher {
           intersectPoint.y = floatStrTrim(intersectPoint.y)
           intersectPoint.z = floatStrTrim(intersectPoint.z)
           const offset = _intersections[0].face.normal.clone().multiplyScalar(PLACE_MARK_DISTANCE)
-          debug().log('PlaceMark#dropPlaceMark: offset: ', offset)
           const point = intersectPoint.add(offset)
           const lookAt = point.add(_intersections[0].face.normal)
           const promiseGroup = this.putDown({point, lookAt})
@@ -164,18 +151,13 @@ export default class PlaceMark extends EventDispatcher {
 
 
     this.putDown = ({point, lookAt, fillColor = 'black', height = INACTIVE_PLACE_MARK_HEIGHT}) => {
-      debug().log('PlaceMark#putDown: point: ', point)
-      debug().log('PlaceMark#putDown: lookAt: ', lookAt) // Not using yet since place mark always look at front
       return new Promise((resolve, reject) => {
         getSvgObjFromUrl('/icons/PlaceMark.svg').then((svgObj) => {
           const _placeMark = getSvgGroupFromObj({svgObj, fillColor, layer: 'placemark', height})
           _placeMark.position.copy(point)
           _scene.add(_placeMark)
           _placeMarks.push(_placeMark)
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: _placeMarks: ', _placeMarks)
           const placeMarkMeshSet = getPlaceMarkMeshSet()
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet: ', placeMarkMeshSet)
-          debug().log('PlaceMark#putDown#getSvgGroupFromObj: placeMarkMeshSet.size: ', placeMarkMeshSet.size)
           outlineEffect.setSelection(placeMarkMeshSet)
           resolve(_placeMark)
         })
@@ -184,7 +166,6 @@ export default class PlaceMark extends EventDispatcher {
 
 
     this.disposePlaceMark = (_placeMark) => {
-      debug().log('PlaceMark#disposePlaceMark: before place marks count: ', _placeMarks.length)
       const index = _placeMarks.indexOf(_placeMark)
 
       if (index > -1) {
@@ -192,9 +173,6 @@ export default class PlaceMark extends EventDispatcher {
         disposeGroup(_placeMark)
         _scene.remove(_placeMark)
       }
-
-      debug().log('PlaceMark#disposePlaceMark: after place marks count: ', _placeMarks.length)
-      debug().log('PlaceMark#disposePlaceMark: _scene: ', _scene)
     }
 
 
@@ -209,7 +187,6 @@ export default class PlaceMark extends EventDispatcher {
 
     const getIntersectionPlaceMarkInfo = () => {
       let res = {}
-      debug().log('PlaceMark#getIntersectionPlaceMarkInfo: _placeMarks: ', _placeMarks)
 
       if (_placeMarks.length) {
         updatePointer(event)
@@ -217,7 +194,6 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         _raycaster.setFromCamera(_pointer, _camera)
         _raycaster.intersectObjects(_placeMarks, true, _intersections)
-        debug().log('PlaceMark#getIntersectionPlaceMarkInfo: _intersections: ', _intersections)
         if (_intersections.length) {
           res = {url: _intersections[0].object?.userData?.url}
         }
@@ -236,7 +212,6 @@ export default class PlaceMark extends EventDispatcher {
           }
         })
       })
-      debug().log('PlaceMark#getPlaceMarkMeshes: placeMarkMeshSet: ', placeMarkMeshSet)
       return placeMarkMeshSet
     }
 
@@ -266,6 +241,7 @@ export default class PlaceMark extends EventDispatcher {
         composer.render()
       }
 
+
       return newUpdateFn.bind(context.renderer)
     }
 
@@ -277,3 +253,10 @@ export default class PlaceMark extends EventDispatcher {
     }
   }
 }
+
+
+const tempScale = new Vector3()
+const PLACE_MARK_DISTANCE = 0
+const INACTIVE_PLACE_MARK_HEIGHT = 1
+const ACTIVE_PLACE_MARK_SCALE = 1.6
+const PLACE_MARK_SCALE_FACTOR = 60
