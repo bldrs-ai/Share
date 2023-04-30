@@ -13,6 +13,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import {styled} from '@mui/material/styles'
+import {useExistInFeature} from '../hooks/useExistInFeature'
 
 /**
  * @param {object} model
@@ -46,6 +47,8 @@ export default function NavPanel({
 
   const elementTypesMap = useStore((state) => state.elementTypesMap)
 
+  const existNavTypesInFeature = useExistInFeature('navtypes')
+
   const onTreeViewChanged = (event, value) => {
     if (value !== null) {
       setNavigationMode(value)
@@ -69,7 +72,7 @@ export default function NavPanel({
     },
   }))
 
-  const isNavTree = navigationMode === 'spatial-tree'
+  const isNavTree = existNavTypesInFeature ? navigationMode === 'spatial-tree' : true
   return (
     <div style={{
       width: '100%',
@@ -100,6 +103,7 @@ export default function NavPanel({
         }}
       >
         <div>
+          {existNavTypesInFeature &&
           <StyledToggleButtonGroup
             exclusive
             id={'togglegrp'}
@@ -140,7 +144,7 @@ export default function NavPanel({
                 <ListIcon/>
               </Tooltip>
             </ToggleButton>
-          </StyledToggleButtonGroup>
+          </StyledToggleButtonGroup>}
           <TreeView
             aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
             defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
@@ -157,7 +161,7 @@ export default function NavPanel({
             }}
             key='tree'
             sx={{
-              'padding': '7px 0 14px 0',
+              'padding': existNavTypesInFeature ? '7px 0 14px 0' : '14px 0',
               'maxWidth': '400px',
               'overflowY': 'auto',
               'overflowX': 'hidden',
