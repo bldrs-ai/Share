@@ -37,7 +37,7 @@ class ElementSelectionChangedEventDispatcher extends ApiEventDispatcher {
       if (!propertyStateChanged) {
         return
       }
-      const currSelectedItemsGlobalIds = this.utils.getSelectedElementIds(state)
+      const currSelectedItemsGlobalIds = this.utils.getElementsGlobalIds(state.selectedElements)
       const noChanges = unsortedArraysAreEqual(currSelectedItemsGlobalIds, lastSelectedElementGlobalIds)
       if (noChanges) {
         return

@@ -110,9 +110,33 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const id = this.getPickedItemId(found)
     if (this.isolator.canBePickedInScene(id)) {
       await this.IFC.selector.preselection.pick(found)
+      this.highlightPreselection()
     }
   }
 
+  /**
+   * applies Preselection effect on an Element by Id
+   *
+   * @param {number} modelID
+   * @param {number[]} expressIds express Ids of the elements
+   */
+  async preselectElementsByIds(modelId, expressIds) {
+    const filteredIds = expressIds.filter((id) => this.isolator.canBePickedInScene(id)).map((a) => parseInt(a))
+    if (filteredIds.length) {
+      await this.IFC.selector.preselection.pickByID(modelId, filteredIds, false, true)
+      this.highlightPreselection()
+    }
+  }
+
+  /**
+   * adds the highlighting (outline effect) to the currently preselected element in the viewer
+   */
+  highlightPreselection() {
+    // Deconstruct the preselection meshes set to get the first element in set
+    // The preselection set always contains only one element or none
+    const [targetMesh] = this.IFC.selector.preselection.meshes
+    this.highlighter.addToHighlighting(targetMesh)
+  }
 
   /**
    *

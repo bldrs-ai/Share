@@ -44,6 +44,7 @@ export const build = {
     'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
     'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
     'process.env.DISABLE_MOCK_SERVICE_WORKER': JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER),
+    'process.env.RAW_GIT_PROXY_URL': JSON.stringify(process.env.RAW_GIT_PROXY_URL || 'raw.githubusercontent.com'),
   },
   plugins: [
     progress(),

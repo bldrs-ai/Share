@@ -1,11 +1,13 @@
 import useStore from '../../store/useStore'
 import ApiEventHandler from './ApiEventHandler'
+
+
 /**
  * Select Elements API event handler
  */
-class SelectElementsEventHandler extends ApiEventHandler {
+class HighlightElementsEventHandler extends ApiEventHandler {
   apiConnection = null
-  name = 'ai.bldrs-share.SelectElements'
+  name = 'ai.bldrs-share.HighlightElements'
 
 
   /**
@@ -45,12 +47,11 @@ class SelectElementsEventHandler extends ApiEventHandler {
         }
       }
     }
-    const toBeSelected = expressIds.map((id) => parseInt(id))
-        .filter((id) => useStore.getState().viewerStore.isolator.canBePickedInScene(id))
-    useStore.setState({selectedElements: toBeSelected})
+
+    useStore.setState({preselectedElementIds: expressIds})
 
     return this.apiConnection.successfulResponse({})
   }
 }
 
-export default SelectElementsEventHandler
+export default HighlightElementsEventHandler

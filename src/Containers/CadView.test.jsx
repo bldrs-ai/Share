@@ -7,6 +7,7 @@ import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, * as AllCadView from './CadView'
+import {getFinalURL} from './CadView'
 
 
 const mockedUseNavigate = jest.fn()
@@ -276,6 +277,36 @@ describe('CadView', () => {
   })
 
 
+  it('can highlight some elements based on state change', async () => {
+    const highlightedIdsAsString = ['0', '1']
+    const modelId = 0
+    const elementCount = 2
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByTitle} = render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    await actAsyncFlush()
+    expect(getByTitle('Section')).toBeInTheDocument()
+    await act(() => {
+      result.current.setPreselectedElementIds(highlightedIdsAsString)
+    })
+    expect(result.current.preselectedElementIds).toHaveLength(elementCount)
+    expect(viewer.preselectElementsByIds).toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
+
+    await actAsyncFlush()
+  })
+
+
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
@@ -294,4 +325,27 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
   */
+})
+
+
+describe('With environment variables', () => {
+  const OLD_ENV = process.env
+
+
+  beforeEach(() => {
+    jest.resetModules()
+    process.env = {...OLD_ENV}
+  })
+
+
+  afterAll(() => {
+    process.env = OLD_ENV
+  })
+
+
+  it('getFinalURL', async () => {
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
+    process.env.RAW_GIT_PROXY_URL = 'rawgit.bldrs.dev'
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
+  })
 })
