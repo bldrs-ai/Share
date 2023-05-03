@@ -755,16 +755,20 @@ const getGitHubDownloadURL = async (url, accessToken) => {
 }
 
 
-const getFinalURL = async (url, accessToken) => {
+export const getFinalURL = async (url, accessToken) => {
   const u = new URL(url)
+  debug().log('CadView#getFinalURL: url: ', url)
+  debug().log('CadView#getFinalURL: accessToken: ', accessToken)
+  debug().log('CadView#getFinalURL: process.env.RAW_GIT_PROXY_URL: ', process.env.RAW_GIT_PROXY_URL)
 
   switch (u.host.toLowerCase()) {
     case 'github.com':
-      if (accessToken === '') {
-        u.host = 'raw.githubusercontent.com'
+      if (!accessToken) {
+        u.host = process.env.RAW_GIT_PROXY_URL || 'raw.githubusercontent.com'
         return u.toString()
       }
 
+      debug().log('CadView#getFinalURL: calling getGitHubDownloadURL')
       return await getGitHubDownloadURL(url, accessToken)
 
     default:
