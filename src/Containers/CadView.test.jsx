@@ -345,7 +345,8 @@ describe('With environment variables', () => {
 
   it('getFinalURL', async () => {
     expect(await getFinalURL('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
-    process.env.RAW_GIT_PROXY_URL = 'rawgit.bldrs.dev'
+
+    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
     expect(await getFinalURL('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
   })
 })
