@@ -101,8 +101,7 @@ module.exports = {
     'require-await': 'error',
     'linebreak-style': ['error', 'unix'],
     'no-console': 'error',
-    'no-alert': 'error',
-    'no-debugger': 'error'
+    'no-debugger': 'error',
   },
   settings: {
     react: {
