@@ -7,6 +7,7 @@ import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, * as AllCadView from './CadView'
+import {getFinalURL} from './CadView'
 
 
 const mockedUseNavigate = jest.fn()
@@ -324,4 +325,28 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
   */
+})
+
+
+describe('With environment variables', () => {
+  const OLD_ENV = process.env
+
+
+  beforeEach(() => {
+    jest.resetModules()
+    process.env = {...OLD_ENV}
+  })
+
+
+  afterAll(() => {
+    process.env = OLD_ENV
+  })
+
+
+  it('getFinalURL', async () => {
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
+
+    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
+  })
 })
