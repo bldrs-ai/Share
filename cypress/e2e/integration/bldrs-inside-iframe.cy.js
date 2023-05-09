@@ -261,7 +261,7 @@ describe('bldrs inside iframe', () => {
       assert.equal(response.data['current'].length, hiddenElementsCount)
     })
 
-    cy.get('@iframe').findByTestId('hide-icon').click()
+    cy.get('@iframe').findByTestId('unhide-icon').click()
 
     cy.get('#txtLastMsg').should(($txtLastMsg) => {
       const msg = JSON.parse($txtLastMsg.val())

@@ -26,6 +26,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {groupElementsByTypes} from '../utils/ifc'
 
 
 /**
@@ -61,6 +62,9 @@ export default function CadView({
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
+  const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
+  const [expandedTypes, setExpandedTypes] = useState([])
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   // UI elts
   const theme = useTheme()
@@ -79,6 +83,8 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
@@ -127,7 +133,8 @@ export default function CadView({
         return
       }
       // Update The selection on the scene pick/unpick
-      await viewer.setSelection(0, selectedElements.map((id) => parseInt(id)))
+      const ids = selectedElements.map((id) => parseInt(id))
+      await viewer.setSelection(0, ids)
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
@@ -138,6 +145,10 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
+        }
+        const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
+        if (types.length > 0) {
+          setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
       } else {
         setSelectedElement(null)
@@ -371,6 +382,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
+    setElementTypesMap(groupElementsByTypes(rootElt))
     setIsNavPanelOpen(true)
   }
 
@@ -408,6 +420,10 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
+      const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
+      if (types.length > 0) {
+        setDefaultExpandedTypes(types)
+      }
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -575,7 +591,6 @@ export default function CadView({
     }
   }
 
-
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 60
@@ -645,8 +660,13 @@ export default function CadView({
               model={model}
               element={rootElement}
               defaultExpandedElements={defaultExpandedElements}
+              defaultExpandedTypes={defaultExpandedTypes}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              expandedTypes={expandedTypes}
+              setExpandedTypes={setExpandedTypes}
+              navigationMode={navigationMode}
+              setNavigationMode={setNavigationMode}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)

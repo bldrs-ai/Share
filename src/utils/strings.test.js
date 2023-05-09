@@ -5,6 +5,7 @@ import {
   isNumber,
   isNumeric,
   matchUuid,
+  toTitleCase,
 } from './strings'
 
 
@@ -90,5 +91,11 @@ describe('strings', () => {
       'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48',
       'http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48',
     ])
+  })
+
+  it('toTitleCase', () => {
+    expect(toTitleCase('WALL')).toBe('Wall')
+    expect(toTitleCase('wAlL')).toBe('Wall')
+    expect(toTitleCase('wall')).toBe('Wall')
   })
 })
