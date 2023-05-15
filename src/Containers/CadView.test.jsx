@@ -7,6 +7,7 @@ import useStore from '../store/useStore'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, * as AllCadView from './CadView'
+import {getFinalURL} from './CadView'
 
 
 const mockedUseNavigate = jest.fn()
@@ -28,7 +29,7 @@ describe('CadView', () => {
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
   beforeEach(() => {
     viewer = new IfcViewerAPIExtended()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
+    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValue(makeTestTree())
     viewer.context.getDomElement = jest.fn(() => {
       return document.createElement('div')
     })
@@ -40,7 +41,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPI', async () => {
+  it('renders with mock IfcViewerAPIExtended', async () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
@@ -57,8 +58,8 @@ describe('CadView', () => {
     )
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
   })
 
 
@@ -81,16 +82,16 @@ describe('CadView', () => {
             modelPath={result.current[0]}
           />
         </ShareMock>)
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
+    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
-    expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
+    expect(getPropsCalls[0][1]).toBe(targetEltId) // call 1, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
-    expect(getPropsCalls[1][1]).toBe(targetEltId) // call 2, arg 2
+    expect(getPropsCalls[1][1]).toBe(0) // call 2, arg 2
     await actAsyncFlush()
   })
 
@@ -178,9 +179,9 @@ describe('CadView', () => {
           />
         </ShareMock>,
     )
+    await actAsyncFlush()
     await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
     await actAsyncFlush()
-    viewer._loadedModel.ifcManager.getSpatialStructure.mockReturnValueOnce(makeTestTree())
     render(
         <ShareMock>
           <CadView
@@ -191,8 +192,8 @@ describe('CadView', () => {
           />
         </ShareMock>,
     )
-    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
     await actAsyncFlush()
+    expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
   })
 
 
@@ -276,6 +277,36 @@ describe('CadView', () => {
   })
 
 
+  it('can highlight some elements based on state change', async () => {
+    const highlightedIdsAsString = ['0', '1']
+    const modelId = 0
+    const elementCount = 2
+    const modelPath = {
+      filepath: `index.ifc`,
+      gitpath: undefined,
+    }
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByTitle} = render(
+        <ShareMock>
+          <CadView
+            installPrefix={'/'}
+            appPrefix={'/'}
+            pathPrefix={'/'}
+            modelPath={modelPath}
+          />
+        </ShareMock>)
+    await actAsyncFlush()
+    expect(getByTitle('Section')).toBeInTheDocument()
+    await act(() => {
+      result.current.setPreselectedElementIds(highlightedIdsAsString)
+    })
+    expect(result.current.preselectedElementIds).toHaveLength(elementCount)
+    expect(viewer.preselectElementsByIds).toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
+
+    await actAsyncFlush()
+  })
+
+
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
@@ -288,11 +319,34 @@ describe('CadView', () => {
         <ShareMock>
           <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'} modelPath={modelPath}/>
         </ShareMock>)
-    const viewerMock = __getIfcViewerAPIMockSingleton()
-    expect(viewerMock.IFC.context.getCamera).toHaveBeenCalled()
-    expect(viewerMock.IFC.context.getRenderer).toHaveBeenCalled()
-    expect(viewerMock.IFC.context.getScene).toHaveBeenCalled()
+    expect(viewer.IFC.context.getCamera).toHaveBeenCalled()
+    expect(viewer.IFC.context.getRenderer).toHaveBeenCalled()
+    expect(viewer.IFC.context.getScene).toHaveBeenCalled()
     await actAsyncFlush()
   })
   */
+})
+
+
+describe('With environment variables', () => {
+  const OLD_ENV = process.env
+
+
+  beforeEach(() => {
+    jest.resetModules()
+    process.env = {...OLD_ENV}
+  })
+
+
+  afterAll(() => {
+    process.env = OLD_ENV
+  })
+
+
+  it('getFinalURL', async () => {
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
+
+    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
+    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
+  })
 })

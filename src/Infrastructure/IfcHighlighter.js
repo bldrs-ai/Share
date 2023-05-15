@@ -1,8 +1,7 @@
-import {EffectComposer} from 'postprocessing'
+import {EffectComposer, BlendFunction} from 'postprocessing'
 import {Mesh} from 'three'
 import {IfcContext} from 'web-ifc-viewer/dist/components'
-import createComposer from './CustomPostProcessing'
-
+import CustomPostProcessor from './CustomPostProcessor'
 
 /**
  *  Overrides the default render functionality in the viewer
@@ -10,30 +9,51 @@ import createComposer from './CustomPostProcessing'
  */
 export default class IfcHighlighter {
   highlightedMeshes = null
-  _outlineEffect = null
+  _selectionOutlineEffect = null
+
   /**
    * constructs new class
    *
    * @param {IfcContext} context of the viewer
+   * @param {CustomPostProcessor} the post-processor
    */
-  constructor(context) {
-    // override the viewer rendering pipeline
-    const renderer = context.getRenderer()
-    const scene = context.getScene()
-    const camera = context.getCamera()
-    const {composer, outlineEffect} = createComposer(renderer, scene, camera)
-    this._outlineEffect = outlineEffect
-    context.renderer.update = newUpdateFunction(context, composer)
+  constructor(context, postProcessor) {
+    this._selectionOutlineEffect = postProcessor.createOutlineEffect({
+      blendFunction: BlendFunction.SCREEN,
+      edgeStrength: 1.5,
+      pulseSpeed: 0.0,
+      visibleEdgeColor: 0xc7c7c7,
+      hiddenEdgeColor: 0xff9b00,
+      height: window.innerHeight,
+      windth: window.innerWidth,
+      blur: false,
+      xRay: true,
+      opacity: 1,
+    })
+    context.renderer.update = newUpdateFunction(context, postProcessor.getComposer)
   }
 
 
   /**
    * Highlights and outlines meshes in scene
    *
-   * @param {Mesh} geometry meshes
+   * @param {Mesh[]} geometry meshes
    */
   setHighlighted(meshes) {
-    this._outlineEffect.setSelection(meshes ?? [])
+    this._selectionOutlineEffect.setSelection(meshes ?? [])
+  }
+
+  /**
+   * Highlights and outlines meshes in scene
+   *
+   * @param {Mesh[]} geometry meshes
+   */
+  addToHighlighting(mesh) {
+    const currentSelection = this._selectionOutlineEffect.getSelection()
+    if (mesh && currentSelection.indexOf(mesh) === -1) {
+      currentSelection.add(mesh)
+      // NOTE: the added mesh will be automatically be removed from the scene when the prepick changes
+    }
   }
 }
 

@@ -20,12 +20,14 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
+import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {groupElementsByTypes} from '../utils/ifc'
 
 
 /**
@@ -61,6 +63,9 @@ export default function CadView({
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
+  const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
+  const [expandedTypes, setExpandedTypes] = useState([])
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   // UI elts
   const theme = useTheme()
@@ -79,10 +84,12 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
+  const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
-  // const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -93,8 +100,9 @@ export default function CadView({
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
 
+
   // Place Mark
-  const {createPlaceMark, onSingleTap, onDoubleTap} = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -126,7 +134,8 @@ export default function CadView({
         return
       }
       // Update The selection on the scene pick/unpick
-      await viewer.setSelection(0, selectedElements.map((id) => parseInt(id)))
+      const ids = selectedElements.map((id) => parseInt(id))
+      await viewer.setSelection(0, ids)
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
@@ -138,11 +147,24 @@ export default function CadView({
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }
+        const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
+        if (types.length > 0) {
+          setExpandedTypes([...new Set(types.concat(expandedTypes))])
+        }
       } else {
         setSelectedElement(null)
       }
     })()
   }, [selectedElements])
+
+
+  useEffect(() => {
+    (async () => {
+      if (Array.isArray(preselectedElementIds) && preselectedElementIds.length && viewer) {
+        await viewer.preselectElementsByIds(0, preselectedElementIds)
+      }
+    })()
+  }, [preselectedElementIds])
 
 
   // Watch for path changes within the model.
@@ -216,9 +238,17 @@ export default function CadView({
     createPlaceMark({
       context: viewer.context,
       oppositeObjects: [tmpModelRef],
+      postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
     setModelReady(true)
+    // maintain hidden elements if any
+    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
+        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+    if (previouslyHiddenELements.length > 0) {
+      viewer.isolator.unHideAllElements()
+      viewer.isolator.hideElementsById(previouslyHiddenELements)
+    }
   }
 
 
@@ -265,7 +295,7 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
     const loadedModel = await viewer.loadIfcUrl(
         ifcURL,
-        !urlHasCameraParams(), // fitToFrame
+        !urlHasCameraParams(), // fit to frame
         (progressEvent) => {
           if (Number.isFinite(progressEvent.loaded)) {
             const loadedBytes = progressEvent.loaded
@@ -276,11 +306,12 @@ export default function CadView({
           }
         },
         (error) => {
-          console.warn('CadView#loadIfc$onError', error)
+          debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
         })
+    await viewer.isolator.setModel(loadedModel)
 
     Privacy.recordEvent('select_content', {
       content_type: 'ifc_model',
@@ -304,6 +335,7 @@ export default function CadView({
     }
 
     debug().error('CadView#loadIfc: Model load failed!')
+    return loadedModel
   }
 
 
@@ -353,6 +385,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
+    setElementTypesMap(groupElementsByTypes(rootElt))
     setIsNavPanelOpen(true)
   }
 
@@ -390,6 +423,10 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
+      const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
+      if (types.length > 0) {
+        setDefaultExpandedTypes(types)
+      }
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -421,7 +458,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navigate(`${pathPrefix}${repoFilePath}`)
+    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
   /**
@@ -437,13 +474,14 @@ export default function CadView({
     try {
       // Update The Component state
       setSelectedElements(resultIDs.map((id) => `${id}`))
+
       // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navigate(`${pathPrefix}${repoFilePath}/${path}`)
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -465,7 +503,7 @@ export default function CadView({
     const lookupElt = elementsById[parseInt(expressId)]
     if (!lookupElt) {
       debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
-      return
+      return undefined
     }
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
     return pathIds
@@ -513,6 +551,9 @@ export default function CadView({
    */
   function selectWithShiftClickEvents(shiftKey, expressId) {
     let newSelection = []
+    if (!viewer.isolator.canBePickedInScene(expressId)) {
+      return
+    }
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
@@ -536,14 +577,19 @@ export default function CadView({
       // add a plane
       if (event.code === 'KeyQ') {
         viewer.clipper.createPlane()
-      }
-      // delete all planes
-      if (event.code === 'KeyW') {
+      } else if (event.code === 'KeyW') {
         viewer.clipper.deletePlane()
-      }
-      if (event.code === 'KeyA' ||
+      } else if (event.code === 'KeyA' ||
         event.code === 'Escape') {
         selectItemsInScene([])
+      } else if (event.code === 'KeyH') {
+        viewer.isolator.hideSelectedElements()
+      } else if (event.code === 'KeyU') {
+        viewer.isolator.unHideAllElements()
+      } else if (event.code === 'KeyI') {
+        viewer.isolator.toggleIsolationMode()
+      } else if (event.code === 'KeyR') {
+        viewer.isolator.toggleRevealHiddenElements()
       }
     }
   }
@@ -596,8 +642,10 @@ export default function CadView({
           margin: 'auto',
         }}
         id='viewer-container'
-        onMouseDown={onSingleTap}
-        {...onDoubleTap}
+        onMouseDown={async (event) => {
+          await onSceneSingleTap(event)
+        }}
+        {...onSceneDoubleTap}
       />
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
@@ -635,8 +683,13 @@ export default function CadView({
               model={model}
               element={rootElement}
               defaultExpandedElements={defaultExpandedElements}
+              defaultExpandedTypes={defaultExpandedTypes}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              expandedTypes={expandedTypes}
+              setExpandedTypes={setExpandedTypes}
+              navigationMode={navigationMode}
+              setNavigationMode={setNavigationMode}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
@@ -660,13 +713,17 @@ export default function CadView({
  */
 function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
+
   return (
     isMobile ? (
       <>
+        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
+        and their first elements should be same height and offset so they line up naturally..
+        this is a shim for the misalignment you see with tooltips without it */}
         <Box
           sx={{
             position: 'absolute',
-            top: 0,
+            top: 3,
             right: 0,
           }}
         >
@@ -715,24 +772,24 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
   // Clear any existing scene.
   container.textContent = ''
-  const v = new IfcViewerAPIExtended({
+  const viewer = new IfcViewerAPIExtended({
     container,
     backgroundColor: new Color(backgroundColorStr),
   })
-  debug().log('CadView#initViewer: viewer created:', v)
+  debug().log('CadView#initViewer: viewer created:', viewer)
 
   // Path to web-ifc.wasm in serving directory.
-  v.IFC.setWasmPath('./static/js/')
-  v.clipper.active = true
-  v.clipper.orthogonalY = false
+  viewer.IFC.setWasmPath('./static/js/')
+  viewer.clipper.active = true
+  viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
-    v.prePickIfcItem()
+    viewer.highlightIfcItem()
   }
 
-  v.container = container
-  return v
+  viewer.container = container
+  return viewer
 }
 
 
@@ -743,16 +800,36 @@ const getGitHubDownloadURL = async (url, accessToken) => {
 }
 
 
-const getFinalURL = async (url, accessToken) => {
+export const getFinalURL = async (url, accessToken) => {
   const u = new URL(url)
+  debug().log('CadView#getFinalURL: url: ', url)
+  debug().log('CadView#getFinalURL: accessToken: ', accessToken)
+  debug().log('CadView#getFinalURL: process.env.RAW_GIT_PROXY_URL: ', process.env.RAW_GIT_PROXY_URL)
 
   switch (u.host.toLowerCase()) {
     case 'github.com':
-      if (accessToken === '') {
-        u.host = 'raw.githubusercontent.com'
+      if (!accessToken) {
+        const proxyURL = new URL(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com')
+
+        // Replace the protocol, host, and hostname in the target
+        u.protocol = proxyURL.protocol
+        u.host = proxyURL.host
+        u.hostname = proxyURL.hostname
+
+        // If the port is specified, replace it in the target URL
+        if (proxyURL.port) {
+          u.port = proxyURL.port
+        }
+
+        // If there's a path, *and* it's not just the root, then prepend it to the target URL
+        if (proxyURL.pathname && proxyURL.pathname !== '/') {
+          u.pathname = proxyURL.pathname + u.pathname
+        }
+
         return u.toString()
       }
 
+      debug().log('CadView#getFinalURL: calling getGitHubDownloadURL')
       return await getGitHubDownloadURL(url, accessToken)
 
     default:

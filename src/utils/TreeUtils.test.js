@@ -13,9 +13,11 @@ export function makeTestTree() {
   return {
     name: 'a',
     expressID: 0,
+    type: 'IFCTEST',
     children: [{
       name: 'b',
       expressID: 1,
+      type: 'IFCTEST',
       children: [{
         name: 'c',
         expressID: 2,

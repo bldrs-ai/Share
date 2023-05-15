@@ -1,13 +1,22 @@
 import {
   getDownloadURL,
   parseGitHubRepositoryURL,
-  postIssue,
+  createIssue,
   closeIssue,
+  createComment,
+  deleteComment,
+  getOrganizations,
+  getRepositories,
+  getFiles,
+  MOCK_REPOSITORY,
+  MOCK_FILES,
 } from './GitHub'
 
 
 const httpOK = 200
 const httpCreated = 201
+
+
 describe('GitHub', () => {
   describe('parseGitHubRepositoryURL', () => {
     it('throws an error if given a non-qualified URL', () => {
@@ -60,13 +69,51 @@ describe('GitHub', () => {
   })
 
   describe('post to github', () => {
-    it('successfully post note as an issue', async () => {
-      const res = await postIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
+    it('successfully create note as an issue', async () => {
+      const res = await createIssue({orgName: 'bldrs-ai', name: 'Share'}, {title: 'title', body: 'body'})
       expect(res.status).toEqual(httpCreated)
     })
+
     it('successfully delete the note by closing the issue', async () => {
       const res = await closeIssue({orgName: 'pablo-mayrgundter', name: 'Share'}, 1)
       expect(res.status).toEqual(httpOK)
+    })
+
+    it('successfully create comment', async () => {
+      const res = await createComment({orgName: 'bldrs-ai', name: 'Share'}, 1, {title: 'title', body: 'body'})
+      expect(res.status).toEqual(httpCreated)
+    })
+
+    it('successfully delete comment', async () => {
+      const res = await deleteComment({orgName: 'bldrs-ai', name: 'Share'}, 1)
+      expect(res.status).toEqual(httpOK)
+    })
+  })
+
+  describe('get models from github', () => {
+    it('successfully get repositories', async () => {
+      const res = await getRepositories('bldrs-ai')
+      expect(res.data).toEqual([MOCK_REPOSITORY])
+    })
+
+    it('successfully get files', async () => {
+      const res = await getFiles('Share', 'pablo-mayrgundter')
+      expect(res.data).toEqual([MOCK_FILES])
+    })
+  })
+
+  describe('getOrganizations', () => {
+    it('encounters an exception if no access token is provided', () => {
+      expect(() => getOrganizations()).rejects
+          .toThrowError('GitHub access token is required for this call')
+    })
+
+    it('receives a list of organizations', async () => {
+      const orgs = await getOrganizations('testtoken')
+      expect(orgs).toHaveLength(1)
+
+      const org = orgs[0]
+      expect(org.login).toEqual('bldrs-ai')
     })
   })
 })

@@ -157,4 +157,120 @@ describe('bldrs inside iframe', () => {
 
     cy.get('@iframe').findByRole('dialog', {timeout: 300000}).should('exist')
   })
+
+  it('should hide element when HideElements-message emitted', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    const globalId = '02uD5Qe8H3mek2PYnMWHk1'
+
+    // send a hide elements message
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.HideElements')
+    const msg = {
+      globalIds: [globalId],
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    // trying to select the hidden element
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SelectElements')
+    cy.get('#btnSendMessage').click()
+
+    // hidden elements can't be selected
+    cy.get('#lastMessageReceivedAction').should('not.include.text', /SelectionChanged/i)
+  })
+
+  it('should unhide element when HideElements-message emitted', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    const globalId = '02uD5Qe8H3mek2PYnMWHk1'
+
+    // send a hide elements message
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.HideElements')
+    const msg = {
+      globalIds: [globalId],
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    // Unhide the hidden element
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UnhideElements')
+    cy.get('#btnSendMessage').click()
+
+    // Can be selected again
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SelectElements')
+    cy.get('#btnSendMessage').click()
+    cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
+
+    cy.get('#txtLastMsg').should(($txtLastMsg) => {
+      const lastMsg = JSON.parse($txtLastMsg.val())
+      assert.equal(lastMsg.api, 'fromWidget')
+      assert.equal(lastMsg.widgetId, 'bldrs-share')
+      assert.exists(lastMsg.requestId)
+      assert.exists(lastMsg.data)
+      assert.equal(lastMsg.action, 'ai.bldrs-share.SelectionChanged')
+      assert.equal(lastMsg.data['current'].length, 1)
+      assert.equal(lastMsg.data['current'][0], globalId)
+    })
+  })
+
+  it('should unhide all elements when HideElements-message emitted with wildcard', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    const globalId = '02uD5Qe8H3mek2PYnMWHk1'
+
+    // send a hide elements message
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.HideElements')
+    const msg = {
+      globalIds: [globalId],
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    // Unhide the hidden element
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.UnhideElements')
+    const hidemsg = {
+      globalIds: '*',
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(hidemsg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+
+    // Can be selected again
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.SelectElements')
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+    cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
+  })
+
+  it('should emit HiddenElments message when element is hidden', () => {
+    const hiddenElementsCount = 10
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+
+    // send a hide elements message
+    cy.get('@iframe').findByRole('tree', {label: 'IFC Navigator'}).click()
+    cy.get('@iframe').findByTestId('hide-icon').should('exist')
+    cy.get('@iframe').findByTestId('hide-icon').click()
+
+    cy.get('#txtLastMsg').should(($txtLastMsg) => {
+      const response = JSON.parse($txtLastMsg.val())
+      assert.equal(response.api, 'fromWidget')
+      assert.equal(response.widgetId, 'bldrs-share')
+      assert.exists(response.requestId)
+      assert.exists(response.data)
+      assert.equal(response.action, 'ai.bldrs-share.HiddenElements')
+      assert.equal(response.data['current'].length, hiddenElementsCount)
+    })
+
+    cy.get('@iframe').findByTestId('unhide-icon').click()
+
+    cy.get('#txtLastMsg').should(($txtLastMsg) => {
+      const msg = JSON.parse($txtLastMsg.val())
+      assert.equal(msg.api, 'fromWidget')
+      assert.equal(msg.widgetId, 'bldrs-share')
+      assert.exists(msg.requestId)
+      assert.exists(msg.data)
+      assert.equal(msg.action, 'ai.bldrs-share.HiddenElements')
+      assert.equal(msg.data['current'].length, 0)
+    })
+  })
 })

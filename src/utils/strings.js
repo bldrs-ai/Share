@@ -1,3 +1,5 @@
+import {getHashParamsFromHashStr} from './location'
+
 /**
  * Convert string to integer.
  *
@@ -74,6 +76,26 @@ export function findUrls(str) {
 
 
 /**
+ * @param {string} str
+ * @param {string} prefix
+ * @return {Array<string>} url matches
+ */
+export function findMarkdownUrls(str, prefix) {
+  const markdownUrls = findUrls(str)
+      .filter((url) => {
+        if (url.indexOf('#') === -1) {
+          return false
+        }
+        const encoded = getHashParamsFromHashStr(
+            url.substring(url.indexOf('#') + 1),
+            prefix)
+        return !!encoded
+      })
+  return markdownUrls
+}
+
+
+/**
  * Convert a string-encoded float to a truncated float, of fixed-length `len` or no decimal point expansion
  * - '0' -> 0
  * - '12.34567' -> 12.346
@@ -112,4 +134,18 @@ export const UUID_REGEX = new RegExp(/[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0
  */
 export function matchUuid(str) {
   return str.match(UUID_REGEX) !== null
+}
+
+/**
+ * Converts a string to title case
+ *
+ * @param {string} str The string to turn to title case
+ * @return {string} title case string
+ */
+export function toTitleCase(str) {
+  return str.replace(
+      /\w\S*/g,
+      function(txt) {
+        return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+      })
 }

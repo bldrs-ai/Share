@@ -2,7 +2,6 @@ import {
   FileLoader,
   Group,
   MeshBasicMaterial,
-  Color,
   DoubleSide,
   ShapeGeometry,
   Mesh,
@@ -12,6 +11,7 @@ import {
   SpriteMaterial,
   Sprite,
   ImageLoader,
+  Color,
 } from 'three'
 import {SVGLoader} from 'three/examples/jsm/loaders/SVGLoader'
 import {assertDefined} from './assert'
@@ -52,8 +52,8 @@ export function getSvgGroupFromObj({
   svgObj,
   fillColor,
   strokeColor,
-  width = 2,
-  height = 0,
+  width = 0,
+  height = 2,
   drawStrokes = true,
   drawFillShapes = true,
   strokesWireframe = false,
@@ -62,6 +62,8 @@ export function getSvgGroupFromObj({
   const paths = svgObj.paths
   const group = new Group()
   const svgGroup = new Group()
+  const tempColor = new Color()
+
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i]
     if (!fillColor) {
@@ -72,9 +74,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {
-      const color = new Color()
-      color.setStyle(fillColor)
-      color.convertSRGBToLinear()
+      const color = tempColor.setStyle(fillColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.fillOpacity,
@@ -94,9 +94,7 @@ export function getSvgGroupFromObj({
     }
 
     if (drawStrokes && strokeColor !== undefined && strokeColor !== 'none') {
-      const color = new Color()
-      color.setStyle(strokeColor)
-      color.convertSRGBToLinear()
+      const color = tempColor.setStyle(strokeColor).convertSRGBToLinear()
       const material = new MeshBasicMaterial({
         color: color,
         opacity: path.userData.style.strokeOpacity,
@@ -211,4 +209,56 @@ export function getSpriteFromSvgCanvas({
   const sprite = new Sprite(material)
   sprite.scale.set(width, height, 1.0)
   return sprite
+}
+
+
+/**
+ * Generate sprite using svg file
+ *
+ * @param {Group} group
+ * @param {object} userData color to fill sprite
+ */
+export function addUserDataInGroup(group, userData) {
+  assertDefined(group, userData)
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.userData = {
+        ...child.userData,
+        ...userData,
+      }
+    }
+  })
+  group.userData = {
+    ...group.userData,
+    ...userData,
+  }
+}
+
+
+/**
+ * @param {Group} group
+ * @param {string} color
+ */
+export function setGroupColor(group, color) {
+  assertDefined(group, color)
+  const tempColor = new Color()
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.material.color = tempColor.set(color)
+    }
+  })
+}
+
+/**
+ * @param {Group} group
+ */
+export function disposeGroup(group) {
+  assertDefined(group)
+
+  group.traverse((child) => {
+    if (child instanceof Mesh) {
+      child.geometry.dispose()
+      child.material.dispose()
+    }
+  })
 }

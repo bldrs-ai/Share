@@ -55,7 +55,7 @@ export class MockModel {
 
   /**
    * @param {object} elt IFC element
-   * @param {object} viewer IfcViewerApi instance
+   * @param {object} viewer IfcViewerAPIExtended instance
    * @return {string}
    */
   getIfcType(elt, viewer) {
@@ -111,4 +111,83 @@ export function newMockStringValueElt(label, id = 1) {
       value: label,
     },
   }
+}
+
+
+/**
+ * Create a hirerachy of elements with the given type label.
+ *
+ * @param {string} label
+ * @return {object} The hirerachy root element
+ */
+export function newMockElementHirerachyWithType(label) {
+  return {
+    children: [{
+      children: [{
+        children: [],
+        expressID: 3,
+        type: label,
+        Name: {
+          type: 3,
+          value: '3',
+        },
+      },
+      {
+        children: [],
+        expressID: 4,
+        type: label,
+        Name: {
+          type: 4,
+          value: '4',
+        },
+      }],
+      expressID: 6,
+      type: label,
+      Name: {
+        type: 6,
+        value: '6',
+      },
+    },
+    {
+      children: [],
+      expressID: 7,
+      type: label,
+      Name: {
+        type: 7,
+        value: '7',
+      },
+    }],
+    expressID: 2,
+    type: label,
+    Name: {
+      type: 2,
+      value: '2',
+    },
+  }
+}
+
+/**
+ * Create a mock type with one element with the given label and type.
+ *
+ * @param {string} label
+ * @param {string} type
+ * @param {number} id Express ID for the element.
+ * @return {object[]} array of mocked types with one type
+ */
+export function newMockTypes(label, type, id = 1) {
+  return [
+    {
+      name: type,
+      elements: [
+        {
+          children: [],
+          expressID: id,
+          elements: {
+            type: 1,
+            value: label,
+          },
+        },
+      ],
+    },
+  ]
 }

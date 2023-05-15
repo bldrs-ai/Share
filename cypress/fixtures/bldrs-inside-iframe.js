@@ -65,6 +65,7 @@ class BldrsWidgetDriver {
 */
 const EVENT_CLIENT_SELECTIONCHANGED_ELEMENTS = 'ai.bldrs-share.SelectionChanged'
 const EVENT_CLIENT_MODEL_LOADED = 'ai.bldrs-share.ModelLoaded'
+const EVENT_CLIENT_HIDDEN_ELEMENTS = 'ai.bldrs-share.HiddenElements'
 
 document.addEventListener("DOMContentLoaded", function(event) { 
 const container = document.getElementById('bldrs-widget-iframe')
@@ -122,6 +123,14 @@ ListenToApiAction(EVENT_CLIENT_MODEL_LOADED,
     txtLastMsg.value = JSON.stringify(event.detail??"")
   }
 )
+
+ListenToApiAction(EVENT_CLIENT_HIDDEN_ELEMENTS, 
+  event=>
+  {
+    txtLastMsg.value = JSON.stringify(event.detail??"")
+  }
+)
+
 
 btnSendMessage.addEventListener('click', () => {
   const messageType = txtSendMessageType.value

@@ -10,7 +10,7 @@ import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
-import {postIssue} from '../../utils/GitHub'
+import {createIssue} from '../../utils/GitHub'
 import Submit from '../../assets/icons/Submit.svg'
 
 
@@ -31,8 +31,7 @@ export default function NoteCardCreate({
   const [body, setBody] = useState('')
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
-  const createdNotes = useStore((state) => state.createdNotes)
-  const setCreatedNotes = useStore((state) => state.setCreatedNotes)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const theme = useTheme()
 
 
@@ -41,37 +40,14 @@ export default function NoteCardCreate({
    *
    * @return {void}
    */
-  function createNote() {
-    // TODO(Oleg) noteIndex is used for note number :: need to introduce internal index system
-    let noteIndex
-    if (createdNotes) {
-      noteIndex = Object.keys(createdNotes).length
-    } else {
-      noteIndex = 1
-    }
+  async function createNote() {
     const issuePayload = {
       title,
       body,
     }
-    postIssue(repository, issuePayload, accessToken)
+    await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
-    const localNote = {
-      index: noteIndex,
-      id: noteIndex,
-      number: noteIndex,
-      title: title,
-      body: body,
-      date: new Date().toISOString(),
-      username: user ? user.name : 'username',
-      avatarUrl: user ? user.picture : '',
-      numberOfComments: '',
-      synchedNote: false,
-    }
-    if (createdNotes === null) {
-      setCreatedNotes([localNote])
-    } else {
-      setCreatedNotes([localNote, ...createdNotes])
-    }
+    toggleSynchSidebar()
   }
 
   return (
@@ -95,11 +71,11 @@ export default function NoteCardCreate({
           />}
         avatar={
           isAuthenticated ?
-          <Avatar
-            alt={user.name}
-            src={user.picture}
-          /> :
-          <Avatar alt={username} src={avatarUrl}/>
+            <Avatar
+              alt={user.name}
+              src={user.picture}
+            /> :
+            <Avatar alt={username} src={avatarUrl}/>
         } sx={{
           backgroundColor: theme.palette.primary.main,
         }}
@@ -124,7 +100,9 @@ export default function NoteCardCreate({
           title='Submit'
           size='small'
           placement='bottom'
-          onClick={createNote}
+          onClick={async () => {
+            await createNote()
+          }}
           icon={<Submit style={{width: '15px', height: '15px'}}/>}
         />
       </CardActions>

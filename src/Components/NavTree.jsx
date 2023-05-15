@@ -5,6 +5,8 @@ import {reifyName} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
+import useStore from '../store/useStore'
+import HideToggleButton from './HideToggleButton'
 
 
 const NavTreePropTypes = {
@@ -36,8 +38,11 @@ const NavTreePropTypes = {
    * The id of the node.
    */
   nodeId: PropTypes.string.isRequired,
+  /**
+   * Determines if the tree node has a hide icon.
+   */
+  hasHideIcon: PropTypes.bool,
 }
-
 
 /**
  * @param {object} model IFC model
@@ -61,6 +66,7 @@ export default function NavTree({
       icon: iconProp,
       expansionIcon,
       displayIcon,
+      hasHideIcon,
     } = props
 
     const {
@@ -84,7 +90,6 @@ export default function NavTree({
       selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
-
     return (
       // eslint-disable-next-line jsx-a11y/no-static-element-interactions
       <div
@@ -103,34 +108,43 @@ export default function NavTree({
         >
           {icon}
         </Box>
-        <Typography
-          variant='tree'
-          onClick={handleSelectionClick}
-        >
-          {label}
-        </Typography>
+        <div style={{width: '300px'}}>
+          <Typography
+            variant='tree'
+            onClick={handleSelectionClick}
+          >
+            {label}
+          </Typography>
+          {hasHideIcon &&
+            <div style={{display: 'contents'}}>
+              <HideToggleButton elementId={element.expressID}/>
+            </div>
+          }
+        </div>
       </div>
     )
   })
 
-
   CustomContent.propTypes = NavTreePropTypes
-
 
   const CustomTreeItem = (props) => {
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
+  const viewer = useStore((state) => state.viewerStore)
+
+  const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
   let i = 0
-
-
   // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
       nodeId={element.expressID.toString()}
       label={reifyName({properties: model}, element)}
+      ContentProps={{
+        hasHideIcon: hasHideIcon,
+      }}
     >
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {
