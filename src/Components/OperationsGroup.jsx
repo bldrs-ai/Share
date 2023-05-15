@@ -19,7 +19,7 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import SunIcon from '../assets/icons/Sun.svg'
 import QuestionIcon from '../assets/icons/Question.svg'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
-
+import {useExistInFeature} from '../hooks/useExistInFeature'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -43,7 +43,7 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  const isAppStoreEnabled = useStore((state) => state.isAppStoreEnabled)
+  const isAppStoreEnabled = useExistInFeature('apps')
   const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
