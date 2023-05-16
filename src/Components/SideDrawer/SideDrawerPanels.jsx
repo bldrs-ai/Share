@@ -11,12 +11,11 @@ import NotesNavBar from '../Notes/NotesNavBar'
 import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
-
 /**
  * @param {object} props React props with children
  * @return {React.Component}
  */
-function PanelWithTitle(props) {
+export function PanelWithTitle(props) {
   const titleHeight = '3em'
   const paddingBottom = '0.6em'
   const theme = useTheme()
@@ -40,7 +39,7 @@ function PanelWithTitle(props) {
           borderBottom: `solid 1px ${headerBorderColor}`,
         }}
       >
-        <PanelTitle title={props.title} controlsGroup={props.controlsGroup}/>
+        <PanelTitle title={props.title} iconSrc={props.iconSrc} controlsGroup={props.controlsGroup}/>
       </Box>
       <Box
         sx={{

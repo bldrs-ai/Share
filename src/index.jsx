@@ -15,6 +15,7 @@ import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
 import ApplicationError from './Components/ApplicationError'
 import {Helmet, HelmetProvider} from 'react-helmet-async'
+import {CypressHistorySupport} from 'cypress-react-router'
 
 
 Sentry.init({
@@ -56,6 +57,7 @@ root.render(
             <title>BLDRS</title>
           </Helmet>
           <BrowserRouter>
+            <CypressHistorySupport/>
             <Auth0ProviderWithHistory>
               <BaseRoutes/>
             </Auth0ProviderWithHistory>
