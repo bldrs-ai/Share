@@ -10,10 +10,10 @@ import {
   bindTrigger,
   bindMenu,
 } from 'material-ui-popup-state/hooks'
-import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import LogoutIcon from '@mui/icons-material/Logout'
+import {TooltipIconButton} from './Buttons'
 
 
 const UserProfile = ({size = 'medium'}) => {
@@ -25,24 +25,16 @@ const UserProfile = ({size = 'medium'}) => {
 
   return isAuthenticated && (
     <>
-      <IconButton
-        className={'no-hover'}
+      <TooltipIconButton
+        title={'Sections'}
+        icon={
+          <Avatar
+            alt={user.name}
+            src={user.picture}
+            sx={{width: 22, height: 22}}
+          />}
         {...bindTrigger(popupState)}
-        sx={{
-          'width': '50px',
-          'height': '50px',
-          'border': 'none',
-          '&.Mui-selected, &.Mui-selected:hover': {
-            opacity: .8,
-          },
-        }}
-      >
-        <Avatar
-          alt={user.name}
-          src={user.picture}
-          sx={{width: 22, height: 22}}
-        />
-      </IconButton>
+      />
 
       <Menu
         PaperProps={{
@@ -76,6 +68,7 @@ const UserProfile = ({size = 'medium'}) => {
             <GitHubIcon/>
             <Typography sx={{paddingLeft: '11px'}}>
               Hi, {user.name}!
+              hi
             </Typography>
           </ListItemIcon>
         </MenuItem>

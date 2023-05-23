@@ -8,12 +8,15 @@
 export default function createUIVisibilitySlice(set, get) {
   return {
     isLoginVisible: true,
-    isSearchBarVisible: true,
-    isNavigationPanelVisible: true,
+    isSearchBarVisible: false,
+    isOpenControlVisible: false,
+    isNavigationPanelVisible: false,
     isCollaborationGroupVisible: true,
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,
-
+    isTreeVisible: false,
+    isBranchControlVisible: true,
+    isFilePathVisible: true,
     isAboutDialogSuppressed: false,
 
     setIsLoginVisibile: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
@@ -25,5 +28,9 @@ export default function createUIVisibilitySlice(set, get) {
     setIsSettingsVisibile: (isVisible) => set(() => ({isSettingsVisible: isVisible})),
 
     setIsAboutDialogSuppressed: (isSuppressed) => set(() => ({isAboutDialogSuppressed: isSuppressed})),
+    toggleIsNavigationPanelVisible: () => set((state) => ({isNavigationPanelVisible: !state.isNavigationPanelVisible})),
+    toggleIsBranchControlVisible: () => set((state) => ({isBranchControlVisible: !state.isBranchControlVisible})),
+    toggleIsSearchBarVisible: () => set((state) => ({isSearchBarVisible: !state.isSearchBarVisible})),
+    toggleIsOpenControlVisible: () => set((state) => ({isOpenControlVisible: !state.isOpenControlVisible})),
   }
 }

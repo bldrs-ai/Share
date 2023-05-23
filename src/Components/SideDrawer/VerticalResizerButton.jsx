@@ -184,18 +184,15 @@ export default function VerticalResizerButton({
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
-        {Array.from({length: 3}).map((v, i) =>
-          <Box
-            key={i}
-            sx={{
-              width: `${gripSize}px`,
-              height: `${gripSize}px`,
-              borderRadius: '3px',
-              background: theme.palette.primary.contrastText,
-              opacity: '0.3',
-            }}
-          />,
-        )}
+        <Box
+          sx={{
+            width: `30px`,
+            height: `2px`,
+            borderRadius: '3px',
+            background: theme.palette.primary.contrastText,
+            opacity: '0.5',
+          }}
+        />
       </Paper>
     </Box>
   )

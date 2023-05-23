@@ -130,8 +130,6 @@ export default function Notes() {
 
   return hasError ? <ApplicationError/> : (
     <Paper
-      elevation={0}
-      square
       sx={{
         width: '100%',
         display: 'block',

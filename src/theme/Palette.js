@@ -19,6 +19,9 @@ export const day = {
   },
   background: {
     paper: colors.grey.light,
+    control: colors.grey.lightest,
+    button: colors.grey.lighter,
+    accent: '#F2C94C',
   },
   scene: {
     background: colors.grey.lightest,
@@ -41,6 +44,8 @@ export const night = {
   },
   background: {
     paper: colors.grey.darkest,
+    control: colors.grey.darkest,
+    button: colors.grey.darker,
   },
   scene: {
     background: colors.black,

@@ -2,7 +2,6 @@ import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import MenuItem from '@mui/material/MenuItem'
-import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
 import useTheme from '@mui/styles/useTheme'
@@ -23,11 +22,10 @@ import UploadIcon from '../assets/icons/Upload.svg'
  *
  * @return {React.ReactElement}
  */
-export default function OpenModelControl({fileOpen}) {
+export default function OpenModelControl({fileOpen, modelPath, isLocalModel}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
-  const theme = useTheme()
   const accessToken = useStore((state) => state.accessToken)
   useEffect(() => {
     /**
@@ -50,24 +48,15 @@ export default function OpenModelControl({fileOpen}) {
 
 
   return (
-    <Box
-      sx={{
-        '& button': {
-          margin: '0',
-          border: `solid 1px ${theme.palette.primary.background}`,
-        },
-      }}
-    >
-      <Paper elevation={0} variant='control'>
-        <TooltipIconButton
-          title={'Open IFC'}
-          onClick={() => setIsDialogDisplayed(true)}
-          icon={<OpenIcon/>}
-          placement={'right'}
-          selected={isDialogDisplayed}
-          dataTestId='open-ifc'
-        />
-      </Paper>
+    <Box>
+      <TooltipIconButton
+        title={'Projects'}
+        onClick={() => setIsDialogDisplayed(true)}
+        icon={<OpenIcon/>}
+        placement={'bottom'}
+        selected={isDialogDisplayed}
+        dataTestId='open-ifc'
+      />
       {isDialogDisplayed &&
         <OpenModelDialog
           isDialogDisplayed={isDialogDisplayed}
@@ -87,7 +76,7 @@ export default function OpenModelControl({fileOpen}) {
  * @return {object} React component
  */
 function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
-  const {isAuthenticated, user} = useAuth0()
+  const {isAuthenticated, user, loginWithRedirect} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
@@ -104,6 +93,14 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const openFile = () => {
     fileOpen()
     setIsDialogDisplayed(false)
+  }
+
+  const onClick = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
   }
 
   const selectOrg = async (org) => {
@@ -135,7 +132,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   return (
     <Dialog
       icon={<OpenIcon/>}
-      headerText={'Open'}
+      headerText={'Projects'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
@@ -150,17 +147,17 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           }}
         >
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
-          <p>Visit our {' '}
+          {/* <p style={{padding: '0px 12px'}}>We recommend GitHub for project hosting, visit our {' '}
             <a
               target="_blank"
               href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
               rel="noreferrer"
             >
               wiki
-            </a> to learn more about GitHub hosting.
-          </p>
+            </a> to learn more about why and how
+          </p> */}
           {isAuthenticated ?
-          <Box>
+          <Box sx={{marginTop: '10px'}}>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
@@ -173,22 +170,76 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Typography
             variant={'h4'}
             sx={{
-              backgroundColor: theme.palette.scene.background,
+              border: `1px solid ${theme.palette.primary.main}`,
               borderRadius: '5px',
               padding: '12px',
+              marginTop: '16px',
             }}
           >
-            Please login to get access to your files on GitHub
+            Please&nbsp;
+            <Box
+              component="span"
+              onClick={onClick}
+              sx={{
+                color: theme.palette.secondary.contrastText,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >login
+            </Box>
+            &nbsp;to get access to your projects stored on GitHub or sign up for GitHub&nbsp;
+            <Box
+              component="span"
+              onClick={onClick}
+              sx={{
+                color: theme.palette.secondary.contrastText,
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >here
+            </Box>
+            <Box sx={{marginTop: '10px'}}>To learn more about why we recommend GitHub for file hosting please visit our{' '}
+              <a
+                target="_blank"
+                href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+                rel="noreferrer"
+              >
+                wiki
+              </a>
+            </Box>
           </Typography>
           }
-          <Box
+          {isAuthenticated &&
+          orgName !== undefined &&
+          repoName !== undefined &&
+            <Box
+              sx={{
+                marginTop: '1em',
+                fontSize: '.8em',
+              }}
+            >
+              Project Owners:
+              <br/>
+              Click&nbsp;
+              <a
+                href={`https://github.com/${orgName}/${repoName}/settings/access`}
+                target="_blank"
+                rel="noreferrer"
+              >
+                here
+              </a>
+              &nbsp;to manage access to the project
+            </Box>
+          }
+          <Typography
+            variant='h6'
             sx={{
               marginTop: '1em',
               fontSize: '.8em',
             }}
           >
             * Local files cannot yet be saved or shared.
-          </Box>
+          </Typography>
         </Box>
       }
     />
@@ -214,7 +265,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
-      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc',
+      6: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc',
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})

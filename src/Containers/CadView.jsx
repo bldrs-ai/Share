@@ -13,6 +13,8 @@ import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
+import CreateGroup from '../Components/CreateGroup'
+import ControlsGroup from '../Components/ControlsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -28,6 +30,7 @@ import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import OpenModelControl from '../Components/OpenModelControl'
 
 
 /**
@@ -72,6 +75,7 @@ export default function CadView({
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [isLocalModel, setIsLocalModel] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
@@ -87,11 +91,13 @@ export default function CadView({
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
+  // const showControls = useStore((state) => state.showControls)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const setBranches = useStore((state) => state.setBranches)
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
@@ -99,6 +105,8 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
+  const isOpenControlVisible = useStore((state) => state.isOpenControlVisible)
 
 
   // Place Mark
@@ -110,6 +118,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
+    setBranches([])
   }, [modelPath])
 
 
@@ -281,11 +290,13 @@ export default function CadView({
   async function loadIfc(filepath) {
     debug().log(`CadView#loadIfc: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
+    setIsLocalModel(false)
 
     if (uploadedFile) {
       filepath = getNewModelRealPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
+      setIsLocalModel(true)
     }
 
     const loadingMessageBase = `Loading ${filepath}`
@@ -617,7 +628,9 @@ export default function CadView({
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 60
-  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const controlsGroupWidthPx = 70
+  const searchWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  const navWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx) - controlsGroupWidthPx
   const searchAndNavMaxWidthPx = 300
   return (
     <Box
@@ -652,55 +665,88 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
+
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
-          'top': `1em`,
+          'top': `1.2em`,
           'left': '1em',
           'display': 'flex',
           'flexDirection': 'column',
           'justifyContent': 'flex-start',
           'alignItems': 'flex-start',
           'maxHeight': '95%',
-          'width': '275px',
           '@media (max-width: 900px)': {
-            width: `${searchAndNavWidthPx}px`,
+            width: `${searchWidthPx}px`,
             maxWidth: `${searchAndNavMaxWidthPx}px`,
           },
         }}
         >
-          {isSearchBarVisible &&
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />}
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
-          }
-          {isNavPanelOpen &&
-            isNavigationPanelVisible &&
-            <NavPanel
-              model={model}
-              element={rootElement}
-              defaultExpandedElements={defaultExpandedElements}
-              defaultExpandedTypes={defaultExpandedTypes}
-              expandedElements={expandedElements}
-              setExpandedElements={setExpandedElements}
-              expandedTypes={expandedTypes}
-              setExpandedTypes={setExpandedTypes}
-              navigationMode={navigationMode}
-              setNavigationMode={setNavigationMode}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              pathPrefix={
-                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'Column',
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+            }}
+          >
+            <ControlsGroup modelPath={modelPath} isLocalModel={isLocalModel} fileOpen={loadLocalFile}/>
+            <Box
+              sx={{
+                'width': '280px',
+                'marginLeft': '6px',
+                'marginTop': '10px',
+                '@media (max-width: 900px)': {
+                  width: `${navWidthPx}px`,
+                  maxWidth: `${searchAndNavMaxWidthPx}px`,
+                },
+              }}
+            >
+              {isOpenControlVisible &&
+                <OpenModelControl modelPath={modelPath} fileOpen={loadLocalFile} isLocalModel={isLocalModel}/>
               }
-            />
-          }
+              {isSearchBarVisible &&
+                <SearchBar deselectItems={deselectItems}/>
+              }
+              {
+                modelPath.repo !== undefined && isBranchControlVisible &&
+                <BranchesControl location={location}/>
+              }
+
+              {isNavPanelOpen && isNavigationPanelVisible &&
+                <NavPanel
+                  model={model}
+                  element={rootElement}
+                  defaultExpandedElements={defaultExpandedElements}
+                  expandedElements={expandedElements}
+                  setExpandedElements={setExpandedElements}
+                  selectWithShiftClickEvents={selectWithShiftClickEvents}
+                  pathPrefix={
+                    pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                  }
+                />
+              }
+            </Box>
+          </Box>
         </Box>
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
+      {viewer &&
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.0em',
+            right: '1em',
+            display: 'flex',
+            alignItems: 'flex-start',
+            flex: 1,
+            flexDirection: 'row',
+          }}
+        >
+          <CreateGroup/>
+        </Box>
       }
     </Box>
   )
@@ -747,6 +793,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
           top: 0,
           right: 0,
           display: 'flex',
+          alignItems: 'flex-start',
           flex: 1,
           flexDirection: 'row',
         }}

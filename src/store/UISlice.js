@@ -18,10 +18,12 @@ export default function createUISlice(set, get) {
     isPropertiesOn: false,
     snackMessage: null,
     cutPlanes: [],
+    isBranches: false,
     levelInstance: null,
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
+    showControls: true,
     isHelpTooltips: false,
     isAppStoreOpen: false,
     appStoreSidebarWidth: MOBILE_WIDTH,
@@ -37,8 +39,10 @@ export default function createUISlice(set, get) {
     toggleIsPropertiesOn: () => set((state) => ({isPropertiesOn: !state.isPropertiesOn})),
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
     turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
+    toggleShowControls: () => set((state) => ({showControls: !state.showControls})),
     closeProperties: () => set(() => ({isPropertiesOn: false})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
+    setIsBranches: (isBranches) => set(() => ({isBranches: isBranches})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
       if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {

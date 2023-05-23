@@ -104,7 +104,7 @@ export default function NavTree({
       >
         <Box
           onClick={handleExpansionClick}
-          sx={{margin: '0px 14px 0px 14px'}}
+          sx={{margin: '0px 14px 0px 8px'}}
         >
           {icon}
         </Box>

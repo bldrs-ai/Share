@@ -10,6 +10,9 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CutPlaneIcon from '../assets/icons/CutPlane.svg'
+import ElevationIcon from '../assets/icons/Elevation.svg'
+import PlanIcon from '../assets/icons/Plan.svg'
+import SectionIcon from '../assets/icons/Section.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -96,7 +99,7 @@ export default function CutPlaneMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Section'}
+        title={'Sections'}
         icon={<CutPlaneIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
@@ -111,8 +114,11 @@ export default function CutPlaneMenu() {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            left: '300px',
-            transform: 'translateX(-50px)',
+            left: '240px',
+            transform: 'translateX(-60px)',
+            opacity: .8,
+            background: theme.palette.background.control,
+            zIndex: 10,
           },
           sx: {
             'color': theme.palette.primary.contrastText,
@@ -120,20 +126,56 @@ export default function CutPlaneMenu() {
               color: theme.palette.secondary.main,
               fontWeight: 800,
             },
+            '.MuiMenuItem-root:hover': {
+              backgroundColor: 'transparent',
+            },
+            '.MuiMenuItem-root': {
+              padding: '0px',
+            },
+            '.MuiMenu-paper': {
+              padding: '0px',
+            },
+            '.MuiList-padding': {
+              padding: '0px',
+            },
           },
         }}
       >
-        <MenuItem onClick={() => togglePlane({direction: 'x'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        >X - Section
+        <MenuItem>
+          <TooltipIconButton
+            title={`Plan`}
+            placement={'left'}
+            onClick={() => {
+              togglePlane({direction: 'y'})
+              handleClose()
+            }}
+            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+            icon={<PlanIcon style={{width: '25px', height: '30px'}}/>}
+          />
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'y'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        >Y - Plan
+        <MenuItem>
+          <TooltipIconButton
+            title={`Elevation`}
+            placement={'left'}
+            onClick={() => {
+              togglePlane({direction: 'z'})
+              handleClose()
+            }}
+            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
+            icon={<ElevationIcon style={{width: '19px', height: '30px', marginLeft: '4px'}}/>}
+          />
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'z'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        >Z - Section
+        <MenuItem>
+          <TooltipIconButton
+            title={`Section`}
+            placement={'left'}
+            onClick={() => {
+              togglePlane({direction: 'x'})
+              handleClose()
+            }}
+            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+            icon={<SectionIcon style={{width: '21px', height: '30px'}}/>}
+          />
         </MenuItem>
       </Menu>
     </>

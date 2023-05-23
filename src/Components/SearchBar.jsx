@@ -2,15 +2,17 @@ import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import InputBase from '@mui/material/InputBase'
+import InputAdornment from '@mui/material/InputAdornment'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import OpenModelControl from './OpenModelControl'
+// import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/icons/Clear.svg'
+import SearchIcon from '../assets/icons/Search.svg'
 
 
 /**
@@ -19,7 +21,7 @@ import ClearIcon from '../assets/icons/Clear.svg'
  * @property {Function} fileOpen callback for OpenModelControl
  * @return {React.Component}
  */
-export default function SearchBar({fileOpen}) {
+export default function SearchBar({deselectItems}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -94,18 +96,18 @@ export default function SearchBar({fileOpen}) {
   return (
     <Box sx={{width: '100%'}}>
       <Paper
+        variant='control'
         component='form'
         onSubmit={onSubmit}
-        elevation={0}
-        variant='control'
         sx={{
           'display': 'flex',
+          'marginBottom': '10px',
           'minWidth': '100%',
           'width': `${widthPx}px`,
-          'height': '56px',
           'alignItems': 'center',
           'opacity': .8,
-          'padding': '2px 6px',
+          'padding': '0px 6px',
+          'height': '50px',
           '@media (max-width: 900px)': {
             width: '100%',
           },
@@ -114,19 +116,23 @@ export default function SearchBar({fileOpen}) {
           },
         }}
       >
-        <OpenModelControl fileOpen={fileOpen}/>
+        {/* <OpenModelControl fileOpen={fileOpen}/> */}
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
           onChange={onInputChange}
           error={true}
           placeholder={'Search'}
+          startAdornment={
+            <InputAdornment position="start">
+              <SearchIcon style={{width: '13px', height: '13px', opacity: .5}}/>
+            </InputAdornment>
+          }
           sx={{
             ...theme.typography.tree,
-            'marginTop': '4px',
-            'marginLeft': '14px',
+            'marginLeft': '6px',
             '& input::placeholder': {
-              opacity: .2,
+              opacity: .5,
             },
           }}
         />
@@ -135,10 +141,11 @@ export default function SearchBar({fileOpen}) {
             title='clear'
             onClick={() => {
               setInputText('')
+              deselectItems()
               setError('')
               navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
             }}
-            icon={<ClearIcon/>}
+            icon={<ClearIcon style={{opacity: .5}}/>}
           />
         }
       </Paper>

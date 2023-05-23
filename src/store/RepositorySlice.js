@@ -19,7 +19,7 @@ export default function createRepositorySlice(set, get) {
       },
     })),
     setAccessToken: (token) => set(() => ({accessToken: token})),
-    setBranches: (branches) => set(() => ({issues: branches})),
+    setBranches: (branches) => set(() => ({branches: branches})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
   }
 }

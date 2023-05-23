@@ -4,6 +4,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
+import {useIsMobile} from './Hooks'
 import CloseIcon from '../assets/icons/Close.svg'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
@@ -32,6 +33,7 @@ export function TooltipIconButton({
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
+  const isMobile = useIsMobile()
   const open = aboutInfo ? isHelpTooltips : false
   const handleClose = () => {
     setOpenLocal(false)
@@ -41,20 +43,26 @@ export function TooltipIconButton({
   }
   return (
     <>
-      <Tooltip
-        open={openLocal || open}
-        onClose={handleClose}
-        onOpen={handleOpen}
-        title={title}
-        describeChild
-        placement={placement}
-        data-testid={dataTestId}
-        PopperProps={{style: {zIndex: 0}}}
-      >
-        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-          {icon}
-        </ToggleButton>
-      </Tooltip>
+      {isMobile ?
+       <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+         {icon}
+       </ToggleButton> :
+       <Tooltip
+         open={openLocal || open}
+         onClose={handleClose}
+         onOpen={handleOpen}
+         title={title}
+         describeChild
+         placement={placement}
+         data-testid={dataTestId}
+         PopperProps={{style: {zIndex: 0}}}
+       >
+         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+           {icon}
+         </ToggleButton>
+       </Tooltip>
+      }
+
     </>
   )
 }
@@ -82,6 +90,7 @@ export function ControlButton({
     <>
       <TooltipIconButton
         title={title}
+        placement={placement}
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}

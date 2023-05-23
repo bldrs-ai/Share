@@ -40,9 +40,8 @@ export default function Dialog({
       onClose={close}
       sx={{
         textAlign: 'center',
-        zIndex: 1000,
       }}
-      PaperProps={{variant: 'control'}}
+      PaperProps={{variant: 'control', zIndex: 10}}
     >
       <DialogContent>
         <div
@@ -51,7 +50,7 @@ export default function Dialog({
             top: 0,
             right: 0,
             margin: '0.5em',
-            opacity: .5,
+            opacity: .8,
           }}
         >
           <CloseButton onClick={close}/>

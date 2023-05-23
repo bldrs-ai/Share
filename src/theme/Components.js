@@ -27,7 +27,7 @@ export function getComponentOverrides(palette) {
             height: '40px',
             textTransform: 'none',
             border: 'none',
-            backgroundColor: palette.primary.main,
+            backgroundColor: palette.background.button,
           },
         },
       ],
@@ -43,9 +43,14 @@ export function getComponentOverrides(palette) {
           'width': '50px',
           'height': '50px',
           'border': 'none',
+          'margin': '.2em',
           '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: palette.primary.background,
+            backgroundColor: palette.background.button,
             opacity: .8,
+          },
+          '&.MuiToggleButton-root .MuiToggleButton-label > svg': {
+            width: '14px',
+            height: '14px',
           },
         },
         sizeSmall: {
@@ -64,7 +69,8 @@ export function getComponentOverrides(palette) {
         {
           props: {variant: 'control'},
           style: {
-            backgroundColor: palette.primary.background,
+            backgroundColor: palette.background.control,
+            boxShadow: '0px 1px 10px -5px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12)',
           },
         },
         {

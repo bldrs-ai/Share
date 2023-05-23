@@ -69,7 +69,7 @@ export default function NotesNavBar() {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={<BackIcon/>}
+           icon={<BackIcon style={{width: '17px', height: '17px'}}/>}
          />
         }
       </Box>
@@ -86,13 +86,13 @@ export default function NotesNavBar() {
             <TooltipIconButton
               title='Previous Note'
               onClick={() => selectNote('previous')}
-              icon={<PreviousIcon/>}
+              icon={<PreviousIcon style={{width: '16px', height: '16px'}}/>}
               placement='bottom'
             />
             <TooltipIconButton
               title='Next Note'
               onClick={() => selectNote('next')}
-              icon={<NextIcon/>}
+              icon={<NextIcon style={{width: '16px', height: '16px'}}/>}
               placement='bottom'
             />
           </>
@@ -111,14 +111,14 @@ export default function NotesNavBar() {
             title='Back to the list'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<BackIcon style={{width: '16px', height: '16px'}}/>}
+            icon={<BackIcon/>}
             size='medium'
           /> :
           <TooltipIconButton
             title='Add a note'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<AddNoteIcon style={{width: '18px', height: '18px'}}/>}
+            icon={<AddNoteIcon/>}
             size='medium'
           />
         )}

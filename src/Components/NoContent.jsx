@@ -22,6 +22,7 @@ export default function NoContent({message = 'no content'}) {
       'justifyContent': 'center',
       'alignItems': 'center',
       'backgroundColor': 'none',
+      'padding': '1em 0em',
       '& svg': {
         width: '30px',
         height: '30px',
@@ -31,7 +32,7 @@ export default function NoContent({message = 'no content'}) {
     variant='control'
     >
       <Box>
-        <AttentionIcon/>
+        <AttentionIcon style={{height: '21px', weight: '21px'}}/>
       </Box>
       <Typography variant={'h4'}>{message}</Typography>
     </Paper>

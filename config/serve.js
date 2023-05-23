@@ -19,9 +19,9 @@ const serveNotFound = ((res) => {
       // MIT License
       // https://github.com/rafgraph/spa-github-pages
       // This page needs to be > 512 bytes to work for IE.  Currently 968.
-      var pathSegmentsToKeep = window.location.pathname.startsWith('/Share') ? 1 : 0
+      var pathSegmentsToKeep = .location.pathname.startsWith('/Share') ? 1 : 0
 
-      var l = window.location
+      var l = .location
       var u1 = l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '')
       var u2 = l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/'
       var u3 = l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~')

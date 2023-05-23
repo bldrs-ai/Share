@@ -89,6 +89,7 @@ export default function SideDrawer() {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
+          zIndex: 3,
           background: theme.palette.primary.background,
         }}
         ref={sidebarRef}

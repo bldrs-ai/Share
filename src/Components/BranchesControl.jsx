@@ -3,6 +3,7 @@ import {useNavigate} from 'react-router-dom'
 import TextField from '@mui/material/TextField'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
+import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import debug from '../utils/debug'
@@ -20,6 +21,8 @@ import {handleBeforeUnload} from '../utils/event'
 export default function Branches() {
   const navigate = useNavigate()
   const repository = useStore((state) => state.repository)
+  const isBranches = useStore((state) => state.isBranches)
+  const setIsBranches = useStore((state) => state.setIsBranches)
   const [branches, setBranches] = useState([])
   const [versionPaths, setVersionPaths] = useState([])
   const [selected, setSelected] = useState(0)
@@ -49,6 +52,11 @@ export default function Branches() {
           versionPathsTemp.push(versionPath)
         })
         setVersionPaths(versionPathsTemp)
+        if (branchesData.length > 1) {
+          setIsBranches(true)
+        } else {
+          setIsBranches(false)
+        }
       } catch (e) {
         debug().warn('failed to fetch branches', e)
       }
@@ -57,8 +65,7 @@ export default function Branches() {
     if (branches.length === 0 && modelPath.repo !== undefined) {
       fetchBranches()
     }
-  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo])
-
+  }, [accessToken, repository, branches.length, modelPath.branch, modelPath.filepath, modelPath.org, modelPath.repo, setIsBranches])
 
   const handleSelect = (event) => {
     const versionNumber = event.target.value
@@ -71,25 +78,27 @@ export default function Branches() {
 
 
   return (
-    <>
-      {branches.length > 1 && modelPath.repo !== undefined &&
+    <Box sx={{width: '100%'}}>
+      {isBranches && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
-            marginTop: '34px',
+            marginBottom: '10px',
             opacity: .8,
           }}
         >
           <TextField
             sx={{
-              'width': '300px',
+              'width': '100%',
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
+                padding: '13px 0px 13px 16px',
               },
               '& .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: .5,
               },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
               },
               '&:hover .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
@@ -97,9 +106,10 @@ export default function Branches() {
               // TODO(oleg): connect to props
               '&:hover .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                opacity: 1,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
               },
               // TODO(oleg): connect to props
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
@@ -110,12 +120,12 @@ export default function Branches() {
                 color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
               },
             }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label='Git Branches / Project Versions'
+            label='Versions'
             value={selected}
             select
             role="button"
@@ -134,6 +144,6 @@ export default function Branches() {
           </TextField>
         </Paper>
       }
-    </>
+    </Box>
   )
 }

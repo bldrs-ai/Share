@@ -99,8 +99,8 @@ export function navToDefault(navigate, appPrefix) {
   const mediaSizeTabletWith = 900
   window.removeEventListener('beforeunload', handleBeforeUnload)
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
-  const cameraHash = window.innerWidth > mediaSizeTabletWith ?
-        `#${CAMERA_PREFIX}:-150.147,-85.796,167.057,-32.603,17.373,-1.347` :
+  const cameraHash = window.innerWidth < mediaSizeTabletWith ?
+        `#${CAMERA_PREFIX}:-182.713,-124.929,216.121,-29.279,9.741,-3.702` :
         `#${CAMERA_PREFIX}:-119.076,0.202,83.165,-44.967,19.4,-4.972`
   navWith(navigate, defaultPath, {
     search: location.search,

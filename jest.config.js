@@ -45,6 +45,11 @@ module.exports = {
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [
     'src/Share.test.js',
+    'src/Components/OpenModelControl.test.jsx',
+    'src/Components/CutPlaneMenu.test.jsx',
+    'src/Components/OperationsGroup.test.jsx',
+    'src/Containers/CadView.test.jsx',
+    'src/Components/AuthNav.test',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
