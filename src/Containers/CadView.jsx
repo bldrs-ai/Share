@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
@@ -66,9 +67,9 @@ export default function CadView({
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
-  const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
+  // const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
   const [expandedTypes, setExpandedTypes] = useState([])
-  const [navigationMode, setNavigationMode] = useState('spatial-tree')
+  // const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   // UI elts
   const theme = useTheme()
@@ -434,10 +435,11 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
-      const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
-      if (types.length > 0) {
-        setDefaultExpandedTypes(types)
-      }
+      // eslint-disable-next-line max-len
+      // const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
+      // if (types.length > 0) {
+      //   setDefaultExpandedTypes(types)
+      // }
       Privacy.recordEvent('search', {
         search_term: query,
       })

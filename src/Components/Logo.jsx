@@ -86,8 +86,8 @@ export default function Logo({onClick}) {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            left: '240px',
-            transform: 'translateX(60px)',
+            // left: '240px',
+            transform: 'translateX(0px) translateY(-60px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 1,
