@@ -66,6 +66,25 @@ describe.skip('bldrs inside iframe', () => {
     // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
+  it('should load model from external http source when LoadModel-message emitted', () => {
+    const model = 'raw.githubusercontent.com/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
+    const modelRootNodeName = 'Proxy with extruded box'
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.LoadModel')
+    const msg = {
+      srcPath: model,
+    }
+
+    cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
+
+    cy.get('#txtSendMessagePayload').clear()
+        .type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+    cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
+    cy.get('@iframe').contains('span', modelRootNodeName).should('exist')
+  })
+
   it('should select element when SelectElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
