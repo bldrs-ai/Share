@@ -1,14 +1,14 @@
 import React, {useState} from 'react'
 import {useLocation} from 'react-router-dom'
+import useStore from '../store/useStore'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import useTheme from '@mui/styles/useTheme'
 import debug from '../utils/debug'
 import {TooltipIconButton} from './Buttons'
-import MoreIcon from '../assets/icons/More.svg'
-// import AboutControl from './About/AboutControl'
-import MoonIcon from '../assets/icons/Moon.svg'
-import SunIcon from '../assets/icons/Sun.svg'
+import TreeIcon from '../assets/icons/Tree.svg'
+import TypesIcon from '../assets/icons/Types.svg'
+import ElementsIcon from '../assets/icons/Elements.svg'
 
 
 /**
@@ -18,8 +18,10 @@ import SunIcon from '../assets/icons/Sun.svg'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function ResourcesMenu() {
+export default function TreeMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
+  // const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const toggleIsNavigationPanelVisible = useStore((state) => state.toggleIsNavigationPanelVisible)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
@@ -40,8 +42,8 @@ export default function ResourcesMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Resources'}
-        icon={<MoreIcon/>}
+        title={'Structure'}
+        icon={<TreeIcon/>}
         onClick={handleClick}
       />
       <Menu
@@ -54,8 +56,7 @@ export default function ResourcesMenu() {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            left: '240px',
-            transform: 'translateX(-60px)',
+            transform: 'translateX(70px) translateY(-3px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 1,
@@ -84,12 +85,21 @@ export default function ResourcesMenu() {
 
         <MenuItem>
           <TooltipIconButton
-            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
+            title={`Types`}
             onClick={() => {
               handleClose()
-              theme.toggleColorMode()
             }}
-            icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
+            icon={<TypesIcon/>}
+          />
+        </MenuItem>
+        <MenuItem>
+          <TooltipIconButton
+            title={`Elements`}
+            onClick={() => {
+              handleClose()
+              toggleIsNavigationPanelVisible()
+            }}
+            icon={<ElementsIcon/>}
           />
         </MenuItem>
       </Menu>

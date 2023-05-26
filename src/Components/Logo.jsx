@@ -43,6 +43,7 @@ export default function Logo({onClick}) {
         'position': 'fixed',
         'bottom': '1em',
         'left': '1.3em',
+        'border': `1px solid ${theme.palette.mode === 'light' ? theme.palette.background.control : theme.palette.primary.main } `,
         '& svg': {
           'width': '50px',
           'height': '50px',
@@ -87,7 +88,7 @@ export default function Logo({onClick}) {
         PaperProps={{
           style: {
             // left: '240px',
-            transform: 'translateX(0px) translateY(-60px)',
+            transform: 'translateX(0px) translateY(-70px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 1,
