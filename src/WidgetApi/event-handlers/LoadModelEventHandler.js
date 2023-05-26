@@ -32,7 +32,7 @@ class LoadModelEventHandler extends ApiEventHandler {
     }
     if ('githubIfcPath' in data) {
       this.navigation(`/share/v/gh/${data.githubIfcPath}`)
-    } else if('srcPath' in data) {
+    } else if ('srcPath' in data) {
       this.navigation(`/share/v/src/${data.srcPath}`)
     }
 
