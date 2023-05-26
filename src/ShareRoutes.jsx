@@ -109,7 +109,7 @@ function FetchFromUrl({appPrefix}) {
         if (urlIndex < locationParts.length) {
           const encodedUrl = locationParts.slice(urlIndex).join('/')
           const decodedUrl = decodeURIComponent(encodedUrl)
-          const fullUrl = `https://${decodedUrl}`
+          const fullUrl = `//${decodedUrl}`
           const fetchResponse = await fetch(fullUrl)
           const blob = await fetchResponse.blob()
 
