@@ -10,7 +10,7 @@ export default function createUIVisibilitySlice(set, get) {
     isLoginVisible: true,
     isSearchBarVisible: false,
     isOpenControlVisible: false,
-    isNavigationPanelVisible: false,
+    isNavigationPanelVisible: true,
     isCollaborationGroupVisible: true,
     isModelInteractionGroupVisible: true,
     isSettingsVisible: true,

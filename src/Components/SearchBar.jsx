@@ -97,6 +97,7 @@ export default function SearchBar({deselectItems}) {
     <Box sx={{width: '100%'}}>
       <Paper
         variant='control'
+        elevation={0}
         component='form'
         onSubmit={onSubmit}
         sx={{
@@ -123,6 +124,7 @@ export default function SearchBar({deselectItems}) {
           onChange={onInputChange}
           error={true}
           placeholder={'Search'}
+          elevation={0}
           startAdornment={
             <InputAdornment position="start">
               <SearchIcon style={{width: '13px', height: '13px', opacity: .5}}/>

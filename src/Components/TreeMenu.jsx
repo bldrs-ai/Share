@@ -20,8 +20,12 @@ import ElementsIcon from '../assets/icons/Elements.svg'
  */
 export default function TreeMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  // const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
-  const toggleIsNavigationPanelVisible = useStore((state) => state.toggleIsNavigationPanelVisible)
+  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
+  const showNavPanel = useStore((state) => state.showNavPanel)
+  const hideNavPanel = useStore((state) => state.hideNavPanel)
+  const isElementNavigation = useStore((state) => state.isElementNavigation)
+  const setElementNavigation = useStore((state) => state.setElementNavigation)
+  const setTypeNavigation = useStore((state) => state.setTypeNavigation)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
@@ -37,13 +41,20 @@ export default function TreeMenu() {
   const handleClose = () => {
     setAnchorEl(null)
   }
-
+  const toggleIsNavPanelOpen = (isElementNavigationLocal) => {
+    if (isNavPanelOpen && isElementNavigationLocal === isElementNavigation ) {
+      hideNavPanel()
+    } else {
+      showNavPanel()
+    }
+  }
 
   return (
     <>
       <TooltipIconButton
         title={'Structure'}
         placement={'bottom'}
+        selected={isNavPanelOpen}
         icon={<TreeIcon/>}
         onClick={handleClick}
       />
@@ -83,24 +94,28 @@ export default function TreeMenu() {
           },
         }}
       >
-
         <MenuItem>
           <TooltipIconButton
-            title={`Types`}
+            title={`Elements`}
+            selected={isElementNavigation === true && isNavPanelOpen}
             onClick={() => {
               handleClose()
+              setElementNavigation()
+              toggleIsNavPanelOpen(true)
             }}
-            icon={<TypesIcon/>}
+            icon={<ElementsIcon style={{width: '15px', height: '15px'}}/>}
           />
         </MenuItem>
         <MenuItem>
           <TooltipIconButton
-            title={`Elements`}
+            title={`Types`}
+            selected={isElementNavigation !== true && isNavPanelOpen}
             onClick={() => {
               handleClose()
-              toggleIsNavigationPanelVisible()
+              setTypeNavigation()
+              toggleIsNavPanelOpen(false)
             }}
-            icon={<ElementsIcon/>}
+            icon={<TypesIcon style={{width: '15px', height: '15px'}}/>}
           />
         </MenuItem>
       </Menu>

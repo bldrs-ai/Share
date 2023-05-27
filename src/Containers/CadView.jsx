@@ -69,7 +69,7 @@ export default function CadView({
   const [expandedElements, setExpandedElements] = useState([])
   // const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
   const [expandedTypes, setExpandedTypes] = useState([])
-  // const [navigationMode, setNavigationMode] = useState('spatial-tree')
+
 
   // UI elts
   const theme = useTheme()
@@ -84,7 +84,7 @@ export default function CadView({
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
-  const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
+  // const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
@@ -198,7 +198,7 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    setIsNavPanelOpen(false)
+    // setIsNavPanelOpen(false)
     setShowSearchBar(false)
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
@@ -398,7 +398,7 @@ export default function CadView({
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
-    setIsNavPanelOpen(true)
+    // setIsNavPanelOpen(true)
   }
 
 
@@ -709,7 +709,7 @@ export default function CadView({
               {isOpenControlVisible &&
                 <OpenModelControl modelPath={modelPath} fileOpen={loadLocalFile} isLocalModel={isLocalModel}/>
               }
-              {isSearchBarVisible &&
+              {isSearchBarVisible && showControls &&
                 <SearchBar deselectItems={deselectItems}/>
               }
               {
@@ -717,7 +717,7 @@ export default function CadView({
                 <BranchesControl location={location}/>
               }
 
-              {isNavPanelOpen && isNavigationPanelVisible &&
+              {isNavPanelOpen && isNavigationPanelVisible && showControls &&
                 <NavPanel
                   model={model}
                   element={rootElement}
