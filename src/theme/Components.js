@@ -27,6 +27,7 @@ export function getComponentOverrides(palette) {
             height: '40px',
             textTransform: 'none',
             border: 'none',
+            fontWeight: '400',
             backgroundColor: palette.background.button,
           },
         },

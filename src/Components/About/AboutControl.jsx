@@ -38,7 +38,7 @@ export default function AboutControl() {
       title='About'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
-      placement={'right'}
+      placement={'left'}
       icon={
         <AboutIcon
           style={{

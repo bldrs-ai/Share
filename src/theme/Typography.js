@@ -1,4 +1,4 @@
-const fontFamily = 'Helvetica'
+const fontFamily = 'Roboto'
 const fontSize = 16
 const fontWeight = '400'
 const letterSpacing = 'normal'
@@ -16,10 +16,10 @@ export function getTypography() {
     lineHeight: lineHeight,
     h1: {fontSize: '1.3em', fontWeight},
     h2: {fontSize: '1.2em', fontWeight},
-    h3: {fontSize: '1.1em', fontWeight: 400},
+    h3: {fontSize: '1.1em', fontWeight},
     h4: {fontSize: fontSize, fontWeight},
-    h5: {fontSize: '.9em', lineHeight: '1.2em', fontWeight: 400},
-    h6: {fontSize: '.8em', fontWeight: 500},
+    h5: {fontSize: '.94em', lineHeight: '1.2em'},
+    h6: {fontSize: '.8em', fontWeight},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},

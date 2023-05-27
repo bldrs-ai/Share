@@ -6,7 +6,7 @@ import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ViewMenu from './ViewMenu'
-// import ResourcesMenu from './ResourcesMenu'
+import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
@@ -120,6 +120,7 @@ export default function OperationsGroup({deselectItems}) {
             {/* <PlanesMenu/> */}
             <CutPlaneMenu/>
             <ViewMenu/>
+
             {/* <TooltipIconButton
               title='Notes'
               icon={<CaptureIcon/>}
@@ -149,6 +150,7 @@ export default function OperationsGroup({deselectItems}) {
             {/* <ResourcesMenu/> */}
           </ButtonGroup>
           }
+          <ResourcesMenu/>
           {/* Invisible */}
           <CameraControl/>
         </Paper>

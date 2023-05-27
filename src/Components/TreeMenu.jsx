@@ -43,6 +43,7 @@ export default function TreeMenu() {
     <>
       <TooltipIconButton
         title={'Structure'}
+        placement={'bottom'}
         icon={<TreeIcon/>}
         onClick={handleClick}
       />

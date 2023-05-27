@@ -14,7 +14,7 @@ import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
-import CreateGroup from '../Components/CreateGroup'
+// import CreateGroup from '../Components/CreateGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -92,7 +92,7 @@ export default function CadView({
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
-  // const showControls = useStore((state) => state.showControls)
+  const showControls = useStore((state) => state.showControls)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
@@ -692,7 +692,9 @@ export default function CadView({
               alignItems: 'flex-start',
             }}
           >
-            <ControlsGroup modelPath={modelPath} isLocalModel={isLocalModel} fileOpen={loadLocalFile}/>
+            {showControls &&
+              <ControlsGroup modelPath={modelPath} isLocalModel={isLocalModel} fileOpen={loadLocalFile}/>
+            }
             <Box
               sx={{
                 'width': '280px',
@@ -735,7 +737,7 @@ export default function CadView({
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
-      {viewer &&
+      {/* {viewer &&
         <Box
           sx={{
             position: 'fixed',
@@ -749,7 +751,7 @@ export default function CadView({
         >
           <CreateGroup/>
         </Box>
-      }
+      } */}
     </Box>
   )
 }

@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -23,54 +22,55 @@ export default function AboutDescription({setIsDialogDisplayed}) {
   return (
     <Box
       sx={{
-        width: '268px',
+        width: '264px',
         height: '160px',
         fontSize: '.9em',
         fontWeight: 'bold',
-        borderRadius: '10px',
+        borderRadius: '8px',
         margin: '2em 0',
-        padding: '.5em 1em .7em .5em',
+        padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
-        backgroundColor: theme.palette.background.button,
-        // border: `1px solid ${theme.palette.primary.main}`,
+        // backgroundColor: theme.palette.background.button,
+        border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
     >
       <Box
         sx={{
-          padding: '4px 4px 4px 8px',
+          padding: '6px 6px',
         }}
       >
-        <Typography variant={'h2'}>
+        <Typography variant={'h5'} >
+            Cross-functional online collaboration unlocks team flow,
+            productivity and creativity.
             Open workspaces, open standards and open source code is the most powerful way to work.
             Cooperation is the unfair advantage.
         </Typography>
         <Box
           sx={{
-            // marginRight: 'px',
+            marginRight: '-6px',
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '1.0em',
+            top: '1.4em',
           }}
         >
-          <a
-            href='https://bldrs.ai/share/v/p/index.ifc#c:-93.79,4.24,100.38,-43.48,15.73,-4.34::i:1148362525'
+          {/* <a
+            href='https://bldrs.ai/share/v/p/index.ifc#c:-113.444,0.464,81.43,-23.595,24.522,10.88::i:1493510953'
             onClick={onClickLink}
           >
-            <Typography variant={'h2'} sx={{textDecoration: 'underline', marginLeft: '10px'}}>Guide</Typography>
-          </a>
-          {/* <a
+            <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Guide</Typography>
+          </a> */}
+          <a
             // eslint-disable-next-line max-len
             href='https://bldrs.ai/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
             onClick={onClickLink}
           >
-            <Typography variant={'h2'} sx={{textDecoration: 'underline', marginLeft: '10px'}}>Team</Typography>
-          </a> */}
+            <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Team</Typography>
+          </a>
         </Box>
       </Box>
     </Box>
   )
 }
-

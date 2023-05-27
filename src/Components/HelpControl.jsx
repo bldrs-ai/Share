@@ -28,7 +28,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
         title={'Help'}
         onClick={() => setIsDialogDisplayed(true)}
         icon={<QuestionIcon/>}
-        placement={'right'}
+        placement={'left'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
       />
