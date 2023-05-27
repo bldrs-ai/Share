@@ -673,11 +673,19 @@ export default function CadView({
           sx={{
             position: 'absolute',
             top: '40%',
-            left: '48%',
-            width: '100px',
+            width: '100vw',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
           }}
         >
-          <Loader height={20}/>
+          <Box
+            sx={{
+              width: '100px',
+            }}
+          >
+            <Loader height={20}/>
+          </Box>
         </Box>
       }
       {showSearchBar && (
