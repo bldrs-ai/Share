@@ -65,7 +65,7 @@ export default function ResourcesMenu() {
     >
       <TooltipIconButton
         title={'Resources'}
-        icon={<QuestionIcon style={{width: '19px', height: '19px'}}/>}
+        icon={<QuestionIcon style={{width: '17px', height: '17px'}}/>}
         onClick={handleClick}
       />
       <Menu
