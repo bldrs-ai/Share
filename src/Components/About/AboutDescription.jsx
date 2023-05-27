@@ -53,7 +53,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '1.4em',
+            top: '1em',
           }}
         >
           {/* <a

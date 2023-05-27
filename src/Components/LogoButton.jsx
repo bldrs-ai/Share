@@ -15,7 +15,7 @@ export default function LogoButton({onClick}) {
       sx={{
         position: 'fixed',
         bottom: '20px',
-        left: '20px',
+        left: '26px',
       }}
     >
       <TooltipIconButton
