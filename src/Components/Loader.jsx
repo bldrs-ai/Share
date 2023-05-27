@@ -10,11 +10,11 @@ import CircularProgress from '@mui/material/CircularProgress'
  * @param  {string} type
  * @return {object} React component.
  */
-export default function Loader({type = 'linear'}) {
+export default function Loader({type = 'linear', height = 8}) {
   return (
     <Box sx={{width: '100%', alignItems: 'center'}} className={'progress-bar'}>
       {type === 'linear' &&
-        <LinearProgress color="success" sx={{height: '8px', width: '100%', borderRadius: '5px'}}/>
+        <LinearProgress color="success" sx={{height: `${height}px`, width: '100%', borderRadius: '5px'}}/>
       }
       {type === 'circular' &&
         <CircularProgress color="success" sx={{height: '12px', width: '12px'}}/>

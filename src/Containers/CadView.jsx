@@ -32,6 +32,7 @@ import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import OpenModelControl from '../Components/OpenModelControl'
+import Loader from '../Components/Loader'
 
 
 /**
@@ -667,7 +668,18 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
-
+      { isLoading &&
+        <Box
+          sx={{
+            position: 'absolute',
+            top: '40%',
+            left: '48%',
+            width: '100px',
+          }}
+        >
+          <Loader height={20}/>
+        </Box>
+      }
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
