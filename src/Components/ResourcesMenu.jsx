@@ -1,18 +1,15 @@
 import React, {useState} from 'react'
-// import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from './Buttons'
-// import {useLocation} from 'react-router-dom'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import AboutControl from './About/AboutControl'
 import HelpControl from './HelpControl'
+import DiscordIcon from '../assets/icons/Discord.svg'
+import MoreIcon from '../assets/icons/More.svg'
 import MoonIcon from '../assets/icons/Moon.svg'
 import SunIcon from '../assets/icons/Sun.svg'
-import QuestionIcon from '../assets/icons/Question.svg'
-import DiscordIcon from '../assets/icons/Discord.svg'
-// import PkgJson from '../../package.json'
 
 
 /**
@@ -65,7 +62,7 @@ export default function ResourcesMenu() {
     >
       <TooltipIconButton
         title={'Resources'}
-        icon={<QuestionIcon style={{width: '17px', height: '17px'}}/>}
+        icon={<MoreIcon style={{width: '20px', height: '20px'}}/>}
         onClick={handleClick}
       />
       <Menu
