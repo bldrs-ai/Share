@@ -68,7 +68,7 @@ export default function TreeMenu() {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            transform: 'translateX(70px) translateY(-3px)',
+            transform: 'translateX(66px) translateY(-3px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 1,
