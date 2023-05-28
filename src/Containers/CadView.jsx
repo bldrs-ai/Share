@@ -671,8 +671,8 @@ export default function CadView({
       <Box
         sx={{
           position: 'absolute',
-          top: '148px',
-          width: '100vw',
+          top: '1.2em',
+          left: '1.3em',
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
@@ -680,10 +680,10 @@ export default function CadView({
       >
         <Box
           sx={{
-            width: '100px',
+            width: '170px',
           }}
         >
-          <Loader height={24}/>
+          <Loader height={25}/>
         </Box>
       </Box>
       }
