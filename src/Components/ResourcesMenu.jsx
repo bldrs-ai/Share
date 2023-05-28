@@ -62,7 +62,7 @@ export default function ResourcesMenu() {
     >
       <TooltipIconButton
         title={'Resources'}
-        icon={<MoreIcon style={{width: '20px', height: '20px'}}/>}
+        icon={<MoreIcon style={{width: '19px', height: '19px'}}/>}
         onClick={handleClick}
       />
       <Menu
