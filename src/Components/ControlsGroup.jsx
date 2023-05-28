@@ -3,7 +3,7 @@ import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
 import SaveModelControl from './SaveModelControl'
 import useStore from '../store/useStore'
-import BranchIcon from '../assets/icons/Branch.svg'
+// import BranchIcon from '../assets/icons/Branch.svg'
 import SearchIcon from '../assets/icons/Search.svg'
 import OpenModelControl from '../Components/OpenModelControl'
 // import StructureMenu from '../Components/StructureMenu'
@@ -17,9 +17,9 @@ import TreeMenu from './TreeMenu'
  * @return {React.Component}
  */
 export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
-  const isBranches = useStore((state) => state.isBranches)
-  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
-  const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
+  // const isBranches = useStore((state) => state.isBranches)
+  // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
+  // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
 
@@ -48,7 +48,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         placement={'bottom'}
         dataTestId='spatial-elements'
       />
-      {isBranches &&
+      {/* {isBranches &&
         <TooltipIconButton
           title={'Versions'}
           onClick={toggleIsBranchControlVisible}
@@ -57,7 +57,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
           placement={'bottom'}
           dataTestId='project-version'
         />
-      }
+      } */}
       <TreeMenu/>
       {/* <StructureMenu/> */}
     </Paper>

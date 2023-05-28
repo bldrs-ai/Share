@@ -5,7 +5,7 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault, navigateToRandomSampleModel} from '../Share'
 import Alert from '../Components/Alert'
-import BranchesControl from '../Components/BranchesControl'
+// import BranchesControl from '../Components/BranchesControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -106,7 +106,7 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
-  const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
+  // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   const isOpenControlVisible = useStore((state) => state.isOpenControlVisible)
 
 
@@ -680,10 +680,11 @@ export default function CadView({
       >
         <Box
           sx={{
-            width: '170px',
+            // width: '170px',
+            width: '56px',
           }}
         >
-          <Loader height={25}/>
+          <Loader height={56}/>
         </Box>
       </Box>
       }
@@ -731,10 +732,10 @@ export default function CadView({
               {isSearchBarVisible && showControls &&
                 <SearchBar deselectItems={deselectItems}/>
               }
-              {
+              {/* {
                 modelPath.repo !== undefined && isBranchControlVisible &&
                 <BranchesControl location={location}/>
-              }
+              } */}
 
               {isNavPanelOpen && isNavigationPanelVisible && showControls &&
                 <NavPanel
