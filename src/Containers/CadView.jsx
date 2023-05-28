@@ -684,7 +684,7 @@ export default function CadView({
             width: '56px',
           }}
         >
-          <Loader height={56}/>
+          <Loader height={24}/>
         </Box>
       </Box>
       }
