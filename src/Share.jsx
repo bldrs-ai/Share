@@ -110,6 +110,30 @@ export function navToDefault(navigate, appPrefix) {
 
 
 /**
+ * Navigate to index.ifc with nice camera setting.
+ *
+ * @param {Function} navigate
+ * @param {string} appPrefix
+ */
+export function navigateToRandomSampleModel(navigate) {
+  // eslint-disable-next-line no-magic-numbers
+  const randomModel = Math.floor(Math.random() * (6))
+  const modelPath = {
+    0: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
+    1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
+    2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
+    4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
+    // eslint-disable-next-line max-len
+    5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
+    6: '/share/v/gh/OlegMoshkovich/Bldrs_Plaza/main/IFC_STUDY.ifc',
+  }
+  // window.removeEventListener('beforeunload', handleBeforeUnload)
+  navigate({pathname: modelPath[randomModel]})
+}
+
+
+/**
  * Returns a reference to an IFC model file.  For use by IfcViewerAPIExtended.load.
  *
  * Format is either a reference within this project's serving directory:

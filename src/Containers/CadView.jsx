@@ -1,13 +1,11 @@
-/* eslint-disable max-len */
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {navToDefault} from '../Share'
+import {navToDefault, navigateToRandomSampleModel} from '../Share'
 import Alert from '../Components/Alert'
 import BranchesControl from '../Components/BranchesControl'
-import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -17,6 +15,7 @@ import OperationsGroup from '../Components/OperationsGroup'
 // import CreateGroup from '../Components/CreateGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
+import {useWindowDimensions} from '../Components/Hooks'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
@@ -669,24 +668,24 @@ export default function CadView({
         open={isLoading || snackMessage !== null}
       />
       { isLoading &&
+      <Box
+        sx={{
+          position: 'absolute',
+          top: '150px',
+          width: '100vw',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
         <Box
           sx={{
-            position: 'absolute',
-            top: '40%',
-            width: '100vw',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
+            width: '100px',
           }}
         >
-          <Box
-            sx={{
-              width: '100px',
-            }}
-          >
-            <Loader height={20}/>
-          </Box>
+          <Loader height={24}/>
         </Box>
+      </Box>
       }
       {showSearchBar && (
         <Box sx={{
@@ -754,7 +753,7 @@ export default function CadView({
           </Box>
         </Box>
       )}
-      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
       {/* {viewer &&
