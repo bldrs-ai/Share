@@ -671,7 +671,7 @@ export default function CadView({
       <Box
         sx={{
           position: 'absolute',
-          top: '1.2em',
+          top: '2.25em',
           left: '1.3em',
           display: 'flex',
           justifyContent: 'center',
