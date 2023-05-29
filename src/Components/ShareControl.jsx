@@ -1,6 +1,7 @@
 import React, {createRef, useEffect, useState} from 'react'
+import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
-import TextField from '@mui/material/TextField'
+// import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import useStore from '../store/useStore'
 import {addPlaneLocationToUrl} from './CutPlaneMenu'
@@ -146,7 +147,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           <Helmet>
             <title>Share IFC Model — BLDRS</title>
           </Helmet>
-          <TextField
+          {/* <TextField
             value={String(window.location)}
             inputRef={urlTextFieldRef}
             variant='outlined'
@@ -155,6 +156,12 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             InputProps={{
               readOnly: true,
             }}
+          /> */}
+          <QRCode
+            size={200}
+            style={{height: 'auto', maxWidth: '100%', width: '100%'}}
+            value={String(window.location)}
+            viewBox={`0 0 256 256`}
           />
           <Box
             sx={{

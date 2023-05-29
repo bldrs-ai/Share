@@ -41,7 +41,7 @@ export default function Dialog({
       sx={{
         textAlign: 'center',
       }}
-      PaperProps={{variant: 'control', zIndex: 10}}
+      PaperProps={{variant: 'control', zIndex: 10, opacity: .4}}
     >
       <DialogContent>
         <div
