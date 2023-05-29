@@ -1,9 +1,9 @@
-import React from 'react'
+import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import RenderingControl from '../Components/RenderingControl'
-// import {TooltipIconButton} from './Buttons'
-// import RobotIcon from '../assets/icons/Robot.svg'
+// import RenderingControl from '../Components/RenderingControl'
+import {TooltipIconButton} from './Buttons'
+import RobotIcon from '../assets/icons/Robot.svg'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -13,7 +13,7 @@ import RenderingControl from '../Components/RenderingControl'
  * @return {React.Component}
  */
 export default function CreateGroup({deselectItems}) {
-  // const [show, setShow] = useState(true)
+  const [show, setShow] = useState(true)
   return (
     <div>
       <Paper
@@ -30,12 +30,12 @@ export default function CreateGroup({deselectItems}) {
         <ButtonGroup
           orientation='vertical'
         >
-          <RenderingControl/>
-          {/* <TooltipIconButton
+          {/* <RenderingControl/> */}
+          <TooltipIconButton
             title={'A.I. Assistant'}
             onClick={() => setShow(!show)}
-            icon={<RobotIcon style={{width: '25px', height: '25px'}}/>}
-          /> */}
+            icon={<RobotIcon style={{width: '18px', height: '18px'}}/>}
+          />
         </ButtonGroup>
       </Paper>
     </div>
