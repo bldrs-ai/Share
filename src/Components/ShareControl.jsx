@@ -158,7 +158,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             }}
           /> */}
           <QRCode
-            size={200}
+            size={150}
             style={{height: 'auto', maxWidth: '100%', width: '100%'}}
             value={String(window.location)}
             viewBox={`0 0 256 256`}
