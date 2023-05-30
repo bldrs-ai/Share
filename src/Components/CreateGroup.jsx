@@ -32,9 +32,9 @@ export default function CreateGroup({deselectItems}) {
         >
           {/* <RenderingControl/> */}
           <TooltipIconButton
-            title={'A.I. Assistant'}
+            title={'A.I. Assistant ... comming soon'}
             onClick={() => setShow(!show)}
-            icon={<RobotIcon style={{width: '18px', height: '18px'}}/>}
+            icon={<RobotIcon/>}
           />
         </ButtonGroup>
       </Paper>

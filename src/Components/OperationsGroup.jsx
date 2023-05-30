@@ -17,6 +17,7 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import CollapseIcon from '../assets/icons/Collapse.svg'
 // import CaptureIcon from '../assets/icons/Capture.svg'
+// import HelpControl from './HelpControl'
 
 
 /**
@@ -148,6 +149,7 @@ export default function OperationsGroup({deselectItems}) {
             /> */}
             {/* <AboutControl/> */}
             {/* <ResourcesMenu/> */}
+            {/* <HelpControl/> */}
           </ButtonGroup>
           }
           <ResourcesMenu/>

@@ -134,6 +134,9 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             icon={<RenderingIcon/>}
             description={'Generate renderings of the project using text prompts'}
           />
+          <Box>
+            <Box sx={{width: '10px', height: '10px'}}/>
+          </Box>
         </Box>
       }
     />
