@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
-import ViewMenu from './ViewMenu'
+// import ViewMenu from './ViewMenu'
 import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
@@ -120,7 +120,7 @@ export default function OperationsGroup({deselectItems}) {
 
             {/* <PlanesMenu/> */}
             <CutPlaneMenu/>
-            <ViewMenu/>
+            {/* <ViewMenu/> */}
 
             {/* <TooltipIconButton
               title='Notes'
