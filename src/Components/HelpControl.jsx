@@ -11,7 +11,7 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import CutPlaneIcon from '../assets/icons/CutPlane.svg'
 import ViewIcon from '../assets/icons/View.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
-import RenderingIcon from '../assets/icons/RenderingBold.svg'
+import RobotIcon from '../assets/icons/Robot.svg'
 
 
 /**
@@ -82,6 +82,7 @@ const HelpComponent = ({icon, description}) => {
  * @return {object} React component
  */
 function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+  const theme = useTheme()
   /**
    * Close About dialog and redirect to Share instruction note
    */
@@ -131,11 +132,21 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             description={'Navigate the project using element hierarchies'}
           />
           <HelpComponent
-            icon={<RenderingIcon/>}
+            icon={<RobotIcon/>}
             description={'Generate renderings of the project using text prompts'}
           />
-          <Box>
-            <Box sx={{width: '10px', height: '10px'}}/>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              width: '40px',
+              marginTop: '6px',
+            }}
+          >
+            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.main}`, borderRadius: '2px'}}/>
+            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.background}`, borderRadius: '2px'}}/>
+            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.background}`, borderRadius: '2px'}}/>
           </Box>
         </Box>
       }
