@@ -34,7 +34,7 @@ export default function CreateGroup({deselectItems}) {
           <TooltipIconButton
             title={'A.I. Assistant ... comming soon'}
             onClick={() => setShow(!show)}
-            icon={<RobotIcon style={{width: '20px', height: '20px'}}/>}
+            icon={<RobotIcon/>}
           />
         </ButtonGroup>
       </Paper>
