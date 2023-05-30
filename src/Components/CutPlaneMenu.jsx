@@ -9,7 +9,8 @@ import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/icons/CutPlane.svg'
+// import CutPlaneIcon from '../assets/icons/CutPlane.svg'
+import ViewIcon from '../assets/icons/View.svg'
 import ElevationIcon from '../assets/icons/Elevation.svg'
 import PlanIcon from '../assets/icons/Plan.svg'
 import SectionIcon from '../assets/icons/Section.svg'
@@ -100,7 +101,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Sections'}
-        icon={<CutPlaneIcon/>}
+        icon={<ViewIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
       />
