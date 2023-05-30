@@ -1,4 +1,5 @@
-import React, {useState, useEffect} from 'react'
+/* eslint-disable no-magic-numbers */
+import React, {useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
@@ -6,13 +7,13 @@ import MenuItem from '@mui/material/MenuItem'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
+import {addHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/icons/CutPlane.svg'
-import ElevationIcon from '../assets/icons/Elevation.svg'
-import PlanIcon from '../assets/icons/Plan.svg'
-import SectionIcon from '../assets/icons/Section.svg'
+import CutPlaneMenu from './CutPlaneMenu'
+import ExtractLevelsMenu from './ExtractLevelsMenu'
+import StandardViewsMenu from './StandardViewsMenu'
+import ViewIcon from '../assets/icons/View.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -25,14 +26,9 @@ const PLANE_PREFIX = 'p'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function CutPlaneMenu() {
+export default function ViewsMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const model = useStore((state) => state.modelStore)
-  const viewer = useStore((state) => state.viewerStore)
   const cutPlanes = useStore((state) => state.cutPlanes)
-  const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
-  const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
@@ -51,59 +47,14 @@ export default function CutPlaneMenu() {
   }
 
 
-  useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
-    debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
-    if (planeHash && model && viewer) {
-      const planes = getPlanes(planeHash)
-      debug().log('CutPlaneMenu#useEffect: planes: ', planes)
-      if (planes && planes.length) {
-        planes.forEach((plane) => {
-          togglePlane(plane)
-        })
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model])
-
-
-  const togglePlane = ({direction, offset = 0}) => {
-    setLevelInstance(null)
-    const modelCenter = new Vector3
-    model?.geometry.boundingBox.getCenter(modelCenter)
-    setAnchorEl(null)
-    const {normal, modelCenterOffset} = getPlaneSceneInfo({modelCenter, direction, offset})
-    debug().log('CutPlaneMenu#togglePlane: normal: ', normal)
-    debug().log('CutPlaneMenu#togglePlane: modelCenterOffset: ', modelCenterOffset)
-    debug().log('CutPlaneMenu#togglePlane: ifcPlanes: ', viewer.clipper.planes)
-
-    if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
-      debug().log('CutPlaneMenu#togglePlane: found: ', true)
-      removeHashParams(window.location, PLANE_PREFIX, [direction])
-      removeCutPlaneDirection(direction)
-      viewer.clipper.deleteAllPlanes()
-      const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      restCutPlanes.forEach((restCutPlane) => {
-        const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
-        viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
-      })
-    } else {
-      debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
-      addCutPlaneDirection({direction, offset})
-      viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
-    }
-  }
-
-
   return (
     <>
       <TooltipIconButton
-        title={'Sections'}
-        icon={<CutPlaneIcon/>}
+        title={'Model View'}
         placement={'left'}
+        icon={<ViewIcon/>}
         onClick={handleClick}
-        selected={anchorEl !== null || !!cutPlanes.length}
+        selected={anchorEl !== null}
       />
       <Menu
         elevation={1}
@@ -143,40 +94,13 @@ export default function CutPlaneMenu() {
         }}
       >
         <MenuItem>
-          <TooltipIconButton
-            title={`Plan`}
-            placement={'left'}
-            onClick={() => {
-              togglePlane({direction: 'y'})
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-            icon={<PlanIcon style={{width: '25px', height: '30px'}}/>}
-          />
+          <CutPlaneMenu/>
         </MenuItem>
         <MenuItem>
-          <TooltipIconButton
-            title={`Elevation`}
-            placement={'left'}
-            onClick={() => {
-              togglePlane({direction: 'z'})
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-            icon={<ElevationIcon style={{width: '19px', height: '30px', marginLeft: '4px'}}/>}
-          />
+          <StandardViewsMenu/>
         </MenuItem>
         <MenuItem>
-          <TooltipIconButton
-            title={`Section`}
-            placement={'left'}
-            onClick={() => {
-              togglePlane({direction: 'x'})
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-            icon={<SectionIcon style={{width: '21px', height: '30px'}}/>}
-          />
+          <ExtractLevelsMenu/>
         </MenuItem>
       </Menu>
     </>

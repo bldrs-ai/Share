@@ -29,7 +29,7 @@ const PLANE_PREFIX = 'p'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function ViewMenu() {
+export default function StandardViewsMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const viewer = useStore((state) => state.viewerStore)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -54,7 +54,8 @@ export default function ViewMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Views'}
+        title={'Standard Views'}
+        placement={'left'}
         icon={<ViewIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null}

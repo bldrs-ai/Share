@@ -131,19 +131,36 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            left: '300px',
-            transform: 'translateX(-50px)',
+            left: '240px',
+            transform: 'translateX(-70px)',
+            opacity: .8,
+            background: theme.palette.background.control,
+            zIndex: 10,
           },
           sx: {
+            'color': theme.palette.primary.contrastText,
             '& .Mui-selected': {
               color: theme.palette.secondary.main,
-              fontWeight: 600,
+              fontWeight: 800,
+            },
+            '.MuiMenuItem-root:hover': {
+              backgroundColor: 'transparent',
+            },
+            '.MuiMenuItem-root': {
+              padding: '0px',
+            },
+            '.MuiMenu-paper': {
+              padding: '0px',
+            },
+            '.MuiList-padding': {
+              padding: '0px',
             },
           },
         }}
       >
         <TooltipIconButton
           title={'Toggle Plan View'}
+          placement={'left'}
           icon={<PlanViewIcon/>}
           onClick={planView}
         />
@@ -153,7 +170,12 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
             onClick={() => isolateFloor(i)}
             selected={levelInstance === (allLevelsState[i] + floorOffset)}
           >
-            L{i}
+            <TooltipIconButton
+              title={`L ${i}`}
+              placement={'left'}
+              icon={`L ${i}`}
+              onClick={planView}
+            />
           </MenuItem>))
         }
       </Menu>

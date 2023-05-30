@@ -4,8 +4,8 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
-import CutPlaneMenu from './CutPlaneMenu'
-// import ViewMenu from './ViewMenu'
+import ViewsMenu from './ViewsMenu'
+// import StandardViewsMenu from './StandardViewsMenu'
 import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
@@ -119,8 +119,8 @@ export default function OperationsGroup({deselectItems}) {
             />
 
             {/* <PlanesMenu/> */}
-            <CutPlaneMenu/>
-            {/* <ViewMenu/> */}
+            <ViewsMenu/>
+            {/* <StandardViewsMenu/> */}
 
             {/* <TooltipIconButton
               title='Notes'
