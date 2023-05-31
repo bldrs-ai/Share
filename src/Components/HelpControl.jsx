@@ -8,10 +8,9 @@ import InstructionsIcon from '../assets/icons/Instructions.svg'
 import QuestionIcon from '../assets/icons/Question.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
-import CutPlaneIcon from '../assets/icons/CutPlane.svg'
 import ViewIcon from '../assets/icons/View.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
-import RobotIcon from '../assets/icons/Robot.svg'
+import RobotIcon from '../assets/icons/Robot5.svg'
 
 
 /**
@@ -120,12 +119,8 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             description={'Attach text snippets to 3D elements'}
           />
           <HelpComponent
-            icon={<CutPlaneIcon/>}
-            description={'Attach multiple sections to isolate portions of the project'}
-          />
-          <HelpComponent
             icon={<ViewIcon/>}
-            description={'Study the project using standard views'}
+            description={'Study the project using standard views and sections'}
           />
           <HelpComponent
             icon={<TreeIcon/>}
