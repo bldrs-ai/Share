@@ -23,7 +23,7 @@ export default function createUISlice(set, get) {
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
-    showControls: true,
+    showControls: false,
     isHelpTooltips: false,
     isAppStoreOpen: false,
     appStoreSidebarWidth: MOBILE_WIDTH,

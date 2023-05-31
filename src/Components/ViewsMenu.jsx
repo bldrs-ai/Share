@@ -1,4 +1,3 @@
-/* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
