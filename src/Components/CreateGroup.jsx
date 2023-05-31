@@ -51,7 +51,6 @@ export default function CreateGroup({deselectItems}) {
         sx={{
           'display': 'flex',
           'flexDirection': 'column',
-          'opacity': .9,
           '.MuiButtonGroup-root + .MuiButtonGroup-root': {
             borderRadius: 0,
           },
