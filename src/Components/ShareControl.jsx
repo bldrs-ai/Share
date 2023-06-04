@@ -130,7 +130,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<LogoIcon/>}
-      headerText={<Typography variant='h5' sx={{marginTop: '3px'}}> Builders Share</Typography>}
+      headerText={<Typography variant='h4' sx={{marginTop: '4px'}}> Builders Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
