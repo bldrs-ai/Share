@@ -15,6 +15,7 @@ import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import ShareIcon from '../assets/icons/Share.svg'
+import LogoIcon from '../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
 
 
@@ -128,13 +129,14 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<ShareIcon/>}
-      headerText='Share'
+      icon={<LogoIcon/>}
+      headerText={<Typography variant='h5' sx={{marginTop: '3px'}}> Builders Share</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
       actionIcon={<CopyIcon/>}
       actionCb={onCopy}
+      showCloseButton={false}
       content={
         <Box sx={{
           display: 'flex',

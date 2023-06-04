@@ -29,6 +29,7 @@ export default function Dialog({
   actionTitle,
   actionCb,
   actionIcon,
+  showCloseButton = true,
 }) {
   assertDefined(
       icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
@@ -53,7 +54,9 @@ export default function Dialog({
             opacity: .8,
           }}
         >
-          <CloseButton onClick={close}/>
+          { showCloseButton &&
+            <CloseButton onClick={close}/>
+          }
         </div>
         <Typography
           variant='h1'
