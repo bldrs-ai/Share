@@ -42,7 +42,7 @@ const icon = (iconNumber) => {
  */
 export default function CreateGroup({deselectItems}) {
   const [iconNumber, setIconNumber] = useState(1)
-  const iconNumberCalc = iconNumber < 6 ? iconNumber + 1 : 1
+  const iconNumberCalc = iconNumber < 3 ? iconNumber + 1 : 1
 
   return (
     <div>
