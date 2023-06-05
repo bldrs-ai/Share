@@ -12,7 +12,7 @@ import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
-// import CreateGroup from '../Components/CreateGroup'
+import CreateGroup from '../Components/CreateGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {useWindowDimensions} from '../Components/Hooks'
@@ -769,7 +769,7 @@ export default function CadView({
             flexDirection: 'row',
           }}
         >
-          {/* <CreateGroup/> */}
+          <CreateGroup/>
         </Box>
       }
     </Box>
