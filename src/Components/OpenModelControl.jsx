@@ -14,6 +14,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import OpenIcon from '../assets/icons/Open.svg'
+import OpenNewIcon from '../assets/icons/OpenNew.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 
 
@@ -52,7 +53,7 @@ export default function OpenModelControl({fileOpen, modelPath, isLocalModel}) {
       <TooltipIconButton
         title={'Projects'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<OpenIcon/>}
+        icon={<OpenNewIcon/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
