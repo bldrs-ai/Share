@@ -15,11 +15,11 @@ import ElevationIcon from '../assets/icons/Elevation.svg'
 import PlanIcon from '../assets/icons/Plan.svg'
 import SectionIcon from '../assets/icons/Section.svg'
 import ViewIcon from '../assets/icons/View.svg'
-import BackIcon from '../assets/icons/view/Back.svg'
+// import BackIcon from '../assets/icons/view/Back.svg'
 import FrontIcon from '../assets/icons/view/Front.svg'
 import TopIcon from '../assets/icons/view/Top.svg'
-import BottomIcon from '../assets/icons/view/Bottom.svg'
-import RightIcon from '../assets/icons/view/Right.svg'
+// import BottomIcon from '../assets/icons/view/Bottom.svg'
+// import RightIcon from '../assets/icons/view/Right.svg'
 import LeftIcon from '../assets/icons/view/Left.svg'
 
 
@@ -198,7 +198,7 @@ export default function CombinedViewsMenu() {
             icon={<TopIcon style={{width: '30px', height: '30px'}}/>}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Bottom`}
             placement={'left'}
@@ -208,7 +208,7 @@ export default function CombinedViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BottomIcon style={{width: '30px', height: '30px'}}/>}
           />
-        </MenuItem>
+        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Front`}
@@ -220,7 +220,7 @@ export default function CombinedViewsMenu() {
             icon={<FrontIcon style={{width: '18px', height: '30px'}}/>}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Back`}
             placement={'left'}
@@ -230,7 +230,7 @@ export default function CombinedViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BackIcon style={{width: '19px', height: '30px'}}/>}
           />
-        </MenuItem>
+        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Left`}
@@ -242,7 +242,7 @@ export default function CombinedViewsMenu() {
             icon={<LeftIcon style={{width: '19px', height: '30px'}}/>}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Right`}
             placement={'left'}
@@ -252,7 +252,7 @@ export default function CombinedViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
           />
-        </MenuItem>
+        </MenuItem> */}
       </Menu>
     </>
   )
