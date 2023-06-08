@@ -63,6 +63,7 @@ export default function NotesNavBar() {
       >
         {selectedNoteId && !isCreateNoteActive &&
          <TooltipIconButton
+           showTitle={false}
            title='Back to the list'
            placement='bottom'
            onClick={() => {
@@ -84,12 +85,14 @@ export default function NotesNavBar() {
         {(notes && selectedNoteId) && !isCreateNoteActive && notes.length > 1 &&
           <>
             <TooltipIconButton
+              showTitle={false}
               title='Previous Note'
               onClick={() => selectNote('previous')}
               icon={<PreviousIcon style={{width: '16px', height: '16px'}}/>}
               placement='bottom'
             />
             <TooltipIconButton
+              showTitle={false}
               title='Next Note'
               onClick={() => selectNote('next')}
               icon={<NextIcon style={{width: '16px', height: '16px'}}/>}
@@ -109,6 +112,7 @@ export default function NotesNavBar() {
         {!selectedNoteId && (isCreateNoteActive ?
           <TooltipIconButton
             title='Back to the list'
+            showTitle={false}
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
             icon={<BackIcon/>}
