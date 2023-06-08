@@ -21,7 +21,7 @@ const LoginButton = ({
 
   return (
     <TooltipIconButton
-      title={'Log in with GitHub'}
+      title={'Log in'}
       icon={<GitHubIcon/>}
       onClick={onClick}
     />

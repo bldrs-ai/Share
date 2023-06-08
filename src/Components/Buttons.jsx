@@ -1,7 +1,9 @@
 import React from 'react'
 import Button from '@mui/material/Button'
+import Box from '@mui/material/Box'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
@@ -29,12 +31,14 @@ export function TooltipIconButton({
   size = 'medium',
   dataTestId = '',
   aboutInfo = true,
+  showTitle = true,
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const isMobile = useIsMobile()
   const open = aboutInfo ? isHelpTooltips : false
+  const theme = useTheme()
   const handleClose = () => {
     setOpenLocal(false)
   }
@@ -44,9 +48,36 @@ export function TooltipIconButton({
   return (
     <>
       {isMobile ?
-       <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-         {icon}
-       </ToggleButton> :
+          <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+            { showTitle === true ?
+          <Box sx={{display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            height: '36px',
+          }}
+          >
+            {icon}
+            <Box
+              sx={{
+                fontSize: '7px',
+                color: theme.palette.primary.contrastText,
+              }}
+            >
+              {title}
+            </Box>
+          </Box> :
+          <Box sx={{display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            height: '40px',
+          }}
+          >
+            {icon}
+          </Box>
+            }
+          </ToggleButton> :
        <Tooltip
          open={openLocal || open}
          onClose={handleClose}
@@ -57,8 +88,36 @@ export function TooltipIconButton({
          data-testid={dataTestId}
          PopperProps={{style: {zIndex: 0}}}
        >
+
          <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
-           {icon}
+           { showTitle === true ?
+           <Box sx={{display: 'flex',
+             flexDirection: 'column',
+             justifyContent: 'space-between',
+             alignItems: 'center',
+             height: '36px',
+           }}
+           >
+             {icon}
+             <Box
+               sx={{
+                 fontSize: '7px',
+                 color: theme.palette.primary.contrastText,
+               }}
+             >
+               {title}
+             </Box>
+           </Box> :
+           <Box sx={{display: 'flex',
+             flexDirection: 'column',
+             justifyContent: 'center',
+             alignItems: 'center',
+             height: '40px',
+           }}
+           >
+             {icon}
+           </Box>
+           }
          </ToggleButton>
        </Tooltip>
       }
@@ -108,6 +167,7 @@ export function ControlButton({
 export function CloseButton({onClick}) {
   return (
     <TooltipIconButton
+      showTitle={false}
       title='Close'
       onClick={onClick}
       placement='bottom'

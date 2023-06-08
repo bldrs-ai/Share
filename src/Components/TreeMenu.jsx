@@ -8,6 +8,7 @@ import debug from '../utils/debug'
 import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import TypesIcon from '../assets/icons/Types.svg'
+import SetsIcon from '../assets/icons/Sets.svg'
 import ElementsIcon from '../assets/icons/Elements.svg'
 
 
@@ -52,7 +53,7 @@ export default function TreeMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Structure'}
+        title={'Navigation'}
         placement={'bottom'}
         selected={isNavPanelOpen}
         icon={<TreeIcon/>}
@@ -116,6 +117,18 @@ export default function TreeMenu() {
               toggleIsNavPanelOpen(false)
             }}
             icon={<TypesIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        </MenuItem>
+        <MenuItem>
+          <TooltipIconButton
+            title={`Sets`}
+            selected={isElementNavigation !== true && isNavPanelOpen}
+            onClick={() => {
+              handleClose()
+              setTypeNavigation()
+              toggleIsNavPanelOpen(false)
+            }}
+            icon={<SetsIcon style={{width: '15px', height: '15px'}}/>}
           />
         </MenuItem>
       </Menu>

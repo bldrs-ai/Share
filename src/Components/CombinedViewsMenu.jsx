@@ -107,7 +107,7 @@ export default function CombinedViewsMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'View'}
+        title={'Views'}
         icon={<ViewIcon/>}
         placement={'left'}
         onClick={handleClick}

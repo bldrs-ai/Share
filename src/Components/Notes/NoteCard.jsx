@@ -327,7 +327,8 @@ const CardFooter = ({
       >
         {hasCameras &&
           <TooltipIconButton
-            title='Show the camera view'
+            showTitle={false}
+            title='View'
             size='small'
             placement='bottom'
             onClick={onClickCamera}
@@ -336,6 +337,7 @@ const CardFooter = ({
           />}
         {selected &&
           <TooltipIconButton
+            showTitle={false}
             title='Share'
             size='small'
             placement='bottom'

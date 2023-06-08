@@ -115,6 +115,7 @@ export default function NotesNavBar() {
             size='medium'
           /> :
           <TooltipIconButton
+            showTitle={false}
             title='Add a note'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}

@@ -115,7 +115,7 @@ export default function ResourcesMenu() {
         </MenuItem>
         <MenuItem>
           <TooltipIconButton
-            title={`Community Server`}
+            title={`Community`}
             onClick={() => window.open('https://discord.com/channels/853953158560743424/853953158560743426', '_blank').focus()}
             icon={<DiscordIcon style={{width: '20px', height: '20px'}}/>}
           />

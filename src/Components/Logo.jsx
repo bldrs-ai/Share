@@ -42,6 +42,7 @@ export default function Logo({onClick}) {
       }}
     >
       <TooltipIconButton
+        showTitle={false}
         title={`Bldrs: ${PkgJson.version}`}
         icon={<LogoIcon style={{marginLeft: '2px'}}/>}
         onClick={() => {

@@ -19,6 +19,7 @@ export default function LogoButton({onClick}) {
       }}
     >
       <TooltipIconButton
+        showTitle={false}
         title={`Bldrs: ${PkgJson.version}`}
         onClick={onClick}
         icon={<Logo/>}

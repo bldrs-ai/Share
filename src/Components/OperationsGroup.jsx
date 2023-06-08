@@ -219,6 +219,7 @@ export default function OperationsGroup({deselectItems}) {
         >
           <TooltipIconButton
             title={''}
+            showTitle={false}
             onClick={toggleShowControls}
             icon={showControls ? <CollapseIcon/> : <ExpandIcon/>}
           />

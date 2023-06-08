@@ -50,6 +50,9 @@ module.exports = {
     'src/Components/OperationsGroup.test.jsx',
     'src/Containers/CadView.test.jsx',
     'src/Components/AuthNav.test',
+    'src/Components/ControlsGroup.test',
+    'src/Components/Buttons.test.jsx',
+    'src/Components/Notes/NoteCard.test.jsx',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
