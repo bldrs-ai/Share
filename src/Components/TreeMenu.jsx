@@ -54,6 +54,7 @@ export default function TreeMenu() {
     <>
       <TooltipIconButton
         title={'Navigation'}
+        showTitle={false}
         placement={'bottom'}
         selected={isNavPanelOpen}
         icon={<TreeIcon/>}

@@ -52,6 +52,7 @@ export default function OpenModelControl({fileOpen, modelPath, isLocalModel}) {
     <Box>
       <TooltipIconButton
         title={'Projects'}
+        showTitle={false}
         onClick={() => setIsDialogDisplayed(true)}
         icon={<OpenIcon/>}
         placement={'bottom'}

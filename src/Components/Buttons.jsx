@@ -62,6 +62,7 @@ export function TooltipIconButton({
               sx={{
                 fontSize: '7px',
                 color: theme.palette.primary.contrastText,
+                textTransform: 'capitalize',
               }}
             >
               {title}
@@ -101,8 +102,9 @@ export function TooltipIconButton({
              {icon}
              <Box
                sx={{
-                 fontSize: '7px',
-                 color: theme.palette.primary.contrastText,
+                 fontSize: '8px',
+                 color: theme.palette.secondary.contrastText,
+                 textTransform: 'capitalize',
                }}
              >
                {title}

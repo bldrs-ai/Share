@@ -42,6 +42,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
       }
       <TooltipIconButton
         title={'Search'}
+        showTitle={false}
         onClick={toggleIsSearchBarVisible}
         selected={isSearchBarVisible}
         icon={<SearchIcon/>}
