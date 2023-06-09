@@ -39,6 +39,7 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       placement={'left'}
+      showTitle={true}
       icon={
         <AboutIcon
           style={{
@@ -71,7 +72,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>builders</Typography>
+          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>Builders</Typography>
         </Box>
       }
       headerText={''}
@@ -96,7 +97,7 @@ function AboutContent({setIsDialogDisplayed}) {
       <Helmet>
         <title>About — BLDRS</title>
       </Helmet>
-      <Typography variant='h2' gutterBottom={true}>build every thing together</Typography>
+      <Typography variant='h2' gutterBottom={true}>Build every thing together</Typography>
       <a href='https://github.com/bldrs-ai/Share' target='_new'>
         github.com/bldrs-ai/Share
       </a>

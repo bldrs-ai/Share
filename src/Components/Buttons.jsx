@@ -61,7 +61,7 @@ export function TooltipIconButton({
             <Box
               sx={{
                 fontSize: '7px',
-                color: theme.palette.primary.contrastText,
+                color: theme.palette.secondary.contrastText,
                 textTransform: 'capitalize',
               }}
             >
@@ -83,7 +83,7 @@ export function TooltipIconButton({
          open={openLocal || open}
          onClose={handleClose}
          onOpen={handleOpen}
-         title={title}
+         title={showTitle ? '' : title}
          describeChild
          placement={placement}
          data-testid={dataTestId}
@@ -145,6 +145,7 @@ export function ControlButton({
   icon,
   dialog,
   placement = 'left',
+  showTitle = false,
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   return (
@@ -155,6 +156,7 @@ export function ControlButton({
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
+        showTitle={showTitle}
       />
       {isDialogDisplayed && dialog}
     </>

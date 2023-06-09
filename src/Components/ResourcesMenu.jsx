@@ -105,12 +105,13 @@ export default function ResourcesMenu() {
       >
         <MenuItem>
           <TooltipIconButton
-            title={`${theme.palette.mode === 'light' ? 'Night' : 'Day'} theme`}
+            title={`${theme.palette.mode === 'light' ? 'Dark' : 'Light'}`}
             onClick={() => {
               handleClose()
               theme.toggleColorMode()
             }}
             icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
+            showTitle={true}
           />
         </MenuItem>
         <MenuItem>
@@ -118,6 +119,7 @@ export default function ResourcesMenu() {
             title={`Community`}
             onClick={() => window.open('https://discord.com/channels/853953158560743424/853953158560743426', '_blank').focus()}
             icon={<DiscordIcon style={{width: '20px', height: '20px'}}/>}
+            showTitle={true}
           />
         </MenuItem>
         <MenuItem><AboutControl/></MenuItem>

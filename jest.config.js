@@ -53,6 +53,7 @@ module.exports = {
     'src/Components/ControlsGroup.test',
     'src/Components/Buttons.test.jsx',
     'src/Components/Notes/NoteCard.test.jsx',
+    'src/Components/About/AboutControl.test.jsx',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',

@@ -30,6 +30,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
         placement={'left'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
+        showTitle={true}
       />
       {isDialogDisplayed &&
         <HelpDialog
