@@ -152,6 +152,7 @@ export default function CombinedViewsMenu() {
       >
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Plan`}
             placement={'left'}
             onClick={() => {
@@ -164,6 +165,7 @@ export default function CombinedViewsMenu() {
         </MenuItem>
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Elevation`}
             placement={'left'}
             onClick={() => {
@@ -176,6 +178,7 @@ export default function CombinedViewsMenu() {
         </MenuItem>
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Section`}
             placement={'left'}
             onClick={() => {
@@ -189,6 +192,7 @@ export default function CombinedViewsMenu() {
         <Divider/>
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Top`}
             placement={'left'}
             onClick={() => {
@@ -211,6 +215,7 @@ export default function CombinedViewsMenu() {
         </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Front`}
             placement={'left'}
             onClick={() => {
@@ -233,6 +238,7 @@ export default function CombinedViewsMenu() {
         </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Left`}
             placement={'left'}
             onClick={() => {
