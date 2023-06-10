@@ -11,14 +11,7 @@ import useTheme from '@mui/styles/useTheme'
  */
 export default function AboutDescription({setIsDialogDisplayed}) {
   const theme = useTheme()
-  const fontStyle = {
-    marginTop: '4px',
-    // fontWeight: '400',
-    // color: 'lime',
-    fontSize: '18px',
-    lineHeight: '24px',
-    color: theme.palette.primary.contrastText,
-  }
+
 
   /**
    * Close About dialog when a link is clicked
@@ -29,40 +22,30 @@ export default function AboutDescription({setIsDialogDisplayed}) {
   return (
     <Box
       sx={{
-        width: '320px',
-        // height: '160px',
-        // fontSize: '.9em',
-        // fontWeight: 'bold',
-        // borderRadius: '8px',
-        // marginTop: '10px',
-        // padding: '.3em 0em .5em 0em',
+        width: '280px',
+        height: '160px',
+        fontSize: '.9em',
+        fontWeight: 'bold',
+        borderRadius: '8px',
+        margin: '2em 0',
+        padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
         // backgroundColor: theme.palette.background.button,
-        // border: `1px solid ${theme.palette.primary.main}`,
+        border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
     >
       <Box
         sx={{
-          marginTop: '20px',
+          padding: '6px 6px',
         }}
       >
         <Typography variant={'h5'} >
-
-          <Box sx={fontStyle}>
-          1. Cooperation is the unfair advantage.
-          </Box>
-          <Box sx={fontStyle}>
-          2. Open standards and open source code is the most powerful way to work.
-          </Box>
-
-          <br/>
-          {/* Cross-functional online collaboration unlocks team flow,
-          productivity and creativity.
-          <br/> */}
-
+            Cross-functional online collaboration unlocks team flow,
+            productivity and creativity.
+            Open workspaces, open standards and open source code is the most powerful way to work.
+            Cooperation is the unfair advantage.
         </Typography>
-
         <Box
           sx={{
             marginRight: '-6px',
@@ -70,7 +53,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '3.4em',
+            top: '1em',
           }}
         >
           {/* <a
@@ -81,10 +64,10 @@ export default function AboutDescription({setIsDialogDisplayed}) {
           </a> */}
           <a
             // eslint-disable-next-line max-len
-            href='https://bldrs.ai/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:40.821,-10.247,39.647,5.918,-13.326,-13.866::i:1605443723'
+            href='https://deploy-preview-701--bldrs-share.netlify.app/share/v/p/index.ifc#c:-93.79,4.24,100.38,-43.48,15.73,-4.34::i:1148362525'
             onClick={onClickLink}
           >
-            {/* <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Team</Typography> */}
+            <Typography sx={{textDecoration: 'underline', marginLeft: '10px'}}>Welcome</Typography>
           </a>
         </Box>
       </Box>
