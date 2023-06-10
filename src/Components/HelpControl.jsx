@@ -10,7 +10,7 @@ import ShareIcon from '../assets/icons/Share.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
 import ViewIcon from '../assets/icons/View.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
-import RobotIcon from '../assets/icons/Robot5.svg'
+import RobotIcon from '../assets/icons/Robot3.svg'
 
 
 /**

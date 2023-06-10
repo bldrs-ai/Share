@@ -19,7 +19,7 @@ export function getTypography() {
     h3: {fontSize: '1.1em', fontWeight},
     h4: {fontSize: fontSize, fontWeight},
     h5: {fontSize: '.94em', lineHeight: '1.2em'},
-    h6: {fontSize: '.8em', fontWeight},
+    h6: {fontSize: '.8em', lineHeight, fontWeight},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
     tree: {fontSize, lineHeight, letterSpacing, fontWeight},

@@ -8,6 +8,7 @@ import CameraControl from './CameraControl'
 // import CombinedViewsMenu from './CombinedViewsMenu'
 // import StandardViewsMenu from './StandardViewsMenu'
 import ResourcesMenu from './ResourcesMenu'
+// import AboutControl from './About/AboutControl'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
@@ -148,12 +149,12 @@ export default function OperationsGroup({deselectItems}) {
               selected={isHelpTooltips}
               icon={<QuestionIcon/>}
             /> */}
-            {/* <AboutControl/> */}
             {/* <ResourcesMenu/> */}
             {/* <HelpControl/> */}
           </ButtonGroup>
           }
           <ResourcesMenu/>
+          {/* <AboutControl/> */}
           {/* Invisible */}
           <CameraControl/>
         </Paper>
