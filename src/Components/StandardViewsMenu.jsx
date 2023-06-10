@@ -99,10 +99,12 @@ export default function StandardViewsMenu() {
       >
         <MenuItem>
           <TooltipIconButton
+            showTitle={true}
             title={`Top`}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 100, 100, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<TopIcon style={{width: '30px', height: '30px'}}/>}
@@ -111,9 +113,11 @@ export default function StandardViewsMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Bottom`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 150, 100, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BottomIcon style={{width: '30px', height: '30px'}}/>}
@@ -122,9 +126,11 @@ export default function StandardViewsMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Front`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(90, 100, 100, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<FrontIcon style={{width: '18px', height: '30px'}}/>}
@@ -133,9 +139,11 @@ export default function StandardViewsMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Back`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(200, 100, 100, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BackIcon style={{width: '19px', height: '30px'}}/>}
@@ -144,9 +152,11 @@ export default function StandardViewsMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Left`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 100, 200, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<LeftIcon style={{width: '19px', height: '30px'}}/>}
@@ -155,9 +165,11 @@ export default function StandardViewsMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Right`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
+              handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<RightIcon style={{width: '18px', height: '30px'}}/>}

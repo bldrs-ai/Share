@@ -44,7 +44,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
       <ExtractLevelsMenu/>
       <CutPlaneMenu/>
       <TooltipIconButton
-        title={'Capture View'}
+        title={'Captured Views'}
         placement={'top'}
         icon={<CaptureIcon/>}
         onClick={''}

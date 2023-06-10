@@ -145,6 +145,7 @@ export default function CutPlaneMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Plan`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               togglePlane({direction: 'y'})
@@ -157,6 +158,7 @@ export default function CutPlaneMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Elevation`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               togglePlane({direction: 'z'})
@@ -169,6 +171,7 @@ export default function CutPlaneMenu() {
         <MenuItem>
           <TooltipIconButton
             title={`Section`}
+            showTitle={true}
             placement={'left'}
             onClick={() => {
               togglePlane({direction: 'x'})
