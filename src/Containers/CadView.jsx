@@ -76,6 +76,7 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
   const setViewer = useStore((state) => state.setViewer)
+  const customViewSettings = useStore((state) => state.customViewSettings)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
@@ -110,7 +111,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
-  }, [modelPath])
+  }, [modelPath, customViewSettings])
 
 
   // Viewer changes in onModelPath (above)
@@ -310,7 +311,8 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
-        })
+        }, customViewSettings)
+
     await viewer.isolator.setModel(loadedModel)
 
     Privacy.recordEvent('select_content', {

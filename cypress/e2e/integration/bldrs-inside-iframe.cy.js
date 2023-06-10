@@ -273,4 +273,32 @@ describe('bldrs inside iframe', () => {
       assert.equal(msg.data['current'].length, 0)
     })
   })
+
+  it('should set defaultColor to gray, and color one element blue by view settings', () => {
+    cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
+    cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
+    const defaultGrayColor = {
+      x: 0.85,
+      y: 0.85,
+      z: 0.85,
+      w: 1,
+    }
+    const colorBlue = {
+      x: 0.2,
+      y: 0.3,
+      z: 0.9,
+      w: 1,
+    }
+    cy.get('#txtSendMessageType').clear().type('ai.bldrs-share.ChangeViewSettings')
+    const msg = {
+      customViewSettings: {
+        defaultColor: defaultGrayColor,
+        globalIdsToColorMap: {
+          '3qoAS2W2r7m9vxQ0sGR5Rc': colorBlue,
+        },
+      },
+    }
+    cy.get('#txtSendMessagePayload').clear().type(JSON.stringify(msg), {parseSpecialCharSequences: false})
+    cy.get('#btnSendMessage').click()
+  })
 })
