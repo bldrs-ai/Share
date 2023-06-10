@@ -176,6 +176,7 @@ export default function OperationsGroup({deselectItems}) {
           >
             {isSelectedElement() &&
               <TooltipIconButton
+                showTitle={true}
                 title='Properties'
                 onClick={() => {
                   turnOffTooltips()
@@ -187,6 +188,7 @@ export default function OperationsGroup({deselectItems}) {
             }
             {(isSelectedElement() || isSelectedPlane()) &&
                 <TooltipIconButton
+                  showTitle={true}
                   title='Clear'
                   onClick={deselectItems}
                   selected={isSelectedElement() || isSelectedPlane()}
