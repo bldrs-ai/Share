@@ -1,6 +1,6 @@
 import React from 'react'
 import Paper from '@mui/material/Paper'
-// import {TooltipIconButton} from './Buttons'
+import {TooltipIconButton} from './Buttons'
 // import SaveModelControl from './SaveModelControl'
 // import useStore from '../store/useStore'
 // import BranchIcon from '../assets/icons/Branch.svg'
@@ -11,6 +11,7 @@ import Paper from '@mui/material/Paper'
 import CutPlaneMenu from './CutPlaneMenu'
 import ExtractLevelsMenu from './ExtractLevelsMenu'
 import StandardViewsMenu from './StandardViewsMenu'
+import CaptureIcon from '../assets/icons/Capture.svg'
 
 
 /**
@@ -42,6 +43,12 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
       <StandardViewsMenu/>
       <ExtractLevelsMenu/>
       <CutPlaneMenu/>
+      <TooltipIconButton
+        title={'Capture View'}
+        placement={'top'}
+        icon={<CaptureIcon/>}
+        onClick={''}
+      />
     </Paper>
   )
 }

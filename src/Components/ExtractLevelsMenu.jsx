@@ -118,6 +118,7 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
       <TooltipIconButton
         title={'Isolate Levels'}
         icon={<LevelsIcon/>}
+        placement={'top'}
         onClick={handleClick}
         selected={anchorEl !== null || levelInstance !== null}
       />
@@ -127,12 +128,12 @@ export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
-        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        anchorOrigin={{vertical: 'top', horizontal: 'top'}}
+        transformOrigin={{vertical: 'top', horizontal: 'top'}}
         PaperProps={{
           style: {
             left: '240px',
-            transform: 'translateX(-70px)',
+            transform: 'translateY(-60px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 10,

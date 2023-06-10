@@ -101,7 +101,7 @@ export default function CutPlaneMenu() {
       <TooltipIconButton
         title={'Sections'}
         icon={<CutPlaneIcon/>}
-        placement={'left'}
+        placement={'top'}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
       />

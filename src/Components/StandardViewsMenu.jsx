@@ -55,7 +55,7 @@ export default function StandardViewsMenu() {
     <>
       <TooltipIconButton
         title={'Standard Views'}
-        placement={'left'}
+        placement={'top'}
         icon={<ViewIcon/>}
         onClick={handleClick}
         selected={anchorEl !== null}
