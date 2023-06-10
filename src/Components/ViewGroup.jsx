@@ -9,7 +9,7 @@ import {TooltipIconButton} from './Buttons'
 // import StructureMenu from '../Components/StructureMenu'
 // import TreeMenu from './TreeMenu'
 import CutPlaneMenu from './CutPlaneMenu'
-import ExtractLevelsMenu from './ExtractLevelsMenu'
+// import ExtractLevelsMenu from './ExtractLevelsMenu'
 import StandardViewsMenu from './StandardViewsMenu'
 import CaptureIcon from '../assets/icons/Capture.svg'
 
@@ -42,7 +42,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
     >
       <StandardViewsMenu/>
       <CutPlaneMenu/>
-      <ExtractLevelsMenu/>
+      {/* <ExtractLevelsMenu/> */}
       <TooltipIconButton
         title={'Captured Views'}
         placement={'top'}
