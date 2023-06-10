@@ -66,7 +66,7 @@ export default function ViewsMenu() {
         PaperProps={{
           style: {
             left: '240px',
-            transform: 'translateX(-70px)',
+            transform: 'translateY(-60px)',
             opacity: .8,
             background: theme.palette.background.control,
             zIndex: 10,

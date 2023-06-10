@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 // import ViewsMenu from './ViewsMenu'
-import CombinedViewsMenu from './CombinedViewsMenu'
+// import CombinedViewsMenu from './CombinedViewsMenu'
 // import StandardViewsMenu from './StandardViewsMenu'
 import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
@@ -120,7 +120,7 @@ export default function OperationsGroup({deselectItems}) {
             />
 
             {/* <PlanesMenu/> */}
-            <CombinedViewsMenu/>
+            {/* <CombinedViewsMenu/> */}
             {/* <StandardViewsMenu/> */}
 
             {/* <TooltipIconButton

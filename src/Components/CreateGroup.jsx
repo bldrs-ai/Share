@@ -62,7 +62,7 @@ export default function CreateGroup({deselectItems}) {
           {/* <RenderingControl/> */}
           <TooltipIconButton
             showTitle={false}
-            title={'A.I. Assistant ... comming soon'}
+            title={'A.I. Magic ... comming soon'}
             onClick={() => setIconNumber(iconNumberCalc)}
             icon={icon(iconNumber)}
           />
