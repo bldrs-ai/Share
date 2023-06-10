@@ -755,6 +755,7 @@ export default function CadView({
           </Box>
         </Box>
       )}
+      {showControls &&
       <Box
         sx={{
           position: 'absolute',
@@ -768,6 +769,7 @@ export default function CadView({
       >
         <ViewGroup/>
       </Box>
+      }
       <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
