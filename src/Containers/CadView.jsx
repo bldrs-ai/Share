@@ -758,7 +758,7 @@ export default function CadView({
       {showControls &&
       <Box
         sx={{
-          position: 'absolute',
+          position: 'fixed',
           bottom: `1.05em`,
           width: '100%',
           display: 'flex',
