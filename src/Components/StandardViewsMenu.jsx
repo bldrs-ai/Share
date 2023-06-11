@@ -11,12 +11,12 @@ import {addHashParams, getObjectParams, removeHashParams} from '../utils/locatio
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import ViewIcon from '../assets/icons/View.svg'
-import BackIcon from '../assets/icons/view/Back.svg'
 import FrontIcon from '../assets/icons/view/Front.svg'
 import TopIcon from '../assets/icons/view/Top.svg'
-import BottomIcon from '../assets/icons/view/Bottom.svg'
 import RightIcon from '../assets/icons/view/Right.svg'
-import LeftIcon from '../assets/icons/view/Left.svg'
+// import BottomIcon from '../assets/icons/view/Bottom.svg'
+// import BackIcon from '../assets/icons/view/Back.svg'
+// import LeftIcon from '../assets/icons/view/Left.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -110,7 +110,7 @@ export default function StandardViewsMenu() {
             icon={<TopIcon style={{width: '30px', height: '30px'}}/>}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Bottom`}
             showTitle={true}
@@ -122,7 +122,7 @@ export default function StandardViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BottomIcon style={{width: '30px', height: '30px'}}/>}
           />
-        </MenuItem>
+        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Front`}
@@ -136,7 +136,7 @@ export default function StandardViewsMenu() {
             icon={<FrontIcon style={{width: '18px', height: '30px'}}/>}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Back`}
             showTitle={true}
@@ -148,8 +148,8 @@ export default function StandardViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<BackIcon style={{width: '19px', height: '30px'}}/>}
           />
-        </MenuItem>
-        <MenuItem>
+        </MenuItem> */}
+        {/* <MenuItem>
           <TooltipIconButton
             title={`Left`}
             showTitle={true}
@@ -161,7 +161,7 @@ export default function StandardViewsMenu() {
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<LeftIcon style={{width: '19px', height: '30px'}}/>}
           />
-        </MenuItem>
+        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Right`}
