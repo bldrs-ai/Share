@@ -21,7 +21,6 @@ import RightIcon from '../assets/icons/view/Right.svg'
 
 const PLANE_PREFIX = 'p'
 
-
 /**
  * BasicMenu used when there are several option behind UI button
  * show/hide from the right of the screen.
@@ -29,7 +28,7 @@ const PLANE_PREFIX = 'p'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function StandardViewsMenu() {
+export default function StandardViewsMenu({capturedViews}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const viewer = useStore((state) => state.viewerStore)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -39,7 +38,6 @@ export default function StandardViewsMenu() {
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
-
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -54,7 +52,7 @@ export default function StandardViewsMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Standard Views'}
+        title={'Views'}
         placement={'top'}
         icon={<ViewIcon/>}
         onClick={handleClick}
@@ -104,25 +102,12 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 100, 100, true)
-              handleClose()
+              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<TopIcon style={{width: '30px', height: '30px'}}/>}
           />
         </MenuItem>
-        {/* <MenuItem>
-          <TooltipIconButton
-            title={`Bottom`}
-            showTitle={true}
-            placement={'left'}
-            onClick={() => {
-              viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 150, 100, true)
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-            icon={<BottomIcon style={{width: '30px', height: '30px'}}/>}
-          />
-        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Front`}
@@ -130,38 +115,12 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(90, 100, 100, true)
-              handleClose()
+              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<FrontIcon style={{width: '18px', height: '30px'}}/>}
           />
         </MenuItem>
-        {/* <MenuItem>
-          <TooltipIconButton
-            title={`Back`}
-            showTitle={true}
-            placement={'left'}
-            onClick={() => {
-              viewer.IFC.context.ifcCamera.cameraControls.setPosition(200, 100, 100, true)
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-            icon={<BackIcon style={{width: '19px', height: '30px'}}/>}
-          />
-        </MenuItem> */}
-        {/* <MenuItem>
-          <TooltipIconButton
-            title={`Left`}
-            showTitle={true}
-            placement={'left'}
-            onClick={() => {
-              viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 100, 200, true)
-              handleClose()
-            }}
-            selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-            icon={<LeftIcon style={{width: '19px', height: '30px'}}/>}
-          />
-        </MenuItem> */}
         <MenuItem>
           <TooltipIconButton
             title={`Right`}
@@ -169,12 +128,26 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
-              handleClose()
+              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
           />
         </MenuItem>
+        {capturedViews.map((view, i) => {
+          <MenuItem>
+            <TooltipIconButton
+              title={`view ${i}`}
+              showTitle={true}
+              placement={'left'}
+              onClick={() => {
+                viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
+              }}
+              selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+              icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
+            />
+          </MenuItem>
+        })}
       </Menu>
     </>
   )
