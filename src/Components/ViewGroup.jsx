@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React from 'react'
 import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
 // import SaveModelControl from './SaveModelControl'
@@ -31,13 +31,14 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
   // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   // const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   const cameraControls = useStore((state) => state.cameraControls)
-  const [urls, setUrls] = useState([])
+  const setSavedViews = useStore((state) => state.setSavedViews)
+  const savedViews = useStore((state) => state.savedViews)
 
   const onCapture = () => {
     addCameraUrlParams(cameraControls)
     const url = window.location.href
-    const prevUrls = urls.concat(url)
-    setUrls(prevUrls)
+    const viewUrls = savedViews.concat(url)
+    setSavedViews(viewUrls)
   }
 
   return (
@@ -53,7 +54,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
         opacity: .9,
       }}
     >
-      <StandardViewsMenu capturedViews={urls}/>
+      <StandardViewsMenu/>
       <CutPlaneMenu/>
       {/* <ExtractLevelsMenu/> */}
       <TooltipIconButton

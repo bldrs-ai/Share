@@ -4,6 +4,7 @@ import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Divider from '@mui/material/Divider'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
@@ -14,6 +15,7 @@ import ViewIcon from '../assets/icons/View.svg'
 import FrontIcon from '../assets/icons/view/Front.svg'
 import TopIcon from '../assets/icons/view/Top.svg'
 import RightIcon from '../assets/icons/view/Right.svg'
+import SavedView from '../assets/icons/view/SavedView.svg'
 // import BottomIcon from '../assets/icons/view/Bottom.svg'
 // import BackIcon from '../assets/icons/view/Back.svg'
 // import LeftIcon from '../assets/icons/view/Left.svg'
@@ -28,13 +30,15 @@ const PLANE_PREFIX = 'p'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function StandardViewsMenu({capturedViews}) {
+export default function StandardViewsMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const viewer = useStore((state) => state.viewerStore)
   const cutPlanes = useStore((state) => state.cutPlanes)
+  const savedViews = useStore((state) => state.savedViews)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
+  debug().log('saved views: ', savedViews)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
@@ -47,7 +51,6 @@ export default function StandardViewsMenu({capturedViews}) {
   const handleClose = () => {
     setAnchorEl(null)
   }
-
 
   return (
     <>
@@ -75,6 +78,7 @@ export default function StandardViewsMenu({capturedViews}) {
             zIndex: 10,
           },
           sx: {
+            'maxHeight': '250px',
             'color': theme.palette.primary.contrastText,
             '& .Mui-selected': {
               color: theme.palette.secondary.main,
@@ -134,19 +138,25 @@ export default function StandardViewsMenu({capturedViews}) {
             icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
           />
         </MenuItem>
-        {capturedViews.map((view, i) => {
-          <MenuItem>
-            <TooltipIconButton
-              title={`view ${i}`}
-              showTitle={true}
-              placement={'left'}
-              onClick={() => {
-                viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
-              }}
-              selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-              icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
-            />
-          </MenuItem>
+        {savedViews.length > 0 &&
+          <Divider/>
+        }
+        {savedViews.map((viewUrl, i) => {
+          return (
+            <MenuItem key={i}>
+              <TooltipIconButton
+                title={`View ${i + 1}`}
+                showTitle={true}
+                placement={'left'}
+                onClick={() => {
+                  window.location.replace(viewUrl)
+                  // viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
+                }}
+                selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+                icon={<SavedView style={{width: '18px', height: '30px'}}/>}
+              />
+            </MenuItem>
+          )
         })}
       </Menu>
     </>
