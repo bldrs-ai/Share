@@ -83,7 +83,7 @@ export function TooltipIconButton({
          open={openLocal || open}
          onClose={handleClose}
          onOpen={handleOpen}
-         title={showTitle ? '' : title}
+         title={title}
          describeChild
          placement={placement}
          data-testid={dataTestId}
