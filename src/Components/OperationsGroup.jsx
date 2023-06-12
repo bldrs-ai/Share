@@ -18,8 +18,7 @@ import NotesIcon from '../assets/icons/Notes.svg'
 // import {useExistInFeature} from '../hooks/useExistInFeature'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import CollapseIcon from '../assets/icons/Collapse.svg'
-import HideIcon from '../assets/icons/Hide.svg'
-import ShowIcon from '../assets/icons/Show.svg'
+import IsolateIcon from '../assets/icons/Isolate.svg'
 // import CaptureIcon from '../assets/icons/Capture.svg'
 // import HelpControl from './HelpControl'
 
@@ -48,17 +47,16 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  const [showAll, setShowAll] = useState(false)
   // const isAppStoreEnabled = useExistInFeature('apps')
   // const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
   // const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const viewer = useStore((state) => state.viewer)
+  const [isolate, setIsolate] = useState(false)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
     return isMobile ? turnOffIsHelpTooltips() : null
   }
-  const hiddenElements = viewer.isolator.hiddenIds.length > 0
   const isSelectedElement = () => {
     const ifSelected = (
       selectedElement !== null
@@ -162,7 +160,7 @@ export default function OperationsGroup({deselectItems}) {
           {/* Invisible */}
           <CameraControl/>
         </Paper>
-        {(isSelectedElement() || isSelectedPlane() || hiddenElements) &&
+        {(isSelectedElement() || isSelectedPlane() || isolate) &&
         <Paper
           variant='control'
           sx={{
@@ -191,36 +189,24 @@ export default function OperationsGroup({deselectItems}) {
                 selected={isPropertiesOn}
                 icon={<ListIcon/>}
               />
-              <TooltipIconButton
-                showTitle={true}
-                title='Hide'
-                onClick={() => {
-                  viewer.isolator.hideSelectedElements()
-                  setShowAll(true)
-                }}
-                selected={isPropertiesOn}
-                icon={<HideIcon/>}
-              />
             </>
             }
-            {hiddenElements && showAll &&
-              <TooltipIconButton
-                showTitle={true}
-                title='Unhide'
-                onClick={() => {
-                  setShowAll(false)
-                  viewer.isolator.unHideAllElements()
-                }}
-                // selected={isSelectedElement() || isSelectedPlane()}
-                icon={<ShowIcon/>}
-              />
-            }
+            <TooltipIconButton
+              showTitle={true}
+              title='Isolate'
+              onClick={() => {
+                viewer.isolator.toggleIsolationMode()
+                setIsolate(!isolate)
+              }}
+              selected={isolate}
+              icon={<IsolateIcon/>}
+            />
             {(isSelectedElement() || isSelectedPlane()) &&
                 <TooltipIconButton
                   showTitle={true}
                   title='Clear'
                   onClick={deselectItems}
-                  // selected={isSelectedElement() || isSelectedPlane()}
+                  selected={isSelectedElement() || isSelectedPlane()}
                   icon={<ClearIcon/>}
                 />
             }
