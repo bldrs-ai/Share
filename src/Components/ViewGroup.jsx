@@ -11,7 +11,7 @@ import useStore from '../store/useStore'
 import CutPlaneMenu from './CutPlaneMenu'
 // import ExtractLevelsMenu from './ExtractLevelsMenu'
 import StandardViewsMenu from './StandardViewsMenu'
-import CaptureIcon from '../assets/icons/Capture.svg'
+import CaptureIcon from '../assets/icons/view/SavedView.svg'
 import {
   addCameraUrlParams,
   // removeCameraUrlParams,
