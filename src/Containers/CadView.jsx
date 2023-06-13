@@ -753,6 +753,9 @@ export default function CadView({
                   }
                 />
               }
+              {showViewsPanel && showControls &&
+                <SavedViewsPanel/>
+              }
             </Box>
           </Box>
         </Box>
@@ -772,19 +775,6 @@ export default function CadView({
         <ViewGroup/>
       </Box>
       }
-      {showViewsPanel &&
-        <Box
-          sx={{
-            position: 'fixed',
-            top: `6em`,
-            left: `1.2em`,
-          }}
-        >
-          <SavedViewsPanel/>
-        </Box>
-      }
-
-
       <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}

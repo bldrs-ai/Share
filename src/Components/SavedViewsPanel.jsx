@@ -40,7 +40,6 @@ export default function Panel() {
         width: '220px',
         flexDirection: 'column',
         justifyContent: 'flex-start',
-        marginLeft: '5px',
         borderRadius: '10px',
         opacity: .9,
       }}
@@ -54,7 +53,7 @@ export default function Panel() {
           height: '60px',
           opacity: .9,
           fontWeight: '500',
-          borderBottom: '1px solid black',
+          borderBottom: `1px solid ${theme.palette.background.button}`,
         }}
       >
         <Box

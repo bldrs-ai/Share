@@ -54,6 +54,7 @@ export default function NavPanel({
         variant='control'
         sx={{
           // 'marginTop': '14px',
+          'marginBottom': '10px',
           'overflow': 'auto',
           'width': '100%',
           'opacity': .8,

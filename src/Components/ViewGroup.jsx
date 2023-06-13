@@ -26,6 +26,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
   // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
+  const showViewsPanel = useStore((state) => state.showViewsPanel)
 
   return (
     <Paper
@@ -47,6 +48,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
         title={'Saved views'}
         placement={'top'}
         icon={<CaptureIcon/>}
+        selected={showViewsPanel}
         onClick={() => {
           toggleShowViewsPanel()
         }}
