@@ -75,7 +75,7 @@ export default function Panel() {
             alignItems: 'center',
           }}
         >
-          Saved Views
+          Captured Views
         </Box>
       </Box>
       <Box
@@ -91,7 +91,7 @@ export default function Panel() {
             'flexDirection': 'column',
             'justifyContent': 'flex-start',
             'alignItems': 'center',
-            'height': '100px',
+            'height': '160px',
             'width': '240px',
             'borderRadius': '5px',
             'backgroundColor': theme.palette.background.button,
