@@ -189,18 +189,18 @@ export default function OperationsGroup({deselectItems}) {
                 selected={isPropertiesOn}
                 icon={<ListIcon/>}
               />
+              <TooltipIconButton
+                showTitle={true}
+                title='Isolate'
+                onClick={() => {
+                  viewer.isolator.toggleIsolationMode()
+                  setIsolate(!isolate)
+                }}
+                selected={isolate}
+                icon={<IsolateIcon/>}
+              />
             </>
             }
-            <TooltipIconButton
-              showTitle={true}
-              title='Isolate'
-              onClick={() => {
-                viewer.isolator.toggleIsolationMode()
-                setIsolate(!isolate)
-              }}
-              selected={isolate}
-              icon={<IsolateIcon/>}
-            />
             {(isSelectedElement() || isSelectedPlane()) &&
                 <TooltipIconButton
                   showTitle={true}

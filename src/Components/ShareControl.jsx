@@ -176,7 +176,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           >
             {isPlanesOn &&
               <Box sx={rowStyle}>
-                <Typography>Cutplane position</Typography>
+                <Typography>Include Section</Typography>
                 <Toggle
                   onChange={togglePlaneIncluded}
                   checked={isPlaneInUrl}
@@ -184,7 +184,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               </Box>
             }
             <Box sx={rowStyle}>
-              <Typography>Camera position</Typography>
+              <Typography>Include Camera position</Typography>
               <Toggle
                 onChange={toggleCameraIncluded}
                 checked={isCameraInUrl}
