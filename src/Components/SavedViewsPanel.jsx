@@ -37,7 +37,7 @@ export default function Panel() {
       variant='control'
       sx={{
         display: 'flex',
-        width: '220px',
+        width: '280px',
         flexDirection: 'column',
         justifyContent: 'flex-start',
         borderRadius: '10px',
@@ -91,8 +91,8 @@ export default function Panel() {
             'flexDirection': 'column',
             'justifyContent': 'flex-start',
             'alignItems': 'center',
-            'height': '160px',
-            'width': '190px',
+            'height': '100px',
+            'width': '240px',
             'borderRadius': '5px',
             'backgroundColor': theme.palette.background.button,
             'marginTop': '20px',
@@ -109,7 +109,7 @@ export default function Panel() {
             },
           }}
         >
-          {savedViews.map((viewUrl, i) => {
+          {savedViews.reverse().map((viewUrl, i) => {
             return (
               <Box
                 key={i}
