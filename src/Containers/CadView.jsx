@@ -33,6 +33,7 @@ import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import OpenModelControl from '../Components/OpenModelControl'
 import Loader from '../Components/Loader'
+import SavedViewsPanel from '../Components/SavedViewsPanel'
 
 
 /**
@@ -109,6 +110,7 @@ export default function CadView({
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
   // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   const isOpenControlVisible = useStore((state) => state.isOpenControlVisible)
+  const showViewsPanel = useStore((state) => state.showViewsPanel)
 
 
   // Place Mark
@@ -770,6 +772,19 @@ export default function CadView({
         <ViewGroup/>
       </Box>
       }
+      {showViewsPanel &&
+        <Box
+          sx={{
+            position: 'fixed',
+            top: `6em`,
+            left: `1.2em`,
+          }}
+        >
+          <SavedViewsPanel/>
+        </Box>
+      }
+
+
       <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}

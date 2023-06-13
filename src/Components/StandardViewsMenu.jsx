@@ -38,7 +38,6 @@ export default function StandardViewsMenu() {
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
-  debug().log('saved views: ', savedViews)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
