@@ -35,7 +35,7 @@ export default function NavigationGroup() {
       sx={{
         position: 'absolute',
         // top: `1em`,
-        left: '11.3em',
+        left: '11em',
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'flex-start',
