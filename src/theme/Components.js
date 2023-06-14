@@ -31,6 +31,17 @@ export function getComponentOverrides(palette) {
             backgroundColor: palette.background.button,
           },
         },
+        {
+          props: {variant: 'component'},
+          style: {
+            width: '180px',
+            height: '40px',
+            textTransform: 'none',
+            border: 'none',
+            fontWeight: '400',
+            backgroundColor: palette.background.button,
+          },
+        },
       ],
       defaultProps: {
         disableElevation: true,
