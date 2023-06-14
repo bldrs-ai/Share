@@ -19,7 +19,7 @@ import ElementsIcon from '../assets/icons/Elements.svg'
  * @param {Array} listOfOptions Title for the drawer
  * @return {object} ItemPropertiesDrawer react component
  */
-export default function TreeMenu() {
+export default function NavigationMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const showNavPanel = useStore((state) => state.showNavPanel)

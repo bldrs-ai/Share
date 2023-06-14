@@ -3,11 +3,11 @@ import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
 import SaveModelControl from './SaveModelControl'
 import useStore from '../store/useStore'
-// import BranchIcon from '../assets/icons/Branch.svg'
 import SearchIcon from '../assets/icons/Search.svg'
 import OpenModelControl from '../Components/OpenModelControl'
+import TreeIcon from '../assets/icons/Tree.svg'
 // import StructureMenu from '../Components/StructureMenu'
-import TreeMenu from './TreeMenu'
+// import TreeMenu from './NavigationMenu'
 
 
 /**
@@ -21,7 +21,9 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
+  const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
 
   return (
     <Paper
@@ -49,6 +51,15 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         placement={'bottom'}
         dataTestId='spatial-elements'
       />
+      <TooltipIconButton
+        title={'Navigation'}
+        showTitle={false}
+        onClick={toggleShowNavigationGroup}
+        selected={showNavigationGroup}
+        icon={<TreeIcon/>}
+        placement={'bottom'}
+        dataTestId='spatial-elements'
+      />
       {/* {isBranches &&
         <TooltipIconButton
           title={'Versions'}
@@ -59,7 +70,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
           dataTestId='project-version'
         />
       } */}
-      <TreeMenu/>
+      {/* <TreeMenu/> */}
       {/* <StructureMenu/> */}
     </Paper>
   )

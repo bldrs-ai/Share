@@ -34,6 +34,7 @@ import {groupElementsByTypes} from '../utils/ifc'
 import OpenModelControl from '../Components/OpenModelControl'
 import Loader from '../Components/Loader'
 import SavedViewsPanel from '../Components/SavedViewsPanel'
+import NavigationGroup from '../Components/NavigationGroup'
 
 
 /**
@@ -95,6 +96,7 @@ export default function CadView({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const showControls = useStore((state) => state.showControls)
+  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
@@ -717,6 +719,9 @@ export default function CadView({
           >
             {showControls &&
               <ControlsGroup modelPath={modelPath} isLocalModel={isLocalModel} fileOpen={loadLocalFile}/>
+            }
+            {showControls && showNavigationGroup &&
+              <NavigationGroup/>
             }
             <Box
               sx={{
