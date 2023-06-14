@@ -72,7 +72,11 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
         onMouseLeave={handleMouseLeave}
         style={titleStyle}
       >
-        <ViewCube1 style={{width: '12px', height: '12px'}}/>
+        {selected ?
+          <ViewCube1 style={{width: '12px', height: '12px'}}/> :
+          <ViewCube2 style={{width: '12px', height: '12px'}}/>
+        }
+
         <Box
           sx={{
             marginLeft: '10px',
