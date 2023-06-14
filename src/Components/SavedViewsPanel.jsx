@@ -13,8 +13,8 @@ import SavedView from '../assets/icons/view/SavedView.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
-import Delete from '../assets/icons/Delete.svg'
-import Publish from '../assets/icons/Publish.svg'
+import DeleteIcon from '../assets/icons/Delete.svg'
+import PublishIcon from '../assets/icons/Publish.svg'
 
 
 const icon = (iconNumber) => {
@@ -85,12 +85,15 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
           {title}
         </Box>
       </Box>
-      <Box style={{display: 'flex', width: '34px', justifyContent: 'space-between'}}>
+      <Box sx={{display: 'flex', width: '34px', justifyContent: 'space-between'}}>
         <Box>
-          <Publish style={{width: '12px', height: '12px'}}/>
+          <PublishIcon style={{width: '12px', height: '12px'}}/>
         </Box>
-        <Box onClick={onDelete}>
-          <Delete style={{width: '12px', height: '12px'}}/>
+        <Box
+          onClick={onDelete}
+          sx={{cursor: 'pointer'}}
+        >
+          <DeleteIcon style={{width: '12px', height: '12px'}}/>
         </Box>
       </Box>
     </div>
@@ -108,6 +111,7 @@ export default function Panel() {
   const cameraControls = useStore((state) => state.cameraControls)
   const setSavedViews = useStore((state) => state.setSavedViews)
   const savedViews = useStore((state) => state.savedViews)
+  const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const theme = useTheme()
   const [iconNumber, setIconNumber] = useState(1)
   const iconNumberCalc = iconNumber < 3 ? iconNumber + 1 : 1
@@ -172,6 +176,16 @@ export default function Panel() {
           }}
         >
           Captured Views
+        </Box>
+        <Box
+          sx={{
+            position: 'relative',
+            left: '40px',
+            cursor: 'pointer',
+          }}
+          onClick={toggleShowViewsPanel}
+        >
+          <DeleteIcon style={{width: '12px', height: '12px'}}/>
         </Box>
       </Box>
       <Box
