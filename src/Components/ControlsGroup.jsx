@@ -22,6 +22,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const showNavigationGroup = useStore((state) => state.showNavigationGroup)
+  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
 
@@ -55,7 +56,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         title={'Navigation'}
         showTitle={false}
         onClick={toggleShowNavigationGroup}
-        selected={showNavigationGroup}
+        selected={showNavigationGroup || isNavPanelOpen}
         icon={<TreeIcon/>}
         placement={'bottom'}
         dataTestId='spatial-elements'
