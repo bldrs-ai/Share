@@ -294,7 +294,7 @@ const CardFooter = ({
   deleteNote,
   removeComment,
   isComment,
-  synched
+  synched,
 }) => {
   const [shareIssue, setShareIssue] = useState(false)
   const viewer = useStore((state) => state.viewer)
