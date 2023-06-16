@@ -46,7 +46,7 @@ export function TooltipIconButton({
         title={title}
         describeChild
         placement={placement}
-        data-testid={dataTestId}
+        data-testid={dataTestId || title}
         PopperProps={{style: {zIndex: 0}}}
       >
         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>

@@ -5,7 +5,6 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
-import IfcScreenshot from './IfcScreenshot'
 
 
 const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
@@ -31,7 +30,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     this.highlighter = new IfcHighlighter(this.context, this.postProcessor)
     this.isolator = new IfcIsolator(this.context, this)
     this.viewsManager = new IfcViewsManager(this.IFC.loader.ifcManager.parser, viewRules[viewParameter])
-    this.screenshot = new IfcScreenshot(this.context.renderer)
   }
 
   /**

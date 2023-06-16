@@ -417,7 +417,7 @@ const CardFooter = ({
         }
         {isScreenshotEnabled &&
           <TooltipIconButton
-            title='Screenshot'
+            title='Take Screenshot'
             size='small'
             placement='bottom'
             onClick={() => {

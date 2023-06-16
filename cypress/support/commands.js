@@ -23,17 +23,24 @@
 //
 // -- This will overwrite an existing command --
 // Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
+import 'cypress-react-router/add-commands'
 import '@testing-library/cypress/add-commands'
+
 
 /**
  * Allow access to elements inside iframe and chain commands from there.
- * @source https://www.nicknish.co/blog/cypress-targeting-elements-inside-iframes
+ *
+ * @see https://www.nicknish.co/blog/cypress-targeting-elements-inside-iframes
  */
- Cypress.Commands.add('iframe', { prevSubject: 'element' }, ($iframe, callback = () => {}) => {
-     return cy
-        .wrap($iframe)
-        .should(iframe => expect(iframe.contents().find('body')).to.exist)
-        .then(iframe => cy.wrap(iframe.contents().find('body')))
-        .within({}, callback)
-})
-
+Cypress.Commands.add(
+    'iframe',
+    {prevSubject: 'element'},
+    // eslint-disable-next-line no-empty-function
+    ($iframe, callback = () => {}) => {
+      return cy
+          .wrap($iframe)
+          .should((iframe) => expect(iframe.contents().find('body')).to.exist)
+          .then((iframe) => cy.wrap(iframe.contents().find('body')))
+          .within({}, callback)
+    },
+)
