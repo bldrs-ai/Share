@@ -120,10 +120,13 @@ export default function NavTree({
             variant='tree'
             onClick={handleSelectionClick}
             sx={{
-              maxWidth: '200px',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
+              'maxWidth': '200px',
+              'overflow': 'hidden',
+              'whiteSpace': 'nowrap',
+              'textOverflow': 'ellipsis',
+              '@media (max-width: 900px)': {
+                maxWidth: '140px',
+              },
             }}
           >
             {label}

@@ -118,10 +118,13 @@ export default function TypesNavTree({
             variant='tree'
             onClick={handleSelectionClick}
             sx={{
-              maxWidth: '160px',
-              overflow: 'hidden',
-              whiteSpace: 'nowrap',
-              textOverflow: 'ellipsis',
+              'overflow': 'hidden',
+              'whiteSpace': 'nowrap',
+              'textOverflow': 'ellipsis',
+              'maxWidth': '240px',
+              '@media (max-width: 900px)': {
+                maxWidth: '140px',
+              },
             }}
           >
             {label}

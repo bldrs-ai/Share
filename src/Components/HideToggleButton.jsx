@@ -52,9 +52,9 @@ export default function HideToggleButton({elementId}) {
 
   if (isIsolated) {
     return <IsolateIcon style={iconStyle}/>
-  } else if (!isHidden) {
-    return <ToggleSmall onChange={toggleHide} checked={isHidden}/>
-    // return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+  // } else if (!isHidden) {
+  //   return <ToggleSmall onChange={toggleHide} checked={isHidden}/>
+  //   // return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
   } else {
     return <ToggleSmall onChange={toggleHide} checked={isHidden}/>
   //   return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
