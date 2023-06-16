@@ -45,9 +45,9 @@ describe('IFC slice', () => {
   it('set IFC model', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
-      result.current.setModelStore({castShadow: false})
+      result.current.setModel({castShadow: false})
     })
-    expect(result.current.modelStore).toEqual(
+    expect(result.current.model).toEqual(
         {castShadow: false},
     )
   })
@@ -57,9 +57,9 @@ describe('IFC slice', () => {
   it('set IFC viewer', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
-      result.current.setViewerStore({GLTF: {GLTFModels: {}}})
+      result.current.setViewer({GLTF: {GLTFModels: {}}})
     })
-    expect(result.current.viewerStore).toEqual(
+    expect(result.current.viewer).toEqual(
         {GLTF: {GLTFModels: {}}},
     )
   })

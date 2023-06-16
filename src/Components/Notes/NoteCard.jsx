@@ -22,16 +22,15 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {useIsMobile} from '../Hooks'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
 import {NOTE_PREFIX} from './Notes'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
-import PhotoCamera from '@mui/icons-material/PhotoCamera'
-import {grey} from '@mui/material/colors'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
-import {usePlaceMark} from '../../hooks/usePlaceMark'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
 
 
 /**
@@ -163,7 +162,7 @@ export default function NoteCard({
     setSelectedNoteId(null)
     toggleSynchSidebar()
     return closeResponse
-    }
+  }
 
 
   /**
@@ -295,22 +294,22 @@ const CardFooter = ({
   deleteNote,
   removeComment,
   isComment,
-  synched}) => {
+  synched,
+}) => {
   const [shareIssue, setShareIssue] = useState(false)
   const repository = useStore((state) => state.repository)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const viewer = useStore((state) => state.viewer)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
-  const captureScreenshot = async () => {
-  }
   const {togglePlaceMarkActive} = usePlaceMark()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
-
-
+  const isScreenshotEnabled = useExistInFeature('screenshot')
+  const [screenshotUri, setScreenshotUri] = useState(null)
   return (
     <Box
       sx={{
@@ -355,7 +354,9 @@ const CardFooter = ({
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
-              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
+              fill: (placeMarkId === id && placeMarkActivated) ?
+                'red' :
+                theme.palette.mode === 'light' ? 'black' : 'white',
             },
           }}
           >
@@ -409,6 +410,20 @@ const CardFooter = ({
             placement='bottom'
             onClick={() => toggleSynchSidebar()}
             icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
+          />
+        }
+        {isScreenshotEnabled && screenshotUri &&
+         <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
+        }
+        {isScreenshotEnabled &&
+          <TooltipIconButton
+            title='Screenshot'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              setScreenshotUri(viewer.takeScreenshot())
+            }}
+            icon={<PhotoCameraIcon style={{width: '15px', height: '15px'}}/>}
           />
         }
         {numberOfComments > 0 &&

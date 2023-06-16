@@ -24,8 +24,8 @@ const PLANE_PREFIX = 'p'
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const model = useStore((state) => state.modelStore)
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
+  const model = useStore((state) => state.model)
   const cutPlanes = useStore((state) => state.cutPlanes)
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)

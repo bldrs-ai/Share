@@ -55,7 +55,7 @@ function HideIcon({elementId}) {
   const isHidden = useStore((state) => state.hiddenElements[elementId])
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
@@ -171,7 +171,7 @@ export default function NavTree({
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
 
   const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
