@@ -1,9 +1,10 @@
 import React from 'react'
 import useStore from '../store/useStore'
 import IfcIsolator from '../Infrastructure/IfcIsolator'
-import VisibilityIcon from '@mui/icons-material/Visibility'
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
+// import VisibilityIcon from '@mui/icons-material/Visibility'
+// import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import GlassesIcon from '../assets/icons/Glasses.svg'
+import Toggle from './Toggle'
 
 /**
  * @param {IfcIsolator} The IFC isoaltor
@@ -50,8 +51,10 @@ export default function HideToggleButton({elementId}) {
   if (isIsolated) {
     return <GlassesIcon style={iconStyle}/>
   } else if (!isHidden) {
-    return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+    return <Toggle onChange={toggleHide} checked={isHidden}/>
+    // return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
   } else {
-    return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
+    return <Toggle onChange={toggleHide} checked={isHidden}/>
+  //   return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
   }
 }

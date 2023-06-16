@@ -21,10 +21,11 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
+  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
+  const hideNavPanel = useStore((state) => state.hideNavPanel)
 
   return (
     <Paper
@@ -55,7 +56,12 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
       <TooltipIconButton
         title={'Navigation'}
         showTitle={false}
-        onClick={toggleShowNavigationGroup}
+        onClick={() => {
+          if (isNavPanelOpen) {
+            hideNavPanel()
+          }
+          toggleShowNavigationGroup()
+        }}
         selected={showNavigationGroup || isNavPanelOpen}
         icon={<TreeIcon/>}
         placement={'bottom'}

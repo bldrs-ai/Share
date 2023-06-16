@@ -54,6 +54,7 @@ module.exports = {
     'src/Components/Buttons.test.jsx',
     'src/Components/Notes/NoteCard.test.jsx',
     'src/Components/About/AboutControl.test.jsx',
+    'src/Components/NavTree.test.jsx',
   ],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
