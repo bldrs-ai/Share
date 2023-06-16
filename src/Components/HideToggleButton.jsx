@@ -3,8 +3,10 @@ import useStore from '../store/useStore'
 import IfcIsolator from '../Infrastructure/IfcIsolator'
 // import VisibilityIcon from '@mui/icons-material/Visibility'
 // import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
-import GlassesIcon from '../assets/icons/Glasses.svg'
-import Toggle from './Toggle'
+// import GlassesIcon from '../assets/icons/Glasses.svg'
+import IsolateIcon from '../assets/icons/Isolate.svg'
+import {ToggleSmall} from './Toggle'
+
 
 /**
  * @param {IfcIsolator} The IFC isoaltor
@@ -38,7 +40,7 @@ export default function HideToggleButton({elementId}) {
     marginTop: '2px',
     height: '20px',
     opacity: 0.3,
-    visibility: 'hidden',
+    // visibility: 'hidden',
   }
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
@@ -49,12 +51,12 @@ export default function HideToggleButton({elementId}) {
   }
 
   if (isIsolated) {
-    return <GlassesIcon style={iconStyle}/>
+    return <IsolateIcon style={iconStyle}/>
   } else if (!isHidden) {
-    return <Toggle onChange={toggleHide} checked={isHidden}/>
+    return <ToggleSmall onChange={toggleHide} checked={isHidden}/>
     // return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
   } else {
-    return <Toggle onChange={toggleHide} checked={isHidden}/>
+    return <ToggleSmall onChange={toggleHide} checked={isHidden}/>
   //   return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
   }
 }

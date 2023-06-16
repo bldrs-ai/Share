@@ -106,10 +106,23 @@ export default function TypesNavTree({
         >
           {icon}
         </Box>
-        <div style={{width: '300px'}}>
+        <div
+          style={{
+            width: '300px',
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            alignItems: 'center'}}
+        >
           <Typography
             variant='tree'
             onClick={handleSelectionClick}
+            sx={{
+              maxWidth: '200px',
+              overflow: 'hidden',
+              whiteSpace: 'nowrap',
+              textOverflow: 'ellipsis',
+            }}
           >
             {label}
           </Typography>
