@@ -135,3 +135,17 @@ export const UUID_REGEX = new RegExp(/[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0-9A-Z]+-[0
 export function matchUuid(str) {
   return str.match(UUID_REGEX) !== null
 }
+
+/**
+ * Converts a string to title case
+ *
+ * @param {string} str The string to turn to title case
+ * @return {string} title case string
+ */
+export function toTitleCase(str) {
+  return str.replace(
+      /\w\S*/g,
+      function(txt) {
+        return txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase()
+      })
+}

@@ -18,7 +18,8 @@ import MoonIcon from '../assets/icons/Moon.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
 import SunIcon from '../assets/icons/Sun.svg'
 import QuestionIcon from '../assets/icons/Question.svg'
-
+import AppStoreIcon from '../assets/icons/AppStore.svg'
+import {useExistInFeature} from '../hooks/useExistInFeature'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -30,6 +31,8 @@ import QuestionIcon from '../assets/icons/Question.svg'
 export default function OperationsGroup({deselectItems}) {
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const openDrawer = useStore((state) => state.openDrawer)
+  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
+  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
@@ -40,6 +43,7 @@ export default function OperationsGroup({deselectItems}) {
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+  const isAppStoreEnabled = useExistInFeature('apps')
   const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
@@ -141,6 +145,14 @@ export default function OperationsGroup({deselectItems}) {
 
       {isSettingsVisible &&
        <ButtonGroup orientation='vertical'>
+         {isAppStoreEnabled &&
+         <TooltipIconButton
+           title='Open App Store'
+           icon={<AppStoreIcon/>}
+           selected={isAppStoreOpen}
+           onClick={() => toggleAppStoreDrawer()}
+         />
+         }
          <TooltipIconButton
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}

@@ -1,15 +1,14 @@
 import React from 'react'
-import clsx from 'clsx'
+import NavTree from './NavTree'
 import PropTypes from 'prop-types'
-import {reifyName} from '@bldrs-ai/ifclib'
+import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
+import clsx from 'clsx'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
-import useStore from '../store/useStore'
 import HideToggleButton from './HideToggleButton'
 
 
-const NavTreePropTypes = {
+const TypesNavTreePropTypes = {
   /**
    * Override or extend the styles applied to the component.
    */
@@ -46,14 +45,14 @@ const NavTreePropTypes = {
 
 /**
  * @param {object} model IFC model
- * @param {object} element IFC element of the model
+ * @param {object} collection of element types
  * @param {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
  * @return {object} React component
  */
-export default function NavTree({
+export default function TypesNavTree({
   model,
-  element,
+  types,
   pathPrefix,
   selectWithShiftClickEvents,
 }) {
@@ -87,7 +86,6 @@ export default function NavTree({
 
     const handleSelectionClick = (event) => {
       handleSelection(event)
-      selectWithShiftClickEvents(event.shiftKey, element.expressID)
     }
 
     return (
@@ -117,7 +115,7 @@ export default function NavTree({
           </Typography>
           {hasHideIcon &&
             <div style={{display: 'contents'}}>
-              <HideToggleButton elementId={element.expressID}/>
+              <HideToggleButton elementId={nodeId}/>
             </div>
           }
         </div>
@@ -125,42 +123,35 @@ export default function NavTree({
     )
   })
 
-  CustomContent.propTypes = NavTreePropTypes
+  CustomContent.propTypes = TypesNavTreePropTypes
 
   const CustomTreeItem = (props) => {
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
-  const viewer = useStore((state) => state.viewer)
-
-  const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
-
   let i = 0
-  // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
-  // warning about missing a unique key foreach item.  Don't really understand it.
-  return (
+
+  return types.map((type) =>
     <CustomTreeItem
-      nodeId={element.expressID.toString()}
-      label={reifyName({properties: model}, element)}
+      key={type.name}
+      nodeId={type.name}
+      label={type.name}
       ContentProps={{
-        hasHideIcon: hasHideIcon,
+        hasHideIcon: type.elements && type.elements.length > 0,
       }}
     >
-      {element.children && element.children.length > 0 ?
-        element.children.map((child) => {
-          const childKey = `${pathPrefix}-${i++}`
-          return (
-            <React.Fragment key={childKey}>
-              <NavTree
-                model={model}
-                element={child}
-                pathPrefix={pathPrefix}
-                selectWithShiftClickEvents={selectWithShiftClickEvents}
-              />
-            </React.Fragment>
-          )
-        }) :
-        null}
-    </CustomTreeItem>
-  )
+      {type.elements && type.elements.length > 0 ?
+    type.elements.map((e) => {
+      const childKey = `${pathPrefix}-${i++}`
+      return (
+        <NavTree
+          key={childKey}
+          model={model}
+          element={e}
+          pathPrefix={pathPrefix}
+          selectWithShiftClickEvents={selectWithShiftClickEvents}
+        />
+      )
+    }) : null}
+    </CustomTreeItem>)
 }

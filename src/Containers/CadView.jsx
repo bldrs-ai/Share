@@ -11,6 +11,7 @@ import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -26,6 +27,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
+import {groupElementsByTypes} from '../utils/ifc'
 
 
 /**
@@ -61,6 +63,9 @@ export default function CadView({
   const [elementsById] = useState({})
   const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
   const [expandedElements, setExpandedElements] = useState([])
+  const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
+  const [expandedTypes, setExpandedTypes] = useState([])
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   // UI elts
   const theme = useTheme()
@@ -79,6 +84,8 @@ export default function CadView({
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const snackMessage = useStore((state) => state.snackMessage)
@@ -87,7 +94,7 @@ export default function CadView({
   const [modelReady, setModelReady] = useState(false)
   const isMobile = useIsMobile()
   const location = useLocation()
-
+  const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
@@ -126,7 +133,8 @@ export default function CadView({
         return
       }
       // Update The selection on the scene pick/unpick
-      await viewer.setSelection(0, selectedElements.map((id) => parseInt(id)))
+      const ids = selectedElements.map((id) => parseInt(id))
+      await viewer.setSelection(0, ids)
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
@@ -137,6 +145,10 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
+        }
+        const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
+        if (types.length > 0) {
+          setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
       } else {
         setSelectedElement(null)
@@ -316,6 +328,7 @@ export default function CadView({
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
+      updateLoadedFileInfo(uploadedFile, ifcURL)
       return loadedModel
     }
 
@@ -334,6 +347,7 @@ export default function CadView({
         (event) => {
           debug().log('CadView#loadLocalFile#event:', event)
           let ifcUrl = URL.createObjectURL(event.target.files[0])
+          setLoadedFileInfo({source: 'local', info: event.target.files})
           debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
           const parts = ifcUrl.split('/')
           ifcUrl = parts[parts.length - 1]
@@ -369,6 +383,7 @@ export default function CadView({
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
+    setElementTypesMap(groupElementsByTypes(rootElt))
     setIsNavPanelOpen(true)
   }
 
@@ -406,6 +421,10 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
+      const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
+      if (types.length > 0) {
+        setDefaultExpandedTypes(types)
+      }
       Privacy.recordEvent('search', {
         search_term: query,
       })
@@ -574,6 +593,25 @@ export default function CadView({
   }
 
 
+  /**
+   * handles updating the stored file meta data for all cases except local files.
+   *
+   * @param {string} ifcUrl the final ifcUrl that was passed to the viewer
+   */
+  function updateLoadedFileInfo(uploadedFile, ifcUrl) {
+    if (uploadedFile) {
+      return
+    }
+    const githubRegex = /(raw.githubusercontent|github.com)/gi
+    if (ifcUrl.indexOf('/') === 0) {
+      setLoadedFileInfo({source: 'share', info: {
+        url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
+      }})
+    } else if (githubRegex.test(ifcUrl)) {
+      setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
+    }
+  }
+
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 60
@@ -643,8 +681,13 @@ export default function CadView({
               model={model}
               element={rootElement}
               defaultExpandedElements={defaultExpandedElements}
+              defaultExpandedTypes={defaultExpandedTypes}
               expandedElements={expandedElements}
               setExpandedElements={setExpandedElements}
+              expandedTypes={expandedTypes}
+              setExpandedTypes={setExpandedTypes}
+              navigationMode={navigationMode}
+              setNavigationMode={setNavigationMode}
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               pathPrefix={
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
@@ -692,6 +735,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
           }}
         >
           <SideDrawer/>
+          <AppStoreSideDrawer/>
         </Box>
       </>
     ) : (
@@ -707,6 +751,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
       >
         <OperationsGroup deselectItems={deselectItems}/>
         <SideDrawer/>
+        <AppStoreSideDrawer/>
       </Box>
     )
   )
@@ -762,7 +807,23 @@ export const getFinalURL = async (url, accessToken) => {
   switch (u.host.toLowerCase()) {
     case 'github.com':
       if (!accessToken) {
-        u.host = process.env.RAW_GIT_PROXY_URL || 'raw.githubusercontent.com'
+        const proxyURL = new URL(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com')
+
+        // Replace the protocol, host, and hostname in the target
+        u.protocol = proxyURL.protocol
+        u.host = proxyURL.host
+        u.hostname = proxyURL.hostname
+
+        // If the port is specified, replace it in the target URL
+        if (proxyURL.port) {
+          u.port = proxyURL.port
+        }
+
+        // If there's a path, *and* it's not just the root, then prepend it to the target URL
+        if (proxyURL.pathname && proxyURL.pathname !== '/') {
+          u.pathname = proxyURL.pathname + u.pathname
+        }
+
         return u.toString()
       }
 

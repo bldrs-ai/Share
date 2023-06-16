@@ -25,6 +25,7 @@
 // Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
 import 'cypress-react-router/add-commands'
 import '@testing-library/cypress/add-commands'
+import 'cypress-react-router/add-commands'
 
 
 /**

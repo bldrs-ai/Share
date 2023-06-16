@@ -1,5 +1,4 @@
 import React from 'react'
-import {CypressHistorySupport} from 'cypress-react-router'
 import {createRoot} from 'react-dom/client'
 import {FlagsProvider} from 'react-feature-flags'
 import {Helmet, HelmetProvider} from 'react-helmet-async'
@@ -10,6 +9,7 @@ import {
   createRoutesFromChildren,
   matchRoutes,
 } from 'react-router-dom'
+import {CypressHistorySupport} from 'cypress-react-router'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
 import BaseRoutes from './BaseRoutes'

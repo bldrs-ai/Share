@@ -84,17 +84,28 @@ export default class IfcIsolator {
    * @return {number} element id if no children or {number[]} if has children
    */
   flattenChildren(elementId, result = null) {
-    const children = this.spatialStructure[elementId]
-    if (result === null) {
-      result = [elementId]
-    }
-    if (children !== undefined && children.length > 0) {
-      children.forEach((c) => {
-        result.push(c)
-        this.flattenChildren(c, result)
+    if (Number.isInteger(elementId)) {
+      const children = this.spatialStructure[elementId]
+      if (result === null) {
+        result = [elementId]
+      }
+      if (children !== undefined && children.length > 0) {
+        children.forEach((c) => {
+          result.push(c)
+          this.flattenChildren(c, result)
+        })
+      }
+      return result
+    } else {
+      const types = useStore.getState().elementTypesMap
+      const elements = types.filter((t) => t.name === elementId)[0].elements
+      const flattenedTypeElements = []
+      elements.forEach((e) => {
+        flattenedTypeElements.push(e.expressID)
+        this.flattenChildren(e.expressID, flattenedTypeElements)
       })
+      return flattenedTypeElements
     }
-    return result
   }
 
   /**

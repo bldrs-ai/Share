@@ -6,11 +6,11 @@ describe('Ifc Hide/Unhide E2E test suite', () => {
     })
 
     it('should toggle hide icon when clicked', () => {
-      cy.findByRole('tree', {label: 'IFC Navigator'}).click()
+      cy.findByLabelText('Navigation Panel').realHover()
       cy.findByTestId('hide-icon').should('exist')
-      cy.findByTestId('hide-icon').should('have.attr', 'data-icon', 'eye')
       cy.findByTestId('hide-icon').click()
-      cy.findByTestId('hide-icon').should('have.attr', 'data-icon', 'eye-slash')
+      cy.findByTestId('unhide-icon').should('exist')
+      cy.findByTestId('hide-icon').should('not.exist')
     })
   })
 })

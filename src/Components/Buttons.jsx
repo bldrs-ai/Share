@@ -5,6 +5,8 @@ import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
 import CloseIcon from '../assets/icons/Close.svg'
+import ExpandIcon from '../assets/icons/Expand.svg'
+import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
@@ -127,4 +129,36 @@ export function RectangularButton({
 }) {
   assertDefined(title, onClick)
   return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
+}
+
+
+/**
+ * @property {Function} onClick Handler for close event.
+ * @return {React.Component}
+ */
+export function FullScreenButton({onClick}) {
+  return (
+    <TooltipIconButton
+      title='Full screen'
+      onClick={onClick}
+      icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
+      size='medium'
+    />
+  )
+}
+
+
+/**
+ * @property {Function} onClick Handler for close event.
+ * @return {React.Component}
+ */
+export function BackButton({onClick}) {
+  return (
+    <TooltipIconButton
+      title='Back'
+      onClick={onClick}
+      icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
+      size='medium'
+    />
+  )
 }
