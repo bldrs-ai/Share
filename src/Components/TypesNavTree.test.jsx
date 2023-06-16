@@ -31,7 +31,7 @@ describe('TypesNavTree', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = new IfcViewerAPIExtended()
     await act(() => {
-      result.current.setViewerStore(viewer)
+      result.current.setViewer(viewer)
     })
     const {getByText} = render(
         <ShareMock>

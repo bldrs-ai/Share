@@ -23,12 +23,12 @@ import PlanViewIcon from '../assets/icons/PlanView.svg'
 export default function ExtractLevelsMenu({listOfOptions, icon, title}) {
   const [anchorEl, setAnchorEl] = useState(null)
   const [allLevelsState, setAllLevelsState] = useState([])
-  const model = useStore((state) => state.modelStore)
+  const viewer = useStore((state) => state.viewer)
+  const model = useStore((state) => state.model)
   const location = useLocation()
   const levelInstance = useStore((state) => state.levelInstance)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
-  const viewer = useStore((state) => state.viewerStore)
   const theme = useTheme()
   const open = Boolean(anchorEl)
 
