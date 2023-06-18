@@ -7,7 +7,6 @@ import Typography from '@mui/material/Typography'
 import {RectangularButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '@mui/styles/useTheme'
-import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import Eisvogel from '../assets/icons/projects/Eisvogel.svg'
 import Momentum from '../assets/icons/projects/Momentum.svg'
 import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
@@ -18,7 +17,6 @@ import UploadIcon from '../assets/icons/Upload.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import {TooltipIconButton} from './Buttons'
-
 
 
 const icon = (iconNumber) => {
@@ -43,7 +41,7 @@ const LoginComponent = () => {
     <Typography
       variant={'h5'}
       sx={{
-        padding: '12px',
+        padding: '14px',
       }}
     >
       Please&nbsp;
@@ -112,7 +110,7 @@ export default function ProjectPanel({fileOpen}) {
         flexDirection: 'column',
         justifyContent: 'flex-start',
         borderRadius: '10px',
-        opacity: .9,
+        // opacity: .9,
       }}
     >
       <Box
