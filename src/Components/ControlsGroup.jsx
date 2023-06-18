@@ -4,7 +4,8 @@ import {TooltipIconButton} from './Buttons'
 import SaveModelControl from './SaveModelControl'
 import useStore from '../store/useStore'
 import SearchIcon from '../assets/icons/Search.svg'
-import OpenModelControl from '../Components/OpenModelControl'
+// import OpenModelControl from '../Components/OpenModelControl'
+import OpenIcon from '../assets/icons/Open.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
 // import StructureMenu from '../Components/StructureMenu'
 // import TreeMenu from './NavigationMenu'
@@ -23,8 +24,10 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const showNavigationGroup = useStore((state) => state.showNavigationGroup)
+  const showProjectPanel = useStore((state) => state.showProjectPanel)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const hideNavPanel = useStore((state) => state.hideNavPanel)
 
   return (
@@ -40,7 +43,16 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         opacity: .9,
       }}
     >
-      <OpenModelControl modelPath={modelPath} fileOpen={fileOpen} isLocalModel={isLocalModel}/>
+      <TooltipIconButton
+        title={'Projects'}
+        showTitle={false}
+        onClick={toggleShowProjectPanel}
+        selected={showProjectPanel}
+        icon={<OpenIcon/>}
+        placement={'bottom'}
+        dataTestId='spatial-elements'
+      />
+      {/* <OpenModelControl modelPath={modelPath} fileOpen={fileOpen} isLocalModel={isLocalModel}/> */}
       {isLocalModel &&
           <SaveModelControl modelPath={modelPath}/>
       }

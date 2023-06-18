@@ -34,6 +34,7 @@ import {groupElementsByTypes} from '../utils/ifc'
 import OpenModelControl from '../Components/OpenModelControl'
 import Loader from '../Components/Loader'
 import SavedViewsPanel from '../Components/SavedViewsPanel'
+import ProjectPanel from '../Components/ProjectPanel'
 import NavigationGroup from '../Components/NavigationGroup'
 
 
@@ -113,6 +114,8 @@ export default function CadView({
   // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   const isOpenControlVisible = useStore((state) => state.isOpenControlVisible)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
+  const showProjectPanel = useStore((state) => state.showProjectPanel)
+
 
 
   // Place Mark
@@ -760,6 +763,9 @@ export default function CadView({
               }
               {showViewsPanel && showControls &&
                 <SavedViewsPanel/>
+              }
+              {showProjectPanel &&
+                <ProjectPanel fileOpen={loadLocalFile}/>
               }
             </Box>
           </Box>
