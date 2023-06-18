@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import {useNavigate} from 'react-router-dom'
+import {useAuth0} from '@auth0/auth0-react'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
@@ -38,6 +39,16 @@ const icon = (iconNumber) => {
 
 const LoginComponent = () => {
   const theme = useTheme()
+  const {loginWithRedirect} = useAuth0()
+
+  const onClick = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+
   return (
     <Typography
       variant={'h5'}
@@ -48,7 +59,7 @@ const LoginComponent = () => {
       Please&nbsp;
       <Box
         component="span"
-        // onClick={onClick}
+        onClick={onClick}
         sx={{
           color: theme.palette.secondary.contrastText,
           cursor: 'pointer',
@@ -59,7 +70,10 @@ const LoginComponent = () => {
       &nbsp;to get access to your projects stored on GitHub or sign up for GitHub&nbsp;
       <Box
         component="span"
-        // onClick={onClick}
+        onClick={() => {
+          window.open(
+              'https://github.com/signup?ref_cta=Sign+up&ref_loc=header+logged+out&ref_page=%2F&source=header-home', '_blank').focus()
+        }}
         sx={{
           color: theme.palette.secondary.contrastText,
           cursor: 'pointer',
@@ -200,20 +214,20 @@ export default function ProjectPanel({fileOpen}) {
           }}
         >
           <TooltipIconButton
-            title={'SP'}
+            title={'Swiss Property Projects'}
             onClick={() => setShowSample(true)}
-            showTitle={true}
+            // showTitle={true}
             selected={showSample}
             placement={'bottom'}
-            icon={<SwissProperty style={{width: '18px', height: '18px'}}/>}
+            icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
           />
           <TooltipIconButton
             title={'Login'}q
             placement={'bottom'}
-            showTitle={true}
+            // showTitle={true}
             selected={!showSample}
             onClick={() => setShowSample(false)}
-            icon={<GitHubIcon style={{width: '18px', height: '18px'}}/>}
+            icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
           />
         </Box>
         {showSample ?
