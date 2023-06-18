@@ -117,7 +117,6 @@ export default function CadView({
   const showProjectPanel = useStore((state) => state.showProjectPanel)
 
 
-
   // Place Mark
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 

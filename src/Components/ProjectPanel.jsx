@@ -8,27 +8,31 @@ import {RectangularButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '@mui/styles/useTheme'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
-import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
-import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
+import Eisvogel from '../assets/icons/projects/Eisvogel.svg'
+import Momentum from '../assets/icons/projects/Momentum.svg'
+import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
+import Seestrasse from '../assets/icons/projects/Seestrasse.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
 import OpenIcon from '../assets/icons/Open.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import SwissProperty from '../assets/icons/SwissProperty.svg'
 import {TooltipIconButton} from './Buttons'
+
 
 
 const icon = (iconNumber) => {
   if (iconNumber === 0) {
-    return <ViewCube1 style={{width: '18px', height: '18px'}}/>
+    return <Momentum style={{width: '28px', height: '18px'}}/>
   }
   if (iconNumber === 1) {
-    return <ViewCube2 style={{width: '18px', height: '18px'}}/>
+    return <Sheenstock style={{width: '28px', height: '18px'}}/>
   }
   if (iconNumber === 2) {
-    return <ViewCube3 style={{width: '18px', height: '18px'}}/>
+    return <Eisvogel style={{width: '28px', height: '18px'}}/>
   }
   if (iconNumber === 3) {
-    return <ViewCube1 style={{width: '18px', height: '18px'}}/>
+    return <Seestrasse style={{width: '28px', height: '18px'}}/>
   }
 }
 
@@ -194,7 +198,7 @@ export default function ProjectPanel({fileOpen}) {
             showTitle={true}
             selected={showSample}
             placement={'bottom'}
-            icon={<ViewCube1 style={{width: '18px', height: '18px'}}/>}
+            icon={<SwissProperty style={{width: '18px', height: '18px'}}/>}
           />
           <TooltipIconButton
             title={'Login'}q

@@ -60,6 +60,7 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
       style={{
         width: '220px',
         height: '30px',
+        paddingBottom: '10px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
