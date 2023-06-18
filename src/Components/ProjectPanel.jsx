@@ -13,6 +13,7 @@ import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
 import Seestrasse from '../assets/icons/projects/Seestrasse.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
 import OpenIcon from '../assets/icons/Open.svg'
+import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
@@ -21,10 +22,10 @@ import {TooltipIconButton} from './Buttons'
 
 const icon = (iconNumber) => {
   if (iconNumber === 0) {
-    return <Momentum style={{width: '28px', height: '18px'}}/>
+    return <Sheenstock style={{width: '28px', height: '18px'}}/>
   }
   if (iconNumber === 1) {
-    return <Sheenstock style={{width: '28px', height: '18px'}}/>
+    return <Momentum style={{width: '28px', height: '18px'}}/>
   }
   if (iconNumber === 2) {
     return <Eisvogel style={{width: '28px', height: '18px'}}/>
@@ -93,8 +94,8 @@ export default function ProjectPanel({fileOpen}) {
   const theme = useTheme()
 
   const modelPath = {
-    Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Eisvogel: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
     Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
   }
@@ -117,8 +118,9 @@ export default function ProjectPanel({fileOpen}) {
         sx={{
           display: 'flex',
           flexDirection: 'row',
-          justifyContent: 'center',
+          justifyContent: 'space-between',
           alignItems: 'center',
+          padding: '0px 20px',
           height: '60px',
           opacity: .9,
           fontWeight: '500',
@@ -127,31 +129,38 @@ export default function ProjectPanel({fileOpen}) {
       >
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: '10px',
-          }}
-        >
-          <OpenIcon/>
-        </Box>
-        <Box
-          sx={{
+            // border: '1px solid red',
+            width: '240px',
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
           }}
         >
-          Projects
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              marginRight: '10px',
+            }}
+          >
+            {showSample ? <OpenIcon/> : <LoginIcon/>}
+
+          </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {showSample ? 'Sample Projects' : 'Login'}
+          </Box>
         </Box>
         <Box
-          sx={{
-            position: 'relative',
-            left: '67px',
-            cursor: 'pointer',
-          }}
           onClick={toggleShowProjectPanel}
         >
           <DeleteIcon style={{width: '12px', height: '12px'}}/>
@@ -218,7 +227,7 @@ export default function ProjectPanel({fileOpen}) {
             'width': '240px',
             'borderRadius': '10px',
             'backgroundColor': theme.palette.background.button,
-            'marginBottom': '20px',
+            'marginBottom': '10px',
             'marginTop': '10px',
             'overflow': 'auto',
             'scrollbarWidth': 'none', /* Firefox */
@@ -258,7 +267,7 @@ export default function ProjectPanel({fileOpen}) {
             'width': '240px',
             'borderRadius': '10px',
             'backgroundColor': theme.palette.background.button,
-            'marginBottom': '20px',
+            'marginBottom': '10px',
             'marginTop': '10px',
             'overflow': 'auto',
             'scrollbarWidth': 'none', /* Firefox */
@@ -281,14 +290,17 @@ export default function ProjectPanel({fileOpen}) {
           display: 'flex',
           flexDirection: 'row',
           justifyContent: 'center',
-          marginBottom: '20px',
+          marginBottom: '10px',
         }}
       >
-        <RectangularButton
-          title={'Open local file '}
+        <TooltipIconButton
+          title={'Open local file'}
           onClick={() => {
             fileOpen()
           }}
+          // showTitle={true}
+          selected={true}
+          placement={'bottom'}
           icon={<UploadIcon/>}
         />
       </Box>
