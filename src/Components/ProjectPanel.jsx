@@ -214,7 +214,7 @@ export default function ProjectPanel({fileOpen}) {
           }}
         >
           <TooltipIconButton
-            title={'Swiss Property Projects'}
+            title={'Swiss Property Repository'}
             onClick={() => setShowSample(true)}
             // showTitle={true}
             selected={showSample}
