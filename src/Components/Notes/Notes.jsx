@@ -1,9 +1,11 @@
 import React, {useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
 import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
+import useTheme from '@mui/styles/useTheme'
 import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
@@ -19,7 +21,7 @@ export const NOTE_PREFIX = 'i'
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const {user} = useAuth0()
+  const {user, loginWithRedirect} = useAuth0()
   const notes = useStore((state) => state.notes)
   const synchSidebar = useStore((state) => state.synchSidebar)
   const setNotes = useStore((state) => state.setNotes)
@@ -30,6 +32,7 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const drawer = useStore((state) => state.drawer)
   const accessToken = useStore((state) => state.accessToken)
+  const theme = useTheme()
   const [hasError, setHasError] = useState(false)
   const handleError = (err) => {
     if (!err) {
@@ -127,6 +130,14 @@ export default function Notes() {
     }
   }, [drawer, selectedNoteId])
 
+  const onClick = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+
 
   return hasError ? <ApplicationError/> : (
     <Paper
@@ -137,7 +148,25 @@ export default function Notes() {
       }}
     >
       {isCreateNoteActive && user && <NoteCardCreate/>}
-      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
+      {isCreateNoteActive && !user &&
+      <NoContent message={
+        <Box>
+          Please&nbsp;
+          <Box
+            component="span"
+            onClick={onClick}
+            sx={{
+              color: theme.palette.secondary.contrastText,
+              cursor: 'pointer',
+              textDecoration: 'underline',
+            }}
+          >
+          login
+          </Box>
+          &nbsp;to create notes.
+        </Box>
+      }
+      />}
       {notes === null && <Loader type={'linear'}/>}
       {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
       {notes && !selectedNoteId && !isCreateNoteActive ?

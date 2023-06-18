@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import {useAuth0} from '@auth0/auth0-react'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
@@ -53,6 +54,7 @@ export default function OperationsGroup({deselectItems}) {
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const viewer = useStore((state) => state.viewer)
   const [isolate, setIsolate] = useState(false)
+  const {isAuthenticated} = useAuth0()
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
     return isMobile ? turnOffIsHelpTooltips() : null
@@ -98,7 +100,7 @@ export default function OperationsGroup({deselectItems}) {
             },
           }}
         >
-          {isLoginVisible &&
+          {isLoginVisible && isAuthenticated &&
           <ButtonGroup orientation='vertical'>
             <AuthNav/>
           </ButtonGroup>
