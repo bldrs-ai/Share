@@ -1,4 +1,4 @@
-const fontFamily = 'Roboto'
+const fontFamily = 'Satoshi'
 const fontSize = 16
 const fontWeight = '400'
 const letterSpacing = 'normal'

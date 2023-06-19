@@ -17,6 +17,7 @@ import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
 import PublishIcon from '../assets/icons/Publish.svg'
+import RobotIcon from '../assets/icons/Robot1.svg'
 
 
 const icon = (iconNumber) => {
@@ -96,9 +97,12 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
           {title}
         </Box>
       </Box>
-      <Box sx={{display: 'flex', width: '34px', justifyContent: 'space-between'}}>
+      <Box sx={{display: 'flex', width: '54px', justifyContent: 'space-between'}}>
         <Box>
-          <PublishIcon style={{width: '12px', height: '12px'}}/>
+          <RobotIcon style={{width: '15px', height: '15px'}}/>
+        </Box>
+        <Box>
+          <PublishIcon style={{width: '12px', height: '12px', transform: 'rotate(180deg)'}}/>
         </Box>
         <Box
           onClick={onDelete}

@@ -1,6 +1,7 @@
 import React from 'react'
 import Button from '@mui/material/Button'
 import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useTheme from '@mui/styles/useTheme'
@@ -58,7 +59,7 @@ export function TooltipIconButton({
           }}
           >
             {icon}
-            <Box
+            <Typography
               sx={{
                 fontSize: '7px',
                 color: theme.palette.secondary.contrastText,
@@ -66,7 +67,7 @@ export function TooltipIconButton({
               }}
             >
               {title}
-            </Box>
+            </Typography>
           </Box> :
           <Box sx={{display: 'flex',
             flexDirection: 'column',
@@ -100,15 +101,15 @@ export function TooltipIconButton({
            }}
            >
              {icon}
-             <Box
+             <Typography
                sx={{
-                 fontSize: '8px',
+                 fontSize: '9px',
                  color: theme.palette.secondary.contrastText,
                  textTransform: 'capitalize',
                }}
              >
                {title}
-             </Box>
+             </Typography>
            </Box> :
            <Box sx={{display: 'flex',
              flexDirection: 'column',
