@@ -61,7 +61,7 @@ export function TooltipIconButton({
             {icon}
             <Typography
               sx={{
-                fontSize: '7px',
+                fontSize: '9px',
                 color: theme.palette.secondary.contrastText,
                 textTransform: 'capitalize',
               }}
