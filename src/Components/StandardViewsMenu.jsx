@@ -15,10 +15,7 @@ import ViewIcon from '../assets/icons/View.svg'
 import FrontIcon from '../assets/icons/view/Front.svg'
 import TopIcon from '../assets/icons/view/Top.svg'
 import RightIcon from '../assets/icons/view/Right.svg'
-import SavedView from '../assets/icons/view/SavedView.svg'
-// import BottomIcon from '../assets/icons/view/Bottom.svg'
-// import BackIcon from '../assets/icons/view/Back.svg'
-// import LeftIcon from '../assets/icons/view/Left.svg'
+import ViewCube from '../assets/icons/view/ViewCube2.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -105,7 +102,6 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 100, 100, true)
-              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<TopIcon style={{width: '30px', height: '30px'}}/>}
@@ -118,7 +114,6 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(90, 100, 100, true)
-              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<FrontIcon style={{width: '18px', height: '30px'}}/>}
@@ -131,7 +126,6 @@ export default function StandardViewsMenu() {
             placement={'left'}
             onClick={() => {
               viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
-              // handleClose()
             }}
             selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
             icon={<RightIcon style={{width: '18px', height: '30px'}}/>}
@@ -149,10 +143,9 @@ export default function StandardViewsMenu() {
                 placement={'left'}
                 onClick={() => {
                   window.location.replace(viewUrl)
-                  // viewer.IFC.context.ifcCamera.cameraControls.setPosition(100, 0, 100, true)
                 }}
                 selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-                icon={<SavedView style={{width: '18px', height: '30px'}}/>}
+                icon={<ViewCube style={{width: '18px', height: '30px'}}/>}
               />
             </MenuItem>
           )

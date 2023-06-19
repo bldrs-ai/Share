@@ -13,7 +13,6 @@ import Momentum from '../assets/icons/projects/Momentum.svg'
 import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
 import Seestrasse from '../assets/icons/projects/Seestrasse.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
-// import OpenIcon from '../assets/icons/Open.svg'
 import ViewCube from '../assets/icons/view/ViewCube1.svg'
 import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
@@ -143,7 +142,6 @@ export default function ProjectPanel({fileOpen}) {
       >
         <Box
           sx={{
-            // border: '1px solid red',
             width: '240px',
             display: 'flex',
             flexDirection: 'row',
@@ -211,15 +209,13 @@ export default function ProjectPanel({fileOpen}) {
           <TooltipIconButton
             title={'Swiss Property Projects'}
             onClick={() => setShowSample(true)}
-            // showTitle={true}
             selected={showSample}
             placement={'bottom'}
             icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
           />
           <TooltipIconButton
-            title={'Login'}q
+            title={'Login'}
             placement={'bottom'}
-            // showTitle={true}
             selected={!showSample}
             onClick={() => setShowSample(false)}
             icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
@@ -259,6 +255,7 @@ export default function ProjectPanel({fileOpen}) {
                   title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
                   onClick={() => {
                     navigate(modelPath[name])
+                    toggleShowProjectPanel()
                   }}
                   icon={icon(i)}
                 />
@@ -307,7 +304,6 @@ export default function ProjectPanel({fileOpen}) {
           onClick={() => {
             fileOpen()
           }}
-          // showTitle={true}
           selected={true}
           placement={'bottom'}
           icon={<UploadIcon/>}
