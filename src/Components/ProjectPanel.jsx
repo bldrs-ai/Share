@@ -13,7 +13,8 @@ import Momentum from '../assets/icons/projects/Momentum.svg'
 import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
 import Seestrasse from '../assets/icons/projects/Seestrasse.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
-import OpenIcon from '../assets/icons/Open.svg'
+// import OpenIcon from '../assets/icons/Open.svg'
+import ViewCube from '../assets/icons/view/ViewCube1.svg'
 import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
@@ -160,8 +161,7 @@ export default function ProjectPanel({fileOpen}) {
               marginRight: '10px',
             }}
           >
-            {showSample ? <OpenIcon/> : <LoginIcon/>}
-
+            {showSample ? <ViewCube/> : <LoginIcon/>}
           </Box>
           <Box
             sx={{
@@ -194,13 +194,8 @@ export default function ProjectPanel({fileOpen}) {
             'flexDirection': 'row',
             'justifyContent': 'center',
             'alignItems': 'center',
-            // 'height': '100px',
-            // 'width': '240px',
             'borderRadius': '10px',
-            // 'backgroundColor': theme.palette.background.button,
-            // 'border': `1px solid ${theme.palette.background.button}`,
             'marginTop': '10px',
-            // 'marginBottom': '20px',
             'overflow': 'auto',
             'scrollbarWidth': 'none', /* Firefox */
             '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
@@ -214,7 +209,7 @@ export default function ProjectPanel({fileOpen}) {
           }}
         >
           <TooltipIconButton
-            title={'Swiss Property Repository'}
+            title={'Swiss Property Projects'}
             onClick={() => setShowSample(true)}
             // showTitle={true}
             selected={showSample}

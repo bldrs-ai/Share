@@ -9,7 +9,7 @@ import {
   addCameraUrlParams,
 } from './CameraControl'
 import useTheme from '@mui/styles/useTheme'
-import SavedView from '../assets/icons/view/SavedView.svg'
+import SavedView from '../assets/icons/view/ViewCube2.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
@@ -258,7 +258,7 @@ export default function Panel() {
             onCapture()
             setIconNumber(iconNumberCalc)
           }}
-          icon={<CaptureIcon/>}
+          icon={<CaptureIcon style={{width: '12px', height: '12px'}}/>}
         />
       </Box>
     </Paper>
