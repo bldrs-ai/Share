@@ -53,14 +53,13 @@ export default function NavPanel({
         aria-label='Navigation Panel'
         variant='control'
         sx={{
-          // 'marginTop': '14px',
           'marginBottom': '10px',
           'overflow': 'auto',
           'width': '100%',
           'opacity': .8,
           'justifyContent': 'space-around',
           'alignItems': 'center',
-          'maxHeight': '400px',
+          'maxHeight': '236px',
           '&:hover #togglegrp': {
             visibility: 'visible !important',
           },
