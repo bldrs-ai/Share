@@ -143,7 +143,7 @@ export default function Panel() {
         flexDirection: 'column',
         justifyContent: 'flex-start',
         borderRadius: '10px',
-        opacity: .9,
+        opacity: .95,
       }}
     >
       <Box

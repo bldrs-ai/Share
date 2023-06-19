@@ -25,9 +25,11 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const showProjectPanel = useStore((state) => state.showProjectPanel)
+  const showViewsPanel = useStore((state) => state.showViewsPanel)
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
-  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const hideNavPanel = useStore((state) => state.hideNavPanel)
 
   return (
@@ -46,7 +48,12 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
       <TooltipIconButton
         title={'Projects'}
         showTitle={false}
-        onClick={toggleShowProjectPanel}
+        onClick={() => {
+          toggleShowProjectPanel()
+          if (showViewsPanel) {
+            toggleShowViewsPanel()
+          }
+        }}
         selected={showProjectPanel}
         icon={<OpenIcon/>}
         placement={'bottom'}

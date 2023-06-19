@@ -1,30 +1,21 @@
 import React from 'react'
 import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
-// import SaveModelControl from './SaveModelControl'
-// import BranchIcon from '../assets/icons/Branch.svg'
-// import SearchIcon from '../assets/icons/Search.svg'
-// import OpenModelControl from './OpenModelControl'
-// import StructureMenu from '../Components/StructureMenu'
-// import TreeMenu from './TreeMenu'
 import CutPlaneMenu from './CutPlaneMenu'
 import useStore from '../store/useStore'
-// import ExtractLevelsMenu from './ExtractLevelsMenu'
 import StandardViewsMenu from './StandardViewsMenu'
 import CaptureIcon from '../assets/icons/view/SavedView.svg'
 
 
 /**
- * Controls group contains toggles for fileapth, branches, spatial navigation, and element type navigation
+ * View group contains actions related to viewing the model, such as sections, saved and standard views
  *
  * @param {Function} modelPath object containing information about the location of the model
  * @return {React.Component}
  */
 export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
-  // const isBranches = useStore((state) => state.isBranches)
-  // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
-  // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
-  // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const showProjectPanel = useStore((state) => state.showProjectPanel)
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
 
@@ -43,7 +34,6 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
     >
       <StandardViewsMenu/>
       <CutPlaneMenu/>
-      {/* <ExtractLevelsMenu/> */}
       <TooltipIconButton
         title={'Captured views'}
         placement={'top'}
@@ -51,6 +41,9 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
         selected={showViewsPanel}
         onClick={() => {
           toggleShowViewsPanel()
+          if (showProjectPanel) {
+            toggleShowProjectPanel()
+          }
         }}
       />
     </Paper>

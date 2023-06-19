@@ -126,7 +126,7 @@ export default function ProjectPanel({fileOpen}) {
         flexDirection: 'column',
         justifyContent: 'flex-start',
         borderRadius: '10px',
-        // opacity: .9,
+        opacity: .95,
       }}
     >
       <Box
@@ -137,7 +137,6 @@ export default function ProjectPanel({fileOpen}) {
           alignItems: 'center',
           padding: '0px 20px',
           height: '60px',
-          opacity: .9,
           fontWeight: '500',
           borderBottom: `1px solid ${theme.palette.background.button}`,
         }}
