@@ -26,6 +26,7 @@ export default function SnackBarMessage({message, severity, open}) {
           'bottom': '60px',
           'left': '-6px',
           'fontWeight': 400,
+          'maxWidth': '450px',
           '@media (max-width: 900px)': {
             left: '18px',
             bottom: '80px',
