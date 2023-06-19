@@ -2,6 +2,7 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
+import Typography from '@mui/material/Typography'
 import {RectangularButton} from './Buttons'
 import CaptureIcon from '../assets/icons/Capture.svg'
 import useStore from '../store/useStore'
@@ -80,7 +81,7 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
 
         <Box
           sx={{
-            marginLeft: '10px',
+            marginLeft: '12px',
           }}
         >
           {title}
@@ -168,7 +169,7 @@ export default function Panel() {
         >
           <SavedView/>
         </Box>
-        <Box
+        <Typography variant='h4'
           sx={{
             display: 'flex',
             flexDirection: 'row',
@@ -177,7 +178,7 @@ export default function Panel() {
           }}
         >
           Captured Views
-        </Box>
+        </Typography>
         <Box
           sx={{
             position: 'relative',

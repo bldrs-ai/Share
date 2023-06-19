@@ -158,12 +158,13 @@ export default function ProjectPanel({fileOpen}) {
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
-              marginRight: '10px',
+              marginRight: '12px',
+              paddingBottom: '2px',
             }}
           >
             {showSample ? <ViewCube/> : <LoginIcon/>}
           </Box>
-          <Box
+          <Typography variant='h4'
             sx={{
               display: 'flex',
               flexDirection: 'row',
@@ -172,7 +173,7 @@ export default function ProjectPanel({fileOpen}) {
             }}
           >
             {showSample ? 'Sample Projects' : 'Login'}
-          </Box>
+          </Typography>
         </Box>
         <Box
           onClick={toggleShowProjectPanel}

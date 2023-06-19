@@ -760,11 +760,12 @@ export default function CadView({
                   }
                 />
               }
+              {showProjectPanel && showControls &&
+                <ProjectPanel fileOpen={loadLocalFile}/>
+              }
+              <br/>
               {showViewsPanel && showControls &&
                 <SavedViewsPanel/>
-              }
-              {showProjectPanel &&
-                <ProjectPanel fileOpen={loadLocalFile}/>
               }
             </Box>
           </Box>
