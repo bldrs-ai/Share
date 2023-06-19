@@ -1,3 +1,4 @@
+/* eslint-disable max-len */
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
@@ -49,11 +50,19 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
   }
 
   const titleStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    cursor: 'pointer',
-    color: selected ? 'green' : isHovered ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
+    'display': 'flex',
+    'alignItems': 'center',
+    'justifyContent': 'space-between',
+    'cursor': 'pointer',
+    'color': selected ? `${theme.palette.secondary.main}` : isHovered ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
+    '@media (max-width: 900px)': {
+      color: selected ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
+      bottom: '80px',
+      width: '256px',
+      inlineSize: '256px',
+      overflow: 'visible',
+      overflowWrap: 'anywhere',
+    },
   }
 
   return (
