@@ -57,7 +57,8 @@ const LoginComponent = () => {
       }}
     >
       Please&nbsp;
-      <Box
+      <Typography
+        variant='h4'
         component="span"
         onClick={onClick}
         sx={{
@@ -66,7 +67,7 @@ const LoginComponent = () => {
           textDecoration: 'underline',
         }}
       >login
-      </Box>
+      </Typography>
       &nbsp;to get access to your projects stored on GitHub or sign up for GitHub&nbsp;
       <Box
         component="span"
@@ -300,7 +301,7 @@ export default function ProjectPanel({fileOpen}) {
         }}
       >
         <TooltipIconButton
-          title={'Open local file'}
+          title={'Load .ifc or .obj files from your computer'}
           onClick={() => {
             fileOpen()
           }}
