@@ -1,6 +1,6 @@
 const fontFamily = 'Satoshi'
 const fontSize = 16
-const fontWeight = '400'
+const fontWeight = '500'
 const letterSpacing = 'normal'
 const lineHeight = '1.5em'
 
@@ -22,7 +22,7 @@ export function getTypography() {
     h6: {fontSize: '.8em', lineHeight, fontWeight},
     body1: {fontSize, lineHeight, letterSpacing, fontWeight},
     body2: {fontSize, lineHeight, letterSpacing, fontWeight},
-    tree: {fontSize, lineHeight, letterSpacing, fontWeight},
+    tree: {fontSize, lineHeight, letterSpacing, fontWeight: '400'},
     propTitle: {fontSize, lineHeight, letterSpacing, fontWeight},
     propValue: {fontSize, lineHeight, letterSpacing, fontWeight: '300'},
   }

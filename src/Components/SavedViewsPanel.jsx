@@ -89,26 +89,28 @@ const RectangleComponent = ({title, onClick, onDelete, selected}) => {
           <ViewCube2 style={{width: '12px', height: '12px'}}/>
         }
 
-        <Box
+        <Typography
+          variant='h4'
           sx={{
             marginLeft: '12px',
+            fontWeight: '400',
           }}
         >
           {title}
-        </Box>
+        </Typography>
       </Box>
       <Box sx={{display: 'flex', width: '54px', justifyContent: 'space-between'}}>
         <Box>
-          <RobotIcon style={{width: '15px', height: '15px'}}/>
+          <RobotIcon style={{width: '15px', height: '15px', opacity: .7}}/>
         </Box>
         <Box>
-          <PublishIcon style={{width: '12px', height: '12px', transform: 'rotate(180deg)'}}/>
+          <PublishIcon style={{width: '12px', height: '12px', transform: 'rotate(180deg)', opacity: .7}}/>
         </Box>
         <Box
           onClick={onDelete}
           sx={{cursor: 'pointer'}}
         >
-          <DeleteIcon style={{width: '12px', height: '12px'}}/>
+          <DeleteIcon style={{width: '12px', height: '12px', opacity: .7}}/>
         </Box>
       </Box>
     </div>
@@ -167,7 +169,6 @@ export default function Panel() {
           alignItems: 'center',
           height: '60px',
           opacity: .9,
-          fontWeight: '500',
           borderBottom: `1px solid ${theme.palette.background.button}`,
         }}
       >
@@ -188,6 +189,7 @@ export default function Panel() {
             flexDirection: 'row',
             justifyContent: 'center',
             alignItems: 'center',
+            fontWeight: '500',
           }}
         >
           Captured Views
