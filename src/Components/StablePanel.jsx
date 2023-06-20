@@ -5,7 +5,6 @@ import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {RectangularButton} from './Buttons'
-import InputBar from './InputBar'
 import CaptureIcon from '../assets/icons/Capture.svg'
 import useStore from '../store/useStore'
 import {
@@ -13,16 +12,12 @@ import {
 } from './CameraControl'
 import useTheme from '@mui/styles/useTheme'
 import SavedView from '../assets/icons/view/ViewCube2.svg'
-import SDView from '../assets/icons/view/ViewCube2_selected.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
 import PublishIcon from '../assets/icons/Publish.svg'
 import RobotIcon from '../assets/icons/Robot1.svg'
-// import SDIcon from '../assets/icons/SDIcon.svg'
-import LogoBuildings from '../assets/Logo_Buildings.svg'
-// import BackIcon from '../assets/icons/Back.svg'
 
 
 const icon = (iconNumber) => {
@@ -37,7 +32,7 @@ const icon = (iconNumber) => {
   }
 }
 
-const RectangleComponent = ({title, onClick, onDelete, onClickStable, selected}) => {
+const RectangleComponent = ({title, onClick, onDelete, selected}) => {
   const [isHovered, setIsHovered] = useState(false)
   const [isClicked, setIsClicked] = useState(false)
   const theme = useTheme()
@@ -105,10 +100,8 @@ const RectangleComponent = ({title, onClick, onDelete, onClickStable, selected})
         </Typography>
       </Box>
       <Box sx={{display: 'flex', width: '54px', justifyContent: 'space-between'}}>
-        <Box onClick={onClickStable}
-          sx={{cursor: 'pointer'}}
-        >
-          <RobotIcon style={{width: '14px', height: '14px', opacity: .7}}/>
+        <Box>
+          <RobotIcon style={{width: '15px', height: '15px', opacity: .7}}/>
         </Box>
         <Box>
           <PublishIcon style={{width: '12px', height: '12px', transform: 'rotate(180deg)', opacity: .7}}/>
@@ -131,7 +124,7 @@ const RectangleComponent = ({title, onClick, onDelete, onClickStable, selected})
  * @param {Function} modelPath object containing information about the location of the model
  * @return {React.Component}
  */
-export default function Panel() {
+export default function StablePanel() {
   const cameraControls = useStore((state) => state.cameraControls)
   const setSavedViews = useStore((state) => state.setSavedViews)
   const savedViews = useStore((state) => state.savedViews)
@@ -140,7 +133,6 @@ export default function Panel() {
   const [iconNumber, setIconNumber] = useState(1)
   const iconNumberCalc = iconNumber < 3 ? iconNumber + 1 : 1
   const [selected, setSelected] = useState('')
-  const [stable, setStable] = useState(false)
 
   const onCapture = () => {
     addCameraUrlParams(cameraControls)
@@ -189,7 +181,7 @@ export default function Panel() {
             marginRight: '10px',
           }}
         >
-          { !stable ? <SavedView/> : <SDView/>}
+          <SavedView/>
         </Box>
         <Typography variant='h4'
           sx={{
@@ -200,8 +192,7 @@ export default function Panel() {
             fontWeight: '500',
           }}
         >
-          { !stable ? 'Captured Views' : 'AI rendering'}
-
+          Captured Views
         </Typography>
         <Box
           sx={{
@@ -221,85 +212,53 @@ export default function Panel() {
           justifyContent: 'center',
         }}
       >
-        {
-          !stable ?
-          <Box
-            sx={{
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'flex-start',
-              'alignItems': 'center',
-              'height': '160px',
-              'width': '240px',
-              'borderRadius': '5px',
-              'backgroundColor': theme.palette.background.button,
-              'marginTop': '20px',
-              'marginBottom': '20px',
-              'overflow': 'auto',
-              'scrollbarWidth': 'none', /* Firefox */
-              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-              '&::-webkit-scrollbar': {
-                width: '0em',
-                background: 'transparent',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: 'transparent',
-              },
-            }}
-          >
-            {savedViews.reverse().map((viewUrl, i) => {
-              return (
-                <Box
-                  key={i}
-                >
-                  <RectangleComponent
-                    title={`View ${i + 1}`}
-                    placement={'left'}
-                    selected={i === selected}
-                    onDelete={() => {
-                      setSelected('')
-                      deleteView(i)
-                    }} // Call deleteView method with index as parameter
-                    onClick={() => {
-                      window.location.replace(viewUrl)
-                      setSelected(i)
-                    }}
-                    onClickStable={() => setStable(true)}
-                    icon={icon(iconNumber)}
-                  />
-                </Box>
-              )
-            })}
-          </Box> :
-          <Box
-            sx={{
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'center',
-              'alignItems': 'center',
-              'height': '160px',
-              'width': '240px',
-              'borderRadius': '5px',
-              // 'backgroundColor': theme.palette.background.button,
-              // 'border': `1px solid ${theme.palette.background.button}`,
-              'marginTop': '20px',
-              'marginBottom': '20px',
-              'overflow': 'auto',
-              'scrollbarWidth': 'none', /* Firefox */
-              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-              '&::-webkit-scrollbar': {
-                width: '0em',
-                background: 'transparent',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: 'transparent',
-              },
-            }}
-          >
-            <LogoBuildings style={{width: '200px', height: '200px'}}/>
-          </Box>
-        }
-
+        <Box
+          sx={{
+            'display': 'flex',
+            'flexDirection': 'column',
+            'justifyContent': 'flex-start',
+            'alignItems': 'center',
+            'height': '160px',
+            'width': '240px',
+            'borderRadius': '5px',
+            'backgroundColor': theme.palette.background.button,
+            'marginTop': '20px',
+            'marginBottom': '20px',
+            'overflow': 'auto',
+            'scrollbarWidth': 'none', /* Firefox */
+            '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+            '&::-webkit-scrollbar': {
+              width: '0em',
+              background: 'transparent',
+            },
+            '&::-webkit-scrollbar-thumb': {
+              background: 'transparent',
+            },
+          }}
+        >
+          {savedViews.reverse().map((viewUrl, i) => {
+            return (
+              <Box
+                key={i}
+              >
+                <RectangleComponent
+                  title={`View ${i + 1}`}
+                  placement={'left'}
+                  selected={i === selected}
+                  onDelete={() => {
+                    setSelected('')
+                    deleteView(i)
+                  }} // Call deleteView method with index as parameter
+                  onClick={() => {
+                    window.location.replace(viewUrl)
+                    setSelected(i)
+                  }}
+                  icon={icon(iconNumber)}
+                />
+              </Box>
+            )
+          })}
+        </Box>
       </Box>
       <Box
         sx={{
@@ -309,7 +268,6 @@ export default function Panel() {
           marginBottom: '20px',
         }}
       >
-        {!stable ?
         <RectangularButton
           title={'Capture View'}
           onClick={() => {
@@ -317,17 +275,7 @@ export default function Panel() {
             setIconNumber(iconNumberCalc)
           }}
           icon={<CaptureIcon style={{width: '12px', height: '12px'}}/>}
-        /> :
-        <Paper sx={{marginBottom: '10px'}}>
-          <InputBar
-            startAdorment={<RobotIcon/>}
-            placeholder='Description'
-            onSubmit={() => {
-              setStable(false)
-            }}
-          />
-        </Paper>
-        }
+        />
       </Box>
     </Paper>
   )

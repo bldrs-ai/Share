@@ -4,6 +4,7 @@ import Divider from '@mui/material/Divider'
 import InputBase from '@mui/material/InputBase'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/icons/Clear.svg'
+import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
@@ -25,6 +26,7 @@ export default function InputBar({startAdorment, onSubmit, placeholder}) {
         'display': 'flex',
         'alignItems': 'center',
         'padding': '2px 2px 2px 2px',
+        'width': '260px',
         '& .MuiInputBase-root': {
           flex: 1,
         },
@@ -67,6 +69,15 @@ export default function InputBar({startAdorment, onSubmit, placeholder}) {
             setInputText('')
           }}
           icon={<ClearIcon style={{opacity: '.6'}}/>}
+        /> : null
+      }
+      {inputText.length > 0 ?
+        <TooltipIconButton
+          title='clear'
+          size='small'
+          placement='bottom'
+          onClick={onSubmit}
+          icon={<BackIcon style={{opacity: '.6', transform: 'rotate(180deg)', width: '14px', height: '14px'}}/>}
         /> : null
       }
     </Box>
