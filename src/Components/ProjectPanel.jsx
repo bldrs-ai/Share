@@ -229,10 +229,12 @@ export default function ProjectPanel({fileOpen}) {
             'flexDirection': 'column',
             'justifyContent': 'flex-start',
             'alignItems': 'center',
-            'height': '160px',
+            'height': '190px',
             'width': '240px',
             'borderRadius': '10px',
-            'backgroundColor': theme.palette.background.button,
+            // 'backgroundColor': theme.palette.background.button,
+            'border': `1px solid ${theme.palette.background.button}`,
+            'padding': '6px 0px',
             'marginBottom': '10px',
             'marginTop': '10px',
             'overflow': 'auto',
@@ -251,6 +253,9 @@ export default function ProjectPanel({fileOpen}) {
             return (
               <Box
                 key={i}
+                sx={{
+                  margin: '2px 0px',
+                }}
               >
                 <RectangularButton
                   title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
