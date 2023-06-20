@@ -25,7 +25,7 @@ export default function SnackBarMessage({message, severity, open}) {
           'position': 'relative',
           'bottom': '60px',
           'left': '-6px',
-          'fontWeight': 400,
+          'fontWeight': 500,
           'maxWidth': '450px',
           '@media (max-width: 900px)': {
             left: '18px',
@@ -33,6 +33,7 @@ export default function SnackBarMessage({message, severity, open}) {
             width: '256px',
             inlineSize: '256px',
             overflow: 'visible',
+            fontSize: '1em',
             overflowWrap: 'anywhere',
           },
         }}
