@@ -139,6 +139,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
+      hideActionButton={true}
       actionIcon={<UploadIcon/>}
       actionCb={openFile}
       content={
@@ -234,7 +235,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               &nbsp;to manage access to the project
             </Box>
           }
-          <Typography
+          {/* <Typography
             variant='h6'
             sx={{
               marginTop: '1em',
@@ -242,7 +243,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             }}
           >
             * Local files cannot yet be saved or shared.
-          </Typography>
+          </Typography> */}
         </Box>
       }
     />

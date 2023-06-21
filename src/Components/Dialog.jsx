@@ -25,6 +25,7 @@ export default function Dialog({
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
+  hideActionButton = true,
   content,
   actionTitle,
   actionCb,
@@ -75,16 +76,19 @@ export default function Dialog({
         </Typography>
         {content}
       </DialogContent>
-      <DialogActions
-        sx={{
-          overflowY: 'hidden',
-          padding: '0em 0em 2em 0em',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
-      </DialogActions>
+      {!hideActionButton &&
+        <DialogActions
+          sx={{
+            overflowY: 'hidden',
+            padding: '0em 0em 2em 0em',
+            display: 'flex',
+            justifyContent: 'center',
+          }}
+        >
+          <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
+        </DialogActions>
+      }
+
     </MuiDialog>
   )
 }
