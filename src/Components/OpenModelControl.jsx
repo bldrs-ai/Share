@@ -148,7 +148,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             textAlign: 'left',
           }}
         >
-          <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
+          {/* <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/> */}
           {/* <p style={{padding: '0px 12px'}}>We recommend GitHub for project hosting, visit our {' '}
             <a
               target="_blank"

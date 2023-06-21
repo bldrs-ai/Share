@@ -19,6 +19,7 @@ import UploadIcon from '../assets/icons/Upload.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import {TooltipIconButton} from './Buttons'
+import OpenModelControl from '../Components/OpenModelControl'
 
 
 const icon = (iconNumber) => {
@@ -102,11 +103,12 @@ const LoginComponent = () => {
  * @param {Function} modelPath object containing information about the location of the model
  * @return {React.Component}
  */
-export default function ProjectPanel({fileOpen}) {
+export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
   const [showSample, setShowSample] = useState(true)
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
   const theme = useTheme()
+  const {isAuthenticated} = useAuth0()
 
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
@@ -214,6 +216,7 @@ export default function ProjectPanel({fileOpen}) {
             placement={'bottom'}
             icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
           />
+          {!isAuthenticated &&
           <TooltipIconButton
             title={'Login'}
             placement={'bottom'}
@@ -221,6 +224,8 @@ export default function ProjectPanel({fileOpen}) {
             onClick={() => setShowSample(false)}
             icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
           />
+          }
+          {!isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>}
         </Box>
         {showSample ?
         <Box

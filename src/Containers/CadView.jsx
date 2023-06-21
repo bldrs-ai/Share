@@ -761,7 +761,7 @@ export default function CadView({
                 />
               }
               {showProjectPanel && showControls &&
-                <ProjectPanel fileOpen={loadLocalFile}/>
+                <ProjectPanel fileOpen={loadLocalFile} modelPathDefined={modelPath} isLocalModel={isLocalModel}/>
               }
               {showViewsPanel && showControls &&
                 <SavedViewsPanel/>
