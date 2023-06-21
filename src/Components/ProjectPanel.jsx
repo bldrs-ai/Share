@@ -225,7 +225,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
           />
           }
-          {!isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>}
+          {isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>}
         </Box>
         {showSample ?
         <Box

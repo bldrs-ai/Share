@@ -127,7 +127,7 @@ export default function SearchBar({deselectItems}) {
           elevation={0}
           startAdornment={
             <InputAdornment position="start">
-              <SearchIcon style={{width: '13px', height: '13px', opacity: .5}}/>
+              <SearchIcon style={{width: '15px', height: '15px', opacity: .5}}/>
             </InputAdornment>
           }
           sx={{
