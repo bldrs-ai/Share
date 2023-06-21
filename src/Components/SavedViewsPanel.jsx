@@ -199,7 +199,7 @@ export default function Panel() {
             fontWeight: '500',
           }}
         >
-          { !stable ? 'Captured Views' : 'Create with AI'}
+          { !stable ? 'Capture Views' : 'Create with AI'}
 
         </Typography>
         <Box
