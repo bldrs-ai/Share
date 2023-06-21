@@ -109,6 +109,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
   const navigate = useNavigate()
   const theme = useTheme()
   const {isAuthenticated} = useAuth0()
+  // eslint-disable-next-line no-console
+  console.log('is authenticated from projects', isAuthenticated)
 
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
