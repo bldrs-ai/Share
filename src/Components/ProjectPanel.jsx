@@ -174,7 +174,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               alignItems: 'center',
             }}
           >
-            {showSample ? 'Sample Projects' : 'Login'}
+            {showSample ? 'Projects' : 'Login'}
           </Typography>
         </Box>
         <Box

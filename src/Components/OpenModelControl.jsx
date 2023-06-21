@@ -14,9 +14,11 @@ import useStore from '../store/useStore'
 // import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
-import OpenIcon from '../assets/icons/Open.svg'
+// import OpenIcon from '../assets/icons/Open.svg'
+import ViewCubeIcon from '../assets/icons/view/ViewCube1.svg'
 // import OpenSaveIcon from '../assets/icons/OpenNew.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
+import GitHubIcon from '@mui/icons-material/GitHub'
 
 
 /**
@@ -55,7 +57,7 @@ export default function OpenModelControl({fileOpen, modelPath, isLocalModel}) {
         title={'Projects'}
         showTitle={false}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<OpenIcon/>}
+        icon={<ViewCubeIcon/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
@@ -134,8 +136,8 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   return (
     <Dialog
-      icon={<OpenIcon/>}
-      headerText={'Projects'}
+      icon={<GitHubIcon style={{opacity: .5}}/>}
+      headerText={'Github Repos'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
