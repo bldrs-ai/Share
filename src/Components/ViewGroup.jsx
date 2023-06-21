@@ -35,7 +35,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
       <StandardViewsMenu/>
       <CutPlaneMenu/>
       <TooltipIconButton
-        title={'Captured views'}
+        title={'Capture views'}
         placement={'top'}
         icon={<CaptureIcon/>}
         selected={showViewsPanel}

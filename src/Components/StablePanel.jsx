@@ -192,7 +192,7 @@ export default function StablePanel() {
             fontWeight: '500',
           }}
         >
-          Captured Views
+          Capture Views
         </Typography>
         <Box
           sx={{
