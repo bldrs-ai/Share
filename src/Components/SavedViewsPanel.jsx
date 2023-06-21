@@ -1,4 +1,3 @@
-/* eslint-disable max-len */
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
@@ -13,16 +12,14 @@ import {
 } from './CameraControl'
 import useTheme from '@mui/styles/useTheme'
 import SavedView from '../assets/icons/view/ViewCube2.svg'
-import SDView from '../assets/icons/view/ViewCube2_selected.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
+import ViewCubeMagic from '../assets/icons/view/ViewCubeMagic.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
 import PublishIcon from '../assets/icons/Publish.svg'
 import RobotIcon from '../assets/icons/Robot1.svg'
-// import SDIcon from '../assets/icons/SDIcon.svg'
 import LogoBuildings from '../assets/Logo_Buildings.svg'
-// import BackIcon from '../assets/icons/Back.svg'
 
 
 const icon = (iconNumber) => {
@@ -60,7 +57,9 @@ const RectangleComponent = ({title, onClick, onDelete, onClickStable, selected})
     'alignItems': 'center',
     'justifyContent': 'space-between',
     'cursor': 'pointer',
-    'color': selected ? `${theme.palette.secondary.main}` : isHovered ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
+    'color':
+      selected ? `${theme.palette.secondary.main}` :
+      isHovered ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
     '@media (max-width: 900px)': {
       color: selected ? `${theme.palette.secondary.main}` : `${theme.palette.primary.contrastText}`,
       bottom: '80px',
@@ -189,7 +188,7 @@ export default function Panel() {
             marginRight: '10px',
           }}
         >
-          { !stable ? <SavedView/> : <SDView/>}
+          { !stable ? <SavedView/> : <ViewCubeMagic/>}
         </Box>
         <Typography variant='h4'
           sx={{
@@ -200,7 +199,7 @@ export default function Panel() {
             fontWeight: '500',
           }}
         >
-          { !stable ? 'Captured Views' : 'AI rendering'}
+          { !stable ? 'Captured Views' : 'Create with AI'}
 
         </Typography>
         <Box
@@ -280,8 +279,6 @@ export default function Panel() {
               'height': '160px',
               'width': '240px',
               'borderRadius': '5px',
-              // 'backgroundColor': theme.palette.background.button,
-              // 'border': `1px solid ${theme.palette.background.button}`,
               'marginTop': '20px',
               'marginBottom': '20px',
               'overflow': 'auto',

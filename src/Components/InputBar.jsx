@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import InputBase from '@mui/material/InputBase'
 import {TooltipIconButton} from './Buttons'
-import ClearIcon from '../assets/icons/Clear.svg'
+// import ClearIcon from '../assets/icons/Clear.svg'
 import BackIcon from '../assets/icons/Back.svg'
 
 
@@ -60,7 +60,7 @@ export default function InputBar({startAdorment, onSubmit, placeholder}) {
         multiline
         placeholder={placeholder}
       />
-      {inputText.length > 0 ?
+      {/* {inputText.length > 0 ?
         <TooltipIconButton
           title='clear'
           size='small'
@@ -70,10 +70,10 @@ export default function InputBar({startAdorment, onSubmit, placeholder}) {
           }}
           icon={<ClearIcon style={{opacity: '.6'}}/>}
         /> : null
-      }
+      } */}
       {inputText.length > 0 ?
         <TooltipIconButton
-          title='clear'
+          title='Proceed'
           size='small'
           placement='bottom'
           onClick={onSubmit}
