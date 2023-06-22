@@ -208,10 +208,14 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                 marginBottom: '.5em',
               }}
             >
-              Please choose organization, repo and file to get access to the model.
-              <br/>
-              At the moment Builders can only load .ifc files.
-              Support for other CAD formats is coming soon.
+              <div>To access the required model on GitHub:</div>
+
+              <ul>
+                <li>Select the correct organization.</li>
+                <li>Find the relevant repository.</li>
+                <li>Choose the project file you need.</li>
+              </ul>
+              <div>Currently, we only support .ifc files, support for other CAD formats comming soon.</div>
             </Box>
           }
           {isAuthenticated &&
