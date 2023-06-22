@@ -25,7 +25,7 @@ export default function Dialog({
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  hideActionButton = true,
+  showActionButton = true,
   content,
   actionTitle,
   actionCb,
@@ -76,7 +76,7 @@ export default function Dialog({
         </Typography>
         {content}
       </DialogContent>
-      {!hideActionButton &&
+      {showActionButton &&
         <DialogActions
           sx={{
             overflowY: 'hidden',

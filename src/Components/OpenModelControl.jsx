@@ -141,7 +141,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
-      hideActionButton={true}
+      showActionButton={false}
       actionIcon={<UploadIcon/>}
       actionCb={openFile}
       content={
