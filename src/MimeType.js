@@ -1,12 +1,15 @@
 export const supportedTypes = ['ifc', 'obj']
 
 
+const fileTypeRegex = new RegExp(/(?:ifc|obj)/i)
+
+
 /**
  * @param {string} ext
  * @return {boolean} Is supported
  */
 export function isExtensionSupported(ext) {
-  return ext.match(/(?:ifc|obj)/i)
+  return ext.match(fileTypeRegex)
 }
 
 
@@ -25,14 +28,24 @@ export function pathSuffixSupported(pathWithSuffix) {
 
 /**
  * @param {string} filepath
- * @return {Array.<string>}
+ * @return {Array.<Array.<string>>}
  */
 export function splitAroundExtension(filepath) {
   const splitRegex = /\.(?:ifc|obj)/i
-  const match = splitRegex.exec(filepath)
+  const match = fileTypeRegex.exec(filepath)
   if (!match) {
-    throw new Error('Filepath must contain ".(ifc|obj)" (case-insensitive)')
+    throw new FilenameParseError('Filepath must contain ".(ifc|obj)" (case-insensitive)')
   }
   const parts = filepath.split(splitRegex)
   return {parts, match}
+}
+
+
+/** Custom error for better catch in UI. */
+export class FilenameParseError extends Error {
+  /** @param {string} msg */
+  constructor(msg) {
+    super(msg)
+    this.name = 'FilenameParseError'
+  }
 }
