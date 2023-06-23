@@ -24,7 +24,7 @@ describe('CameraControl', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
-      result.current.setViewerStore(viewer)
+      result.current.setViewer(viewer)
     })
     render(<ShareMock><CameraControl/></ShareMock>)
     expect(screen.getByText('Camera')).toBeInTheDocument()

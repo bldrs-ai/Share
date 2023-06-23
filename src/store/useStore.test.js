@@ -10,9 +10,8 @@ describe('UI slice', () => {
     })
     expect(result.current.snackMessage).toEqual(['loading'])
   })
-})
 
-describe('UI slice', () => {
+
   it('Set Drawer State', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
@@ -21,6 +20,7 @@ describe('UI slice', () => {
     expect(result.current.isDrawerOpen).toEqual(true)
   })
 })
+
 
 describe('IFC slice', () => {
   it('select an IFC element', () => {
@@ -39,28 +39,24 @@ describe('IFC slice', () => {
     },
     })
   })
-})
 
-describe('IFC slice', () => {
+
   it('set IFC model', () => {
     const {result} = renderHook(() => useStore((state) => state))
+    const model = {castShadow: false}
     act(() => {
-      result.current.setModelStore({castShadow: false})
+      result.current.setModel(model)
     })
-    expect(result.current.modelStore).toEqual(
-        {castShadow: false},
-    )
+    expect(result.current.model).toEqual(model)
   })
-})
 
-describe('IFC slice', () => {
+
   it('set IFC viewer', () => {
     const {result} = renderHook(() => useStore((state) => state))
+    const viewer = {GLTF: {GLTFModels: {}}}
     act(() => {
-      result.current.setViewerStore({GLTF: {GLTFModels: {}}})
+      result.current.setViewer(viewer)
     })
-    expect(result.current.viewerStore).toEqual(
-        {GLTF: {GLTFModels: {}}},
-    )
+    expect(result.current.viewer).toEqual(viewer)
   })
 })

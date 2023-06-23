@@ -24,7 +24,7 @@ import {floatStrTrim} from '../utils/strings'
  * @return {object} React component
  */
 export default function CameraControl() {
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
   const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
   const setCameraControls = useStore((state) => state.setCameraControls)
   const location = useLocation()

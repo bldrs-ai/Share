@@ -60,8 +60,8 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
   const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const cameraControls = useStore((state) => state.cameraControls)
-  const viewer = useStore((state) => state.viewerStore)
-  const model = useStore((state) => state.modelStore)
+  const viewer = useStore((state) => state.viewer)
+  const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
   const isPlanesOn = viewer.clipper.planes.length > 0
   const rowStyle = {
