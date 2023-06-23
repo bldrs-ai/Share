@@ -162,7 +162,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               paddingBottom: '2px',
             }}
           >
-            {showSample ? <ViewCube/> : <LoginIcon/>}
+            {showSample ? <ViewCube/> : <GitHubIcon style={{width: '24px', height: '24px', opacity: .5}}/>}
           </Box>
           <Typography variant='h4'
             sx={{
@@ -222,7 +222,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             placement={'bottom'}
             selected={!showSample}
             onClick={() => setShowSample(false)}
-            icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
+            icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
           />
           }
           {isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>}
