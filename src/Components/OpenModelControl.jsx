@@ -215,7 +215,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                 <li>Find the relevant repository.</li>
                 <li>Choose the project file you need.</li>
               </ul>
-              <div>Currently, we only support .ifc files, support for other CAD formats comming soon.</div>
+              <div>Currently you can only open .ifc models, support for .obj format comming soon.</div>
             </Box>
           }
           {isAuthenticated &&

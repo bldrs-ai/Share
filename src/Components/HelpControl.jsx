@@ -11,6 +11,9 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import ViewIcon from '../assets/icons/View.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
 import RobotIcon from '../assets/icons/Robot3.svg'
+import PlanIcon from '../assets/icons/Plan.svg'
+import IsolateIcon from '../assets/icons/Isolate.svg'
+import ShortcutIcon from '../assets/icons/Shortcut.svg'
 
 
 /**
@@ -76,6 +79,57 @@ const HelpComponent = ({icon, description}) => {
   )
 }
 
+const HelpList = () => {
+  return (
+    <Box
+      sx={{
+        marginLeft: '10px',
+      }}
+    >
+      <HelpComponent
+        icon={<ShareIcon/>}
+        description={'Share sectioned portions of the project'}
+      />
+      <HelpComponent
+        icon={<NotesIcon/>}
+        description={'Attach text snippets to 3D elements'}
+      />
+      <HelpComponent
+        icon={<ViewIcon/>}
+        description={'Study the project using standard views and sections'}
+      />
+      <HelpComponent
+        icon={<TreeIcon/>}
+        description={'Navigate the project using element hierarchies'}
+      />
+      <HelpComponent
+        icon={<RobotIcon/>}
+        description={'Generate renderings of the project using text prompts'}
+      />
+    </Box>
+  )
+}
+
+const ShortCutList = () => {
+  return (
+    <Box
+      sx={{
+        marginLeft: '10px',
+      }}
+    >
+      <HelpComponent
+        icon={<PlanIcon/>}
+        description={'To attach a plane to any surface, hover over a surface and press Q'}
+      />
+      <HelpComponent
+        icon={<IsolateIcon/>}
+        description={'To Isolate any element select the element and press I'}
+      />
+    </Box>
+  )
+}
+
+
 /**
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
@@ -83,6 +137,7 @@ const HelpComponent = ({icon, description}) => {
  */
 function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const theme = useTheme()
+  const [info, setInfo] = useState(true)
   /**
    * Close About dialog and redirect to Share instruction note
    */
@@ -94,8 +149,8 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<QuestionIcon/>}
-      headerText={'Help'}
+      icon={info ? <QuestionIcon/> : <ShortcutIcon/>}
+      headerText={info ? 'Help' : 'Shortcuts'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Share Instruction'}
@@ -105,44 +160,42 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         <Box
           sx={{
             width: '260px',
+            height: '280px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             alignItems: 'center',
           }}
         >
-          <HelpComponent
-            icon={<ShareIcon/>}
-            description={'Share sectioned portions of the project'}
-          />
-          <HelpComponent
-            icon={<NotesIcon/>}
-            description={'Attach text snippets to 3D elements'}
-          />
-          <HelpComponent
-            icon={<ViewIcon/>}
-            description={'Study the project using standard views and sections'}
-          />
-          <HelpComponent
-            icon={<TreeIcon/>}
-            description={'Navigate the project using element hierarchies'}
-          />
-          <HelpComponent
-            icon={<RobotIcon/>}
-            description={'Generate renderings of the project using text prompts'}
-          />
+          {info && <HelpList/>}
+          {!info && <ShortCutList/>}
           <Box
             sx={{
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'space-between',
-              width: '40px',
+              width: '26px',
               marginTop: '6px',
             }}
           >
-            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.main}`, borderRadius: '2px'}}/>
-            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.background}`, borderRadius: '2px'}}/>
-            <Box sx={{width: '10px', height: '10px', backgroundColor: `${theme.palette.secondary.background}`, borderRadius: '2px'}}/>
+            <Box
+              onClick={() => setInfo(true)}
+              sx={{
+                width: '10px',
+                height: '10px',
+                cursor: 'pointer',
+                backgroundColor: `${info ? theme.palette.secondary.background : theme.palette.secondary.main}`,
+                borderRadius: '2px'}}
+            />
+            <Box
+              onClick={() => setInfo(false)}
+              sx={{
+                width: '10px',
+                height: '10px',
+                cursor: 'pointer',
+                backgroundColor: `${info ? theme.palette.secondary.main : theme.palette.secondary.background}`,
+                borderRadius: '2px'}}
+            />
           </Box>
         </Box>
       }

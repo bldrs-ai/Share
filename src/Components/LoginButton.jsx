@@ -1,7 +1,8 @@
 import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import {TooltipIconButton} from './Buttons'
-import GitHubIcon from '@mui/icons-material/GitHub'
+// import GitHubIcon from '@mui/icons-material/GitHub'
+import LoginIcon from '../assets/icons/Login.svg'
 
 
 const LoginButton = ({
@@ -22,7 +23,7 @@ const LoginButton = ({
   return (
     <TooltipIconButton
       title={'Log in'}
-      icon={<GitHubIcon style={{width: '24px', height: '24px'}}/>}
+      icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
       onClick={onClick}
     />
   )
