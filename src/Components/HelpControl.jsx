@@ -14,6 +14,7 @@ import RobotIcon from '../assets/icons/Robot3.svg'
 import PlanIcon from '../assets/icons/Plan.svg'
 import IsolateIcon from '../assets/icons/Isolate.svg'
 import ShortcutIcon from '../assets/icons/Shortcut.svg'
+import ClearIcon from '../assets/icons/Clear.svg'
 
 
 /**
@@ -122,8 +123,24 @@ const ShortCutList = () => {
         description={'To attach a plane to any surface, hover over a surface and press Q'}
       />
       <HelpComponent
+        icon={<ClearIcon/>}
+        description={'To Clear all planes press W'}
+      />
+      <HelpComponent
         icon={<IsolateIcon/>}
         description={'To Isolate any element select the element and press I'}
+      />
+      <HelpComponent
+        icon={<IsolateIcon/>}
+        description={'To Hide any element select the element and press H'}
+      />
+      <HelpComponent
+        icon={<IsolateIcon/>}
+        description={'To UnHide any element select the element and press U'}
+      />
+      <HelpComponent
+        icon={<IsolateIcon/>}
+        description={'To Revel all hidden elements press R'}
       />
     </Box>
   )
@@ -160,7 +177,6 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         <Box
           sx={{
             width: '260px',
-            height: '280px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',

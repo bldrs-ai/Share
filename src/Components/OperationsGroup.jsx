@@ -1,15 +1,10 @@
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import ButtonGroup from '@mui/material/ButtonGroup'
-// import {useAuth0} from '@auth0/auth0-react'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
-// import ViewsMenu from './ViewsMenu'
-// import CombinedViewsMenu from './CombinedViewsMenu'
-// import StandardViewsMenu from './StandardViewsMenu'
 import ResourcesMenu from './ResourcesMenu'
-// import AboutControl from './About/AboutControl'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
@@ -20,8 +15,6 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import CollapseIcon from '../assets/icons/Collapse.svg'
 import IsolateIcon from '../assets/icons/Isolate.svg'
-// import CaptureIcon from '../assets/icons/Capture.svg'
-// import HelpControl from './HelpControl'
 
 
 /**
@@ -47,14 +40,11 @@ export default function OperationsGroup({deselectItems}) {
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
-  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+  // const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   // const isAppStoreEnabled = useExistInFeature('apps')
-  // const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
-  // const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const viewer = useStore((state) => state.viewer)
   const [isolate, setIsolate] = useState(false)
-  // const {isAuthenticated} = useAuth0()
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
     return isMobile ? turnOffIsHelpTooltips() : null
@@ -123,43 +113,9 @@ export default function OperationsGroup({deselectItems}) {
                 toggle('Notes')
               }}
             />
-
-            {/* <PlanesMenu/> */}
-            {/* <CombinedViewsMenu/> */}
-            {/* <StandardViewsMenu/> */}
-
-            {/* <TooltipIconButton
-              title='Notes'
-              icon={<CaptureIcon/>}
-              selected={isNotesOn}
-              onClick={() => {
-                turnOffTooltips()
-                toggle('Notes')
-              }}
-            /> */}
-          </ButtonGroup>
-          }
-
-          {isSettingsVisible &&
-          <ButtonGroup orientation='vertical'>
-            {/* <TooltipIconButton
-              title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
-              onClick={() => theme.toggleColorMode()}
-              icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
-            /> */}
-            {/* <TooltipIconButton
-              title='Help'
-              onClick={() => toggleIsHelpTooltips()}
-              selected={isHelpTooltips}
-              icon={<QuestionIcon/>}
-            /> */}
-            {/* <ResourcesMenu/> */}
-            {/* <HelpControl/> */}
           </ButtonGroup>
           }
           <ResourcesMenu/>
-          {/* <AboutControl/> */}
-          {/* Invisible */}
           <CameraControl/>
         </Paper>
         {(isSelectedElement() || isSelectedPlane() || isolate) &&
@@ -226,7 +182,6 @@ export default function OperationsGroup({deselectItems}) {
           'marginTop': '1em',
           'opacity': .9,
           '@media (max-width: 900px)': {
-            // padding: '1em 0.5em',
           },
           '.MuiButtonGroup-root + .MuiButtonGroup-root': {
             borderRadius: 0,
