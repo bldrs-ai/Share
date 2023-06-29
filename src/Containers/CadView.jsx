@@ -14,7 +14,7 @@ import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl
 import OperationsGroup from '../Components/OperationsGroup'
 import CreateGroup from '../Components/CreateGroup'
 import ControlsGroup from '../Components/ControlsGroup'
-import ViewGroup from '../Components/ViewGroup'
+// import ViewGroup from '../Components/ViewGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {useWindowDimensions} from '../Components/Hooks'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -770,7 +770,7 @@ export default function CadView({
           </Box>
         </Box>
       )}
-      {showControls &&
+      {/* {showControls &&
       <Box
         sx={{
           position: 'fixed',
@@ -784,7 +784,7 @@ export default function CadView({
       >
         <ViewGroup/>
       </Box>
-      }
+      } */}
       <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}

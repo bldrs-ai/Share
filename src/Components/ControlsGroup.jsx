@@ -3,10 +3,10 @@ import Paper from '@mui/material/Paper'
 import {TooltipIconButton} from './Buttons'
 import SaveModelControl from './SaveModelControl'
 import useStore from '../store/useStore'
-import SearchIcon from '../assets/icons/Search.svg'
+// import SearchIcon from '../assets/icons/Search.svg'
 // import OpenModelControl from '../Components/OpenModelControl'
 import OpenIcon from '../assets/icons/Open.svg'
-import TreeIcon from '../assets/icons/Tree.svg'
+// import TreeIcon from '../assets/icons/Tree.svg'
 // import StructureMenu from '../Components/StructureMenu'
 // import TreeMenu from './NavigationMenu'
 
@@ -21,16 +21,16 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   // const isBranches = useStore((state) => state.isBranches)
   // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
   // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
-  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
+  // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  // const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
+  // const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const showProjectPanel = useStore((state) => state.showProjectPanel)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
-  const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
-  const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
-  const hideNavPanel = useStore((state) => state.hideNavPanel)
+  // const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
+  // const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
+  // const hideNavPanel = useStore((state) => state.hideNavPanel)
 
   return (
     <Paper
@@ -63,7 +63,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
       {isLocalModel &&
           <SaveModelControl modelPath={modelPath}/>
       }
-      <TooltipIconButton
+      {/* <TooltipIconButton
         title={'Search'}
         showTitle={false}
         onClick={toggleIsSearchBarVisible}
@@ -71,8 +71,8 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         icon={<SearchIcon/>}
         placement={'bottom'}
         dataTestId='spatial-elements'
-      />
-      <TooltipIconButton
+      /> */}
+      {/* <TooltipIconButton
         title={'Navigation'}
         showTitle={false}
         onClick={() => {
@@ -84,8 +84,8 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         selected={showNavigationGroup || isNavPanelOpen}
         icon={<TreeIcon/>}
         placement={'bottom'}
-        dataTestId='spatial-elements'
-      />
+        dataTestId='spatial-elements' */}
+      {/* /> */}
       {/* {isBranches &&
         <TooltipIconButton
           title={'Versions'}
