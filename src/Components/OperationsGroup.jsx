@@ -96,13 +96,6 @@ export default function OperationsGroup({deselectItems}) {
             <ShareControl/>
           </ButtonGroup>
           }
-          {isLoginVisible &&
-          <ButtonGroup orientation='vertical'>
-            <AuthNav/>
-          </ButtonGroup>
-          }
-
-
           {isModelInteractionGroupVisible &&
           <ButtonGroup orientation='vertical'>
             <TooltipIconButton
@@ -114,6 +107,11 @@ export default function OperationsGroup({deselectItems}) {
                 toggle('Notes')
               }}
             />
+          </ButtonGroup>
+          }
+          {isLoginVisible &&
+          <ButtonGroup orientation='vertical'>
+            <AuthNav/>
           </ButtonGroup>
           }
           <ResourcesMenu/>

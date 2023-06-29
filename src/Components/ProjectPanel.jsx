@@ -283,7 +283,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             'width': '240px',
             'borderRadius': '10px',
             'backgroundColor': theme.palette.background.button,
-            'marginBottom': '10px',
+            'marginBottom': '20px',
             'marginTop': '10px',
             'overflow': 'auto',
             'scrollbarWidth': 'none', /* Firefox */
@@ -301,24 +301,27 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
         </Box>
         }
       </Box>
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          marginBottom: '10px',
-        }}
-      >
-        <TooltipIconButton
-          title={'Load .ifc or .obj files from your computer'}
-          onClick={() => {
-            fileOpen()
+      {showSample &&
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            marginBottom: '10px',
           }}
-          selected={true}
-          placement={'bottom'}
-          icon={<UploadIcon/>}
-        />
-      </Box>
+        >
+          <TooltipIconButton
+            title={'Load .ifc or .obj files from your computer'}
+            onClick={() => {
+              fileOpen()
+            }}
+            selected={true}
+            placement={'bottom'}
+            icon={<UploadIcon/>}
+          />
+        </Box>
+      }
+
     </Paper>
   )
 }
