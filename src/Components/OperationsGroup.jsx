@@ -7,7 +7,7 @@ import CameraControl from './CameraControl'
 import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
-// import AuthNav from './AuthNav'
+import AuthNav from './AuthNav'
 import ClearIcon from '../assets/icons/Clear.svg'
 import ListIcon from '../assets/icons/List.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
@@ -37,7 +37,7 @@ export default function OperationsGroup({deselectItems}) {
   const cutPlanes = useStore((state) => state.cutPlanes)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
-  // const isLoginVisible = useStore((state) => state.isLoginVisible)
+  const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   // const isSettingsVisible = useStore((state) => state.isSettingsVisible)
@@ -90,11 +90,11 @@ export default function OperationsGroup({deselectItems}) {
             },
           }}
         >
-          {/* {isLoginVisible &&
+          {isLoginVisible &&
           <ButtonGroup orientation='vertical'>
             <AuthNav/>
           </ButtonGroup>
-          } */}
+          }
 
           {isCollaborationGroupVisible &&
           <ButtonGroup orientation='vertical'>
