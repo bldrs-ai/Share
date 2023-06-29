@@ -90,17 +90,18 @@ export default function OperationsGroup({deselectItems}) {
             },
           }}
         >
-          {isLoginVisible &&
-          <ButtonGroup orientation='vertical'>
-            <AuthNav/>
-          </ButtonGroup>
-          }
 
           {isCollaborationGroupVisible &&
           <ButtonGroup orientation='vertical'>
             <ShareControl/>
           </ButtonGroup>
           }
+          {isLoginVisible &&
+          <ButtonGroup orientation='vertical'>
+            <AuthNav/>
+          </ButtonGroup>
+          }
+
 
           {isModelInteractionGroupVisible &&
           <ButtonGroup orientation='vertical'>
