@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault, navigateToRandomSampleModel} from '../Share'
@@ -14,7 +15,7 @@ import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl
 import OperationsGroup from '../Components/OperationsGroup'
 import CreateGroup from '../Components/CreateGroup'
 import ControlsGroup from '../Components/ControlsGroup'
-// import ViewGroup from '../Components/ViewGroup'
+import ViewGroup from '../Components/ViewGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {useWindowDimensions} from '../Components/Hooks'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
@@ -115,6 +116,7 @@ export default function CadView({
   const isOpenControlVisible = useStore((state) => state.isOpenControlVisible)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
   const showProjectPanel = useStore((state) => state.showProjectPanel)
+  const {isAuthenticated} = useAuth0()
 
 
   // Place Mark
@@ -770,7 +772,7 @@ export default function CadView({
           </Box>
         </Box>
       )}
-      {/* {showControls &&
+      {showControls && isAuthenticated &&
       <Box
         sx={{
           position: 'fixed',
@@ -784,7 +786,7 @@ export default function CadView({
       >
         <ViewGroup/>
       </Box>
-      } */}
+      }
       <Logo onClick={() => navigateToRandomSampleModel(navigate)}/>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
