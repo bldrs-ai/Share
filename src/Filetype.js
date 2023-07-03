@@ -1,6 +1,16 @@
-// Only differ by the leading '.'
-const fileTypeRegex = new RegExp(/(?:ifc|obj)/i)
-const fileSuffixRegex = new RegExp(/\.(?:ifc|obj)/i)
+export const supportedTypes = ['ifc']
+
+
+/** Make a non-capturing group of a choice of filetypes. */
+const typeRegexStr = `(?:${supportedTypes.join('|')})`
+
+
+/** */
+const filetypeRegex = new RegExp(typeRegexStr, 'i')
+
+
+/** Prepend it with a '.' to make a file suffix*/
+const fileSuffixRegex = new RegExp(`\\.${typeRegexStr}`, 'i')
 
 
 /**
@@ -8,7 +18,7 @@ const fileSuffixRegex = new RegExp(/\.(?:ifc|obj)/i)
  * @return {boolean} Is supported
  */
 export function isExtensionSupported(ext) {
-  return ext.match(fileTypeRegex) !== null
+  return ext.match(filetypeRegex) !== null
 }
 
 

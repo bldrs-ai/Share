@@ -2,7 +2,7 @@ import {
   looksLikeLink,
   trimToPath,
   githubUrlOrPathToSharePath} from './ShareRoutes'
-import {supportedTypes} from './MimeType'
+import {supportedTypes} from './Filetype'
 
 
 jest.mock('three')
