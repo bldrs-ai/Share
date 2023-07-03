@@ -450,22 +450,13 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                   alignItems: 'center',
                 }}
               >
-                <TooltipIconButton
-                  title={'Open from your computer'}
+                <RectangularButton
+                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
                   onClick={() => {
                     fileOpen()
                   }}
                   placement={'bottom'}
-                  icon={<UploadIcon style={{opacity: .9}}/>}
-                />
-                <TooltipIconButton
-                  title={'Open from GitHub'}
-                  // selected={true}
-                  onClick={() => {
-                    fileOpen()
-                  }}
-                  placement={'bottom'}
-                  icon={<GitHubIcon style={{width: '22px', height: '22px', opacity: .9}}/>}
+                  icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
                 />
               </Box>
             </>
@@ -480,17 +471,17 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
-            marginBottom: '10px',
+            paddingBottom: '16px',
+            paddingTop: '6px',
           }}
         >
-          <TooltipIconButton
-            title={'Open from your computer'}
+          <RectangularButton
+            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
             onClick={() => {
               fileOpen()
             }}
-            // selected={true}
             placement={'bottom'}
-            icon={<UploadIcon/>}
+            icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
           />
         </Box>
       }
