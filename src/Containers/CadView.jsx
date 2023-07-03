@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
+import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
@@ -293,49 +294,84 @@ export default function CadView({
     setIsLoading(true)
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
-    const loadedModel = await viewer.loadIfcUrl(
-        ifcURL,
-        !urlHasCameraParams(), // fit to frame
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.loaded)) {
-            const loadedBytes = progressEvent.loaded
-            // eslint-disable-next-line no-magic-numbers
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        },
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}`)
-        })
-    await viewer.isolator.setModel(loadedModel)
 
-    Privacy.recordEvent('select_content', {
-      content_type: 'ifc_model',
-      item_id: filepath,
-    })
-    setIsLoading(false)
+    let loadedModel
+    if (ifcURL.indexOf('.obj') !== -1) {
+      // loadedModel = await loadObj(ifcURL)
+      const objLoader = new OBJLoader()
+      // objLoader.setCrossOrigin('no-cors')
+      try {
+        async function doLoad() {
+          return new Promise((resolve, reject) => {
+            objLoader.load(
+                ifcURL,
+                (obj) => {
+                  resolve(obj)
+                },
+                () => {console.log('loading...')},
+                (err) => {
+                  reject(err)
+                },
+            )
+          })
+        }
+        const loadedObj = await doLoad()
+        
+        viewer.context.scene.add(loadedObj)
+        const fakeModel = {model: loadedObj}
+        setModel(fakeModel)
+        setModelStore(fakeModel)
+        updateLoadedFileInfo(uploadedFile, ifcURL)
+        console.log('ifcURL loaded final: ', loadedObj)
+        return loadedObj
+      } catch (e) {
+        console.error('COULD NOT LOAD: ', e)
+        return null
+      }
+    } else {
+      loadedModel = await viewer.loadIfcUrl(
+          ifcURL,
+          !urlHasCameraParams(), // fit to frame
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.loaded)) {
+              const loadedBytes = progressEvent.loaded
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          },
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          })
+      Privacy.recordEvent('select_content', {
+        content_type: 'ifc_model',
+        item_id: filepath,
+      })
+      await viewer.isolator.setModel(loadedModel)
 
-    if (loadedModel) {
-      // Fix for https://github.com/bldrs-ai/Share/issues/91
-      //
-      // TODO(pablo): huge hack. Somehow this is getting incremented to
-      // 1 even though we have a new IfcViewer instance for each file
-      // load.  That modelID is used in the IFCjs code as [modelID] and
-      // leads to undefined refs e.g. in prePickIfcItem.  The id should
-      // always be 0.
-      loadedModel.modelID = 0
-      setModel(loadedModel)
-      setModelStore(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcURL)
+      if (loadedModel) {
+        // Fix for https://github.com/bldrs-ai/Share/issues/91
+        //
+        // TODO(pablo): huge hack. Somehow this is getting incremented to
+        // 1 even though we have a new IfcViewer instance for each file
+        // load.  That modelID is used in the IFCjs code as [modelID] and
+        // leads to undefined refs e.g. in prePickIfcItem.  The id should
+        // always be 0.
+        loadedModel.modelID = 0
+        setModel(loadedModel)
+        setModelStore(loadedModel)
+        updateLoadedFileInfo(uploadedFile, ifcURL)
+        return loadedModel
+      }
+
+      debug().error('CadView#loadIfc: Model load failed!')
       return loadedModel
     }
-
-    debug().error('CadView#loadIfc: Model load failed!')
-    return loadedModel
+    setIsLoading(false)
   }
 
 
@@ -345,6 +381,7 @@ export default function CadView({
    * @param {object} m IFCjs loaded model.
    */
   async function onModel(m) {
+    if (true) return
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)

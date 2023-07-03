@@ -1,4 +1,4 @@
-export const supportedTypes = ['ifc']
+export const supportedTypes = ['ifc', 'obj']
 
 
 /** Make a non-capturing group of a choice of filetypes. */
