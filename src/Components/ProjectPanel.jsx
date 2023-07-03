@@ -426,8 +426,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'center',
-              paddingBottom: '16px',
-              paddingTop: '6px',
+              paddingBottom: '26px',
+              paddingTop: '16px',
             }}
           >
             <RectangularButton
