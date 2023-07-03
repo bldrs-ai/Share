@@ -20,8 +20,9 @@ import UploadIcon from '../assets/icons/Upload.svg'
 // import ProceedIcon from '../assets/icons/Proceed.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
+import OpenIcon from '../assets/icons/OpenFolder.svg'
 import {TooltipIconButton} from './Buttons'
-import OpenModelControl from '../Components/OpenModelControl'
+// import OpenModelControl from '../Components/OpenModelControl'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 
 
@@ -103,7 +104,7 @@ const LoginComponent = () => {
   )
 }
 
-const ProjectAccess = ({isDialogDisplayed, setIsDialogDisplayed, fileOpen}) => {
+const ProjectAccess = () => {
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
@@ -346,7 +347,15 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
           />
           }
-          {isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>}
+          {/* {isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>} */}
+          {isAuthenticated &&
+          <TooltipIconButton
+            title={'Project Access'}
+            placement={'bottom'}
+            selected={!showSample}
+            onClick={() => setShowSample(false)}
+            icon={<OpenIcon style={{width: '20px', height: '20px'}}/>}
+          />}
         </Box>
         {showSample ?
         <Box
@@ -418,7 +427,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             },
           }}
         >
-          {isAuthenticated &&
+          {!isAuthenticated &&
             <>
               <LoginComponent/>
               <RectangularButton
@@ -430,7 +439,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               />
             </>
           }
-          {!isAuthenticated &&
+          {isAuthenticated &&
             <>
               <ProjectAccess/>
               <Box
