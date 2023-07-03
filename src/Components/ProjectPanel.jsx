@@ -428,7 +428,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           }}
         >
           {!isAuthenticated &&
-            <>
+            <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
               <LoginComponent/>
               <RectangularButton
                 title={'Login to GitHub'}
@@ -437,7 +437,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 }}
                 icon={<GitHubIcon style={{opacity: .5}}/>}
               />
-            </>
+            </Box>
           }
           {isAuthenticated &&
             <>
