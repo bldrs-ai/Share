@@ -10,7 +10,7 @@ import debug from './utils/debug'
 import {assertDefined} from './utils/assert'
 import {handleBeforeUnload} from './utils/event'
 import Share from './Share'
-import {pathSuffixSupported} from './MimeType'
+import {pathSuffixSupported} from './Filetype'
 
 
 /**

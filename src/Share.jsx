@@ -10,7 +10,7 @@ import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import {handleBeforeUnload} from './utils/event'
-import {splitAroundExtension} from './MimeType'
+import {splitAroundExtension} from './Filetype'
 import Styles from './Styles'
 
 
@@ -138,8 +138,8 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   if (filepath === '') {
     return null
   }
-  const {parts, match} = splitAroundExtension(filepath)
-  filepath = `/${parts[0]}${match[0]}`
+  const {parts, extension} = splitAroundExtension(filepath)
+  filepath = `/${parts[0]}${extension}`
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:
     //   /v/p/*.  It should be only the filename.

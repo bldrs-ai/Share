@@ -1,7 +1,6 @@
-export const supportedTypes = ['ifc', 'obj']
-
-
+// Only differ by the leading '.'
 const fileTypeRegex = new RegExp(/(?:ifc|obj)/i)
+const fileSuffixRegex = new RegExp(/\.(?:ifc|obj)/i)
 
 
 /**
@@ -9,7 +8,7 @@ const fileTypeRegex = new RegExp(/(?:ifc|obj)/i)
  * @return {boolean} Is supported
  */
 export function isExtensionSupported(ext) {
-  return ext.match(fileTypeRegex)
+  return ext.match(fileTypeRegex) !== null
 }
 
 
@@ -27,17 +26,18 @@ export function pathSuffixSupported(pathWithSuffix) {
 
 
 /**
+ * e.g. for foo.ifc/bar => {parts: ['foo', '/bar'], extension: '.ifc'}
+ *
  * @param {string} filepath
- * @return {Array.<Array.<string>>}
+ * @return {Array.<Array.<string>>} {parts, extension}
  */
 export function splitAroundExtension(filepath) {
-  const splitRegex = /\.(?:ifc|obj)/i
-  const match = fileTypeRegex.exec(filepath)
+  const match = fileSuffixRegex.exec(filepath)
   if (!match) {
     throw new FilenameParseError('Filepath must contain ".(ifc|obj)" (case-insensitive)')
   }
-  const parts = filepath.split(splitRegex)
-  return {parts, match}
+  const parts = filepath.split(fileSuffixRegex)
+  return {parts, extension: match[0]}
 }
 
 
