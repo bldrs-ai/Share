@@ -136,9 +136,18 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   let m = null
   let filepath = urlParams['*']
   if (filepath === '') {
+    alert(`Must provide a filepath`)
     return null
   }
-  const {parts, extension} = splitAroundExtension(filepath)
+  let parts
+  let extension
+  try {
+    ({parts, extension} = splitAroundExtension(filepath))
+  } catch (e) {
+    alert(`Unsupported filetype: ${filepath}`)
+    debug().error(e)
+    return null
+  }
   filepath = `/${parts[0]}${extension}`
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:

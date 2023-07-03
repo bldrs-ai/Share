@@ -1,4 +1,5 @@
 import {
+  FilenameParseError,
   isExtensionSupported,
   pathSuffixSupported,
   splitAroundExtension,
@@ -28,5 +29,8 @@ describe('Filetype', () => {
       expect(parts).toStrictEqual(['asdf', '/blah'])
       expect(extension).toStrictEqual(`.${ext}`)
     }
+    expect(() => {
+      splitAroundExtension(`asdf.obj/blah`)
+    }).toThrow(FilenameParseError)
   })
 })
