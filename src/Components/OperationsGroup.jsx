@@ -2,7 +2,6 @@ import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
-import {useAuth0} from '@auth0/auth0-react'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import ResourcesMenu from './ResourcesMenu'
@@ -47,7 +46,6 @@ export default function OperationsGroup({deselectItems}) {
   const viewer = useStore((state) => state.viewer)
   const [isolate, setIsolate] = useState(false)
   const isMobile = useIsMobile()
-  const {isAuthenticated} = useAuth0()
 
   const turnOffTooltips = () => {
     return isMobile ? turnOffIsHelpTooltips() : null
@@ -93,7 +91,7 @@ export default function OperationsGroup({deselectItems}) {
             },
           }}
         >
-          {isLoginVisible && isAuthenticated &&
+          {isLoginVisible &&
           <ButtonGroup orientation='vertical'>
             <AuthNav/>
           </ButtonGroup>
@@ -114,11 +112,6 @@ export default function OperationsGroup({deselectItems}) {
                 toggle('Notes')
               }}
             />
-          </ButtonGroup>
-          }
-          {isLoginVisible && !isAuthenticated &&
-          <ButtonGroup orientation='vertical'>
-            <AuthNav/>
           </ButtonGroup>
           }
           <ResourcesMenu/>

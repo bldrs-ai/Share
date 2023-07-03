@@ -46,34 +46,36 @@ export default function Selector({setIsDialogDisplayed, label, selected, setSele
 const selectorStyles = (theme) => {
   return (
     {
-      'width': '260px',
+      'width': '230px',
       'padding': '0px 0px 12px 0px',
       '& .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.main,
       },
       '& .MuiInputLabel-root': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.contrastText,
+        fontWeight: 400,
       },
       '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
+        borderColor: theme.palette.primary.main,
       },
       '&:hover .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.main,
       },
       '&:hover .MuiInputLabel-root': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.main,
       },
       '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
+        borderColor: theme.palette.primary.main,
       },
       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.main,
       },
       '& .MuiInputLabel-root.Mui-focused': {
-        color: theme.palette.secondary.main,
+        color: theme.palette.primary.contrastText,
+        fontWeight: 400,
       },
       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
+        borderColor: theme.palette.primary.main,
       },
     }
   )
