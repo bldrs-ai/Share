@@ -218,7 +218,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
   const theme = useTheme()
   const {isAuthenticated, loginWithRedirect} = useAuth0()
   useEffect(() => {
-    if (!isAuthenticated) {
+    if (isAuthenticated) {
       setShowSample(false)
     }
   }, [isAuthenticated])
