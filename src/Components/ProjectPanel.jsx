@@ -17,12 +17,10 @@ import DeleteIcon from '../assets/icons/Delete.svg'
 import ViewCube from '../assets/icons/view/ViewCube1.svg'
 import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
-// import ProceedIcon from '../assets/icons/Proceed.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
 import {TooltipIconButton} from './Buttons'
-// import OpenModelControl from '../Components/OpenModelControl'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 
 
@@ -118,7 +116,6 @@ const ProjectAccess = () => {
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const {user} = useAuth0()
-  // const theme = useTheme()
 
   useEffect(() => {
     /**
@@ -173,13 +170,8 @@ const ProjectAccess = () => {
         'flexDirection': 'column',
         'justifyContent': 'flex-start',
         'alignItems': 'center',
-        // 'height': '200px',
         'width': '240px',
         'borderRadius': '10px',
-        // 'backgroundColor': theme.palette.background.button,
-        // 'border': `1px solid ${theme.palette.background.button} `,
-        // 'marginBottom': '20px',
-        // 'marginTop': '10px',
         'paddingTop': '10px',
         'overflow': 'auto',
         'scrollbarWidth': 'none', /* Firefox */
@@ -197,10 +189,128 @@ const ProjectAccess = () => {
       <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
       <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
       {selectedFileName !== '' &&
-        <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-          <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
-        </Box>
+      <Box sx={{textAlign: 'center', marginTop: '4px', marginBottom: '8px'}}>
+        <RectangularButton
+          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Access project</Box>}
+          onClick={() => {
+            navigateToFile()
+          }}
+          placement={'bottom'}
+          icon={<GitHubIcon style={{width: '28px', height: '20px', opacity: .5}}/>}
+        />
+      </Box>
       }
+    </Box>
+  )
+}
+
+const TitleBar = ({showSample}) => {
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  const theme = useTheme()
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0px 20px',
+        height: '60px',
+        fontWeight: '500',
+        borderBottom: `1px solid ${theme.palette.background.button}`,
+      }}
+    >
+      <Box
+        sx={{
+          width: '240px',
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: '12px',
+            paddingBottom: '2px',
+          }}
+        >
+          <ViewCube/>
+        </Box>
+        <Typography variant='h4'
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {showSample ? 'Sample Projects' : 'Projects'}
+        </Typography>
+      </Box>
+      <Box
+        onClick={toggleShowProjectPanel}
+      >
+        <DeleteIcon style={{width: '12px', height: '12px'}}/>
+      </Box>
+    </Box>
+  )
+}
+
+const ProjectsOptions = ({showSample, setShowSample}) => {
+  const {isAuthenticated} = useAuth0()
+  return (
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'row',
+        'justifyContent': 'center',
+        'alignItems': 'center',
+        'borderRadius': '10px',
+        'marginTop': '10px',
+        'overflow': 'auto',
+        'scrollbarWidth': 'none', /* Firefox */
+        '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+        '&::-webkit-scrollbar': {
+          width: '0em',
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'transparent',
+        },
+      }}
+    >
+      <TooltipIconButton
+        title={'Swiss Property Projects'}
+        onClick={() => setShowSample(true)}
+        selected={showSample}
+        placement={'bottom'}
+        icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
+      />
+
+      {!isAuthenticated &&
+      <TooltipIconButton
+        title={'Login with Github Account'}
+        placement={'bottom'}
+        selected={!showSample}
+        onClick={() => setShowSample(false)}
+        icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
+      />
+      }
+
+      {isAuthenticated &&
+      <TooltipIconButton
+        title={'Project Access'}
+        placement={'bottom'}
+        selected={!showSample}
+        onClick={() => setShowSample(false)}
+        icon={<OpenIcon style={{width: '20px', height: '20px'}}/>}
+      />}
+
     </Box>
   )
 }
@@ -239,6 +349,29 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
     Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
   }
 
+  const backgroundStyle = {
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'flex-start',
+    'alignItems': 'center',
+    'height': '190px',
+    'width': '240px',
+    'borderRadius': '10px',
+    'border': `1px solid ${theme.palette.background.button}`,
+    'padding': '6px 0px',
+    'marginBottom': '10px',
+    'marginTop': '10px',
+    'overflow': 'auto',
+    'scrollbarWidth': 'none', /* Firefox */
+    '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+    '&::-webkit-scrollbar': {
+      width: '0em',
+      background: 'transparent',
+    },
+    '&::-webkit-scrollbar-thumb': {
+      background: 'transparent',
+    },
+  }
 
   return (
     <Paper
@@ -253,56 +386,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
         opacity: .95,
       }}
     >
-      <Box
-        sx={{
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          padding: '0px 20px',
-          height: '60px',
-          fontWeight: '500',
-          borderBottom: `1px solid ${theme.palette.background.button}`,
-        }}
-      >
-        <Box
-          sx={{
-            width: '240px',
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-              marginRight: '12px',
-              paddingBottom: '2px',
-            }}
-          >
-            <ViewCube/>
-          </Box>
-          <Typography variant='h4'
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-            }}
-          >
-            {showSample ? 'Sample Projects' : 'Projects'}
-          </Typography>
-        </Box>
-        <Box
-          onClick={toggleShowProjectPanel}
-        >
-          <DeleteIcon style={{width: '12px', height: '12px'}}/>
-        </Box>
-      </Box>
+      <TitleBar showSample={showSample}/>
       <Box
         sx={{
           display: 'flex',
@@ -311,78 +395,9 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           alignItems: 'center',
         }}
       >
-        <Box
-          sx={{
-            'display': 'flex',
-            'flexDirection': 'row',
-            'justifyContent': 'center',
-            'alignItems': 'center',
-            'borderRadius': '10px',
-            'marginTop': '10px',
-            'overflow': 'auto',
-            'scrollbarWidth': 'none', /* Firefox */
-            '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-            '&::-webkit-scrollbar': {
-              width: '0em',
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'transparent',
-            },
-          }}
-        >
-          <TooltipIconButton
-            title={'Swiss Property Projects'}
-            onClick={() => setShowSample(true)}
-            selected={showSample}
-            placement={'bottom'}
-            icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
-          />
-          {!isAuthenticated &&
-          <TooltipIconButton
-            title={'Login with Github Account'}
-            placement={'bottom'}
-            selected={!showSample}
-            onClick={() => setShowSample(false)}
-            icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
-          />
-          }
-          {/* {isAuthenticated && <OpenModelControl modelPath={modelPathDefined} fileOpen={fileOpen} isLocalModel={isLocalModel}/>} */}
-          {isAuthenticated &&
-          <TooltipIconButton
-            title={'Project Access'}
-            placement={'bottom'}
-            selected={!showSample}
-            onClick={() => setShowSample(false)}
-            icon={<OpenIcon style={{width: '20px', height: '20px'}}/>}
-          />}
-        </Box>
-        {showSample ?
-        <Box
-          sx={{
-            'display': 'flex',
-            'flexDirection': 'column',
-            'justifyContent': 'flex-start',
-            'alignItems': 'center',
-            'height': '190px',
-            'width': '240px',
-            'borderRadius': '10px',
-            'border': `1px solid ${theme.palette.background.button}`,
-            'padding': '6px 0px',
-            'marginBottom': '10px',
-            'marginTop': '10px',
-            'overflow': 'auto',
-            'scrollbarWidth': 'none', /* Firefox */
-            '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-            '&::-webkit-scrollbar': {
-              width: '0em',
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'transparent',
-            },
-          }}
-        >
+        <ProjectsOptions showSample={showSample} setShowSample={setShowSample}/>
+        {showSample &&
+        <Box sx={backgroundStyle}>
           {Object.keys(modelPath).map((name, i) => {
             return (
               <Box
@@ -402,90 +417,88 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               </Box>
             )
           })}
-        </Box> :
-        <Box
-          sx={{
-            'display': 'flex',
-            'flexDirection': 'column',
-            'justifyContent': 'flex-start',
-            'alignItems': 'center',
-            // 'height': '220px',
-            'width': '240px',
-            'borderRadius': '10px',
-            // 'backgroundColor': theme.palette.background.button,
-            'marginBottom': '14px',
-            'marginTop': '10px',
-            'overflow': 'auto',
-            'scrollbarWidth': 'none', /* Firefox */
-            '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-            '&::-webkit-scrollbar': {
-              width: '0em',
-              background: 'transparent',
-            },
-            '&::-webkit-scrollbar-thumb': {
-              background: 'transparent',
-            },
-          }}
-        >
-          {!isAuthenticated &&
-            <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
-              <LoginComponent/>
-              <RectangularButton
-                title={'Login to GitHub'}
-                onClick={() => {
-                  login()
-                }}
-                icon={<GitHubIcon style={{opacity: .5}}/>}
-              />
-            </Box>
-          }
-          {isAuthenticated &&
-            <>
-              <ProjectAccess/>
-              <Box
-                sx={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
+        </Box>}
+        {showSample &&
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              paddingBottom: '16px',
+              paddingTop: '6px',
+            }}
+          >
+            <RectangularButton
+              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+              onClick={() => {
+                fileOpen()
+              }}
+              placement={'bottom'}
+              icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+            />
+          </Box>
+        }
+
+        {!showSample &&
+          <Box
+            sx={{
+              'display': 'flex',
+              'flexDirection': 'column',
+              'justifyContent': 'flex-start',
+              'alignItems': 'center',
+              'width': '240px',
+              'borderRadius': '10px',
+              'marginBottom': '14px',
+              'marginTop': '10px',
+              'overflow': 'auto',
+              'scrollbarWidth': 'none', /* Firefox */
+              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+              '&::-webkit-scrollbar': {
+                width: '0em',
+                background: 'transparent',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: 'transparent',
+              },
+            }}
+          >
+            {!isAuthenticated &&
+              <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
+                <LoginComponent/>
                 <RectangularButton
-                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+                  title={'Login to GitHub'}
                   onClick={() => {
-                    fileOpen()
+                    login()
                   }}
-                  placement={'bottom'}
-                  icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+                  icon={<GitHubIcon style={{opacity: .5}}/>}
                 />
               </Box>
-            </>
-          }
-
-        </Box>
+            }
+            {isAuthenticated &&
+              <>
+                <ProjectAccess/>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+                    onClick={() => {
+                      fileOpen()
+                    }}
+                    placement={'bottom'}
+                    icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+                  />
+                </Box>
+              </>
+            }
+          </Box>
         }
       </Box>
-      {showSample &&
-        <Box
-          sx={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            paddingBottom: '16px',
-            paddingTop: '6px',
-          }}
-        >
-          <RectangularButton
-            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
-            onClick={() => {
-              fileOpen()
-            }}
-            placement={'bottom'}
-            icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
-          />
-        </Box>
-      }
-
     </Paper>
   )
 }
