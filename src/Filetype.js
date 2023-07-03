@@ -36,15 +36,13 @@ export function pathSuffixSupported(pathWithSuffix) {
 
 
 /**
- * e.g. for foo.ifc/bar => {parts: ['foo', '/bar'], extension: '.ifc'}
- *
  * @param {string} filepath
- * @return {Array.<Array.<string>>} {parts, extension}
+ * @return {{parts: Array.<string>, extension: string}}
  */
 export function splitAroundExtension(filepath) {
   const match = fileSuffixRegex.exec(filepath)
   if (!match) {
-    throw new FilenameParseError('Filepath must contain ".(ifc|obj)" (case-insensitive)')
+    throw new FilenameParseError(`Filepath must contain ".${typeRegexStr}" (case-insensitive)`)
   }
   const parts = filepath.split(fileSuffixRegex)
   return {parts, extension: match[0]}

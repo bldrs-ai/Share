@@ -10,17 +10,12 @@ describe('Share', () => {
       filepath: '/as_Ifcdf.ifc',
       eltPath: '/1234',
     })
-    expect(getModelPath('/share', '/share/v/p', {'*': 'as_Ifcdf.obj/1234'})).toStrictEqual({
-      filepath: '/as_Ifcdf.obj',
-      eltPath: '/1234',
-    })
   })
 
 
   it('getModelPath parses mixed-case ifc filepaths', () => {
     for (const ext of [
       'ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc',
-      'obj', 'Obj', 'OBJ', 'ObJ', 'oBj', 'OBj',
     ]) {
       const inPath = `as_${ext}df.${ext}/1234`
       expect(getModelPath('/share', '/share/v/p', {'*': inPath})).toStrictEqual({
