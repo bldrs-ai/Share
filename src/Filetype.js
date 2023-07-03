@@ -1,5 +1,7 @@
 export const supportedTypes = ['ifc', 'obj']
 
+console.log('SUPPORTED TYPES: ', supportedTypes)
+
 
 /** Make a non-capturing group of a choice of filetypes. */
 const typeRegexStr = `(?:${supportedTypes.join('|')})`

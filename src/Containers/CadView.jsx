@@ -316,7 +316,6 @@ export default function CadView({
           })
         }
         const loadedObj = await doLoad()
-        
         viewer.context.scene.add(loadedObj)
         const fakeModel = {model: loadedObj}
         setModel(fakeModel)
