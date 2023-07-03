@@ -110,6 +110,7 @@ const ProjectAccess = () => {
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
   const navigate = useNavigate()
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
@@ -160,6 +161,7 @@ const ProjectAccess = () => {
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
       navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
+      toggleShowProjectPanel()
     }
   }
 
