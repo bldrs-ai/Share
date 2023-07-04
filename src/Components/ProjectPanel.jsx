@@ -175,6 +175,7 @@ const ProjectAccess = () => {
         'width': '240px',
         'borderRadius': '10px',
         'paddingTop': '10px',
+        'paddingBottom': '10px',
         'overflow': 'auto',
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
@@ -485,6 +486,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     flexDirection: 'row',
                     justifyContent: 'center',
                     alignItems: 'center',
+                    paddingBottom: '10px',
                   }}
                 >
                   <RectangularButton
