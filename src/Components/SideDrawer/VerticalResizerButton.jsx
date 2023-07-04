@@ -59,12 +59,13 @@ export default function VerticalResizerButton({
           if (expansionSidebarHeight < 0) {
             expansionSidebarHeight = 0
           }
-          if (expansionSidebarHeight > window.innerHeight) {
-            expansionSidebarHeight = window.innerHeight
+          if (expansionSidebarHeight > document.documentElement.clientHeight) {
+            expansionSidebarHeight = document.documentElement.clientHeight
           }
           if (expansionSidebarHeight < thickness) {
             expansionSidebarHeight = thickness
           }
+          // console.log('setSidebarHeight - expansionSidebarHeight - 1', expansionSidebarHeight)
           setSidebarHeight(expansionSidebarHeight)
           setIsExpanded(true)
         }
@@ -79,6 +80,7 @@ export default function VerticalResizerButton({
         expansionSidebarHeight = e.target.innerHeight
       }
       if (e.target.innerHeight < sidebarHeight) {
+        // console.log('setSidebarHeight - e.target.innerHeight', e.target.innerHeight)
         setSidebarHeight(e.target.innerHeight)
       }
     }
@@ -141,9 +143,11 @@ export default function VerticalResizerButton({
 
   useEffect(() => {
     if (isExpanded) {
+      // console.log('setSidebarHeight - expansionSidebarHeight - 2', expansionSidebarHeight)
       setSidebarHeight(expansionSidebarHeight)
     } else {
-      const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min(window.innerHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
+      const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min( document.documentElement.clientHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
+      // console.log('setSidebarHeight - expansionSidebarHeight', defaultHeight)
       setSidebarHeight(defaultHeight)
     }
   }, [isExpanded, setSidebarHeight])
@@ -199,4 +203,4 @@ export default function VerticalResizerButton({
 }
 
 
-let expansionSidebarHeight = window.innerHeight
+let expansionSidebarHeight = document.documentElement.clientHeight
