@@ -6,18 +6,19 @@ import {
   useLocation,
   useNavigate,
 } from 'react-router-dom'
-import {assertDefined} from './utils/assert'
-import Share from './Share'
 import debug from './utils/debug'
+import {assertDefined} from './utils/assert'
 import {handleBeforeUnload} from './utils/event'
+import Share from './Share'
+import {pathSuffixSupported} from './Filetype'
 
 
 /**
  * For URL design see: https://github.com/bldrs-ai/Share/wiki/URL-Structure
  *
  * A new model path will cause a new instance of CadView to be
- * instantiated, including a new IFC.js viewer.  Thus, each model has
- * its own IFC.js/three.js context.
+ * instantiated.  CadView will invoke the model loader and creates a
+ * THREE.Scene.  This scene is currently not re-used
  *
  * For example, a first page load of:
  *
@@ -110,7 +111,7 @@ function Forward({appPrefix}) {
  */
 export function looksLikeLink(input) {
   assertDefined(input)
-  return input.toLowerCase().endsWith('.ifc') && (
+  return pathSuffixSupported(input) && (
     input.startsWith('http') ||
       input.startsWith('/') ||
       input.startsWith('bldrs') ||
@@ -170,9 +171,11 @@ const pathParts = [
 ]
 
 
+// TODO(pablo): this is pretty ad-hoc.  Could be unified with MimeType
+// parsing.
 /**
- * Matches strings like '/org/repo/branch/dir1/dir2/file.ifc' with
- * an optional host prefix.
+ * Matches strings like '/org/repo/branch/dir1/dir2/file.(ifc|obj)'
+ * with an optional host prefix.
  */
 const re = new RegExp(`^/${pathParts.join('/')}$`)
 
