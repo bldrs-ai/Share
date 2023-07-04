@@ -136,6 +136,7 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   let m = null
   let filepath = urlParams['*']
   if (filepath === '') {
+    alert(`Must provide a filepath`)
     return null
   }
   let parts
