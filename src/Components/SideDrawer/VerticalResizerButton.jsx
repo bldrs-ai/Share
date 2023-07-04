@@ -51,7 +51,7 @@ export default function VerticalResizerButton({
         if (isResizing) {
           if (isOnTop) {
           // eslint-disable-next-line no-magic-numbers
-            expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + (thickness / 2)
+            expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY
           } else {
           // eslint-disable-next-line no-magic-numbers
             expansionSidebarHeight = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().top - (thickness / 2)
