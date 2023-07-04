@@ -51,7 +51,7 @@ export default function VerticalResizerButton({
         if (isResizing) {
           if (isOnTop) {
           // eslint-disable-next-line no-magic-numbers
-            expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY
+            expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + (thickness / 2)
           } else {
           // eslint-disable-next-line no-magic-numbers
             expansionSidebarHeight = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().top - (thickness / 2)
@@ -59,9 +59,9 @@ export default function VerticalResizerButton({
           if (expansionSidebarHeight < 0) {
             expansionSidebarHeight = 0
           }
-          // if (expansionSidebarHeight > document.documentElement.clientHeight) {
-          //   expansionSidebarHeight = document.documentElement.clientHeight
-          // }
+          if (expansionSidebarHeight > document.documentElement.clientHeight) {
+            expansionSidebarHeight = document.documentElement.clientHeight + 100
+          }
           if (expansionSidebarHeight < thickness) {
             expansionSidebarHeight = thickness
           }
