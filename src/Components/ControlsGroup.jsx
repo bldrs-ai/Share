@@ -64,17 +64,16 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
       {isLocalModel && isAuthenticated &&
           <SaveModelControl modelPath={modelPath}/>
       }
+      <TooltipIconButton
+        title={'Search / Open'}
+        showTitle={false}
+        onClick={toggleIsSearchBarVisible}
+        selected={isSearchBarVisible}
+        icon={<SearchIcon/>}
+        placement={'bottom'}
+        dataTestId='spatial-elements'
+      />
       {isAuthenticated &&
-        <>
-          <TooltipIconButton
-            title={'Search'}
-            showTitle={false}
-            onClick={toggleIsSearchBarVisible}
-            selected={isSearchBarVisible}
-            icon={<SearchIcon/>}
-            placement={'bottom'}
-            dataTestId='spatial-elements'
-          />
           <TooltipIconButton
             title={'Navigation'}
             showTitle={false}
@@ -89,9 +88,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
             placement={'bottom'}
             dataTestId='spatial-elements'
           />
-        </>
       }
-
       {/* {isBranches &&
         <TooltipIconButton
           title={'Versions'}
