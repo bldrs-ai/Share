@@ -1,4 +1,4 @@
-export const supportedTypes = ['ifc', 'obj']
+export const supportedTypes = ['ifc', 'obj', 'gltf']
 
 console.log('SUPPORTED TYPES: ', supportedTypes)
 

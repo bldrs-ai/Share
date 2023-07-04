@@ -1,5 +1,6 @@
 import {OBJLoader} from 'three/examples/jsm/loaders/OBJLoader'
 import {GLTFLoader} from 'three/examples/jsm/loaders/GLTFLoader'
+import {DRACOLoader} from 'three/examples/jsm/loaders/DRACOLoader'
 import * as Filetype from './Filetype'
 // import {IfcLoader} from './loaders/IfcLoader'
 import debug from './utils/debug'
@@ -14,7 +15,13 @@ export function findLoader(urlStr) {
   let loader = null
   switch (extension) {
     case '.obj': loader = new OBJLoader(); break
-    case '.gltf': loader = new GLTFLoader(); break
+    case '.gltf': {
+      loader = new GLTFLoader()
+      const dracoLoader = new DRACOLoader()
+      dracoLoader.setDecoderPath('/static/js/')
+      loader.setDRACOLoader(dracoLoader)
+      break
+    }
     // case '.ifc': loader = IfcLoader(); break
     default: // fallthrough
   }
@@ -23,7 +30,7 @@ export function findLoader(urlStr) {
 
 
 /** */
-export function load(urlStr, loader, setLoadingMessage) {
+export function doLoad(urlStr, loader, setLoadingMessage) {
   const loadingMessageBase = ''
   return new Promise((resolve, reject) => {
     loader.load(

@@ -296,12 +296,16 @@ export default function CadView({
     const finalUrl = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     const loader = Loader.findLoader(finalUrl)
+    console.log('LOADER CHOSEN: ', loader)
     let loadedModel
     if (loader !== null) {
-      loadedModel = await loader.load(finalUrl, loader, setLoadingMessage)
+      const promise = Loader.doLoad(finalUrl, loader, setLoadingMessage)
+      console.log('LOADED MODEL promise: ', promise)
+      loadedModel = await promise
+      console.log('LOADED MODEL: ', loadedModel)
       if (loadedModel) {
-        console.log('LOADED: ', loadedModel)
-        viewer.context.scene.add(loadedModel)
+        console.log('LOADED MODEL, setting scene...')
+        viewer.context.scene.add(finalUrl.indexOf('gltf') == - 1 ? loadedModel: loadedModel.scene)
         // await viewer.isolator.setModel(loadedModel)
       } else {
         console.log('LOAD Failed: ', finalUrl, loader, loadedModel)
