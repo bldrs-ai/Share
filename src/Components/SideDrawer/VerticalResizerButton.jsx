@@ -60,7 +60,8 @@ export default function VerticalResizerButton({
             expansionSidebarHeight = 0
           }
           if (expansionSidebarHeight > document.documentElement.clientHeight) {
-            expansionSidebarHeight = document.documentElement.clientHeight + 100
+            // eslint-disable-next-line no-magic-numbers
+            expansionSidebarHeight = '100vh'
           }
           if (expansionSidebarHeight < thickness) {
             expansionSidebarHeight = thickness
