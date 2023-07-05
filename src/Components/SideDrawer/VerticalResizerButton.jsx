@@ -51,10 +51,8 @@ export default function VerticalResizerButton({
       (mouseMoveEvent) => {
         if (isResizing) {
           if (isOnTop) {
-          // eslint-disable-next-line no-magic-numbers
             expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + (thickness / 2)
           } else {
-          // eslint-disable-next-line no-magic-numbers
             expansionSidebarHeight = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().top - (thickness / 2)
           }
           if (expansionSidebarHeight < 0) {
@@ -101,10 +99,8 @@ export default function VerticalResizerButton({
         case 1: // one finger
           startResizing(true)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // two finger
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // three finger
           break
         default:
@@ -119,10 +115,8 @@ export default function VerticalResizerButton({
         case 1: // one finger
           resize(e.touches[0])
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // two finger
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // three finger
           break
         default:
@@ -185,7 +179,16 @@ export default function VerticalResizerButton({
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
-        {Array.from({length: 3}).map((v, i) =>
+        <Box
+          sx={{
+            width: `30px`,
+            height: `2px`,
+            borderRadius: '3px',
+            background: theme.palette.primary.contrastText,
+            opacity: '0.5',
+          }}
+        />
+        {/* {Array.from({length: 3}).map((v, i) =>
           <Box
             key={i}
             sx={{
@@ -196,7 +199,7 @@ export default function VerticalResizerButton({
               opacity: '0.3',
             }}
           />,
-        )}
+        )} */}
       </Paper>
     </Box>
   )
