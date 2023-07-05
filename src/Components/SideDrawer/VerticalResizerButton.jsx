@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 import React, {useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
@@ -59,14 +60,12 @@ export default function VerticalResizerButton({
           if (expansionSidebarHeight < 0) {
             expansionSidebarHeight = 0
           }
-          if (expansionSidebarHeight > document.documentElement.clientHeight) {
-            // eslint-disable-next-line no-magic-numbers
-            expansionSidebarHeight = '100vh'
+          if (expansionSidebarHeight > window.innerHeight + 50) {
+            expansionSidebarHeight = window.innerHeight + 50
           }
           if (expansionSidebarHeight < thickness) {
             expansionSidebarHeight = thickness
           }
-          // console.log('setSidebarHeight - expansionSidebarHeight - 1', expansionSidebarHeight)
           setSidebarHeight(expansionSidebarHeight)
           setIsExpanded(true)
         }
@@ -81,7 +80,6 @@ export default function VerticalResizerButton({
         expansionSidebarHeight = e.target.innerHeight
       }
       if (e.target.innerHeight < sidebarHeight) {
-        // console.log('setSidebarHeight - e.target.innerHeight', e.target.innerHeight)
         setSidebarHeight(e.target.innerHeight)
       }
     }
@@ -144,11 +142,9 @@ export default function VerticalResizerButton({
 
   useEffect(() => {
     if (isExpanded) {
-      // console.log('setSidebarHeight - expansionSidebarHeight - 2', expansionSidebarHeight)
       setSidebarHeight(expansionSidebarHeight)
     } else {
-      const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min( document.documentElement.clientHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
-      // console.log('setSidebarHeight - expansionSidebarHeight', defaultHeight)
+      const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min(window.innerHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
       setSidebarHeight(defaultHeight)
     }
   }, [isExpanded, setSidebarHeight])
@@ -189,19 +185,22 @@ export default function VerticalResizerButton({
         onMouseDown={startResizing}
         {...onResizerDblTap}
       >
-        <Box
-          sx={{
-            width: `30px`,
-            height: `2px`,
-            borderRadius: '3px',
-            background: theme.palette.primary.contrastText,
-            opacity: '0.5',
-          }}
-        />
+        {Array.from({length: 3}).map((v, i) =>
+          <Box
+            key={i}
+            sx={{
+              width: `${gripSize}px`,
+              height: `${gripSize}px`,
+              borderRadius: '3px',
+              background: theme.palette.primary.contrastText,
+              opacity: '0.3',
+            }}
+          />,
+        )}
       </Paper>
     </Box>
   )
 }
 
 
-let expansionSidebarHeight = document.documentElement.clientHeight
+let expansionSidebarHeight = window.innerHeight
