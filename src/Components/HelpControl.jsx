@@ -11,7 +11,7 @@ import NotesIcon from '../assets/icons/Notes.svg'
 import ViewIcon from '../assets/icons/View.svg'
 import TreeIcon from '../assets/icons/Tree.svg'
 import RobotIcon from '../assets/icons/Robot3.svg'
-import BulletIcon from '../assets/icons/Bullet.svg'
+// import BulletIcon from '../assets/icons/Bullet.svg'
 import ShortcutIcon from '../assets/icons/Shortcut.svg'
 
 
@@ -117,27 +117,27 @@ const ShortCutList = () => {
       }}
     >
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> Q </div>}
         description={'To attach a plane to any surface, hover over a surface and press Q'}
       />
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> W </div>}
         description={'To delete a plane, hover over a plane and press W'}
       />
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> I </div>}
         description={'To isolate any element select the element and press I'}
       />
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> H </div>}
         description={'To hide any element select the element and press H'}
       />
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> U </div>}
         description={'To unhide any element select the element and press U'}
       />
       <HelpComponent
-        icon={<BulletIcon/>}
+        icon={<div style={{fontWeight: 500}}> R </div>}
         description={'To revel all hidden elements press R'}
       />
     </Box>
@@ -198,7 +198,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 width: '10px',
                 height: '10px',
                 cursor: 'pointer',
-                backgroundColor: `${info ? theme.palette.secondary.background : theme.palette.secondary.main}`,
+                backgroundColor: `${info ? theme.palette.secondary.main : theme.palette.secondary.background}`,
                 borderRadius: '2px'}}
             />
             <Box
@@ -207,7 +207,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 width: '10px',
                 height: '10px',
                 cursor: 'pointer',
-                backgroundColor: `${info ? theme.palette.secondary.main : theme.palette.secondary.background}`,
+                backgroundColor: `${info ? theme.palette.secondary.background : theme.palette.secondary.main}`,
                 borderRadius: '2px'}}
             />
           </Box>

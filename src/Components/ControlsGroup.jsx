@@ -65,7 +65,7 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
           <SaveModelControl modelPath={modelPath}/>
       }
       <TooltipIconButton
-        title={'Search / Open'}
+        title={'Search by property name'}
         showTitle={false}
         onClick={toggleIsSearchBarVisible}
         selected={isSearchBarVisible}

@@ -55,8 +55,8 @@ export default function VerticalResizerButton({
           } else {
             expansionSidebarHeight = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().top - (thickness / 2)
           }
-          if (expansionSidebarHeight < 0) {
-            expansionSidebarHeight = 0
+          if (expansionSidebarHeight < 100) {
+            expansionSidebarHeight = 100
           }
           if (expansionSidebarHeight > window.innerHeight + 100) {
             expansionSidebarHeight = window.innerHeight + 100

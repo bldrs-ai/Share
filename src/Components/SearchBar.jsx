@@ -123,7 +123,7 @@ export default function SearchBar({deselectItems}) {
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search / Open'}
+          placeholder={'Search by property name'}
           elevation={0}
           startAdornment={
             <InputAdornment position="start">
