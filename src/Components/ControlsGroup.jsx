@@ -73,22 +73,20 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         placement={'bottom'}
         dataTestId='spatial-elements'
       />
-      {isAuthenticated &&
-          <TooltipIconButton
-            title={'Navigation'}
-            showTitle={false}
-            onClick={() => {
-              if (isNavPanelOpen) {
-                hideNavPanel()
-              }
-              toggleShowNavigationGroup()
-            }}
-            selected={showNavigationGroup || isNavPanelOpen}
-            icon={<TreeIcon/>}
-            placement={'bottom'}
-            dataTestId='spatial-elements'
-          />
-      }
+      <TooltipIconButton
+        title={'Navigation'}
+        showTitle={false}
+        onClick={() => {
+          if (isNavPanelOpen) {
+            hideNavPanel()
+          }
+          toggleShowNavigationGroup()
+        }}
+        selected={showNavigationGroup || isNavPanelOpen}
+        icon={<TreeIcon/>}
+        placement={'bottom'}
+        dataTestId='spatial-elements'
+      />
       {/* {isBranches &&
         <TooltipIconButton
           title={'Versions'}
