@@ -5,6 +5,7 @@ import CutPlaneMenu from './CutPlaneMenu'
 import useStore from '../store/useStore'
 import StandardViewsMenu from './StandardViewsMenu'
 import CaptureIcon from '../assets/icons/view/SavedView.svg'
+import {useAuth0} from '@auth0/auth0-react'
 
 
 /**
@@ -18,6 +19,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
+  const {isAuthenticated} = useAuth0()
 
   return (
     <Paper
@@ -34,18 +36,20 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
     >
       <StandardViewsMenu/>
       <CutPlaneMenu/>
-      <TooltipIconButton
-        title={'Capture views'}
-        placement={'top'}
-        icon={<CaptureIcon/>}
-        selected={showViewsPanel}
-        onClick={() => {
-          toggleShowViewsPanel()
-          if (showProjectPanel) {
-            toggleShowProjectPanel()
-          }
-        }}
-      />
+      {isAuthenticated &&
+        <TooltipIconButton
+          title={'Capture views'}
+          placement={'top'}
+          icon={<CaptureIcon/>}
+          selected={showViewsPanel}
+          onClick={() => {
+            toggleShowViewsPanel()
+            if (showProjectPanel) {
+              toggleShowProjectPanel()
+            }
+          }}
+        />
+      }
     </Paper>
   )
 }
