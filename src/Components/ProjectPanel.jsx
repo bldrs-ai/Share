@@ -14,9 +14,13 @@ import Momentum from '../assets/icons/projects/Momentum.svg'
 import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
 import Seestrasse from '../assets/icons/projects/Seestrasse.svg'
 import DeleteIcon from '../assets/icons/Delete.svg'
-import ViewCube from '../assets/icons/view/ViewCube1.svg'
+import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
+import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
+import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
 import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
+import SaveIcon from '../assets/icons/Save.svg'
+import ExportIcon from '../assets/icons/Export.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
@@ -97,6 +101,47 @@ const LoginComponent = () => {
             wiki
           </a>
         </Box>
+      </Typography>
+    </Box>
+  )
+}
+
+const SaveComponent = () => {
+  const theme = useTheme()
+
+  return (
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'justifyContent': 'flex-start',
+        'alignItems': 'center',
+        'height': '80px',
+        'width': '240px',
+        'borderRadius': '10px',
+        'backgroundColor': theme.palette.background.button,
+        'marginBottom': '20px',
+        'marginTop': '10px',
+        'overflow': 'auto',
+        'scrollbarWidth': 'none', /* Firefox */
+        '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+        '&::-webkit-scrollbar': {
+          width: '0em',
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'transparent',
+        },
+      }}
+    >
+      <Typography
+        variant={'h5'}
+        sx={{
+          padding: '14px',
+          textalign: 'left',
+        }}
+      >
+        Please login to save your project on Github and to enable version history.
       </Typography>
     </Box>
   )
@@ -198,7 +243,7 @@ const ProjectAccess = () => {
           onClick={() => {
             navigateToFile()
           }}
-          placement={'bottom'}
+          placement={'top'}
           icon={<GitHubIcon style={{width: '28px', height: '20px', opacity: .5}}/>}
         />
       </Box>
@@ -207,7 +252,7 @@ const ProjectAccess = () => {
   )
 }
 
-const TitleBar = ({showSample}) => {
+const TitleBar = ({showMode}) => {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const theme = useTheme()
   return (
@@ -242,7 +287,10 @@ const TitleBar = ({showSample}) => {
             paddingBottom: '2px',
           }}
         >
-          <ViewCube/>
+          {showMode === 'sample' && <ViewCube1/> }
+          {showMode === 'projects' && <ViewCube2/> }
+          {showMode === 'save' && <ViewCube3/> }
+
         </Box>
         <Typography variant='h4'
           sx={{
@@ -252,7 +300,9 @@ const TitleBar = ({showSample}) => {
             alignItems: 'center',
           }}
         >
-          {showSample ? 'Sample Projects' : 'Projects'}
+          {showMode === 'sample' && 'Sample Projects' }
+          {showMode === 'projects' && 'Projects' }
+          {showMode === 'save' && 'Save Projects' }
         </Typography>
       </Box>
       <Box
@@ -264,7 +314,7 @@ const TitleBar = ({showSample}) => {
   )
 }
 
-const ProjectsOptions = ({showSample, setShowSample}) => {
+const ProjectsOptions = ({showMode, setShowMode}) => {
   const {isAuthenticated} = useAuth0()
   return (
     <Box
@@ -289,30 +339,40 @@ const ProjectsOptions = ({showSample, setShowSample}) => {
     >
       <TooltipIconButton
         title={'Swiss Property Projects'}
-        onClick={() => setShowSample(true)}
-        selected={showSample}
-        placement={'bottom'}
+        onClick={() => setShowMode('sample')}
+        selected={showMode === 'sample'}
+        placement={'top'}
         icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
       />
 
       {!isAuthenticated &&
       <TooltipIconButton
         title={'Login with Github Account'}
-        placement={'bottom'}
-        selected={!showSample}
-        onClick={() => setShowSample(false)}
-        icon={<LoginIcon style={{width: '20px', height: '20px'}}/>}
+        placement={'top'}
+        selected={showMode === 'projects'}
+        onClick={() => setShowMode('projects')}
+        icon={<LoginIcon style={{width: '21px', height: '21px'}}/>}
       />
       }
 
       {isAuthenticated &&
       <TooltipIconButton
         title={'Project Access'}
-        placement={'bottom'}
-        selected={!showSample}
-        onClick={() => setShowSample(false)}
+        placement={'top'}
+        selected={showMode === 'projects'}
+        onClick={() => setShowMode('projects')}
         icon={<OpenIcon style={{width: '20px', height: '20px'}}/>}
       />}
+
+      {!isAuthenticated &&
+      <TooltipIconButton
+        title={'Save Project'}
+        placement={'top'}
+        selected={showMode === 'save'}
+        onClick={() => setShowMode('save')}
+        icon={<SaveIcon style={{width: '20px', height: '20px'}}/>}
+      />
+      }
 
     </Box>
   )
@@ -326,14 +386,14 @@ const ProjectsOptions = ({showSample, setShowSample}) => {
  * @return {React.Component}
  */
 export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
-  const [showSample, setShowSample] = useState(true)
+  const [showMode, setShowMode] = useState('sample')
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
   const theme = useTheme()
   const {isAuthenticated, loginWithRedirect} = useAuth0()
   useEffect(() => {
     if (isAuthenticated) {
-      setShowSample(false)
+      setShowMode('projects')
     }
   }, [isAuthenticated])
 
@@ -389,7 +449,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
         opacity: .95,
       }}
     >
-      <TitleBar showSample={showSample}/>
+      <TitleBar showMode={showMode}/>
       <Box
         sx={{
           display: 'flex',
@@ -398,8 +458,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           alignItems: 'center',
         }}
       >
-        <ProjectsOptions showSample={showSample} setShowSample={setShowSample}/>
-        {showSample &&
+        <ProjectsOptions showMode={showMode} setShowMode={setShowMode}/>
+        {showMode === 'sample' &&
         <Box sx={backgroundStyle}>
           {Object.keys(modelPath).map((name, i) => {
             return (
@@ -421,7 +481,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             )
           })}
         </Box>}
-        {showSample &&
+
+        {showMode === 'sample' &&
           <Box
             sx={{
               display: 'flex',
@@ -436,13 +497,13 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               onClick={() => {
                 fileOpen()
               }}
-              placement={'bottom'}
+              placement={'top'}
               icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
             />
           </Box>
         }
 
-        {!showSample &&
+        {showMode === 'projects' &&
           <Box
             sx={{
               'display': 'flex',
@@ -494,7 +555,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     onClick={() => {
                       fileOpen()
                     }}
-                    placement={'bottom'}
+                    placement={'top'}
                     icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
                   />
                 </Box>
@@ -502,6 +563,81 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             }
           </Box>
         }
+        {showMode === 'save' &&
+          <Box
+            sx={{
+              'display': 'flex',
+              'flexDirection': 'column',
+              'justifyContent': 'flex-start',
+              'alignItems': 'center',
+              'width': '240px',
+              'borderRadius': '10px',
+              'marginBottom': '14px',
+              'marginTop': '10px',
+              'overflow': 'auto',
+              'scrollbarWidth': 'none', /* Firefox */
+              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+              '&::-webkit-scrollbar': {
+                width: '0em',
+                background: 'transparent',
+              },
+              '&::-webkit-scrollbar-thumb': {
+                background: 'transparent',
+              },
+            }}
+          >
+            {!isAuthenticated &&
+              <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
+                <SaveComponent/>
+                <Box sx={{
+                  height: '90px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                }}
+                >
+                  <RectangularButton
+                    title={'Login to GitHub'}
+                    onClick={() => {
+                      login()
+                    }}
+                    icon={<GitHubIcon style={{opacity: .5}}/>}
+                  />
+                  <RectangularButton
+                    title={'Export'}
+                    onClick={() => {
+                      login()
+                    }}
+                    icon={<ExportIcon/>}
+                  />
+                </Box>
+              </Box>
+            }
+            {isAuthenticated &&
+              <>
+                <ProjectAccess/>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingBottom: '10px',
+                  }}
+                >
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+                    onClick={() => {
+                      fileOpen()
+                    }}
+                    placement={'top'}
+                    icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+                  />
+                </Box>
+              </>
+            }
+          </Box>}
       </Box>
     </Paper>
   )
