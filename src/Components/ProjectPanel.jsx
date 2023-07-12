@@ -111,9 +111,9 @@ const SaveComponent = () => {
   const {isAuthenticated} = useAuth0()
   const navigate = useNavigate()
   const modelPath = {
-    Commit_1: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
     Commit_3: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    Commit_2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    Commit_1: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
   }
   const backgroundStyle = {
     'display': 'flex',
@@ -522,8 +522,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'center',
-              paddingBottom: '26px',
-              paddingTop: '16px',
+              paddingBottom: '20px',
+              paddingTop: '6px',
             }}
           >
             <RectangularButton
@@ -624,11 +624,12 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
                 <SaveComponent/>
                 <Box sx={{
-                  height: '90px',
+                  height: '96px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
                   alignItems: 'center',
+                  paddingTop: '6px',
                 }}
                 >
                   <RectangularButton
