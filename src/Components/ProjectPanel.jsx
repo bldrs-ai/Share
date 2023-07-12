@@ -21,6 +21,7 @@ import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import SaveIcon from '../assets/icons/Save.svg'
 import ExportIcon from '../assets/icons/Export.svg'
+import CommitIcon from '../assets/icons/Commit.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
@@ -42,7 +43,6 @@ const icon = (iconNumber) => {
     return <Seestrasse style={{width: '28px', height: '18px'}}/>
   }
 }
-
 
 const LoginComponent = () => {
   const theme = useTheme()
@@ -108,41 +108,75 @@ const LoginComponent = () => {
 
 const SaveComponent = () => {
   const theme = useTheme()
+  const {isAuthenticated} = useAuth0()
+  const navigate = useNavigate()
+  const modelPath = {
+    Commit_1: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    Commit_2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    Commit_3: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+  }
+  const backgroundStyle = {
+    'display': 'flex',
+    'flexDirection': 'column',
+    'justifyContent': 'flex-start',
+    'alignItems': 'center',
+    'height': '190px',
+    'width': '240px',
+    'borderRadius': '10px',
+    'border': `1px solid ${theme.palette.background.button}`,
+    'padding': '6px 0px',
+    'marginBottom': '10px',
+    // 'marginTop': '10px',
+    'overflow': 'auto',
+    // 'scrollbarWidth': 'none', /* Firefox */
+    // '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+    '&::-webkit-scrollbar': {
+      width: '.1em',
+      // background: 'transparent',
+    },
+    // '&::-webkit-scrollbar-thumb': {
+    //   background: 'transparent',
+    // },
+  }
 
   return (
-    <Box
-      sx={{
-        'display': 'flex',
-        'flexDirection': 'column',
-        'justifyContent': 'flex-start',
-        'alignItems': 'center',
-        'height': '80px',
-        'width': '240px',
-        'borderRadius': '10px',
-        'backgroundColor': theme.palette.background.button,
-        'marginBottom': '20px',
-        'marginTop': '10px',
-        'overflow': 'auto',
-        'scrollbarWidth': 'none', /* Firefox */
-        '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-        '&::-webkit-scrollbar': {
-          width: '0em',
-          background: 'transparent',
-        },
-        '&::-webkit-scrollbar-thumb': {
-          background: 'transparent',
-        },
-      }}
-    >
-      <Typography
-        variant={'h5'}
-        sx={{
-          padding: '14px',
-          textalign: 'left',
-        }}
-      >
-        Please login to save your project on Github and to enable version history.
-      </Typography>
+    <Box>
+      {!isAuthenticated &&
+      <Box sx={backgroundStyle}>
+        {Object.keys(modelPath).map((name, i) => {
+          return (
+            <Box
+              key={i}
+              sx={{
+                margin: '2px 0px',
+              }}
+            >
+              <RectangularButton
+                title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
+                onClick={() => {
+                  navigate(modelPath[name])
+                  // toggleShowProjectPanel()
+                }}
+                icon={<CommitIcon style={{width: '10px', height: '10px'}}/>}
+              />
+            </Box>
+          )
+        })}
+      </Box>
+      }
+      {isAuthenticated &&
+        <Box sx={backgroundStyle}>
+          <Typography
+            variant={'h5'}
+            sx={{
+              padding: '14px',
+              textalign: 'left',
+            }}
+          >
+            Please login to save your project on Github and to enable version history.
+          </Typography>
+        </Box>
+      }
     </Box>
   )
 }
@@ -342,7 +376,7 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
         onClick={() => setShowMode('sample')}
         selected={showMode === 'sample'}
         placement={'top'}
-        icon={<SwissProperty style={{width: '24px', height: '24px'}}/>}
+        icon={<SwissProperty style={{width: '22px', height: '22px'}}/>}
       />
 
       {!isAuthenticated &&
@@ -498,7 +532,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 fileOpen()
               }}
               placement={'top'}
-              icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+              icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
             />
           </Box>
         }
@@ -556,7 +590,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                       fileOpen()
                     }}
                     placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
                   />
                 </Box>
               </>
@@ -605,14 +639,37 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     icon={<GitHubIcon style={{opacity: .5}}/>}
                   />
                   <RectangularButton
-                    title={'Export'}
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export</Box>}
                     onClick={() => {
-                      login()
+                      fileOpen()
                     }}
-                    icon={<ExportIcon/>}
+                    placement={'top'}
+                    icon={<ExportIcon style={{width: '28px', height: '18px'}}/>}
                   />
                 </Box>
               </Box>
+            }
+            {isAuthenticated &&
+              <>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    paddingBottom: '10px',
+                  }}
+                >
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
+                    onClick={() => {
+                      fileOpen()
+                    }}
+                    placement={'top'}
+                    icon={<CommitIcon style={{width: '28px', height: '18px'}}/>}
+                  />
+                </Box>
+              </>
             }
             {isAuthenticated &&
               <>
@@ -632,7 +689,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                       fileOpen()
                     }}
                     placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px', opacity: .5}}/>}
+                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
                   />
                 </Box>
               </>
