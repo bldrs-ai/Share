@@ -633,6 +633,16 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     icon={<GitHubIcon style={{opacity: .5}}/>}
                   />
                 }
+                {isAuthenticated &&
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
+                    onClick={() => {
+                      fileOpen()
+                    }}
+                    placement={'top'}
+                    icon={<CommitIcon style={{width: '28px', height: '18px'}}/>}
+                  />
+                }
                 <RectangularButton
                   title={<Box>Export</Box>}
                   onClick={() => {
@@ -643,28 +653,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 />
               </Box>
             </Box>
-            {isAuthenticated &&
-              <>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    paddingBottom: '10px',
-                  }}
-                >
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<CommitIcon style={{width: '28px', height: '18px'}}/>}
-                  />
-                </Box>
-              </>
-            }
           </Box>
         }
       </Box>
