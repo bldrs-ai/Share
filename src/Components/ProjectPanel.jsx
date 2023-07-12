@@ -391,7 +391,6 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
         icon={<OpenIcon style={{width: '20px', height: '20px'}}/>}
       />}
 
-      {!isAuthenticated &&
       <TooltipIconButton
         title={'Save Project'}
         placement={'top'}
@@ -399,7 +398,6 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
         onClick={() => setShowMode('save')}
         icon={<SaveIcon style={{width: '20px', height: '20px'}}/>}
       />
-      }
 
     </Box>
   )
