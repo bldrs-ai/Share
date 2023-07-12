@@ -126,17 +126,10 @@ const SaveComponent = () => {
     'border': `1px solid ${theme.palette.background.button}`,
     'padding': '6px 0px',
     'marginBottom': '10px',
-    // 'marginTop': '10px',
     'overflow': 'auto',
-    // 'scrollbarWidth': 'none', /* Firefox */
-    // '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
     '&::-webkit-scrollbar': {
       width: '.1em',
-      // background: 'transparent',
     },
-    // '&::-webkit-scrollbar-thumb': {
-    //   background: 'transparent',
-    // },
   }
 
   return (
@@ -148,7 +141,7 @@ const SaveComponent = () => {
             <Box
               key={i}
               sx={{
-                margin: '2px 0px',
+                margin: '4px 0px',
               }}
             >
               <RectangularButton
