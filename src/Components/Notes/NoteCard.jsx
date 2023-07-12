@@ -30,6 +30,7 @@ import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
+import {Typography} from '@mui/material'
 
 
 /**
@@ -223,7 +224,9 @@ export default function NoteCard({
           },
         }}
       >
-        <ReactMarkdown>{body}</ReactMarkdown>
+        <Typography variant='h4'>
+          <ReactMarkdown>{body}</ReactMarkdown>
+        </Typography>
         {textOverflow &&
           <ShowMore
             expandText={expandText}
