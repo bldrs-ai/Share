@@ -134,7 +134,7 @@ const SaveComponent = () => {
 
   return (
     <Box>
-      {!isAuthenticated &&
+      {isAuthenticated &&
       <Box sx={backgroundStyle}>
         {Object.keys(modelPath).map((name, i) => {
           return (
@@ -157,7 +157,7 @@ const SaveComponent = () => {
         })}
       </Box>
       }
-      {isAuthenticated &&
+      {!isAuthenticated &&
         <Box sx={backgroundStyle}>
           <Typography
             variant={'h5'}
@@ -633,7 +633,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     icon={<GitHubIcon style={{opacity: .5}}/>}
                   />
                   <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export</Box>}
+                    title={<Box>Export</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
