@@ -485,27 +485,28 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
       >
         <ProjectsOptions showMode={showMode} setShowMode={setShowMode}/>
         {showMode === 'sample' &&
-        <Box sx={backgroundStyle}>
-          {Object.keys(modelPath).map((name, i) => {
-            return (
-              <Box
-                key={i}
-                sx={{
-                  margin: '2px 0px',
-                }}
-              >
-                <RectangularButton
-                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
-                  onClick={() => {
-                    navigate(modelPath[name])
-                    toggleShowProjectPanel()
+          <Box sx={backgroundStyle}>
+            {Object.keys(modelPath).map((name, i) => {
+              return (
+                <Box
+                  key={i}
+                  sx={{
+                    margin: '2px 0px',
                   }}
-                  icon={icon(i)}
-                />
-              </Box>
-            )
-          })}
-        </Box>}
+                >
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
+                    onClick={() => {
+                      navigate(modelPath[name])
+                      toggleShowProjectPanel()
+                    }}
+                    icon={icon(i)}
+                  />
+                </Box>
+              )
+            })}
+          </Box>
+        }
 
         {showMode === 'sample' &&
           <Box
@@ -588,6 +589,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             }
           </Box>
         }
+
         {showMode === 'save' &&
           <Box
             sx={{
@@ -611,18 +613,18 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               },
             }}
           >
-            {!isAuthenticated &&
-              <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
-                <SaveComponent/>
-                <Box sx={{
-                  height: '96px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  paddingTop: '6px',
-                }}
-                >
+            <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
+              <SaveComponent/>
+              <Box sx={{
+                height: '96px',
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                paddingTop: '6px',
+              }}
+              >
+                {!isAuthenticated &&
                   <RectangularButton
                     title={'Login to GitHub'}
                     onClick={() => {
@@ -630,17 +632,17 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     }}
                     icon={<GitHubIcon style={{opacity: .5}}/>}
                   />
-                  <RectangularButton
-                    title={<Box>Export</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<ExportIcon style={{width: '28px', height: '18px'}}/>}
-                  />
-                </Box>
+                }
+                <RectangularButton
+                  title={<Box>Export</Box>}
+                  onClick={() => {
+                    fileOpen()
+                  }}
+                  placement={'top'}
+                  icon={<ExportIcon style={{width: '28px', height: '18px'}}/>}
+                />
               </Box>
-            }
+            </Box>
             {isAuthenticated &&
               <>
                 <Box
@@ -686,7 +688,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 </Box>
               </>
             }
-          </Box>}
+          </Box>
+        }
       </Box>
     </Paper>
   )
