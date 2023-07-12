@@ -665,29 +665,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 </Box>
               </>
             }
-            {isAuthenticated &&
-              <>
-                <ProjectAccess/>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    paddingBottom: '10px',
-                  }}
-                >
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-                  />
-                </Box>
-              </>
-            }
           </Box>
         }
       </Box>
