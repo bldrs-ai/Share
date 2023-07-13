@@ -17,15 +17,16 @@ import DeleteIcon from '../assets/icons/Delete.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
-import LoginIcon from '../assets/icons/Login.svg'
+// import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import SaveIcon from '../assets/icons/Save.svg'
 import ExportIcon from '../assets/icons/Export.svg'
 import CommitIcon from '../assets/icons/Commit.svg'
 import CommitActionIcon from '../assets/icons/CommitAction.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import SwissProperty from '../assets/icons/SwissProperty.svg'
+// import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
+import FolderIcon from '../assets/icons/Folder.svg'
 import {TooltipIconButton} from './Buttons'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 
@@ -370,11 +371,11 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
       }}
     >
       <TooltipIconButton
-        title={'Swiss Property Projects'}
+        title={'Partner Projects - Swiss Property'}
         onClick={() => setShowMode('sample')}
         selected={showMode === 'sample'}
         placement={'top'}
-        icon={<SwissProperty style={{width: '22px', height: '22px'}}/>}
+        icon={<Sheenstock style={{width: '22px', height: '22px'}}/>}
       />
 
       {!isAuthenticated &&
@@ -383,7 +384,7 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
         placement={'top'}
         selected={showMode === 'projects'}
         onClick={() => setShowMode('projects')}
-        icon={<LoginIcon style={{width: '21px', height: '21px'}}/>}
+        icon={<FolderIcon style={{width: '21px', height: '21px'}}/>}
       />
       }
 
