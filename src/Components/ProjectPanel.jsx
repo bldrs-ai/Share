@@ -22,6 +22,7 @@ import UploadIcon from '../assets/icons/Upload.svg'
 import SaveIcon from '../assets/icons/Save.svg'
 import ExportIcon from '../assets/icons/Export.svg'
 import CommitIcon from '../assets/icons/Commit.svg'
+import CommitActionIcon from '../assets/icons/CommitAction.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
@@ -485,6 +486,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
       >
         <ProjectsOptions showMode={showMode} setShowMode={setShowMode}/>
         {showMode === 'sample' &&
+        <>
           <Box sx={backgroundStyle}>
             {Object.keys(modelPath).map((name, i) => {
               return (
@@ -506,9 +508,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               )
             })}
           </Box>
-        }
-
-        {showMode === 'sample' &&
           <Box
             sx={{
               display: 'flex',
@@ -527,6 +526,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
             />
           </Box>
+        </>
         }
 
         {showMode === 'projects' &&
@@ -635,12 +635,12 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 }
                 {isAuthenticated &&
                   <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
+                    title={<Box>Commit</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
                     placement={'top'}
-                    icon={<CommitIcon style={{width: '28px', height: '18px'}}/>}
+                    icon={<CommitActionIcon style={{width: '28px', height: '18px'}}/>}
                   />
                 }
                 <RectangularButton
