@@ -635,7 +635,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 }
                 {isAuthenticated &&
                   <RectangularButton
-                    title={<Box>Commit</Box>}
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
@@ -644,7 +644,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                   />
                 }
                 <RectangularButton
-                  title={<Box>Export</Box>}
+                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export</Box>}
                   onClick={() => {
                     fileOpen()
                   }}
