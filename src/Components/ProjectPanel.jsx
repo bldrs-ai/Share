@@ -56,7 +56,7 @@ const LoginComponent = () => {
         'flexDirection': 'column',
         'justifyContent': 'flex-start',
         'alignItems': 'center',
-        'height': '160px',
+        // 'height': '160px',
         'width': '240px',
         'borderRadius': '10px',
         'backgroundColor': theme.palette.background.button,
@@ -164,12 +164,33 @@ const SaveComponent = () => {
       </Box>
       }
       {!isAuthenticated &&
-        <Box sx={backgroundStyle}>
+        <Box sx={{
+          'display': 'flex',
+          'flexDirection': 'column',
+          'justifyContent': 'flex-start',
+          'alignItems': 'center',
+          // 'height': '160px',
+          'width': '240px',
+          'borderRadius': '10px',
+          'backgroundColor': theme.palette.background.button,
+          'marginBottom': '20px',
+          'marginTop': '10px',
+          'overflow': 'auto',
+          'scrollbarWidth': 'none', /* Firefox */
+          '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+          '&::-webkit-scrollbar': {
+            width: '0em',
+            background: 'transparent',
+          },
+          '&::-webkit-scrollbar-thumb': {
+            background: 'transparent',
+          },
+        }}
+        >
           <Typography
             variant={'h5'}
             sx={{
-              padding: '14px',
-              textalign: 'left',
+              padding: '12px',
             }}
           >
             Please login to save your project on Github and to enable version history.
