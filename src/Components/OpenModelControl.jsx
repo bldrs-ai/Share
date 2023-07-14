@@ -134,7 +134,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
       headerText={'Access'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Open local file'}
+      actionTitle={'Import'}
       showActionButton={false}
       actionIcon={<UploadIcon/>}
       actionCb={openFile}
