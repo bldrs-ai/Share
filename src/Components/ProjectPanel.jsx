@@ -151,12 +151,12 @@ const SaveComponent = () => {
               }}
             >
               <RectangularButton
-                title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
+                title={<Box sx={{width: '100px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
                 onClick={() => {
                   navigate(modelPath[name])
                   // toggleShowProjectPanel()
                 }}
-                icon={<CommitIcon style={{width: '10px', height: '10px'}}/>}
+                icon={<CommitIcon style={{width: '10px', height: '30px'}}/>}
               />
             </Box>
           )
@@ -544,7 +544,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             }}
           >
             <RectangularButton
-              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
               onClick={() => {
                 fileOpen()
               }}
@@ -603,7 +603,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                   }}
                 >
                   <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Open local</Box>}
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
@@ -670,7 +670,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                   />
                 }
                 <RectangularButton
-                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export</Box>}
+                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export ifc</Box>}
                   onClick={() => {
                     fileOpen()
                   }}
