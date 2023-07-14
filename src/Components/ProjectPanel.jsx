@@ -364,9 +364,9 @@ const TitleBar = ({showMode}) => {
             alignItems: 'center',
           }}
         >
-          {showMode === 'sample' && 'Sample Projects' }
-          {showMode === 'projects' && 'Projects' }
-          {showMode === 'save' && 'Save Projects' }
+          {showMode === 'sample' && 'Sample projects' }
+          {showMode === 'projects' && 'Access project' }
+          {showMode === 'save' && 'Save project' }
         </Typography>
       </Box>
       <Box
@@ -603,7 +603,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             {isAuthenticated &&
               <>
                 <ProjectAccess/>
-                <Box
+                {/* <Box
                   sx={{
                     display: 'flex',
                     flexDirection: 'row',
@@ -612,15 +612,15 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     paddingBottom: '10px',
                   }}
                 >
-                  {/* <RectangularButton
+                  <RectangularButton
                     title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
                     placement={'top'}
                     icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-                  /> */}
-                </Box>
+                  />
+                </Box> */}
               </>
             }
           </Box>
