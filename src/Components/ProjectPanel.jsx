@@ -602,14 +602,14 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     paddingBottom: '10px',
                   }}
                 >
-                  <RectangularButton
+                  {/* <RectangularButton
                     title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
                     placement={'top'}
                     icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-                  />
+                  /> */}
                 </Box>
               </>
             }
