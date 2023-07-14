@@ -113,13 +113,12 @@ const SaveComponent = () => {
   const {isAuthenticated} = useAuth0()
   const navigate = useNavigate()
   const modelPath = {
-    Commit_7: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_6: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_5: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_4: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_3: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-    Commit_1: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Added another building': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Chnage the walls': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Check structure': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Replace windows': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Adjusted set back': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
+    'Change profile': '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
   }
   const backgroundStyle = {
     'display': 'flex',
@@ -151,12 +150,23 @@ const SaveComponent = () => {
               }}
             >
               <RectangularButton
-                title={<Box sx={{width: '100px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
+                title={
+                  <Box sx={{
+                    fontSize: '.8em',
+                    width: '100px',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textAlign: 'left',
+                    marginLeft: '10px',
+                    textOverflow: 'ellipsis'}
+                  }
+                  >
+                    {name}
+                  </Box>}
                 onClick={() => {
                   navigate(modelPath[name])
-                  // toggleShowProjectPanel()
                 }}
-                icon={<CommitIcon style={{width: '10px', height: '30px'}}/>}
+                icon={<CommitIcon style={{width: '11px', height: '30px'}}/>}
               />
             </Box>
           )
@@ -661,7 +671,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                 }
                 {isAuthenticated &&
                   <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Commit</Box>}
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Save</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
