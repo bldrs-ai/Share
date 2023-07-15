@@ -166,7 +166,7 @@ const SaveComponent = () => {
                 onClick={() => {
                   navigate(modelPath[name])
                 }}
-                icon={<CommitIcon style={{width: '11px', height: '30px'}}/>}
+                icon={<CommitIcon style={{width: '11px', height: '50px'}}/>}
               />
             </Box>
           )
