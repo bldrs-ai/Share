@@ -12,7 +12,7 @@ import {handleBeforeUnload} from '../utils/event'
 // import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/icons/Clear.svg'
-import SearchIcon from '../assets/icons/Search.svg'
+// import SearchIcon from '../assets/icons/Search.svg'
 
 
 /**
@@ -21,7 +21,7 @@ import SearchIcon from '../assets/icons/Search.svg'
  * @property {Function} fileOpen callback for OpenModelControl
  * @return {React.Component}
  */
-export default function SearchBar({deselectItems}) {
+export default function SearchBar({deselectItems, placeholderText, icon, variableLength}) {
   const location = useLocation()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -32,7 +32,7 @@ export default function SearchBar({deselectItems}) {
   // input length is dynamically calculated in order to fit the input string into the Text input
   const widthPerChar = 6.5
   const minWidthPx = 125
-  const widthPx = (Number(inputText.length) * widthPerChar) + minWidthPx
+  const widthPx = variableLength ? (Number(inputText.length) * widthPerChar) + minWidthPx : minWidthPx
   // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
   const theme = useTheme()
@@ -123,18 +123,18 @@ export default function SearchBar({deselectItems}) {
           value={inputText}
           onChange={onInputChange}
           error={true}
-          placeholder={'Search by property name'}
+          placeholder={placeholderText || 'Search by property name'}
           elevation={0}
           startAdornment={
             <InputAdornment position="start">
-              <SearchIcon style={{width: '15px', height: '15px', opacity: .5}}/>
+              {icon}
             </InputAdornment>
           }
           sx={{
             ...theme.typography.tree,
             'marginLeft': '6px',
             '& input::placeholder': {
-              opacity: .5,
+              opacity: .8,
             },
           }}
         />

@@ -92,6 +92,8 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  * @return {React.ReactElement} React component
  */
 function AboutContent({setIsDialogDisplayed}) {
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  const showProjectPanel = useStore((state) => state.showProjectPanel)
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
       <Helmet>
@@ -102,6 +104,31 @@ function AboutContent({setIsDialogDisplayed}) {
         github.com/bldrs-ai/Share
       </a>
       <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
+      <Box
+        sx={{
+          'border': '1px solid grey',
+          'borderRadius': '5px',
+          'height': '40px',
+          'display': 'flex',
+          'justifyContent': 'center',
+          'alignItems': 'center',
+          'cursor': 'pointer',
+          '&:hover': {
+            backgroundColor: 'green',
+            color: 'white',
+          },
+        }}
+        onClick={() => {
+          if (!showProjectPanel) {
+            toggleShowProjectPanel()
+            setIsDialogDisplayed()
+          }
+        }}
+      >
+        <Typography variant={'h4'}>
+          Open Project
+        </Typography>
+      </Box>
       <PrivacyControl/>
     </Box>)
 }

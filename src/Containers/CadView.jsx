@@ -37,6 +37,7 @@ import Loader from '../Components/Loader'
 import SavedViewsPanel from '../Components/SavedViewsPanel'
 import ProjectPanel from '../Components/ProjectPanel'
 import NavigationGroup from '../Components/NavigationGroup'
+import SearchIcon from '../assets/icons/Search.svg'
 
 
 /**
@@ -741,7 +742,11 @@ export default function CadView({
                 <OpenModelControl modelPath={modelPath} fileOpen={loadLocalFile} isLocalModel={isLocalModel}/>
               }
               {isSearchBarVisible && showControls &&
-                <SearchBar deselectItems={deselectItems}/>
+                <SearchBar
+                  deselectItems={deselectItems}
+                  variableLength={true}
+                  icon={ <SearchIcon style={{width: '15px', height: '15px', opacity: .5}}/>}
+                />
               }
               {/* {
                 modelPath.repo !== undefined && isBranchControlVisible &&

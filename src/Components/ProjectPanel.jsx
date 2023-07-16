@@ -9,6 +9,7 @@ import {RectangularButton} from './Buttons'
 import useStore from '../store/useStore'
 import useTheme from '@mui/styles/useTheme'
 import Selector from './Selector'
+import SearchBar from './SearchBar'
 import Eisvogel from '../assets/icons/projects/Eisvogel.svg'
 import Momentum from '../assets/icons/projects/Momentum.svg'
 import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
@@ -479,7 +480,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
     'flexDirection': 'column',
     'justifyContent': 'flex-start',
     'alignItems': 'center',
-    'height': '190px',
+    // 'height': '190px',
     'width': '240px',
     'borderRadius': '10px',
     'border': `1px solid ${theme.palette.background.button}`,
@@ -588,6 +589,11 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               },
             }}
           >
+            <SearchBar
+              placeholderText={'Paste model link'}
+              variableLength={false}
+              icon={ <GitHubIcon style={{width: '20px', height: '20px', opacity: .5}}/>}
+            />
             {!isAuthenticated &&
               <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
                 <LoginComponent/>
