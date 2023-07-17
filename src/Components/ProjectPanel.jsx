@@ -574,7 +574,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               'justifyContent': 'flex-start',
               'alignItems': 'center',
               'width': '240px',
-              'borderRadius': '10px',
+              // 'borderRadius': '10px',
               'marginBottom': '14px',
               'marginTop': '10px',
               'overflow': 'auto',
