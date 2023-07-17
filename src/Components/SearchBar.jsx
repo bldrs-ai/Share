@@ -9,10 +9,8 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-// import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import ClearIcon from '../assets/icons/Clear.svg'
-// import SearchIcon from '../assets/icons/Search.svg'
 
 
 /**
@@ -97,15 +95,17 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
     <Box sx={{width: '100%'}}>
       <Paper
         variant='control'
-        elevation={0}
+        elevation={3}
         component='form'
         onSubmit={onSubmit}
         sx={{
           'display': 'flex',
           'marginBottom': '10px',
           'minWidth': '100%',
+          'boxShadow': 'none',
           'width': `${widthPx}px`,
           'alignItems': 'center',
+          'border': '1px solid lightGrey',
           'opacity': .8,
           'padding': '0px 6px',
           'height': '50px',
