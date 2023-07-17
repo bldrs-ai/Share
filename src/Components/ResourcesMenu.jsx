@@ -1,5 +1,4 @@
 import React, {useState} from 'react'
-// import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from './Buttons'
 import Menu from '@mui/material/Menu'
@@ -33,33 +32,6 @@ export default function ResourcesMenu() {
 
 
   return (
-    // <Paper
-    //   variant='control'
-    //   sx={{
-    //     // 'position': 'fixed',
-    //     // 'bottom': '1em',
-    //     // 'right': '1em',
-    //     // 'border': `1px solid ${theme.palette.mode === 'light' ? theme.palette.background.control : theme.palette.primary.main } `,
-    //     '& svg': {
-    //       'width': '50px',
-    //       'height': '50px',
-    //       'marginBottom': '4px',
-    //       'marginTop': '4px',
-    //       '@media (max-width: 900px)': {
-    //         width: '40px',
-    //       },
-    //       '& .left-face': {
-    //         fill: theme.palette.secondary.background,
-    //       },
-    //       '& .right-face': {
-    //         fill: theme.palette.secondary.main,
-    //       },
-    //       '& #logo path': {
-    //         stroke: theme.palette.primary.main,
-    //       },
-    //     },
-    //   }}
-    // >
     <>
       <TooltipIconButton
         title={'Resources'}
@@ -76,7 +48,6 @@ export default function ResourcesMenu() {
         transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
-            // left: '240px',
             transform: 'translateX(-70px) translateY(0px)',
             opacity: .8,
             background: theme.palette.background.control,

@@ -412,7 +412,7 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
 
       {!isAuthenticated &&
       <TooltipIconButton
-        title={'Login with Github Account'}
+        title={'Acceess projects hosted on GitHub'}
         placement={'top'}
         selected={showMode === 'projects'}
         onClick={() => setShowMode('projects')}

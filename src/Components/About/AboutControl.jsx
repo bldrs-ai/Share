@@ -1,6 +1,7 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
@@ -94,6 +95,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 function AboutContent({setIsDialogDisplayed}) {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const showProjectPanel = useStore((state) => state.showProjectPanel)
+  const theme = useTheme()
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
       <Helmet>
@@ -106,7 +108,8 @@ function AboutContent({setIsDialogDisplayed}) {
       <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
       <Box
         sx={{
-          'border': '1px solid grey',
+          'border': `1px solid ${theme.palette.primary.main}`,
+          'color': theme.palette.primary.contrastText,
           'borderRadius': '5px',
           'height': '40px',
           'display': 'flex',
