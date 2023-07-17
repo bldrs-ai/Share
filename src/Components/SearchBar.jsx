@@ -95,16 +95,15 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
     <Box sx={{width: '100%'}}>
       <Paper
         variant='control'
-        elevation={3}
         component='form'
         onSubmit={onSubmit}
         sx={{
           'display': 'flex',
           'marginBottom': '10px',
           'minWidth': '100%',
-          'boxShadow': 'none',
           'width': `${widthPx}px`,
           'alignItems': 'center',
+          // 'boxShadow': 'none',
           'border': '1px solid lightGrey',
           'opacity': .8,
           'padding': '0px 6px',

@@ -83,8 +83,8 @@ export function getComponentOverrides(palette) {
           props: {variant: 'control'},
           style: {
             backgroundColor: palette.background.control,
-            boxShadow: 'none',
-            // boxShadow: '0px 1px 10px -5px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12)',
+            // boxShadow: 'none',
+            boxShadow: '0px 1px 10px -5px rgba(0,0,0,0.2), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 1px 3px 0px rgba(0,0,0,0.12)',
           },
         },
         {
