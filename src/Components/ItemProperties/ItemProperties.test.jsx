@@ -11,7 +11,7 @@ test('ItemProperties for single element', async () => {
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
     result.current.setSelectedElement({expressID: 10})
-    result.current.setModelStore(new MockModel)
+    result.current.setModel(new MockModel)
   })
 
   const {getByText} = render(

@@ -15,7 +15,7 @@ export default function HideToggleButton({elementId}) {
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
     const toBeHidden = viewer.isolator.flattenChildren(elementId)

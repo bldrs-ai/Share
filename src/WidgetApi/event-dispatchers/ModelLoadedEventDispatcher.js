@@ -24,7 +24,7 @@ class ModelLoadedEventDispatcher extends ApiEventDispatcher {
    */
   initDispatch() {
     useStore.subscribe((state, previousState) => {
-      if (state.modelStore !== previousState.modelStore) {
+      if (state.model !== previousState.model) {
         const eventData = {}
         this.apiConnection.send(this.name, eventData)
       }

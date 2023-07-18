@@ -2,7 +2,6 @@ import React, {useEffect, useMemo, useRef} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
-import Styles from './Styles'
 import {CAMERA_PREFIX} from './Components/CameraControl'
 import CadView, {searchIndex} from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
@@ -11,6 +10,8 @@ import useShareTheme from './theme/Theme'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import {handleBeforeUnload} from './utils/event'
+import {splitAroundExtension} from './Filetype'
+import Styles from './Styles'
 
 
 /**
@@ -120,7 +121,14 @@ export function navToDefault(navigate, appPrefix) {
  *
  * @param {string} installPrefix e.g. /share
  * @param {string} pathPrefix e.g. /share/v/p
- * @param {object} urlParams e.g. .../:org/:repo/:branch/*
+ * @param {object} urlParams e.g.:
+ *     .../:org/:repo/:branch/ with .../a/b/c/d
+ *   becomes:
+ *     {
+ *       '*': 'a/b/c/d',
+ *       'org': 'a',
+ *       ...
+ *     }
  * @return {object}
  */
 export function getModelPath(installPrefix, pathPrefix, urlParams) {
@@ -130,13 +138,16 @@ export function getModelPath(installPrefix, pathPrefix, urlParams) {
   if (filepath === '') {
     return null
   }
-  const splitRegex = /\.ifc/i
-  const match = splitRegex.exec(filepath)
-  if (!match) {
-    throw new Error('Filepath must contain ".ifc" (case-insensitive)')
+  let parts
+  let extension
+  try {
+    ({parts, extension} = splitAroundExtension(filepath))
+  } catch (e) {
+    alert(`Unsupported filetype: ${filepath}`)
+    debug().error(e)
+    return null
   }
-  const parts = filepath.split(splitRegex)
-  filepath = `/${parts[0]}${match[0]}`
+  filepath = `/${parts[0]}${extension}`
   if (pathPrefix.endsWith('new') || pathPrefix.endsWith('/p')) {
     // * param is defined in ../Share.jsx, e.g.:
     //   /v/p/*.  It should be only the filename.

@@ -34,7 +34,7 @@ describe('CutPlaneMenu', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
-      result.current.setViewerStore(viewer)
+      result.current.setViewer(viewer)
     })
     fireEvent.click(sectionButton)
     const xDirection = getByText('X - Section')
@@ -57,7 +57,7 @@ describe('CutPlaneMenu', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
-      result.current.setViewerStore(viewer)
+      result.current.setViewer(viewer)
     })
     const callCreatePlanes = viewer.clipper.createFromNormalAndCoplanarPoint.mock.calls
     expect(callCreatePlanes.length).toBe(1)
@@ -73,7 +73,7 @@ describe('CutPlaneMenu', () => {
     // mock contains one plane
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
-      result.current.setViewerStore(viewer)
+      result.current.setViewer(viewer)
     })
     const shareButton = getByTitle('Share')
     fireEvent.click(shareButton)
@@ -85,8 +85,8 @@ describe('CutPlaneMenu', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
-      result.current.setViewerStore(viewer)
-      result.current.setModelStore(model)
+      result.current.setViewer(viewer)
+      result.current.setModel(model)
     })
     render(
         <ShareMock

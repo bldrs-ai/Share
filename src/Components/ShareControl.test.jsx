@@ -15,7 +15,7 @@ describe('ShareControl', () => {
   })
 
   it('updates the title when the dialog is open', async () => {
-    const {result} = renderHook(() => useStore((state) => state.setViewerStore))
+    const {result} = renderHook(() => useStore((state) => state.setViewer))
     result.current({
       clipper: {
         planes: [],

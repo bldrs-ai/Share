@@ -13,7 +13,6 @@ export default (
     content={'What you should know about doing the thing'}
     actionTitle={'Do do the thing?'}
     actionCb={() => {
-      // eslint-disable-next-line no-alert
       alert('You did the thing')
     }}
   />

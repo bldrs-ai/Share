@@ -46,7 +46,7 @@ class HideElementsEventHandler extends ApiEventHandler {
       }
     }
 
-    useStore.getState().viewerStore.isolator.hideElementsById(expressIds.map((id) => Number(id)))
+    useStore.getState().viewer.isolator.hideElementsById(expressIds.map((id) => Number(id)))
 
     return this.apiConnection.successfulResponse({})
   }
