@@ -227,7 +227,7 @@ export function removeHashParams(location, name, paramKeys = []) {
 
   location.hash = newParamsEncoded
   if (location.hash === '') {
-    history.replaceState(
+    history.pushState(
         '', document.title, window.location.pathname + window.location.search)
   }
 }
