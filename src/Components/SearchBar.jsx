@@ -103,7 +103,7 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
           'minWidth': '100%',
           'width': `${widthPx}px`,
           'alignItems': 'center',
-          // 'boxShadow': 'none',
+          'boxShadow': 'none',
           'border': '1px solid lightGrey',
           'opacity': .8,
           'padding': '0px 6px',
