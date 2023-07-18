@@ -1,4 +1,10 @@
 /**
+ * BLDRS, when inserted in an iframe, is modifying the parent window's
+ * history. This is a workaround to prevent that.
+ */
+window.history.pushState = window.history.replaceState;
+
+/**
  * Helper for calling navigate that will append search query to path,
  * if present, before appending an optional hash.
  *
