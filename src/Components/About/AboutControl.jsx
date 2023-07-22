@@ -73,7 +73,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>Builders</Typography>
+          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}
