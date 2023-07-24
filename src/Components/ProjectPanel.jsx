@@ -545,24 +545,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               )
             })}
           </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              paddingBottom: '20px',
-              paddingTop: '6px',
-            }}
-          >
-            <RectangularButton
-              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
-              onClick={() => {
-                fileOpen()
-              }}
-              placement={'top'}
-              icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-            />
-          </Box>
         </>
         }
 
@@ -604,6 +586,23 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                   }}
                   icon={<GitHubIcon style={{opacity: .5}}/>}
                 />
+                <Box
+                  sx={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    justifyContent: 'center',
+                    paddingTop: '6px',
+                  }}
+                >
+                  <RectangularButton
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
+                    onClick={() => {
+                      fileOpen()
+                    }}
+                    placement={'top'}
+                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
+                  />
+                </Box>
               </Box>
             }
             {isAuthenticated &&

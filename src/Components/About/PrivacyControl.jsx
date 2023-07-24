@@ -31,13 +31,16 @@ export default function PrivacyControl() {
   return (
     <Box
       sx={{
-        width: '100%',
-        margin: '1em 0',
-        textAlign: 'justify',
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        'width': '100%',
+        'margin': '1em 0',
+        'textAlign': 'justify',
+        'display': 'flex',
+        'flexDirection': 'row',
+        'justifyContent': 'space-between',
+        'alignItems': 'center',
+        '@media (max-width: 900px)': {
+          margin: '.5em 0',
+        },
       }}
     >
       <Typography>

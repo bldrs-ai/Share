@@ -93,7 +93,9 @@ export default function ResourcesMenu() {
             showTitle={true}
           />
         </MenuItem>
-        <MenuItem><AboutControl/></MenuItem>
+        <MenuItem>
+          <AboutControl/>
+        </MenuItem>
         <MenuItem><HelpControl/></MenuItem>
       </Menu>
     </>
