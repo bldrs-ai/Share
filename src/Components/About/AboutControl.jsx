@@ -18,7 +18,7 @@ import {Helmet} from 'react-helmet-async'
  *
  * @return {React.Component}
  */
-export default function AboutControl() {
+export default function AboutControl({closeMenu}) {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
@@ -51,6 +51,7 @@ export default function AboutControl() {
       }
       dialog={
         <AboutDialog
+          closeMenu={closeMenu}
           isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayedForDialog}
         />
@@ -65,9 +66,10 @@ export default function AboutControl() {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
+ * @param {Finction} closeMenu
  * @return {React.ReactElement} React component
  */
-export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, closeMenu}) {
   return (
     <Dialog
       icon={
@@ -79,9 +81,13 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
+      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed} closeMenu={closeMenu}/>}
       actionTitle='OK'
-      actionCb={() => setIsDialogDisplayed(false)}
+      actionCb={() => {
+        closeMenu()
+        setIsDialogDisplayed(false)
+      }
+      }
     />
   )
 }
@@ -90,9 +96,10 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 /**
  * The content portion of the AboutDialog
  *
+ * @param {Finction} closeMenu
  * @return {React.ReactElement} React component
  */
-function AboutContent({setIsDialogDisplayed}) {
+function AboutContent({setIsDialogDisplayed, closeMenu}) {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const showProjectPanel = useStore((state) => state.showProjectPanel)
   const theme = useTheme()
@@ -125,6 +132,7 @@ function AboutContent({setIsDialogDisplayed}) {
           if (!showProjectPanel) {
             toggleShowProjectPanel()
             setIsDialogDisplayed()
+            closeMenu()
           }
         }}
       >

@@ -94,7 +94,7 @@ export default function ResourcesMenu() {
           />
         </MenuItem>
         <MenuItem>
-          <AboutControl/>
+          <AboutControl closeMenu={() => handleClose()}/>
         </MenuItem>
         <MenuItem><HelpControl/></MenuItem>
       </Menu>
