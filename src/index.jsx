@@ -54,7 +54,7 @@ root.render(
       <FlagsProvider value={flags}>
         <HelmetProvider>
           <Helmet>
-            <title>Builders</title>
+            <title>builders</title>
           </Helmet>
           <BrowserRouter>
             <CypressHistorySupport/>

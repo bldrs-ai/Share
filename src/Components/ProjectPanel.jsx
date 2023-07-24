@@ -95,10 +95,10 @@ const LoginComponent = () => {
           }}
         >here
         </Box>
-        <Box sx={{marginTop: '10px'}}>To learn more about why we recommend GitHub for file hosting please visit our{' '}
+        <Box sx={{marginTop: '10px'}}>To learn more about how to access models stored on GitHub visit our{' '}
           <a
             target="_blank"
-            href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+            href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
             rel="noreferrer"
           >
             wiki
