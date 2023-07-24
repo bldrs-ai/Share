@@ -39,11 +39,15 @@ export default function AboutDescription({setIsDialogDisplayed}) {
           padding: '6px 6px',
         }}
       >
-        <Typography variant={'h5'} >
-            Cross-functional online collaboration unlocks team flow,
+        <Typography variant={'h5'} sx={{fontSize: '.75em'}} >
+          {/* Cross-functional online collaboration unlocks team flow,
             productivity and creativity.
             Open workspaces, open standards and open source code is the most powerful way to work.
-            Cooperation is the unfair advantage.
+            Cooperation is the unfair advantage. */}
+          Builders is a cross-functional online collaboration platform which is being developed
+          with the aim to unlock team flow, productivity and creativity for the builders of the world.
+          We believe open workspaces, open standards and open source code is the most powerful way to work since
+          the foundation of these practices is cooperation, which clearly is the unfair advantage.
         </Typography>
         <Box
           sx={{
@@ -52,7 +56,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '1em',
+            top: '.5em',
           }}
         >
           <a
