@@ -1,18 +1,28 @@
 import debug from '../utils/debug'
 
 
-/**
- * Upload a local file for display.
- *
- * @param {Function} navigate
- * @param {string} appPrefix
- * @param {Function} handleBeforeUnload
- */
-export function loadLocalFile(navigate, appPrefix, handleBeforeUnload) {
-  const viewerContainer = document.getElementById('viewer-container')
-  const fileInput = document.createElement('input')
-  fileInput.setAttribute('type', 'file')
-  fileInput.addEventListener(
+export default class IfcLoader {
+  /**
+   * Upload a local file for display.
+   *
+   * @param {Function} navigate
+   * @param {string} appPrefix
+   * @param {Function} handleBeforeUnload
+   */
+  constructor(opts) {
+    if (opts.appPrefix) {
+      this.appPrefix = opts.appPrefix
+    } else {
+      throw new Error('Must have an appPrefix configured for IfcLoader')
+    }
+  }
+
+
+  load(navigate, handleBeforeUnload) {
+    const viewerContainer = document.getElementById('viewer-container')
+    const fileInput = document.createElement('input')
+    fileInput.setAttribute('type', 'file')
+    fileInput.addEventListener(
       'change',
       (event) => {
         debug().log('loader#loadLocalFile#event:', event)
@@ -27,25 +37,26 @@ export function loadLocalFile(navigate, appPrefix, handleBeforeUnload) {
         navigate(`${appPrefix}/v/new/${tmpUrl}.ifc`)
       },
       false,
-  )
-  viewerContainer.appendChild(fileInput)
-  fileInput.click()
-  viewerContainer.removeChild(fileInput)
-}
+    )
+    viewerContainer.appendChild(fileInput)
+    fileInput.click()
+    viewerContainer.removeChild(fileInput)
+  }
 
 
-/**
- * Construct browser's actual blob URL from app URL for uploaded file.
- *
- * @param {string} filepath
- * @return {string}
- */
-export function getUploadedBlobPath(filepath) {
-  const l = window.location
-  // TODO(pablo): fix this with the above TODO for ifc suffix.
-  filepath = filepath.split('.ifc')[0]
-  const parts = filepath.split('/')
-  filepath = parts[parts.length - 1]
-  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
-  return filepath
+  /**
+   * Construct browser's actual blob URL from app URL for uploaded file.
+   *
+   * @param {string} filepath
+   * @return {string}
+   */
+  getUploadedBlobPath(filepath) {
+    const l = window.location
+    // TODO(pablo): fix this with the above TODO for ifc suffix.
+    filepath = filepath.split('.ifc')[0]
+    const parts = filepath.split('/')
+    filepath = parts[parts.length - 1]
+    filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
+    return filepath
+  }
 }
