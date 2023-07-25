@@ -1,5 +1,13 @@
-import {WebGLRenderer, Camera, Scene} from 'three'
-import {EffectComposer, EffectPass, OutlineEffect, RenderPass} from 'postprocessing'
+import {
+  WebGLRenderer,
+  Camera,
+  Scene
+} from 'three'
+import {EffectComposer} from 'three/examples/jsm/postprocessing/EffectComposer'
+//import {EffectPass} from 'three/examples/jsm/postprocessing/EffectPass'
+//import {OutlineEffect} from 'three/examples/jsm/postprocessing/OutlineEffect'
+import {RenderPass} from 'three/examples/jsm/postprocessing/RenderPass'
+import {SSAOPass} from 'three/examples/jsm/postprocessing/SSAOPass'
 
 /**
  *  A custom post processor utility
@@ -20,6 +28,13 @@ export default class CustomPostProcessor {
   constructor(renderer, scene, camera) {
     this._composer = new EffectComposer(renderer)
     this._composer.addPass(new RenderPass(scene, camera))
+    /*
+    const sp = new SSAOPass(scene, camera)
+    sp.radius = 10
+    sp.aoClamp = 0.3
+    sp.lumInfluence = 0.7
+    this._composer.addPass(sp)
+    */
     this._scene = scene
     this._camera = camera
   }
@@ -40,9 +55,9 @@ export default class CustomPostProcessor {
    * @return {OutlineEffect} the outline effect
    */
   createOutlineEffect(effectOpts) {
-    const outlineEffect = new OutlineEffect(this._scene, this._camera, effectOpts)
-    const selectionOutlinePass = new EffectPass(this._camera, outlineEffect)
-    this._composer.addPass(selectionOutlinePass)
-    return outlineEffect
+    // const outlineEffect = new OutlineEffect(this._scene, this._camera, effectOpts)
+    // const selectionOutlinePass = new EffectPass(this._camera, outlineEffect)
+    // this._composer.addPass(selectionOutlinePass)
+    return null //outlineEffect
   }
 }

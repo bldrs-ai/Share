@@ -1,4 +1,5 @@
 import React, {useEffect, useState} from 'react'
+import * as THREE from 'three'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
@@ -20,7 +21,7 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
-import * as Loader from '../Loader'
+import * as Loader from '../loaders/Factory'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
@@ -232,7 +233,7 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    const tmpModelRef = await loadIfc(pathToLoad)
+    const tmpModelRef = await loadModel(pathToLoad)
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -278,16 +279,18 @@ export default function CadView({
    *
    * @param {string} filepath
    */
-  async function loadIfc(filepath) {
-    debug().log(`CadView#loadIfc: `, filepath)
+  async function loadModel(filepath) {
+    debug().log(`CadView#loadModel: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
 
     // TODO
+    /*
     if (uploadedFile) {
       filepath = IfcLoader.getUploadedBlobPath(filepath)
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
+      debug().log('CadView#loadModel: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
-    }
+      }
+    */
 
     const loadingMessageBase = `Loading ${filepath}`
     setLoadingMessage(loadingMessageBase)
@@ -297,25 +300,44 @@ export default function CadView({
 
     const loader = Loader.findLoader(finalUrl)
     console.log('LOADER CHOSEN: ', loader)
-    let loadedModel
     if (loader !== null) {
-      const promise = Loader.doLoad(finalUrl, loader, setLoadingMessage)
-      console.log('LOADED MODEL promise: ', promise)
-      loadedModel = await promise
-      console.log('LOADED MODEL: ', loadedModel)
-      if (loadedModel) {
-        console.log('LOADED MODEL, setting scene...')
-        viewer.context.scene.add(finalUrl.indexOf('gltf') == - 1 ? loadedModel: loadedModel.scene)
-        // await viewer.isolator.setModel(loadedModel)
-      } else {
-        console.log('LOAD Failed: ', finalUrl, loader, loadedModel)
-      }
+      loader.load(
+          finalUrl,
+          (loadedModel) => {
+            console.log('loader: loadedModel: ', loadedModel)
+            onModelLoad(finalUrl, loadedModel)
+          },
+          (e) => {
+            console.log('loader: onProgress', e)
+          },
+          (e) => {
+            console.log('loader: onError', e)
+          }
+      )
     } else {
       alert(`Unknown filetype for URL: ${finalUrl}`)
       return null
     }
+  }
 
+
+  /** */
+  function onModelLoad(finalUrl, loadedModel) {
     setIsLoading(false)
+    if ((finalUrl.indexOf('gltf') !== -1) ||
+        (finalUrl.indexOf('glb') !== -1)) {
+      loadedModel = loadedModel.scene
+      // Loader.addEnvMap(viewer.context.scene.scene, viewer.context.renderer.renderer)
+      const threeScene = viewer.context.scene.scene
+      const light = new THREE.DirectionalLight(0xffffff, 1)
+      light.position.set(5, 10, 5)
+      light.castShadow = true
+      threeScene.add(light)
+      loadedModel.receiveShadow = true
+    }
+    console.log('LOADED MODEL, setting scene: ', loadedModel)
+    viewer.context.scene.add(loadedModel)
+    // await viewer.isolator.setModel(loadedModel)
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -328,13 +350,13 @@ export default function CadView({
       loadedModel.modelID = 0
       setModel(loadedModel)
       setModelStore(loadedModel)
-      updateLoadedFileInfo(uploadedFile, finalUrl)
-      debug().error('CadView#loadIfc: Model load failed!')
+      updateLoadedFileInfo(loadedModel, finalUrl)
+      debug().error('CadView#loadModel: Model load failed!')
 
       // TODO(pablo): generalize from ifc
       Privacy.recordEvent('select_content', {
         content_type: 'ifc_model',
-        item_id: filepath,
+        item_id: finalUrl,
       })
       return loadedModel
     }
@@ -347,7 +369,6 @@ export default function CadView({
    * @param {object} m IFCjs loaded model.
    */
   async function onModel(m) {
-    if (true) return
     assertDefined(m)
     debug().log('CadView#onModel', m)
     const rootElt = await m.ifcManager.getSpatialStructure(0, true)
