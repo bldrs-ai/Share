@@ -344,6 +344,7 @@ const ProjectAccess = () => {
         'width': '240px',
         'borderRadius': '10px',
         'paddingTop': '10px',
+        'paddingBottom': '6px',
         'overflow': 'auto',
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
