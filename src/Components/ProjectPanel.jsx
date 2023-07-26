@@ -18,14 +18,12 @@ import DeleteIcon from '../assets/icons/Delete.svg'
 import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../assets/icons/view/ViewCube2.svg'
 import ViewCube3 from '../assets/icons/view/ViewCube3.svg'
-// import LoginIcon from '../assets/icons/Login.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 import SaveIcon from '../assets/icons/Save.svg'
 import ExportIcon from '../assets/icons/Export.svg'
 import CommitIcon from '../assets/icons/Commit.svg'
 import CommitActionIcon from '../assets/icons/CommitAction.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
-// import SwissProperty from '../assets/icons/SwissProperty.svg'
 import OpenIcon from '../assets/icons/OpenFolder.svg'
 import FolderIcon from '../assets/icons/Folder.svg'
 import {TooltipIconButton} from './Buttons'
@@ -57,7 +55,6 @@ const LoginComponent = () => {
         'flexDirection': 'column',
         'justifyContent': 'flex-start',
         'alignItems': 'center',
-        // 'height': '160px',
         'width': '240px',
         'borderRadius': '10px',
         'backgroundColor': theme.palette.background.button,
@@ -180,7 +177,6 @@ const SaveComponent = () => {
           'flexDirection': 'column',
           'justifyContent': 'flex-start',
           'alignItems': 'center',
-          // 'height': '160px',
           'width': '240px',
           'borderRadius': '10px',
           'backgroundColor': theme.palette.background.button,
@@ -480,7 +476,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
     'flexDirection': 'column',
     'justifyContent': 'flex-start',
     'alignItems': 'center',
-    // 'height': '190px',
     'width': '240px',
     'borderRadius': '10px',
     'border': `1px solid ${theme.palette.background.button}`,
@@ -545,6 +540,25 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               )
             })}
           </Box>
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              paddingTop: '4px',
+              paddingBottom: '16px',
+            }}
+          >
+            <RectangularButton
+              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Sample repo</Box>}
+              onClick={() => {
+                window.open(
+                    'https://github.com/Swiss-Property-AG/Schneestock-Public', '_blank').focus()
+              }}
+              placement={'top'}
+              icon={<GitHubIcon style={{width: '28px', height: '18px'}}/>}
+            />
+          </Box>
         </>
         }
 
@@ -556,7 +570,6 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               'justifyContent': 'flex-start',
               'alignItems': 'center',
               'width': '240px',
-              // 'borderRadius': '10px',
               'marginBottom': '14px',
               'marginTop': '10px',
               'overflow': 'auto',
@@ -608,24 +621,23 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             {isAuthenticated &&
               <>
                 <ProjectAccess/>
-                {/* <Box
+                <Box
                   sx={{
                     display: 'flex',
                     flexDirection: 'row',
                     justifyContent: 'center',
-                    alignItems: 'center',
-                    paddingBottom: '10px',
+                    paddingTop: '6px',
                   }}
                 >
                   <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import</Box>}
+                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
                     onClick={() => {
                       fileOpen()
                     }}
                     placement={'top'}
                     icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
                   />
-                </Box> */}
+                </Box>
               </>
             }
           </Box>

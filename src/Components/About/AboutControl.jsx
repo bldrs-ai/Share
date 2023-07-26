@@ -66,7 +66,7 @@ export default function AboutControl({closeMenu}) {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
- * @param {Finction} closeMenu
+ * @param {Function} closeMenu
  * @return {React.ReactElement} React component
  */
 export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, closeMenu}) {
@@ -96,7 +96,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, closeMenu}
 /**
  * The content portion of the AboutDialog
  *
- * @param {Finction} closeMenu
+ * @param {Function} closeMenu
  * @return {React.ReactElement} React component
  */
 function AboutContent({setIsDialogDisplayed, closeMenu}) {
