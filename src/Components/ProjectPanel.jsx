@@ -557,7 +557,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     'https://github.com/Swiss-Property-AG/Schneestock-Public', '_blank').focus()
               }}
               placement={'top'}
-              icon={<GitHubIcon style={{width: '28px', height: '18px'}}/>}
+              icon={<GitHubIcon style={{width: '28px', height: '18px', opacity: '.5'}}/>}
             />
           </Box>
         </>
