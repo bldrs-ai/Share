@@ -297,7 +297,7 @@ const ProjectAccess = () => {
       <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
       <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
       <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
-      {selectedFileName !== '' &&
+      {/* {selectedFileName !== '' && */}
       <Box sx={{textAlign: 'center', marginTop: '4px'}}>
         <RectangularButton
           title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Access project</Box>}
@@ -308,7 +308,7 @@ const ProjectAccess = () => {
           icon={<GitHubIcon style={{width: '28px', height: '20px', opacity: .5}}/>}
         />
       </Box>
-      }
+      {/* } */}
     </Box>
   )
 }
@@ -435,6 +435,49 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
       />
 
     </Box>
+  )
+}
+
+const ProjectAccessActions = ({fileOpen, login}) => {
+  const {isAuthenticated} = useAuth0()
+  return (
+    <>
+      {isAuthenticated ?
+      <>
+        <RectangularButton
+          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
+          onClick={() => {
+            fileOpen()
+          }}
+          placement={'top'}
+          icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
+        />
+      </> :
+      <>
+        <RectangularButton
+          title={'Login to GitHub'}
+          onClick={() => {
+            login()
+          }}
+          icon={<GitHubIcon style={{opacity: .5}}/>}
+        />
+        <Box
+          sx={{
+            paddingTop: '6px',
+          }}
+        >
+          <RectangularButton
+            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
+            onClick={() => {
+              fileOpen()
+            }}
+            placement={'top'}
+            icon={<UploadIcon style={{width: '28px', height: '18px', paddingLeft: '5px'}}/>}
+          />
+        </Box>
+      </>
+      }
+    </>
   )
 }
 
@@ -599,52 +642,13 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             {!isAuthenticated &&
               <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
                 <LoginComponent/>
-                <RectangularButton
-                  title={'Login to GitHub'}
-                  onClick={() => {
-                    login()
-                  }}
-                  icon={<GitHubIcon style={{opacity: .5}}/>}
-                />
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    paddingTop: '6px',
-                  }}
-                >
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px', paddingLeft: '5px'}}/>}
-                  />
-                </Box>
+                <ProjectAccessActions login={login} fileOpen={fileOpen}/>
               </Box>
             }
             {isAuthenticated &&
               <>
                 <ProjectAccess/>
-                <Box
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    justifyContent: 'center',
-                    paddingTop: '6px',
-                  }}
-                >
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-                  />
-                </Box>
+                <ProjectAccessActions login={login} fileOpen={fileOpen}/>
               </>
             }
           </Box>
@@ -715,6 +719,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
             </Box>
           </Box>
         }
+
       </Box>
     </Paper>
   )
