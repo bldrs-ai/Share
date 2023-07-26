@@ -62,13 +62,13 @@ const selectorStyles = (theme) => {
         color: theme.palette.primary.contrastText,
       },
       '&:hover .MuiInputLabel-root': {
-        color: theme.palette.primary.main,
+        color: theme.palette.primary.contrastText,
       },
       '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
         borderColor: theme.palette.primary.main,
       },
       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.primary.contrastText,
       },
       '& .MuiInputLabel-root.Mui-focused': {
         color: theme.palette.primary.contrastText,

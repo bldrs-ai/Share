@@ -298,7 +298,7 @@ const ProjectAccess = () => {
       <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
       <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
       {selectedFileName !== '' &&
-      <Box sx={{textAlign: 'center', marginTop: '4px', marginBottom: '8px'}}>
+      <Box sx={{textAlign: 'center', marginTop: '4px'}}>
         <RectangularButton
           title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Access project</Box>}
           onClick={() => {
