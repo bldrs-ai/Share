@@ -44,7 +44,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             productivity and creativity.
             Open workspaces, open standards and open source code is the most powerful way to work.
             Cooperation is the unfair advantage. */}
-          Builders is a cross-functional online collaboration platform which is being developed
+          Share is a cross-functional online collaboration platform which is being developed
           with the aim to unlock team flow, productivity and creativity for the builders of the world.
           We believe open workspaces, open standards and open source code is the most powerful way to work since
           the foundation of these practices is cooperation, which clearly is the unfair advantage.
