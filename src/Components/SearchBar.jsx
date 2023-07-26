@@ -116,7 +116,6 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
           },
         }}
       >
-        {/* <OpenModelControl fileOpen={fileOpen}/> */}
         <InputBase
           inputRef={searchInputRef}
           value={inputText}

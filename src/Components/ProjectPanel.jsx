@@ -344,7 +344,6 @@ const ProjectAccess = () => {
         'width': '240px',
         'borderRadius': '10px',
         'paddingTop': '10px',
-        'paddingBottom': '10px',
         'overflow': 'auto',
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
@@ -360,7 +359,6 @@ const ProjectAccess = () => {
       <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
       <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
       <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
-      {/* {selectedFileName !== '' && */}
       <Box sx={{textAlign: 'center', marginTop: '4px'}}>
         <RectangularButton
           title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Access project</Box>}
@@ -371,7 +369,6 @@ const ProjectAccess = () => {
           icon={<GitHubIcon style={{width: '28px', height: '20px', opacity: .5}}/>}
         />
       </Box>
-      {/* } */}
     </Box>
   )
 }
