@@ -355,6 +355,7 @@ const TitleBar = ({showMode}) => {
         </Box>
         <Typography variant='h4'
           sx={{
+            fontWeight: '500',
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',
@@ -613,7 +614,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                       fileOpen()
                     }}
                     placement={'top'}
-                    icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
+                    icon={<UploadIcon style={{width: '28px', height: '18px', paddingLeft: '5px'}}/>}
                   />
                 </Box>
               </Box>
@@ -702,7 +703,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
                     fileOpen()
                   }}
                   placement={'top'}
-                  icon={<ExportIcon style={{width: '28px', height: '18px'}}/>}
+                  icon={<ExportIcon style={{width: '28px', height: '18px', paddingLeft: '6px'}}/>}
                 />
               </Box>
             </Box>
