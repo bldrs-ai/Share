@@ -45,6 +45,69 @@ const icon = (iconNumber) => {
   }
 }
 
+const TitleBar = ({showMode}) => {
+  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  const theme = useTheme()
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0px 20px',
+        height: '60px',
+        fontWeight: '500',
+        borderBottom: `1px solid ${theme.palette.background.button}`,
+      }}
+    >
+      <Box
+        sx={{
+          width: '240px',
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
+      >
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+            marginRight: '12px',
+            paddingBottom: '2px',
+          }}
+        >
+          {showMode === 'sample' && <ViewCube1/> }
+          {showMode === 'projects' && <ViewCube2/> }
+          {showMode === 'save' && <ViewCube3/> }
+
+        </Box>
+        <Typography variant='h4'
+          sx={{
+            fontWeight: '500',
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {showMode === 'sample' && 'Sample projects' }
+          {showMode === 'projects' && 'Access project' }
+          {showMode === 'save' && 'Save project' }
+        </Typography>
+      </Box>
+      <Box
+        onClick={toggleShowProjectPanel}
+      >
+        <DeleteIcon style={{width: '12px', height: '12px'}}/>
+      </Box>
+    </Box>
+  )
+}
+
 const LoginComponent = () => {
   const theme = useTheme()
 
@@ -313,70 +376,50 @@ const ProjectAccess = () => {
   )
 }
 
-const TitleBar = ({showMode}) => {
-  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
-  const theme = useTheme()
+const ProjectAccessActions = ({fileOpen, login}) => {
+  const {isAuthenticated} = useAuth0()
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0px 20px',
-        height: '60px',
-        fontWeight: '500',
-        borderBottom: `1px solid ${theme.palette.background.button}`,
-      }}
-    >
-      <Box
-        sx={{
-          width: '240px',
-          display: 'flex',
-          flexDirection: 'row',
-          justifyContent: 'center',
-          alignItems: 'center',
-        }}
-      >
+    <>
+      {isAuthenticated ?
+      <>
+        <RectangularButton
+          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
+          onClick={() => {
+            fileOpen()
+          }}
+          placement={'top'}
+          icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
+        />
+      </> :
+      <>
+        <RectangularButton
+          title={'Login to GitHub'}
+          onClick={() => {
+            login()
+          }}
+          icon={<GitHubIcon style={{opacity: .5}}/>}
+        />
         <Box
           sx={{
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-            marginRight: '12px',
-            paddingBottom: '2px',
+            paddingTop: '6px',
           }}
         >
-          {showMode === 'sample' && <ViewCube1/> }
-          {showMode === 'projects' && <ViewCube2/> }
-          {showMode === 'save' && <ViewCube3/> }
-
+          <RectangularButton
+            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
+            onClick={() => {
+              fileOpen()
+            }}
+            placement={'top'}
+            icon={<UploadIcon style={{width: '28px', height: '18px', paddingLeft: '5px'}}/>}
+          />
         </Box>
-        <Typography variant='h4'
-          sx={{
-            fontWeight: '500',
-            display: 'flex',
-            flexDirection: 'row',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          {showMode === 'sample' && 'Sample projects' }
-          {showMode === 'projects' && 'Access project' }
-          {showMode === 'save' && 'Save project' }
-        </Typography>
-      </Box>
-      <Box
-        onClick={toggleShowProjectPanel}
-      >
-        <DeleteIcon style={{width: '12px', height: '12px'}}/>
-      </Box>
-    </Box>
+      </>
+      }
+    </>
   )
 }
 
-const ProjectsOptions = ({showMode, setShowMode}) => {
+const ProjectPanelOptions = ({showMode, setShowMode}) => {
   const {isAuthenticated} = useAuth0()
   return (
     <Box
@@ -438,83 +481,16 @@ const ProjectsOptions = ({showMode, setShowMode}) => {
   )
 }
 
-const ProjectAccessActions = ({fileOpen, login}) => {
-  const {isAuthenticated} = useAuth0()
-  return (
-    <>
-      {isAuthenticated ?
-      <>
-        <RectangularButton
-          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
-          onClick={() => {
-            fileOpen()
-          }}
-          placement={'top'}
-          icon={<UploadIcon style={{width: '28px', height: '18px'}}/>}
-        />
-      </> :
-      <>
-        <RectangularButton
-          title={'Login to GitHub'}
-          onClick={() => {
-            login()
-          }}
-          icon={<GitHubIcon style={{opacity: .5}}/>}
-        />
-        <Box
-          sx={{
-            paddingTop: '6px',
-          }}
-        >
-          <RectangularButton
-            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Import ifc</Box>}
-            onClick={() => {
-              fileOpen()
-            }}
-            placement={'top'}
-            icon={<UploadIcon style={{width: '28px', height: '18px', paddingLeft: '5px'}}/>}
-          />
-        </Box>
-      </>
-      }
-    </>
-  )
-}
-
-
-/**
- * Controls group contains toggles for fileapth, branches, spatial navigation, and element type navigation
- *
- * @param {Function} modelPath object containing information about the location of the model
- * @return {React.Component}
- */
-export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
-  const [showMode, setShowMode] = useState('sample')
+const SampleProjects = () => {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
   const theme = useTheme()
-  const {isAuthenticated, loginWithRedirect} = useAuth0()
-  useEffect(() => {
-    if (isAuthenticated) {
-      setShowMode('projects')
-    }
-  }, [isAuthenticated])
-
-  const login = async () => {
-    await loginWithRedirect({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
-  }
-
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
     Eisvogel: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
     Seestrasse: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
   }
-
   const backgroundStyle = {
     'display': 'flex',
     'flexDirection': 'column',
@@ -539,6 +515,79 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
   }
 
   return (
+    <>
+      <Box sx={backgroundStyle}>
+        {Object.keys(modelPath).map((name, i) => {
+          return (
+            <Box
+              key={i}
+              sx={{
+                margin: '2px 0px',
+              }}
+            >
+              <RectangularButton
+                title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
+                onClick={() => {
+                  navigate(modelPath[name])
+                  toggleShowProjectPanel()
+                }}
+                icon={icon(i)}
+              />
+            </Box>
+          )
+        })}
+      </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          paddingTop: '4px',
+          paddingBottom: '16px',
+        }}
+      >
+        <RectangularButton
+          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Sample repo</Box>}
+          onClick={() => {
+            window.open(
+                'https://github.com/Swiss-Property-AG/Schneestock-Public', '_blank').focus()
+          }}
+          placement={'top'}
+          icon={<GitHubIcon style={{width: '28px', height: '18px', opacity: '.5'}}/>}
+        />
+      </Box>
+    </>
+  )
+}
+
+
+/**
+ * Controls group contains toggles for fileapth, branches, spatial navigation, and element type navigation
+ *
+ * @param {Function} modelPath object containing information about the location of the model
+ * @return {React.Component}
+ */
+export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
+  const [showMode, setShowMode] = useState('sample')
+
+  // const theme = useTheme()
+  const {isAuthenticated, loginWithRedirect} = useAuth0()
+  useEffect(() => {
+    if (isAuthenticated) {
+      setShowMode('projects')
+    }
+  }, [isAuthenticated])
+
+  const login = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+
+
+  return (
     <Paper
       elevation={1}
       variant='control'
@@ -560,51 +609,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           alignItems: 'center',
         }}
       >
-        <ProjectsOptions showMode={showMode} setShowMode={setShowMode}/>
-        {showMode === 'sample' &&
-        <>
-          <Box sx={backgroundStyle}>
-            {Object.keys(modelPath).map((name, i) => {
-              return (
-                <Box
-                  key={i}
-                  sx={{
-                    margin: '2px 0px',
-                  }}
-                >
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
-                    onClick={() => {
-                      navigate(modelPath[name])
-                      toggleShowProjectPanel()
-                    }}
-                    icon={icon(i)}
-                  />
-                </Box>
-              )
-            })}
-          </Box>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              paddingTop: '4px',
-              paddingBottom: '16px',
-            }}
-          >
-            <RectangularButton
-              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Sample repo</Box>}
-              onClick={() => {
-                window.open(
-                    'https://github.com/Swiss-Property-AG/Schneestock-Public', '_blank').focus()
-              }}
-              placement={'top'}
-              icon={<GitHubIcon style={{width: '28px', height: '18px', opacity: '.5'}}/>}
-            />
-          </Box>
-        </>
-        }
+        <ProjectPanelOptions showMode={showMode} setShowMode={setShowMode}/>
+        {showMode === 'sample' && <SampleProjects/>}
 
         {showMode === 'projects' &&
           <Box
