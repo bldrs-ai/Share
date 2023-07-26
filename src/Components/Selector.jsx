@@ -49,7 +49,7 @@ const selectorStyles = (theme) => {
       'width': '230px',
       'padding': '0px 0px 12px 0px',
       '& .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.primary.contrastText,
       },
       '& .MuiInputLabel-root': {
         color: theme.palette.primary.contrastText,
@@ -59,7 +59,7 @@ const selectorStyles = (theme) => {
         borderColor: theme.palette.primary.main,
       },
       '&:hover .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.primary.contrastText,
       },
       '&:hover .MuiInputLabel-root': {
         color: theme.palette.primary.main,
