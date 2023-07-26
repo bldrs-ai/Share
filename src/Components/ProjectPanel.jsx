@@ -585,11 +585,17 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
               },
             }}
           >
-            <SearchBar
-              placeholderText={'Paste model link'}
-              variableLength={false}
-              icon={ <GitHubIcon style={{width: '20px', height: '20px', opacity: .5}}/>}
-            />
+            <Box
+              sx={{
+                width: '230px',
+              }}
+            >
+              <SearchBar
+                placeholderText={'Paste model link'}
+                variableLength={false}
+                icon={ <GitHubIcon style={{width: '20px', height: '20px', opacity: .5}}/>}
+              />
+            </Box>
             {!isAuthenticated &&
               <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
                 <LoginComponent/>
