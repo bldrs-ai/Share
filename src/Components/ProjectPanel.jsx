@@ -271,7 +271,7 @@ const SaveComponent = () => {
   )
 }
 
-const ProjectAccess = () => {
+const NavigateToRepository = () => {
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
@@ -558,6 +558,132 @@ const SampleProjects = () => {
   )
 }
 
+const ProjectBrowers = ({fileOpen}) => {
+  const {isAuthenticated, loginWithRedirect} = useAuth0()
+  const login = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+  return (
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'justifyContent': 'flex-start',
+        'alignItems': 'center',
+        'width': '240px',
+        'marginBottom': '14px',
+        'marginTop': '10px',
+        'overflow': 'auto',
+        'scrollbarWidth': 'none', /* Firefox */
+        '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+        '&::-webkit-scrollbar': {
+          width: '0em',
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'transparent',
+        },
+      }}
+    >
+      <Box
+        sx={{
+          width: '230px',
+        }}
+      >
+        <SearchBar
+          placeholderText={'Paste model link'}
+          variableLength={false}
+          icon={ <GitHubIcon style={{width: '20px', height: '20px', opacity: .5}}/>}
+        />
+      </Box>
+      {!isAuthenticated &&
+        <>
+          <LoginComponent/>
+          <ProjectAccessActions login={login} fileOpen={fileOpen}/>
+        </>
+      }
+      {isAuthenticated &&
+        <>
+          <NavigateToRepository/>
+          <ProjectAccessActions login={login} fileOpen={fileOpen}/>
+        </>
+      }
+    </Box>
+  )
+}
+
+const Version = ({fileOpen}) => {
+  const {isAuthenticated, loginWithRedirect} = useAuth0()
+  const login = async () => {
+    await loginWithRedirect({
+      appState: {
+        returnTo: window.location.pathname,
+      },
+    })
+  }
+  return (
+    <Box
+      sx={{
+        'display': 'flex',
+        'flexDirection': 'column',
+        'justifyContent': 'flex-start',
+        'alignItems': 'center',
+        'width': '240px',
+        'borderRadius': '10px',
+        'marginBottom': '14px',
+        'marginTop': '10px',
+        'overflow': 'auto',
+        'scrollbarWidth': 'none', /* Firefox */
+        '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
+        '&::-webkit-scrollbar': {
+          width: '0em',
+          background: 'transparent',
+        },
+        '&::-webkit-scrollbar-thumb': {
+          background: 'transparent',
+        },
+      }}
+    >
+      <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
+        <SaveComponent/>
+        <Box sx={{
+          height: '92px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          paddingTop: '6px',
+        }}
+        >
+          {isAuthenticated ?
+            <RectangularButton
+              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Save version</Box>}
+              onClick={fileOpen}
+              placement={'top'}
+              icon={<CommitActionIcon style={{width: '28px', height: '18px'}}/>}
+            /> :
+            <RectangularButton
+              title={'Login to GitHub'}
+              onClick={login}
+              icon={<GitHubIcon style={{opacity: .5}}/>}
+            />
+          }
+          <RectangularButton
+            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export ifc</Box>}
+            onClick={fileOpen}
+            placement={'top'}
+            icon={<ExportIcon style={{width: '28px', height: '18px', paddingLeft: '6px'}}/>}
+          />
+        </Box>
+      </Box>
+    </Box>
+  )
+}
+
 
 /**
  * Controls group contains toggles for fileapth, branches, spatial navigation, and element type navigation
@@ -567,23 +693,12 @@ const SampleProjects = () => {
  */
 export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
   const [showMode, setShowMode] = useState('sample')
-
-  // const theme = useTheme()
-  const {isAuthenticated, loginWithRedirect} = useAuth0()
+  const {isAuthenticated} = useAuth0()
   useEffect(() => {
     if (isAuthenticated) {
       setShowMode('projects')
     }
   }, [isAuthenticated])
-
-  const login = async () => {
-    await loginWithRedirect({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
-  }
-
 
   return (
     <Paper
@@ -609,121 +724,8 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
       >
         <ProjectPanelOptions showMode={showMode} setShowMode={setShowMode}/>
         {showMode === 'sample' && <SampleProjects/>}
-
-        {showMode === 'projects' &&
-          <Box
-            sx={{
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'flex-start',
-              'alignItems': 'center',
-              'width': '240px',
-              'marginBottom': '14px',
-              'marginTop': '10px',
-              'overflow': 'auto',
-              'scrollbarWidth': 'none', /* Firefox */
-              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-              '&::-webkit-scrollbar': {
-                width: '0em',
-                background: 'transparent',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: 'transparent',
-              },
-            }}
-          >
-            <Box
-              sx={{
-                width: '230px',
-              }}
-            >
-              <SearchBar
-                placeholderText={'Paste model link'}
-                variableLength={false}
-                icon={ <GitHubIcon style={{width: '20px', height: '20px', opacity: .5}}/>}
-              />
-            </Box>
-            {!isAuthenticated &&
-              <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
-                <LoginComponent/>
-                <ProjectAccessActions login={login} fileOpen={fileOpen}/>
-              </Box>
-            }
-            {isAuthenticated &&
-              <>
-                <ProjectAccess/>
-                <ProjectAccessActions login={login} fileOpen={fileOpen}/>
-              </>
-            }
-          </Box>
-        }
-
-        {showMode === 'save' &&
-          <Box
-            sx={{
-              'display': 'flex',
-              'flexDirection': 'column',
-              'justifyContent': 'flex-start',
-              'alignItems': 'center',
-              'width': '240px',
-              'borderRadius': '10px',
-              'marginBottom': '14px',
-              'marginTop': '10px',
-              'overflow': 'auto',
-              'scrollbarWidth': 'none', /* Firefox */
-              '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
-              '&::-webkit-scrollbar': {
-                width: '0em',
-                background: 'transparent',
-              },
-              '&::-webkit-scrollbar-thumb': {
-                background: 'transparent',
-              },
-            }}
-          >
-            <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
-              <SaveComponent/>
-              <Box sx={{
-                height: '96px',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                paddingTop: '6px',
-              }}
-              >
-                {!isAuthenticated &&
-                  <RectangularButton
-                    title={'Login to GitHub'}
-                    onClick={() => {
-                      login()
-                    }}
-                    icon={<GitHubIcon style={{opacity: .5}}/>}
-                  />
-                }
-                {isAuthenticated &&
-                  <RectangularButton
-                    title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Save</Box>}
-                    onClick={() => {
-                      fileOpen()
-                    }}
-                    placement={'top'}
-                    icon={<CommitActionIcon style={{width: '28px', height: '18px'}}/>}
-                  />
-                }
-                <RectangularButton
-                  title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export ifc</Box>}
-                  onClick={() => {
-                    fileOpen()
-                  }}
-                  placement={'top'}
-                  icon={<ExportIcon style={{width: '28px', height: '18px', paddingLeft: '6px'}}/>}
-                />
-              </Box>
-            </Box>
-          </Box>
-        }
-
+        {showMode === 'projects' && <ProjectBrowers fileOpen={fileOpen}/>}
+        {showMode === 'save' && <Version fileOpen={fileOpen}/>}
       </Box>
     </Paper>
   )
