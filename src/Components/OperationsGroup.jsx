@@ -3,6 +3,7 @@ import Paper from '@mui/material/Paper'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
+import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import ResourcesMenu from './ResourcesMenu'
 import ShareControl from './ShareControl'
@@ -11,7 +12,6 @@ import AuthNav from './AuthNav'
 import ClearIcon from '../assets/icons/Clear.svg'
 import ListIcon from '../assets/icons/List.svg'
 import NotesIcon from '../assets/icons/Notes.svg'
-// import {useExistInFeature} from '../hooks/useExistInFeature'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import CollapseIcon from '../assets/icons/Collapse.svg'
 import IsolateIcon from '../assets/icons/Isolate.svg'
@@ -115,6 +115,7 @@ export default function OperationsGroup({deselectItems}) {
           </ButtonGroup>
           }
           <ResourcesMenu/>
+          <AboutControl/>
           <CameraControl/>
         </Paper>
         {(isSelectedElement() || isSelectedPlane() || isolate) &&

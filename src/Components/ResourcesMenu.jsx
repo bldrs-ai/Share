@@ -3,7 +3,7 @@ import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from './Buttons'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import AboutControl from './About/AboutControl'
+// import AboutControl from './About/AboutControl'
 import HelpControl from './HelpControl'
 import DiscordIcon from '../assets/icons/Discord.svg'
 import MoreIcon from '../assets/icons/More.svg'
@@ -93,9 +93,9 @@ export default function ResourcesMenu() {
             showTitle={true}
           />
         </MenuItem>
-        <MenuItem>
+        {/* <MenuItem>
           <AboutControl closeMenu={() => handleClose()}/>
-        </MenuItem>
+        </MenuItem> */}
         <MenuItem><HelpControl/></MenuItem>
       </Menu>
     </>

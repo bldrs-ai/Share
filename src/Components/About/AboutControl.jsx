@@ -40,7 +40,6 @@ export default function AboutControl({closeMenu}) {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       placement={'left'}
-      showTitle={true}
       icon={
         <AboutIcon
           style={{

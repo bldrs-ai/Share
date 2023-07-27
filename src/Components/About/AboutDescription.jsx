@@ -39,13 +39,13 @@ export default function AboutDescription({setIsDialogDisplayed}) {
           padding: '6px 6px',
         }}
       >
-        <Typography variant={'h5'} sx={{fontSize: '.75em'}} >
+        <Typography variant={'h5'} sx={{fontSize: '.8em'}} >
           {/* Cross-functional online collaboration unlocks team flow,
             productivity and creativity.
             Open workspaces, open standards and open source code is the most powerful way to work.
             Cooperation is the unfair advantage. */}
-          Share is a cross-functional online collaboration platform which is being developed
-          with the aim to unlock team flow, productivity and creativity for the builders of the world.
+          Share is a cross-functional online collaboration platform that aims
+          to unlock team flow, productivity and creativity for the builders of the world.
           We believe open workspaces, open standards and open source code is the most powerful way to work since
           the foundation of these practices is cooperation, which clearly is the unfair advantage.
         </Typography>
