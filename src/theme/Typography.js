@@ -1,4 +1,4 @@
-const fontFamily = 'Satoshi'
+const fontFamily = 'Helvetica'
 const fontSize = 16
 const fontWeight = '400'
 const letterSpacing = 'normal'

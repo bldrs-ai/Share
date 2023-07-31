@@ -56,7 +56,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '.5em',
+            top: '-.5em',
           }}
         >
           <a

@@ -35,7 +35,7 @@ import {groupElementsByTypes} from '../utils/ifc'
 import OpenModelControl from '../Components/OpenModelControl'
 import Loader from '../Components/Loader'
 import SavedViewsPanel from '../Components/SavedViewsPanel'
-import ProjectPanel from '../Components/ProjectPanel'
+import ProjectPanel from '../Components/ProjectPanel/ProjectPanel'
 import NavigationGroup from '../Components/NavigationGroup'
 import SearchIcon from '../assets/icons/Search.svg'
 
