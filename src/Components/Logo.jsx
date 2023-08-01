@@ -19,8 +19,6 @@ export default function Logo({onClick}) {
         'bottom': '1em',
         'left': '1em',
         '& svg': {
-          'width': '50px',
-          'height': '50px',
           'marginBottom': '4px',
           'marginTop': '4px',
           '@media (max-width: 900px)': {
@@ -40,7 +38,7 @@ export default function Logo({onClick}) {
     >
       <TooltipIconButton
         title={`Bldrs: ${PkgJson.version}`}
-        placement="right"
+        placement='right'
         icon={<LogoIcon/>}
         onClick={onClick}
         aboutInfo={false}

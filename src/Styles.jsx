@@ -20,16 +20,25 @@ export default function Styles({theme}) {
         'a': {
           color: theme.palette.secondary.contrastText,
         },
-        'svg': {
+        '.MuiSvgIcon-root': {
+          // Mui icons use 'color' instead of 'fill'
+          color: theme.palette.primary.contrastText,
+        },
+        '.icon-share': {
+          fill: theme.palette.primary.contrastText,
           width: '18px',
           height: '18px',
-          fill: theme.palette.primary.contrastText,
         },
-        '.closeButton': {
+        /* icon-nav-* are the sub-icons in NavTree */
+        '.icon-nav-caret': {
           width: '12px',
           height: '12px',
         },
-        '.caretToggle': {
+        '.icon-nav-eye': {
+          width: '12px',
+          height: '12px',
+        },
+        '.icon-nav-glasses': {
           width: '12px',
           height: '12px',
         },

@@ -102,7 +102,7 @@ export function CloseButton({onClick}) {
       title='Close'
       onClick={onClick}
       placement='bottom'
-      icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
+      icon={<CloseIcon className='icon-share'/>}
       size='medium'
       aboutInfo={false}
     />
