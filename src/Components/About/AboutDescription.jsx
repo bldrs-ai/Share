@@ -23,7 +23,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
     <Box
       sx={{
         width: '280px',
-        fontSize: '.9em',
+        fontSize: '1em',
         fontWeight: 'bold',
         borderRadius: '8px',
         margin: '1em 0',
