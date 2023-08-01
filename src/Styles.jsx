@@ -29,6 +29,10 @@ export default function Styles({theme}) {
           width: '18px',
           height: '18px',
         },
+        '.icon-small': {
+          width: '15px',
+          height: '15px',
+        },
         /* icon-nav-* are the sub-icons in NavTree */
         '.icon-nav-caret': {
           width: '12px',
