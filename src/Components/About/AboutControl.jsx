@@ -123,7 +123,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
           'alignItems': 'center',
           'cursor': 'pointer',
           '&:hover': {
-            backgroundColor: 'green',
+            backgroundColor: theme.palette.secondary.main,
             color: 'white',
           },
         }}

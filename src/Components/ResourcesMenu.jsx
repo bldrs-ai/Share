@@ -51,6 +51,7 @@ export default function ResourcesMenu() {
             transform: 'translateX(-70px) translateY(0px)',
             opacity: .8,
             background: theme.palette.background.control,
+            boxShadow: 'rgba(0, 0, 0, 0.24) 0px 3px 8px',
             zIndex: 1,
           },
           sx: {
@@ -88,7 +89,8 @@ export default function ResourcesMenu() {
         </MenuItem>
         <MenuItem>
           <TooltipIconButton
-            title={`Community`}
+            title={`Ask`}
+            placement='left'
             onClick={() => window.open('https://discord.com/channels/853953158560743424/853953158560743426', '_blank').focus()}
             icon={<DiscordIcon style={{width: '20px', height: '20px'}}/>}
             showTitle={true}

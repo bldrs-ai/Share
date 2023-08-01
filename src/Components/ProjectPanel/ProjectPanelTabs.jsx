@@ -17,8 +17,8 @@ const ProjectPanelTabs = ({showMode, setShowMode}) => {
       sx={{
         'display': 'flex',
         'flexDirection': 'row',
-        'justifyContent': 'space-between',
-        'width': '186px',
+        'justifyContent': 'center',
+        // 'width': '186px',
         'alignItems': 'center',
         'borderRadius': '10px',
         'overflow': 'auto',

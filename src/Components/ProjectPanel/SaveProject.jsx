@@ -66,7 +66,15 @@ const SaveProject = () => {
                 padding: '10px',
               }}
             >
-              Please login to save your project and to enable version history.
+              Please login to save your project and to enable version history.&nbsp;
+              To learn more visit our&nbsp;
+              <a
+                target="_blank"
+                href='https://github.com/bldrs-ai/Share/wiki/Open-IFC-model-hosted-on-GitHub'
+                rel="noreferrer"
+              >
+                wiki
+              </a>
             </Typography>
           }
         />

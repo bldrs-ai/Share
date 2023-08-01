@@ -23,14 +23,12 @@ export default function AboutDescription({setIsDialogDisplayed}) {
     <Box
       sx={{
         width: '280px',
-        height: '160px',
         fontSize: '.9em',
         fontWeight: 'bold',
         borderRadius: '8px',
-        margin: '2em 0',
+        margin: '1em 0',
         padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
-        border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
     >
@@ -56,7 +54,6 @@ export default function AboutDescription({setIsDialogDisplayed}) {
             flexDirection: 'row',
             justifyContent: 'flex-end',
             position: 'relative',
-            top: '-.5em',
           }}
         >
           <a
