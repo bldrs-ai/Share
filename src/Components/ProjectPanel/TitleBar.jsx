@@ -23,7 +23,7 @@ const TitleBar = ({showMode}) => {
         padding: '0px 20px',
         height: '60px',
         fontWeight: '500',
-        borderBottom: `1px solid ${theme.palette.background.button}`,
+        borderBottom: `1px solid ${theme.palette.primary.main}`,
       }}
     >
       <Box
@@ -52,7 +52,7 @@ const TitleBar = ({showMode}) => {
         </Box>
         <Typography variant='h4'
           sx={{
-            fontWeight: '500',
+            // fontWeight: '500',
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',

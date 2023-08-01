@@ -83,6 +83,7 @@ export default function ResourcesMenu() {
             }}
             icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
             showTitle={true}
+            placement='left'
           />
         </MenuItem>
         <MenuItem>

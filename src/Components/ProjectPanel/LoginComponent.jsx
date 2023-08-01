@@ -13,7 +13,7 @@ const LoginComponent = () => {
       <Typography
         variant={'h5'}
         sx={{
-          padding: '14px',
+          padding: '12px',
         }}
       >
         Please login to get access to your projects stored on GitHub or sign up for GitHub&nbsp;

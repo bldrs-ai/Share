@@ -4,7 +4,6 @@ import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import {RectangularButton} from '../Buttons'
 import useStore from '../../store/useStore'
-import useTheme from '@mui/styles/useTheme'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import Eisvogel from '../../assets/icons/projects/Eisvogel.svg'
 import Momentum from '../../assets/icons/projects/Momentum.svg'
@@ -30,7 +29,6 @@ const icon = (iconNumber) => {
 const SampleProjects = () => {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
-  const theme = useTheme()
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
@@ -44,7 +42,6 @@ const SampleProjects = () => {
     'alignItems': 'center',
     'width': '240px',
     'borderRadius': '10px',
-    'border': `1px solid ${theme.palette.background.button}`,
     'padding': '6px 0px',
     'marginBottom': '10px',
     'marginTop': '10px',

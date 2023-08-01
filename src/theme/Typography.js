@@ -1,4 +1,4 @@
-const fontFamily = 'Helvetica'
+const fontFamily = 'satoshi'
 const fontSize = 16
 const fontWeight = '400'
 const letterSpacing = 'normal'

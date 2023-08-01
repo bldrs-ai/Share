@@ -97,14 +97,13 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
         variant='control'
         component='form'
         onSubmit={onSubmit}
+        elevation={1}
         sx={{
           'display': 'flex',
           'marginBottom': '10px',
           'minWidth': '100%',
           'width': `${widthPx}px`,
           'alignItems': 'center',
-          'boxShadow': 'none',
-          'border': '1px solid lightGrey',
           'opacity': .8,
           'padding': '0px 6px',
           'height': '50px',
@@ -122,7 +121,7 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
           onChange={onInputChange}
           error={true}
           placeholder={placeholderText || 'Search by property name'}
-          elevation={0}
+          elevation={1}
           startAdornment={
             <InputAdornment position="start">
               {icon}

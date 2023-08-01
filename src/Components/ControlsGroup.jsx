@@ -19,9 +19,6 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @return {React.Component}
  */
 export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
-  // const isBranches = useStore((state) => state.isBranches)
-  // const isBranchControlVisible = useStore((state) => state.isBranchControlVisible)
-  // const toggleIsBranchControlVisible = useStore((state) => state.toggleIsBranchControlVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const showNavigationGroup = useStore((state) => state.showNavigationGroup)

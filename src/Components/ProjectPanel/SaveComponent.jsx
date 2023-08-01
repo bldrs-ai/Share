@@ -63,7 +63,7 @@ const SaveComponent = () => {
             <Typography
               variant={'h5'}
               sx={{
-                padding: '14px',
+                padding: '12px',
               }}
             >
               Please login to save your project on Github and to enable version history.
