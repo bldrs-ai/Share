@@ -85,6 +85,7 @@ export function ControlButton({
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
+        className='icon-share'
       />
       {isDialogDisplayed && dialog}
     </>
@@ -103,7 +104,6 @@ export function CloseButton({onClick}) {
       onClick={onClick}
       placement='bottom'
       icon={<CloseIcon className='icon-share'/>}
-      size='medium'
       aboutInfo={false}
     />
   )
