@@ -9,7 +9,7 @@ import Message from './Message'
 import Container from './Container'
 
 
-const SaveComponent = () => {
+const SaveProject = () => {
   const {isAuthenticated} = useAuth0()
   const navigate = useNavigate()
   const modelPath = {
@@ -63,10 +63,10 @@ const SaveComponent = () => {
             <Typography
               variant={'h5'}
               sx={{
-                padding: '12px',
+                padding: '10px',
               }}
             >
-              Please login to save your project on Github and to enable version history.
+              Please login to save your project and to enable version history.
             </Typography>
           }
         />
@@ -76,4 +76,4 @@ const SaveComponent = () => {
 }
 
 
-export default SaveComponent
+export default SaveProject

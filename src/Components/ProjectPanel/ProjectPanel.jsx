@@ -3,7 +3,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
 import TitleBar from './TitleBar'
-import ProjectPanelOptions from './ProjectPanelOptions'
+import ProjectPanelTabs from './ProjectPanelTabs'
 import SampleProjects from './SampleProjects'
 import ProjectBrower from './ProjectBrowser'
 import Version from './Version'
@@ -45,7 +45,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           alignItems: 'center',
         }}
       >
-        <ProjectPanelOptions showMode={showMode} setShowMode={setShowMode}/>
+        <ProjectPanelTabs showMode={showMode} setShowMode={setShowMode}/>
         {showMode === 'sample' && <SampleProjects/>}
         {showMode === 'projects' && <ProjectBrower fileOpen={fileOpen}/>}
         {showMode === 'save' && <Version fileOpen={fileOpen}/>}

@@ -742,11 +742,13 @@ export default function CadView({
                 <OpenModelControl modelPath={modelPath} fileOpen={loadLocalFile} isLocalModel={isLocalModel}/>
               }
               {isSearchBarVisible && showControls &&
+              <Box sx={{marginBottom: '10px'}}>
                 <SearchBar
                   deselectItems={deselectItems}
                   variableLength={true}
                   icon={ <SearchIcon style={{width: '15px', height: '15px', opacity: .5}}/>}
                 />
+              </Box>
               }
               {/* {
                 modelPath.repo !== undefined && isBranchControlVisible &&

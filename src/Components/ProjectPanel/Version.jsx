@@ -5,7 +5,7 @@ import {RectangularButton} from '../Buttons'
 import ExportIcon from '../../assets/icons/Export.svg'
 import CommitActionIcon from '../../assets/icons/CommitAction.svg'
 import GitHubIcon from '@mui/icons-material/GitHub'
-import SaveComponent from './SaveComponent'
+import SaveProject from './SaveProject'
 
 
 const Version = ({fileOpen}) => {
@@ -27,7 +27,6 @@ const Version = ({fileOpen}) => {
         'width': '240px',
         'borderRadius': '10px',
         'marginBottom': '14px',
-        'marginTop': '10px',
         'overflow': 'auto',
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
@@ -40,37 +39,35 @@ const Version = ({fileOpen}) => {
         },
       }}
     >
-      <Box sx={{paddingBottom: '6px', textAlign: 'center'}}>
-        <SaveComponent/>
-        <Box sx={{
-          height: '92px',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          paddingTop: '6px',
-        }}
-        >
-          {isAuthenticated ?
-            <RectangularButton
-              title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Save version</Box>}
-              onClick={fileOpen}
-              placement={'top'}
-              icon={<CommitActionIcon style={{width: '28px', height: '18px'}}/>}
-            /> :
-            <RectangularButton
-              title={'Login to GitHub'}
-              onClick={login}
-              icon={<GitHubIcon style={{opacity: .5}}/>}
-            />
-          }
+      <SaveProject/>
+      <Box sx={{
+        height: '92px',
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingTop: '6px',
+      }}
+      >
+        {isAuthenticated ?
           <RectangularButton
-            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export ifc</Box>}
+            title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Save version</Box>}
             onClick={fileOpen}
             placement={'top'}
-            icon={<ExportIcon style={{width: '28px', height: '18px', paddingLeft: '6px'}}/>}
+            icon={<CommitActionIcon style={{width: '28px', height: '18px'}}/>}
+          /> :
+          <RectangularButton
+            title={'Login to GitHub'}
+            onClick={login}
+            icon={<GitHubIcon style={{opacity: .5}}/>}
           />
-        </Box>
+        }
+        <RectangularButton
+          title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>Export ifc</Box>}
+          onClick={fileOpen}
+          placement={'top'}
+          icon={<ExportIcon style={{width: '28px', height: '18px', paddingLeft: '6px'}}/>}
+        />
       </Box>
     </Box>
   )

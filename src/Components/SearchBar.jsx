@@ -97,10 +97,8 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
         variant='control'
         component='form'
         onSubmit={onSubmit}
-        elevation={1}
         sx={{
           'display': 'flex',
-          'marginBottom': '10px',
           'minWidth': '100%',
           'width': `${widthPx}px`,
           'alignItems': 'center',

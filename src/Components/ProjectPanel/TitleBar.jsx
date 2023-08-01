@@ -3,7 +3,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useStore from '../../store/useStore'
-import useTheme from '@mui/styles/useTheme'
+// import useTheme from '@mui/styles/useTheme'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import ViewCube1 from '../../assets/icons/view/ViewCube1.svg'
 import ViewCube2 from '../../assets/icons/view/ViewCube2.svg'
@@ -12,7 +12,7 @@ import ViewCube3 from '../../assets/icons/view/ViewCube3.svg'
 
 const TitleBar = ({showMode}) => {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
-  const theme = useTheme()
+  // const theme = useTheme()
   return (
     <Box
       sx={{
@@ -22,8 +22,6 @@ const TitleBar = ({showMode}) => {
         alignItems: 'center',
         padding: '0px 20px',
         height: '60px',
-        fontWeight: '500',
-        borderBottom: `1px solid ${theme.palette.primary.main}`,
       }}
     >
       <Box
@@ -52,7 +50,6 @@ const TitleBar = ({showMode}) => {
         </Box>
         <Typography variant='h4'
           sx={{
-            // fontWeight: '500',
             display: 'flex',
             flexDirection: 'row',
             justifyContent: 'center',

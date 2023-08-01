@@ -1,5 +1,6 @@
 import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
+import useTheme from '@mui/styles/useTheme'
 import Box from '@mui/material/Box'
 import Sheenstock from '../../assets/icons/projects/Sheenstock.svg'
 import SaveIcon from '../../assets/icons/Save.svg'
@@ -8,8 +9,9 @@ import FolderIcon from '../../assets/icons/Folder.svg'
 import {TooltipIconButton} from '../Buttons'
 
 
-const ProjectPanelOptions = ({showMode, setShowMode}) => {
+const ProjectPanelTabs = ({showMode, setShowMode}) => {
   const {isAuthenticated} = useAuth0()
+  const theme = useTheme()
   return (
     <Box
       sx={{
@@ -18,8 +20,8 @@ const ProjectPanelOptions = ({showMode, setShowMode}) => {
         'justifyContent': 'center',
         'alignItems': 'center',
         'borderRadius': '10px',
-        'marginTop': '10px',
         'overflow': 'auto',
+        'border': `1px solid ${theme.palette.primary.main}`,
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
         '&::-webkit-scrollbar': {
@@ -69,4 +71,4 @@ const ProjectPanelOptions = ({showMode, setShowMode}) => {
   )
 }
 
-export default ProjectPanelOptions
+export default ProjectPanelTabs

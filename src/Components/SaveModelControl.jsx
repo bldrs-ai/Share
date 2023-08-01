@@ -47,15 +47,12 @@ export default function SaveModelControl({fileSave, modelPath}) {
         onClick={() => setIsDialogDisplayed(true)}
         icon={<SaveIcon/>}
         placement={'bottom'}
-        // selected={isDialogDisplayed}
         dataTestId='Save-ifc'
       />
       {isDialogDisplayed &&
         <SaveModelDialog
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
-          // fileSave={fileSave}
-          // orgNamesArr={orgNamesArr}
         />
       }
     </Box>
@@ -73,7 +70,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const theme = useTheme()
 
   const SaveFile = () => {
-    // fileSave()
     setIsDialogDisplayed(false)
   }
 
@@ -88,32 +84,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const signupForGithub = () => {
     window.open('https://github.com/join', '_blank')
   }
-
-  // const selectOrg = async (org) => {
-  //   setSelectedOrgName(org)
-  //   let repos
-  //   if (orgNamesArr[org] === user.nickname) {
-  //     repos = await getUserRepositories(user.nickname, accessToken)
-  //   } else {
-  //     repos = await getRepositories(orgNamesArr[org], accessToken)
-  //   }
-  //   const repoNames = Object.keys(repos).map((key) => repos[key].name)
-  //   setRepoNamesArr(repoNames)
-  // }
-
-  // const selectRepo = async (repo) => {
-  //   setSelectedRepoName(repo)
-  //   const owner = orgNamesArr[selectedOrgName]
-  //   const files = await getFiles(repoNamesArr[repo], owner, accessToken)
-  //   const fileNames = Object.keys(files).map((key) => files[key].name)
-  //   setFilesArr(fileNames)
-  // }
-
-  // const navigateToFile = () => {
-  //   if (filesArr[selectedFileName].includes('.ifc')) {
-  //     navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
-  //   }
-  // }
 
   return (
     <Dialog
