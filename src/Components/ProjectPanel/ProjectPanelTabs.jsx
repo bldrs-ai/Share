@@ -1,6 +1,6 @@
 import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
-import useTheme from '@mui/styles/useTheme'
+// import useTheme from '@mui/styles/useTheme'
 import Box from '@mui/material/Box'
 import Sheenstock from '../../assets/icons/projects/Sheenstock.svg'
 import SaveIcon from '../../assets/icons/Save.svg'
@@ -11,17 +11,18 @@ import {TooltipIconButton} from '../Buttons'
 
 const ProjectPanelTabs = ({showMode, setShowMode}) => {
   const {isAuthenticated} = useAuth0()
-  const theme = useTheme()
+  // const theme = useTheme()
   return (
     <Box
       sx={{
         'display': 'flex',
         'flexDirection': 'row',
-        'justifyContent': 'center',
+        'justifyContent': 'space-between',
+        'width': '186px',
         'alignItems': 'center',
         'borderRadius': '10px',
         'overflow': 'auto',
-        'border': `1px solid ${theme.palette.primary.main}`,
+        // 'border': `1px solid ${theme.palette.primary.main}`,
         'scrollbarWidth': 'none', /* Firefox */
         '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
         '&::-webkit-scrollbar': {

@@ -103,6 +103,7 @@ export default function SearchBar({deselectItems, placeholderText, icon, variabl
           'width': `${widthPx}px`,
           'alignItems': 'center',
           'opacity': .8,
+          'border': `1px solid ${theme.palette.background.button}`,
           'padding': '0px 6px',
           'height': '50px',
           '@media (max-width: 900px)': {
