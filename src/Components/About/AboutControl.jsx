@@ -120,6 +120,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
           'height': '40px',
           'display': 'flex',
           'justifyContent': 'center',
+          'marginBottom': '.7em',
           'alignItems': 'center',
           'cursor': 'pointer',
           '&:hover': {
