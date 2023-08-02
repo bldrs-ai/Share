@@ -7,6 +7,7 @@ import Styles from './Styles'
 
 
 /**
+ * Mirrors the context setup for Share.
  * @param {object} props
  * @return {React.Component}
  */
