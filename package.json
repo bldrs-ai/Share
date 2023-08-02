@@ -1,6 +1,5 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r683",
   "version": "1.0.0-r682",
   "main": "src/index.jsx",
   "license": "MIT",
@@ -41,8 +40,8 @@
     "@mui/styled-engine": "^5.8.7",
     "@mui/styles": "^5.11.13",
     "@octokit/rest": "^19.0.3",
-    "@sentry/react": "^7.31.1",
-    "@sentry/tracing": "^7.31.1",
+    "@sentry/react": "^7.61.0",
+    "@sentry/tracing": "^7.61.0",
     "clsx": "^1.2.1",
     "cypress-react-router": "^2.0.1",
     "material-ui-popup-state": "^5.0.4",
