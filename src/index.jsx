@@ -33,6 +33,10 @@ Sentry.init({
     }),
   ],
   tracesSampleRate: 1.0,
+  tracePropagationTargets: [
+    'https://bldrs.ai',
+    'https://*.bldrs.dev',
+  ],
 })
 
 if (process.env.DISABLE_MOCK_SERVICE_WORKER !== 'true') {
