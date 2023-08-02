@@ -116,7 +116,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
         sx={{
           'border': `1px solid ${theme.palette.primary.main}`,
           'color': theme.palette.primary.contrastText,
-          'borderRadius': '5px',
+          'borderRadius': '7px',
           'height': '40px',
           'display': 'flex',
           'justifyContent': 'center',
@@ -125,7 +125,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
           'cursor': 'pointer',
           '&:hover': {
             backgroundColor: theme.palette.secondary.main,
-            color: 'white',
+            color: theme.palette.primary.main,
           },
         }}
         onClick={() => {
