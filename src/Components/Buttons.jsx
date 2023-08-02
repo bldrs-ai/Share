@@ -105,6 +105,7 @@ export function CloseButton({onClick}) {
       placement='bottom'
       icon={<CloseIcon className='icon-share icon-small'/>}
       aboutInfo={false}
+      className='closeButton'
     />
   )
 }

@@ -1,5 +1,6 @@
 import React from 'react'
 import {useSelect, useValue} from 'react-cosmos/fixture'
+import FixtureContext from '../FixtureContext'
 import Toast from './Toast'
 
 
@@ -23,8 +24,10 @@ export default () => {
   })
 
   return (
-    <Toast severity={severity} title={title} closeTimeout={closeTimeout}>
+    <FixtureContext>
+      <Toast severity={severity} title={title} closeTimeout={closeTimeout}>
         Your rendering has completed!
-    </Toast>
+      </Toast>
+    </FixtureContext>
   )
 }
