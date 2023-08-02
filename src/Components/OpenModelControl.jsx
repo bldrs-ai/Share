@@ -62,7 +62,7 @@ export default function OpenModelControl({fileOpen}) {
         <TooltipIconButton
           title={'Open IFC'}
           onClick={() => setIsDialogDisplayed(true)}
-          icon={<OpenIcon/>}
+          icon={<OpenIcon className='icon-share'/>}
           placement={'right'}
           selected={isDialogDisplayed}
           dataTestId='open-ifc'
@@ -134,12 +134,12 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   return (
     <Dialog
-      icon={<OpenIcon/>}
+      icon={<OpenIcon className='icon-share'/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
-      actionIcon={<UploadIcon/>}
+      actionIcon={<UploadIcon className='icon-share'/>}
       actionCb={openFile}
       content={
         <Box
@@ -166,7 +166,11 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
             {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-                <RectangularButton title={'Load file'} icon={<UploadIcon/>} onClick={navigateToFile}/>
+                <RectangularButton
+                  title={'Load file'}
+                  icon={<UploadIcon className='icon-share'/>}
+                  onClick={navigateToFile}
+                />
               </Box>
             }
           </Box> :

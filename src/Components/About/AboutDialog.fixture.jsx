@@ -1,21 +1,17 @@
 import React from 'react'
-import {HelmetProvider} from 'react-helmet-async'
-import {ThemeProvider} from '@mui/material/styles'
-import useShareTheme from '../../theme/Theme'
+import FixtureContext from '../../FixtureContext'
 import {AboutDialog} from './AboutControl'
 
 
 /** @return {React.Component} */
-export default function Example() {
+export default function AboutDialogFixture() {
   return (
-    <HelmetProvider>
-      <ThemeProvider theme={useShareTheme()}>
-        <AboutDialog
-          isDialogDisplayed={true}
-          // eslint-disable-next-line no-empty-function
-          setIsDialogDisplayed={() => {}}
-        />
-      </ThemeProvider>
-    </HelmetProvider>
+    <FixtureContext>
+      <AboutDialog
+        isDialogDisplayed={true}
+        // eslint-disable-next-line no-empty-function
+        setIsDialogDisplayed={() => {}}
+      />
+    </FixtureContext>
   )
 }
