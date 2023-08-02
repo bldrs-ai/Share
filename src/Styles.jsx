@@ -26,7 +26,7 @@ export default function Styles({theme}) {
         },
         '.MuiDialog-paper': {
           textAlign: 'center',
-          padding: '1em',
+          padding: '1em 0.5em',
         },
         '.MuiDialog-paper > .MuiButtonBase-root': {
           position: 'absolute',
