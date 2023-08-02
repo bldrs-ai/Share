@@ -35,7 +35,10 @@ export default function AboutDescription({setIsDialogDisplayed}) {
     >
       <Box
         sx={{
-          padding: '6px 6px',
+          'padding': '6px 6px',
+          '@media (max-width: 900px)': {
+            fontSize: '.8em',
+          },
         }}
       >
         <Typography variant={'h5'} sx={{fontSize: '.8em'}} >
