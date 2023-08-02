@@ -4,7 +4,7 @@ import {AboutDialog} from './AboutControl'
 
 
 /** @return {React.Component} */
-export default () => {
+export default function AboutDialogFixture() {
   return (
     <FixtureContext>
       <AboutDialog

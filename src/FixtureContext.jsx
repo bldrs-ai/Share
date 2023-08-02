@@ -10,7 +10,7 @@ import Styles from './Styles'
  * @param {object} props
  * @return {React.Component}
  */
-export default (props) => {
+export default function FixtureContext(props) {
   const theme = useShareTheme()
   return (
     <HelmetProvider>

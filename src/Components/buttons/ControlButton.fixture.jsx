@@ -9,7 +9,7 @@ import AnnouncementIcon from '@mui/icons-material/Announcement'
  *
  * @return {React.Component}
  */
-export default () => {
+export default function ControlButtonFixture() {
   const [isDisplayed, setIsDisplayed] = useState(false)
   return (
     <FixtureContext>
