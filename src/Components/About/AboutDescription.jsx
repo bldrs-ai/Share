@@ -29,6 +29,7 @@ export default function AboutDescription({setIsDialogDisplayed}) {
         margin: '1em 0',
         padding: '.3em 1em .5em .5em',
         color: theme.palette.primary.contrastText,
+        border: `1px solid ${theme.palette.primary.main}`,
         textAlign: 'left',
       }}
     >
