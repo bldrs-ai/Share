@@ -1,7 +1,8 @@
-import React, {useState, useEffect} from 'react'
+import React, {useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
+import useStore from '../../store/useStore'
 import ProjectPanelTabs from './ProjectPanelTabs'
 import SampleProjects from './SampleProjects'
 import ProjectBrower from './ProjectBrowser'
@@ -14,12 +15,13 @@ import Version from './Version'
  * @return {React.Component}
  */
 export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
-  const [showMode, setShowMode] = useState('sample')
+  const projectMode = useStore((state) => state.projectMode)
   const {isAuthenticated} = useAuth0()
   useEffect(() => {
     if (isAuthenticated) {
-      setShowMode('projects')
+      projectMode('Open project')
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
 
   return (
@@ -45,10 +47,10 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
           alignItems: 'center',
         }}
       >
-        <ProjectPanelTabs showMode={showMode} setShowMode={setShowMode}/>
-        {showMode === 'sample' && <SampleProjects/>}
-        {showMode === 'projects' && <ProjectBrower fileOpen={fileOpen}/>}
-        {showMode === 'save' && <Version fileOpen={fileOpen}/>}
+        <ProjectPanelTabs/>
+        {projectMode === 'Sample projects' && <SampleProjects/>}
+        {projectMode === 'Open project' && <ProjectBrower fileOpen={fileOpen}/>}
+        {projectMode === 'Save project' && <Version fileOpen={fileOpen}/>}
       </Box>
     </Paper>
   )

@@ -29,6 +29,7 @@ export default function createUISlice(set, get) {
     isAppStoreOpen: false,
     appStoreSidebarWidth: MOBILE_WIDTH,
     appStoreSidebarHeight: MOBILE_HEIGHT,
+    projectMode: 'Sample projects',
     selectedStoreApp: null,
     showViewsPanel: false,
     showProjectPanel: false,
@@ -50,6 +51,7 @@ export default function createUISlice(set, get) {
     setIsBranches: (isBranches) => set(() => ({isBranches: isBranches})),
     setElementNavigation: () => set((state) => ({isElementNavigation: true})),
     setTypeNavigation: () => set((state) => ({isElementNavigation: false})),
+    setProjectMode: (mode) => set(() => ({projectMode: mode})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
       if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {

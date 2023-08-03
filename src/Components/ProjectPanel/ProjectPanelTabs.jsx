@@ -1,16 +1,49 @@
 import React from 'react'
-import {useAuth0} from '@auth0/auth0-react'
-// import useTheme from '@mui/styles/useTheme'
+// import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
-import Sheenstock from '../../assets/icons/projects/Sheenstock.svg'
-import SaveIcon from '../../assets/icons/Save.svg'
-import OpenIcon from '../../assets/icons/OpenFolder.svg'
-import FolderIcon from '../../assets/icons/Folder.svg'
-import {TooltipIconButton} from '../Buttons'
+import {styled} from '@mui/material/styles'
+import useStore from '../../store/useStore'
+// import useTheme from '@mui/styles/useTheme'
+// import Sheenstock from '../../assets/icons/projects/Sheenstock.svg'
+// import SaveIcon from '../../assets/icons/Save.svg'
+// import OpenIcon from '../../assets/icons/OpenFolder.svg'
+// import FolderIcon from '../../assets/icons/Folder.svg'
+// import {TooltipIconButton} from '../Buttons'
+import Tabs from '@mui/material/Tabs'
+import Tab from '@mui/material/Tab'
 
 
-const ProjectPanelTabs = ({showMode, setShowMode}) => {
-  const {isAuthenticated} = useAuth0()
+const AntTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) => ({
+  'textTransform': 'none',
+  'fontWeight': 500,
+  'minWidth': 0,
+  [theme.breakpoints.up('sm')]: {
+    minWidth: 0,
+  },
+  'marginRight': theme.spacing(1),
+  'color': theme.palette.primary.contrastText,
+  '&:hover': {
+    color: theme.palette.secondary.background,
+    opacity: 1,
+  },
+  '&.Mui-selected': {
+    color: theme.palette.secondary.main,
+  },
+  '&.Mui-focusVisible': {
+    backgroundColor: '#d1eaff',
+  },
+}))
+
+
+const ProjectPanelTabs = () => {
+  // const {isAuthenticated} = useAuth0()
+  const [value, setValue] = React.useState(0)
+  const setProjectMode = useStore((state) => state.setProjectMode)
+
+  const handleChange = (event, newValue) => {
+    setValue(newValue)
+  }
+
   // const theme = useTheme()
   return (
     <Box
@@ -20,7 +53,7 @@ const ProjectPanelTabs = ({showMode, setShowMode}) => {
         'justifyContent': 'center',
         // 'width': '186px',
         'alignItems': 'center',
-        'borderRadius': '10px',
+        // 'borderRadius': '10px',
         'overflow': 'auto',
         // 'border': `1px solid ${theme.palette.primary.main}`,
         'scrollbarWidth': 'none', /* Firefox */
@@ -34,7 +67,22 @@ const ProjectPanelTabs = ({showMode, setShowMode}) => {
         },
       }}
     >
-      <TooltipIconButton
+      <Tabs value={value} onChange={handleChange} centered>
+        <AntTab label="Explore"
+          textColor="inherit"
+          variant="fullWidth"
+          onClick={() => {
+            setProjectMode('Sample projects')
+          }}
+        />
+        <AntTab label="Open"
+          onClick={() => setProjectMode('Open project')}
+        />
+        <AntTab label="Save"
+          onClick={() => setProjectMode('Save project')}
+        />
+      </Tabs>
+      {/* <TooltipIconButton
         title={'Partner Projects - Swiss Property'}
         onClick={() => setShowMode('sample')}
         selected={showMode === 'sample'}
@@ -67,7 +115,7 @@ const ProjectPanelTabs = ({showMode, setShowMode}) => {
         selected={showMode === 'save'}
         onClick={() => setShowMode('save')}
         icon={<SaveIcon style={{width: '20px', height: '20px'}}/>}
-      />
+      /> */}
     </Box>
   )
 }

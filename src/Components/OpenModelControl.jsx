@@ -6,12 +6,25 @@ import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import {getOrganizations} from '../utils/GitHub'
 import OpenIcon from '../assets/icons/Open.svg'
-import UploadIcon from '../assets/icons/Upload.svg'
+// import UploadIcon from '../assets/icons/Upload.svg'
 // import GitHubIcon from '@mui/icons-material/GitHub'
 import ProjectPanel from './ProjectPanel/ProjectPanel'
-import ViewCube1 from '../assets/icons/view/ViewCube1.svg'
+import Sheenstock from '../assets/icons/projects/Sheenstock.svg'
+import SaveIcon from '../assets/icons/Save.svg'
+import FolderIcon from '../assets/icons/Folder.svg'
 
 
+const Icon = () => {
+  const projectMode = useStore((state) => state.projectMode)
+  return (
+    <>
+      {projectMode === 'Sample projects' && <Sheenstock/> }
+      {projectMode === 'Save project' && <SaveIcon/> }
+      {projectMode === 'Open project' && <FolderIcon/> }
+    </>
+
+  )
+}
 /**
  * Displays model open dialog.
  *
@@ -78,16 +91,17 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     fileOpen()
     setIsDialogDisplayed(false)
   }
+  const projectMode = useStore((state) => state.projectMode)
 
   return (
     <Dialog
-      icon={<ViewCube1/>}
-      headerText={'Project Access'}
+      icon={<Icon/>}
+      headerText={projectMode}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Import'}
       showActionButton={false}
-      actionIcon={<UploadIcon/>}
+      actionIcon={<Icon/>}
       actionCb={openFile}
       content={
         <ProjectPanel fileOpen={fileOpen} modelPathDefined={modelPath} isLocalModel={isLocalModel}/>

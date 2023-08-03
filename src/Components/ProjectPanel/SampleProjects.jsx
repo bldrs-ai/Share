@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import React from 'react'
 import {useNavigate} from 'react-router-dom'
+import useTheme from '@mui/styles/useTheme'
 import Box from '@mui/material/Box'
 import {RectangularButton} from '../Buttons'
 // import useStore from '../../store/useStore'
@@ -29,6 +30,7 @@ const icon = (iconNumber) => {
 const SampleProjects = () => {
   // const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
+  const theme = useTheme()
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
     Momentum: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
@@ -46,6 +48,7 @@ const SampleProjects = () => {
     'marginBottom': '10px',
     'marginTop': '10px',
     'overflow': 'auto',
+    'border': `1px solid ${theme.palette.primary.main}`,
     'scrollbarWidth': 'none', /* Firefox */
     '-ms-overflow-style': 'none', /* Internet Explorer 10+ */
     '&::-webkit-scrollbar': {

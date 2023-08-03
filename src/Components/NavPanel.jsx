@@ -10,6 +10,7 @@ import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import NavigationGroup from './NavigationGroup'
 
+
 /**
  * @param {object} model
  * @param {object} element
