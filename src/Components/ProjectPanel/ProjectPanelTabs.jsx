@@ -1,7 +1,8 @@
-import React from 'react'
+import React, {useEffect} from 'react'
 // import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import {styled} from '@mui/material/styles'
+import {useAuth0} from '@auth0/auth0-react'
 import useStore from '../../store/useStore'
 // import useTheme from '@mui/styles/useTheme'
 // import Sheenstock from '../../assets/icons/projects/Sheenstock.svg'
@@ -42,6 +43,14 @@ const ProjectPanelTabs = () => {
   // const {isAuthenticated} = useAuth0()
   const [value, setValue] = React.useState(0)
   const setProjectMode = useStore((state) => state.setProjectMode)
+
+  const {isAuthenticated} = useAuth0()
+  useEffect(() => {
+    if (isAuthenticated) {
+      setValue(1)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAuthenticated])
 
   const handleChange = (event, newValue) => {
     setValue(newValue)
