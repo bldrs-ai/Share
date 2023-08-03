@@ -16,6 +16,9 @@ import Tab from '@mui/material/Tab'
 const AntTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) => ({
   'textTransform': 'none',
   'fontWeight': 500,
+  '@media (max-width: 900px)': {
+    fontSize: '.5em',
+  },
   'minWidth': 0,
   [theme.breakpoints.up('sm')]: {
     minWidth: 0,
@@ -51,9 +54,7 @@ const ProjectPanelTabs = () => {
         'display': 'flex',
         'flexDirection': 'row',
         'justifyContent': 'center',
-        // 'width': '186px',
         'alignItems': 'center',
-        // 'borderRadius': '10px',
         'overflow': 'auto',
         // 'border': `1px solid ${theme.palette.primary.main}`,
         'scrollbarWidth': 'none', /* Firefox */

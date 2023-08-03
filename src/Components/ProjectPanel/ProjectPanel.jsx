@@ -16,10 +16,11 @@ import Version from './Version'
  */
 export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel}) {
   const projectMode = useStore((state) => state.projectMode)
+  const setProjectMode = useStore((state) => state.setProjectMode)
   const {isAuthenticated} = useAuth0()
   useEffect(() => {
     if (isAuthenticated) {
-      projectMode('Open project')
+      setProjectMode('Open project')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated])
