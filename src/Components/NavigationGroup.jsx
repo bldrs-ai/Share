@@ -28,6 +28,9 @@ const AntTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) => (
   '&.Mui-focusVisible': {
     backgroundColor: '#d1eaff',
   },
+  '@media (max-width: 900px)': {
+    fontSize: '.8em',
+  },
 }))
 
 /**

@@ -17,7 +17,7 @@ const AntTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) => (
   'textTransform': 'none',
   'fontWeight': 500,
   '@media (max-width: 900px)': {
-    fontSize: '.5em',
+    fontSize: '1em',
   },
   'minWidth': 0,
   [theme.breakpoints.up('sm')]: {
