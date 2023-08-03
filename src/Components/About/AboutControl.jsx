@@ -1,7 +1,7 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
+// import useTheme from '@mui/styles/useTheme'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
@@ -99,9 +99,9 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, closeMenu}
  * @return {React.ReactElement} React component
  */
 function AboutContent({setIsDialogDisplayed, closeMenu}) {
-  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
-  const showProjectPanel = useStore((state) => state.showProjectPanel)
-  const theme = useTheme()
+  // const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  // const showProjectPanel = useStore((state) => state.showProjectPanel)
+  // const theme = useTheme()
   return (
     <Box sx={{'& a': {textDecoration: 'none'}}}>
       <Helmet>
@@ -112,7 +112,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
         github.com/bldrs-ai/Share
       </a>
       <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
-      <Box
+      {/* <Box
         sx={{
           'border': `1px solid ${theme.palette.primary.main}`,
           'color': theme.palette.primary.contrastText,
@@ -139,7 +139,7 @@ function AboutContent({setIsDialogDisplayed, closeMenu}) {
         <Typography variant={'h4'}>
           Open Project
         </Typography>
-      </Box>
+      </Box> */}
       <PrivacyControl/>
     </Box>)
 }
