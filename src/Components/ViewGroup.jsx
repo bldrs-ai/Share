@@ -20,6 +20,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const showViewsPanel = useStore((state) => state.showViewsPanel)
   const {isAuthenticated} = useAuth0()
+  const hideNavPanel = useStore((state) => state.hideNavPanel)
 
   return (
     <Paper
@@ -44,6 +45,7 @@ export default function ViewGroup({modelPath, isLocalModel, fileOpen}) {
           selected={showViewsPanel}
           onClick={() => {
             toggleShowViewsPanel()
+            hideNavPanel()
             if (showProjectPanel) {
               toggleShowProjectPanel()
             }

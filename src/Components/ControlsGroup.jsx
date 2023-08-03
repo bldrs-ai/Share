@@ -24,9 +24,10 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   // const showProjectPanel = useStore((state) => state.showProjectPanel)
-  // const showViewsPanel = useStore((state) => state.showViewsPanel)
+  const showViewsPanel = useStore((state) => state.showViewsPanel)
   // const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   // const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
+  const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
   // const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
   const showNavPanel = useStore((state) => state.showNavPanel)
@@ -82,6 +83,9 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
             hideNavPanel()
           } else {
             showNavPanel()
+          }
+          if (showViewsPanel) {
+            toggleShowViewsPanel()
           }
         }}
         selected={showNavigationGroup || isNavPanelOpen}
