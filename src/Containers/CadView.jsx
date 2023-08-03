@@ -36,7 +36,7 @@ import OpenModelControl from '../Components/OpenModelControl'
 import Loader from '../Components/Loader'
 import SavedViewsPanel from '../Components/SavedViewsPanel'
 import ProjectPanel from '../Components/ProjectPanel/ProjectPanel'
-import NavigationGroup from '../Components/NavigationGroup'
+// import NavigationGroup from '../Components/NavigationGroup'
 import SearchIcon from '../assets/icons/Search.svg'
 
 
@@ -99,7 +99,7 @@ export default function CadView({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const showControls = useStore((state) => state.showControls)
-  const showNavigationGroup = useStore((state) => state.showNavigationGroup)
+  // const showNavigationGroup = useStore((state) => state.showNavigationGroup)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
@@ -724,9 +724,9 @@ export default function CadView({
             {showControls &&
               <ControlsGroup modelPath={modelPath} isLocalModel={isLocalModel} fileOpen={loadLocalFile}/>
             }
-            {showControls && showNavigationGroup &&
+            {/* {showControls && showNavigationGroup &&
               <NavigationGroup/>
-            }
+            } */}
             <Box
               sx={{
                 'width': '280px',

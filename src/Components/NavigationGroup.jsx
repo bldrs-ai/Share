@@ -1,9 +1,10 @@
 import React from 'react'
-import Paper from '@mui/material/Paper'
+import Box from '@mui/material/Box'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
 import TypesIcon from '../assets/icons/Types.svg'
 import ElementsIcon from '../assets/icons/Elements.svg'
+import SetsIcon from '../assets/icons/Sets.svg'
 
 
 /**
@@ -17,31 +18,32 @@ export default function NavigationGroup() {
   const isElementNavigation = useStore((state) => state.isElementNavigation)
   const setElementNavigation = useStore((state) => state.setElementNavigation)
   const setTypeNavigation = useStore((state) => state.setTypeNavigation)
-  const showNavPanel = useStore((state) => state.showNavPanel)
-  const hideNavPanel = useStore((state) => state.hideNavPanel)
+  // const showNavPanel = useStore((state) => state.showNavPanel)
+  // const hideNavPanel = useStore((state) => state.hideNavPanel)
 
-  const toggleIsNavPanelOpen = (isElementNavigationLocal) => {
-    if (isNavPanelOpen && isElementNavigationLocal === isElementNavigation ) {
-      hideNavPanel()
-    } else {
-      showNavPanel()
-    }
-  }
+  // const toggleIsNavPanelOpen = (isElementNavigationLocal) => {
+  //   if (isNavPanelOpen && isElementNavigationLocal === isElementNavigation ) {
+  //     hideNavPanel()
+  //   } else {
+  //     showNavPanel()
+  //   }
+  // }
 
   return (
-    <Paper
-      elevation={1}
+    <Box
+      // elevation={1}
       variant='control'
       sx={{
-        position: 'absolute',
+        // position: 'absolute',
         // top: `1em`,
-        left: '11em',
+        // left: '11em',
         display: 'flex',
         flexDirection: 'row',
         justifyContent: 'flex-start',
-        marginLeft: '5px',
-        borderRadius: '10px',
+        // marginLeft: '5px',
+        // borderRadius: '10px',
         opacity: .9,
+        // borderBottom: '1px solid lightgrey',
       }}
     >
       <TooltipIconButton
@@ -51,7 +53,6 @@ export default function NavigationGroup() {
         selected={isElementNavigation === true && isNavPanelOpen}
         onClick={() => {
           setElementNavigation()
-          toggleIsNavPanelOpen(true)
         }}
         icon={<ElementsIcon style={{width: '15px', height: '15px'}}/>}
       />
@@ -62,10 +63,18 @@ export default function NavigationGroup() {
         selected={isElementNavigation !== true && isNavPanelOpen}
         onClick={() => {
           setTypeNavigation()
-          toggleIsNavPanelOpen(false)
         }}
         icon={<TypesIcon style={{width: '15px', height: '15px'}}/>}
       />
-    </Paper>
+      <TooltipIconButton
+        showTitle={true}
+        placement={'bottom'}
+        title={`Sets`}
+        onClick={() => {
+          setTypeNavigation()
+        }}
+        icon={<SetsIcon style={{width: '15px', height: '15px'}}/>}
+      />
+    </Box>
   )
 }

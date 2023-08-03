@@ -8,6 +8,7 @@ import {assertDefined} from '../utils/assert'
 import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
+import NavigationGroup from './NavigationGroup'
 
 /**
  * @param {object} model
@@ -59,7 +60,7 @@ export default function NavPanel({
           'opacity': .8,
           'justifyContent': 'space-around',
           'alignItems': 'center',
-          'maxHeight': '236px',
+          'maxHeight': '336px',
           '&:hover #togglegrp': {
             visibility: 'visible !important',
           },
@@ -70,8 +71,12 @@ export default function NavPanel({
             maxHeight: '150px',
             top: '86px',
           },
+          '&::-webkit-scrollbar': {
+            width: '.1em',
+          },
         }}
       >
+        <NavigationGroup/>
         <div>
           <TreeView
             aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}

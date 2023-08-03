@@ -27,7 +27,8 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
   const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const toggleShowViewsPanel = useStore((state) => state.toggleShowViewsPanel)
   const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
-  const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
+  // const toggleShowNavigationGroup = useStore((state) => state.toggleShowNavigationGroup)
+  const showNavPanel = useStore((state) => state.showNavPanel)
   const hideNavPanel = useStore((state) => state.hideNavPanel)
   const {isAuthenticated} = useAuth0()
 
@@ -76,8 +77,9 @@ export default function ControlsGroup({modelPath, isLocalModel, fileOpen}) {
         onClick={() => {
           if (isNavPanelOpen) {
             hideNavPanel()
+          } else {
+            showNavPanel()
           }
-          toggleShowNavigationGroup()
         }}
         selected={showNavigationGroup || isNavPanelOpen}
         icon={<TreeIcon/>}

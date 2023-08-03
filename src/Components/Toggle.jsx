@@ -56,7 +56,7 @@ export function ToggleSmall({onChange, checked}) {
           border: `solid 1px ${theme.palette.primary.main}`,
         },
         '& .MuiSwitch-switchBase.Mui-checked+.MuiSwitch-track': {
-          backgroundColor: theme.palette.secondary.main,
+          backgroundColor: theme.palette.secondary.background,
         },
       }}
     />
