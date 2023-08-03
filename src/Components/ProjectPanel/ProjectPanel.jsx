@@ -2,7 +2,6 @@ import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Paper from '@mui/material/Paper'
 import Box from '@mui/material/Box'
-import TitleBar from './TitleBar'
 import ProjectPanelTabs from './ProjectPanelTabs'
 import SampleProjects from './SampleProjects'
 import ProjectBrower from './ProjectBrowser'
@@ -25,7 +24,7 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
 
   return (
     <Paper
-      elevation={1}
+      // elevation={1}
       variant='control'
       sx={{
         display: 'flex',
@@ -34,9 +33,10 @@ export default function ProjectPanel({fileOpen, modelPathDefined, isLocalModel})
         justifyContent: 'flex-start',
         borderRadius: '10px',
         opacity: .95,
+        boxShadow: 'none',
       }}
     >
-      <TitleBar showMode={showMode}/>
+      {/* <TitleBar showMode={showMode}/> */}
       <Box
         sx={{
           display: 'flex',

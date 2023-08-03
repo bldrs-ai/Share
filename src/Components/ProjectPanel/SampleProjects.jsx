@@ -27,7 +27,7 @@ const icon = (iconNumber) => {
 }
 
 const SampleProjects = () => {
-  const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
+  // const toggleShowProjectPanel = useStore((state) => state.toggleShowProjectPanel)
   const navigate = useNavigate()
   const modelPath = {
     Schneestock: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
@@ -72,7 +72,7 @@ const SampleProjects = () => {
                 title={<Box sx={{width: '200px', textAlign: 'left', marginLeft: '10px'}}>{name}</Box>}
                 onClick={() => {
                   navigate(modelPath[name])
-                  toggleShowProjectPanel()
+                  // toggleShowProjectPanel()
                 }}
                 icon={icon(i)}
               />
