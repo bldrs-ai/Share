@@ -83,7 +83,6 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, closeMenu}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed} closeMenu={closeMenu}/>}
       actionTitle='OK'
       actionCb={() => {
-        closeMenu()
         setIsDialogDisplayed(false)
       }
       }
