@@ -68,7 +68,7 @@ const ProjectPanelTabs = () => {
         },
       }}
     >
-      <Tabs value={value} onChange={handleChange} centered>
+      <Tabs value={value} onChange={handleChange} centered fullWidth >
         <AntTab label="Explore"
           textColor="inherit"
           variant="fullWidth"
