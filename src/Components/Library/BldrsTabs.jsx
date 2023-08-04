@@ -44,7 +44,7 @@ const CustomTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) =
 /**
  * Styled Tabs component.
  *
- * @property {Array} tabs array of tabs
+ * @property {Array<string>} tabs array of tabs
  * @return {React.Component}
  */
 export default function BldrsTabs({tabNames, actionCb}) {
