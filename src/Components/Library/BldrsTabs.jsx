@@ -56,16 +56,13 @@ export default function BldrsTabs({tabNames, actionCb}) {
   }
   return (
     <Box sx={{width: '100%'}}>
-      <Box sx={{bgcolor: '#fff'}}>
-        <CustomTabs value={value} onChange={handleChange}>
-          {tabNames.map((tabName) => {
-            return (
-              <CustomTab key={tabName} label={tabName}/>
-            )
-          })}
-        </CustomTabs>
-        <Box sx={{p: 3}}/>
-      </Box>
+      <CustomTabs value={value} onChange={handleChange}>
+        {tabNames.map((tabName) => {
+          return (
+            <CustomTab key={tabName} label={tabName}/>
+          )
+        })}
+      </CustomTabs>
     </Box>
   )
 }
