@@ -56,7 +56,7 @@ export default function BldrsTabs({tabNames, actionCb}) {
   }
   return (
     <Box sx={{width: '100%'}}>
-      <CustomTabs value={value} onChange={handleChange}>
+      <CustomTabs value={value} onChange={handleChange} centered variant="fullWidth">
         {tabNames.map((tabName) => {
           return (
             <CustomTab key={tabName} label={tabName}/>
