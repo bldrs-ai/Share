@@ -52,8 +52,8 @@ export default function BldrsTabs({tabNames, actionCb}) {
 
   const handleChange = (event, newValue) => {
     setValue(newValue)
+    actionCb(newValue)
   }
-
   return (
     <Box sx={{width: '100%'}}>
       <Box sx={{bgcolor: '#fff'}}>
