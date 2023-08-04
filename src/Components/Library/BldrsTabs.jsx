@@ -57,7 +57,7 @@ export default function BldrsTabs({tabNames, actionCb}) {
   return (
     <Box sx={{width: '100%'}}>
       <Box sx={{bgcolor: '#fff'}}>
-        <CustomTabs value={value} onChange={handleChange} aria-label="ant example">
+        <CustomTabs value={value} onChange={handleChange}>
           {tabNames.map((tabName) => {
             return (
               <CustomTab key={tabName} label={tabName}/>
