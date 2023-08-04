@@ -1,16 +1,17 @@
+/* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import {styled} from '@mui/material/styles'
+import Box from '@mui/material/Box'
 import Tabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
-import Box from '@mui/material/Box'
 
 
-const CustomTabs = styled(Tabs)({
-  'borderBottom': '1px solid #e8e8e8',
+const CustomTabs = styled(Tabs)(({theme}) => ({
+  'borderBottom': `1px solid ${theme.palette.primary.main}`,
   '& .MuiTabs-indicator': {
-    backgroundColor: '#1890ff',
+    backgroundColor: theme.palette.secondary.main,
   },
-})
+}))
 
 
 const CustomTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) => ({
@@ -19,42 +20,34 @@ const CustomTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) =
   [theme.breakpoints.up('sm')]: {
     minWidth: 0,
   },
-  'fontWeight': theme.typography.fontWeightRegular,
-  'marginRight': theme.spacing(1),
-  'color': 'rgba(0, 0, 0, 0.85)',
-  'fontFamily': [
-    '-apple-system',
-    'BlinkMacSystemFont',
-    '"Segoe UI"',
-    'Roboto',
-    '"Helvetica Neue"',
-    'Arial',
-    'sans-serif',
-    '"Apple Color Emoji"',
-    '"Segoe UI Emoji"',
-    '"Segoe UI Symbol"',
-  ].join(','),
+  'fontSize': '1em',
+  'fontWeight': theme.typography.fontWeight,
+  'marginRight': theme.spacing(0),
+  'color': theme.palette.primary.contrastText,
+  'fontFamily': theme.typography.fontFamily,
   '&:hover': {
-    color: '#40a9ff',
-    opacity: 1,
+    color: theme.palette.secondary.main,
   },
   '&.Mui-selected': {
-    color: '#1890ff',
-    fontWeight: theme.typography.fontWeightMedium,
+    color: theme.palette.secondary.main,
+    fontWeight: theme.typography.fontWeight,
   },
   '&.Mui-focusVisible': {
-    backgroundColor: '#d1eaff',
+    backgroundColor: 'green',
+  },
+  '@media (max-width: 700px)': {
+    fontSize: '.7em',
   },
 }))
 
 
 /**
- * Styled Tabs copnent.
+ * Styled Tabs component.
  *
  * @property {Array} tabs array of tabs
  * @return {React.Component}
  */
-export default function BldrsTabs({tabs, actionCb}) {
+export default function BldrsTabs({tabNames, actionCb}) {
   const [value, setValue] = useState(0)
 
   const handleChange = (event, newValue) => {
@@ -65,9 +58,11 @@ export default function BldrsTabs({tabs, actionCb}) {
     <Box sx={{width: '100%'}}>
       <Box sx={{bgcolor: '#fff'}}>
         <CustomTabs value={value} onChange={handleChange} aria-label="ant example">
-          <CustomTab label="Tab 1"/>
-          <CustomTab label="Tab 2"/>
-          <CustomTab label="Tab 3"/>
+          {tabNames.map((tabName) => {
+            return (
+              <CustomTab key={tabName} label={tabName}/>
+            )
+          })}
         </CustomTabs>
         <Box sx={{p: 3}}/>
       </Box>
