@@ -2,9 +2,11 @@ import React from 'react'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import Typography from '@mui/material/Typography'
 import MuiDialog from '@mui/material/Dialog'
 import {RectangularButton, CloseButton} from '../Buttons'
-import Tabs from './BldrsTabs'
+import Tabs from './Tabs'
+import TabsSimple from './TabsSimple'
 import {assertDefined} from '../../utils/assert'
 
 
@@ -19,7 +21,7 @@ import {assertDefined} from '../../utils/assert'
  * @property {string} actionTitle Title for the action button
  * @property {Function} actionCb Callback for action button
  * @property {React.ReactElement} [actionIcon] Optional icon for the action button
- * @property {Array<string>} tabNames Array of tabs name
+ * @property {Array<object>} tabList Array of tabs name and tab content
  * @return {React.Component}
  */
 export default function Dialog({
@@ -27,15 +29,14 @@ export default function Dialog({
   headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  content,
   actionTitle,
   actionCb,
   actionIcon,
-  tabNames,
+  tabList,
 }) {
   assertDefined(
-      icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
-      actionTitle, actionCb)
+      icon, headerText, isDialogDisplayed, setIsDialogDisplayed,
+      actionTitle, actionCb, tabList)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
@@ -44,15 +45,17 @@ export default function Dialog({
       PaperProps={{variant: 'control'}}
     >
       <CloseButton onClick={close}/>
-      <DialogTitle>
+      <DialogTitle >
         {icon}<br/>
-        {headerText}
+        <Typography variant={'h4'}>{headerText}</Typography>
       </DialogTitle>
-      <DialogContent>
-        <Tabs tabNames={tabNames}/>
-        {content}
+      <DialogContent sx={{border: '1px solid lightGray', padding: '10px'}}>
+        <TabsSimple tabList={['Explore', 'Open', 'Save']}/>
       </DialogContent>
-      <DialogActions>
+      <DialogContent sx={{border: '1px solid lightGray', padding: '0px'}}>
+        <Tabs tabList={tabList}/>
+      </DialogContent>
+      <DialogActions sx={{border: '1px solid lightGray'}} disableSpacing>
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
       </DialogActions>
     </MuiDialog>

@@ -55,6 +55,12 @@ export function getComponentOverrides(palette) {
         },
       },
     },
+    MuiDialog: {
+      styleOverrides: {
+        root: {
+        },
+      },
+    },
     MuiPaper: {
       styleOverrides: {
         root: {

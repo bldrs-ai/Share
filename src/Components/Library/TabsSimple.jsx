@@ -7,7 +7,7 @@ import Tab from '@mui/material/Tab'
 
 
 const CustomTabs = styled(Tabs)(({theme}) => ({
-  'borderBottom': `1px solid ${theme.palette.primary.main}`,
+  // 'borderBottom': `1px solid ${theme.palette.primary.main}`,
   '& .MuiTabs-indicator': {
     backgroundColor: theme.palette.secondary.main,
   },
@@ -20,7 +20,7 @@ const CustomTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) =
   [theme.breakpoints.up('sm')]: {
     minWidth: 0,
   },
-  'fontSize': '1em',
+  'fontSize': '.9em',
   'fontWeight': theme.typography.fontWeight,
   'marginRight': theme.spacing(0),
   'color': theme.palette.primary.contrastText,
@@ -44,10 +44,10 @@ const CustomTab = styled((props) => <Tab disableRipple {...props}/>)(({theme}) =
 /**
  * Styled Tabs component.
  *
- * @property {Array<string>} tabs array of tabs
+ * @property {Array<string>} tabList array of Tab strings composed of tab names
  * @return {React.Component}
  */
-export default function BldrsTabs({tabNames, actionCb}) {
+export default function BldrsTabs({tabList, actionCb}) {
   const [value, setValue] = useState(0)
 
   const handleChange = (event, newValue) => {
@@ -57,9 +57,9 @@ export default function BldrsTabs({tabNames, actionCb}) {
   return (
     <Box sx={{width: '100%'}}>
       <CustomTabs value={value} onChange={handleChange} centered variant="fullWidth">
-        {tabNames.map((tabName) => {
+        {tabList.map((tab) => {
           return (
-            <CustomTab key={tabName} label={tabName}/>
+            <CustomTab key={tab} label={tab}/>
           )
         })}
       </CustomTabs>
