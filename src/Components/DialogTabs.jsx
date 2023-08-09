@@ -5,12 +5,12 @@ import DialogTitle from '@mui/material/DialogTitle'
 import Typography from '@mui/material/Typography'
 import MuiDialog from '@mui/material/Dialog'
 import Tabs from './Tabs'
-import {RectangularButton, CloseButton} from '../Buttons'
-import {assertDefined} from '../../utils/assert'
+import {RectangularButton, CloseButton} from './Buttons'
+import {assertDefined} from '../utils/assert'
 
 
 /**
- * A generic base dialog component.
+ * A ialog with tabs component.
  *
  * @property {React.ReactElement} icon Leading icon above header description
  * @property {Array<string>} headerText Short array of messages describing the current opeation
