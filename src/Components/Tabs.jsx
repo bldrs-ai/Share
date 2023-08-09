@@ -4,9 +4,10 @@ import MuiTabs from '@mui/material/Tabs'
 import Tab from '@mui/material/Tab'
 
 /**
- * Styled Tabs component.
+ * Tabs component.
  *
  * @property {Array<string>} tabList array of Tab strings composed of tab names
+ * @property {Function} actionCb called back fired when the tabs is selected returns currect tab number
  * @return {React.Component}
  */
 export default function Tabs({tabList, actionCb}) {

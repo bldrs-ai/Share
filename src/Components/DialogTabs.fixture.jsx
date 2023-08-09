@@ -7,7 +7,6 @@ import AttentionIcon from '../assets/icons/Attention.svg'
 
 
 const tabList = ['Explore', 'Open', 'Save']
-
 const contentList = [
   <Box sx={{textAlign: 'left'}} key={1}>
     <Typography variant='h4'>
@@ -52,11 +51,8 @@ const contentList = [
     </Typography>
   </Box>,
 ]
-
 const headerTextList = ['Explore Sample Projects', 'Open Project', 'Save Project']
 
-
-// const contentList = ['one', 'two', 'three']
 
 export default (
   <FixtureContext>

@@ -10,11 +10,11 @@ import {assertDefined} from '../utils/assert'
 
 
 /**
- * A ialog with tabs component.
+ * A Dialog with tabs compoent.
  *
  * @property {React.ReactElement} icon Leading icon above header description
  * @property {Array<string>} headerText Short array of messages describing the current opeation
- * @property {Array<string>} tabList Array of tabs name and tab content
+ * @property {Array<string>} tabList Array of tabs names
  * @property {Array<React.ReactElement>} contentList Array of components coresponding to the tabs
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
