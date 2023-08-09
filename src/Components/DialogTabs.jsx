@@ -14,7 +14,8 @@ import {assertDefined} from '../utils/assert'
  *
  * @property {React.ReactElement} icon Leading icon above header description
  * @property {Array<string>} headerText Short array of messages describing the current opeation
- * @property {Array<string>} tabList Array of tabs names
+ * @property {Array<string>} tabList List of tabs names
+ * @property {boolean} scrollableTabs Activate if the nymber of tabs is larger then 5
  * @property {Array<React.ReactElement>} contentList Array of components coresponding to the tabs
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
@@ -27,6 +28,7 @@ export default function Dialog({
   icon,
   headerTextList = ['loading'],
   tabList = ['loading'],
+  scrollableTabs = false,
   contentList = ['loading'],
   isDialogDisplayed,
   setIsDialogDisplayed,
@@ -52,7 +54,7 @@ export default function Dialog({
         <Typography variant={'h4'}>{headerTextList[currentTab]}</Typography>
       </DialogTitle>
       <DialogContent>
-        <Tabs tabList={tabList} actionCb={setCurrentTab}/>
+        <Tabs tabList={tabList} scrollableTabs={scrollableTabs} actionCb={setCurrentTab}/>
       </DialogContent>
       <DialogContent
         sx={{height: '240px'}}
