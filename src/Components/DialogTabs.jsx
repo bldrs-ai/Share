@@ -31,7 +31,7 @@ export default function Dialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
   actionTitle,
-  actionCb,
+  actionCb = [() => alert('loading')],
   actionIcon,
 }) {
   assertDefined(
@@ -58,7 +58,7 @@ export default function Dialog({
         {contentList[currentTab] || 'loading' }
       </DialogContent>
       <DialogActions disableSpacing>
-        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
+        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb[currentTab]}/>
       </DialogActions>
     </MuiDialog>
   )

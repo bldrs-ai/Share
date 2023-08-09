@@ -52,6 +52,11 @@ const contentList = [
   </Box>,
 ]
 const headerTextList = ['Explore Sample Projects', 'Open Project', 'Save Project']
+const actionCbList = [
+  () => alert('Explore actionCb'),
+  () => alert('Open actionCb'),
+  () => alert('Save actionCb'),
+]
 
 
 export default (
@@ -64,9 +69,7 @@ export default (
       setIsDialogDisplayed={() => {}}
       content={'What you should know about doing the thing'}
       actionTitle={'Do do the thing?'}
-      actionCb={() => {
-        alert('You did the thing')
-      }}
+      actionCb={actionCbList}
       tabList={tabList}
       contentList={contentList}
       headerTextList={headerTextList}
