@@ -14,26 +14,25 @@ import {assertDefined} from '../../utils/assert'
  *
  * @property {React.ReactElement} icon Leading icon above header description
  * @property {Array<string>} headerText Short array of messages describing the current opeation
+ * @property {Array<string>} tabList Array of tabs name and tab content
+ * @property {Array<React.ReactElement>} contentList Array of components coresponding to the tabs
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
- * @property {React.ReactElement} content Content of the dialog
  * @property {string} actionTitle Title for the action button
  * @property {Function} actionCb Callback for action button
  * @property {React.ReactElement} [actionIcon] Optional icon for the action button
- * @property {Array<string>} tabList Array of tabs name and tab content
- * @property {Array<React.ReactElement>} contentLis Array of components coresponding to the tabs
  * @return {React.Component}
  */
 export default function Dialog({
   icon,
   headerTextList = ['loading'],
+  tabList = ['loading'],
+  contentList = ['loading'],
   isDialogDisplayed,
   setIsDialogDisplayed,
   actionTitle,
   actionCb,
   actionIcon,
-  tabList = ['loading'],
-  contentList = ['loading'],
 }) {
   assertDefined(
       icon, headerTextList, isDialogDisplayed, setIsDialogDisplayed,
