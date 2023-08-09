@@ -51,7 +51,7 @@ export default function Dialog({
         {icon}<br/>
         <Typography variant={'h4'}>{headerTextList[currentTab]}</Typography>
       </DialogTitle>
-      <DialogContent>
+      <DialogContent sx={{marginBottom: '6px'}}>
         <Tabs tabList={tabList} actionCb={setCurrentTab}/>
       </DialogContent>
       <DialogContent sx={{height: '240px'}}>
