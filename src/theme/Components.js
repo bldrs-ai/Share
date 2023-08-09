@@ -64,7 +64,6 @@ export function getComponentOverrides(palette, typography) {
     MuiDialogContent: {
       styleOverrides: {
         root: {
-          height: '240px',
           padding: '0px 10px',
         },
       },
