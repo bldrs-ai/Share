@@ -45,7 +45,7 @@ export default function Dialog({
         {icon}<br/>
         {headerText}
       </DialogTitle>
-      <DialogContent sx={{border: '1px solid red'}}>{content}</DialogContent>
+      <DialogContent>{content}</DialogContent>
       <DialogActions>
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
       </DialogActions>

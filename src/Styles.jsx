@@ -26,7 +26,7 @@ export default function Styles({theme}) {
         },
         '.MuiDialog-paper': {
           textAlign: 'center',
-          padding: '1em 0.5em',
+          padding: '0.5em',
         },
         '.MuiDialog-paper > .MuiButtonBase-root': {
           position: 'absolute',
@@ -65,7 +65,7 @@ export default function Styles({theme}) {
           height: '12px',
         },
         '*::-webkit-scrollbar': {
-          width: '10px',
+          width: '2px',
           background: theme.palette.secondary.background,
         },
         '*::-webkit-scrollbar-thumb': {
