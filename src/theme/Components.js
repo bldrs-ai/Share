@@ -118,6 +118,7 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           'paddingBottom': '12px',
+          'width': '100%',
           '& .MuiTabs-indicator': {
             backgroundColor: palette.secondary.main,
           },

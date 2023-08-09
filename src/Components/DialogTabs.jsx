@@ -59,7 +59,7 @@ export default function Dialog({
       >
         {contentList[currentTab] || 'loading' }
       </DialogContent>
-      <DialogActions disableSpacing>
+      <DialogActions >
         <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb[currentTab]}/>
       </DialogActions>
     </MuiDialog>
