@@ -40,7 +40,7 @@ export default function Dialog({
       onClose={close}
       PaperProps={{variant: 'control'}}
     >
-      <CloseButton onClick={close}/>
+      <CloseButton onClick={close} className='icon-share'/>
       <DialogTitle>
         {icon}<br/>
         {headerText}

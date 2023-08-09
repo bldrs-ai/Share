@@ -109,7 +109,7 @@ export function getComponentOverrides(palette, typography) {
             backgroundColor: 'green',
           },
           '@media (max-width: 700px)': {
-            fontSize: '.7em',
+            fontSize: '.8em',
           },
         },
       },
@@ -117,6 +117,7 @@ export function getComponentOverrides(palette, typography) {
     MuiTabs: {
       styleOverrides: {
         root: {
+          'paddingBottom': '12px',
           '& .MuiTabs-indicator': {
             backgroundColor: palette.secondary.main,
           },

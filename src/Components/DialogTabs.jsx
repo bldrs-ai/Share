@@ -51,10 +51,12 @@ export default function Dialog({
         {icon}<br/>
         <Typography variant={'h4'}>{headerTextList[currentTab]}</Typography>
       </DialogTitle>
-      <DialogContent sx={{marginBottom: '6px'}}>
+      <DialogContent>
         <Tabs tabList={tabList} actionCb={setCurrentTab}/>
       </DialogContent>
-      <DialogContent sx={{height: '240px'}}>
+      <DialogContent
+        sx={{height: '240px'}}
+      >
         {contentList[currentTab] || 'loading' }
       </DialogContent>
       <DialogActions disableSpacing>
