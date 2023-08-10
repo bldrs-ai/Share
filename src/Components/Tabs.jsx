@@ -7,7 +7,7 @@ import Tab from '@mui/material/Tab'
  *
  * @property {Array<string>} tabList array of Tab strings composed of tab names
  * @property {boolean} scrollableTabs whenever the tabs number is large then 5 variant shall be flipper to scrollable
- * @property {Function} actionCb called back fired when the tabs is selected returns currect tab number
+ * @property {Function} actionCb callBack fired when the tabs is selected, returns currect tab number
  * @return {React.Component}
  */
 export default function Tabs({tabList, scrollableTabs, actionCb}) {
