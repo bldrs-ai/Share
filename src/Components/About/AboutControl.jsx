@@ -39,12 +39,7 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <AboutIcon
-          style={{
-            width: '20px',
-            height: '20px',
-          }}
-        />
+        <AboutIcon className='icon-share'/>
       }
       dialog={
         <AboutDialog
@@ -69,8 +64,8 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
-          <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
+          <LogoB/>
+          <Typography variant='h6'>bldrs.ai</Typography>
         </Box>
       }
       headerText={''}

@@ -1,19 +1,20 @@
 import React from 'react'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import ListIcon from '@mui/icons-material/List'
 import Paper from '@mui/material/Paper'
+import ToggleButton from '@mui/material/ToggleButton'
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
+import Tooltip from '@mui/material/Tooltip'
 import TreeView from '@mui/lab/TreeView'
+import {styled} from '@mui/material/styles'
 import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
+import {useExistInFeature} from '../hooks/useExistInFeature'
 import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
-import ListIcon from '@mui/icons-material/List'
-import ToggleButton from '@mui/material/ToggleButton'
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
-import Tooltip from '@mui/material/Tooltip'
-import {styled} from '@mui/material/styles'
-import {useExistInFeature} from '../hooks/useExistInFeature'
+
 
 /**
  * @param {object} model
@@ -147,8 +148,8 @@ export default function NavPanel({
           </StyledToggleButtonGroup>}
           <TreeView
             aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
-            defaultCollapseIcon={<NodeOpenIcon className='caretToggle'/>}
-            defaultExpandIcon={<NodeClosedIcon className='caretToggle'/>}
+            defaultCollapseIcon={<NodeOpenIcon className='icon-share icon-nav-caret'/>}
+            defaultExpandIcon={<NodeClosedIcon className='icon-share icon-nav-caret'/>}
             defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
             expanded={isNavTree ? expandedElements : expandedTypes}
             selected={selectedElements}

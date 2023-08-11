@@ -32,7 +32,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
-      icon={<ShareIcon style={{width: '20px', height: '20px'}}/>}
+      icon={<ShareIcon className='icon-share'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -127,12 +127,12 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<ShareIcon/>}
+      icon={<ShareIcon className='icon-share'/>}
       headerText='Share'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
-      actionIcon={<CopyIcon/>}
+      actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
       content={
         <Box sx={{

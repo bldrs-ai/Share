@@ -336,7 +336,7 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={<CameraIcon/>}
+            icon={<CameraIcon className='icon-share'/>}
             aboutInfo={false}
           />}
         {selected &&
@@ -348,7 +348,7 @@ const CardFooter = ({
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={<ShareIcon/>}
+            icon={<ShareIcon className='icon-share'/>}
           />
         }
         {
@@ -367,7 +367,7 @@ const CardFooter = ({
               onClick={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+              icon={<PlaceMarkIcon className='icon-share'/>}
             />
           </Box>
         }
@@ -389,7 +389,7 @@ const CardFooter = ({
             onClick={async () => {
               await deleteNote(repository, accessToken, noteNumber)
             }}
-            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {isComment && synched && user && user.nickname === username &&
@@ -400,7 +400,7 @@ const CardFooter = ({
             onClick={async () => {
               await removeComment(repository, accessToken, id)
             }}
-            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {!synched &&
@@ -409,7 +409,7 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={() => toggleSynchSidebar()}
-            icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<SynchIcon className='icon-share'/>}
           />
         }
         {isScreenshotEnabled && screenshotUri &&
@@ -423,7 +423,7 @@ const CardFooter = ({
             onClick={() => {
               setScreenshotUri(viewer.takeScreenshot())
             }}
-            icon={<PhotoCameraIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
         {numberOfComments > 0 &&

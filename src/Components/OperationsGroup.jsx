@@ -115,7 +115,7 @@ export default function OperationsGroup({deselectItems}) {
        <ButtonGroup orientation='vertical'>
          <TooltipIconButton
            title='Notes'
-           icon={<NotesIcon/>}
+           icon={<NotesIcon className='icon-share'/>}
            selected={isNotesOn}
            onClick={() => {
              turnOffTooltips()
@@ -129,7 +129,7 @@ export default function OperationsGroup({deselectItems}) {
              toggle('Properties')
            }}
            selected={isPropertiesOn}
-           icon={<ListIcon/>}
+           icon={<ListIcon className='icon-share'/>}
          />
          <CutPlaneMenu/>
          {/* <ExtractLevelsMenu/> */}
@@ -137,7 +137,7 @@ export default function OperationsGroup({deselectItems}) {
            title='Clear'
            onClick={deselectItems}
            selected={isSelected()}
-           icon={<ClearIcon/>}
+           icon={<ClearIcon className='icon-share'/>}
          />
 
        </ButtonGroup>
@@ -156,13 +156,16 @@ export default function OperationsGroup({deselectItems}) {
          <TooltipIconButton
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}
-           icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
+           icon={
+             theme.palette.mode === 'light' ?
+               <MoonIcon className='icon-share'/> :
+               <SunIcon className='icon-share'/>}
          />
          <TooltipIconButton
            title='Help'
            onClick={() => toggleIsHelpTooltips()}
            selected={isHelpTooltips}
-           icon={<QuestionIcon/>}
+           icon={<QuestionIcon className='icon-share'/>}
          />
          <AboutControl/>
        </ButtonGroup>
