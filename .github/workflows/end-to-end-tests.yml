@@ -12,16 +12,46 @@ on:
   workflow_dispatch:
 
 jobs:
+  install-cypress:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Install Cypress
+        id: install-cypress
+        uses: cypress-io/github-action@v5
+        with:
+          runTests: false
+          build: yarn build-share
+
+      - name: Save build artifacts
+        id: build-artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build
+          if-no-files-found: error
+          path: docs/
+
   run-cypress:
     runs-on: ubuntu-20.04
+    needs: install-cypress
     steps:
       - name: Checkout
         id: checkout
         uses: actions/checkout@v3
+
+      - name: Restore build artifacts
+        id: restore-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+          path: docs/
 
       - name: E2E Tests on Google Chrome
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
           browser: chrome
-          build: yarn build-share
+          start: node config/serve.js
