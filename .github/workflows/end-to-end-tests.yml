@@ -32,8 +32,36 @@ jobs:
           if-no-files-found: error
           path: docs/
 
-  run-cypress:
+  run-cypress-on-linux:
     runs-on: ubuntu-20.04
+    needs: install-cypress
+    strategy:
+      fail-fast: false
+      matrix:
+        containers: [1, 2, 3, 4]
+
+    steps:
+      - name: Checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Restore build artifacts
+        id: restore-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build
+
+      - name: E2E Tests on Google Chrome
+        id: e2e-on-google-chrome
+        uses: cypress-io/github-action@v5
+        with:
+          record: true
+          parallel: true
+          browser: chrome
+          start: node config/serve.js
+
+  run-cypress-on-windows:
+    runs-on: windows-latest
     needs: install-cypress
     strategy:
       fail-fast: false
