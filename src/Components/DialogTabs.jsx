@@ -24,7 +24,7 @@ import {assertDefined} from '../utils/assert'
  * @property {React.ReactElement} [actionIcon] Optional icon for the action button
  * @return {React.Component}
  */
-export default function Dialog({
+export default function DialogTab({
   icon,
   headerTextList = ['loading'],
   tabList = ['loading'],
