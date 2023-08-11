@@ -47,6 +47,7 @@ jobs:
 
       - name: Restore build artifacts
         id: restore-artifacts
+        uses: actions/download-artifact@v3
         with:
           name: build
 
