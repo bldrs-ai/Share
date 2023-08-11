@@ -1,9 +1,21 @@
 import React from 'react'
+import FixtureContext from '../FixtureContext'
 import {TooltipIconButton} from './Buttons'
 import ShareIcon from '../assets/icons/Share.svg'
 
 
-export default (
-  // eslint-disable-next-line no-console
-  <TooltipIconButton title={'Hello World'} icon={<ShareIcon/>} onClick={() => console.log('clicked')}/>
-)
+/** @return {React.Component} */
+export default function Example() {
+  return (
+    <FixtureContext>
+      <TooltipIconButton
+        title={'Hello World'}
+        icon={<ShareIcon className='icon-share'/>}
+        onClick={() => {
+          // eslint-disable-next-line no-console
+          console.log('clicked')
+        }}
+      />
+    </FixtureContext>
+  )
+}

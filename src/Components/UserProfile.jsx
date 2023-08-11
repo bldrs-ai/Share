@@ -1,17 +1,17 @@
 import React from 'react'
-import {useAuth0} from '@auth0/auth0-react'
-import Avatar from '@mui/material/Avatar'
-import MenuItem from '@mui/material/MenuItem'
-import ListItemIcon from '@mui/material/ListItemIcon'
-import Divider from '@mui/material/Divider'
-import Typography from '@mui/material/Typography'
 import {
   usePopupState,
   bindTrigger,
   bindMenu,
 } from 'material-ui-popup-state/hooks'
+import {useAuth0} from '@auth0/auth0-react'
+import Avatar from '@mui/material/Avatar'
 import IconButton from '@mui/material/IconButton'
+import ListItemIcon from '@mui/material/ListItemIcon'
 import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
+import Typography from '@mui/material/Typography'
+import Divider from '@mui/material/Divider'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import LogoutIcon from '@mui/icons-material/Logout'
 
@@ -73,7 +73,7 @@ const UserProfile = ({size = 'medium'}) => {
       >
         <MenuItem>
           <ListItemIcon sx={{display: 'flex', alignItems: 'center'}}>
-            <GitHubIcon/>
+            <GitHubIcon className='icon-share'/>
             <Typography sx={{paddingLeft: '11px'}}>
               Hi, {user.name}!
             </Typography>

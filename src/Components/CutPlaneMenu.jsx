@@ -97,7 +97,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
-        icon={<CutPlaneIcon/>}
+        icon={<CutPlaneIcon className='icon-share'/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
       />

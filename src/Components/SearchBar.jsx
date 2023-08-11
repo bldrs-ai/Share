@@ -138,7 +138,7 @@ export default function SearchBar({fileOpen}) {
               setError('')
               navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
             }}
-            icon={<ClearIcon/>}
+            icon={<ClearIcon className='icon-share'/>}
           />
         }
       </Paper>
