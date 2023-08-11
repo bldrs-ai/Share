@@ -9,6 +9,8 @@ on:
     branches:
       - main
 
+  workflow_dispatch:
+
 jobs:
   run-cypress:
     runs-on: ubuntu-20.04
