@@ -37,11 +37,6 @@ jobs:
   run-cypress:
     runs-on: ubuntu-20.04
     needs: install-cypress
-    strategy:
-      fail-fast: false
-      matrix:
-        containers: [1, 2, 3, 4]
-
     steps:
       - name: Checkout
         id: checkout
@@ -57,6 +52,5 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
-          parallel: true
           browser: chrome
           start: node config/serve.js
