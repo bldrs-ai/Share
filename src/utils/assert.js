@@ -25,6 +25,11 @@ export function assertDefined(...args) {
     if (Object.prototype.hasOwnProperty.call(args, ndx)) {
       const arg = args[ndx]
       assert(arg !== null && arg !== undefined, `Arg ${ndx} is not defined`)
+      if (Array.isArray(arg)) {
+        for (let i = 0; i < arg.length; i++) {
+          assertDefined(arg[i], `Arg ${ndx} is an array with undefined index ${i}`)
+        }
+      }
     }
   }
   if (args.length === 1) {
@@ -43,4 +48,24 @@ export function assertDefinedBoolean(arg) {
     return true
   }
   return false
+}
+
+
+/**
+ * @param {any} args Variable length arguments to assert are defined.
+ * @return {Array<Array>} The arrays
+ */
+export function assertArraysEqualLength(...arrays) {
+  if (arrays.length <= 1) {
+    throw new Error('Expected multiple arrays')
+  }
+  const arrLength = arrays[0].length
+  for (const ndx in arrays) {
+    if (Object.prototype.hasOwnProperty.call(arrays, ndx)) {
+      const array = arrays[ndx]
+      assertDefined(array)
+      assert(arrLength === array.length, `Array ${ndx} has unexpected length != ${array.length}`)
+    }
+  }
+  return arrays
 }
