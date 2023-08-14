@@ -47,6 +47,7 @@ export default function TabbedDialog({
       <CloseButton onClick={close}/>
       <DialogTitle>
         {icon && <>{icon}<br/></>}
+        {headerLabels[currentTab]}
       </DialogTitle>
       <DialogContent>
         <Tabs tabLabels={tabLabels} actionCb={setCurrentTab} isScrollable={isTabsScrollable}/>
