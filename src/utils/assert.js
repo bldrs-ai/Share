@@ -52,8 +52,8 @@ export function assertDefinedBoolean(arg) {
 
 
 /**
- * @param {any} args Variable length arguments to assert are defined.
- * @return {Array<Array>} The arrays
+ * @param {any} arrays Variable length arguments to assert are defined.
+ * @return {Array<Array<any>>} The arrays
  */
 export function assertArraysEqualLength(...arrays) {
   if (arrays.length <= 1) {
