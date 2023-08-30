@@ -5,12 +5,8 @@ import IfcViewsManager from './IfcElementsStyleManager'
 import IfcCustomViewSettings from './IfcCustomViewSettings'
 import CustomPostProcessor from './CustomPostProcessor'
 import debug from '../utils/debug'
-import {IfcGeometryExtraction} from 'bldrs-conway'
-import {useExistInFeature} from '../hooks/useExistInFeature'
-const isNewEngineEnabled = useExistInFeature('newengine')
 
-console.log("isNewEngineEnabled: " + isNewEngineEnabled)
-const viewParameter = (new URLSearchParams(window.location.search)).get('view')?.toLowerCase() ?? 'default'
+
 const viewRules = {
   'default': [],
   'ch.sia380-1.heatmap': ['Rule1', 'Rule2'],

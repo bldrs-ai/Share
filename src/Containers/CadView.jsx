@@ -754,10 +754,6 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.clipper.active = true
   viewer.clipper.orthogonalY = false
 
-  if (isNewEngineEnabled) {
-    console.log("NewEngine feature flag works...")
-  }
-
   // Highlight items when hovering over them
   window.onmousemove = (event) => {
     viewer.highlightIfcItem()

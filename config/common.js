@@ -13,6 +13,17 @@ const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
 const assetsDir = path.resolve(__dirname, '..', 'public')
 export const buildDir = path.resolve(__dirname, '..', 'docs')
 
+const webIfcShimAliasPlugin = {
+  name: 'webIfcShimAlias',
+  setup(build) {
+    build.onResolve({ filter: /^web-ifc$/ }, (args) => {
+      return {
+        path: path.resolve(__dirname, '../node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
+      };
+    });
+  },
+};
+
 export const build = {
   entryPoints: [entryPoint],
   bundle: true,
@@ -53,5 +64,6 @@ export const build = {
       src: assetsDir,
       dest: buildDir,
     }),
+    webIfcShimAliasPlugin,
   ],
 }
