@@ -105,7 +105,7 @@ function AboutContent({setIsDialogDisplayed}) {
             github.com/bldrs-ai/Share
           </Link>
         </Stack>
-        <Box sx={{padding: '0px 10px'}} elevation={0}>
+        <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
             <Box variant='span'>
               Welcome to Share.

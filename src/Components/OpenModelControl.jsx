@@ -210,6 +210,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
         value={selected}
         onChange={handleSelect}
         label="Sample Projects"
+        aria-labelledby="Sample Projects"
       >
         <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
         <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
