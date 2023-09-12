@@ -1,13 +1,12 @@
 import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import InputLabel from '@mui/material/InputLabel'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
+import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import FormControl from '@mui/material/FormControl'
-import Select from '@mui/material/Select'
+import useTheme from '@mui/styles/useTheme'
 import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
@@ -138,6 +137,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           direction="column"
           justifyContent="center"
           alignItems="center"
+          sx={{paddingTop: '6px'}}
         >
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           {isAuthenticated ?
@@ -186,6 +186,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 function SampleModelFileSelector({setIsDialogDisplayed}) {
   const navigate = useNavigate()
   const [selected, setSelected] = useState('')
+  const theme = useTheme()
   const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
@@ -202,24 +203,54 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
     navigate({pathname: modelPath[e.target.value]})
     closeDialog()
   }
+
   return (
-    <FormControl sx={{width: '200px', margin: '6px'}} label="Sample Projects" aria-labelledby="Sample Projects">
-      <InputLabel>Sample Projects</InputLabel>
-      <Select
-        labelId="Sample model"
-        value={selected}
-        onChange={handleSelect}
-        label="Sample Projects"
-        aria-labelledby="Sample Projects"
-      >
-        <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-        <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-        <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-        <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-        <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-        <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-        <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
-      </Select>
-    </FormControl>
+    <TextField
+      sx={{
+        'width': '260px',
+        '& .MuiOutlinedInput-input': {
+          color: theme.palette.primary.main,
+        },
+        '& .MuiInputLabel-root': {
+          color: theme.palette.primary.main,
+        },
+        '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.primary.main,
+        },
+        '&:hover .MuiOutlinedInput-input': {
+          color: theme.palette.primary.main,
+        },
+        '&:hover .MuiInputLabel-root': {
+          color: theme.palette.primary.main,
+        },
+        '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.primary.main,
+        },
+        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
+          color: theme.palette.primary.main,
+        },
+        '& .MuiInputLabel-root.Mui-focused': {
+          color: theme.palette.primary.main,
+        },
+        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
+          borderColor: theme.palette.primary.main,
+        },
+      }}
+      value={selected}
+      onChange={(e) => handleSelect(e, () => setIsDialogDisplayed(false))}
+      variant='outlined'
+      label='Sample Projects'
+      select
+      size='small'
+    >
+      <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+      <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+      <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+      <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+      <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+      <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
+    </TextField>
   )
 }
+
