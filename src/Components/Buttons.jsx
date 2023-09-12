@@ -116,9 +116,9 @@ export function CloseButton({onClick}) {
  *
  * @property {string} title Text to show in button
  * @property {Function} onClick callback
- * @property {object} icon Start icon to left of text
- * @property {boolean} border Default: false
- * @property {boolean} background Default: true
+ * @property {object} [icon] Start icon to left of text
+ * @property {boolean} [border] Default: false
+ * @property {boolean} [background] Default: true
  * @return {object} React component
  */
 export function RectangularButton({
@@ -129,7 +129,11 @@ export function RectangularButton({
   background = true,
 }) {
   assertDefined(title, onClick)
-  return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
+  return (
+    icon ?
+      <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button> :
+      <Button onClick={onClick} variant='rectangular'>{title}</Button>
+  )
 }
 
 

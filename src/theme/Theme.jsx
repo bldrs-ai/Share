@@ -53,7 +53,7 @@ function loadTheme(mode, setMode, themeChangeListeners) {
   // https://mui.com/customization/dark-mode/
   const activePalette = mode === Themes.Day ? day : night
   const theme = {
-    components: getComponentOverrides(activePalette),
+    components: getComponentOverrides(activePalette, getTypography()),
     typography: getTypography(),
     shape: {borderRadius: 8},
     palette: activePalette,

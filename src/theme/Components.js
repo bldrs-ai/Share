@@ -2,7 +2,7 @@
  * @param {object} Mui color palette.
  * @return {object} Mui component overrides.
  */
-export function getComponentOverrides(palette) {
+export function getComponentOverrides(palette, typography) {
   return {
     MuiTreeItem: {
       styleOverrides: {
@@ -55,6 +55,19 @@ export function getComponentOverrides(palette) {
         },
       },
     },
+    MuiDialog: {
+      styleOverrides: {
+        root: {
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          padding: '0px 10px',
+        },
+      },
+    },
     MuiPaper: {
       styleOverrides: {
         root: {
@@ -75,6 +88,44 @@ export function getComponentOverrides(palette) {
         },
       ],
     },
+    MuiTab: {
+      styleOverrides: {
+        root: {
+          'textTransform': 'none',
+          'minWidth': 0,
+          'fontSize': '.9em',
+          'fontWeight': typography.fontWeight,
+          'marginRight': 0,
+          'color': palette.primary.contrastText,
+          'fontFamily': typography.fontFamily,
+          '&:hover': {
+            color: palette.secondary.main,
+          },
+          '&.Mui-selected': {
+            color: palette.secondary.main,
+            fontWeight: typography.fontWeight,
+          },
+          '&.Mui-focusVisible': {
+            backgroundColor: 'green',
+          },
+          '@media (max-width: 700px)': {
+            fontSize: '.8em',
+          },
+        },
+      },
+    },
+    MuiTabs: {
+      styleOverrides: {
+        root: {
+          'paddingBottom': '12px',
+          'width': '100%',
+          '& .MuiTabs-indicator': {
+            backgroundColor: palette.secondary.main,
+          },
+        },
+      },
+    },
+
     MuiCardActions: {
       styleOverrides: {
         root: {

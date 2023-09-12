@@ -13,6 +13,7 @@ export function getTypography() {
     fontFamily: fontFamily,
     fontSize: fontSize,
     letterSpacing: letterSpacing,
+    fontWeight: fontWeight,
     lineHeight: lineHeight,
     h1: {fontSize: '1.3em', fontWeight},
     h2: {fontSize: '1.2em', fontWeight},

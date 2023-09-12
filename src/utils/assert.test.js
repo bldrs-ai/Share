@@ -1,6 +1,8 @@
+/* eslint-disable no-magic-numbers */
 import {
   assert,
   assertDefined,
+  assertArraysEqualLength,
 } from './assert'
 
 
@@ -15,8 +17,28 @@ test('assert', () => {
 })
 
 
-test('assert', () => {
+test('assertDefined', () => {
   assertDefined(1)
+  assertDefined(1, 2)
+  assertDefined(1, 2, 3)
+  assertDefined([])
+  assertDefined([], [])
+  assertDefined([], [], [])
+  expectFailure(() => {
+    assertDefined([undefined])
+  })
+  expectFailure(() => {
+    assertDefined([1], [undefined])
+  })
+  expectFailure(() => {
+    assertDefined([undefined], [1])
+  })
+  expectFailure(() => {
+    assertDefined([undefined], [1])
+  })
+  expectFailure(() => {
+    assertDefined([undefined], [undefined])
+  })
   expectFailure(() => {
     assertDefined(undefined)
   })
@@ -34,6 +56,22 @@ test('assert', () => {
   expectFailure(() => {
     new TestVarargs(a, b)
   })
+})
+
+
+test('assertArraysEqualLength', () => {
+  expectFailure(() => {
+    assertArraysEqualLength()
+  })
+  expectFailure(() => {
+    assertArraysEqualLength([])
+  })
+  assertArraysEqualLength([], [])
+  assertArraysEqualLength([], [], [])
+  assertArraysEqualLength([], [], [], [])
+
+  assertArraysEqualLength([1, 1, 1], [2, 2, 2])
+  assertArraysEqualLength([1, 1, 1], [2, 2, 2], [3, 3, 3])
 })
 
 
