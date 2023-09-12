@@ -203,7 +203,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
     closeDialog()
   }
   return (
-    <FormControl sx={{width: '200px', margin: '6px'}} label="Sample Projects">
+    <FormControl sx={{width: '200px', margin: '6px'}} label="Sample Projects" aria-labelledby="Sample Projects">
       <InputLabel>Sample Projects</InputLabel>
       <Select
         labelId="Sample model"
