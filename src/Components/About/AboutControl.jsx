@@ -1,11 +1,12 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import AboutDescription from './AboutDescription'
 import PrivacyControl from './PrivacyControl'
 import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
@@ -62,13 +63,12 @@ export default function AboutControl() {
 export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
-      icon={
+      headerText={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
           <LogoB/>
-          <Typography variant='h6'>bldrs.ai</Typography>
+          <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>
       }
-      headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
@@ -86,15 +86,39 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({setIsDialogDisplayed}) {
   return (
-    <Box sx={{'& a': {textDecoration: 'none'}}}>
+    <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
         <title>About — BLDRS</title>
       </Helmet>
-      <Typography variant='h2' gutterBottom={true}>build every thing together</Typography>
-      <a href='https://github.com/bldrs-ai/Share' target='_new'>
-        github.com/bldrs-ai/Share
-      </a>
-      <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
-      <PrivacyControl/>
+      <Stack
+        spacing={3}
+        direction="column"
+        justifyContent="center"
+        alignItems="center"
+      >
+        <Stack spacing={0}>
+          <Typography variant={'body1'}>build every thing together</Typography>
+          <Link
+            underline="always"
+            href='https://github.com/bldrs-ai/Share'
+          >
+            github.com/bldrs-ai/Share
+          </Link>
+        </Stack>
+        <Box sx={{padding: '0px 10px'}} elevation={0}>
+          <Typography variant={'body1'}>
+            <Box variant='span'>
+              Welcome to Share.
+            </Box>
+            Highlight specific elements within your 3D model,
+            position the camera angle,
+            share the exact view using generated link.
+            <Box variant='span' sx={{fontWeight: 'bold'}}>
+              With the Share link everyone has access to the same context in digital space.
+            </Box>
+          </Typography>
+        </Box>
+        <PrivacyControl/>
+      </Stack>
     </Box>)
 }

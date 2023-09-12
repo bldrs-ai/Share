@@ -55,7 +55,7 @@ export default function ItemPropertiesDrawer({
         },
       })}
       >
-        <Typography variant='h1'>{title}</Typography>
+        <Typography variant='body1'>{title}</Typography>
         <TooltipIconButton
           title='Close properties'
           onClick={onClose}

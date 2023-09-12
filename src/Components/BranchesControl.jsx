@@ -81,7 +81,7 @@ export default function Branches() {
         >
           <TextField
             sx={{
-              'width': '300px',
+              'width': '274px',
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },

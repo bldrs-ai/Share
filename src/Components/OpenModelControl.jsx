@@ -1,11 +1,13 @@
 import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import InputLabel from '@mui/material/InputLabel'
+import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
-import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import TextField from '@mui/material/TextField'
-import useTheme from '@mui/styles/useTheme'
+import FormControl from '@mui/material/FormControl'
+import Select from '@mui/material/Select'
 import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
@@ -27,7 +29,6 @@ export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
-  const theme = useTheme()
   const accessToken = useStore((state) => state.accessToken)
   useEffect(() => {
     /**
@@ -50,24 +51,15 @@ export default function OpenModelControl({fileOpen}) {
 
 
   return (
-    <Box
-      sx={{
-        '& button': {
-          margin: '0',
-          border: `solid 1px ${theme.palette.primary.background}`,
-        },
-      }}
-    >
-      <Paper elevation={0} variant='control'>
-        <TooltipIconButton
-          title={'Open IFC'}
-          onClick={() => setIsDialogDisplayed(true)}
-          icon={<OpenIcon className='icon-share'/>}
-          placement={'right'}
-          selected={isDialogDisplayed}
-          dataTestId='open-ifc'
-        />
-      </Paper>
+    <Box>
+      <TooltipIconButton
+        title={'Open IFC'}
+        onClick={() => setIsDialogDisplayed(true)}
+        icon={<OpenIcon className='icon-share'/>}
+        placement={'right'}
+        selected={isDialogDisplayed}
+        dataTestId='open-ifc'
+      />
       {isDialogDisplayed &&
         <OpenModelDialog
           isDialogDisplayed={isDialogDisplayed}
@@ -93,7 +85,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
   const [selectedFileName, setSelectedFileName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
-  const theme = useTheme()
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
@@ -142,23 +133,13 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
       actionIcon={<UploadIcon className='icon-share'/>}
       actionCb={openFile}
       content={
-        <Box
-          sx={{
-            width: '260px',
-            paddingTop: '6px',
-            textAlign: 'left',
-          }}
+        <Stack
+          spacing={1}
+          direction="column"
+          justifyContent="center"
+          alignItems="center"
         >
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
-          <p>Visit our {' '}
-            <a
-              target="_blank"
-              href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
-              rel="noreferrer"
-            >
-              wiki
-            </a> to learn more about GitHub hosting.
-          </p>
           {isAuthenticated ?
           <Box>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
@@ -174,26 +155,24 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               </Box>
             }
           </Box> :
-          <Typography
-            variant={'h4'}
-            sx={{
-              backgroundColor: theme.palette.scene.background,
-              borderRadius: '5px',
-              padding: '12px',
-            }}
-          >
-            Please login to get access to your files on GitHub
-          </Typography>
-          }
-          <Box
-            sx={{
-              marginTop: '1em',
-              fontSize: '.8em',
-            }}
-          >
-            * Local files cannot yet be saved or shared.
+          <Box sx={{padding: '0px 10px'}} elevation={0}>
+            <Stack>
+              <Typography variant={'body1'}>
+                Please login to get access to your files on GitHub
+              </Typography>
+              <Typography variant={'body1'}>
+                Visit our {' '}
+                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'>
+                  wiki
+                </Link> to learn more about GitHub hosting.
+              </Typography>
+            </Stack>
           </Box>
-        </Box>
+          }
+          <Typography variant={'caption'}>
+            * Local files cannot yet be saved or shared.
+          </Typography>
+        </Stack>
       }
     />
   )
@@ -207,7 +186,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 function SampleModelFileSelector({setIsDialogDisplayed}) {
   const navigate = useNavigate()
   const [selected, setSelected] = useState('')
-  const theme = useTheme()
   const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
@@ -224,53 +202,23 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
     navigate({pathname: modelPath[e.target.value]})
     closeDialog()
   }
-
   return (
-    <TextField
-      sx={{
-        'width': '260px',
-        '& .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiInputLabel-root': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-        '&:hover .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '&:hover .MuiInputLabel-root': {
-          color: theme.palette.secondary.main,
-        },
-        '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiInputLabel-root.Mui-focused': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-      }}
-      value={selected}
-      onChange={(e) => handleSelect(e, () => setIsDialogDisplayed(false))}
-      variant='outlined'
-      label='Sample Projects'
-      select
-      size='small'
-    >
-      <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-      <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-      <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-      <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-      <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-      <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
-    </TextField>
+    <FormControl sx={{width: '200px', margin: '6px'}} label="Sample Projects">
+      <InputLabel>Sample Projects</InputLabel>
+      <Select
+        labelId="Sample model"
+        value={selected}
+        onChange={handleSelect}
+        label="Sample Projects"
+      >
+        <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
+        <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
+        <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
+        <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
+        <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
+        <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
+        <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
+      </Select>
+    </FormControl>
   )
 }

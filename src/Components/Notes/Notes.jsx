@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from 'react'
-import Paper from '@mui/material/Paper'
 import {useAuth0} from '@auth0/auth0-react'
+import Stack from '@mui/material/Stack'
 import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
@@ -129,14 +129,8 @@ export default function Notes() {
 
 
   return hasError ? <ApplicationError/> : (
-    <Paper
-      elevation={0}
-      square
-      sx={{
-        width: '100%',
-        display: 'block',
-        overflow: 'auto',
-      }}
+    <Stack
+      spacing={1}
     >
       {isCreateNoteActive && user && <NoteCardCreate/>}
       {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
@@ -194,6 +188,6 @@ export default function Notes() {
           }
         </>
       }
-    </Paper>
+    </Stack>
   )
 }
