@@ -156,7 +156,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             }
           </Box> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
-            <Stack>
+            <Stack sx={{textAlign: 'left'}}>
               <Typography variant={'body1'}>
                 Please login to get access to your files on GitHub
               </Typography>
