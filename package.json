@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r689",
+  "version": "1.0.0-r691",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,9 +8,12 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn clean && yarn build-share && yarn build-cosmos",
+    "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
+    "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
     "build-share": "yarn write-new-version && node config/build.js && yarn build-share-copy-web-asm",
+    "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share",
+    "build-share-webifc": "USE_WEBIFC_SHIM=false yarn build-share",
     "build-share-copy-web-asm": "shx cp node_modules/web-ifc/*.wasm docs/static/js && shx cp node_modules/bldrs-conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
     "clean": "shx rm -rf docs",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
@@ -19,7 +22,8 @@
     "precommit": "yarn lint && yarn test",
     "serve": "yarn serve-share",
     "serve-cosmos": "cosmos --config .cosmos.config.json",
-    "serve-share": "yarn build-share && node config/serve.js",
+    "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node config/serve.js",
+    "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node config/serve.js",
     "test": "jest",
     "cypress": "cypress run",
     "cypress-spec": "cypress run --spec",

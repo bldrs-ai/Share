@@ -24,46 +24,59 @@ const webIfcShimAliasPlugin = {
   },
 };
 
-export const build = {
-  entryPoints: [entryPoint],
-  bundle: true,
-  minify: process.env.MINIFY_BUILD === 'true',
-  // https://esbuild.github.io/api/#keep-names
-  // We use code identifiers e.g. in ItemProperties for their names
-  keepNames: true,
-  // Splitting
-  // Entry points (our src/index.jsx) are currently not named with
-  // cache-busting segments, like index-x84nfi.js, so we should be
-  // careful with our caching, i.e. not putting much index.jsx.
-  // See:
-  //   https://esbuild.github.io/api/#chunk-names
-  //   https://github.com/evanw/esbuild/issues/16
-  splitting: false,
-  metafile: true,
-  outdir: buildDir,
-  format: 'esm',
-  sourcemap: true,
-  platform: 'browser',
-  target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
-  logLevel: 'info',
-  define: {
-    'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
-    'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI || null),
-    'process.env.AUTH0_DOMAIN': JSON.stringify(process.env.AUTH0_DOMAIN),
-    'process.env.GITHUB_API_TOKEN': JSON.stringify(process.env.GITHUB_API_TOKEN),
-    'process.env.GITHUB_BASE_URL': JSON.stringify(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
-    'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
-    'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
-    'process.env.DISABLE_MOCK_SERVICE_WORKER': JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER),
-    'process.env.RAW_GIT_PROXY_URL': JSON.stringify(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com'),
-  },
-  plugins: [
+const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
+export const buildConfig = (useWebIfcShim) => {
+  const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx');
+  const assetsDir = path.resolve(__dirname, '..', 'public');
+  const buildDir = path.resolve(__dirname, '..', 'docs');
+
+  // Initialize plugins array
+  const plugins = [
     progress(),
     svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
     copyStaticFiles({
       src: assetsDir,
       dest: buildDir,
     }),
-    webIfcShimAliasPlugin,
-  ],
-}
+  ];
+
+
+  // Conditionally include webIfcShimAliasPlugin
+  if (useWebIfcShim) {
+    console.log("Using Conway shim backend")
+    plugins.push(webIfcShimAliasPlugin);
+  } else {
+    console.log("Using original Web-Ifc backend")
+  }
+
+  // Return the build config
+  return {
+    entryPoints: [entryPoint],
+    bundle: true,
+    minify: process.env.MINIFY_BUILD === 'true',
+    keepNames: true,
+    splitting: false,
+    metafile: true,
+    outdir: buildDir,
+    format: 'esm',
+    sourcemap: true,
+    platform: 'browser',
+    target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
+    logLevel: 'info',
+    define: {
+      'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
+      'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI || null),
+      'process.env.AUTH0_DOMAIN': JSON.stringify(process.env.AUTH0_DOMAIN),
+      'process.env.GITHUB_API_TOKEN': JSON.stringify(process.env.GITHUB_API_TOKEN),
+      'process.env.GITHUB_BASE_URL': JSON.stringify(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
+      'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
+      'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV),
+      'process.env.DISABLE_MOCK_SERVICE_WORKER': JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER),
+      'process.env.RAW_GIT_PROXY_URL': JSON.stringify(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com'),
+      'process.env.USE_WEBIFC_SHIM': JSON.stringify(useWebIfcShim),
+    },
+    plugins: plugins,
+  };
+};
+
+export const build = buildConfig(useWebIfcShim)
