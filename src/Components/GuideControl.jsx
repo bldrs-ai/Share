@@ -91,7 +91,7 @@ function GuidePanel({openToggle, offsetTop}) {
         }}
         ><Close onClick={openToggle}/>
         </Box>
-        <Typography variant='h1'>Guide</Typography>
+        <Typography variant='body1'>Guide</Typography>
         <p>To select an element:</p>
         <ul>
           <li>Double tap an element</li>

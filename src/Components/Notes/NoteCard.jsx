@@ -4,9 +4,9 @@ import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
+import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
-import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -189,36 +189,36 @@ export default function NoteCard({
 
 
   return (
-    <Paper
+    <Card
       elevation={1}
       variant='note'
-      square
-      sx={{
-        marginBottom: '1em',
-        width: '100%',
-      }}
     >
+      {isComment &&
+        <CardHeader
+          avatar={<Avatar alt={username} src={avatarUrl}/>}
+          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+        />
+      }
+      {!isComment &&
       <CardActionArea
-        sx={{
-          cursor: isComment ? null : 'pointer',
-        }}
-        onClick={() => isComment ? null : selectCard()}
-        onKeyPress={() => isComment ? null : selectCard()}
+        sx={{cursor: 'pointer'}}
+        onClick={() => selectCard()}
+        onKeyPress={() => selectCard()}
         data-testid="selectionContainer"
       >
         <CardHeader
-          title={isComment ? null : title}
+          title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
           sx={{
-            backgroundColor: isComment ? theme.palette.scene.background : theme.palette.primary.main,
+            backgroundColor: theme.palette.scene.background,
           }}
         />
       </CardActionArea>
+      }
       <CardContent
         sx={{
-          'padding': '0px 20px 0px 20px',
-          'margin': '0px 0px 0px 0px',
+          'padding': '0px 20px',
           '& img': {
             width: '100%',
           },
@@ -252,7 +252,7 @@ export default function NoteCard({
           synched={synched}
         />
       }
-    </Paper>
+    </Card>
   )
 }
 

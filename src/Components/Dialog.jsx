@@ -1,9 +1,9 @@
 import React from 'react'
-import MuiDialog from '@mui/material/Dialog'
+import Button from '@mui/material/Button'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import {RectangularButton, CloseButton} from '../Components/Buttons'
+import MuiDialog from '@mui/material/Dialog'
 import {assertDefined} from '../utils/assert'
 
 
@@ -31,23 +31,22 @@ export default function Dialog({
   actionIcon,
 }) {
   assertDefined(
-      icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
+      headerText, isDialogDisplayed, setIsDialogDisplayed, content,
       actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
       open={isDialogDisplayed}
       onClose={close}
-      PaperProps={{variant: 'control'}}
     >
-      <CloseButton onClick={close}/>
       <DialogTitle>
-        {icon}<br/>
         {headerText}
       </DialogTitle>
       <DialogContent>{content}</DialogContent>
       <DialogActions>
-        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
+        <Button variant="contained" onClick={actionCb} >
+          {actionTitle}
+        </Button>
       </DialogActions>
     </MuiDialog>
   )

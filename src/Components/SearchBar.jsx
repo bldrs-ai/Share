@@ -123,11 +123,8 @@ export default function SearchBar({fileOpen}) {
           placeholder={'Search'}
           sx={{
             ...theme.typography.tree,
-            'marginTop': '4px',
-            'marginLeft': '14px',
-            '& input::placeholder': {
-              opacity: .2,
-            },
+            marginTop: '4px',
+            marginLeft: '4px',
           }}
         />
         {inputText.length > 0 &&
