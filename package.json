@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r692",
+  "version": "1.0.0-r695",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -21,7 +21,6 @@
     "husky-init": "husky install",
     "lint": "yarn eslint src && tsc",
     "precommit": "yarn lint && yarn test",
-
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node config/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node config/serve.js",
