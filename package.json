@@ -21,7 +21,7 @@
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share": "yarn build-share && node config/serve.js",
     "test": "jest",
-    "cypress": "cypress run",
+    "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
     "cypress-headed": "cypress run --headed --browser chrome --no-exit",
     "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
