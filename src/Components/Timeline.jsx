@@ -55,7 +55,7 @@ export default function VersionsTimeline({versionHistory}) {
                 <Paper
                   variant='background'
                   elevation={active === i ? 4 : 1}
-                  sx={{padding: '8px'}}
+                  sx={{padding: '10px'}}
                 >
                   <Typography
                     variant="caption"
