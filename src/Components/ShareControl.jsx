@@ -1,7 +1,7 @@
 import React, {createRef, useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
+import Stack from '@mui/material/Stack'
 import useStore from '../store/useStore'
 import {addPlaneLocationToUrl} from './CutPlaneMenu'
 import {removeHashParams} from '../utils/location'
@@ -64,12 +64,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
   const isPlanesOn = viewer.clipper.planes.length > 0
-  const rowStyle = {
-    display: 'flex',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  }
 
 
   useEffect(() => {
@@ -98,6 +92,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(location)
     urlTextFieldRef.current.select()
+    closeDialog()
   }
 
 
@@ -135,14 +130,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
       content={
-        <Box sx={{
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginTop: '10px',
-        }}
-        >
+        <Stack spacing={1}>
           <Helmet>
             <title>Share IFC Model — BLDRS</title>
           </Helmet>
@@ -156,33 +144,33 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               readOnly: true,
             }}
           />
-          <Box
-            sx={{
-              width: '100%',
-              marginTop: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              paddingLeft: '10px',
-            }}
-          >
+          <Stack spacing={0}>
             {isPlanesOn &&
-              <Box sx={rowStyle}>
+              <Stack
+                direction="row"
+                justifyContent="space-around"
+                alignItems="center"
+              >
                 <Typography>Cutplane position</Typography>
                 <Toggle
                   onChange={togglePlaneIncluded}
                   checked={isPlaneInUrl}
                 />
-              </Box>
+              </Stack>
             }
-            <Box sx={rowStyle}>
+            <Stack
+              direction="row"
+              justifyContent="space-around"
+              alignItems="center"
+            >
               <Typography>Camera position</Typography>
               <Toggle
                 onChange={toggleCameraIncluded}
                 checked={isCameraInUrl}
               />
-            </Box>
-          </Box>
-        </Box>
+            </Stack>
+          </Stack>
+        </Stack>
       }
     />)
 }

@@ -18,7 +18,7 @@ export default function Styles({theme}) {
           maxHeight: '100%',
         },
         'a': {
-          color: theme.palette.secondary.contrastText,
+          color: theme.palette.primary.main,
         },
         '.MuiSvgIcon-root': {
           // Mui icons use 'color' instead of 'fill'
@@ -69,7 +69,7 @@ export default function Styles({theme}) {
           background: theme.palette.secondary.background,
         },
         '*::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.secondary.main,
+          backgroundColor: theme.palette.primary.main,
         },
       }}
     />

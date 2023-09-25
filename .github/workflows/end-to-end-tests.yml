@@ -55,25 +55,3 @@ jobs:
         with:
           browser: chrome
           start: node config/serve.js
-
-  run-cypress-on-windows:
-    runs-on: windows-latest
-    needs: install-cypress
-    steps:
-      - name: Checkout
-        id: checkout
-        uses: actions/checkout@v3
-
-      - name: Restore build artifacts
-        id: restore-artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build
-          path: docs/
-
-      - name: E2E Tests on Google Chrome
-        id: e2e-on-google-chrome
-        uses: cypress-io/github-action@v5
-        with:
-          browser: chrome
-          start: node config/serve.js

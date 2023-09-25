@@ -14,7 +14,7 @@ export default function NoContent({message = 'no content'}) {
   return (
     <Paper variant='control' sx={{textAlign: 'center'}}>
       <AttentionIcon className='icon-share'/>
-      <Typography variant={'h4'} sx={{marginTop: '1em'}}>{message}</Typography>
+      <Typography sx={{marginTop: '1em'}}>{message}</Typography>
     </Paper>
   )
 }

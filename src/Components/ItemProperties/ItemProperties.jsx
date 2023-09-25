@@ -60,7 +60,7 @@ export default function ItemProperties() {
           marginTop: '10px',
         }}
         >
-          <Typography variant='h2' sx={{
+          <Typography variant='body1' sx={{
             position: 'sticky',
             top: '0px',
             display: 'flex',

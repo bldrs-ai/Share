@@ -25,7 +25,6 @@ export default function AboutGuide() {
         borderRadius: '10px',
         margin: '2em 0',
         padding: '.3em 1em .5em .5em',
-        color: theme.palette.primary.contrastText,
         backgroundColor: theme.palette.scene.background,
       }}
     >
@@ -38,7 +37,6 @@ export default function AboutGuide() {
             height: '13px',
             verticalAlign: 'middle',
             lineHeight: '15px',
-            fill: theme.palette.primary.contrastText,
           },
           '& div': {
             textAlign: 'right',

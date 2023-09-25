@@ -19,6 +19,11 @@ export function getComponentOverrides(palette, typography) {
       },
     },
     MuiButton: {
+      styleOverrides: {
+        root: {
+          fontWeight: 400,
+        },
+      },
       variants: [
         {
           props: {variant: 'rectangular'},
@@ -69,16 +74,19 @@ export function getComponentOverrides(palette, typography) {
       },
     },
     MuiPaper: {
-      styleOverrides: {
-        root: {
-        },
-      },
       variants: [
         {
           props: {variant: 'control'},
           style: {
             backgroundColor: palette.primary.background,
           },
+        },
+        {
+          props: {variant: 'background'},
+          style: ({ownerState, theme}) => ({
+            boxShadow: theme.shadows[ownerState.elevation],
+            padding: '10px',
+          }),
         },
         {
           props: {variant: 'note'},
@@ -88,48 +96,52 @@ export function getComponentOverrides(palette, typography) {
         },
       ],
     },
-    MuiTab: {
+    MuiDialogTitle: {
       styleOverrides: {
         root: {
-          'textTransform': 'none',
-          'minWidth': 0,
-          'fontSize': '.9em',
-          'fontWeight': typography.fontWeight,
-          'marginRight': 0,
-          'color': palette.primary.contrastText,
-          'fontFamily': typography.fontFamily,
-          '&:hover': {
-            color: palette.secondary.main,
-          },
-          '&.Mui-selected': {
-            color: palette.secondary.main,
-            fontWeight: typography.fontWeight,
-          },
-          '&.Mui-focusVisible': {
-            backgroundColor: 'green',
-          },
-          '@media (max-width: 700px)': {
-            fontSize: '.8em',
-          },
+          fontWeight: 400,
+          textAlign: 'center',
+          capitalize: 'none',
         },
       },
-    },
-    MuiTabs: {
-      styleOverrides: {
-        root: {
-          'paddingBottom': '12px',
-          'width': '100%',
-          '& .MuiTabs-indicator': {
-            backgroundColor: palette.secondary.main,
-          },
-        },
-      },
-    },
 
-    MuiCardActions: {
+    },
+    MuiDialogActions: {
       styleOverrides: {
         root: {
+          justifyContent: 'center',
+          padding: '1em 0px',
         },
+      },
+    },
+    MuiSwitch: {
+      root: {
+        width: 42,
+        height: 26,
+        padding: 0,
+        margin: 8,
+      },
+      switchBase: {
+        'padding': 1,
+        '&$checked, &$colorPrimary$checked, &$colorSecondary$checked': {
+          'transform': 'translateX(16px)',
+          'color': '#fff',
+          '& + $track': {
+            opacity: 1,
+            border: 'none',
+          },
+        },
+      },
+      thumb: {
+        width: 24,
+        height: 24,
+      },
+      track: {
+        borderRadius: 13,
+        border: '1px solid #bdbdbd',
+        backgroundColor: '#fafafa',
+        opacity: 1,
+        transition: 'background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,border 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
       },
     },
   }

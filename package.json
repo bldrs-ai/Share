@@ -25,7 +25,7 @@
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node config/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node config/serve.js",
     "test": "jest",
-    "cypress": "cypress run",
+    "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
     "cypress-headed": "cypress run --headed --browser chrome --no-exit",
     "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
