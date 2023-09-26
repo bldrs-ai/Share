@@ -114,7 +114,7 @@ function AboutContent({setIsDialogDisplayed}) {
             Upload your IFC model,
             position the camera, select model elements and place a section planes,
             share the exact view using generated link.
-            With the link everyone has access to the same context in digital space.
+            With the link everyone has access to the same context.
             </Box>
             <Box variant='span'>
               You can reach us on our{' '}
