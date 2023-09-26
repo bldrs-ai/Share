@@ -4288,7 +4288,7 @@ bl@^4.1.0:
 
 bldrs-conway@./bldrs-conway-v0.0.1.tgz:
   version "0.0.1"
-  resolved "./bldrs-conway-v0.0.1.tgz#994b133e704a6ddf77691a8782dcfc8bd0cf766f"
+  resolved "./bldrs-conway-v0.0.1.tgz#74a8dd22946e82ecc5d362227f310137a8aaca3b"
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
