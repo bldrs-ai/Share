@@ -137,7 +137,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           direction="column"
           justifyContent="center"
           alignItems="center"
-          sx={{paddingTop: '6px'}}
+          sx={{paddingTop: '6px', width: '280px'}}
         >
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           {isAuthenticated ?
@@ -157,21 +157,19 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           </Box> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>
-              <Typography variant={'body1'}>
-                Please login to get access to your files on GitHub
-              </Typography>
-              <Typography variant={'body1'}>
-                Visit our {' '}
-                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'>
+              <Typography variant={'body2'} sx={{marginTop: '10px'}}>
+                Please login to GitHub to get access to your projects,
+                or visit our {' '}
+                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color={'secondary'}>
                   wiki
                 </Link> to learn more about GitHub hosting.
+              </Typography>
+              <Typography variant={'caption'} sx={{marginTop: '10px'}}>
+               * Local files cannot yet be saved or shared.
               </Typography>
             </Stack>
           </Box>
           }
-          <Typography variant={'caption'}>
-            * Local files cannot yet be saved or shared.
-          </Typography>
         </Stack>
       }
     />

@@ -108,7 +108,7 @@ function AboutContent({setIsDialogDisplayed}) {
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
             <Box variant='span'>
-              Welcome to Share.
+              Welcome to Share - 3D integration environment.
             </Box>
             Highlight specific elements within your 3D model,
             position the camera angle,
