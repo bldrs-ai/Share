@@ -56,7 +56,7 @@ export default function OpenModelControl({fileOpen}) {
         onClick={() => setIsDialogDisplayed(true)}
         icon={<OpenIcon className='icon-share'/>}
         placement={'right'}
-        selected={isDialogDisplayed}
+        selected={true}
         dataTestId='open-ifc'
       />
       {isDialogDisplayed &&

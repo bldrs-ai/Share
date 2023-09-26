@@ -3,6 +3,7 @@ import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import useTheme from '@mui/styles/useTheme'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
@@ -29,7 +30,7 @@ export default function SearchBar({fileOpen}) {
   const searchInputRef = useRef(null)
   // input length is dynamically calculated in order to fit the input string into the Text input
   const widthPerChar = 6.5
-  const minWidthPx = 125
+  const minWidthPx = 230
   const widthPx = (Number(inputText.length) * widthPerChar) + minWidthPx
   // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
   // TODO(oleg): find a cleaner way to achieve this
@@ -92,7 +93,11 @@ export default function SearchBar({fileOpen}) {
   // to have them share the same width, which is now set in the parent
   // container (CadView).
   return (
-    <Box sx={{width: '100%'}}>
+    <Stack
+      direction="row"
+      sx={{width: '100%'}}
+    >
+      <OpenModelControl fileOpen={fileOpen}/>
       <Paper
         component='form'
         onSubmit={onSubmit}
@@ -100,11 +105,9 @@ export default function SearchBar({fileOpen}) {
         variant='control'
         sx={{
           'display': 'flex',
-          'minWidth': '100%',
+          // 'minWidth': '100%',
           'width': `${widthPx}px`,
-          'height': '56px',
           'alignItems': 'center',
-          'opacity': .8,
           'padding': '2px 6px',
           '@media (max-width: 900px)': {
             width: '100%',
@@ -114,7 +117,6 @@ export default function SearchBar({fileOpen}) {
           },
         }}
       >
-        <OpenModelControl fileOpen={fileOpen}/>
         <InputBase
           inputRef={searchInputRef}
           value={inputText}
@@ -130,6 +132,7 @@ export default function SearchBar({fileOpen}) {
         {inputText.length > 0 &&
           <TooltipIconButton
             title='clear'
+            selected={true}
             onClick={() => {
               setInputText('')
               setError('')
@@ -150,7 +153,7 @@ export default function SearchBar({fileOpen}) {
         >{error}
         </Box>
       }
-    </Box>
+    </Stack>
   )
 }
 
