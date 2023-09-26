@@ -13,8 +13,8 @@ import {
 import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
-import ShareIcon from '../assets/icons/Share.svg'
 import {Helmet} from 'react-helmet-async'
+import ShareIcon from '@mui/icons-material/Share'
 
 
 /**
@@ -32,7 +32,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
-      icon={<ShareIcon className='icon-share'/>}
+      icon={<ShareIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
