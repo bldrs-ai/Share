@@ -105,10 +105,10 @@ export default function SearchBar({fileOpen}) {
         variant='control'
         sx={{
           'display': 'flex',
-          // 'minWidth': '100%',
           'width': `${widthPx}px`,
           'alignItems': 'center',
           'padding': '2px 6px',
+          'borderLeft': `1px solid ${theme.palette.scene.background}`,
           '@media (max-width: 900px)': {
             width: '100%',
           },
