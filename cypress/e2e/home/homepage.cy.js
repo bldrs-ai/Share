@@ -7,7 +7,7 @@ describe('home page', () => {
           .should('exist')
           .should('be.visible')
           .contains('Build every thing together')
-      cy.title().should('eq', 'About — BLDRS')
+      cy.title().should('eq', 'About — Bldrs.ai')
     })
   })
 
