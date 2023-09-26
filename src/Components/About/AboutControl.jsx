@@ -115,10 +115,10 @@ function AboutContent({setIsDialogDisplayed}) {
             position the camera,<br/>
             share the exact view using generated link.
             </Box>
-            <Box variant='span' sx={{marginTop: '10px'}}>
+            <Box variant='span'>
               With Share link everyone has access to the same context in digital space.
             </Box>
-            <Box variant='span' sx={{marginTop: '10px'}}>
+            <Box variant='span'>
               You can reach us on our{' '}
               <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
                 discord
