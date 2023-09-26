@@ -107,6 +107,7 @@ export default function SearchBar({fileOpen}) {
           'display': 'flex',
           'width': `${widthPx}px`,
           'alignItems': 'center',
+
           'padding': '2px 6px',
           'borderLeft': `1px solid ${theme.palette.scene.background}`,
           '@media (max-width: 900px)': {
@@ -125,14 +126,14 @@ export default function SearchBar({fileOpen}) {
           placeholder={'Search'}
           sx={{
             ...theme.typography.tree,
-            marginTop: '4px',
+            // marginTop: '4px',
             marginLeft: '14px',
           }}
         />
         {inputText.length > 0 &&
           <TooltipIconButton
             title='clear'
-            selected={true}
+            size='small'
             onClick={() => {
               setInputText('')
               setError('')

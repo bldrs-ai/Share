@@ -117,7 +117,7 @@ function AboutContent({setIsDialogDisplayed}) {
             With the link everyone has access to the same context.
             </Box>
             <Box variant='span'>
-              You can reach us on our{' '}
+              You can reach us on{' '}
               <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
                 discord
               </Link>.
