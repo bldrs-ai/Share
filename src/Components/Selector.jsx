@@ -49,31 +49,31 @@ const selectorStyles = (theme) => {
       'width': '260px',
       'padding': '0px 0px 12px 0px',
       '& .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '& .MuiInputLabel-root': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.primary.main,
+        borderColor: theme.palette.secondary.main,
       },
       '&:hover .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '&:hover .MuiInputLabel-root': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.primary.main,
+        borderColor: theme.palette.secondary.main,
       },
       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '& .MuiInputLabel-root.Mui-focused': {
-        color: theme.palette.primary.main,
+        color: theme.palette.secondary.main,
       },
       '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.primary.main,
+        borderColor: theme.palette.secondary.main,
       },
     }
   )
