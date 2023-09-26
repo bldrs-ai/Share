@@ -15,8 +15,8 @@ import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
-import OpenIcon from '../assets/icons/Open.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
 
 
 /**
@@ -54,7 +54,7 @@ export default function OpenModelControl({fileOpen}) {
       <TooltipIconButton
         title={'Open IFC'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<OpenIcon className='icon-share'/>}
+        icon={<CreateNewFolderIcon className='icon-share' color='secondary'/>}
         placement={'right'}
         selected={true}
         dataTestId='open-ifc'
@@ -124,7 +124,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   return (
     <Dialog
-      icon={<OpenIcon className='icon-share'/>}
+      icon={<CreateNewFolderIcon className='icon-share'/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -149,8 +149,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
             {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton
-                  title={'Load file'}
-                  icon={<UploadIcon className='icon-share'/>}
+                  title={'LOAD FILE'}
                   onClick={navigateToFile}
                 />
               </Box>
@@ -159,9 +158,9 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>
               <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-                Please login to GitHub to get access to your projects, <br/>
-                or visit our {' '}
-                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='overline'>
+                Please login to GitHub to get access to your projects.
+                Visit our {' '}
+                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
                   wiki
                 </Link> to learn more about GitHub hosting.
               </Typography>

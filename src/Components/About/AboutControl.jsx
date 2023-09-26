@@ -8,10 +8,9 @@ import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 import PrivacyControl from './PrivacyControl'
-import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
-
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 /**
  * Button to toggle About panel on and off
@@ -40,7 +39,7 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <AboutIcon className='icon-share'/>
+        <InfoOutlinedIcon className='icon-share' color='secondary'/>
       }
       dialog={
         <AboutDialog
@@ -97,7 +96,7 @@ function AboutContent({setIsDialogDisplayed}) {
         alignItems="center"
       >
         <Stack spacing={0}>
-          <Typography variant={'heading5'}>Build every thing together</Typography>
+          <Typography variant='body1'>Build every thing together</Typography>
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'

@@ -11,7 +11,7 @@ import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
 import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
-import ClearIcon from '../assets/icons/Clear.svg'
+import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 
 
 /**
@@ -126,7 +126,7 @@ export default function SearchBar({fileOpen}) {
           placeholder={'Search'}
           sx={{
             ...theme.typography.tree,
-            // marginTop: '4px',
+            marginTop: '4px',
             marginLeft: '14px',
           }}
         />
@@ -139,7 +139,7 @@ export default function SearchBar({fileOpen}) {
               setError('')
               navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
             }}
-            icon={<ClearIcon className='icon-share'/>}
+            icon={<HighlightOffIcon className='icon-share' color='secondary'/>}
           />
         }
       </Paper>
