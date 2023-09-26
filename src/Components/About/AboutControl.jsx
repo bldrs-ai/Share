@@ -101,20 +101,28 @@ function AboutContent({setIsDialogDisplayed}) {
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'
+            color='inherit'
+            variant='overline'
           >
             github.com/bldrs-ai/Share
           </Link>
         </Stack>
-        <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
+        <Box sx={{padding: '0px 10px', width: '390px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
             <Box variant='span'>
-              Welcome to Share - 3D integration environment.
-            </Box>
-            Highlight specific elements within your 3D model,
-            position the camera angle,
+            Welcome to Share.<br/>
+            Upload your IFC model,
+            position the camera,<br/>
             share the exact view using generated link.
-            <Box variant='span' sx={{fontWeight: 'bold'}}>
-              With the Share link everyone has access to the same context in digital space.
+            </Box>
+            <Box variant='span' sx={{marginTop: '10px'}}>
+              With Share link everyone has access to the same context in digital space.
+            </Box>
+            <Box variant='span' sx={{marginTop: '10px'}}>
+              You can reach us on our{' '}
+              <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
+                discord
+              </Link>.
             </Box>
           </Typography>
         </Box>

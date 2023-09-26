@@ -160,7 +160,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
               <Typography variant={'body2'} sx={{marginTop: '10px'}}>
                 Please login to GitHub to get access to your projects,
                 or visit our {' '}
-                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color={'secondary'}>
+                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='overline'>
                   wiki
                 </Link> to learn more about GitHub hosting.
               </Typography>
