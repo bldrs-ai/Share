@@ -107,7 +107,7 @@ function AboutContent({setIsDialogDisplayed}) {
             github.com/bldrs-ai/Share
           </Link>
         </Stack>
-        <Box sx={{padding: '0px 10px', width: '390px', textAlign: 'left'}} elevation={0}>
+        <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
             <Box variant='span'>
             Welcome to Share.<br/>
@@ -116,7 +116,7 @@ function AboutContent({setIsDialogDisplayed}) {
             share the exact view using generated link.
             </Box>
             <Box variant='span'>
-              With Share link everyone has access to the same context in digital space.
+              With Share link everyone has access <br/> to the same context in digital space.
             </Box>
             <Box variant='span'>
               You can reach us on our{' '}

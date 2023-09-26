@@ -158,7 +158,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>
               <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-                Please login to GitHub to get access to your projects,
+                Please login to GitHub to get access to your projects, <br/>
                 or visit our {' '}
                 <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='overline'>
                   wiki
