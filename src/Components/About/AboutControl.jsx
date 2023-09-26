@@ -88,7 +88,7 @@ function AboutContent({setIsDialogDisplayed}) {
   return (
     <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
-        <title>About — BLDRS</title>
+        <title>About — Bldrs.ai</title>
       </Helmet>
       <Stack
         spacing={3}
@@ -97,7 +97,7 @@ function AboutContent({setIsDialogDisplayed}) {
         alignItems="center"
       >
         <Stack spacing={0}>
-          <Typography variant={'body1'}>build every thing together</Typography>
+          <Typography variant={'heading5'}>Build every thing together</Typography>
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'
