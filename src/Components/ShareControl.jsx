@@ -15,7 +15,7 @@ import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
 // import ShareIcon from '@mui/icons-material/Share'
-import ShareIcon from '../assets/Icons/Share.svg'
+import ShareIcon from '../assets/icons/Share.svg'
 
 
 /**

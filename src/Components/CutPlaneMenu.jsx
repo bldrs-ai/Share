@@ -9,7 +9,7 @@ import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+import CropOutlinedIcon from '../assets/icons/Cutplane.svg'
 
 
 const PLANE_PREFIX = 'p'
