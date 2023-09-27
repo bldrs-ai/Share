@@ -14,7 +14,7 @@ import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
-import CommentOutlinedIcon from '@mui/icons-material/CommentOutlined'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
@@ -105,7 +105,7 @@ export default function OperationsGroup({deselectItems}) {
        <ButtonGroup orientation='vertical'>
          <TooltipIconButton
            title='Notes'
-           icon={<CommentOutlinedIcon className='icon-share' color='secondary'/>}
+           icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
            selected={isNotesOn}
            onClick={() => {
              turnOffTooltips()
