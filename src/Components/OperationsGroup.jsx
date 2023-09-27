@@ -151,13 +151,13 @@ export default function OperationsGroup({deselectItems}) {
                <NightlightOutlinedIcon className='icon-share' color='secondary'/> :
                <WbSunnyOutlinedIcon className='icon-share' color='secondary'/>}
          />
+         <AboutControl/>
          <TooltipIconButton
            title='Help'
            onClick={() => toggleIsHelpTooltips()}
            selected={isHelpTooltips}
            icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
          />
-         <AboutControl/>
        </ButtonGroup>
       }
       {/* Invisible */}
