@@ -696,7 +696,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         <Box
           sx={{
             position: 'absolute',
-            top: 3,
+            top: 0,
             right: 0,
           }}
         >
