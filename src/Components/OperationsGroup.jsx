@@ -148,8 +148,8 @@ export default function OperationsGroup({deselectItems}) {
            onClick={() => theme.toggleColorMode()}
            icon={
              theme.palette.mode === 'light' ?
-               <NightlightOutlinedIcon className='icon-share' color='secondary'/> :
-               <WbSunnyOutlinedIcon className='icon-share' color='secondary'/>}
+               <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
+               <NightlightOutlinedIcon className='icon-share' color='secondary'/> }
          />
          <AboutControl/>
          <TooltipIconButton
