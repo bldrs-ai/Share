@@ -111,9 +111,9 @@ function AboutContent({setIsDialogDisplayed}) {
             <Box variant='span'>
             Welcome to Share.<br/>
             Upload your IFC model,
-            position the camera, select model elements and place section planes,
-            share the exact view using generated Share link.
-            With the link everyone has access to the same context.
+            position the camera, select elements and crop the model using section planes;
+            share the exact view using generated link.
+            With Share everyone has access to the same context in model space.
             </Box>
             <Box variant='span'>
               You can reach us on{' '}
