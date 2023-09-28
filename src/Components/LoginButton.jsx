@@ -1,7 +1,7 @@
 import React from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import {TooltipIconButton} from './Buttons'
-import GitHubIcon from '../assets/icons/GitHub.svg'
+import GitHubIcon from '@mui/icons-material/GitHub'
 
 
 const LoginButton = ({
@@ -22,7 +22,7 @@ const LoginButton = ({
   return (
     <TooltipIconButton
       title={'Log in with GitHub'}
-      icon={<GitHubIcon className='icon-share'/>}
+      icon={<GitHubIcon className='icon-share' color='secondary'/>}
       onClick={onClick}
     />
   )

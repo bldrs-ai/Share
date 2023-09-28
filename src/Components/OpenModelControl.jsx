@@ -15,8 +15,8 @@ import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
-import OpenIcon from '../assets/icons/Open.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
 
 
 /**
@@ -54,9 +54,9 @@ export default function OpenModelControl({fileOpen}) {
       <TooltipIconButton
         title={'Open IFC'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<OpenIcon className='icon-share'/>}
+        icon={<CreateNewFolderIcon className='icon-share' color='secondary'/>}
         placement={'right'}
-        selected={isDialogDisplayed}
+        selected={true}
         dataTestId='open-ifc'
       />
       {isDialogDisplayed &&
@@ -124,7 +124,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   return (
     <Dialog
-      icon={<OpenIcon className='icon-share'/>}
+      icon={<CreateNewFolderIcon className='icon-share'/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -137,41 +137,39 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           direction="column"
           justifyContent="center"
           alignItems="center"
-          sx={{paddingTop: '6px'}}
+          sx={{paddingTop: '6px', width: '280px'}}
         >
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           {isAuthenticated ?
-          <Box>
+          <Stack>
+            <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
             {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton
-                  title={'Load file'}
-                  icon={<UploadIcon className='icon-share'/>}
+                  title={'LOAD FILE'}
                   onClick={navigateToFile}
                 />
               </Box>
             }
-          </Box> :
+          </Stack> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>
-              <Typography variant={'body1'}>
-                Please login to get access to your files on GitHub
-              </Typography>
-              <Typography variant={'body1'}>
+              <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+                Please login to GitHub to get access to your projects.
                 Visit our {' '}
-                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'>
+                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
                   wiki
                 </Link> to learn more about GitHub hosting.
+              </Typography>
+              <Typography variant={'caption'} sx={{marginTop: '10px'}}>
+               * Local files cannot yet be saved or shared.
               </Typography>
             </Stack>
           </Box>
           }
-          <Typography variant={'caption'}>
-            * Local files cannot yet be saved or shared.
-          </Typography>
         </Stack>
       }
     />
@@ -190,7 +188,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
   const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
-      0: '/share/v/gh/IFCjs/test-ifc-files/main/Schependomlaan/IFC%20Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
+      0: '/share/v/gh/bldrs-ai/testModels/test/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
       1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
       2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
       3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
@@ -209,31 +207,31 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
       sx={{
         'width': '260px',
         '& .MuiOutlinedInput-input': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '& .MuiInputLabel-root': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.primary.main,
+          borderColor: theme.palette.secondary.main,
         },
         '&:hover .MuiOutlinedInput-input': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '&:hover .MuiInputLabel-root': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.primary.main,
+          borderColor: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '& .MuiInputLabel-root.Mui-focused': {
-          color: theme.palette.primary.main,
+          color: theme.palette.secondary.main,
         },
         '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.primary.main,
+          borderColor: theme.palette.secondary.main,
         },
       }}
       value={selected}

@@ -15,7 +15,7 @@ describe('About control tests', () => {
     const {getByTitle, getByText} = render(<MockComponent><AboutControl/></MockComponent>)
     const aboutControl = getByTitle('About')
     fireEvent.click(aboutControl)
-    const dialogTitle = getByText('build every thing together')
+    const dialogTitle = getByText('Build every thing together')
     expect(dialogTitle).toBeInTheDocument()
   })
 
@@ -24,6 +24,6 @@ describe('About control tests', () => {
       wrapper: MockComponent,
     })
 
-    await(waitFor(() => expect(document.title).toBe('About — BLDRS')))
+    await(waitFor(() => expect(document.title).toBe('About — Bldrs.ai')))
   })
 })

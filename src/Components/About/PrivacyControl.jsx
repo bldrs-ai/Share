@@ -43,7 +43,7 @@ export default function PrivacyControl() {
         alignItems="flex-start"
       >
         <Typography>Analytics cookies</Typography>
-        <Link href='https://github.com/bldrs-ai/Share/wiki/Design#privacy' >
+        <Link href='https://github.com/bldrs-ai/Share/wiki/Design#privacy' color='inherit' variant='overline'>
           read more
         </Link>
       </Stack>
