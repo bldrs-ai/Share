@@ -46,6 +46,7 @@
     "@octokit/rest": "^19.0.3",
     "@sentry/react": "^7.61.0",
     "@sentry/tracing": "^7.61.0",
+    "bldrs-conway": "./bldrs-conway-v0.0.1.tgz",
     "clsx": "^1.2.1",
     "cypress-react-router": "^2.0.1",
     "material-ui-popup-state": "^5.0.4",
