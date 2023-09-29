@@ -1,0 +1,159 @@
+import React, {useEffect, useState} from 'react'
+// import {useAuth0} from '@auth0/auth0-react'
+import List from '@mui/material/List'
+import Stack from '@mui/material/Stack'
+import * as Sentry from '@sentry/react'
+import debug from '../../utils/debug'
+import useStore from '../../store/useStore'
+import {getIssues, getIssueComments} from '../../utils/GitHub'
+// import Loader from '../Loader'
+// import NoContent from '../NoContent'
+import NoteCard from './NoteCard'
+// import NoteCardCreate from './NoteCardCreate'
+import ApplicationError from '../ApplicationError'
+
+
+/** The prefix to use for the note ID within the URL hash. */
+export const NOTE_PREFIX = 'i'
+
+
+/** @return {object} List of notes and comments as react component. */
+export default function Notes() {
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  // const {user} = useAuth0()
+  const notes = useStore((state) => state.notes)
+  const synchSidebar = useStore((state) => state.synchSidebar)
+  const setNotes = useStore((state) => state.setNotes)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  // const comments = useStore((state) => state.comments)
+  const setComments = useStore((state) => state.setComments)
+  const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+  const repository = useStore((state) => state.repository)
+  const drawer = useStore((state) => state.drawer)
+  const accessToken = useStore((state) => state.accessToken)
+  const [hasError, setHasError] = useState(false)
+  const handleError = (err) => {
+    if (!err) {
+      return
+    }
+
+    Sentry.captureException(err)
+    setHasError(true)
+  }
+
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+
+        const newNotes = []
+        let issueIndex = 0
+        const issueArr = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect: issueArr: ', issueArr)
+
+        issueArr.reverse().map((issue, index) => {
+          if (issue.body === null) {
+            debug().warn(`issue ${index} has no body: `, issue)
+            return
+          }
+
+          newNotes.push({
+            index: issueIndex++,
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            date: issue.created_at,
+            username: issue.user.login,
+            avatarUrl: issue.user.avatar_url,
+            numberOfComments: issue.comments,
+            synched: true,
+          })
+        })
+
+        setNotes(newNotes)
+      } catch (e) {
+        debug().warn('failed to fetch notes: ', e)
+        handleError(e)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, synchSidebar])
+
+
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+        if (!selectedNoteId || !filteredNote) {
+          return
+        }
+        const newComments = []
+        const commentArr = await getIssueComments(repository, filteredNote.number, accessToken)
+        debug().log('Notes#useEffect: commentArr: ', commentArr)
+
+        if (commentArr) {
+          commentArr.map((comment) => {
+            newComments.push({
+              id: comment.id,
+              body: comment.body,
+              date: comment.created_at,
+              username: comment.user.login,
+              avatarUrl: comment.user.avatar_url,
+              synched: true,
+            })
+          })
+        }
+
+        setComments(newComments)
+      } catch (e) {
+        debug().warn('failed to fetch comments: ', e)
+        handleError(e)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repository, selectedNoteId, synchSidebar, filteredNote])
+
+
+  useEffect(() => {
+    if (drawer) {
+      drawer.scrollTop = 0
+    }
+  }, [drawer, selectedNoteId])
+
+
+  return hasError ? <ApplicationError/> : (
+    <Stack justifyContent={'center'} alignItems={'center'}>
+      <List
+        spacing={2}
+      >
+        {notes && !selectedNoteId && !isCreateNoteActive &&
+          notes.map((note, index) => {
+            return (
+              <NoteCard
+                key={index}
+                index={note.index}
+                id={note.id}
+                noteNumber={note.number}
+                title={note.title}
+                date={note.date}
+                body={note.body}
+                username={note.username}
+                numberOfComments={note.numberOfComments}
+                avatarUrl={note.avatarUrl}
+                synched={note.synched}
+              />
+            )
+          })
+        }
+      </List>
+    </Stack>
+  )
+}

@@ -73,6 +73,24 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiList: {
+      styleOverrides: {
+        root: ({theme}) => ({
+          backgroundColor: theme.palette.background.default, // use palette color here
+          padding: '0px',
+        }),
+      },
+    },
+    MuiListSubheader: {
+      styleOverrides: {
+        root: ({theme}) => ({
+          backgroundColor: theme.palette.background.default, // use palette color here
+          borderBottom: `1px solid ${theme.palette.background.paper}`,
+          paddingTop: '10px',
+          paddingBottom: '10px',
+        }),
+      },
+    },
     MuiPaper: {
       variants: [
         {

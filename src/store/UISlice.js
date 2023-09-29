@@ -12,7 +12,7 @@ import debug from '../utils/debug'
 export default function createUISlice(set, get) {
   return {
     isNotesOn: false,
-    isDrawerOpen: false,
+    isDrawerOpen: true,
     isNavPanelOpen: true,
     isOpenControlHighlighted: true,
     isPropertiesOn: false,
