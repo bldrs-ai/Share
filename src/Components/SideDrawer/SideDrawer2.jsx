@@ -5,6 +5,7 @@ import Drawer from '@mui/material/Drawer'
 import useStore from '../../store/useStore'
 import {getHashParams} from '../../utils/location'
 import Notes from '../Notes/Notes2'
+import Properties from '../Notes/Notes2'
 import List from '@mui/material/List'
 import ListSubheader from '@mui/material/ListSubheader'
 import IconButton from '@mui/material/IconButton'
@@ -92,7 +93,10 @@ export default function SideDrawer() {
           overflow: 'hidden'},
       }}
     >
-      <Box sx={{overflow: 'scroll'}}>
+      <Box sx={{
+        height: '50%',
+        overflow: 'scroll'}}
+      >
         <List
           spacing={1}
         >
@@ -116,6 +120,35 @@ export default function SideDrawer() {
             </Stack>
           </ListSubheader>
           <Notes/>
+        </List>
+      </Box>
+      <Box sx={{
+        height: '50%',
+        overflow: 'scroll'}}
+      >
+        <List
+          spacing={1}
+        >
+          <ListSubheader>
+            <Stack
+              direction="row"
+              justifyContent="space-between"
+              alignItems="center"
+            >
+              <Typography variant='body1'>Notes</Typography>
+              <Stack
+                direction="row"
+                justifyContent="center"
+                alignItems="center"
+                spacing={1}
+              >
+                <IconButton aria-label="comments" size='small' onClick={closeDrawer}>
+                  <CloseIcon fontSize='small'/>
+                </IconButton>
+              </Stack>
+            </Stack>
+          </ListSubheader>
+          <Properties/>
         </List>
       </Box>
     </Drawer>
