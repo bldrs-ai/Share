@@ -79,7 +79,7 @@ export default function CadView({
   const setViewer = useStore((state) => state.setViewer)
   const customViewSettings = useStore((state) => state.customViewSettings)
   // setModelStore instead of setModel since there's already a state var with this name
-  const setModelStore = useStore((state) => state.setModel)
+  const setModelStore = useStore((state) => state.setModelStore)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
