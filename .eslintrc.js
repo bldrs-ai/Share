@@ -54,7 +54,6 @@ module.exports = {
     'default-case': 'error',
     'default-param-last': ['error'],
     'eqeqeq': ['error', 'always'],
-    'no-alert': 'error',
     'no-empty-function': 'error',
     'no-eq-null': 'error',
     'no-eval': 'error',

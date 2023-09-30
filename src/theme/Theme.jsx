@@ -2,7 +2,6 @@ import {useEffect, useMemo, useState} from 'react'
 import {createTheme} from '@mui/material/styles'
 import * as Privacy from '../privacy/Privacy'
 import {getComponentOverrides} from './Components'
-import {getTypography} from './Typography'
 import {day, night} from './Palette'
 
 
@@ -54,8 +53,7 @@ function loadTheme(mode, setMode, themeChangeListeners) {
   const activePalette = mode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
-    typography: getTypography(),
-    shape: {borderRadius: 8},
+    shape: {borderRadius: 0},
     palette: activePalette,
     toggleColorMode: () => {
       setMode((prevMode) => {

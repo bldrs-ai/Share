@@ -1,9 +1,9 @@
 import React from 'react'
+import Button from '@mui/material/Button'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
+import DialogTitle from '@mui/material/DialogTitle'
 import MuiDialog from '@mui/material/Dialog'
-import Typography from '@mui/material/Typography'
-import {RectangularButton, CloseButton} from '../Components/Buttons'
 import {assertDefined} from '../utils/assert'
 
 
@@ -31,57 +31,22 @@ export default function Dialog({
   actionIcon,
 }) {
   assertDefined(
-      icon, headerText, isDialogDisplayed, setIsDialogDisplayed, content,
+      headerText, isDialogDisplayed, setIsDialogDisplayed, content,
       actionTitle, actionCb)
   const close = () => setIsDialogDisplayed(false)
   return (
     <MuiDialog
       open={isDialogDisplayed}
       onClose={close}
-      sx={{
-        textAlign: 'center',
-        zIndex: 1000,
-      }}
-      PaperProps={{variant: 'control'}}
     >
-      <DialogContent>
-        <div
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-            margin: '0.5em',
-            opacity: .5,
-          }}
-        >
-          <CloseButton onClick={close}/>
-        </div>
-        <Typography
-          variant='h1'
-          sx={{
-            'margin': '1em 0',
-            'textAlign': 'center',
-            'display': 'inline-flex',
-            'alignItems': 'center',
-            'justifyContent': 'center',
-            '& svg': {
-              marginRight: '0.5em',
-            },
-          }}
-        >
-          {icon && icon} {headerText}
-        </Typography>
-        {content}
-      </DialogContent>
-      <DialogActions
-        sx={{
-          overflowY: 'hidden',
-          padding: '0em 0em 2em 0em',
-          display: 'flex',
-          justifyContent: 'center',
-        }}
-      >
-        <RectangularButton title={actionTitle} icon={actionIcon} onClick={actionCb}/>
+      <DialogTitle>
+        {headerText}
+      </DialogTitle>
+      <DialogContent>{content}</DialogContent>
+      <DialogActions>
+        <Button variant="contained" onClick={actionCb} >
+          {actionTitle}
+        </Button>
       </DialogActions>
     </MuiDialog>
   )

@@ -12,14 +12,15 @@ import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
-import ClearIcon from '../assets/icons/Clear.svg'
-import ListIcon from '../assets/icons/List.svg'
-import MoonIcon from '../assets/icons/Moon.svg'
-import NotesIcon from '../assets/icons/Notes.svg'
-import SunIcon from '../assets/icons/Sun.svg'
-import QuestionIcon from '../assets/icons/Question.svg'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
+import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -72,8 +73,6 @@ export default function OperationsGroup({deselectItems}) {
   }
 
   const theme = useTheme()
-  const separatorOpacity = 0.1
-  const separatorColor = hexToRgba(assertDefined(theme.palette.primary.contrastText), separatorOpacity)
   // When the model has dark/black colors, then the icons (also dark)
   // disappear. This keeps them visible.
   const bgOpacity = 0.2
@@ -87,15 +86,6 @@ export default function OperationsGroup({deselectItems}) {
         'padding': '1em',
         '@media (max-width: 900px)': {
           padding: '1em 0.5em',
-        },
-        '.MuiButtonGroup-root + .MuiButtonGroup-root': {
-          marginTop: '0.5em',
-          paddingTop: '0.5em',
-          borderTop: `solid 1px ${separatorColor}`,
-          borderRadius: 0,
-        },
-        '.MuiButtonBase-root + .MuiButtonBase-root': {
-          marginTop: '0.5em',
         },
       }}
     >
@@ -115,7 +105,7 @@ export default function OperationsGroup({deselectItems}) {
        <ButtonGroup orientation='vertical'>
          <TooltipIconButton
            title='Notes'
-           icon={<NotesIcon/>}
+           icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
            selected={isNotesOn}
            onClick={() => {
              turnOffTooltips()
@@ -129,7 +119,7 @@ export default function OperationsGroup({deselectItems}) {
              toggle('Properties')
            }}
            selected={isPropertiesOn}
-           icon={<ListIcon/>}
+           icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
          />
          <CutPlaneMenu/>
          {/* <ExtractLevelsMenu/> */}
@@ -137,7 +127,7 @@ export default function OperationsGroup({deselectItems}) {
            title='Clear'
            onClick={deselectItems}
            selected={isSelected()}
-           icon={<ClearIcon/>}
+           icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
          />
 
        </ButtonGroup>
@@ -156,15 +146,18 @@ export default function OperationsGroup({deselectItems}) {
          <TooltipIconButton
            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
            onClick={() => theme.toggleColorMode()}
-           icon={theme.palette.mode === 'light' ? <MoonIcon/> : <SunIcon/>}
+           icon={
+             theme.palette.mode === 'light' ?
+               <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
+               <NightlightOutlinedIcon className='icon-share' color='secondary'/> }
          />
+         <AboutControl/>
          <TooltipIconButton
            title='Help'
            onClick={() => toggleIsHelpTooltips()}
            selected={isHelpTooltips}
-           icon={<QuestionIcon/>}
+           icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
          />
-         <AboutControl/>
        </ButtonGroup>
       }
       {/* Invisible */}

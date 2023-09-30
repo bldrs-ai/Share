@@ -1,10 +1,12 @@
 import {getModelPath} from './Share'
 
 
+jest.mock('three')
+
+
 describe('Share', () => {
-  it('getModelPath parses ifc filepaths', () => {
-    const urlParams = {'*': 'as_Ifcdf.ifc/1234'}
-    expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
+  it('getModelPath parses ifc and obj filepaths', () => {
+    expect(getModelPath('/share', '/share/v/p', {'*': 'as_Ifcdf.ifc/1234'})).toStrictEqual({
       filepath: '/as_Ifcdf.ifc',
       eltPath: '/1234',
     })
@@ -12,13 +14,15 @@ describe('Share', () => {
 
 
   it('getModelPath parses mixed-case ifc filepaths', () => {
-    ['ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc'].forEach((ext) => {
-      const urlParams = {'*': `as_Ifcdf.${ext}/1234`}
-      expect(getModelPath('/share', '/share/v/p', urlParams)).toStrictEqual({
-        filepath: `/as_Ifcdf.${ext}`,
+    for (const ext of [
+      'ifc', 'Ifc', 'IFC', 'IfC', 'iFc', 'IFc',
+    ]) {
+      const inPath = `as_${ext}df.${ext}/1234`
+      expect(getModelPath('/share', '/share/v/p', {'*': inPath})).toStrictEqual({
+        filepath: `/as_${ext}df.${ext}`,
         eltPath: '/1234',
       })
-    })
+    }
   })
 })
 

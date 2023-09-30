@@ -36,7 +36,7 @@ class UnhideElementsEventHandler extends ApiEventHandler {
     }
 
     if (data.globalIds === '*') {
-      useStore.getState().viewerStore.isolator.unHideAllElements()
+      useStore.getState().viewer.isolator.unHideAllElements()
     } else {
       const expressIds = []
       if (data.globalIds.length) {
@@ -48,7 +48,7 @@ class UnhideElementsEventHandler extends ApiEventHandler {
         }
       }
 
-      useStore.getState().viewerStore.isolator.unHideElementsById(expressIds.map((id) => Number(id)))
+      useStore.getState().viewer.isolator.unHideElementsById(expressIds.map((id) => Number(id)))
     }
 
     return this.apiConnection.successfulResponse({})

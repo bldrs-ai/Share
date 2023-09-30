@@ -38,7 +38,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
           }} src={iconSrc} alt={title}
           /> : <></>
         }
-        <Typography variant='h2'>
+        <Typography >
           {title}
         </Typography>
       </Box>

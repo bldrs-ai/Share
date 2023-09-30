@@ -131,7 +131,7 @@ export default function NavTree({
     return <TreeItem ContentComponent={CustomContent} {...props}/>
   }
 
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
 
   const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 

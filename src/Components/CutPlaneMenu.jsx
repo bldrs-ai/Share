@@ -9,7 +9,8 @@ import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneIcon from '../assets/icons/CutPlane.svg'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+// import CropOutlinedIcon from '../assets/icons/Cutplane.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -24,8 +25,8 @@ const PLANE_PREFIX = 'p'
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const model = useStore((state) => state.modelStore)
-  const viewer = useStore((state) => state.viewerStore)
+  const model = useStore((state) => state.model)
+  const viewer = useStore((state) => state.viewer)
   const cutPlanes = useStore((state) => state.cutPlanes)
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
@@ -97,7 +98,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
-        icon={<CutPlaneIcon/>}
+        icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
       />
@@ -112,7 +113,7 @@ export default function CutPlaneMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(-50px)',
+            transform: 'translateX(-60px)',
           },
           sx: {
             'color': theme.palette.primary.contrastText,

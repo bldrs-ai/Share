@@ -1,11 +1,11 @@
 /* eslint-disable no-unused-vars */
 const OFF = 4
 const ERROR = 3
-const WARN = 2
+const WARN = 2 // Use this as default for prod.  Should never see these messages.
 const INFO = 1
 const DEBUG = 0
 /* eslint-enable no-unused-vars */
-let DEBUG_LEVEL = DEBUG
+let DEBUG_LEVEL = WARN
 
 
 /**

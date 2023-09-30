@@ -12,11 +12,11 @@ const ApplicationError = () => {
       bgcolor: grey[100],
     }}
     >
-      <Typography variant={'h1'} sx={{color: 'primary.light', fontWeight: 600, pb: 2}}>
+      <Typography variant={'body1'} sx={{color: 'primary.light', fontWeight: 600, pb: 2}}>
         Oh no!
       </Typography>
 
-      <Typography variant={'h2'} sx={{color: 'success.dark', fontWeight: 1000, pb: 2}}>
+      <Typography variant={'body1'} sx={{color: 'success.dark', fontWeight: 1000, pb: 2}}>
         We&apos;re not quite sure what went wrong.
       </Typography>
 

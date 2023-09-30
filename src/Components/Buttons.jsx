@@ -48,7 +48,7 @@ export function TooltipIconButton({
         title={title}
         describeChild
         placement={placement}
-        data-testid={dataTestId}
+        data-testid={dataTestId || title}
         PopperProps={{style: {zIndex: 0}}}
       >
         <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
@@ -85,6 +85,7 @@ export function ControlButton({
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
+        className='icon-share'
       />
       {isDialogDisplayed && dialog}
     </>
@@ -102,9 +103,9 @@ export function CloseButton({onClick}) {
       title='Close'
       onClick={onClick}
       placement='bottom'
-      icon={<CloseIcon style={{width: '15px', height: '15px'}}/>}
-      size='medium'
+      icon={<CloseIcon className='icon-share icon-small'/>}
       aboutInfo={false}
+      className='closeButton'
     />
   )
 }
@@ -115,9 +116,9 @@ export function CloseButton({onClick}) {
  *
  * @property {string} title Text to show in button
  * @property {Function} onClick callback
- * @property {object} icon Start icon to left of text
- * @property {boolean} border Default: false
- * @property {boolean} background Default: true
+ * @property {object} [icon] Start icon to left of text
+ * @property {boolean} [border] Default: false
+ * @property {boolean} [background] Default: true
  * @return {object} React component
  */
 export function RectangularButton({
@@ -128,7 +129,11 @@ export function RectangularButton({
   background = true,
 }) {
   assertDefined(title, onClick)
-  return <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button>
+  return (
+    icon ?
+      <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button> :
+      <Button onClick={onClick} variant='rectangular'>{title}</Button>
+  )
 }
 
 

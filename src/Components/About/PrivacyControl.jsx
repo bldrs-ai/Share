@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
-import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import Link from '@mui/material/Link'
 import * as Privacy from '../../privacy/Privacy'
 import Toggle from '../Toggle'
 
@@ -29,25 +30,25 @@ export default function PrivacyControl() {
 
 
   return (
-    <Box
-      sx={{
-        width: '100%',
-        margin: '1em 0',
-        textAlign: 'justify',
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-      }}
+    <Stack
+      spacing={2}
+      direction="row"
+      justifyContent="space-around"
+      alignItems="center"
     >
-      <Typography>
-        Analytics cookies<br/>
-        <a href='https://github.com/bldrs-ai/Share/wiki/Design#privacy' target='_new'>
+      <Stack
+        spacing={0}
+        direction="column"
+        justifyContent="flex-start"
+        alignItems="flex-start"
+      >
+        <Typography>Analytics cookies</Typography>
+        <Link href='https://github.com/bldrs-ai/Share/wiki/Design#privacy' color='inherit' variant='overline'>
           read more
-        </a>
-      </Typography>
+        </Link>
+      </Stack>
       <Toggle checked={acceptCookies} onChange={changePrivacy}/>
-    </Box>
+    </Stack>
   )
 }
 

@@ -4,9 +4,9 @@ import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
+import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
-import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -22,14 +22,15 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {useIsMobile} from '../Hooks'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
 import {NOTE_PREFIX} from './Notes'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
-import {usePlaceMark} from '../../hooks/usePlaceMark'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
 
 
 /**
@@ -188,36 +189,36 @@ export default function NoteCard({
 
 
   return (
-    <Paper
+    <Card
       elevation={1}
       variant='note'
-      square
-      sx={{
-        marginBottom: '1em',
-        width: '100%',
-      }}
     >
+      {isComment &&
+        <CardHeader
+          avatar={<Avatar alt={username} src={avatarUrl}/>}
+          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+        />
+      }
+      {!isComment &&
       <CardActionArea
-        sx={{
-          cursor: isComment ? null : 'pointer',
-        }}
-        onClick={() => isComment ? null : selectCard()}
-        onKeyPress={() => isComment ? null : selectCard()}
+        sx={{cursor: 'pointer'}}
+        onClick={() => selectCard()}
+        onKeyPress={() => selectCard()}
         data-testid="selectionContainer"
       >
         <CardHeader
-          title={isComment ? null : title}
+          title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
           sx={{
-            backgroundColor: isComment ? theme.palette.scene.background : theme.palette.primary.main,
+            backgroundColor: theme.palette.scene.background,
           }}
         />
       </CardActionArea>
+      }
       <CardContent
         sx={{
-          'padding': '0px 20px 0px 20px',
-          'margin': '0px 0px 0px 0px',
+          'padding': '0px 20px',
           '& img': {
             width: '100%',
           },
@@ -251,7 +252,7 @@ export default function NoteCard({
           synched={synched}
         />
       }
-    </Paper>
+    </Card>
   )
 }
 
@@ -293,8 +294,10 @@ const CardFooter = ({
   deleteNote,
   removeComment,
   isComment,
-  synched}) => {
+  synched,
+}) => {
   const [shareIssue, setShareIssue] = useState(false)
+  const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const accessToken = useStore((state) => state.accessToken)
@@ -305,6 +308,8 @@ const CardFooter = ({
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const isScreenshotEnabled = useExistInFeature('screenshot')
+  const [screenshotUri, setScreenshotUri] = useState(null)
 
 
   return (
@@ -331,7 +336,7 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={<CameraIcon/>}
+            icon={<CameraIcon className='icon-share'/>}
             aboutInfo={false}
           />}
         {selected &&
@@ -343,7 +348,7 @@ const CardFooter = ({
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={<ShareIcon/>}
+            icon={<ShareIcon className='icon-share'/>}
           />
         }
         {
@@ -362,7 +367,7 @@ const CardFooter = ({
               onClick={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceMarkIcon style={{width: '15px', height: '15px'}}/>}
+              icon={<PlaceMarkIcon className='icon-share'/>}
             />
           </Box>
         }
@@ -384,7 +389,7 @@ const CardFooter = ({
             onClick={async () => {
               await deleteNote(repository, accessToken, noteNumber)
             }}
-            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {isComment && synched && user && user.nickname === username &&
@@ -395,7 +400,7 @@ const CardFooter = ({
             onClick={async () => {
               await removeComment(repository, accessToken, id)
             }}
-            icon={<DeleteIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {!synched &&
@@ -404,7 +409,21 @@ const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={() => toggleSynchSidebar()}
-            icon={<SynchIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<SynchIcon className='icon-share'/>}
+          />
+        }
+        {isScreenshotEnabled && screenshotUri &&
+         <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
+        }
+        {isScreenshotEnabled &&
+          <TooltipIconButton
+            title='Take Screenshot'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              setScreenshotUri(viewer.takeScreenshot())
+            }}
+            icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
         {numberOfComments > 0 &&

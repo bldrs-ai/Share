@@ -7,9 +7,9 @@
  */
 export default function createIFCSlice(set, get) {
   return {
-    viewerStore: {},
+    viewer: {},
+    model: null,
     modelPath: null,
-    modelStore: null,
     selectedElement: null,
     selectedElements: [],
     elementTypesMap: [],
@@ -18,8 +18,8 @@ export default function createIFCSlice(set, get) {
     loadedFileInfo: null,
     customViewSettings: null,
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
+    setModelStore: (model) => set(() => ({model: model})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
-    setModelStore: (model) => set(() => ({modelStore: model})),
     setSelectedElement: (element) => set(() => ({selectedElement: element})),
     setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),

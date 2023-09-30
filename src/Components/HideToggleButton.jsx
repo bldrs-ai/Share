@@ -5,6 +5,7 @@ import VisibilityIcon from '@mui/icons-material/Visibility'
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff'
 import GlassesIcon from '../assets/icons/Glasses.svg'
 
+
 /**
  * @param {IfcIsolator} The IFC isoaltor
  * @param {number} IFC element id
@@ -15,7 +16,7 @@ export default function HideToggleButton({elementId}) {
   const updateHiddenStatus = useStore((state) => state.updateHiddenStatus)
   const isIsolated = useStore((state) => state.isolatedElements[elementId])
   const isTempIsolationModeOn = useStore((state) => state.isTempIsolationModeOn)
-  const viewer = useStore((state) => state.viewerStore)
+  const viewer = useStore((state) => state.viewer)
 
   const toggleHide = () => {
     const toBeHidden = viewer.isolator.flattenChildren(elementId)
@@ -48,10 +49,25 @@ export default function HideToggleButton({elementId}) {
   }
 
   if (isIsolated) {
-    return <GlassesIcon style={iconStyle}/>
+    return <GlassesIcon style={iconStyle} className='icon-share icon-nav-glasses'/>
   } else if (!isHidden) {
-    return <VisibilityIcon data-testid='hide-icon' style={iconStyle} onClick={toggleHide}/>
+    return (
+      <VisibilityIcon
+        onClick={toggleHide}
+        className='icon-share icon-nav-eye'
+        style={iconStyle}
+        data-testid='hide-icon'
+      />
+    )
   } else {
-    return <VisibilityOffIcon data-testid='unhide-icon' style={iconStyle} onClick={toggleHide}/>
+    return (
+      <VisibilityOffIcon
+        onClick={toggleHide}
+        className='icon-share icon-nav-eye'
+        data-testid='unhide-icon'
+        style={iconStyle}
+        fill={undefined}
+      />
+    )
   }
 }

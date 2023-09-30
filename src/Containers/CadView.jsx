@@ -20,6 +20,7 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
+import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
 import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
@@ -77,19 +78,19 @@ export default function CadView({
   const viewer = useStore((state) => state.viewer)
   const setViewer = useStore((state) => state.setViewer)
   const customViewSettings = useStore((state) => state.customViewSettings)
+  // setModelStore instead of setModel since there's already a state var with this name
+  const setModelStore = useStore((state) => state.setModel)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
-  const setModelStore = useStore((state) => state.setModelStore)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
-  const setViewerStore = useStore((state) => state.setViewerStore)
   const snackMessage = useStore((state) => state.snackMessage)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
@@ -198,7 +199,6 @@ export default function CadView({
           pathPrefix,
           assertDefined(themeArg.palette.scene.background))
       setViewer(initializedViewer)
-      setViewerStore(initializedViewer)
     }
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
@@ -218,12 +218,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.secondary.background,
+      color: theme.palette.primary.main,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.secondary.main,
+      color: theme.palette.primary.main,
       depthTest: true,
     })
 
@@ -284,7 +284,7 @@ export default function CadView({
     const uploadedFile = pathPrefix.endsWith('new')
 
     if (uploadedFile) {
-      filepath = getNewModelRealPath(filepath)
+      filepath = getUploadedBlobPath(filepath)
       debug().log('CadView#loadIfc: parsed blob: ', filepath)
       window.addEventListener('beforeunload', handleBeforeUnload)
     }
@@ -338,31 +338,6 @@ export default function CadView({
 
     debug().error('CadView#loadIfc: Model load failed!')
     return loadedModel
-  }
-
-
-  /** Upload a local IFC file for display. */
-  function loadLocalFile() {
-    const viewerContainer = document.getElementById('viewer-container')
-    const fileInput = document.createElement('input')
-    fileInput.setAttribute('type', 'file')
-    fileInput.addEventListener(
-        'change',
-        (event) => {
-          debug().log('CadView#loadLocalFile#event:', event)
-          let ifcUrl = URL.createObjectURL(event.target.files[0])
-          setLoadedFileInfo({source: 'local', info: event.target.files})
-          debug().log('CadView#loadLocalFile#event: ifcUrl: ', ifcUrl)
-          const parts = ifcUrl.split('/')
-          ifcUrl = parts[parts.length - 1]
-          window.removeEventListener('beforeunload', handleBeforeUnload)
-          navigate(`${appPrefix}/v/new/${ifcUrl}.ifc`)
-        },
-        false,
-    )
-    viewerContainer.appendChild(fileInput)
-    fileInput.click()
-    viewerContainer.removeChild(fileInput)
   }
 
 
@@ -672,9 +647,7 @@ export default function CadView({
         }}
         >
           {isSearchBarVisible &&
-            <SearchBar
-              fileOpen={loadLocalFile}
-            />}
+            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>}
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>
@@ -725,7 +698,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         <Box
           sx={{
             position: 'absolute',
-            top: 3,
+            top: 0,
             right: 0,
           }}
         >
@@ -837,18 +810,4 @@ export const getFinalURL = async (url, accessToken) => {
     default:
       return url
   }
-}
-
-
-/**
- * @param {string} filepath
- * @return {string}
- */
-export function getNewModelRealPath(filepath) {
-  const l = window.location
-  filepath = filepath.split('.ifc')[0]
-  const parts = filepath.split('/')
-  filepath = parts[parts.length - 1]
-  filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
-  return filepath
 }

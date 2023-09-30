@@ -18,27 +18,58 @@ export default function Styles({theme}) {
           maxHeight: '100%',
         },
         'a': {
-          color: theme.palette.secondary.contrastText,
+          color: theme.palette.primary.main,
         },
-        'svg': {
-          width: '18px',
-          height: '18px',
+        '.MuiSvgIcon-root': {
+          // Mui icons use 'color' instead of 'fill'
+          color: theme.palette.primary.contrastText,
+        },
+        '.MuiDialog-paper': {
+          textAlign: 'center',
+          padding: '0.5em',
+        },
+        '.MuiDialog-paper > .MuiButtonBase-root': {
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          margin: '0.5em',
+          opacity: .5,
+        },
+        '.MuiDialogActions-root': {
+          textAlign: 'center',
+        },
+        '.MuiDialogActions-root > .MuiButtonBase-root': {
+          marginLeft: 'auto',
+          marginRight: 'auto',
+        },
+        '.icon-share': {
           fill: theme.palette.primary.contrastText,
+          width: '21px',
+          height: '21px',
         },
-        '.closeButton': {
+        '.icon-small': {
+          width: '15px',
+          height: '15px',
+        },
+        /* icon-nav-* are the sub-icons in NavTree */
+        '.icon-nav-caret': {
           width: '12px',
           height: '12px',
         },
-        '.caretToggle': {
+        '.icon-nav-eye': {
+          width: '12px',
+          height: '12px',
+        },
+        '.icon-nav-glasses': {
           width: '12px',
           height: '12px',
         },
         '*::-webkit-scrollbar': {
-          width: '10px',
+          width: '2px',
           background: theme.palette.secondary.background,
         },
         '*::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.secondary.main,
+          backgroundColor: theme.palette.primary.main,
         },
       }}
     />

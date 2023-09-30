@@ -62,7 +62,7 @@ export default function ExpansionPanel({summary, detail, expandState}) {
           '@media (max-width: 900px)': {
             maxWidth: '320px',
           },
-        }} variant='h3'
+        }}
         >
           {summary}
         </Typography>

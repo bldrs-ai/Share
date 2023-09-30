@@ -19,7 +19,7 @@ export default function ItemProperties() {
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
-  const model = useStore((state) => state.modelStore)
+  const model = useStore((state) => state.model)
   const element = useStore((state) => state.selectedElement)
   const theme = useTheme()
 
@@ -60,7 +60,7 @@ export default function ItemProperties() {
           marginTop: '10px',
         }}
         >
-          <Typography variant='h2' sx={{
+          <Typography variant='body1' sx={{
             position: 'sticky',
             top: '0px',
             display: 'flex',

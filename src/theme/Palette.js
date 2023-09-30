@@ -7,13 +7,13 @@ const colors = getColors()
 export const day = {
   mode: 'light',
   primary: {
-    main: colors.grey.medium,
+    main: '#6D8752',
     background: colors.grey.light,
     contrastText: colors.black,
     highlight: colors.orange,
   },
   secondary: {
-    main: colors.green.darkest,
+    main: colors.grey.dark,
     background: colors.green.lightest,
     contrastText: colors.green.dark,
   },
@@ -29,13 +29,13 @@ export const day = {
 export const night = {
   mode: 'dark',
   primary: {
-    main: colors.grey.dark,
+    main: '#6D8752',
     background: colors.grey.darkest,
     contrastText: colors.grey.lightest,
     highlight: colors.orange,
   },
   secondary: {
-    main: colors.green.lightest,
+    main: colors.grey.light,
     background: colors.green.medium,
     contrastText: colors.green.lightest,
   },

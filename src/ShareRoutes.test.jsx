@@ -2,16 +2,19 @@ import {
   looksLikeLink,
   trimToPath,
   githubUrlOrPathToSharePath} from './ShareRoutes'
+import {supportedTypes} from './Filetype'
 
 
 jest.mock('three')
 
 
+// All paths here are .ifc but tests should use these as a template to
+// replace with all supporte suffixes.
 const path = '/org/repo/branch/file.ifc'
 const pathAbc = '/org/repo/branch/a/b/c/file.ifc'
 const pathBlob = '/org/repo/blob/branch/file.ifc'
 const pathBlobAbc = '/org/repo/blob/branch/a/b/c/file.ifc'
-const tests = [
+const testTemplates = [
   {s: 'http://www.github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
   {s: 'http://github.com/org/repo/blob/branch/file.ifc', out: pathBlob},
   {s: 'http://www.github.com/org/repo/blob/branch/a/b/c/file.ifc', out: pathBlobAbc},
@@ -31,6 +34,29 @@ const tests = [
   {s: '/org/repo/blob/branch/a/b/c/file.ifc', out: pathBlobAbc},
   {s: '/org/repo/branch/a/b/c/file.ifc', out: pathAbc},
 ]
+
+
+/**
+ * Replace the tests above by using them a template for paths with
+ * different filetypes.
+ *
+ * @return {Array.<object>}
+ */
+function expandTestTemplates() {
+  const replaced = []
+  for (const test of testTemplates) {
+    for (const ext of supportedTypes) {
+      const subIn = test.s.replace(/.ifc/, `.${ext}`)
+      const subOut = test.out.replace(/.ifc/, `.${ext}`)
+      replaced.push({s: subIn, out: subOut})
+    }
+  }
+  // .ifc is one of the supported types, so don't need append original array
+  return replaced
+}
+
+// This is the actual array of tests used for the tests below.
+const tests = expandTestTemplates()
 
 
 describe('ShareRoutes', () => {

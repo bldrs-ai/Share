@@ -151,4 +151,21 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
     const ifcManager = this.IFC
     return ifcManager.loader.ifcManager.getExpressId(mesh.geometry, picked.faceIndex)
   }
+
+
+  /**
+   * Uses the internal renderer to take screenshot of current scene.
+   *
+   * The image may be fetched to bytes with:
+   *
+   *   const res = await fetch(dataURI)
+   *   const img = await res.blob()
+   *
+   * @return {string}
+   */
+  takeScreenshot() {
+    const renderer = this.context.renderer
+    const dataURI = renderer.newScreenshot()
+    return dataURI
+  }
 }

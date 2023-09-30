@@ -48,7 +48,7 @@ export const build = {
   },
   plugins: [
     progress(),
-    svgrPlugin(),
+    svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
     copyStaticFiles({
       src: assetsDir,
       dest: buildDir,

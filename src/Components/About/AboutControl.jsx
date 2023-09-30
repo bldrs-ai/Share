@@ -1,16 +1,16 @@
 import React, {useState} from 'react'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
+import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import AboutDescription from './AboutDescription'
 import PrivacyControl from './PrivacyControl'
-import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
-
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 /**
  * Button to toggle About panel on and off
@@ -39,12 +39,7 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <AboutIcon
-          style={{
-            width: '20px',
-            height: '20px',
-          }}
-        />
+        <InfoOutlinedIcon className='icon-share' color='secondary'/>
       }
       dialog={
         <AboutDialog
@@ -67,13 +62,12 @@ export default function AboutControl() {
 export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
-      icon={
+      headerText={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
-          <LogoB style={{width: '60px', height: '60px'}}/>
-          <Typography variant='h6' sx={{marginLeft: '-9px', marginTop: '6px'}}>bldrs.ai</Typography>
+          <LogoB/>
+          <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>
       }
-      headerText={''}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
@@ -91,15 +85,45 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  */
 function AboutContent({setIsDialogDisplayed}) {
   return (
-    <Box sx={{'& a': {textDecoration: 'none'}}}>
+    <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
-        <title>About — BLDRS</title>
+        <title>About — Bldrs.ai</title>
       </Helmet>
-      <Typography variant='h2' gutterBottom={true}>build every thing together</Typography>
-      <a href='https://github.com/bldrs-ai/Share' target='_new'>
-        github.com/bldrs-ai/Share
-      </a>
-      <AboutDescription setIsDialogDisplayed={setIsDialogDisplayed}/>
-      <PrivacyControl/>
+      <Stack
+        spacing={3}
+        direction="column"
+        justifyContent="center"
+        alignItems="center"
+      >
+        <Stack spacing={0}>
+          <Typography variant='body1'>Build every thing together</Typography>
+          <Link
+            underline="always"
+            href='https://github.com/bldrs-ai/Share'
+            color='inherit'
+            variant='overline'
+          >
+            github.com/bldrs-ai/Share
+          </Link>
+        </Stack>
+        <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
+          <Typography variant={'body1'}>
+            <Box variant='span'>
+            Welcome to Share.<br/>
+            Upload your IFC model,
+            position the camera, select elements and crop the model using section planes;
+            share the exact view using generated link.
+            With Share everyone has access to the same context in model space.
+            </Box>
+            <Box variant='span'>
+              You can reach us on{' '}
+              <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
+                discord
+              </Link>.
+            </Box>
+          </Typography>
+        </Box>
+        <PrivacyControl/>
+      </Stack>
     </Box>)
 }
