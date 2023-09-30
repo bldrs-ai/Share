@@ -108,19 +108,15 @@ function AboutContent({setIsDialogDisplayed}) {
         </Stack>
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
-            <Box variant='span'>
             Welcome to Share.<br/>
             Upload your IFC model,
             position the camera, select elements and crop the model using section planes;
             share the exact view using generated link.
-            With Share everyone has access to the same context in model space.
-            </Box>
-            <Box variant='span'>
-              You can reach us on{' '}
-              <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
-                discord
-              </Link>.
-            </Box>
+            With Share everyone has access to the same context in model space.<br/>
+            You can reach us on{' '}
+            <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
+              discord
+            </Link>.
           </Typography>
         </Box>
         <PrivacyControl/>

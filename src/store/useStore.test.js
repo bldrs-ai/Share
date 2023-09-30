@@ -45,7 +45,7 @@ describe('IFC slice', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const model = {castShadow: false}
     act(() => {
-      result.current.setModel(model)
+      result.current.setModelStore(model)
     })
     expect(result.current.model).toEqual(model)
   })
