@@ -9,6 +9,7 @@ import ElementSelectionChangedEventDispatcher from './event-dispatchers/ElementS
 import ModelLoadedEventDispatcher from './event-dispatchers/ModelLoadedEventDispatcher'
 import HiddenElementsEventDispatcher from './event-dispatchers/HiddenElementsEventDispatcher'
 import HighlightElementsEventHandler from './event-handlers/HighlightElementsEventHandler'
+import ChangeViewSettingsEventHandler from './event-handlers/ChangeViewSettingsEventHandler'
 
 
 /**
@@ -48,6 +49,7 @@ class ApiEventsRegistry {
       new SuppressAboutDialogHandler(this.apiConnection),
       new HideElementsEventHandler(this.apiConnection, this.searchIndex),
       new UnhideElementsEventHandler(this.apiConnection, this.searchIndex),
+      new ChangeViewSettingsEventHandler(this.apiConnection),
     ]
     for (const event of events) {
       this.apiConnection.on(`action:${event.name}`, event.handler.bind(event))

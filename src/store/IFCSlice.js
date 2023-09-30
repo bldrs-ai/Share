@@ -16,8 +16,9 @@ export default function createIFCSlice(set, get) {
     preselectedElementIds: null,
     cameraControls: null,
     loadedFileInfo: null,
-    setViewer: (viewer) => set(() => ({viewer: viewer})),
-    setModel: (model) => set(() => ({model: model})),
+    customViewSettings: null,
+    setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
+    setModelStore: (model) => set(() => ({model: model})),
     setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
     setSelectedElement: (element) => set(() => ({selectedElement: element})),
     setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
@@ -25,5 +26,6 @@ export default function createIFCSlice(set, get) {
     setPreselectedElementIds: (elementIds) => set(() => ({preselectedElementIds: elementIds})),
     setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
     setLoadedFileInfo: (loadedFileInfo) => set(() => ({loadedFileInfo: loadedFileInfo})),
+    setCustomViewSettings: (customViewSettings) => set(() => ({customViewSettings: customViewSettings})),
   }
 }
