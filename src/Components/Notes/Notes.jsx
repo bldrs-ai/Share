@@ -133,6 +133,7 @@ export default function Notes() {
     <Stack justifyContent={'center'} alignItems={'center'}>
       <List
         spacing={1}
+        sx={{paddingBottom: '60px'}}
       >
         {isCreateNoteActive && user && <NoteCardCreate/>}
         {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}

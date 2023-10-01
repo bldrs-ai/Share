@@ -7,7 +7,7 @@ import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
-import NotesNavBar from '../Notes/NotesNavBar'
+import NotesNavBar from '../Notes/NotesNavBar_original'
 import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
