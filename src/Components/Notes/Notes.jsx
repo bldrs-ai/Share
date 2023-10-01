@@ -1,5 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
+import List from '@mui/material/List'
 import Stack from '@mui/material/Stack'
 import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
@@ -129,65 +130,67 @@ export default function Notes() {
 
 
   return hasError ? <ApplicationError/> : (
-    <Stack
-      spacing={1}
-    >
-      {isCreateNoteActive && user && <NoteCardCreate/>}
-      {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
-      {notes === null && <Loader type={'linear'}/>}
-      {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
-      {notes && !selectedNoteId && !isCreateNoteActive ?
-        notes.map((note, index) => {
-          return (
-            <NoteCard
-              key={index}
-              index={note.index}
-              id={note.id}
-              noteNumber={note.number}
-              title={note.title}
-              date={note.date}
-              body={note.body}
-              username={note.username}
-              numberOfComments={note.numberOfComments}
-              avatarUrl={note.avatarUrl}
-              synched={note.synched}
-            />
-          )
-        }) :
-        <>
-          {(filteredNote && !isCreateNoteActive) ?
-            <NoteCard
-              index={filteredNote.index}
-              id={filteredNote.id}
-              noteNumber={filteredNote.number}
-              title={filteredNote.title}
-              date={filteredNote.date}
-              body={filteredNote.body}
-              username={filteredNote.username}
-              numberOfComments={filteredNote.numberOfComments}
-              avatarUrl={filteredNote.avatarUrl}
-              synched={filteredNote.synched}
-            /> : null
-          }
-          {comments && !isCreateNoteActive &&
-            comments.map((comment, index) => {
-              return (
-                <NoteCard
-                  key={index}
-                  isComment={true}
-                  id={comment.id}
-                  index=''
-                  body={comment.body}
-                  date={comment.date}
-                  username={comment.username}
-                  avatarUrl={comment.avatarUrl}
-                  synched={comment.synched}
-                />
-              )
-            })
-          }
-        </>
-      }
+    <Stack justifyContent={'center'} alignItems={'center'}>
+      <List
+        spacing={1}
+      >
+        {isCreateNoteActive && user && <NoteCardCreate/>}
+        {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
+        {notes === null && <Loader type={'linear'}/>}
+        {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
+        {notes && !selectedNoteId && !isCreateNoteActive ?
+          notes.map((note, index) => {
+            return (
+              <NoteCard
+                key={index}
+                index={note.index}
+                id={note.id}
+                noteNumber={note.number}
+                title={note.title}
+                date={note.date}
+                body={note.body}
+                username={note.username}
+                numberOfComments={note.numberOfComments}
+                avatarUrl={note.avatarUrl}
+                synched={note.synched}
+              />
+            )
+          }) :
+          <>
+            {(filteredNote && !isCreateNoteActive) ?
+              <NoteCard
+                index={filteredNote.index}
+                id={filteredNote.id}
+                noteNumber={filteredNote.number}
+                title={filteredNote.title}
+                date={filteredNote.date}
+                body={filteredNote.body}
+                username={filteredNote.username}
+                numberOfComments={filteredNote.numberOfComments}
+                avatarUrl={filteredNote.avatarUrl}
+                synched={filteredNote.synched}
+              /> : null
+            }
+            {comments && !isCreateNoteActive &&
+              comments.map((comment, index) => {
+                return (
+                  <NoteCard
+                    key={index}
+                    isComment={true}
+                    id={comment.id}
+                    index=''
+                    body={comment.body}
+                    date={comment.date}
+                    username={comment.username}
+                    avatarUrl={comment.avatarUrl}
+                    synched={comment.synched}
+                  />
+                )
+              })
+            }
+          </>
+        }
+      </List>
     </Stack>
   )
 }
