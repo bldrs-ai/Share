@@ -4,6 +4,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
+import {useIsMobile} from '../Hooks'
 import {hexToRgba} from '../../utils/color'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
@@ -22,6 +23,7 @@ export default function ItemProperties() {
   const model = useStore((state) => state.model)
   const element = useStore((state) => state.selectedElement)
   const theme = useTheme()
+  const isMobile = useIsMobile()
 
 
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function ItemProperties() {
   const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
   return (
     <Box sx={{
+      'paddingBottom': isMobile ? '80px' : '0px',
       '& td': {
         minWidth: '130px',
         maxWidth: '130px',
