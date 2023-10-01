@@ -84,10 +84,10 @@ export function getComponentOverrides(palette, typography) {
     MuiListSubheader: {
       styleOverrides: {
         root: ({theme}) => ({
-          backgroundColor: theme.palette.background.default, // use palette color here
+          backgroundColor: theme.palette.primary.background, // use palette color here
+          borderTop: `1px solid ${theme.palette.background.paper}`,
           borderBottom: `1px solid ${theme.palette.background.paper}`,
-          paddingTop: '10px',
-          paddingBottom: '10px',
+          padding: '0px',
         }),
       },
     },

@@ -29,6 +29,9 @@ import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import Notes from '../Components/Notes/Notes2'
+// import Properties from '../Components/Notes/Notes2'
+import ItemProperties from '../Components/ItemProperties/ItemProperties'
 
 
 /**
@@ -725,7 +728,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         }}
       >
         <OperationsGroup deselectItems={deselectItems}/>
-        <SideDrawer/>
+        <SideDrawer topPanel={<Notes/>} bottomPanel={<ItemProperties/>}/>
         <AppStoreSideDrawer/>
       </Box>
     )
