@@ -5,6 +5,7 @@ import Stack from '@mui/material/Stack'
 import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
+import {useIsMobile} from '../Hooks'
 import {getIssues, getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
@@ -25,6 +26,7 @@ export default function Notes() {
   const synchSidebar = useStore((state) => state.synchSidebar)
   const setNotes = useStore((state) => state.setNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const isMobile = useIsMobile()
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
@@ -133,7 +135,7 @@ export default function Notes() {
     <Stack justifyContent={'center'} alignItems={'center'}>
       <List
         spacing={1}
-        sx={{paddingBottom: '60px'}}
+        sx={isMobile && {paddingBottom: '80px'}}
       >
         {isCreateNoteActive && user && <NoteCardCreate/>}
         {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
