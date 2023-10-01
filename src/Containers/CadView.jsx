@@ -10,7 +10,8 @@ import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
-import SideDrawer from '../Components/SideDrawer/SideDrawer2'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import SideDrawerLeft from '../Components/SideDrawer/SideDrawer2'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
@@ -30,7 +31,6 @@ import SearchIndex from './SearchIndex'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import Notes from '../Components/Notes/Notes2'
-// import Properties from '../Components/Notes/Notes2'
 import ItemProperties from '../Components/ItemProperties/ItemProperties'
 
 
@@ -728,7 +728,8 @@ function OperationsGroupAndDrawer({deselectItems}) {
         }}
       >
         <OperationsGroup deselectItems={deselectItems}/>
-        <SideDrawer topPanel={<Notes/>} bottomPanel={<ItemProperties/>}/>
+        <SideDrawerLeft topPanel={<Notes/>} bottomPanel={<ItemProperties/>}/>
+        <SideDrawer/>
         <AppStoreSideDrawer/>
       </Box>
     )
