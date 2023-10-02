@@ -81,6 +81,8 @@ function newInitializeLoadingStateFunction(parser) {
       const viewSettings = await compileViewRules(this.state.api, modelID, this._rules)
       this._overrideStyles = viewSettings
     }
+    // Check if _overrideStyles has any setting using global id to be converted to expressId
+    this._overrideStyles?.normalizeGlobalIdSettings(this.state.api, modelID)
     // eslint-disable-next-line new-cap
     const shapes = await this.state.api.GetLineIDsWithType(modelID, IFCPRODUCTDEFINITIONSHAPE)
     this.loadingState.total = shapes.size()

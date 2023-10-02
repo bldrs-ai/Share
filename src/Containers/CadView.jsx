@@ -75,8 +75,9 @@ export default function CadView({
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
   const setViewer = useStore((state) => state.setViewer)
+  const customViewSettings = useStore((state) => state.customViewSettings)
   // setModelStore instead of setModel since there's already a state var with this name
-  const setModelStore = useStore((state) => state.setModel)
+  const setModelStore = useStore((state) => state.setModelStore)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
@@ -109,7 +110,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
-  }, [modelPath])
+  }, [modelPath, customViewSettings])
 
 
   // Viewer changes in onModelPath (above)
@@ -215,12 +216,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.secondary.background,
+      color: theme.palette.primary.main,
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.secondary.main,
+      color: theme.palette.primary.main,
       depthTest: true,
     })
 
@@ -308,7 +309,8 @@ export default function CadView({
           // TODO(pablo): error modal.
           setIsLoading(false)
           setAlertMessage(`Could not load file: ${filepath}`)
-        })
+        }, customViewSettings)
+
     await viewer.isolator.setModel(loadedModel)
 
     Privacy.recordEvent('select_content', {
@@ -694,7 +696,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         <Box
           sx={{
             position: 'absolute',
-            top: 3,
+            top: 0,
             right: 0,
           }}
         >

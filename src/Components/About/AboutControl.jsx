@@ -8,10 +8,9 @@ import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 import PrivacyControl from './PrivacyControl'
-import AboutIcon from '../../assets/icons/Information.svg'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
-
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 /**
  * Button to toggle About panel on and off
@@ -40,7 +39,7 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <AboutIcon className='icon-share'/>
+        <InfoOutlinedIcon className='icon-share' color='secondary'/>
       }
       dialog={
         <AboutDialog
@@ -88,7 +87,7 @@ function AboutContent({setIsDialogDisplayed}) {
   return (
     <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
-        <title>About — BLDRS</title>
+        <title>About — Bldrs.ai</title>
       </Helmet>
       <Stack
         spacing={3}
@@ -97,25 +96,27 @@ function AboutContent({setIsDialogDisplayed}) {
         alignItems="center"
       >
         <Stack spacing={0}>
-          <Typography variant={'body1'}>build every thing together</Typography>
+          <Typography variant='body1'>Build every thing together</Typography>
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'
+            color='inherit'
+            variant='overline'
           >
             github.com/bldrs-ai/Share
           </Link>
         </Stack>
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
-            <Box variant='span'>
-              Welcome to Share.
-            </Box>
-            Highlight specific elements within your 3D model,
-            position the camera angle,
+            Welcome to Share.<br/>
+            Upload your IFC model,
+            position the camera, select elements and crop the model using section planes;
             share the exact view using generated link.
-            <Box variant='span' sx={{fontWeight: 'bold'}}>
-              With the Share link everyone has access to the same context in digital space.
-            </Box>
+            With Share everyone has access to the same context in model space.<br/>
+            You can reach us on{' '}
+            <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
+              discord
+            </Link>.
           </Typography>
         </Box>
         <PrivacyControl/>

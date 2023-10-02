@@ -21,7 +21,7 @@ jobs:
 
       - name: Install Cypress WebIfc
         id: install-cypress-webifc
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@v6
         with:
           runTests: false
           build: yarn build-share-webifc
@@ -51,7 +51,7 @@ jobs:
 
       - name: E2E Tests on Google Chrome
         id: e2e-on-google-chrome
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@v6
         with:
           browser: chrome
           start: node config/serve.js
@@ -65,7 +65,7 @@ jobs:
 
       - name: Install Cypress Conway
         id: install-cypress-conway
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@v6
         with:
           runTests: false
           build: yarn build-share-conway
@@ -95,7 +95,7 @@ jobs:
 
       - name: E2E Tests on Google Chrome
         id: e2e-on-google-chrome
-        uses: cypress-io/github-action@v5
+        uses: cypress-io/github-action@v6
         with:
           browser: chrome
           start: node config/serve.js

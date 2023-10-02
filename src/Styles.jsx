@@ -44,8 +44,8 @@ export default function Styles({theme}) {
         },
         '.icon-share': {
           fill: theme.palette.primary.contrastText,
-          width: '18px',
-          height: '18px',
+          width: '21px',
+          height: '21px',
         },
         '.icon-small': {
           width: '15px',

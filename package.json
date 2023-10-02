@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r706",
+  "version": "1.0.0-r709",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -92,7 +92,7 @@
     "babel-jest": "^28.1.3",
     "babel-loader": "^8.2.5",
     "canvas": "^2.11.0",
-    "cypress": "^12.3.0",
+    "cypress": "^13.2.0",
     "cypress-real-events": "^1.7.6",
     "esbuild": "^0.15.5",
     "esbuild-clean-plugin": "^1.0.0",

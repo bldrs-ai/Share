@@ -13,7 +13,7 @@ export const day = {
     highlight: colors.orange,
   },
   secondary: {
-    main: colors.grey.lightest,
+    main: colors.grey.dark,
     background: colors.green.lightest,
     contrastText: colors.green.dark,
   },
@@ -35,7 +35,7 @@ export const night = {
     highlight: colors.orange,
   },
   secondary: {
-    main: colors.green.lightest,
+    main: colors.grey.light,
     background: colors.green.medium,
     contrastText: colors.green.lightest,
   },
