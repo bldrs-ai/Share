@@ -127,7 +127,7 @@ export default function SearchBar({fileOpen}) {
           sx={{
             ...theme.typography.tree,
             marginTop: '4px',
-            marginLeft: '14px',
+            marginLeft: '16px',
           }}
         />
         {inputText.length > 0 &&
