@@ -19,8 +19,8 @@ jobs:
         id: checkout
         uses: actions/checkout@v3
 
-      - name: Install Cypress
-        id: install-cypress
+      - name: Install Cypress WebIfc
+        id: install-cypress-webifc
         uses: cypress-io/github-action@v5
         with:
           runTests: false
@@ -63,8 +63,8 @@ jobs:
         id: checkout
         uses: actions/checkout@v3
 
-      - name: Install Cypress
-        id: install-cypress
+      - name: Install Cypress Conway
+        id: install-cypress-conway
         uses: cypress-io/github-action@v5
         with:
           runTests: false
