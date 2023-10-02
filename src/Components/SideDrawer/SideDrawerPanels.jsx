@@ -61,7 +61,7 @@ export function NotesPanel() {
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
 
-  let title = selectedNoteId ? 'Note' : 'Notes'
+  let title = selectedNoteId ? 'NOTE' : 'NOTES'
   if (isCreateNoteActive) {
     title = 'Add a note'
   }
@@ -86,7 +86,7 @@ export function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   return (
-    <PanelWithTitle title={'Properties'}
+    <PanelWithTitle title={'PROPERTIES'}
       controlsGroup={
         <CloseButton
           onClick={toggleIsPropertiesOn}

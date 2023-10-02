@@ -98,7 +98,7 @@ export default function NavPanel({
             visibility: 'visible !important',
           },
           '@media (max-width: 900px)': {
-            maxHeight: '150px',
+            maxHeight: '140px',
             top: '86px',
           },
         }}
