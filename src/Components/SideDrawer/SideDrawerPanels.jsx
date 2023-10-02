@@ -63,7 +63,7 @@ export function NotesPanel() {
 
   let title = selectedNoteId ? 'NOTE' : 'NOTES'
   if (isCreateNoteActive) {
-    title = 'Add a note'
+    title = 'ADD A NOTE'
   }
 
   return (

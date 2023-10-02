@@ -115,7 +115,7 @@ export default function NotesNavBar() {
             size='medium'
           /> :
           <TooltipIconButton
-            title='Add a note'
+            title='ADD A NOTE'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
             icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
