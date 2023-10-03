@@ -12,12 +12,12 @@ import {assertDefined} from '../utils/assert'
  * @property {string} size MUI size of the input component
  * @return {React.Component}
  */
-export default function InputAutocomplete({elements, placeholder, size = 'small'}) {
+export default function InputAutocomplete({elements, placeholder, size = 'small', multiple = false}) {
   assertDefined(elements, placeholder)
   return (
     <Stack spacing={3} sx={{minWidth: '280px'}}>
       <Autocomplete
-        multiple
+        multiple={multiple}
         options={elements}
         getOptionLabel={(option) => option.title}
         filterSelectedOptions

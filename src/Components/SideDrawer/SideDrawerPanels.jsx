@@ -1,5 +1,7 @@
 import React, {useRef, useEffect} from 'react'
 import Box from '@mui/material/Box'
+import Button from '@mui/material/Button'
+import Stack from '@mui/material/Stack'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
 import {CloseButton} from '../Buttons'
@@ -88,9 +90,16 @@ export function PropertiesPanel({includeGutter}) {
   return (
     <PanelWithTitle title={'Properties'}
       controlsGroup={
-        <CloseButton
-          onClick={toggleIsPropertiesOn}
-        />
+        <Stack
+          direction='row'
+          justifyContent='center'
+          alignItems='center'
+        >
+          <Button variant='overline'>Save</Button>
+          <CloseButton
+            onClick={toggleIsPropertiesOn}
+          />
+        </Stack>
       }
       includeGutter={includeGutter}
     >

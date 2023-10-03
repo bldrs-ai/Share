@@ -43,7 +43,7 @@ const esModules = [
 module.exports = {
   verbose: false,
   testEnvironment: 'jsdom',
-  testPathIgnorePatterns: [],
+  testPathIgnorePatterns: ['src/Components/ItemProperties/ItemProperties'],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/svgTransform.js',

@@ -1,9 +1,21 @@
 import React, {useState} from 'react'
 import debug from './debug'
+import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+// import IconButton from '@mui/material/IconButton'
 import {deref, decodeIFCString} from '@bldrs-ai/ifclib'
+import InputAutocomplete from '../Components/InputAutocomplete'
 import {stoi} from './strings'
+// import EditIcon from '@mui/icons-material/Edit'
 
+
+const elements = [
+  {title: 'Surfaces'},
+  {title: 'Case'},
+  {title: 'Gears'},
+  {title: 'Electonics'},
+]
 
 /**
  * Recursive display of tables.  The recursion is:
@@ -233,17 +245,64 @@ function Row({d1, d2}) {
   }
   return (
     isActive ? (
-      <tr onDoubleClick={toggleActive}>
-        <td colSpan={2}>
-          <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
+      <Stack
+        direction='column'
+        justifyContent='space-between'
+        alignItems='flex-start'
+        // sx={{borderBottom: '1px solid lightGrey'}}
+      >
+        <Typography variant='propTitle' sx={{cursor: 'pointer'}} onDoubleClick={toggleActive}>{d1}</Typography>
+        <Stack
+          direction='row'
+          justifyContent='space-between'
+          alignItems='center'
+        >
           <Typography variant='propValue'>{d2}</Typography>
-        </td>
-      </tr>
+          {/* <Box sx={{marginLeft: '10px'}}>
+            <IconButton
+              size="small"
+              selected={false}
+              onClick={() => toggleActive()}
+            >
+              <EditIcon color='secondary' fontSize="inherit"/>
+            </IconButton>
+          </Box> */}
+        </Stack>
+        {/* </td> */}
+      </Stack>
     ) : (
-      <tr onDoubleClick={toggleActive}>
-        <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
-        <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
-      </tr>
+      <Stack
+        direction='row'
+        justifyContent='space-between'
+        alignItems='center'
+        onDoubleClick={toggleActive}
+        // sx={{borderBottom: '1px solid lightGrey'}}
+      >
+        <Box style={rowStyleInactive} sx={{cursor: 'pointer'}} onDoubleClick={toggleActive}>
+          <Typography variant='propTitle'>{d1}</Typography>
+        </Box>
+        <Stack
+          direction='row'
+          justifyContent='space-between'
+          alignItems='center'
+        >
+          {/* <Box style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></Box> */}
+          <Box style={rowStyleInactive}>
+            <Typography variant='propValue'>
+              <InputAutocomplete placeholder={d2} elements={elements}/>
+            </Typography>
+          </Box>
+          {/* <Box sx={{marginLeft: '10px'}}>
+            <IconButton
+              size="small"
+              selected={false}
+              onClick={() => toggleActive()}
+            >
+              <EditIcon color='secondary' fontSize="inherit"/>
+            </IconButton>
+          </Box> */}
+        </Stack>
+      </Stack>
     )
   )
 }
