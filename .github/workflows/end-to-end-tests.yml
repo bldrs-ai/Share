@@ -30,7 +30,7 @@ jobs:
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build-${{ github.ref_name }}
+          name: build-${{ github.sha }}
           if-no-files-found: error
           path: docs/
 
@@ -46,7 +46,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: build-${{ github.ref_name }}
+          name: build-${{ github.sha }}
           path: docs/
 
       - name: E2E Tests on Google Chrome
@@ -74,7 +74,7 @@ jobs:
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build-${{ github.ref_name }}
+          name: build-${{ github.sha }}
           if-no-files-found: error
           path: docs/
 
@@ -90,7 +90,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: build-${{ github.ref_name }}
+          name: build-${{ github.sha }}
           path: docs/
 
       - name: E2E Tests on Google Chrome
