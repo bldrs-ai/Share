@@ -12,15 +12,15 @@ on:
   workflow_dispatch:
 
 jobs:
-  install-cypress:
+  install-cypress-webifc:
     runs-on: ubuntu-20.04
     steps:
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
-      - name: Install Cypress
-        id: install-cypress
+      - name: Install Cypress WebIfc
+        id: install-cypress-webifc
         uses: cypress-io/github-action@v6
         with:
           runTests: false
@@ -30,13 +30,13 @@ jobs:
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build
+          name: build-webifc-${{ github.sha }}
           if-no-files-found: error
           path: docs/
 
-  run-cypress-on-linux:
+  run-cypress-on-linux-webifc:
     runs-on: ubuntu-20.04
-    needs: install-cypress
+    needs: install-cypress-webifc
     steps:
       - name: checkout
         id: checkout
@@ -46,7 +46,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: build
+          name: build-webifc-${{ github.sha }}
           path: docs/
 
       - name: E2E Tests on Google Chrome
