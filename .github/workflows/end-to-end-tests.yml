@@ -58,6 +58,7 @@ jobs:
 
   install-cypress-conway:
     runs-on: ubuntu-20.04
+    needs: run-cypress-on-linux-webifc
     steps:
       - name: checkout
         id: checkout
