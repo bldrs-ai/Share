@@ -30,7 +30,7 @@ jobs:
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build-conway-${{ github.sha }}
+          name: build-webifc-${{ github.sha }}
           if-no-files-found: error
           path: docs/
 
@@ -46,7 +46,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: build-conway-${{ github.sha }}
+          name: build-webifc-${{ github.sha }}
           path: docs/
 
       - name: E2E Tests on Google Chrome
