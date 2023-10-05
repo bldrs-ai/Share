@@ -15,7 +15,7 @@ describe('SideDrawer', () => {
       result.current.toggleIsNotesOn()
       result.current.openDrawer()
     })
-    expect(await findByText('Notes')).toBeVisible()
+    expect(await findByText('NOTES')).toBeVisible()
 
     // reset the store
     await act(() => {
@@ -30,7 +30,7 @@ describe('SideDrawer', () => {
       result.current.toggleIsPropertiesOn()
       result.current.openDrawer()
     })
-    expect(await findByText('Properties')).toBeVisible()
+    expect(await findByText('PROPERTIES')).toBeVisible()
 
     // reset the store
     await act(() => {
@@ -47,7 +47,7 @@ describe('SideDrawer', () => {
       storeHook.result.current.toggleIsNotesOn()
       storeHook.result.current.openDrawer()
     })
-    expect(await sideDrawerRender.findByText('Notes')).toBeVisible()
+    expect(await sideDrawerRender.findByText('NOTES')).toBeVisible()
     expect(mobileHook.result.current).toBe(false)
     const xResizerEl = sideDrawerRender.getByTestId('x_resizer')
     fireEvent.click(xResizerEl)
