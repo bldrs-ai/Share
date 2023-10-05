@@ -7,7 +7,7 @@ import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
-import NotesNavBar from '../Notes/NotesNavBar'
+import NotesNavBar from '../Notes/NotesNavBar_original'
 import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
@@ -61,9 +61,9 @@ export function NotesPanel() {
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
 
-  let title = selectedNoteId ? 'Note' : 'Notes'
+  let title = selectedNoteId ? 'NOTE' : 'NOTES'
   if (isCreateNoteActive) {
-    title = 'Add a note'
+    title = 'ADD A NOTE'
   }
 
   return (
@@ -86,7 +86,7 @@ export function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   return (
-    <PanelWithTitle title={'Properties'}
+    <PanelWithTitle title={'PROPERTIES'}
       controlsGroup={
         <CloseButton
           onClick={toggleIsPropertiesOn}
