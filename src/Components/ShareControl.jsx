@@ -137,6 +137,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             <title>Share IFC Model — BLDRS</title>
           </Helmet>
           <QRCode
+            data-testid="qrcode"
             size={100}
             style={{height: 'auto', maxWidth: '100%', width: '100%'}}
             value={String(window.location)}

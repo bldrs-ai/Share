@@ -31,4 +31,18 @@ describe('ShareControl', () => {
 
     await(waitFor(() => expect(document.title).toBe('Share IFC Model — BLDRS')))
   })
+
+  test('renders QRCode component', () => {
+    // Render the ShareControl component
+    const {getByTitle, queryByTestId} = render(<ShareControl/>, {
+      wrapper: MockComponent,
+    })
+
+    // The ShareDialog is not open by default, so we'll need to simulate it being opened
+    const shareButton = getByTitle('Share')
+    fireEvent.click(shareButton)
+
+    const qrcode = queryByTestId('qrcode')
+    expect(qrcode).toBeInTheDocument()
+  })
 })
