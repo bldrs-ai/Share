@@ -151,7 +151,7 @@ export default function NavPanel({
             defaultCollapseIcon={<NodeOpenIcon className='icon-share icon-nav-caret'/>}
             defaultExpandIcon={<NodeClosedIcon className='icon-share icon-nav-caret'/>}
             defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
-            // expanded={isNavTree ? expandedElements : expandedTypes}
+            expanded={isNavTree ? expandedElements : expandedTypes}
             selected={selectedElements}
             onNodeToggle={(event, nodeIds) => {
               if (isNavTree) {
