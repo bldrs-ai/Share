@@ -5,8 +5,8 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
+import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
-import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -15,6 +15,7 @@ import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
@@ -646,8 +647,12 @@ export default function CadView({
           },
         }}
         >
+          <ControlsGroup fileOpen={() => loadLocalFile(navigate)}/>
           {isSearchBarVisible &&
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>}
+          <Box sx={{marginTop: '14px'}}>
+            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+          </Box>
+          }
           {
             modelPath.repo !== undefined &&
             <BranchesControl location={location}/>

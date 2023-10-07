@@ -9,7 +9,6 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import OpenModelControl from './OpenModelControl'
 import {TooltipIconButton} from './Buttons'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 
@@ -97,7 +96,6 @@ export default function SearchBar({fileOpen}) {
       direction="row"
       sx={{width: '100%'}}
     >
-      <OpenModelControl fileOpen={fileOpen}/>
       <Paper
         component='form'
         onSubmit={onSubmit}
