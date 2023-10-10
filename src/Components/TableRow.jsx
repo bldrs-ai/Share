@@ -1,4 +1,5 @@
 import React, {useState} from 'react'
+import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
@@ -92,18 +93,22 @@ export default function CustomTableRow({heading, subtext, inputType = 'input', o
       {isEditing ? (
         <>
           {renderInputComponent()}
-          <IconButton size="small" onClick={handleSubmit}>
-            <SubmitIcon fontSize="inherit" color='primary'/>
-          </IconButton>
+          <Box sx={{width: '40px'}}>
+            <IconButton size="small" onClick={handleSubmit}>
+              <SubmitIcon fontSize="inherit" color='primary'/>
+            </IconButton>
+          </Box>
         </>
       ) : (
         <>
           <Typography variant="body1" sx={commonStyles}>
             {value}
           </Typography>
-          <IconButton size="small" onClick={() => setIsEditing(true)}>
-            <EditIcon fontSize="inherit" color='primary'/>
-          </IconButton>
+          <Box sx={{width: '40px'}}>
+            <IconButton size="small" onClick={() => setIsEditing(true)}>
+              <EditIcon fontSize="inherit" color='primary'/>
+            </IconButton>
+          </Box>
         </>
       )}
     </Stack>
