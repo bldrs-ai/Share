@@ -7,7 +7,7 @@ import TableRow from './TableRow'
 export default (
   <FixtureContext>
     <Box sx={{width: '400px'}}>
-      <TableRow heading='hello' subtext='hello'/>
+      <TableRow heading='hello' subtext='hello' inputType='select' options={['Option1', 'Option2', 'Option3']}/>
     </Box>
   </FixtureContext>
 )

@@ -3,6 +3,8 @@ import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import IconButton from '@mui/material/IconButton'
 import Input from '@mui/material/Input'
+import Select from '@mui/material/Select'
+import MenuItem from '@mui/material/MenuItem'
 import EditIcon from '@mui/icons-material/Edit'
 import SubmitIcon from '@mui/icons-material/Done'
 
@@ -12,9 +14,11 @@ import SubmitIcon from '@mui/icons-material/Done'
  * @param {object} props Component properties.
  * @param {string} props.heading The non-editable heading displayed in the table row.
  * @param {string} props.subtext The editable content of the table row.
+ * @param {('input'|'select')} [props.inputType='input'] The type of input component.
+ * @param {Array<string>} [props.options=[]] The options for the select component.
  * @return {object} The rendered component.
  */
-export default function CustomTableRow({heading, subtext}) {
+export default function CustomTableRow({heading, subtext, inputType = 'input', options = []}) {
   const [isEditing, setIsEditing] = useState(false)
   const [value, setValue] = useState(subtext)
 
@@ -28,7 +32,6 @@ export default function CustomTableRow({heading, subtext}) {
     }
   }
 
-
   const commonStyles = {
     height: '40px',
     display: 'flex',
@@ -37,6 +40,42 @@ export default function CustomTableRow({heading, subtext}) {
     textOverflow: 'ellipsis',
     overflow: 'hidden',
     whiteSpace: 'nowrap',
+  }
+
+  const renderInputComponent = () => {
+    if (inputType === 'select') {
+      return (
+        <Select
+          value={value}
+          data-testid={'select'}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={() => setIsEditing(false)}
+          sx={{
+            ...commonStyles,
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: 'transparent',
+            },
+          }}
+        >
+          {options.map((option, index) => (
+            <MenuItem key={index} value={option}>
+              {option}
+            </MenuItem>
+          ))}
+        </Select>
+      )
+    }
+
+    return (
+      <Input
+        sx={{...commonStyles, borderBottom: 'none'}}
+        disableUnderline
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={() => setIsEditing(false)}
+        onKeyDown={handleKeyDown}
+      />
+    )
   }
 
   return (
@@ -51,19 +90,12 @@ export default function CustomTableRow({heading, subtext}) {
         {heading}
       </Typography>
       {isEditing ? (
-       <>
-         <Input
-           sx={{...commonStyles, borderBottom: 'none'}}
-           disableUnderline
-           value={value}
-           onChange={(e) => setValue(e.target.value)}
-           onBlur={() => setIsEditing(false)}
-           onKeyDown={handleKeyDown} // Add this line to handle Enter key press
-         />
-         <IconButton size="small" onClick={handleSubmit}>
-           <SubmitIcon fontSize="inherit"/>
-         </IconButton>
-       </>
+        <>
+          {renderInputComponent()}
+          <IconButton size="small" onClick={handleSubmit}>
+            <SubmitIcon fontSize="inherit"/>
+          </IconButton>
+        </>
       ) : (
         <>
           <Typography variant="body1" sx={commonStyles}>

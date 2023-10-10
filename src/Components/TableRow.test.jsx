@@ -18,6 +18,17 @@ describe('<CustomTableRow />', () => {
     expect(screen.getByDisplayValue('Test Subtext')).toBeInTheDocument()
   })
 
+  it('switches to select editing mode', () => {
+    const {getByTestId} = render(
+        <CustomTableRow heading="Test Heading" subtext="Option 1" inputType="select" options={['Option 1', 'Option 2']}/>,
+    )
+
+    fireEvent.click(screen.getByRole('button')) // Click the edit button
+
+    const select = getByTestId('select')
+    expect(select).toBeInTheDocument()
+  })
+
   test('submits edited text when Enter key is pressed', () => {
     render(<CustomTableRow heading="Test Heading" subtext="Test Subtext"/>)
     fireEvent.click(screen.getByRole('button')) // Click the edit button
