@@ -1,3 +1,6 @@
+global.TextEncoder = global.TextEncoder || require('util').TextEncoder;
+global.TextDecoder = global.TextDecoder || require('util').TextDecoder;
+
 /**
  * TODO(pablo): this is a work-around for jest not understanding es6
  * modules.  I don't really understand the problem, just that this
@@ -34,6 +37,7 @@ const esModules = [
   'vfile',
   'vfile-message',
   'web-ifc',
+  'bldrs-conway',
   'web-ifc-three',
   'web-ifc-viewer',
   'use-double-tap',
