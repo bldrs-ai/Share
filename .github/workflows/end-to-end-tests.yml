@@ -54,7 +54,7 @@ jobs:
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
-          start: node config/serve.js
+          start: yarn serve-share-webifc
 
   install-cypress-conway:
     runs-on: ubuntu-20.04
@@ -99,4 +99,4 @@ jobs:
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
-          start: node config/serve.js
+          start: yarn serve-share-conway
