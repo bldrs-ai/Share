@@ -93,7 +93,7 @@ export default function CustomTableRow({heading, subtext, inputType = 'input', o
         <>
           {renderInputComponent()}
           <IconButton size="small" onClick={handleSubmit}>
-            <SubmitIcon fontSize="inherit"/>
+            <SubmitIcon fontSize="inherit" color='primary'/>
           </IconButton>
         </>
       ) : (
@@ -102,7 +102,7 @@ export default function CustomTableRow({heading, subtext, inputType = 'input', o
             {value}
           </Typography>
           <IconButton size="small" onClick={() => setIsEditing(true)}>
-            <EditIcon fontSize="inherit"/>
+            <EditIcon fontSize="inherit" color='primary'/>
           </IconButton>
         </>
       )}
