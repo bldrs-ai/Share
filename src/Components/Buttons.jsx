@@ -4,9 +4,9 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
-import CloseIcon from '../assets/icons/Close.svg'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
+import CloseIcon from '@mui/icons-material/Close'
 
 
 /**

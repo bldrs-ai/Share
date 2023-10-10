@@ -12,11 +12,11 @@ describe('SideDrawerPanels', () => {
     await act(() => {
       result.current.setSelectedNoteId(null)
     })
-    expect(getByText('Notes')).toBeInTheDocument()
+    expect(getByText('NOTES')).toBeInTheDocument()
   })
 
   it('Properties', () => {
     const {getByText} = render(<ShareMock><PropertiesPanel/></ShareMock>)
-    expect(getByText('Properties')).toBeInTheDocument()
+    expect(getByText('PROPERTIES')).toBeInTheDocument()
   })
 })
