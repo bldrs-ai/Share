@@ -92,6 +92,7 @@ export function getComponentOverrides(palette, typography) {
           props: {variant: 'note'},
           style: {
             backgroundColor: palette.scene.background,
+            marginBottom: '10px',
           },
         },
       ],

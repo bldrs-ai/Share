@@ -60,10 +60,13 @@ const proxyRequestHandler = ((options, res) => http.request(options, (proxyRes) 
  *
  * See https://esbuild.github.io/api/#customizing-server-behavior
  */
+// Read the environment variable
+const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
+
 esbuild.serve({
   port: SERVE_PORT - 1,
   servedir: common.build.outdir,
-}, common.build).then((result) => {
+}, common.buildConfig(useWebIfcShim)).then((result) => {
   // The result tells us where esbuild's local server is
   const {host, port} = result
 

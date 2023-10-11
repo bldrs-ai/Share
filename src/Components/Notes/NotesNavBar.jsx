@@ -1,5 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import ListSubheader from '@mui/material/ListSubheader'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import {addHashParams, removeHashParams} from '../../utils/location'
@@ -42,14 +43,7 @@ export default function NotesNavBar() {
 
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-      }}
-    >
+    <ListSubheader>
       <Box
         sx={{
           'display': 'flex',
@@ -86,13 +80,13 @@ export default function NotesNavBar() {
             <TooltipIconButton
               title='Previous Note'
               onClick={() => selectNote('previous')}
-              icon={<PreviousIcon className='icon-share'/>}
+              icon={<PreviousIcon className='icon-share' color='secondary'/>}
               placement='bottom'
             />
             <TooltipIconButton
               title='Next Note'
               onClick={() => selectNote('next')}
-              icon={<NextIcon className='icon-share'/>}
+              icon={<NextIcon className='icon-share' color='secondary'/>}
               placement='bottom'
             />
           </>
@@ -115,15 +109,15 @@ export default function NotesNavBar() {
             size='medium'
           /> :
           <TooltipIconButton
-            title='Add a note'
+            title='ADD A NOTE'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<AddNoteIcon className='icon-share'/>}
+            icon={<AddNoteIcon className='icon-share' color='secondary'/>}
             size='medium'
           />
         )}
         <CloseButton onClick={closeNotes}/>
       </Box>
-    </Box>
+    </ListSubheader>
   )
 }

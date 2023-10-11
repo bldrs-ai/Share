@@ -12,31 +12,31 @@ on:
   workflow_dispatch:
 
 jobs:
-  install-cypress:
+  install-cypress-webifc:
     runs-on: ubuntu-20.04
     steps:
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
-      - name: Install Cypress
-        id: install-cypress
+      - name: Install Cypress WebIfc
+        id: install-cypress-webifc
         uses: cypress-io/github-action@v6
         with:
           runTests: false
-          build: yarn build-share
+          build: yarn build-share-webifc
 
       - name: Save build artifacts
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
-          name: build
+          name: build-webifc-${{ github.sha }}
           if-no-files-found: error
           path: docs/
 
-  run-cypress-on-linux:
+  run-cypress-on-linux-webifc:
     runs-on: ubuntu-20.04
-    needs: install-cypress
+    needs: install-cypress-webifc
     steps:
       - name: checkout
         id: checkout
@@ -46,7 +46,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
-          name: build
+          name: build-webifc-${{ github.sha }}
           path: docs/
 
       - name: E2E Tests on Google Chrome
@@ -54,4 +54,49 @@ jobs:
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
-          start: node config/serve.js
+          start: yarn serve-share-webifc
+
+  install-cypress-conway:
+    runs-on: ubuntu-20.04
+    needs: run-cypress-on-linux-webifc
+    steps:
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Install Cypress Conway
+        id: install-cypress-conway
+        uses: cypress-io/github-action@v6
+        with:
+          runTests: false
+          build: yarn build-share-conway
+
+      - name: Save build artifacts
+        id: build-artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: build-conway-${{ github.sha }}
+          if-no-files-found: error
+          path: docs/
+
+  run-cypress-on-linux-conway:
+    runs-on: ubuntu-20.04
+    needs: install-cypress-conway
+    steps:
+      - name: checkout
+        id: checkout
+        uses: actions/checkout@v3
+
+      - name: Restore build artifacts
+        id: restore-artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: build-conway-${{ github.sha }}
+          path: docs/
+
+      - name: E2E Tests on Google Chrome
+        id: e2e-on-google-chrome
+        uses: cypress-io/github-action@v6
+        with:
+          browser: chrome
+          start: yarn serve-share-conway
