@@ -1,13 +1,11 @@
 import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
-import TextField from '@mui/material/TextField'
+import InputAutocomplete from './InputAutocomplete'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import SearchIcon from '@mui/icons-material/Search'
 
 
@@ -23,7 +21,6 @@ export default function SearchBar({fileOpen}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
-  const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
 
 
@@ -77,6 +74,12 @@ export default function SearchBar({fileOpen}) {
     searchInputRef.current.blur()
   }
 
+  const handleClear = () => {
+    setInputText('')
+    setError('')
+    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+  }
+
 
   // The container and paper are set to 100% width to fill the
   // container SearchBar shares with NavPanel.  This is an easier way
@@ -84,37 +87,18 @@ export default function SearchBar({fileOpen}) {
   // container (CadView).
   return (
     <form onSubmit={onSubmit}>
-      <TextField
-        inputRef={searchInputRef}
-        value={inputText}
-        size='small'
-        onChange={onInputChange}
-        onSubmit={onSubmit}
-        error={!!error.length} // True if there's an error message
-        fullWidth={true}
-        placeholder={'Search'}
-        variant="outlined"
-        InputProps={{
-          startAdornment: (
-            <InputAdornment position="start">
-              <SearchIcon sx={{opacity: .5}} color='secondary'/>
-            </InputAdornment>
-          ),
-          endAdornment: inputText.length > 0 ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size='small'
-                  onClick={() => {
-                    setInputText('')
-                    setError('')
-                    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-                  }}
-                >
-                  <HighlightOffIcon className='icon-share' color='secondary'/>
-                </IconButton>
-              </InputAdornment>
-          ) : null,
-        }}
+      <InputAutocomplete
+        inputText={inputText}
+        setInputText={setInputText}
+        error={error}
+        onClear={handleClear}
+        options={['together', 'dach', 'fen', 'wand']}
+        startAdornment={
+          <InputAdornment position="start">
+            <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
+          </InputAdornment>
+        }
+        placeholder="Search"
       />
     </form>
   )

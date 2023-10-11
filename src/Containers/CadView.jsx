@@ -100,6 +100,8 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const isSearchVisible = useStore((state) => state.isSearchVisible)
+  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
 
 
   // Place Mark
@@ -592,7 +594,7 @@ export default function CadView({
 
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 60
+  const operationsGroupWidthPx = 100
   const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
   const searchAndNavMaxWidthPx = 300
   return (
@@ -646,8 +648,8 @@ export default function CadView({
         }}
         >
           <ControlsGroup fileOpen={() => loadLocalFile(navigate)}/>
-          {isSearchBarVisible &&
-          <Box sx={{marginTop: '14px'}}>
+          {isSearchBarVisible && isSearchVisible &&
+          <Box sx={{marginTop: '10px', width: '100%'}}>
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
           </Box>
           }
@@ -657,6 +659,7 @@ export default function CadView({
           }
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
+            isNavigationVisible &&
             <NavPanel
               model={model}
               element={rootElement}
@@ -729,7 +732,9 @@ function OperationsGroupAndDrawer({deselectItems}) {
           flexDirection: 'row',
         }}
       >
-        <OperationsGroup deselectItems={deselectItems}/>
+        <Box>
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
         <SideDrawer/>
         <AppStoreSideDrawer/>
       </Box>
