@@ -5022,10 +5022,10 @@ cypress-react-router@^2.0.1:
   resolved "https://registry.yarnpkg.com/cypress-react-router/-/cypress-react-router-2.0.1.tgz#939a21baa2d584ec8b9cd2e1626468ad59ba4fc7"
   integrity sha512-vP7labviVtbG+CQ34nVWCiieUD6vD/CO7lqrIkD75j5NnZS6AjvHgmczAQYHVHvsZqpan2W35sj4oHNBoBnx8w==
 
-cypress-real-events@^1.7.6:
-  version "1.7.6"
-  resolved "https://registry.yarnpkg.com/cypress-real-events/-/cypress-real-events-1.7.6.tgz#6f17e0b2ceea1d6dc60f6737d8f84cc517bbbb4c"
-  integrity sha512-yP6GnRrbm6HK5q4DH6Nnupz37nOfZu/xn1xFYqsE2o4G73giPWQOdu6375QYpwfU1cvHNCgyD2bQ2hPH9D7NMw==
+cypress-real-events@^1.10.3:
+  version "1.10.3"
+  resolved "https://registry.yarnpkg.com/cypress-real-events/-/cypress-real-events-1.10.3.tgz#e2e949ea509cc4306df6c238de1a9982d67360e5"
+  integrity sha512-YN3fn+CJIAM638sE6uMvv2/n3PsWowdd0rOiN6ZoyezNAMyENfuQHvccLKZpN+apGfQZYetCml6QXLYgDid2fg==
 
 cypress@^13.2.0:
   version "13.2.0"

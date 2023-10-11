@@ -87,7 +87,7 @@
     "babel-loader": "^8.2.5",
     "canvas": "^2.11.0",
     "cypress": "^13.2.0",
-    "cypress-real-events": "^1.7.6",
+    "cypress-real-events": "^1.10.3",
     "esbuild": "^0.15.5",
     "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
