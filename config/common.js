@@ -16,11 +16,11 @@ export const buildDir = path.resolve(__dirname, '..', 'docs')
 const webIfcShimAliasPlugin = {
   name: 'webIfcShimAlias',
   setup(build) {
-    build.onResolve({ filter: /^web-ifc$/ }, (args) => {
+    build.onResolve({filter: /^web-ifc$/}, (args) => {
       return {
         path: path.resolve(__dirname, '../node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
-      };
-    });
+      }
+    })
   },
 };
 
@@ -38,15 +38,14 @@ export const buildConfig = (useWebIfcShim) => {
       src: assetsDir,
       dest: buildDir,
     }),
-  ];
-
+  ]
 
   // Conditionally include webIfcShimAliasPlugin
   if (useWebIfcShim) {
-    console.log("Using Conway shim backend")
+    console.log('Using Conway shim backend')
     plugins.push(webIfcShimAliasPlugin);
   } else {
-    console.log("Using original Web-Ifc backend")
+    console.log('Using original Web-Ifc backend')
   }
 
   // Return the build config
@@ -77,7 +76,7 @@ export const buildConfig = (useWebIfcShim) => {
       'process.env.USE_WEBIFC_SHIM': JSON.stringify(useWebIfcShim),
     },
     plugins: plugins,
-  };
-};
+  }
+}
 
 export const build = buildConfig(useWebIfcShim)
