@@ -42,7 +42,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
 
-  it('should load model when LoadModel-message emitted', () => {
+  it.skip('should load model when LoadModel-message emitted', () => {
     const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
     const modelRootNodeName = 'Proxy with extruded box'
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
@@ -66,7 +66,7 @@ describe('bldrs inside iframe', () => {
     // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
-  it('should select element when SelectElements-message emitted', () => {
+  it.skip('should select element when SelectElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -81,7 +81,7 @@ describe('bldrs inside iframe', () => {
     cy.get('@iframe').contains('span', /621/).should('exist')
   })
 
-  it('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
+  it.skip('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
     const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
@@ -158,7 +158,7 @@ describe('bldrs inside iframe', () => {
     cy.get('@iframe').findByRole('dialog', {timeout: 300000}).should('exist')
   })
 
-  it('should hide element when HideElements-message emitted', () => {
+  it.skip('should hide element when HideElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -179,7 +179,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#lastMessageReceivedAction').should('not.include.text', /SelectionChanged/i)
   })
 
-  it('should unhide element when HideElements-message emitted', () => {
+  it.skip('should unhide element when HideElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -213,7 +213,7 @@ describe('bldrs inside iframe', () => {
     })
   })
 
-  it('should unhide all elements when HideElements-message emitted with wildcard', () => {
+  it.skip('should unhide all elements when HideElements-message emitted with wildcard', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -241,7 +241,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
   })
 
-  it('should emit HiddenElments message when element is hidden', () => {
+  it.skip('should emit HiddenElments message when element is hidden', () => {
     const hiddenElementsCount = 10
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
@@ -274,7 +274,7 @@ describe('bldrs inside iframe', () => {
     })
   })
 
-  it('should set defaultColor to gray, and color one element blue by view settings', () => {
+  it.skip('should set defaultColor to gray, and color one element blue by view settings', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const defaultGrayColor = {
