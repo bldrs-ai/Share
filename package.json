@@ -95,7 +95,7 @@
     "canvas": "^2.11.0",
     "cypress": "^13.2.0",
     "cypress-real-events": "^1.10.3",
-    "esbuild": "^0.15.5",
+    "esbuild": "^0.19.4",
     "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
     "esbuild-plugin-progress": "^1.0.1",
