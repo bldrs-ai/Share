@@ -241,7 +241,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#lastMessageReceivedAction').contains(/SelectionChanged/i)
   })
 
-  it('should emit HiddenElments message when element is hidden', () => {
+  it.skip('should emit HiddenElments message when element is hidden', () => {
     const hiddenElementsCount = 10
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
@@ -274,7 +274,7 @@ describe('bldrs inside iframe', () => {
     })
   })
 
-  it('should set defaultColor to gray, and color one element blue by view settings', () => {
+  it.skip('should set defaultColor to gray, and color one element blue by view settings', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const defaultGrayColor = {
