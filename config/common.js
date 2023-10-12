@@ -26,9 +26,6 @@ const webIfcShimAliasPlugin = {
 
 const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
 export const buildConfig = (useWebIfcShim) => {
-  const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx');
-  const assetsDir = path.resolve(__dirname, '..', 'public');
-  const buildDir = path.resolve(__dirname, '..', 'docs');
 
   // Initialize plugins array
   const plugins = [
