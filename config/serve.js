@@ -4,11 +4,8 @@ import * as common from './common.js'
 
 const SERVE_PORT = 8080
 
-// Read the environment variable
-const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
-
 const ctx = await esbuild.context({
-  ...common.buildConfig(useWebIfcShim),
+  ...common.build,
   banner: {
     js: `new EventSource('/esbuild').addEventListener('change', () => location.reload());`,
   },

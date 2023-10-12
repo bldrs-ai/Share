@@ -22,11 +22,9 @@ const webIfcShimAliasPlugin = {
       }
     })
   },
-};
+}
 
-const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
-export const buildConfig = (useWebIfcShim) => {
-
+export const buildConfig = () => {
   // Initialize plugins array
   const plugins = [
     progress(),
@@ -38,6 +36,7 @@ export const buildConfig = (useWebIfcShim) => {
   ]
 
   // Conditionally include webIfcShimAliasPlugin
+  const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true'
   if (useWebIfcShim) {
     console.log('Using Conway shim backend')
     plugins.push(webIfcShimAliasPlugin);
@@ -76,4 +75,4 @@ export const buildConfig = (useWebIfcShim) => {
   }
 }
 
-export const build = buildConfig(useWebIfcShim)
+export const build = buildConfig()
