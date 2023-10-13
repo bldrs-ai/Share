@@ -42,6 +42,7 @@ export default function OperationsGroup({fileOpen, repo}) {
         title='Navigation'
         icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
         placement='bottom'
+        dataTestId='navigation-toggle'
         aboutInfo={false}
         selected={isNavigationVisible}
         onClick={() => {
