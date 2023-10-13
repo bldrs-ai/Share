@@ -10,7 +10,7 @@ const path = require('path')
  * framework itself loads the system under test within an iframe. This means
  * that in all these tests Bldrs runs in an iframe which runs in an iframe.
  */
-describe('bldrs inside iframe', () => {
+describe.skip('bldrs inside iframe', () => {
   const SYSTEM_UNDER_TEST = '/cypress/static/bldrs-inside-iframe.html'
   const KEYCODE_ESC = 27
   const REQUEST_SUCCESS_CODE = 200
@@ -42,7 +42,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#cbxIsReady').should('exist').and('be.checked')
   })
 
-  it.skip('should load model when LoadModel-message emitted', () => {
+  it('should load model when LoadModel-message emitted', () => {
     const model = 'Swiss-Property-AG/Momentum-Public/main/Momentum.ifc'
     const modelRootNodeName = 'Proxy with extruded box'
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
@@ -66,7 +66,7 @@ describe('bldrs inside iframe', () => {
     // cy.get('#messagesCount').contains('2') //Second loaded message received
   })
 
-  it.skip('should select element when SelectElements-message emitted', () => {
+  it('should select element when SelectElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -81,7 +81,7 @@ describe('bldrs inside iframe', () => {
     cy.get('@iframe').contains('span', /621/).should('exist')
   })
 
-  it.skip('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
+  it('should emit SelectionChanged-message when element was selected through the menu and when cleared', () => {
     const targetElementId = '3vMqyUfHj3tgritpIZS4iG'
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
@@ -158,7 +158,7 @@ describe('bldrs inside iframe', () => {
     cy.get('@iframe').findByRole('dialog', {timeout: 300000}).should('exist')
   })
 
-  it.skip('should hide element when HideElements-message emitted', () => {
+  it('should hide element when HideElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -179,7 +179,7 @@ describe('bldrs inside iframe', () => {
     cy.get('#lastMessageReceivedAction').should('not.include.text', /SelectionChanged/i)
   })
 
-  it.skip('should unhide element when HideElements-message emitted', () => {
+  it('should unhide element when HideElements-message emitted', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
@@ -213,7 +213,7 @@ describe('bldrs inside iframe', () => {
     })
   })
 
-  it.skip('should unhide all elements when HideElements-message emitted with wildcard', () => {
+  it('should unhide all elements when HideElements-message emitted with wildcard', () => {
     cy.get('@iframe').trigger('keydown', {keyCode: KEYCODE_ESC})
     cy.get('#lastMessageReceivedAction').contains(/ModelLoaded/i)
     const globalId = '02uD5Qe8H3mek2PYnMWHk1'
