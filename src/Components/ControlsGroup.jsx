@@ -4,7 +4,7 @@ import OpenModelControl from './OpenModelControl'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import HistoryIcon from '@mui/icons-material/History'
-import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined'
+import SearchIcon from '@mui/icons-material/Search'
 import TreeIcon from '../assets/icons/Tree.svg'
 
 
@@ -15,53 +15,61 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({fileOpen}) {
-  const cutPlanes = useStore((state) => state.cutPlanes)
-  const levelInstance = useStore((state) => state.levelInstance)
-  const selectedElement = useStore((state) => state.selectedElement)
+export default function OperationsGroup({fileOpen, repo}) {
+  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
+  const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
+  const isSearchVisible = useStore((state) => state.isSearchVisible)
+  const toggleIsSearchVisible = useStore((state) => state.toggleIsSearchVisible)
+  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
+  const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
 
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null ||
-      cutPlanes.length !== 0 ||
-      levelInstance !== null
-    )
-    return ifSelected
-  }
 
   return (
-    <ButtonGroup orientation='horizontal' >
-      {/* <TooltipIconButton
-        title='Open Project'
-        icon={<CreateNewFolderIcon color='secondary'/>}
-        placement='bottom'
-        selected={true}
-        onClick={() => (isSelected)}
-      /> */}
+    <ButtonGroup
+      orientation='horizontal'
+      variant='contained'
+    >
       <OpenModelControl fileOpen={fileOpen}/>
       <TooltipIconButton
         title='Search'
-        icon={<SearchOutlinedIcon/>}
+        icon={<SearchIcon className='icon-share' color='secondary'/>}
         placement='bottom'
         aboutInfo={false}
-        selected={true}
-        onClick={() => (isSelected)}
+        selected={isSearchVisible}
+        onClick={toggleIsSearchVisible}
       />
       <TooltipIconButton
         title='Navigation'
         icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
         placement='bottom'
         aboutInfo={false}
-        selected={true}
-        onClick={() => (isSelected)}
+        selected={isNavigationVisible}
+        onClick={() => {
+          if (isVersionHistoryVisible) {
+            toggleIsVersionHistoryVisible()
+            toggleIsNavigationVisible()
+          } else {
+            toggleIsNavigationVisible()
+          }
+        }}
       />
-      <TooltipIconButton
-        title='Project History'
-        icon={<HistoryIcon className='icon-share' color='secondary'/>}
-        placement='bottom'
-        selected={true}
-        onClick={() => (isSelected)}
-      />
+      {repo !== undefined &&
+        <TooltipIconButton
+          title='Project History'
+          icon={<HistoryIcon className='icon-share' color='secondary'/>}
+          placement='bottom'
+          selected={isVersionHistoryVisible}
+          onClick={() => {
+            if (isNavigationVisible) {
+              toggleIsVersionHistoryVisible()
+              toggleIsNavigationVisible()
+            } else {
+              toggleIsVersionHistoryVisible()
+            }
+          }}
+        />
+      }
+
     </ButtonGroup>
   )
 }

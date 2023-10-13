@@ -55,6 +55,9 @@ function loadTheme(mode, setMode, themeChangeListeners) {
     components: getComponentOverrides(activePalette),
     shape: {borderRadius: 0},
     palette: activePalette,
+    zIndex: {
+      modal: 2000,
+    },
     toggleColorMode: () => {
       setMode((prevMode) => {
         const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day

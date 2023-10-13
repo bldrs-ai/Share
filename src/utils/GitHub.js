@@ -3,6 +3,18 @@ import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
 
+/**
+ * @param {object} repository
+ * @param {string} branch
+ * @param {string} accessToken
+ * @return {Array}
+ */
+export async function getCommitsForBranch(repository, branch, accessToken = '') {
+  const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
+  const commitsArr = res.data
+  return commitsArr
+}
+
 
 /**
  * @param {object} repository

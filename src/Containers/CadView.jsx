@@ -28,6 +28,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
+import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 
@@ -102,6 +103,9 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const isSearchVisible = useStore((state) => state.isSearchVisible)
+  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
+  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
 
 
   // Place Mark
@@ -594,7 +598,7 @@ export default function CadView({
 
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 60
+  const operationsGroupWidthPx = 100
   const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
   const searchAndNavMaxWidthPx = 300
   return (
@@ -647,18 +651,15 @@ export default function CadView({
           },
         }}
         >
-          <ControlsGroup fileOpen={() => loadLocalFile(navigate)}/>
-          {isSearchBarVisible &&
-          <Box sx={{marginTop: '14px'}}>
+          <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
+          {isSearchBarVisible && isSearchVisible &&
+          <Box sx={{marginTop: '10px', width: '100%'}}>
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
           </Box>
           }
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
-          }
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
+            isNavigationVisible &&
             <NavPanel
               model={model}
               element={rootElement}
@@ -675,6 +676,13 @@ export default function CadView({
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
               }
             />
+          }
+          {
+            modelPath.repo !== undefined && isVersionHistoryVisible &&
+            <>
+              <BranchesControl location={location}/>
+              <VersionsHistoryPanel branch={modelPath.branch}/>
+            </>
           }
         </Box>
       )}
@@ -731,7 +739,9 @@ function OperationsGroupAndDrawer({deselectItems}) {
           flexDirection: 'row',
         }}
       >
-        <OperationsGroup deselectItems={deselectItems}/>
+        <Box>
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
         <SideDrawer/>
         <AppStoreSideDrawer/>
       </Box>
