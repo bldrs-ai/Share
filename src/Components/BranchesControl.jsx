@@ -75,13 +75,14 @@ export default function Branches() {
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
-            marginTop: '34px',
-            opacity: .8,
+            marginTop: '14px',
+            opacity: .9,
+            width: '100%',
           }}
         >
           <TextField
             sx={{
-              'width': '274px',
+              'width': '100%',
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },
@@ -115,7 +116,7 @@ export default function Branches() {
             }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label='Git Branches / Project Versions'
+            label={<Typography>GIT BRANCHES</Typography>}
             value={selected}
             select
             role="button"

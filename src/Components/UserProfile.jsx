@@ -33,7 +33,7 @@ const UserProfile = ({size = 'medium'}) => {
           'height': '50px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            opacity: .8,
+            opacity: .9,
           },
         }}
       >
