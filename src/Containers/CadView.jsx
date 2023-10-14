@@ -32,14 +32,12 @@ import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 
-
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
  */
 export const searchIndex = new SearchIndex()
 let count = 0
-
 
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as

@@ -11,6 +11,7 @@
 *.log
 /coverage
 
+cypress/downloads
 cypress/videos
 cypress/screenshots
 

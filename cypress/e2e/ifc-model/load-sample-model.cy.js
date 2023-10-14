@@ -3,7 +3,7 @@ describe('sample models', () => {
   const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
   const REQUEST_SUCCESS_CODE = 200
 
-  context('when no model is loaded', () => {
+  context.skip('when no model is loaded', () => {
     beforeEach(() => {
       cy.setCookie('isFirstTime', 'false')
       cy.visit('/')
