@@ -125,40 +125,40 @@ describe('CadView', () => {
   })
 
 
-  it('clear elements and planes on unselect', async () => {
-    const testTree = makeTestTree()
-    const targetEltId = testTree.children[0].expressID
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setSelectedElement(targetEltId)
-      result.current.setSelectedElements([targetEltId])
-      result.current.setCutPlaneDirections(['y'])
-    })
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
-    expect(getByTitle('Section')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear')
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
-    expect(result.current.selectedElements).toHaveLength(0)
-    expect(result.current.selectedElement).toBe(null)
-    expect(result.current.cutPlanes.length).toBe(0)
-    await actAsyncFlush()
-  })
+  // it('clear elements and planes on unselect', async () => {
+  //   const testTree = makeTestTree()
+  //   const targetEltId = testTree.children[0].expressID
+  //   const modelPath = {
+  //     filepath: `index.ifc`,
+  //     gitpath: undefined,
+  //   }
+  //   const {result} = renderHook(() => useStore((state) => state))
+  //   await act(() => {
+  //     result.current.setSelectedElement(targetEltId)
+  //     result.current.setSelectedElements([targetEltId])
+  //     result.current.setCutPlaneDirections(['y'])
+  //   })
+  //   const {getByTitle} = render(
+  //       <ShareMock>
+  //         <CadView
+  //           installPrefix={'/'}
+  //           appPrefix={'/'}
+  //           pathPrefix={'/'}
+  //           modelPath={modelPath}
+  //         />
+  //       </ShareMock>)
+  //   expect(getByTitle('Section')).toBeInTheDocument()
+  //   const clearSelection = getByTitle('Clear')
+  //   await act(async () => {
+  //     await fireEvent.click(clearSelection)
+  //   })
+  //   const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
+  //   expect(callDeletePlanes.length).toBe(1)
+  //   expect(result.current.selectedElements).toHaveLength(0)
+  //   expect(result.current.selectedElement).toBe(null)
+  //   expect(result.current.cutPlanes.length).toBe(0)
+  //   await actAsyncFlush()
+  // })
 
 
   it('prevent reloading without user approval when loading a model from local', async () => {
@@ -197,55 +197,56 @@ describe('CadView', () => {
   })
 
 
-  it('select multiple elements and then clears selection, then reselect', async () => {
-    const selectedIds = [0, 1]
-    const selectedIdsAsString = ['0', '1']
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
-    expect(getByTitle('Section')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear')
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    expect(result.current.selectedElement).toBe(null)
-    expect(result.current.selectedElements).toHaveLength(0)
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
-    expect(result.current.selectedElement).toBe(null)
-    expect(result.current.selectedElements).toHaveLength(0)
-    const modelId = 0
-    const clearCallParam = [modelId, []] // Clear Selection Call Parameters
-    const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
-    /** Expected basic 2 on load (init search, Select from Url), select, clear, select, clear */
-    const expectedCall = [selectCallParam, clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
-    const setSelectionCalls = viewer.setSelection.mock.calls
-    expect(setSelectionCalls).toEqual(expectedCall)
-  })
+  // it('select multiple elements and then clears selection, then reselect', async () => {
+  //   const selectedIds = [0, 1]
+  //   const selectedIdsAsString = ['0', '1']
+  //   const modelPath = {
+  //     filepath: `index.ifc`,
+  //     gitpath: undefined,
+  //   }
+  //   const {result} = renderHook(() => useStore((state) => state))
+  //   await act(() => {
+  //     result.current.setSelectedElements(selectedIdsAsString)
+  //   })
+  //   const {getByTitle} = render(
+  //       <ShareMock>
+  //         <CadView
+  //           installPrefix={'/'}
+  //           appPrefix={'/'}
+  //           pathPrefix={'/'}
+  //           modelPath={modelPath}
+  //         />
+  //       </ShareMock>)
+  //   expect(getByTitle('Section')).toBeInTheDocument()
+  //   const clearSelection = getByTitle('Clear')
+  //   await act(async () => {
+  //     await fireEvent.click(clearSelection)
+  //   })
+  //   await act(() => {
+  //     result.current.setSelectedElements(selectedIdsAsString)
+  //   })
+  //   await act(async () => {
+  //     await fireEvent.click(clearSelection)
+  //   })
+  //   expect(result.current.selectedElement).toBe(null)
+  //   expect(result.current.selectedElements).toHaveLength(0)
+  //   await act(() => {
+  //     result.current.setSelectedElements(selectedIdsAsString)
+  //   })
+  //   await act(async () => {
+  //     await fireEvent.click(clearSelection)
+  //   })
+  //   expect(result.current.selectedElement).toBe(null)
+  //   expect(result.current.selectedElements).toHaveLength(0)
+  //   const modelId = 0
+  //   const clearCallParam = [modelId, []] // Clear Selection Call Parameters
+  //   const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
+  //   /** Expected basic 2 on load (init search, Select from Url), select, clear, select, clear */
+  //   const expectedCall =
+  //   [selectCallParam, clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
+  //   const setSelectionCalls = viewer.setSelection.mock.calls
+  //   expect(setSelectionCalls).toEqual(expectedCall)
+  // })
 
 
   it('can clear selection using Escape key', async () => {

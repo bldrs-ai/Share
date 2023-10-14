@@ -1,5 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
@@ -72,80 +73,111 @@ export default function OperationsGroup({deselectItems}) {
 
   const theme = useTheme()
   return (
-    <ButtonGroup
-      orientation='vertical'
-      variant='contained'
-      sx={{margin: '1em .5em'}}
+    <Stack
+      spacing={2}
+      direction="column"
+      justifyContent="space-around"
+      alignItems="center"
+      sx={{margin: '1em 1em'}}
     >
-      {isLoginVisible &&
-          <AuthNav/>
-      }
+      <ButtonGroup
+        orientation='vertical'
+        variant='contained'
+      >
+        {isLoginVisible &&
+            <AuthNav/>
+        }
 
-      {isCollaborationGroupVisible &&
-        <Box>
-          <ShareControl/>
-        </Box>
-      }
+        {isCollaborationGroupVisible &&
+          <Box>
+            <ShareControl/>
+          </Box>
+        }
 
-      {isModelInteractionGroupVisible &&
-        <>
-          <TooltipIconButton
-            title='Notes'
-            icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
-            selected={isNotesOn}
-            onClick={() => {
-              turnOffTooltips()
-              toggle('Notes')
-            }}
-          />
-          <TooltipIconButton
-            title='Properties'
-            onClick={() => {
-              turnOffTooltips()
-              toggle('Properties')
-            }}
-            selected={isPropertiesOn}
-            icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
-          />
-          <CutPlaneMenu/>
+        {isModelInteractionGroupVisible &&
+          <>
+            <TooltipIconButton
+              title='Notes'
+              icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
+              selected={isNotesOn}
+              onClick={() => {
+                turnOffTooltips()
+                toggle('Notes')
+              }}
+            />
+            {/* <TooltipIconButton
+              title='Properties'
+              onClick={() => {
+                turnOffTooltips()
+                toggle('Properties')
+              }}
+              selected={isPropertiesOn}
+              icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
+            /> */}
+            <CutPlaneMenu/>
+            {/* <TooltipIconButton
+              title='Clear'
+              onClick={deselectItems}
+              selected={isSelected()}
+              icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
+            /> */}
+          </>
+        }
+
+        {isSettingsVisible &&
+          <>
+            {isAppStoreEnabled &&
+            <TooltipIconButton
+              title='Open App Store'
+              icon={<AppStoreIcon/>}
+              selected={isAppStoreOpen}
+              onClick={() => toggleAppStoreDrawer()}
+            />
+            }
+            <TooltipIconButton
+              title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
+              onClick={() => theme.toggleColorMode()}
+              icon={
+                theme.palette.mode === 'light' ?
+                  <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
+                  <NightlightOutlinedIcon className='icon-share'/> }
+            />
+            <AboutControl/>
+            <TooltipIconButton
+              title='Help'
+              onClick={() => toggleIsHelpTooltips()}
+              selected={isHelpTooltips}
+              icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
+            />
+          </>
+        }
+        {/* Invisible */}
+        <CameraControl/>
+      </ButtonGroup >
+      {isSelected() &&
+        <ButtonGroup
+          orientation='vertical'
+          variant='contained'
+        >
+          {selectedElement !== null &&
+            <TooltipIconButton
+              title='Properties'
+              onClick={() => {
+                turnOffTooltips()
+                toggle('Properties')
+              }}
+              selected={isPropertiesOn}
+              icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
+            />
+          }
           <TooltipIconButton
             title='Clear'
             onClick={deselectItems}
             selected={isSelected()}
             icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
           />
-        </>
+        </ButtonGroup>
       }
-
-      {isSettingsVisible &&
-        <>
-          {isAppStoreEnabled &&
-          <TooltipIconButton
-            title='Open App Store'
-            icon={<AppStoreIcon/>}
-            selected={isAppStoreOpen}
-            onClick={() => toggleAppStoreDrawer()}
-          />
-          }
-          <TooltipIconButton
-            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
-            onClick={() => theme.toggleColorMode()}
-            icon={
-              theme.palette.mode === 'light' ?
-                <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
-                <NightlightOutlinedIcon className='icon-share'/> }
-          />
-          <AboutControl/>
-          <TooltipIconButton
-            title='Help'
-            onClick={() => toggleIsHelpTooltips()}
-            selected={isHelpTooltips}
-            icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
-          />
-        </>
-      }
-      {/* Invisible */}
-      <CameraControl/>
-    </ButtonGroup>
+    </Stack>
   )
 }
