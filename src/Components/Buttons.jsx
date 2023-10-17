@@ -1,6 +1,7 @@
 import React from 'react'
 import Button from '@mui/material/Button'
-import ToggleButton from '@mui/material/ToggleButton'
+// import ToggleButton from '@mui/material/ToggleButton'
+import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
@@ -51,9 +52,9 @@ export function TooltipIconButton({
         data-testid={dataTestId || title}
         PopperProps={{style: {zIndex: 0}}}
       >
-        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+        <IconButton selected={selected} onClick={onClick} value={''} size={size}>
           {icon}
-        </ToggleButton>
+        </IconButton>
       </Tooltip>
     </>
   )
