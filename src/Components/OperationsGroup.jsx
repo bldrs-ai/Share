@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import useTheme from '@mui/styles/useTheme'
+// import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 // import AboutControl from './About/AboutControl'
@@ -16,9 +16,9 @@ import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
-import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+// import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+// import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 
 /**
@@ -70,28 +70,19 @@ export default function OperationsGroup({deselectItems, viewer}) {
     }
   }
 
-  const theme = useTheme()
+  // const theme = useTheme()
   return (
     <Stack
       spacing={2}
       direction="column"
       justifyContent="space-around"
-      alignItems="center"
+      alignItems="flex-end"
       sx={{margin: '1em'}}
     >
       <ButtonGroup
-        orientation='vertical'
+        orientation='horizontal'
         variant='contained'
       >
-        {isLoginVisible &&
-            <AuthNav/>
-        }
-
-        {isCollaborationGroupVisible &&
-          <Box>
-            <ShareControl/>
-          </Box>
-        }
 
         {isModelInteractionGroupVisible &&
           <>
@@ -108,6 +99,16 @@ export default function OperationsGroup({deselectItems, viewer}) {
           </>
         }
 
+        {isCollaborationGroupVisible &&
+          <Box>
+            <ShareControl/>
+          </Box>
+        }
+        {isLoginVisible &&
+            <AuthNav/>
+        }
+
+
         {isSettingsVisible &&
           <>
             {isAppStoreEnabled &&
@@ -118,62 +119,72 @@ export default function OperationsGroup({deselectItems, viewer}) {
               onClick={() => toggleAppStoreDrawer()}
             />
             }
-            <TooltipIconButton
+            {/* <TooltipIconButton
               title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
               onClick={() => theme.toggleColorMode()}
               icon={
                 theme.palette.mode === 'light' ?
                   <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                   <NightlightOutlinedIcon className='icon-share'/> }
-            />
+            /> */}
             {/* <AboutControl/> */}
           </>
         }
         {/* Invisible */}
         <CameraControl/>
       </ButtonGroup >
-      {isSelected() &&
-        <ButtonGroup
-          orientation='vertical'
-          variant='contained'
-        >
-          {selectedElement !== null &&
-          <>
+      <Stack
+        spacing={2}
+        direction="column"
+        justifyContent="center"
+        alignItems="center"
+        sx={{
+          margin: '1em',
+        }}
+      >
+        {isSelected() &&
+          <ButtonGroup
+            orientation='vertical'
+            variant='contained'
+          >
+            {selectedElement !== null &&
+            <>
+              <TooltipIconButton
+                title='Properties'
+                onClick={() => {
+                  turnOffTooltips()
+                  toggle('Properties')
+                }}
+                selected={isPropertiesOn}
+                icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
+              />
+              <TooltipIconButton
+                showTitle={true}
+                title='Isolate'
+                onClick={() => {
+                  viewer.isolator.toggleIsolationMode()
+                  setIsolate(!isolate)
+                }}
+                selected={isolate}
+                icon={<CenterFocusWeakIcon/>}
+              />
+            </>
+            }
             <TooltipIconButton
-              title='Properties'
+              title='Clear'
               onClick={() => {
-                turnOffTooltips()
-                toggle('Properties')
+                if (isolate) {
+                  setIsolate(!isolate)
+                  viewer.isolator.toggleIsolationMode()
+                }
+                deselectItems()
               }}
-              selected={isPropertiesOn}
-              icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
+              selected={isSelected()}
+              icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
             />
-            <TooltipIconButton
-              showTitle={true}
-              title='Isolate'
-              onClick={() => {
-                viewer.isolator.toggleIsolationMode()
-                setIsolate(!isolate)
-              }}
-              selected={isolate}
-              icon={<CenterFocusWeakIcon/>}
-            />
-          </>
-          }
-          <TooltipIconButton
-            title='Clear'
-            onClick={() => {
-              if (isolate) {
-                setIsolate(!isolate)
-                viewer.isolator.toggleIsolationMode()
-              }
-              deselectItems()
-            }}
-            selected={isSelected()}
-            icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
-          />
-        </ButtonGroup>
-      }
+          </ButtonGroup>
+        }
+      </Stack>
     </Stack>
   )
 }
