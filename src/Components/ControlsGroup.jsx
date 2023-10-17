@@ -29,6 +29,7 @@ export default function OperationsGroup({fileOpen, repo}) {
       orientation='vertical'
       variant='outlined'
     >
+      {/* <Logo onClick={fileOpen}/> */}
       <AboutControl/>
       <OpenModelControl fileOpen={fileOpen}/>
       {/* <TooltipIconButton

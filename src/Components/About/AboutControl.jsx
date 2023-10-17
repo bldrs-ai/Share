@@ -45,8 +45,8 @@ export default function AboutControl() {
         <Box
           sx={{
             '& svg': {
-              // 'marginBottom': '4px',
-              // 'marginTop': '4px',
+              'marginBottom': '4px',
+              'marginTop': '4px',
               '@media (max-width: 900px)': {
                 width: '20px',
               },
@@ -64,7 +64,6 @@ export default function AboutControl() {
         >
           <LogoB/>
         </Box>
-
       }
       dialog={
         <AboutDialog
