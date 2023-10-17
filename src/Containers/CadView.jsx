@@ -651,9 +651,12 @@ export default function CadView({
       {showSearchBar && (
         <Stack
           sx={{
-            position: 'absolute',
-            bottom: '1em',
-            width: '100%',
+            'position': 'absolute',
+            'bottom': '1em',
+            'width': '100%',
+            '@media (max-width: 900px)': {
+              bottom: '3em',
+            },
           }}
         >
           <Box>
