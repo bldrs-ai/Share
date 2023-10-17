@@ -17,7 +17,6 @@ import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 
@@ -44,8 +43,6 @@ export default function OperationsGroup({deselectItems}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
-  const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
-  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
@@ -105,22 +102,7 @@ export default function OperationsGroup({deselectItems}) {
                 toggle('Notes')
               }}
             />
-            {/* <TooltipIconButton
-              title='Properties'
-              onClick={() => {
-                turnOffTooltips()
-                toggle('Properties')
-              }}
-              selected={isPropertiesOn}
-              icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
-            /> */}
             <CutPlaneMenu/>
-            {/* <TooltipIconButton
-              title='Clear'
-              onClick={deselectItems}
-              selected={isSelected()}
-              icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
-            /> */}
           </>
         }
 
@@ -143,12 +125,6 @@ export default function OperationsGroup({deselectItems}) {
                   <NightlightOutlinedIcon className='icon-share'/> }
             />
             <AboutControl/>
-            <TooltipIconButton
-              title='Help'
-              onClick={() => toggleIsHelpTooltips()}
-              selected={isHelpTooltips}
-              icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
-            />
           </>
         }
         {/* Invisible */}
