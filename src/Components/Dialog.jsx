@@ -44,7 +44,7 @@ export default function Dialog({
       </DialogTitle>
       <DialogContent>{content}</DialogContent>
       <DialogActions>
-        <Button variant="contained" onClick={actionCb} >
+        <Button variant="rectangular" onClick={actionCb} >
           {actionTitle}
         </Button>
       </DialogActions>

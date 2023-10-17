@@ -98,6 +98,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
+        placement='top'
         icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
@@ -113,7 +114,7 @@ export default function CutPlaneMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(-54px)',
+            transform: 'translateX(34px) translateY(-50px)',
           },
           sx: {
             'color': theme.palette.primary.contrastText,

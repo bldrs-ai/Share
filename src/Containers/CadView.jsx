@@ -1,12 +1,14 @@
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import Stack from '@mui/material/Stack'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 // import AboutControl from '../Components/About/AboutControl'
 import ControlsGroup from '../Components/ControlsGroup'
+import MiscGroup from '../Components/MiscGroup'
 import BranchesControl from '../Components/BranchesControl'
 // import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
@@ -633,6 +635,9 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
+      {showSearchBar &&
+            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+      }
       {showSearchBar && (
         <Box sx={{
           position: 'absolute',
@@ -643,13 +648,23 @@ export default function CadView({
           <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
         </Box>
       )}
-      {/* {showSearchBar &&
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
-      } */}
+      {showSearchBar && (
+        <Stack
+          sx={{
+            position: 'absolute',
+            bottom: '1em',
+            width: '100%',
+          }}
+        >
+          <Box>
+            <MiscGroup deselectItems={deselectItems} viewer={viewer} repo={modelPath.repo}/>
+          </Box>
+        </Stack>
+      )}
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
-          'top': `1em`,
+          'top': `6em`,
           'left': '1em',
           'display': 'flex',
           'flexDirection': 'column',

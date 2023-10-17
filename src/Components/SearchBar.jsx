@@ -1,7 +1,7 @@
 import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Autocomplete from '@mui/material/Autocomplete'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
@@ -87,83 +87,91 @@ export default function SearchBar({fileOpen}) {
   // to have them share the same width, which is now set in the parent
   // container (CadView).
   return (
-    <form onSubmit={onSubmit}>
-      <Paper sx={{width: '400px'}}>
-        <Autocomplete
-          fullWidth
-          freeSolo
-          options={['together', 'dach', 'fen', 'wand']}
-          value={inputText}
-          onChange={(_, newValue) => setInputText(newValue || '')}
-          onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
-          inputValue={inputText}
-          PaperComponent={({children}) => (
-            <Box sx={{'.MuiAutocomplete-option': {
-              backgroundColor: theme.palette.scene.background,
-              boxShadow: theme.shadows[1],
-            }}}
-            >
-              {children}
-            </Box>
-          )}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              inputRef={searchInputRef}
-              size="small"
-              error={!!error.length}
-              placeholder='Search'
-              variant="outlined"
-              sx={{
-                'width': '100%',
-                'border': 'none',
-                '& fieldset': {
-                  border: 'none',
-                },
-                '&:hover fieldset': {
-                  border: 'none',
-                },
-                '&.Mui-focused fieldset': {
-                  border: 'none',
-                },
-                '& .MuiOutlinedInput-root': {
-                  border: 'none',
-                  height: '50px',
-                },
-              }}
-              InputProps={{
-                ...params.InputProps,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
-                  </InputAdornment>
-                ),
-                endAdornment: inputText.length > 0 ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setInputText('')
-                        setError('')
-                        navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-                      }}
-                      style={{padding: 0, opacity: 0.8}}
-                    >
-                      <HighlightOffIcon
-                        className="icon-share"
-                        sx={{opacity: 0.8}}
-                        ize="inherit"
-                        color="secondary"
-                      />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              }}
-            />
-          )}
-        />
-      </Paper>
-    </form>
+    <Stack
+      justifyContent={'center'}
+      alignItems={'center'}
+      sx={{width: '100%',
+        position: 'absolute',
+        top: '1em',
+        left: '0em',
+        borderRadius: '20px'}}
+    >
+      <Box
+        sx={{
+          'width': '300px',
+          '@media (max-width: 900px)': {
+            width: '240px',
+          }}}
+      >
+        <form onSubmit={onSubmit}>
+          <Autocomplete
+            freeSolo
+            options={['together', 'dach', 'fen', 'wand']}
+            value={inputText}
+            onChange={(_, newValue) => setInputText(newValue || '')}
+            onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
+            inputValue={inputText}
+            PaperComponent={({children}) => (
+              <Box sx={{'.MuiAutocomplete-option': {
+                backgroundColor: theme.palette.scene.background,
+                boxShadow: theme.shadows[1],
+              }}}
+              >
+                {children}
+              </Box>
+            )}
+            renderInput={(params) => (
+              <TextField
+                {...params}
+                inputRef={searchInputRef}
+                size="small"
+                error={!!error.length}
+                placeholder='Search'
+                variant="outlined"
+                sx={{
+                  'width': '100%',
+                  'borderRadius': '20px',
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: '20px', // Ensure the input field also gets the border radius
+                  },
+                  '& fieldset': {
+                    borderRadius: '20px', // Apply border radius to the fieldset as well
+                  },
+                }}
+                InputProps={{
+                  ...params.InputProps,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
+                    </InputAdornment>
+                  ),
+                  endAdornment: inputText.length > 0 ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => {
+                    setInputText('')
+                    setError('')
+                    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+                  }}
+                  style={{padding: 0, opacity: 0.8}}
+                >
+                  <HighlightOffIcon
+                    className="icon-share"
+                    sx={{opacity: 0.8}}
+                    size="inherit"
+                    color="secondary"
+                  />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+                }}
+              />
+            )}
+          />
+        </form>
+      </Box>
+    </Stack>
   )
 }
 

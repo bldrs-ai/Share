@@ -18,7 +18,7 @@ export const day = {
     contrastText: colors.green.dark,
   },
   background: {
-    paper: colors.grey.light,
+    paper: colors.grey.lightest,
   },
   scene: {
     background: colors.grey.lightest,

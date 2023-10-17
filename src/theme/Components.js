@@ -30,7 +30,8 @@ export function getComponentOverrides(palette, typography) {
           style: {
             width: '180px',
             height: '40px',
-            textTransform: 'none',
+            // textTransform: 'none',
+            borderRadius: '20px',
             border: 'none',
             backgroundColor: palette.primary.main,
           },
@@ -74,7 +75,8 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiDialog: {
       styleOverrides: {
-        root: {
+        paper: {
+          borderRadius: '20px',
         },
       },
     },

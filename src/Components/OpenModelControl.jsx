@@ -55,7 +55,7 @@ export default function OpenModelControl({fileOpen}) {
         title={'Open IFC'}
         onClick={() => setIsDialogDisplayed(true)}
         icon={<CreateNewFolderOutlinedIcon className='icon-share' color='secondary'/>}
-        placement={'bottom'}
+        placement={'right'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
       />
