@@ -9,6 +9,7 @@ import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
+import PkgJson from '../../../package.json'
 import {Helmet} from 'react-helmet-async'
 
 /**
@@ -34,7 +35,7 @@ export default function AboutControl() {
 
   return (
     <ControlButton
-      title='About'
+      title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
