@@ -686,7 +686,7 @@ export default function CadView({
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
       }
     </Box>
   )
@@ -697,7 +697,7 @@ export default function CadView({
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-function OperationsGroupAndDrawer({deselectItems}) {
+function OperationsGroupAndDrawer({deselectItems, viewer}) {
   const isMobile = useIsMobile()
 
   return (
@@ -713,7 +713,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
             right: 0,
           }}
         >
-          <OperationsGroup deselectItems={deselectItems}/>
+          <OperationsGroup deselectItems={deselectItems} viewer={viewer}/>
         </Box>
         <Box
           sx={{
@@ -738,7 +738,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         }}
       >
         <Box>
-          <OperationsGroup deselectItems={deselectItems}/>
+          <OperationsGroup deselectItems={deselectItems} viewer={viewer}/>
         </Box>
         <SideDrawer/>
         <AppStoreSideDrawer/>

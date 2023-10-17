@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
@@ -14,6 +14,7 @@ import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
@@ -27,7 +28,7 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({deselectItems}) {
+export default function OperationsGroup({deselectItems, viewer}) {
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const openDrawer = useStore((state) => state.openDrawer)
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
@@ -43,6 +44,7 @@ export default function OperationsGroup({deselectItems}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
+  const [isolate, setIsolate] = useState(false)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
@@ -136,6 +138,7 @@ export default function OperationsGroup({deselectItems}) {
           variant='contained'
         >
           {selectedElement !== null &&
+          <>
             <TooltipIconButton
               title='Properties'
               onClick={() => {
@@ -145,10 +148,27 @@ export default function OperationsGroup({deselectItems}) {
               selected={isPropertiesOn}
               icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
             />
+            <TooltipIconButton
+              showTitle={true}
+              title='Isolate'
+              onClick={() => {
+                viewer.isolator.toggleIsolationMode()
+                setIsolate(!isolate)
+              }}
+              selected={isolate}
+              icon={<CenterFocusWeakIcon/>}
+            />
+          </>
           }
           <TooltipIconButton
             title='Clear'
-            onClick={deselectItems}
+            onClick={() => {
+              if (isolate) {
+                setIsolate(!isolate)
+                viewer.isolator.toggleIsolationMode()
+              }
+              deselectItems()
+            }}
             selected={isSelected()}
             icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
           />
