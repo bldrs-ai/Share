@@ -636,8 +636,8 @@ export default function CadView({
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
-          'top': `.5em`,
-          'left': '.5em',
+          'top': `1em`,
+          'left': '1em',
           'display': 'flex',
           'flexDirection': 'column',
           'justifyContent': 'flex-start',
@@ -688,8 +688,9 @@ export default function CadView({
       {/* <Logo onClick={() => navToDefault(navigate, appPrefix)}/> */}
       <Box sx={{
         position: 'fixed',
-        bottom: '.5em',
-        left: '.5em'}}
+        bottom: '1em',
+        left: '1em',
+      }}
       >
         <AboutControl/>
       </Box>

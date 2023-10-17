@@ -77,7 +77,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
       direction="column"
       justifyContent="space-around"
       alignItems="center"
-      sx={{margin: '.5em'}}
+      sx={{margin: '1em'}}
     >
       <ButtonGroup
         orientation='vertical'
