@@ -40,7 +40,7 @@ export const night = {
     contrastText: colors.green.light,
   },
   background: {
-    paper: colors.grey.darkest,
+    paper: colors.grey.dark,
   },
   scene: {
     background: colors.black,

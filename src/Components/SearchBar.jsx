@@ -86,7 +86,11 @@ export default function SearchBar({fileOpen}) {
   // container (CadView).
   return (
     <form onSubmit={onSubmit}>
-      <Paper elevation={1} variant='control' sx={{opacity: '.9'}}>
+      <Paper elevation={1}
+        sx={{
+          opacity: '.9',
+        }}
+      >
         <Autocomplete
           fullWidth
           freeSolo
@@ -98,9 +102,9 @@ export default function SearchBar({fileOpen}) {
           PaperComponent={({children}) => (
             <Paper
               sx={{
-                'backgroundColor': theme.palette.scene.background,
+                'backgroundColor': theme.palette.background,
                 '.MuiAutocomplete-option': {
-                  backgroundColor: theme.palette.scene.background,
+                  backgroundColor: theme.palette.background,
                 },
               }}
             >
