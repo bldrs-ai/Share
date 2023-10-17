@@ -47,7 +47,7 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'contained'},
           style: ({theme}) => ({
-            backgroundColor: palette.scene.background,
+            backgroundColor: theme.palette.primary.background,
             boxShadow: theme.shadows[1],
             opacity: .9,
           }),
@@ -61,7 +61,7 @@ export function getComponentOverrides(palette, typography) {
           'height': '50px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: palette.primary.background,
+            backgroundColor: palette.secondary.background,
             opacity: .9,
           },
         },

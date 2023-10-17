@@ -8,13 +8,13 @@ export const day = {
   mode: 'light',
   primary: {
     main: '#6D8752',
-    background: colors.grey.light,
+    background: colors.grey.lightest,
     contrastText: colors.black,
     highlight: colors.orange,
   },
   secondary: {
     main: colors.grey.dark,
-    background: colors.grey.lightest,
+    background: colors.grey.light,
     contrastText: colors.green.dark,
   },
   background: {
@@ -30,14 +30,14 @@ export const night = {
   mode: 'dark',
   primary: {
     main: '#6D8752',
-    background: colors.grey.darkest,
+    background: colors.grey.dark,
     contrastText: colors.grey.lightest,
     highlight: colors.orange,
   },
   secondary: {
     main: colors.grey.light,
-    background: colors.grey.dark,
-    contrastText: colors.green.lightest,
+    background: colors.black,
+    contrastText: colors.green.light,
   },
   background: {
     paper: colors.grey.darkest,

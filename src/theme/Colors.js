@@ -1,6 +1,5 @@
 import {grey, green, orange} from '@mui/material/colors'
 
-
 /**
  * @return {object} Color definitions: {grey, green, lime, black}
  * @see https://mui.com/customization/color/#color-palette
