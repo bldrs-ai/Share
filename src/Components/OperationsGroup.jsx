@@ -5,7 +5,7 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
-import AboutControl from './About/AboutControl'
+// import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
@@ -77,7 +77,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
       direction="column"
       justifyContent="space-around"
       alignItems="center"
-      sx={{margin: '1em 1em'}}
+      sx={{margin: '.5em'}}
     >
       <ButtonGroup
         orientation='vertical'
@@ -126,7 +126,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
                   <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                   <NightlightOutlinedIcon className='icon-share'/> }
             />
-            <AboutControl/>
+            {/* <AboutControl/> */}
           </>
         }
         {/* Invisible */}

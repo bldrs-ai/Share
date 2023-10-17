@@ -10,7 +10,6 @@ import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import SearchIcon from '@mui/icons-material/Search'
 import useTheme from '@mui/styles/useTheme'
 
 
@@ -135,11 +134,6 @@ export default function SearchBar({fileOpen}) {
               }}
               InputProps={{
                 ...params.InputProps,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
-                  </InputAdornment>
-                ),
                 endAdornment: inputText.length > 0 ? (
                   <InputAdornment position="end">
                     <IconButton

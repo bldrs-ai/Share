@@ -5,9 +5,10 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
+import AboutControl from '../Components/About/AboutControl'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
-import Logo from '../Components/Logo'
+// import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
@@ -635,8 +636,8 @@ export default function CadView({
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
-          'top': `1em`,
-          'left': '1em',
+          'top': `.5em`,
+          'left': '.5em',
           'display': 'flex',
           'flexDirection': 'column',
           'justifyContent': 'flex-start',
@@ -684,7 +685,14 @@ export default function CadView({
           }
         </Box>
       )}
-      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
+      {/* <Logo onClick={() => navToDefault(navigate, appPrefix)}/> */}
+      <Box sx={{
+        position: 'fixed',
+        bottom: '.5em',
+        left: '.5em'}}
+      >
+        <AboutControl/>
+      </Box>
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
       }
