@@ -3,7 +3,6 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
@@ -20,7 +19,6 @@ import {Helmet} from 'react-helmet-async'
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
-  const theme = useTheme()
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
     component: 'about',
     name: 'isFirstTime',
@@ -45,20 +43,21 @@ export default function AboutControl() {
         <Box
           sx={{
             '& svg': {
-              'marginBottom': '4px',
-              'marginTop': '4px',
+              'marginTop': '6px',
+              'width': '20px',
               '@media (max-width: 900px)': {
+                marginTop: '4px',
                 width: '20px',
               },
-              '& .left-face': {
-                fill: theme.palette.secondary.background,
-              },
-              '& .right-face': {
-                fill: theme.palette.secondary.main,
-              },
-              '& #logo path': {
-                stroke: theme.palette.primary.main,
-              },
+              // '& .left-face': {
+              //   fill: theme.palette.secondary.background,
+              // },
+              // '& .right-face': {
+              //   fill: theme.palette.secondary.main,
+              // },
+              // '& #logo path': {
+              //   stroke: theme.palette.primary.main,
+              // },
             },
           }}
         >
