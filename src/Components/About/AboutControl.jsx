@@ -35,6 +35,7 @@ export default function AboutControl() {
 
   return (
     <ControlButton
+      size='small'
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}

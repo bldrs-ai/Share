@@ -86,6 +86,7 @@ export function ControlButton({
         icon={icon}
         selected={isDialogDisplayed}
         className='icon-share'
+        sx={{width: '50px', height: '50px'}}
       />
       {isDialogDisplayed && dialog}
     </>

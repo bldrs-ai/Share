@@ -5,7 +5,7 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import AboutControl from '../Components/About/AboutControl'
+// import AboutControl from '../Components/About/AboutControl'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
 // import Logo from '../Components/Logo'
@@ -100,7 +100,7 @@ export default function CadView({
   const location = useLocation()
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
   // Granular visibility controls for the UI components
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
@@ -635,6 +635,19 @@ export default function CadView({
       />
       {showSearchBar && (
         <Box sx={{
+          position: 'absolute',
+          top: '1em',
+          left: '1em',
+        }}
+        >
+          <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
+        </Box>
+      )}
+      {/* {showSearchBar &&
+            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+      } */}
+      {showSearchBar && (
+        <Box sx={{
           'position': 'absolute',
           'top': `1em`,
           'left': '1em',
@@ -650,9 +663,9 @@ export default function CadView({
           },
         }}
         >
-          <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
-          {isSearchBarVisible && isSearchVisible &&
-          <Box sx={{marginTop: '10px', width: '100%'}}>
+
+          {isSearchVisible &&
+          <Box sx={{width: '100%'}}>
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
           </Box>
           }
@@ -686,14 +699,14 @@ export default function CadView({
         </Box>
       )}
       {/* <Logo onClick={() => navToDefault(navigate, appPrefix)}/> */}
-      <Box sx={{
-        position: 'fixed',
-        bottom: '1em',
+      {/* <Box sx={{
+        position: 'absolute',
+        top: '1em',
         left: '1em',
       }}
       >
         <AboutControl/>
-      </Box>
+      </Box> */}
       {alert}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
       }
@@ -718,7 +731,7 @@ function OperationsGroupAndDrawer({deselectItems, viewer}) {
         <Box
           sx={{
             position: 'absolute',
-            top: 0,
+            marginTop: 0,
             right: 0,
           }}
         >
@@ -727,7 +740,7 @@ function OperationsGroupAndDrawer({deselectItems, viewer}) {
         <Box
           sx={{
             position: 'absolute',
-            bottom: 0,
+            bottoptom: 0,
             width: '100%',
           }}
         >

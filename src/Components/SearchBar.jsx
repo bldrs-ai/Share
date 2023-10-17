@@ -1,5 +1,6 @@
 import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
+import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Autocomplete from '@mui/material/Autocomplete'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -10,6 +11,7 @@ import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import SearchIcon from '@mui/icons-material/Search'
 import useTheme from '@mui/styles/useTheme'
 
 
@@ -86,11 +88,7 @@ export default function SearchBar({fileOpen}) {
   // container (CadView).
   return (
     <form onSubmit={onSubmit}>
-      <Paper elevation={1}
-        sx={{
-          opacity: '.9',
-        }}
-      >
+      <Paper sx={{width: '400px'}}>
         <Autocomplete
           fullWidth
           freeSolo
@@ -100,16 +98,13 @@ export default function SearchBar({fileOpen}) {
           onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
           inputValue={inputText}
           PaperComponent={({children}) => (
-            <Paper
-              sx={{
-                'backgroundColor': theme.palette.background,
-                '.MuiAutocomplete-option': {
-                  backgroundColor: theme.palette.background,
-                },
-              }}
+            <Box sx={{'.MuiAutocomplete-option': {
+              backgroundColor: theme.palette.scene.background,
+              boxShadow: theme.shadows[1],
+            }}}
             >
               {children}
-            </Paper>
+            </Box>
           )}
           renderInput={(params) => (
             <TextField
@@ -138,6 +133,11 @@ export default function SearchBar({fileOpen}) {
               }}
               InputProps={{
                 ...params.InputProps,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
+                  </InputAdornment>
+                ),
                 endAdornment: inputText.length > 0 ? (
                   <InputAdornment position="end">
                     <IconButton

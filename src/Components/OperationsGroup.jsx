@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
-// import useTheme from '@mui/styles/useTheme'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 // import AboutControl from './About/AboutControl'
@@ -16,9 +16,9 @@ import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
-// import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-// import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 
 /**
@@ -70,7 +70,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
     }
   }
 
-  // const theme = useTheme()
+  const theme = useTheme()
   return (
     <Stack
       spacing={2}
@@ -80,9 +80,19 @@ export default function OperationsGroup({deselectItems, viewer}) {
       sx={{margin: '1em'}}
     >
       <ButtonGroup
-        orientation='horizontal'
-        variant='contained'
+        orientation='vertical'
+        variant='outlined'
       >
+
+
+        {isLoginVisible &&
+            <AuthNav/>
+        }
+        {isCollaborationGroupVisible &&
+          <Box>
+            <ShareControl/>
+          </Box>
+        }
 
         {isModelInteractionGroupVisible &&
           <>
@@ -99,16 +109,6 @@ export default function OperationsGroup({deselectItems, viewer}) {
           </>
         }
 
-        {isCollaborationGroupVisible &&
-          <Box>
-            <ShareControl/>
-          </Box>
-        }
-        {isLoginVisible &&
-            <AuthNav/>
-        }
-
-
         {isSettingsVisible &&
           <>
             {isAppStoreEnabled &&
@@ -119,14 +119,14 @@ export default function OperationsGroup({deselectItems, viewer}) {
               onClick={() => toggleAppStoreDrawer()}
             />
             }
-            {/* <TooltipIconButton
+            <TooltipIconButton
               title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
               onClick={() => theme.toggleColorMode()}
               icon={
                 theme.palette.mode === 'light' ?
                   <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                   <NightlightOutlinedIcon className='icon-share'/> }
-            /> */}
+            />
             {/* <AboutControl/> */}
           </>
         }
@@ -145,7 +145,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
         {isSelected() &&
           <ButtonGroup
             orientation='vertical'
-            variant='contained'
+            variant='outlined'
           >
             {selectedElement !== null &&
             <>

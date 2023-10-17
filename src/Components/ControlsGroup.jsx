@@ -4,9 +4,9 @@ import OpenModelControl from './OpenModelControl'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import HistoryIcon from '@mui/icons-material/History'
-import SearchIcon from '@mui/icons-material/Search'
-import TreeIcon from '../assets/icons/Tree.svg'
-
+// import SearchIcon from '@mui/icons-material/Search'
+// import TreeIcon from '../assets/icons/Tree.svg'
+import AboutControl from './About/AboutControl'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -18,27 +18,28 @@ import TreeIcon from '../assets/icons/Tree.svg'
 export default function OperationsGroup({fileOpen, repo}) {
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
-  const isSearchVisible = useStore((state) => state.isSearchVisible)
-  const toggleIsSearchVisible = useStore((state) => state.toggleIsSearchVisible)
+  // const isSearchVisible = useStore((state) => state.isSearchVisible)
+  // const toggleIsSearchVisible = useStore((state) => state.toggleIsSearchVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
 
 
   return (
     <ButtonGroup
-      orientation='horizontal'
-      variant='contained'
+      orientation='vertical'
+      variant='outlined'
     >
+      <AboutControl/>
       <OpenModelControl fileOpen={fileOpen}/>
-      <TooltipIconButton
+      {/* <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
         placement='bottom'
         aboutInfo={false}
         selected={isSearchVisible}
         onClick={toggleIsSearchVisible}
-      />
-      <TooltipIconButton
+      /> */}
+      {/* <TooltipIconButton
         title='Navigation'
         icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
         placement='bottom'
@@ -53,7 +54,8 @@ export default function OperationsGroup({fileOpen, repo}) {
             toggleIsNavigationVisible()
           }
         }}
-      />
+      /> */}
+
       {repo !== undefined &&
         <TooltipIconButton
           title='Project History'
