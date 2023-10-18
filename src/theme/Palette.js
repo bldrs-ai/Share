@@ -8,7 +8,7 @@ export const day = {
   mode: 'light',
   primary: {
     main: '#6D8752',
-    background: colors.grey.lightest,
+    background: colors.grey.light,
     contrastText: colors.black,
     highlight: colors.orange,
   },

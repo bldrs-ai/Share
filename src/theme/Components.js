@@ -52,6 +52,14 @@ export function getComponentOverrides(palette, typography) {
             opacity: .9,
           }),
         },
+        {
+          props: {variant: 'outlined'},
+          style: ({theme}) => ({
+            backgroundColor: theme.palette.primary.background,
+            boxShadow: theme.shadows[0],
+            opacity: .9,
+          }),
+        },
       ],
     },
     MuiToggleButton: {

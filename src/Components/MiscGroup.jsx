@@ -52,7 +52,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
     >
       <ButtonGroup
         orientation='horizontal'
-        variant='contained'
+        variant='outlined'
         sx={{borderRadius: '20px', padding: '0px 20px'}}
       >
 
