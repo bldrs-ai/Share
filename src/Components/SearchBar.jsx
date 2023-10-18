@@ -106,7 +106,7 @@ export default function SearchBar({fileOpen}) {
         <form onSubmit={onSubmit}>
           <Autocomplete
             freeSolo
-            options={['together', 'dach', 'fen', 'wand']}
+            options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte']}
             value={inputText}
             onChange={(_, newValue) => setInputText(newValue || '')}
             onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}

@@ -3,14 +3,10 @@ import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
-// import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
-// import AppStoreIcon from '../assets/icons/AppStore.svg'
-// import {useExistInFeature} from '../hooks/useExistInFeature'
 import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
-// import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
@@ -25,29 +21,16 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @return {React.Component}
  */
 export default function MiscGroup({deselectItems, viewer, repo}) {
-  // const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
-  // const openDrawer = useStore((state) => state.openDrawer)
-  // const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
-  // const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  // const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  // const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const cutPlanes = useStore((state) => state.cutPlanes)
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  // const isAppStoreEnabled = useExistInFeature('apps')
   const [isolate, setIsolate] = useState(false)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
-
-  // const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
-  // const isMobile = useIsMobile()
-  // const turnOffTooltips = () => {
-  //   return isMobile ? turnOffIsHelpTooltips() : null
-  // }
 
 
   const isSelected = () => {
@@ -58,16 +41,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
     )
     return ifSelected
   }
-
-  // const toggle = (panel) => {
-  //   openDrawer()
-  //   if (panel === 'Properties') {
-  //     toggleIsPropertiesOn()
-  //   }
-  //   if (panel === 'Notes') {
-  //     toggleIsNotesOn()
-  //   }
-  // }
 
   const theme = useTheme()
   return (
@@ -82,22 +55,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
         variant='contained'
         sx={{borderRadius: '20px', padding: '0px 20px'}}
       >
-        {repo !== undefined &&
-        <TooltipIconButton
-          title='Project History'
-          icon={<HistoryIcon className='icon-share' color='secondary'/>}
-          placement='top'
-          selected={isVersionHistoryVisible}
-          onClick={() => {
-            if (isNavigationVisible) {
-              toggleIsVersionHistoryVisible()
-              toggleIsNavigationVisible()
-            } else {
-              toggleIsVersionHistoryVisible()
-            }
-          }}
-        />
-        }
+
         {isSettingsVisible &&
           <>
             <TooltipIconButton
@@ -116,6 +74,22 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
                 }
               }}
             />
+            {repo !== undefined &&
+              <TooltipIconButton
+                title='Project History'
+                icon={<HistoryIcon className='icon-share' color='secondary'/>}
+                placement='top'
+                selected={isVersionHistoryVisible}
+                onClick={() => {
+                  if (isNavigationVisible) {
+                    toggleIsVersionHistoryVisible()
+                    toggleIsNavigationVisible()
+                  } else {
+                    toggleIsVersionHistoryVisible()
+                  }
+                }}
+              />
+            }
             <TooltipIconButton
               title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
               onClick={() => theme.toggleColorMode()}
