@@ -20,9 +20,9 @@ export default function SnackBarMessage({message, severity, open}) {
       <Alert
         sx={{
           'backgroundColor': theme.palette.primary.main,
-          'color': theme.palette.primary.contrastText,
+          // 'color': theme.palette.primary.contrastText,
           'width': '20em',
-          'borderRadius': '20px',
+          'borderRadius': '10px',
           'position': 'relative',
           'bottom': '2.5em',
           'left': '-.5em',
