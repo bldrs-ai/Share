@@ -30,7 +30,6 @@ export function getComponentOverrides(palette, typography) {
           style: {
             width: '180px',
             height: '40px',
-            // textTransform: 'none',
             borderRadius: '20px',
             border: 'none',
             backgroundColor: palette.primary.main,
@@ -48,9 +47,9 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'contained'},
           style: ({theme}) => ({
-            backgroundColor: theme.palette.primary.background,
+            backgroundColor: theme.palette.scene.background,
             boxShadow: theme.shadows[0],
-            opacity: .7,
+            opacity: .9,
           }),
         },
       ],

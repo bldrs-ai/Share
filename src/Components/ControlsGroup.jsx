@@ -27,7 +27,7 @@ export default function OperationsGroup({fileOpen, repo}) {
   return (
     <ButtonGroup
       orientation='vertical'
-      variant='outlined'
+      variant='contained'
     >
       {/* <Logo onClick={fileOpen}/> */}
       <AboutControl/>
