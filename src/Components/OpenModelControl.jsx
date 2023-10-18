@@ -16,8 +16,8 @@ import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
-// import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
+// import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
 
 
 /**
@@ -55,7 +55,7 @@ export default function OpenModelControl({fileOpen}) {
       <TooltipIconButton
         title={'Open IFC'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<CreateNewFolderIcon className='icon-share' color='secondary' sx={{color: '#626262'}}/>}
+        icon={<CreateNewFolderOutlinedIcon className='icon-share' color='secondary'/>}
         placement={'right'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
@@ -125,7 +125,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
 
   return (
     <Dialog
-      icon={<CreateNewFolderIcon className='icon-share'/>}
+      icon={<CreateNewFolderOutlinedIcon className='icon-share'/>}
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
