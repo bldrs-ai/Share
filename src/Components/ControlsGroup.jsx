@@ -28,6 +28,7 @@ export default function OperationsGroup({fileOpen, repo}) {
     <ButtonGroup
       orientation='vertical'
       variant='contained'
+      sx={{borderRadius: '4px'}}
     >
       {/* <Logo onClick={fileOpen}/> */}
       <AboutControl/>
