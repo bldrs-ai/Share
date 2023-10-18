@@ -106,7 +106,7 @@ export default function SearchBar({fileOpen}) {
         <form onSubmit={onSubmit}>
           <Autocomplete
             freeSolo
-            options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte']}
+            options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
             value={inputText}
             onChange={(_, newValue) => setInputText(newValue || '')}
             onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
@@ -125,6 +125,7 @@ export default function SearchBar({fileOpen}) {
                 {...params}
                 inputRef={searchInputRef}
                 size="small"
+                // multiline
                 error={!!error.length}
                 placeholder='Search'
                 variant="outlined"

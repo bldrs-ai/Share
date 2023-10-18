@@ -43,7 +43,7 @@ export default function AboutControl() {
         <Box
           sx={{
             '& svg': {
-              'marginTop': '6px',
+              'marginTop': '10px',
               'width': '20px',
               '@media (max-width: 900px)': {
                 marginTop: '4px',

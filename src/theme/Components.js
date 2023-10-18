@@ -49,8 +49,8 @@ export function getComponentOverrides(palette, typography) {
           props: {variant: 'contained'},
           style: ({theme}) => ({
             backgroundColor: theme.palette.primary.background,
-            boxShadow: theme.shadows[1],
-            opacity: .9,
+            boxShadow: theme.shadows[0],
+            opacity: .7,
           }),
         },
       ],
