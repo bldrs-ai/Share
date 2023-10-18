@@ -42,6 +42,16 @@ export function getComponentOverrides(palette, typography) {
         disableRipple: true,
       },
     },
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          color: palette.scene.background,
+          backgroundColor: palette.primary.main,
+          width: '20em',
+          borderRadius: '10px',
+        },
+      },
+    },
     MuiButtonGroup: {
       variants: [
         {
