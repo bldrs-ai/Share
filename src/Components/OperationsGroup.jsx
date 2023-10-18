@@ -73,6 +73,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
       <ButtonGroup
         orientation='vertical'
         variant='contained'
+        sx={{borderRadius: '4px'}}
       >
 
         {isLoginVisible &&

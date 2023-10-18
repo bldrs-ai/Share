@@ -113,8 +113,9 @@ export default function SearchBar({fileOpen}) {
             inputValue={inputText}
             PaperComponent={({children}) => (
               <Box sx={{'.MuiAutocomplete-option': {
-                backgroundColor: theme.palette.scene.background,
-                boxShadow: theme.shadows[1],
+                color: theme.palette.primary.contrastText,
+                backgroundColor: theme.palette.primary.background,
+                boxShadow: theme.shadows[0],
               }}}
               >
                 {children}
@@ -125,7 +126,6 @@ export default function SearchBar({fileOpen}) {
                 {...params}
                 inputRef={searchInputRef}
                 size="small"
-                // multiline
                 error={!!error.length}
                 placeholder='Search'
                 variant="outlined"
