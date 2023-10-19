@@ -23,7 +23,6 @@ export default function Panel({title, onClose, content}) {
       sx={{
         overflowY: 'scroll',
         maxHeight: '300px',
-        marginTop: '14px',
         width: '100%',
         opacity: .9,
         position: 'relative',
@@ -37,19 +36,23 @@ export default function Panel({title, onClose, content}) {
         alignItems='center'
         sx={{
           position: 'sticky',
+          // padding: '8px 0px',
+          height: '40px',
           top: 0,
           backgroundColor: theme.palette.primary.background,
           zIndex: 1,
         }}
       >
-        <Typography variant='overline' sx={{marginLeft: '1em'}}>{title}</Typography>
+        <Typography variant='body1' sx={{marginLeft: '1em'}}>{title}</Typography>
         <Box sx={{marginRight: '.4em'}}>
           <IconButton aria-label="close" size="small" onClick={onClose}>
-            <CloseIcon fontSize="inherit"/>
+            <CloseIcon fontSize="small" color='secondary'/>
           </IconButton>
         </Box>
       </Stack>
-      {content}
+      <Box sx={{padding: '1px 0px'}}>
+        {content}
+      </Box>
     </Paper>
   )
 }

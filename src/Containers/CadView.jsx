@@ -3,6 +3,7 @@ import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
+import AboutControl from '../Components/About/AboutControl'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import ControlsGroup from '../Components/ControlsGroup'
@@ -101,7 +102,7 @@ export default function CadView({
   // Granular visibility controls for the UI components
   // const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
-  const isSearchVisible = useStore((state) => state.isSearchVisible)
+  // const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
 
@@ -634,7 +635,13 @@ export default function CadView({
       />
       {showSearchBar &&
       <>
+        {
+          !isNavigationVisible && isMobile && !isVersionHistoryVisible &&
         <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+        }
+        {!isMobile &&
+        <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+        }
         <Box sx={{
           position: 'absolute',
           top: '1em',
@@ -650,12 +657,12 @@ export default function CadView({
             width: '100%',
           }}
         >
-          <MiscGroup deselectItems={deselectItems} viewer={viewer} repo={modelPath.repo}/>
+          <MiscGroup deselectItems={deselectItems} viewer={viewer}/>
         </Box>
         <Box sx={{
           'position': 'absolute',
-          'top': `5.4em`,
-          'left': '1em',
+          'top': `1em`,
+          'left': '4.5em',
           'display': 'flex',
           'flexDirection': 'column',
           'justifyContent': 'flex-start',
@@ -665,14 +672,15 @@ export default function CadView({
           '@media (max-width: 900px)': {
             width: `${searchAndNavWidthPx}px`,
             maxWidth: `${searchAndNavMaxWidthPx}px`,
+            left: '4.0em',
           },
         }}
         >
-          {isSearchVisible &&
+          {/* {isSearchVisible &&
             <Box sx={{width: '100%'}}>
               <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
             </Box>
-          }
+          } */}
           {isNavPanelOpen &&
           isNavigationPanelVisible &&
           isNavigationVisible &&
@@ -699,6 +707,15 @@ export default function CadView({
               <VersionsHistoryPanel branch={modelPath.branch}/>
             </>
           }
+        </Box>
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.5em',
+            left: '1em',
+          }}
+        >
+          <AboutControl/>
         </Box>
         {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
       </>

@@ -44,7 +44,7 @@ export default function AboutControl() {
           sx={{
             '& svg': {
               'marginTop': '6px',
-              'width': '16px',
+              'width': '20px',
               '@media (max-width: 900px)': {
                 marginTop: '4px',
                 width: '20px',

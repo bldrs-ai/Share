@@ -10,10 +10,10 @@ import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
-import HistoryIcon from '@mui/icons-material/History'
+// import HistoryIcon from '@mui/icons-material/History'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
-import TreeIcon from '../assets/icons/Tree.svg'
+// import TreeIcon from '../assets/icons/Tree.svg'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -28,12 +28,8 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  const [isolate, setIsolate] = useState(false)
+  const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
-  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
-  const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
-  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
-  const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
 
 
   const isSelected = () => {
@@ -62,38 +58,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
         {isSettingsVisible &&
           <>
             <TooltipIconButton
-              title='Navigation'
-              icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
-              placement='top'
-              dataTestId='Navigation'
-              aboutInfo={false}
-              selected={isNavigationVisible}
-              onClick={() => {
-                if (isVersionHistoryVisible) {
-                  toggleIsVersionHistoryVisible()
-                  toggleIsNavigationVisible()
-                } else {
-                  toggleIsNavigationVisible()
-                }
-              }}
-            />
-            {repo !== undefined &&
-              <TooltipIconButton
-                title='Project History'
-                icon={<HistoryIcon className='icon-share' color='secondary'/>}
-                placement='top'
-                selected={isVersionHistoryVisible}
-                onClick={() => {
-                  if (isNavigationVisible) {
-                    toggleIsVersionHistoryVisible()
-                    toggleIsNavigationVisible()
-                  } else {
-                    toggleIsVersionHistoryVisible()
-                  }
-                }}
-              />
-            }
-            <TooltipIconButton
               title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
               onClick={() => theme.toggleColorMode()}
               placement={'top'}
@@ -110,20 +74,19 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
           </>
         }
 
-
         {isSelected() && selectedElement !== null &&
-          <>
             <TooltipIconButton
               showTitle={true}
               title='Isolate'
               placement='top'
               onClick={() => {
                 viewer.isolator.toggleIsolationMode()
-                setIsolate(!isolate)
+                setIsIsolate(!isIsolate)
               }}
-              selected={isolate}
-              icon={<CenterFocusWeakIcon/>}
-            />
+              selected={isIsolate}
+              icon={<CenterFocusWeakIcon color='seconda'/>}
+            />}
+        {isSelected() && !isIsolate &&
             <TooltipIconButton
               showTitle={true}
               title='Hide'
@@ -132,12 +95,11 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
                 viewer.isolator.hideSelectedElements()
                 setIsHidden(true)
               }}
-              selected={isolate}
-              icon={<VisibilityOffOutlinedIcon color='secondary'/>}
+              selected={isIsolate}
+              icon={<VisibilityOffOutlinedIcon color='primary'/>}
             />
-          </>
         }
-        {isHidden &&
+        {isHidden && !isIsolate &&
           <TooltipIconButton
             title='Un-hide all'
             placement='top'
@@ -149,13 +111,13 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
             icon={<VisibilityOutlinedIcon className='icon-share' color='secondary'/>}
           />
         }
-        {isSelected &&
+        {isSelected() &&
             <TooltipIconButton
               title='Clear'
               placement='top'
               onClick={() => {
-                if (isolate) {
-                  setIsolate(!isolate)
+                if (isIsolate) {
+                  setIsIsolate(!isIsolate)
                   viewer.isolator.toggleIsolationMode()
                 }
                 deselectItems()

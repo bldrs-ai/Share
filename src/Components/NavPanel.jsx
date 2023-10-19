@@ -164,7 +164,7 @@ export default function NavPanel({
             </TreeView>
           </Box>
         }
-        title='Version History'
+        title='NAVIGATION'
         onClose={toggleIsNavigationVisible}
       />
     </div>
