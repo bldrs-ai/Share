@@ -646,12 +646,9 @@ export default function CadView({
         </Box>
         <Box
           sx={{
-            'position': 'fixed',
-            'bottom': '1em',
-            'width': '100%',
-            '@media (max-width: 900px)': {
-              bottom: '1em',
-            },
+            position: 'fixed',
+            bottom: '2em',
+            width: '100%',
           }}
         >
           <MiscGroup deselectItems={deselectItems} viewer={viewer} repo={modelPath.repo}/>
