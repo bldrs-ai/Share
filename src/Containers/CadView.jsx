@@ -650,7 +650,7 @@ export default function CadView({
             'bottom': '1em',
             'width': '100%',
             '@media (max-width: 900px)': {
-              bottom: '8em',
+              bottom: '2em',
             },
           }}
         >
