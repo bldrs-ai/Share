@@ -703,8 +703,8 @@ export default function CadView({
           }
           {modelPath.repo !== undefined && isVersionHistoryVisible &&
             <>
-              <BranchesControl location={location}/>
               <VersionsHistoryPanel branch={modelPath.branch}/>
+              <BranchesControl location={location}/>
             </>
           }
         </Box>

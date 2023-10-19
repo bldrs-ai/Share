@@ -22,7 +22,7 @@ export default function Panel({title, onClose, content}) {
     <Paper
       sx={{
         overflowY: 'scroll',
-        maxHeight: '300px',
+        maxHeight: '290px',
         width: '100%',
         opacity: .9,
         position: 'relative',

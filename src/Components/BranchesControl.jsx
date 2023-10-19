@@ -77,9 +77,9 @@ export default function Branches() {
           sx={{
             opacity: .9,
             width: '100%',
-            // marginBottom: '40px',
+            marginTop: '20px',
             height: '40px',
-            borderRadius: '4px',
+            borderRadius: '10px',
             backgroundColor: theme.palette.primary.background,
           }}
         >
