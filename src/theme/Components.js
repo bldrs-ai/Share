@@ -135,7 +135,7 @@ export function getComponentOverrides(palette, typography) {
         root: {
           fontWeight: 400,
           textAlign: 'center',
-          capitalize: 'none',
+          textTransform: 'uppercase',
         },
       },
 
