@@ -38,7 +38,7 @@ export default function Panel({title, onClose, content}) {
         sx={{
           position: 'sticky',
           top: 0,
-          backgroundColor: theme.palette.secondary.background,
+          backgroundColor: theme.palette.primary.background,
           zIndex: 1,
         }}
       >
