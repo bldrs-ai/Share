@@ -36,7 +36,6 @@ export default function Panel({title, onClose, content}) {
         alignItems='center'
         sx={{
           position: 'sticky',
-          // padding: '8px 0px',
           height: '40px',
           top: 0,
           backgroundColor: theme.palette.primary.background,
