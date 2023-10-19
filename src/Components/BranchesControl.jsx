@@ -75,48 +75,59 @@ export default function Branches() {
       {branches.length > 1 && modelPath.repo !== undefined &&
         <Paper elevation={0} variant='control'
           sx={{
-            marginTop: '14px',
             opacity: .9,
             width: '100%',
+            marginBottom: '40px',
+            height: '40px',
+            borderRadius: '4px',
           }}
         >
           <TextField
             sx={{
               'width': '100%',
+              'height': '40px', // Set height for the TextField itself
+              '& .MuiSelect-select': {
+                height: '40px',
+                borderRadius: '4px',
+                padding: '10px 26px 10px 12px', // Adjust padding to vertically center the content
+              },
               '& .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },
               '& .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
               },
+              '& .MuiOutlinedInput-root': {
+                height: '40px', // Ensure the input field and label together fit within 40px
+              },
               '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
+                // borderBottom: `1px solid ${theme.palette.primary.main}`,
               },
               '&:hover .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },
-              // TODO(oleg): connect to props
               '&:hover .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
               },
               '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                border: 'none',
+                // borderBottom: `1px solid ${theme.palette.primary.main}`,
               },
-              // TODO(oleg): connect to props
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
                 color: theme.palette.primary.contrastText,
               },
-              // TODO(oleg): connect to props
               '& .MuiInputLabel-root.Mui-focused': {
                 color: theme.palette.primary.contrastText,
               },
               '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                borderColor: theme.palette.primary.main,
+                // borderBottom: `2px solid ${theme.palette.primary.main}`,
+                border: 'none',
               },
             }}
             onChange={(e) => handleSelect(e)}
             variant='outlined'
-            label={<Typography>GIT BRANCHES</Typography>}
+            label={<Typography>BRANCHES</Typography>}
             value={selected}
             select
             role="button"
