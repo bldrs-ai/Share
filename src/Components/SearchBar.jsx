@@ -4,13 +4,11 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Autocomplete from '@mui/material/Autocomplete'
 import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import SearchIcon from '@mui/icons-material/Search'
 import useTheme from '@mui/styles/useTheme'
 
@@ -137,26 +135,6 @@ export default function SearchBar({fileOpen}) {
                       <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
                     </InputAdornment>
                   ),
-                  endAdornment: inputText.length > 0 ? (
-              <InputAdornment position="end">
-                <IconButton
-                  size="small"
-                  onClick={() => {
-                    setInputText('')
-                    setError('')
-                    navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-                  }}
-                  style={{padding: 0, opacity: 0.8}}
-                >
-                  <HighlightOffIcon
-                    className="icon-share"
-                    sx={{opacity: 0.8}}
-                    size="inherit"
-                    color="secondary"
-                  />
-                </IconButton>
-              </InputAdornment>
-            ) : null,
                 }}
               />
             )}

@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-import Stack from '@mui/material/Stack'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
@@ -635,9 +634,8 @@ export default function CadView({
         open={isLoading || snackMessage !== null}
       />
       {showSearchBar &&
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
-      }
-      {showSearchBar && (
+      <>
+        <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
         <Box sx={{
           position: 'absolute',
           top: '1em',
@@ -646,9 +644,7 @@ export default function CadView({
         >
           <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
         </Box>
-      )}
-      {showSearchBar && (
-        <Stack
+        <Box
           sx={{
             'position': 'absolute',
             'bottom': '1em',
@@ -658,12 +654,8 @@ export default function CadView({
             },
           }}
         >
-          <Box>
-            <MiscGroup deselectItems={deselectItems} viewer={viewer} repo={modelPath.repo}/>
-          </Box>
-        </Stack>
-      )}
-      {showSearchBar && (
+          <MiscGroup deselectItems={deselectItems} viewer={viewer} repo={modelPath.repo}/>
+        </Box>
         <Box sx={{
           'position': 'absolute',
           'top': `5.4em`,
@@ -680,15 +672,14 @@ export default function CadView({
           },
         }}
         >
-
           {isSearchVisible &&
-          <Box sx={{width: '100%'}}>
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
-          </Box>
+            <Box sx={{width: '100%'}}>
+              <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+            </Box>
           }
           {isNavPanelOpen &&
-            isNavigationPanelVisible &&
-            isNavigationVisible &&
+          isNavigationPanelVisible &&
+          isNavigationVisible &&
             <NavPanel
               model={model}
               element={rootElement}
@@ -706,23 +697,23 @@ export default function CadView({
               }
             />
           }
-          {
-            modelPath.repo !== undefined && isVersionHistoryVisible &&
+          {modelPath.repo !== undefined && isVersionHistoryVisible &&
             <>
               <BranchesControl location={location}/>
               <VersionsHistoryPanel branch={modelPath.branch}/>
             </>
           }
         </Box>
-      )}
+        {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
+      </>
+      }
       {alert}
-      {viewer && showSearchBar && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
       {isLoading &&
        <Box
          sx={{
-           position: 'relative', // Parent needs a relative position
-           width: '100%', // Assuming you want it to cover the full width
-           height: '100vh', // 100% of the viewport height
+           position: 'relative',
+           width: '100%',
+           height: '100vh',
            backgroundColor: theme.palette.scene.background,
          }}
        >
@@ -733,7 +724,7 @@ export default function CadView({
              height: '40px',
              top: '26%',
              left: '50%',
-             transform: 'translate(-50%, -50%)', // This ensures the center of the box is exactly at the center of its container
+             transform: 'translate(-50%, -50%)',
            }}
          >
            <LogoIcon/>

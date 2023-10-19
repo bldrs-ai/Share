@@ -17,7 +17,6 @@ import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-// import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
 
 
 /**
