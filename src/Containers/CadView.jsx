@@ -3,7 +3,6 @@ import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import CircularProgress from '@mui/material/CircularProgress'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import ControlsGroup from '../Components/ControlsGroup'
@@ -719,12 +718,36 @@ export default function CadView({
              position: 'absolute',
              width: '40px',
              height: '40px',
-             top: '26%',
+             top: '30%',
              left: '50%',
              transform: 'translate(-50%, -50%)',
            }}
          >
-           <CircularProgress thickness={8} disableShrink/>
+           <Box
+             sx={{
+               'display': 'flex',
+               'justifyContent': 'center',
+               'alignItems': 'center',
+               '.circleLoader': {
+                 width: '1em',
+                 height: '1em',
+                 borderRadius: '50%',
+                 backgroundColor: 'primary.main',
+                 animation: 'diameterChange 1s infinite alternate',
+               },
+               '@keyframes diameterChange': {
+                 '0%': {
+                   transform: 'scale(1)',
+                 },
+                 '100%': {
+                   transform: 'scale(3)',
+                 },
+               },
+             }}
+           >
+             <Box className="circleLoader"/>
+           </Box>
+           {/* <CircularProgress thickness={8} disableShrink/> */}
          </Box>
        </Box>
       }
