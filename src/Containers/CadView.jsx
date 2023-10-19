@@ -3,6 +3,7 @@ import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
+import CircularProgress from '@mui/material/CircularProgress'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import ControlsGroup from '../Components/ControlsGroup'
@@ -31,7 +32,6 @@ import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
-import LogoIcon from '../assets/LogoB.svg'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -727,7 +727,7 @@ export default function CadView({
              transform: 'translate(-50%, -50%)',
            }}
          >
-           <LogoIcon/>
+           <CircularProgress thickness={8} disableShrink/>
          </Box>
        </Box>
       }
