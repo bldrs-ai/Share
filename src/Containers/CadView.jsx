@@ -640,6 +640,7 @@ export default function CadView({
            position: 'relative', // Parent needs a relative position
            width: '100%', // Assuming you want it to cover the full width
            height: '100vh', // 100% of the viewport height
+           backgroundColor: theme.palette.scene.background,
          }}
        >
          <Box
@@ -647,7 +648,7 @@ export default function CadView({
              position: 'absolute',
              width: '40px',
              height: '40px',
-             top: '30%',
+             top: '26%',
              left: '50%',
              transform: 'translate(-50%, -50%)', // This ensures the center of the box is exactly at the center of its container
            }}
