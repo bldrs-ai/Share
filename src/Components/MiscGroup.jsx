@@ -118,7 +118,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               title='Isolate'
               placement='top'
               onClick={() => {
-                viewer.isolator.updateHiddenStatus()
+                viewer.isolator.toggleIsolationMode()
                 setIsolate(!isolate)
               }}
               selected={isolate}
