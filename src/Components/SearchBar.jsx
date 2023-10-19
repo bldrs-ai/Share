@@ -111,16 +111,6 @@ export default function SearchBar({fileOpen}) {
             onChange={(_, newValue) => setInputText(newValue || '')}
             onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
             inputValue={inputText}
-            PaperComponent={({children}) => (
-              <Box sx={{'.MuiAutocomplete-option': {
-                color: theme.palette.primary.contrastText,
-                backgroundColor: theme.palette.primary.background,
-                boxShadow: theme.shadows[0],
-              }}}
-              >
-                {children}
-              </Box>
-            )}
             renderInput={(params) => (
               <TextField
                 {...params}
@@ -134,6 +124,7 @@ export default function SearchBar({fileOpen}) {
                   'borderRadius': '20px',
                   '& .MuiOutlinedInput-root': {
                     borderRadius: '20px', // Ensure the input field also gets the border radius
+                    backgroundColor: theme.palette.scene.background,
                   },
                   '& fieldset': {
                     borderRadius: '20px', // Apply border radius to the fieldset as well

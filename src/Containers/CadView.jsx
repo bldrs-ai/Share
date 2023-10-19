@@ -634,29 +634,6 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
-      {isLoading &&
-       <Box
-         sx={{
-           position: 'relative', // Parent needs a relative position
-           width: '100%', // Assuming you want it to cover the full width
-           height: '100vh', // 100% of the viewport height
-           backgroundColor: theme.palette.scene.background,
-         }}
-       >
-         <Box
-           sx={{
-             position: 'absolute',
-             width: '40px',
-             height: '40px',
-             top: '26%',
-             left: '50%',
-             transform: 'translate(-50%, -50%)', // This ensures the center of the box is exactly at the center of its container
-           }}
-         >
-           <LogoIcon/>
-         </Box>
-       </Box>
-      }
       {showSearchBar &&
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
       }
@@ -739,7 +716,29 @@ export default function CadView({
         </Box>
       )}
       {alert}
-      {viewer && showSearchBar && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
+      {viewer && showSearchBar && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
+      {isLoading &&
+       <Box
+         sx={{
+           position: 'relative', // Parent needs a relative position
+           width: '100%', // Assuming you want it to cover the full width
+           height: '100vh', // 100% of the viewport height
+           backgroundColor: theme.palette.scene.background,
+         }}
+       >
+         <Box
+           sx={{
+             position: 'absolute',
+             width: '40px',
+             height: '40px',
+             top: '26%',
+             left: '50%',
+             transform: 'translate(-50%, -50%)', // This ensures the center of the box is exactly at the center of its container
+           }}
+         >
+           <LogoIcon/>
+         </Box>
+       </Box>
       }
     </Box>
   )
