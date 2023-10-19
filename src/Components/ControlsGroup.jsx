@@ -29,6 +29,7 @@ export default function OperationsGroup({fileOpen, repo}) {
       orientation='vertical'
       variant='contained'
       sx={{borderRadius: '4px'}}
+      spacing="0.5rem"
     >
       {/* <Logo onClick={fileOpen}/> */}
       <AboutControl/>

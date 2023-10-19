@@ -45,9 +45,9 @@ export function getComponentOverrides(palette, typography) {
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          color: palette.secondary.main,
+          color: 'white',
           backgroundColor: palette.primary.main,
-          width: '20em',
+          maxWidth: '20em',
           borderRadius: '10px',
         },
       },
