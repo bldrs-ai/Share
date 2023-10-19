@@ -77,9 +77,10 @@ export default function Branches() {
           sx={{
             opacity: .9,
             width: '100%',
-            marginBottom: '40px',
+            // marginBottom: '40px',
             height: '40px',
             borderRadius: '4px',
+            backgroundColor: theme.palette.primary.background,
           }}
         >
           <TextField
@@ -96,6 +97,7 @@ export default function Branches() {
               },
               '& .MuiInputLabel-root': {
                 color: theme.palette.primary.contrastText,
+                marginLeft: '-2px',
               },
               '& .MuiOutlinedInput-root': {
                 height: '40px', // Ensure the input field and label together fit within 40px
