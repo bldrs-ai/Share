@@ -88,11 +88,15 @@ export default function SearchBar({fileOpen}) {
     <Stack
       justifyContent={'center'}
       alignItems={'center'}
-      sx={{width: '100%',
-        position: 'absolute',
-        top: '1em',
-        left: '0em',
-        borderRadius: '20px'}}
+      sx={{'width': '100%',
+        'position': 'absolute',
+        'top': '1em',
+        'left': '0em',
+        'borderRadius': '20px',
+        '@media (max-width: 1000px)': {
+          display: 'none',
+        },
+      }}
     >
       <Box
         sx={{
