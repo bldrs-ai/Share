@@ -6,11 +6,9 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-// import AboutControl from '../Components/About/AboutControl'
 import ControlsGroup from '../Components/ControlsGroup'
 import MiscGroup from '../Components/MiscGroup'
 import BranchesControl from '../Components/BranchesControl'
-// import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
@@ -34,6 +32,7 @@ import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import LogoIcon from '../assets/LogoB.svg'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -635,6 +634,28 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
+      {isLoading &&
+       <Box
+         sx={{
+           position: 'relative', // Parent needs a relative position
+           width: '100%', // Assuming you want it to cover the full width
+           height: '100vh', // 100% of the viewport height
+         }}
+       >
+         <Box
+           sx={{
+             position: 'absolute',
+             width: '40px',
+             height: '40px',
+             top: '30%',
+             left: '50%',
+             transform: 'translate(-50%, -50%)', // This ensures the center of the box is exactly at the center of its container
+           }}
+         >
+           <LogoIcon/>
+         </Box>
+       </Box>
+      }
       {showSearchBar &&
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
       }
@@ -667,7 +688,7 @@ export default function CadView({
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
-          'top': `6em`,
+          'top': `5.4em`,
           'left': '1em',
           'display': 'flex',
           'flexDirection': 'column',
@@ -716,17 +737,8 @@ export default function CadView({
           }
         </Box>
       )}
-      {/* <Logo onClick={() => navToDefault(navigate, appPrefix)}/> */}
-      {/* <Box sx={{
-        position: 'absolute',
-        top: '1em',
-        left: '1em',
-      }}
-      >
-        <AboutControl/>
-      </Box> */}
       {alert}
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
+      {viewer && showSearchBar && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
       }
     </Box>
   )

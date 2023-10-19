@@ -33,6 +33,7 @@ export function getComponentOverrides(palette, typography) {
             borderRadius: '20px',
             border: 'none',
             backgroundColor: palette.primary.main,
+            color: 'white',
           },
         },
       ],
@@ -79,7 +80,7 @@ export function getComponentOverrides(palette, typography) {
           'height': '40px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: palette.secondary.background,
+            backgroundColor: palette.scene.background,
             opacity: .9,
           },
         },
