@@ -4,6 +4,7 @@ import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -16,9 +17,9 @@ import CloseIcon from '@mui/icons-material/Close'
  * @return {React.ReactElement} A rendered Panel component.
  */
 export default function Panel({title, onClose, content}) {
+  const theme = useTheme()
   return (
     <Paper
-      variant='control'
       sx={{
         overflowY: 'scroll',
         maxHeight: '300px',
@@ -26,6 +27,8 @@ export default function Panel({title, onClose, content}) {
         width: '100%',
         opacity: .9,
         position: 'relative',
+        borderRadius: '4px',
+        backgroundColor: theme.palette.scene.background,
       }}
     >
       <Stack
@@ -35,7 +38,7 @@ export default function Panel({title, onClose, content}) {
         sx={{
           position: 'sticky',
           top: 0,
-          backgroundColor: 'background.paper',
+          backgroundColor: theme.palette.secondary.background,
           zIndex: 1,
         }}
       >

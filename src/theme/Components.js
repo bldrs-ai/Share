@@ -93,7 +93,7 @@ export function getComponentOverrides(palette, typography) {
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: '20px',
+          borderRadius: '10px',
         },
       },
     },
