@@ -43,8 +43,8 @@ export default function Panel({title, onClose, content}) {
         }}
       >
         <Typography variant='body1' sx={{marginLeft: '.9em'}}>{title}</Typography>
-        <Box sx={{marginRight: '.15em'}}>
-          <IconButton aria-label="close" size="small" onClick={onClose}>
+        <Box sx={{marginRight: '.3em'}}>
+          <IconButton aria-label="close" size="small" onClick={onClose} sx={{borderRadius: '0px'}}>
             <CloseIcon fontSize="small" color='secondary'/>
           </IconButton>
         </Box>
