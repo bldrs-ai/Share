@@ -737,10 +737,10 @@ export default function CadView({
                },
                '@keyframes diameterChange': {
                  '0%': {
-                   transform: 'scale(1)',
+                   transform: 'scale(2)',
                  },
                  '100%': {
-                   transform: 'scale(3)',
+                   transform: 'scale(2.5)',
                  },
                },
              }}

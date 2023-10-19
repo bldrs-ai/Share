@@ -11,6 +11,8 @@ import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import HistoryIcon from '@mui/icons-material/History'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 import TreeIcon from '../assets/icons/Tree.svg'
 
 /**
@@ -27,6 +29,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const [isolate, setIsolate] = useState(false)
+  const [isHidden, setIsHidden] = useState(false)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
@@ -106,35 +109,60 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
             <CutPlaneMenu/>
           </>
         }
-        {isSelected() &&
-        <>
-          {selectedElement !== null &&
-              <TooltipIconButton
-                showTitle={true}
-                title='Isolate'
-                placement='top'
-                onClick={() => {
-                  viewer.isolator.toggleIsolationMode()
-                  setIsolate(!isolate)
-                }}
-                selected={isolate}
-                icon={<CenterFocusWeakIcon/>}
-              />
-          }
+
+
+        {isSelected() && selectedElement !== null &&
+          <>
+            <TooltipIconButton
+              showTitle={true}
+              title='Isolate'
+              placement='top'
+              onClick={() => {
+                viewer.isolator.updateHiddenStatus()
+                setIsolate(!isolate)
+              }}
+              selected={isolate}
+              icon={<CenterFocusWeakIcon/>}
+            />
+            <TooltipIconButton
+              showTitle={true}
+              title='Hide'
+              placement='top'
+              onClick={() => {
+                viewer.isolator.hideSelectedElements()
+                setIsHidden(true)
+              }}
+              selected={isolate}
+              icon={<VisibilityOffOutlinedIcon color='secondary'/>}
+            />
+          </>
+        }
+        {isHidden &&
           <TooltipIconButton
-            title='Clear'
+            title='Un-hide all'
             placement='top'
             onClick={() => {
-              if (isolate) {
-                setIsolate(!isolate)
-                viewer.isolator.toggleIsolationMode()
-              }
-              deselectItems()
+              viewer.isolator.unHideAllElements()
+              setIsHidden(false)
             }}
-            selected={isSelected()}
-            icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
+            selected={isHidden}
+            icon={<VisibilityOutlinedIcon className='icon-share' color='secondary'/>}
           />
-        </>
+        }
+        {isSelected &&
+            <TooltipIconButton
+              title='Clear'
+              placement='top'
+              onClick={() => {
+                if (isolate) {
+                  setIsolate(!isolate)
+                  viewer.isolator.toggleIsolationMode()
+                }
+                deselectItems()
+              }}
+              selected={isSelected()}
+              icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
+            />
         }
         {/* Invisible */}
         <CameraControl/>
