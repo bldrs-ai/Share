@@ -142,7 +142,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           {isAuthenticated ?
           <Stack>
-            <Typography variant='body1' sx={{padding: '1.5em 0em'}}>PROJECTS</Typography>
+            <Typography variant='body1' sx={{marginBottom: '10px 0px 16px 0px'}}>PROJECTS</Typography>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
