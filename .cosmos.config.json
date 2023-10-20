@@ -6,5 +6,6 @@
   "publicUrl": "./",
   "webpack": {
     "configPath": ".cosmos.webpack.js"
-  }
+  },
+  "plugins": ["react-cosmos-plugin-webpack"]
 }
