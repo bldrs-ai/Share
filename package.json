@@ -11,7 +11,7 @@
     "build": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
-    "build-cosmos": "shx rm -rf docs/cosmos; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
+    "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
     "build-share": "yarn write-new-version && node config/build.js",
     "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share && yarn build-share-copy-web-asm-conway",
     "build-share-webifc": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-web-asm-webifc",
