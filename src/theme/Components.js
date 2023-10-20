@@ -58,7 +58,7 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'contained'},
           style: ({theme}) => ({
-            backgroundColor: theme.palette.scene.background,
+            // backgroundColor: theme.palette.scene.background,
             boxShadow: theme.shadows[0],
             opacity: .9,
           }),
@@ -86,10 +86,27 @@ export function getComponentOverrides(palette, typography) {
         },
         sizeSmall: {
           border: 'none',
-          width: '60px',
-          height: '60px',
+          width: '30px',
+          height: '30px',
         },
       },
+      variants: [
+        {
+          props: {variant: 'circle'},
+          style: {
+            'width': '40px',
+            'height': '40px',
+            'borderRadius': '10px',
+            'border': 'none',
+            'margin': '0px 4px 2px 0px',
+            'backgroundColor': palette.scene.background,
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.primary.background,
+              opacity: .9,
+            },
+          },
+        },
+      ],
     },
     MuiDialog: {
       styleOverrides: {

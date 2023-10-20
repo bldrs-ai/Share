@@ -59,8 +59,9 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
           <>
             <TooltipIconButton
               title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
-              onClick={() => theme.toggleColorMode()}
+              onClick={() => theme.toggleColorMode()}kk
               placement={'top'}
+              variant='solid'
               icon={
                 theme.palette.mode === 'light' ?
                   <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
@@ -79,6 +80,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               showTitle={true}
               title='Isolate'
               placement='top'
+              variant='solid'
               onClick={() => {
                 viewer.isolator.toggleIsolationMode()
                 setIsIsolate(!isIsolate)
@@ -91,6 +93,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               showTitle={true}
               title='Hide'
               placement='top'
+              variant='solid'
               onClick={() => {
                 viewer.isolator.hideSelectedElements()
                 setIsHidden(true)
@@ -103,6 +106,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
           <TooltipIconButton
             title='Un-hide all'
             placement='top'
+            variant='solid'
             onClick={() => {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
@@ -115,6 +119,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
             <TooltipIconButton
               title='Clear'
               placement='top'
+              variant='solid'
               onClick={() => {
                 if (isIsolate) {
                   setIsIsolate(!isIsolate)
