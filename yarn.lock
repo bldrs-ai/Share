@@ -5847,7 +5847,7 @@ esbuild-plugin-svgr@^2.0.0:
   dependencies:
     "@svgr/core" "^8.0.0"
 
-esbuild@^0.16.17:
+esbuild@0.16.17:
   version "0.16.17"
   resolved "https://registry.yarnpkg.com/esbuild/-/esbuild-0.16.17.tgz#fc2c3914c57ee750635fee71b89f615f25065259"
   integrity sha512-G8LEkV0XzDMNwXKgM0Jwu3nY3lSTwSGY6XbxM9cr9+s0T/qSV1q1JVPBGzm3dcjhCic9+emZDmMffkwgPeOeLg==
