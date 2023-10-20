@@ -1,4 +1,4 @@
-const HtmlWebpackPlugin = require('html-webpack-plugin')
+// const HtmlWebpackPlugin = require('html-webpack-plugin')
 const path = require('path')
 
 
@@ -16,7 +16,8 @@ module.exports = {
     publicPath: '/cosmos/',
     filename: 'index.html',
   },
-  plugins: [new HtmlWebpackPlugin()],
+  //plugins: [new HtmlWebpackPlugin()],
+  plugins: ['html-webpack-plugin', 'react-cosmos-plugin-webpack'],
   module: {
     rules: [
       {
