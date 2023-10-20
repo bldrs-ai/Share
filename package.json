@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r744",
+  "version": "1.0.0-r745",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -28,10 +28,10 @@
     "lint-src": "yarn eslint src && tsc -p tools/tsconfig.json",
     "lint-tools": "yarn eslint --rule no-console:off cypress tools",
     "precommit": "yarn lint && yarn test",
+    "serve": "yarn serve-share-webifc",
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node tools/esbuild/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node tools/esbuild/serve.js",
-    "serve": "yarn serve-share-webifc",
     "test": "jest --config tools/jest/jest.config.js",
     "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
   },
@@ -98,7 +98,7 @@
     "canvas": "^2.11.0",
     "cypress": "^13.2.0",
     "cypress-real-events": "^1.10.3",
-    "esbuild": "0.16.17",
+    "esbuild": "0.17.19",
     "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
     "esbuild-plugin-progress": "^1.0.1",

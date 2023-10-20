@@ -1,49 +1,48 @@
-import http from 'http'
+import http from 'node:http'
 
 
 /**
- * @param {number} port The port for this proxy server to listen on.  E.g. 8080
  * @param {string} proxiedHost The host to which traffic will be sent. E.g. localhost
  * @param {number} port The port to which traffic will be sent.  E.g. 8079
+ * @return {object} Proxy server
+ * @see https://esbuild.github.io/api/#serve-proxy
  */
-export function runProxyServer(port, proxiedHost, proxiedPort) {
-  http.createServer((request, response) => {
+export function createProxyServer(host, port) {
+  return http.createServer((req, res) => {
     const options = {
-      hostname: proxiedHost,
-      port: proxiedPort,
-      path: request.URL,
-      method: request.method,
-      headers: request.headers,
+      hostname: host,
+      port: port,
+      path: req.url,
+      method: req.method,
+      headers: req.headers,
     }
 
     // Forward each incoming request to esbuild
-    const proxyReq = proxyRequestHandler(options, response)
+    const proxyReq = http.request(options, (proxyResponse) => {
+      // If esbuild cannot find the resource to serve, send our react-router bounce.
+      if (proxyResponse.statusCode === HTTP_NOT_FOUND) {
+        serveNotFound(res)
+        return
+      }
+
+      // Otherwise, forward the response from esbuild to the client
+      res.writeHead(proxyResponse.statusCode, proxyResponse.headers)
+      proxyResponse.pipe(res, {end: true})
+    })
 
     // Forward the body of the request to esbuild
-    request.pipe(proxyReq, {end: true})
-  }).listen(port)
+    req.pipe(proxyReq, {end: true})
+  })
 }
 
 
 const HTTP_NOT_FOUND = 404
 
-
-const proxyRequestHandler = (options, res) => {
-  return http.request(options, (proxyResponse) => {
-    // If esbuild returns "not found", send a custom 404 page
-    if (proxyResponse.statusCode === HTTP_NOT_FOUND) {
-      serveNotFound(res)
-    } else {
-      // Otherwise, forward the response from esbuild to the client
-      res.writeHead(proxyResponse.statusCode, proxyResponse.headers)
-      proxyResponse.pipe(res, {end: true})
-    }
-  })
-}
-
-
+/**
+ * We interpret any 404 as a potential react-router bounce
+ */
 const serveNotFound = ((res) => {
-  res.writeHead(HTTP_NOT_FOUND, {'Content-Type': 'text/html\nServer: esbuild-proxy'})
+  res.writeHead(HTTP_NOT_FOUND, {'Content-Type': 'text/html'})
   res.end(`<!DOCTYPE html>
 <html>
   <head>

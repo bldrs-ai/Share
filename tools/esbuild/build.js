@@ -11,7 +11,6 @@ esbuild
       if (process.env.DISABLE_MOCK_SERVICE_WORKER === 'true') {
         unlink(join(common.buildDir, 'mockServiceWorker.js'), (err) => console.log(err))
       }
-
       console.log('Build succeeded.')
     })
     .catch(() => process.exit(1))
