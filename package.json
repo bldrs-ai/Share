@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r730",
+  "version": "1.0.0-r740",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -25,6 +25,7 @@
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node config/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node config/serve.js",
+    "serve": "yarn serve-share-webifc",
     "test": "jest",
     "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
