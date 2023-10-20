@@ -19,17 +19,13 @@ const webIfcShimAliasPlugin = {
     build.onResolve({ filter: /^web-ifc$/ }, (args) => {
       return {
         path: path.resolve(__dirname, '../node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
-      };
-    });
+      }
+    })
   },
-};
+}
 
-const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true';
+
 export const buildConfig = (useWebIfcShim) => {
-  const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx');
-  const assetsDir = path.resolve(__dirname, '..', 'public');
-  const buildDir = path.resolve(__dirname, '..', 'docs');
-
   // Initialize plugins array
   const plugins = [
     progress(),
@@ -38,30 +34,31 @@ export const buildConfig = (useWebIfcShim) => {
       src: assetsDir,
       dest: buildDir,
     }),
-  ];
+  ]
 
 
   // Conditionally include webIfcShimAliasPlugin
   if (useWebIfcShim) {
-    console.log("Using Conway shim backend")
-    plugins.push(webIfcShimAliasPlugin);
+    console.log('Using Conway shim backend')
+    plugins.push(webIfcShimAliasPlugin)
   } else {
-    console.log("Using original Web-Ifc backend")
+    console.log('Using original Web-Ifc backend')
   }
+
 
   // Return the build config
   return {
     entryPoints: [entryPoint],
-    bundle: true,
-    minify: process.env.MINIFY_BUILD === 'true',
-    keepNames: true,
-    splitting: false,
-    metafile: true,
     outdir: buildDir,
     format: 'esm',
-    sourcemap: true,
     platform: 'browser',
     target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
+    bundle: true,
+    minify: (process.env.MINIFY_BUILD || 'true') === 'true',
+    keepNames: true, // TODOD(pablo): have had breakage without this
+    splitting: false,
+    metafile: true,
+    sourcemap: true,
     logLevel: 'info',
     define: {
       'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID),
@@ -76,7 +73,8 @@ export const buildConfig = (useWebIfcShim) => {
       'process.env.USE_WEBIFC_SHIM': JSON.stringify(useWebIfcShim),
     },
     plugins: plugins,
-  };
-};
+  }
+}
 
-export const build = buildConfig(useWebIfcShim)
+const useShim = process.env.USE_WEBIFC_SHIM === 'true'
+export const build = buildConfig(useShim)
