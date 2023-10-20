@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r740",
+  "version": "1.0.0-r743",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -98,7 +98,7 @@
     "canvas": "^2.11.0",
     "cypress": "^13.2.0",
     "cypress-real-events": "^1.10.3",
-    "esbuild": "^0.15.5",
+    "esbuild": "^0.16.17",
     "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
     "esbuild-plugin-progress": "^1.0.1",
