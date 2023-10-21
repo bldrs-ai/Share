@@ -708,7 +708,6 @@ export default function CadView({
             </>
           }
         </Box>
-        { !isMobile &&
         <Box
           sx={{
             position: 'fixed',
@@ -718,7 +717,6 @@ export default function CadView({
         >
           <AboutControl/>
         </Box>
-        }
         {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
       </>
       }

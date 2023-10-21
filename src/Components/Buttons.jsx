@@ -76,6 +76,7 @@ export function ControlButton({
   setIsDialogDisplayed,
   icon,
   dialog,
+  variant = 'noBackground',
   placement = 'left',
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
@@ -83,6 +84,7 @@ export function ControlButton({
     <>
       <TooltipIconButton
         title={title}
+        variant={variant}
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
