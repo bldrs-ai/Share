@@ -64,6 +64,7 @@ export default function NotesNavBar() {
         {selectedNoteId && !isCreateNoteActive &&
          <TooltipIconButton
            title='Back to the list'
+           variant="noBackground"
            placement='bottom'
            onClick={() => {
              removeHashParams(window.location, NOTE_PREFIX)
@@ -85,12 +86,14 @@ export default function NotesNavBar() {
           <>
             <TooltipIconButton
               title='Previous Note'
+              variant="noBackground"
               onClick={() => selectNote('previous')}
               icon={<NavigateBeforeIcon className='icon-share' color='secondary'/>}
               placement='bottom'
             />
             <TooltipIconButton
               title='Next Note'
+              variant="noBackground"
               onClick={() => selectNote('next')}
               icon={<NavigateNextIcon className='icon-share' color='secondary'/>}
               placement='bottom'
@@ -109,6 +112,7 @@ export default function NotesNavBar() {
         {!selectedNoteId && (isCreateNoteActive ?
           <TooltipIconButton
             title='Back to the list'
+            variant="noBackground"
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
             icon={<ArrowBackIcon className='icon-share' color='secondary'/>}
@@ -117,6 +121,7 @@ export default function NotesNavBar() {
           <TooltipIconButton
             title='ADD A NOTE'
             placement='bottom'
+            variant="noBackground"
             onClick={toggleIsCreateNoteActive}
             icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
             size='medium'

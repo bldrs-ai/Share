@@ -12,7 +12,7 @@ import AttentionIcon from '../assets/icons/Attention.svg'
  */
 export default function NoContent({message = 'no content'}) {
   return (
-    <Paper variant='control' sx={{textAlign: 'center', padding: '20px 5px', borderRadius: '4px'}}>
+    <Paper variant='control' sx={{textAlign: 'center', padding: '20px', borderRadius: '10px'}}>
       <AttentionIcon className='icon-share'/>
       <Typography sx={{marginTop: '1em'}}>{message}</Typography>
     </Paper>

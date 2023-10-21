@@ -115,7 +115,8 @@ export default function CutPlaneMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(34px) translateY(-50px)',
+            transform: 'translateX(0px) translateY(-70px)',
+            borderRadius: '10px',
           },
           sx: {
             'color': theme.palette.primary.contrastText,

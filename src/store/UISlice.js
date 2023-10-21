@@ -1,4 +1,4 @@
-import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
+import {MOBILE_HEIGHT} from '../utils/constants'
 import debug from '../utils/debug'
 
 
@@ -23,11 +23,11 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: MOBILE_WIDTH,
+    sidebarWidth: 400,
     sidebarHeight: MOBILE_HEIGHT,
     isHelpTooltips: false,
     isAppStoreOpen: false,
-    appStoreSidebarWidth: MOBILE_WIDTH,
+    appStoreSidebarWidth: 300,
     appStoreSidebarHeight: MOBILE_HEIGHT,
     selectedStoreApp: null,
     openDrawer: () => set(() => ({isDrawerOpen: true})),

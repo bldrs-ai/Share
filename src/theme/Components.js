@@ -92,7 +92,7 @@ export function getComponentOverrides(palette, typography) {
       },
       variants: [
         {
-          props: {variant: 'circle'},
+          props: {variant: 'rounded'},
           style: {
             'width': '40px',
             'height': '40px',
@@ -100,6 +100,21 @@ export function getComponentOverrides(palette, typography) {
             'border': 'none',
             'margin': '0px 4px 2px 0px',
             'backgroundColor': palette.scene.background,
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.primary.background,
+              opacity: .9,
+            },
+          },
+        },
+        {
+          props: {variant: 'noBackground'},
+          style: {
+            'width': '40px',
+            'height': '40px',
+            'borderRadius': '10px',
+            'border': 'none',
+            'margin': '0px 4px 2px 0px',
+            // 'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
               backgroundColor: palette.primary.background,
               opacity: .9,

@@ -28,7 +28,7 @@ export function TooltipIconButton({
   size = 'medium',
   dataTestId = '',
   aboutInfo = true,
-  variant = 'circle',
+  variant = 'rounded',
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
@@ -105,6 +105,7 @@ export function CloseButton({onClick}) {
       title='Close'
       onClick={onClick}
       placement='bottom'
+      variant="noBackground"
       icon={<CloseIcon className='icon-share icon-small'/>}
       aboutInfo={false}
       className='closeButton'
