@@ -37,6 +37,7 @@ export default function CutPlaneMenu() {
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
+  console.log('cutplane length', cutPlanes)
 
 
   const handleClick = (event) => {
