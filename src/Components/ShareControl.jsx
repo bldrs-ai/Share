@@ -34,6 +34,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
+      variant='rounded'
       icon={<ShareIcon className='icon-share'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
