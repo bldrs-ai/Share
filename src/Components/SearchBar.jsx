@@ -99,7 +99,7 @@ export default function SearchBar({fileOpen}) {
         sx={{
           'width': '300px',
           '@media (max-width: 900px)': {
-            width: '240px',
+            width: '200px',
           }}}
       >
         <form onSubmit={onSubmit}>
