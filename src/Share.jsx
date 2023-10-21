@@ -102,7 +102,7 @@ export function navToDefault(navigate, appPrefix) {
   const defaultPath = `${appPrefix}/v/p/index.ifc${location.query || ''}`
   const cameraHash = window.innerWidth > mediaSizeTabletWith ?
         `#${CAMERA_PREFIX}:-133.022,131.828,161.85,-38.078,22.64,-2.314` :
-        `#${CAMERA_PREFIX}:-162.834,168.329,215.95,-51.086,-30.029,25.194`
+        `#${CAMERA_PREFIX}:-172.282,164.125,204.926,-43.324,-1.759,0.345`
   navWith(navigate, defaultPath, {
     search: location.search,
     hash: cameraHash,
