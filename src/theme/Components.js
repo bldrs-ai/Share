@@ -134,6 +134,7 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           padding: '0px 10px',
+          overflowX: 'hidden',
         },
       },
     },

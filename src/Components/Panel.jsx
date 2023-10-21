@@ -21,13 +21,16 @@ export default function Panel({title, onClose, content}) {
   return (
     <Paper
       sx={{
-        overflowY: 'scroll',
-        maxHeight: '290px',
-        width: '100%',
-        opacity: .9,
-        position: 'relative',
-        borderRadius: '4px',
-        backgroundColor: theme.palette.scene.background,
+        'overflowY': 'scroll',
+        'maxHeight': '390px',
+        'width': '100%',
+        'opacity': .9,
+        'position': 'relative',
+        'borderRadius': '4px',
+        'backgroundColor': theme.palette.scene.background,
+        '@media (max-width: 800px)': {
+          maxHeight: '216px',
+        },
       }}
     >
       <Stack

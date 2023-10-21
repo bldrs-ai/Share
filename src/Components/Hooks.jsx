@@ -1,12 +1,13 @@
 import {useState, useEffect} from 'react'
-import {MOBILE_WIDTH} from '../utils/constants'
+// import {MOBILE_WIDTH} from '../utils/constants'
 
 
 /**
  * @return {boolean} True iff window width <= MOBILE_WIDTH.
  */
 export function useIsMobile() {
-  return useWindowDimensions().width <= MOBILE_WIDTH
+  // eslint-disable-next-line no-magic-numbers
+  return useWindowDimensions().width <= 900
 }
 
 
