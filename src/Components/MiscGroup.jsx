@@ -1,19 +1,17 @@
 import React, {useState} from 'react'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
-// import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-// import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-// import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
-// // import HistoryIcon from '@mui/icons-material/History'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
-// import TreeIcon from '../assets/icons/Tree.svg'
+// import useTheme from '@mui/styles/useTheme'
+// import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+// import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -27,10 +25,10 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
   const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
-  // const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
-
+  // const isSettingsVisible = useStore((state) => state.isSettingsVisible)
+  // const theme = useTheme()
 
   const isSelected = () => {
     const ifSelected = (
@@ -41,7 +39,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
     return ifSelected
   }
 
-  // const theme = useTheme()
   return (
     <Stack
       spacing={2}
@@ -54,7 +51,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
         variant='outlined'
         sx={{borderRadius: '20px', padding: '0px 20px'}}
       >
-
         {/* {isSettingsVisible &&
           <>
             <TooltipIconButton
