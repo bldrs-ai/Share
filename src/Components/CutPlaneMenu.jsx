@@ -34,10 +34,10 @@ export default function CutPlaneMenu() {
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
+  const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
-
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -56,6 +56,7 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
+        setIsCutPlane(true)
         planes.forEach((plane) => {
           togglePlane(plane)
         })
@@ -81,6 +82,7 @@ export default function CutPlaneMenu() {
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+      setIsCutPlane(false)
       restCutPlanes.forEach((restCutPlane) => {
         const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
         viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
@@ -102,7 +104,7 @@ export default function CutPlaneMenu() {
         variant='solid'
         icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         onClick={handleClick}
-        selected={anchorEl !== null || !!cutPlanes.length}
+        selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
       />
       <Menu
         elevation={1}
