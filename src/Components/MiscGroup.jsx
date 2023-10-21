@@ -21,8 +21,6 @@ import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined
  * @return {React.Component}
  */
 export default function MiscGroup({deselectItems, viewer, repo}) {
-  const cutPlanes = useStore((state) => state.cutPlanes)
-  const levelInstance = useStore((state) => state.levelInstance)
   const selectedElement = useStore((state) => state.selectedElement)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const [isIsolate, setIsIsolate] = useState(false)
@@ -32,12 +30,11 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
 
   const isSelected = () => {
     const ifSelected = (
-      selectedElement !== null ||
-      cutPlanes.length !== 0 ||
-      levelInstance !== null
+      selectedElement !== null
     )
     return ifSelected
   }
+
 
   return (
     <Stack
