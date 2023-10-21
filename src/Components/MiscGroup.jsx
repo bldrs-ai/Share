@@ -108,7 +108,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
             icon={<VisibilityOutlinedIcon className='icon-share' color='secondary'/>}
           />
         }
-        {isSelected() &&
+        {isSelected() && !isIsolate &&
             <TooltipIconButton
               title='Clear'
               placement='top'
