@@ -83,7 +83,7 @@ export default function CadView({
   const setModelStore = useStore((state) => state.setModelStore)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
+  // const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
@@ -427,15 +427,11 @@ export default function CadView({
   /** Reset global state */
   function resetState() {
     resetSelection()
-    setCutPlaneDirections([])
     setLevelInstance(null)
   }
 
   /** Deselect active scene elts and remove clip planes. */
   function deselectItems() {
-    if (viewer) {
-      viewer.clipper.deleteAllPlanes()
-    }
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)

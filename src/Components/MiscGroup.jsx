@@ -114,10 +114,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               placement='top'
               variant='solid'
               onClick={() => {
-                if (isIsolate) {
-                  setIsIsolate(!isIsolate)
-                  viewer.isolator.toggleIsolationMode()
-                }
                 deselectItems()
               }}
               selected={isSelected()}
