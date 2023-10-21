@@ -670,8 +670,8 @@ export default function CadView({
           'maxHeight': '95%',
           'width': '275px',
           '@media (max-width: 900px)': {
-            width: `80%`,
-            maxWidth: `80%`,
+            width: `78%`,
+            maxWidth: `78%`,
             left: '4.0em',
           },
         }}
