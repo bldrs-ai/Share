@@ -16,7 +16,7 @@ import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {useWindowDimensions} from '../Components/Hooks'
+// import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Privacy from '../privacy/Privacy'
@@ -595,11 +595,11 @@ export default function CadView({
     }
   }
 
-  const windowDimensions = useWindowDimensions()
-  const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 100
-  const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
-  const searchAndNavMaxWidthPx = 300
+  // const windowDimensions = useWindowDimensions()
+  // const spacingBetweenSearchAndOpsGroupPx = 20
+  // const operationsGroupWidthPx = 100
+  // const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
+  // const searchAndNavMaxWidthPx = 300
   return (
     <Box
       sx={{
@@ -670,8 +670,8 @@ export default function CadView({
           'maxHeight': '95%',
           'width': '275px',
           '@media (max-width: 900px)': {
-            width: `${searchAndNavWidthPx}px`,
-            maxWidth: `${searchAndNavMaxWidthPx}px`,
+            width: `80%`,
+            maxWidth: `80%`,
             left: '4.0em',
           },
         }}
@@ -717,7 +717,12 @@ export default function CadView({
         >
           <AboutControl/>
         </Box>
-        {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
+        {!isMobile && viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
+
+        {
+          !isNavigationVisible && isMobile && !isVersionHistoryVisible &&
+          <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
+        }
       </>
       }
       {alert}

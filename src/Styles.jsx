@@ -65,11 +65,11 @@ export default function Styles({theme}) {
           height: '12px',
         },
         '*::-webkit-scrollbar': {
-          width: '2px',
+          width: '10px',
           background: theme.palette.secondary.background,
         },
         '*::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.primary.main,
+          backgroundColor: theme.palette.primary.background,
         },
       }}
     />
