@@ -10,7 +10,9 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-// import CropOutlinedIcon from '../assets/icons/Cutplane.svg'
+import ElevationIcon from '../assets/Icons/Elevation.svg'
+import PlanIcon from '../assets/Icons/Plan.svg'
+import SectionIcon from '../assets/Icons/Section.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -129,17 +131,18 @@ export default function CutPlaneMenu() {
           },
         }}
       >
+
         <MenuItem onClick={() => togglePlane({direction: 'x'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        >X - Section
+        ><SectionIcon className='icon-share'/> &nbsp; &nbsp; Section
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        >Y - Plan
+        ><PlanIcon className='icon-share'/> &nbsp; &nbsp; Plan
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        >Z - Section
+        ><ElevationIcon className='icon-share'/> &nbsp; &nbsp; Elevation
         </MenuItem>
       </Menu>
     </>
