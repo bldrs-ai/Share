@@ -3,6 +3,7 @@ import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
@@ -131,18 +132,23 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-
-        <MenuItem onClick={() => togglePlane({direction: 'x'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        ><SectionIcon className='icon-share'/> &nbsp; &nbsp; Section
-        </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        ><PlanIcon className='icon-share'/> &nbsp; &nbsp; Plan
+        >
+          <PlanIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => togglePlane({direction: 'x'})}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+        >
+          <SectionIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        ><ElevationIcon className='icon-share'/> &nbsp; &nbsp; Elevation
+        >
+          <ElevationIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
         </MenuItem>
       </Menu>
     </>
