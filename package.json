@@ -101,6 +101,7 @@
     "cypress": "^13.2.0",
     "cypress-real-events": "^1.10.3",
     "esbuild": "^0.16.17",
+    "esbuild-clean-plugin": "^1.0.0",
     "esbuild-copy-static-files": "^0.1.0",
     "esbuild-plugin-progress": "^1.0.1",
     "esbuild-plugin-svgr": "^2.0.0",
