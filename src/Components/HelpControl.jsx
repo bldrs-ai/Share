@@ -25,7 +25,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
       <TooltipIconButton
         title={'Help'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<HelpOutlineIcon/>}
+        icon={<HelpOutlineIcon color='secondary'/>}
         placement={'left'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
