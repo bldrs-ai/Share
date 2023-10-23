@@ -7,18 +7,18 @@ import * as process from 'node:process'
 
 
 const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+const __root = path.resolve(__filename, '../../../')
+const entryPoint = path.resolve(__root, 'src', 'index.jsx')
+const assetsDir = path.resolve(__root, 'public')
+export const buildDir = path.resolve(__root, 'docs')
 
-const entryPoint = path.resolve(__dirname, '..', 'src', 'index.jsx')
-const assetsDir = path.resolve(__dirname, '..', 'public')
-export const buildDir = path.resolve(__dirname, '..', 'docs')
 
 const webIfcShimAliasPlugin = {
   name: 'webIfcShimAlias',
   setup(build) {
     build.onResolve({filter: /^web-ifc$/}, (args) => {
       return {
-        path: path.resolve(__dirname, '../node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
+        path: path.resolve(__root, 'node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
       }
     })
   },
