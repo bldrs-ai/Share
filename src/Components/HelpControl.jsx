@@ -106,36 +106,36 @@ const HelpList = () => {
   )
 }
 
-const ShortCutList = () => {
-  return (
-    <Box
-      sx={{
-        marginLeft: '10px',
-      }}
-    >
-      <HelpComponent
-        icon={<div style={{fontWeight: 500}}> Q </div>}
-        description={'To attach a plane to any surface, hover over a surface and press Q'}
-      />
-      <HelpComponent
-        icon={<div style={{fontWeight: 500}}> I </div>}
-        description={'To isolate any element select the element and press I'}
-      />
-      <HelpComponent
-        icon={<div style={{fontWeight: 500}}> H </div>}
-        description={'To hide any element select the element and press H'}
-      />
-      <HelpComponent
-        icon={<div style={{fontWeight: 500}}> U </div>}
-        description={'To unhide any element select the element and press U'}
-      />
-      <HelpComponent
-        icon={<div style={{fontWeight: 500}}> R </div>}
-        description={'To revel all hidden elements press R'}
-      />
-    </Box>
-  )
-}
+// const ShortCutList = () => {
+//   return (
+//     <Box
+//       sx={{
+//         marginLeft: '10px',
+//       }}
+//     >
+//       <HelpComponent
+//         icon={<div style={{fontWeight: 500}}> Q </div>}
+//         description={'To attach a plane to any surface, hover over a surface and press Q'}
+//       />
+//       <HelpComponent
+//         icon={<div style={{fontWeight: 500}}> I </div>}
+//         description={'To isolate any element select the element and press I'}
+//       />
+//       <HelpComponent
+//         icon={<div style={{fontWeight: 500}}> H </div>}
+//         description={'To hide any element select the element and press H'}
+//       />
+//       <HelpComponent
+//         icon={<div style={{fontWeight: 500}}> U </div>}
+//         description={'To unhide any element select the element and press U'}
+//       />
+//       <HelpComponent
+//         icon={<div style={{fontWeight: 500}}> R </div>}
+//         description={'To revel all hidden elements press R'}
+//       />
+//     </Box>
+//   )
+// }
 
 
 /**
@@ -144,14 +144,14 @@ const ShortCutList = () => {
  * @return {object} React component
  */
 function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const theme = useTheme()
-  const [info, setInfo] = useState(true)
+  // const theme = useTheme()
+  // const [info, setInfo] = useState(true)
 
 
   return (
     <Dialog
       icon={<HelpOutlineIcon/>}
-      headerText={info ? 'Help' : 'Shortcuts'}
+      headerText={'Help'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
@@ -167,9 +167,8 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             alignItems: 'center',
           }}
         >
-          {info && <HelpList/>}
-          {!info && <ShortCutList/>}
-          <Box
+          <HelpList/>
+          {/* <Box
             sx={{
               display: 'flex',
               flexDirection: 'row',
@@ -196,7 +195,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 backgroundColor: `${info ? theme.palette.secondary.background : theme.palette.secondary.main}`,
                 borderRadius: '2px'}}
             />
-          </Box>
+          </Box> */}
         </Box>
       }
     />
