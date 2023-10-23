@@ -11,6 +11,7 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import ElevationIcon from '../assets/icons/Elevation1.svg'
 import PlanIcon from '../assets/icons/Plan1.svg'
 import SectionIcon from '../assets/icons/Section1.svg'
@@ -34,6 +35,7 @@ export default function CutPlaneMenu() {
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
@@ -150,6 +152,17 @@ export default function CutPlaneMenu() {
           <ElevationIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
         </MenuItem>
+        {cutPlanes.length > 0 &&
+          <MenuItem
+            onClick={() => {
+              setCutPlaneDirections([])
+              viewer.clipper.deleteAllPlanes()
+            } }
+          >
+            <HighlightOffIcon className='icon-share'/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
+          </MenuItem>
+        }
       </Menu>
     </>
   )
