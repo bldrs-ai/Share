@@ -4,12 +4,13 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
-import TreeIcon from '../assets/icons/Tree.svg'
-import ShareIcon from '../assets/icons/Share.svg'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import HistoryIcon from '@mui/icons-material/History'
+import TreeIcon from '../assets/icons/Tree.svg'
+import ShareIcon from '../assets/icons/Share.svg'
 
 
 /**
@@ -63,11 +64,12 @@ const HelpComponent = ({icon, description}) => {
       >
         {icon}
       </Box>
-      <Typography variant='body1'
+      <Typography variant='overline'
         sx={{
           marginLeft: '30px',
           width: '180px',
           textAlign: 'left',
+          lineHeight: '1.2em',
         }}
       >
         {description}
@@ -84,23 +86,27 @@ const HelpList = () => {
       }}
     >
       <HelpComponent
-        icon={<ShareIcon className='icon-share'/>}
+        icon={<ShareIcon className='icon-share' color='secondary'/>}
         description={'Share sectioned portions of the project'}
       />
       <HelpComponent
-        icon={<ChatOutlinedIcon/>}
+        icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
         description={'Attach notes to 3D elements'}
       />
       <HelpComponent
-        icon={<CropOutlinedIcon/>}
+        icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         description={'Study the project using standard sections'}
       />
       <HelpComponent
-        icon={<TreeIcon className='icon-share'/>}
+        icon={<TreeIcon className='icon-share' color='secondary'/>}
         description={'Navigate the project using element hierarchies'}
       />
       <HelpComponent
-        icon={<AutoFixHighIcon/>}
+        icon={<HistoryIcon className='icon-share' color='secondary'/>}
+        description={'Access project version history'}
+      />
+      <HelpComponent
+        icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
         description={'Generate renderings of the project using text prompts'}
       />
     </Box>
