@@ -76,6 +76,5 @@ export const buildConfig = (useWebIfcShim) => {
   }
 }
 
-
 const useShim = process.env.USE_WEBIFC_SHIM === 'true'
 export const build = buildConfig(useShim)
