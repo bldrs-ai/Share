@@ -88,7 +88,7 @@ const HelpList = () => {
       />
       <HelpComponent
         icon={<ChatOutlinedIcon/>}
-        description={'Attach text snippets to 3D elements'}
+        description={'Attach notes to 3D elements'}
       />
       <HelpComponent
         icon={<CropOutlinedIcon/>}
