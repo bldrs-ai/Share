@@ -87,7 +87,7 @@ const HelpList = () => {
       }}
     >
       <HelpComponent
-        icon={<CreateNewFolderOutlinedIcon className='icon-share' color='secondary'/>}
+        icon={<CreateNewFolderOutlinedIcon color='secondary'/>}
         description={'Open IFC projects from GITHUB or local drive'}
       />
       <HelpComponent
@@ -95,7 +95,7 @@ const HelpList = () => {
         description={'Navigate the project using element hierarchies'}
       />
       <HelpComponent
-        icon={<HistoryIcon className='icon-share' color='secondary'/>}
+        icon={<HistoryIcon color='secondary'/>}
         description={'Access project version history'}
       />
       <HelpComponent
@@ -103,11 +103,11 @@ const HelpList = () => {
         description={'Share sectioned portions of the project'}
       />
       <HelpComponent
-        icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
+        icon={<ChatOutlinedIcon color='secondary'/>}
         description={'Attach notes to 3D elements'}
       />
       <HelpComponent
-        icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
+        icon={<CropOutlinedIcon color='secondary'/>}
         description={'Study the project using standard sections'}
       />
 
