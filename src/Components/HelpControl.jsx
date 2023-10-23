@@ -48,7 +48,7 @@ const HelpComponent = ({icon, description}) => {
       sx={{
         display: 'flex',
         flexDirection: 'row',
-        justifyContent: 'space-between',
+        justifyContent: 'flex-start',
         alignItems: 'center',
         width: '250px',
         marginBottom: '10px',
@@ -65,7 +65,8 @@ const HelpComponent = ({icon, description}) => {
       </Box>
       <Typography variant='body1'
         sx={{
-          width: '200px',
+          marginLeft: '30px',
+          width: '180px',
           textAlign: 'left',
         }}
       >
