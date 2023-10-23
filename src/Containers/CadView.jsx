@@ -30,6 +30,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
+import HelpControl from '../Components/HelpControl'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 
@@ -712,6 +713,15 @@ export default function CadView({
           }}
         >
           <AboutControl/>
+        </Box>
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.5em',
+            right: '1em',
+          }}
+        >
+          <HelpControl/>
         </Box>
         {!isMobile && viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
 
