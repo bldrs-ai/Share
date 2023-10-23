@@ -6,6 +6,7 @@ import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import HistoryIcon from '@mui/icons-material/History'
@@ -86,6 +87,18 @@ const HelpList = () => {
       }}
     >
       <HelpComponent
+        icon={<CreateNewFolderOutlinedIcon className='icon-share' color='secondary'/>}
+        description={'Open IFC projects from GITHUB or local drive'}
+      />
+      <HelpComponent
+        icon={<TreeIcon className='icon-share' color='secondary'/>}
+        description={'Navigate the project using element hierarchies'}
+      />
+      <HelpComponent
+        icon={<HistoryIcon className='icon-share' color='secondary'/>}
+        description={'Access project version history'}
+      />
+      <HelpComponent
         icon={<ShareIcon className='icon-share' color='secondary'/>}
         description={'Share sectioned portions of the project'}
       />
@@ -97,14 +110,8 @@ const HelpList = () => {
         icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         description={'Study the project using standard sections'}
       />
-      <HelpComponent
-        icon={<TreeIcon className='icon-share' color='secondary'/>}
-        description={'Navigate the project using element hierarchies'}
-      />
-      <HelpComponent
-        icon={<HistoryIcon className='icon-share' color='secondary'/>}
-        description={'Access project version history'}
-      />
+
+
       <HelpComponent
         icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
         description={'Generate renderings of the project using text prompts'}
