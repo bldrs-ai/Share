@@ -11,9 +11,9 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import ElevationIcon from '../assets/Icons/Elevation1.svg'
-import PlanIcon from '../assets/Icons/Plan1.svg'
-import SectionIcon from '../assets/Icons/Section1.svg'
+import ElevationIcon from '../assets/icons/Elevation1.svg'
+import PlanIcon from '../assets/icons/Plan1.svg'
+import SectionIcon from '../assets/icons/Section1.svg'
 
 
 const PLANE_PREFIX = 'p'
