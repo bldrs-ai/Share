@@ -74,7 +74,7 @@ export default function CadView({
 
   // UI elts
   const theme = useTheme()
-  const [showControls, setShowControls] = useState(false)
+  const [showControls, setShowControls] = useState(true)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -812,7 +812,6 @@ export default function CadView({
            >
              <Box className="circleLoader"/>
            </Box>
-           {/* <CircularProgress thickness={8} disableShrink/> */}
          </Box>
        </Box>
       }

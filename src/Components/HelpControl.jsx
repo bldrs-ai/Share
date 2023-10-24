@@ -4,15 +4,15 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import HistoryIcon from '@mui/icons-material/History'
+import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
-import LogoB from '../assets/LogoB.svg'
 
 
 /**
@@ -28,12 +28,12 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
       <TooltipIconButton
         title={'Help'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<HelpOutlineIcon color='primary'/>}
+        icon={<HelpOutlineIcon color='secondary'/>}
         placement={'left'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
         showTitle={true}
-        variant='noBackground'
+        variant='rounded'
       />
       {isDialogDisplayed &&
         <HelpDialog
@@ -89,26 +89,6 @@ const HelpList = () => {
       }}
     >
       <HelpComponent
-        icon={
-          <Box
-            sx={{
-              '& svg': {
-                'marginTop': '6px',
-                'marginLeft': '2px',
-                'width': '20px',
-                '@media (max-width: 900px)': {
-                  marginTop: '4px',
-                  width: '20px',
-                },
-              },
-            }}
-          >
-            <LogoB/>
-          </Box>
-        }
-        description={'Activate Bldrs controls'}
-      />
-      <HelpComponent
         icon={<TouchAppOutlinedIcon className='icon-share' color='secondary'/>}
         description={'Double click/tap the model to select an element'}
       />
@@ -127,6 +107,10 @@ const HelpList = () => {
       <HelpComponent
         icon={<ChatOutlinedIcon color='secondary'/>}
         description={'Attach notes to 3D elements'}
+      />
+      <HelpComponent
+        icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
+        description={'Study element properties'}
       />
       <HelpComponent
         icon={<HistoryIcon color='secondary'/>}

@@ -11,7 +11,6 @@ import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
 import PkgJson from '../../../package.json'
 import {Helmet} from 'react-helmet-async'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 
 /**
@@ -41,23 +40,22 @@ export default function AboutControl() {
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
-      // icon={
-      //   <Box
-      //     sx={{
-      //       '& svg': {
-      //         'marginTop': '6px',
-      //         'width': '20px',
-      //         '@media (max-width: 900px)': {
-      //           marginTop: '4px',
-      //           width: '20px',
-      //         },
-      //       },
-      //     }}
-      //   >
-      //     <LogoB/>
-      //   </Box>
-      // }
-      icon={<InfoOutlinedIcon color='primary'/>}
+      icon={
+        <Box
+          sx={{
+            '& svg': {
+              'marginTop': '6px',
+              'width': '20px',
+              '@media (max-width: 900px)': {
+                marginTop: '4px',
+                width: '20px',
+              },
+            },
+          }}
+        >
+          <LogoB/>
+        </Box>
+      }
       dialog={
         <AboutDialog
           isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
