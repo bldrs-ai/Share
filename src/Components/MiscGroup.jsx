@@ -116,7 +116,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               onClick={() => {
                 deselectItems()
               }}
-              selected={isSelected()}
               icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
             />
         }
