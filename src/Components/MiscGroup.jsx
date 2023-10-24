@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
-import CenterFocusWeakIcon from '@mui/icons-material/CenterFocusWeak'
+import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
@@ -79,7 +79,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
                 setIsIsolate(!isIsolate)
               }}
               selected={isIsolate}
-              icon={<CenterFocusWeakIcon color='seconda'/>}
+              icon={<FilterCenterFocusIcon color='secondary'/>}
             />}
         {isSelected() && !isIsolate &&
             <TooltipIconButton

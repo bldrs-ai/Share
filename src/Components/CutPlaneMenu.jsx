@@ -152,18 +152,18 @@ export default function CutPlaneMenu() {
           <ElevationIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
         </MenuItem>
-        {cutPlanes.length > 0 &&
-          <MenuItem
-            onClick={() => {
-              setCutPlaneDirections([])
-              viewer.clipper.deleteAllPlanes()
-              setAnchorEl(null)
-            } }
-          >
-            <HighlightOffIcon className='icon-share'/>
-            <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
-          </MenuItem>
-        }
+        <MenuItem
+          onClick={() => {
+            setCutPlaneDirections([])
+            removePlanes(viewer)
+            setAnchorEl(null)
+            setIsCutPlane(false)
+            removeHashParams(window.location, PLANE_PREFIX, ['x', 'y', 'z'])
+          } }
+        >
+          <HighlightOffIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
+        </MenuItem>
       </Menu>
     </>
   )
