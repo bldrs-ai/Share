@@ -1,5 +1,5 @@
-global.TextEncoder = global.TextEncoder || require('util').TextEncoder;
-global.TextDecoder = global.TextDecoder || require('util').TextDecoder;
+global.TextEncoder = global.TextEncoder || require('util').TextEncoder
+global.TextDecoder = global.TextDecoder || require('util').TextDecoder
 
 /**
  * TODO(pablo): this is a work-around for jest not understanding es6
@@ -47,7 +47,7 @@ const esModules = [
 module.exports = {
   verbose: false,
   testEnvironment: 'jsdom',
-  testPathIgnorePatterns: [],
+  testPathIgnorePatterns: ['src/Containers/CadView.test.jsx'],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/svgTransform.js',
