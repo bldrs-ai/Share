@@ -652,17 +652,15 @@ export default function CadView({
             <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
           </Box>
         }
-        {showControls &&
-          <Box
-            sx={{
-              position: 'fixed',
-              bottom: '1.5em',
-              width: '100%',
-            }}
-          >
-            <MiscGroup deselectItems={deselectItems} viewer={viewer}/>
-          </Box>
-        }
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.5em',
+            width: '100%',
+          }}
+        >
+          <MiscGroup deselectItems={deselectItems} viewer={viewer}/>
+        </Box>
         <Box sx={{
           'position': 'absolute',
           'top': `1em`,
@@ -734,13 +732,13 @@ export default function CadView({
           <TooltipIconButton
             title='Bldrs controls'
             onClick={() => setShowControls(!showControls)}
-            variant='solid'
+            variant='rounded'
             icon={
               <Box
                 sx={{
                   '& svg': {
                     'marginTop': '6px',
-                    'width': '24px',
+                    'width': '20px',
                     '@media (max-width: 900px)': {
                       marginTop: '4px',
                       width: '20px',
@@ -753,18 +751,15 @@ export default function CadView({
             }
           />
         </Box>
-        {showControls &&
-          <Box
-            sx={{
-              position: 'fixed',
-              bottom: '1.5em',
-              right: '1em',
-            }}
-          >
-            <HelpControl/>
-          </Box>
-        }
-
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.5em',
+            right: '1em',
+          }}
+        >
+          <HelpControl/>
+        </Box>
         {!isMobile && viewer && showControls && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
 
         {
