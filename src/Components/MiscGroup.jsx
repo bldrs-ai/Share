@@ -62,7 +62,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
             />
           </>
         } */}
-        {isModelInteractionGroupVisible &&
+        {isModelInteractionGroupVisible && !isIsolate &&
           <>
             <CutPlaneMenu/>
           </>
