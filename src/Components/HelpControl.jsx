@@ -5,7 +5,6 @@ import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
@@ -136,10 +135,6 @@ const HelpList = () => {
       <HelpComponent
         icon={<CropOutlinedIcon color='secondary'/>}
         description={'Study the project using standard sections'}
-      />
-      <HelpComponent
-        icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
-        description={'Generate renderings of the project using text prompts'}
       />
     </Box>
   )
