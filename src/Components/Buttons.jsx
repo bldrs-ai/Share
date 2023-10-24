@@ -2,6 +2,7 @@ import React from 'react'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import {useIsMobile} from '../Hooks'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
 import ExpandIcon from '../assets/icons/Expand.svg'
@@ -34,6 +35,7 @@ export function TooltipIconButton({
   const [openLocal, setOpenLocal] = React.useState(false)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const open = aboutInfo ? isHelpTooltips : false
+  const isMobile = useIsMobile()
   const handleClose = () => {
     setOpenLocal(false)
   }
@@ -46,7 +48,7 @@ export function TooltipIconButton({
         open={openLocal || open}
         onClose={handleClose}
         onOpen={handleOpen}
-        title={title}
+        title={isMobile ? '' : title }
         describeChild
         placement={placement}
         data-testid={dataTestId || title}
