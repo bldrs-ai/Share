@@ -11,7 +11,7 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import CloseIcon from '@mui/icons-material/Close'
 import ElevationIcon from '../assets/icons/Elevation1.svg'
 import PlanIcon from '../assets/icons/Plan1.svg'
 import SectionIcon from '../assets/icons/Section1.svg'
@@ -161,7 +161,7 @@ export default function CutPlaneMenu() {
             removeHashParams(window.location, PLANE_PREFIX, ['x', 'y', 'z'])
           } }
         >
-          <HighlightOffIcon className='icon-share'/>
+          <CloseIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
         </MenuItem>
       </Menu>

@@ -104,7 +104,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
             }}
-            selected={isHidden}
             icon={<VisibilityOutlinedIcon className='icon-share' color='secondary'/>}
           />
         }
