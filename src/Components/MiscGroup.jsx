@@ -6,7 +6,7 @@ import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import CloseIcon from '@mui/icons-material/Close'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 // import useTheme from '@mui/styles/useTheme'
@@ -116,7 +116,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               onClick={() => {
                 deselectItems()
               }}
-              icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
+              icon={<CloseIcon className='icon-share'color='secondary'/>}
             />
         }
         {/* Invisible */}
