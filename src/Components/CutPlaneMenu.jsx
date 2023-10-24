@@ -157,6 +157,7 @@ export default function CutPlaneMenu() {
             onClick={() => {
               setCutPlaneDirections([])
               viewer.clipper.deleteAllPlanes()
+              setAnchorEl(null)
             } }
           >
             <HighlightOffIcon className='icon-share'/>
