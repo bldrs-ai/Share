@@ -46,7 +46,6 @@ export default function Styles({theme}) {
           fill: theme.palette.primary.contrastText,
           width: '22px',
           height: '22px',
-          marginRight: '2px',
         },
         '.icon-small': {
           width: '15px',
