@@ -90,6 +90,26 @@ const HelpList = () => {
       }}
     >
       <HelpComponent
+        icon={
+          <Box
+            sx={{
+              '& svg': {
+                'marginTop': '6px',
+                'marginLeft': '2px',
+                'width': '20px',
+                '@media (max-width: 900px)': {
+                  marginTop: '4px',
+                  width: '20px',
+                },
+              },
+            }}
+          >
+            <LogoB/>
+          </Box>
+        }
+        description={'Activate Bldrs controls'}
+      />
+      <HelpComponent
         icon={<TouchAppOutlinedIcon className='icon-share' color='secondary'/>}
         description={'Double click/tap the model to select an element'}
       />
@@ -120,26 +140,6 @@ const HelpList = () => {
       <HelpComponent
         icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
         description={'Generate renderings of the project using text prompts'}
-      />
-      <HelpComponent
-        icon={
-          <Box
-            sx={{
-              '& svg': {
-                'marginTop': '6px',
-                'marginLeft': '2px',
-                'width': '20px',
-                '@media (max-width: 900px)': {
-                  marginTop: '4px',
-                  width: '20px',
-                },
-              },
-            }}
-          >
-            <LogoB/>
-          </Box>
-        }
-        description={'Activate Bldrs controls'}
       />
     </Box>
   )
