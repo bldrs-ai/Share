@@ -3,7 +3,7 @@ import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import AboutControl from '../Components/About/AboutControl'
+// import AboutControl from '../Components/About/AboutControl'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import ControlsGroup from '../Components/ControlsGroup'
@@ -15,6 +15,7 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
+import {TooltipIconButton} from '../Components/Buttons'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 // import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
@@ -33,6 +34,7 @@ import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import HelpControl from '../Components/HelpControl'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import LogoB from '../assets/LogoB.svg'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -72,6 +74,7 @@ export default function CadView({
 
   // UI elts
   const theme = useTheme()
+  const [showControls, setShowControls] = useState(false)
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -633,29 +636,33 @@ export default function CadView({
       {showSearchBar &&
       <>
         {
-          !isNavigationVisible && isMobile && !isVersionHistoryVisible &&
+          !isNavigationVisible && isMobile && !isVersionHistoryVisible && showControls &&
         <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
         }
-        {!isMobile &&
+        {!isMobile && showControls &&
         <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
         }
-        <Box sx={{
-          position: 'absolute',
-          top: '1em',
-          left: '1em',
-        }}
-        >
-          <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
-        </Box>
-        <Box
-          sx={{
-            position: 'fixed',
-            bottom: '1.5em',
-            width: '100%',
+        {showControls &&
+          <Box sx={{
+            position: 'absolute',
+            top: '1em',
+            left: '1em',
           }}
-        >
-          <MiscGroup deselectItems={deselectItems} viewer={viewer}/>
-        </Box>
+          >
+            <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
+          </Box>
+        }
+        {showControls &&
+          <Box
+            sx={{
+              position: 'fixed',
+              bottom: '1.5em',
+              width: '100%',
+            }}
+          >
+            <MiscGroup deselectItems={deselectItems} viewer={viewer}/>
+          </Box>
+        }
         <Box sx={{
           'position': 'absolute',
           'top': `1em`,
@@ -681,6 +688,7 @@ export default function CadView({
           {isNavPanelOpen &&
           isNavigationPanelVisible &&
           isNavigationVisible &&
+          showControls &&
             <NavPanel
               model={model}
               element={rootElement}
@@ -698,13 +706,24 @@ export default function CadView({
               }
             />
           }
-          {modelPath.repo !== undefined && isVersionHistoryVisible &&
+          {modelPath.repo !== undefined && isVersionHistoryVisible && showControls &&
             <>
               <VersionsHistoryPanel branch={modelPath.branch}/>
               <BranchesControl location={location}/>
             </>
           }
         </Box>
+        {/* {showControls &&
+          <Box
+            sx={{
+              position: 'fixed',
+              bottom: '4.5em',
+              right: '1em',
+            }}
+          >
+            <AboutControl/>
+          </Box>
+        } */}
         <Box
           sx={{
             position: 'fixed',
@@ -712,21 +731,44 @@ export default function CadView({
             left: '1em',
           }}
         >
-          <AboutControl/>
+          <TooltipIconButton
+            title='Bldrs controls'
+            onClick={() => setShowControls(!showControls)}
+            variant='solid'
+            icon={
+              <Box
+                sx={{
+                  '& svg': {
+                    'marginTop': '6px',
+                    'width': '24px',
+                    '@media (max-width: 900px)': {
+                      marginTop: '4px',
+                      width: '20px',
+                    },
+                  },
+                }}
+              >
+                <LogoB/>
+              </Box>
+            }
+          />
         </Box>
-        <Box
-          sx={{
-            position: 'fixed',
-            bottom: '1.5em',
-            right: '1em',
-          }}
-        >
-          <HelpControl/>
-        </Box>
-        {!isMobile && viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
+        {showControls &&
+          <Box
+            sx={{
+              position: 'fixed',
+              bottom: '1.5em',
+              right: '1em',
+            }}
+          >
+            <HelpControl/>
+          </Box>
+        }
+
+        {!isMobile && viewer && showControls && <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>}
 
         {
-          !isNavigationVisible && isMobile && !isVersionHistoryVisible &&
+          !isNavigationVisible && isMobile && !isVersionHistoryVisible && showControls &&
           <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
         }
       </>
