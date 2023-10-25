@@ -130,7 +130,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Double click / tap the model to select model element',
+      description: 'Doubl click the model to select an element',
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
@@ -141,7 +141,7 @@ const HelpList = ({pageIndex}) => {
       description: 'Isolate selected element',
     },
     {
-      icon: <VisibilityOffOutlinedIcon className='icon-share' color='secondary'/>,
+      icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary'/>,
       description: 'Hide selected element',
     },
     {
