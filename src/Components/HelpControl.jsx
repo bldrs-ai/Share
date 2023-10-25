@@ -68,7 +68,6 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
  * @return {React.ReactElement} Rendered component
  */
 const HelpComponent = ({icon, description}) => {
-  const theme = useTheme()
   return (
     <Box
       sx={{
@@ -76,10 +75,12 @@ const HelpComponent = ({icon, description}) => {
         flexDirection: 'row',
         justifyContent: 'flex-start',
         alignItems: 'center',
-        width: '250px',
+        width: '230px',
         marginBottom: '10px',
-        paddingBottom: '4px',
-        borderBottom: `1px solid ${theme.palette.background.button}`,
+        paddingBottom: '2px',
+        paddingTop: '2px',
+
+        // border: '1px solid red',
       }}
     >
       <Box sx={{marginLeft: '10px'}}>{icon}</Box>
@@ -87,7 +88,7 @@ const HelpComponent = ({icon, description}) => {
         variant='overline'
         sx={{
           marginLeft: '30px',
-          width: '180px',
+          width: '150px',
           textAlign: 'left',
           lineHeight: '1.4em',
         }}
@@ -130,7 +131,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Double click the model to select an element',
+      description: <Typography variant='overline' sx={{lineHeight: '1.4em'}}>Double click the model to select <br/> an element</Typography>,
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
@@ -146,7 +147,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Unhide all of the hidden elements',
+      description: `Unhide all of the hidden elements`,
     },
     {
       icon: <CloseIcon className='icon-share' color='secondary'/>,
@@ -158,7 +159,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
-      description: 'Navigate the project using element hierarchies',
+      description: 'Navigate the project using element hierarchy',
     },
     {
       icon: <HistoryIcon color='secondary'/>,
@@ -191,7 +192,7 @@ const HelpList = ({pageIndex}) => {
   ]
 
   return (
-    <Box sx={{marginLeft: '10px', height: '220px'}}>
+    <Box sx={{marginLeft: '10px', height: '240px'}}>
       {pageContents[pageIndex].map((item, index) => (
         <HelpComponent key={index} icon={item.icon} description={item.description}/>
       ))}
@@ -231,7 +232,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<InfoOutlinedIcon/>}
-      headerText={'Bldrs.ai'}
+      headerText={<Typography variant='body1'>Bldrs.ai</Typography>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
@@ -240,16 +241,16 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={
         <Box
           sx={{
-            width: '260px',
+            width: '220px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             alignItems: 'center',
+            marginTop: '10px',
           }}
           {...swipeHandlers}
         >
           <HelpList pageIndex={pageIndex}/>
-
           <Box
             sx={{
               display: 'flex',
