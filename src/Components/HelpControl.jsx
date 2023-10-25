@@ -130,7 +130,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Doubl click the model to select an element',
+      description: 'Double click the model to select an element',
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
