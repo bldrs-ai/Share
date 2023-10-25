@@ -6,6 +6,9 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
+import TreeIcon from '../assets/icons/Tree.svg'
+import ShareIcon from '../assets/icons/Share.svg'
+import LogoB from '../assets/LogoB.svg'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
@@ -13,11 +16,12 @@ import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBullet
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import HistoryIcon from '@mui/icons-material/History'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
-import TreeIcon from '../assets/icons/Tree.svg'
-import ShareIcon from '../assets/icons/Share.svg'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
-import LogoB from '../assets/LogoB.svg'
+import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
+import PortraitIcon from '@mui/icons-material/Portrait'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 
 
 /**
@@ -123,43 +127,61 @@ const HelpList = ({pageIndex}) => {
       description: 'Double click/tap the model to select an element',
     },
     {
+      icon: <CropOutlinedIcon color='secondary'/>,
+      description: 'Study the project using standard sections',
+    },
+    {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
       description: 'Double click/tap the model to select an element',
     },
     {
-      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
-      description: 'Open IFC projects from GITHUB or local drive',
-    },
-    {
-      icon: <ShareIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
-      description: 'Share sectioned portions of the project',
-    },
-    {
-      icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
-      description: 'Navigate the project using element hierarchies',
-    },
-    {
-      icon: <ChatOutlinedIcon color='secondary'/>,
-      description: 'Attach notes to 3D elements',
+      icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
+      description: 'Isolate selected model element',
     },
     {
       icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
       description: 'Study element properties',
     },
     {
+      icon: <VisibilityOffOutlinedIcon className='icon-share' color='secondary'/>,
+      description: 'Hide selected model element',
+    },
+    {
+      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
+      description: 'Unhide all of the hidden model element',
+    },
+    {
+      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
+      description: 'Open IFC projects from GITHUB or local drive',
+    },
+    {
+      icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
+      description: 'Navigate the project using element hierarchies',
+    },
+    {
       icon: <HistoryIcon color='secondary'/>,
       description: 'Access project version history',
     },
     {
-      icon: <CropOutlinedIcon color='secondary'/>,
-      description: 'Study the project using standard sections',
+      icon: <PortraitIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
+      description: 'Log in to get access to projects hosted on Github',
     },
+    {
+      icon: <ShareIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
+      description: 'Share sectioned portions of the project',
+    },
+    {
+      icon: <ChatOutlinedIcon color='secondary'/>,
+      description: 'Attach notes to 3D elements',
+    },
+
   ]
 
   const pageContents = [
     helpContent.slice(0, 3),
-    helpContent.slice(3, 6),
-    helpContent.slice(6),
+    helpContent.slice(3, 7),
+    helpContent.slice(7, 10),
+    helpContent.slice(9),
   ]
 
   return (
@@ -183,7 +205,7 @@ const HelpList = ({pageIndex}) => {
  */
 function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [pageIndex, setPageIndex] = useState(0)
-  const totalPages = 3
+  const totalPages = 4
   const theme = useTheme()
 
   return (
@@ -212,7 +234,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'space-between',
-              width: '100%',
+              width: '60%',
               marginTop: '6px',
               alignItems: 'center',
             }}
@@ -229,7 +251,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               alignItems="center"
             >
               <Stack
-                direction='row' sx={{width: '42px'}}
+                direction='row' sx={{width: '54px'}}
               >
                 {[...Array(totalPages)].map((_, idx) => (
                   <Box

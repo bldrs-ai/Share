@@ -9,9 +9,7 @@ import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import CloseIcon from '@mui/icons-material/Close'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
-// import useTheme from '@mui/styles/useTheme'
-// import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-// import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
