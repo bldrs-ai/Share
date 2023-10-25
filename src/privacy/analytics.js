@@ -1,7 +1,10 @@
-import gtag from '../utils/gtag'
+import ReactGA from 'react-ga4'
 import * as Functional from './functional'
 import * as Privacy from './Privacy'
 import {assertDefined} from '../utils/assert'
+
+
+ReactGA.initialize('G-GRLNVMZRGW')
 
 
 /**
@@ -9,13 +12,13 @@ import {assertDefined} from '../utils/assert'
  *
  *   https://developers.google.com/tag-platform/gtagjs/reference
  *
- * @param {object} commandParameters
+ * @param {string} actionName
  * @param {object} additionalConfigInfo
  */
-export function recordEvent(commandParameters, additionalConfigInfo) {
-  assertDefined(commandParameters)
+export function recordEvent(actionName, additionalConfigInfo) {
+  assertDefined(actionName)
   if (isAnalyticsAllowed()) {
-    gtag('event', commandParameters, additionalConfigInfo)
+    ReactGA.event(actionName, additionalConfigInfo)
   }
 }
 
