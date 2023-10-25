@@ -730,7 +730,7 @@ export default function CadView({
           }}
         >
           <TooltipIconButton
-            title='Bldrs controls'
+            title='Bldrs tools'
             onClick={() => setShowControls(!showControls)}
             variant='rounded'
             icon={
