@@ -1,6 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
-import {Swipeable} from 'react-swipeable'
+import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -214,7 +214,8 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const totalPages = 4
   const theme = useTheme()
 
-  const handlers = {
+
+  const swipeHandlers = useSwipeable({
     onSwipedLeft: () => {
       if (pageIndex < totalPages - 1) {
         setPageIndex(pageIndex + 1)
@@ -225,7 +226,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         setPageIndex(pageIndex - 1)
       }
     },
-  }
+  })
 
   return (
     <Dialog
@@ -237,78 +238,77 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       actionIcon={<InfoOutlinedIcon/>}
       actionCb={() => setIsDialogDisplayed(false)}
       content={
-        <Swipeable {...handlers}>
+        <Box
+          sx={{
+            width: '260px',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+          {...swipeHandlers}
+        >
+          <HelpList pageIndex={pageIndex}/>
+
           <Box
             sx={{
-              width: '260px',
               display: 'flex',
-              flexDirection: 'column',
+              flexDirection: 'row',
               justifyContent: 'space-between',
+              width: '68%',
+              marginTop: '6px',
               alignItems: 'center',
             }}
           >
-            <HelpList pageIndex={pageIndex}/>
+            <TooltipIconButton
+              title='Previous'
+              placement='right'
+              variant='noBackground'
+              icon={
+                <ArrowBackIcon
+                  color='secondary'
+                  sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+                />}
+              onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
+            />
 
-            <Box
-              sx={{
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'space-between',
-                width: '68%',
-                marginTop: '6px',
-                alignItems: 'center',
-              }}
+            <Stack
+              sx={{width: '100%'}}
+              direction="row"
+              justifyContent="center"
+              alignItems="center"
             >
-              <TooltipIconButton
-                title='Previous'
-                placement='right'
-                variant='noBackground'
-                icon={
-                  <ArrowBackIcon
-                    color='secondary'
-                    sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
-                  />}
-                onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
-              />
-
               <Stack
-                sx={{width: '100%'}}
-                direction="row"
-                justifyContent="center"
-                alignItems="center"
+                direction='row' sx={{width: '38px'}}
               >
-                <Stack
-                  direction='row' sx={{width: '38px'}}
-                >
-                  {[...Array(totalPages)].map((_, idx) => (
-                    <Box
-                      key={idx}
-                      sx={{
-                        width: '6px',
-                        height: '6px',
-                        backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
-                        borderRadius: '50%',
-                        marginX: '2px',
-                      }}
-                    />
-                  ))}
-                </Stack>
+                {[...Array(totalPages)].map((_, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      width: '6px',
+                      height: '6px',
+                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
+                      borderRadius: '50%',
+                      marginX: '2px',
+                    }}
+                  />
+                ))}
               </Stack>
-              <TooltipIconButton
-                title='Next'
-                placement='right'
-                variant='noBackground'
-                icon={
-                  <ArrowForwardIcon
-                    color='secondary'
-                    sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
-                  />}
-                onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
-              />
-            </Box>
-
+            </Stack>
+            <TooltipIconButton
+              title='Next'
+              placement='right'
+              variant='noBackground'
+              icon={
+                <ArrowForwardIcon
+                  color='secondary'
+                  sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+                />}
+              onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
+            />
           </Box>
-        </Swipeable>
+
+        </Box>
       }
     />
   )
