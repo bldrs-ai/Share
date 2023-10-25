@@ -36,7 +36,7 @@ export const night = {
   },
   secondary: {
     main: colors.grey.light,
-    background: colors.black,
+    background: colors.grey.medium,
     contrastText: colors.green.light,
   },
   background: {

@@ -259,7 +259,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                     sx={{
                       width: '10px',
                       height: '10px',
-                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.primary.background,
+                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
                       borderRadius: '50%',
                       marginX: '2px',
                     }}
