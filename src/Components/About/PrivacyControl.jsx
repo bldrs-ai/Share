@@ -2,32 +2,27 @@ import React, {useEffect, useState} from 'react'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Link from '@mui/material/Link'
-import * as Privacy from '../../privacy/Privacy'
+import * as Analytics from '../../privacy/analytics'
 import Toggle from '../Toggle'
 
 
 /**
- * The PrivacyControl component contains and "accept cookies" checkbox.
+ * The PrivacyControl component contains and "accept analytics" checkbox.
  *
  * @return {React.ReactElement}
  */
 export default function PrivacyControl() {
-  const [acceptCookies, setAcceptCookies] = useState(true)
-
+  const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(true)
 
   useEffect(() => {
-    if (Privacy.isPrivacySocialEnabled()) {
-      setAcceptCookies(true)
-    } else {
-      setAcceptCookies(false)
-    }
+    setIsAnalyticsEnabled(Analytics.isAllowed())
   }, [])
 
-  const changePrivacy = () => {
-    setPrivacy(acceptCookies)
-    setAcceptCookies(!acceptCookies)
+  const togglePrivacy = () => {
+    const newVal = !isAnalyticsEnabled
+    setIsAnalyticsEnabled(newVal)
+    Analytics.setIsAllowed(newVal)
   }
-
 
   return (
     <Stack
@@ -47,16 +42,7 @@ export default function PrivacyControl() {
           read more
         </Link>
       </Stack>
-      <Toggle checked={acceptCookies} onChange={changePrivacy}/>
+      <Toggle checked={isAnalyticsEnabled} onChange={togglePrivacy}/>
     </Stack>
   )
-}
-
-
-export const setPrivacy = (acceptCookies) => {
-  if (acceptCookies) {
-    Privacy.setUsageAndSocialEnabled(false, false)
-  } else {
-    Privacy.setUsageAndSocialEnabled(true, true)
-  }
 }

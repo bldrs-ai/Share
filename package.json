@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r747",
+  "version": "1.0.0-r748",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -53,6 +53,7 @@
     "bldrs-conway": "./bldrs-conway-v0.0.1.tgz",
     "clsx": "^1.2.1",
     "cypress-react-router": "^2.0.1",
+    "js-cookie": "^3.0.5",
     "material-ui-popup-state": "^5.0.4",
     "matrix-widget-api": "^1.1.1",
     "normalize.css": "^8.0.1",

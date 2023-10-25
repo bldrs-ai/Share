@@ -1,42 +1,44 @@
 import ReactGA from 'react-ga4'
-import * as Functional from './functional'
-import * as Privacy from './Privacy'
+import Cookies from 'js-cookie'
 import {assertDefined} from '../utils/assert'
+import Expires from './Expires'
 
 
-ReactGA.initialize('G-GRLNVMZRGW')
+const COOKIE_NAME = 'isAnalyticsAllowed'
+const DEFAULT_VALUE = true
+const GA_ID = 'G-GRLNVMZRGW'
+
+
+/** @return {boolean} */
+export function isAllowed() {
+  const val = Cookies.get(COOKIE_NAME)
+  return val === undefined ? DEFAULT_VALUE : val === 'true'
+}
 
 
 /**
- * A passthrough to GTags that can be toggled by user preference.
- *
- *   https://developers.google.com/tag-platform/gtagjs/reference
- *
+ * @param {boolean} allowed
+ */
+export function setIsAllowed(allowed) {
+  assertDefined(allowed)
+  Cookies.set(COOKIE_NAME, allowed, {expires: Expires.DAYS})
+}
+
+
+/** Conditionally initialize GA only when allowed and on access. */
+let isInitialized = false
+
+/**
  * @param {string} actionName
  * @param {object} additionalConfigInfo
  */
 export function recordEvent(actionName, additionalConfigInfo) {
   assertDefined(actionName)
-  if (isAnalyticsAllowed()) {
+  if (isAllowed()) {
+    if (!isInitialized) {
+      ReactGA.initialize(GA_ID)
+      isInitialized = true
+    }
     ReactGA.event(actionName, additionalConfigInfo)
   }
-}
-
-
-/**
- * @return {boolean} is social level of privacy enabled
- */
-export function isAnalyticsAllowed() {
-  return Privacy.isPrivacySocialEnabled()
-}
-
-
-/**
- * Enable or disable analytics cookies
- *
- * @param {boolean} isAllowed Is analytics enabled
- */
-export function setIsAnalyticsAllowed(isAllowed) {
-  assertDefined(isAllowed)
-  Functional.setCookieBoolean('isAnalyticsAllowed', isAllowed)
 }

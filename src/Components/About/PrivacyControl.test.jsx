@@ -1,14 +1,21 @@
-import * as Privacy from '../../privacy/Privacy'
-import {setPrivacy} from './PrivacyControl'
+import React from 'react'
+import {fireEvent, render} from '@testing-library/react'
+import * as Analytics from '../../privacy/analytics'
+import PrivacyControl from './PrivacyControl'
 
 
-describe('PrivacyControl tests', () => {
-  test('sets privacy settings correctly', () => {
-    // Test setting privacy to disabled
-    setPrivacy(true)
-    expect(Privacy.isPrivacySocialEnabled()).toBe(false)
-    // Test setting privacy to enabled
-    setPrivacy(false)
-    expect(Privacy.isPrivacySocialEnabled()).toBe(true)
+describe('PrivacyControl', () => {
+  test('toggle sets analytics cookie correctly', () => {
+    expect(Analytics.isAllowed()).toBe(true)
+
+    const {getByRole} = render(<PrivacyControl/>)
+    const enableAnalyticsToggle = getByRole('checkbox')
+    expect(enableAnalyticsToggle).toBeInTheDocument()
+
+    fireEvent.click(enableAnalyticsToggle)
+    expect(Analytics.isAllowed()).toBe(false)
+
+    fireEvent.click(enableAnalyticsToggle)
+    expect(Analytics.isAllowed()).toBe(true)
   })
 })
