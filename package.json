@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r747",
+  "version": "1.0.0-r748",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -41,7 +41,6 @@
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
     "@emotion/styled": "^11.10.0",
-    "@fontsource/roboto": "^5.0.8",
     "@iconscout/react-unicons": "^2.0.0",
     "@mui/icons-material": "^5.11.9",
     "@mui/lab": "^5.0.0-alpha.95",
