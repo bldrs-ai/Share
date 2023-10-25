@@ -8,7 +8,9 @@ global.TextDecoder = global.TextDecoder || require('util').TextDecoder
  */
 const esModules = [
   '@bldrs-ai',
+  '@popperjs/core',
   'bail',
+  'bim-fragment',
   'comma-separated-tokens',
   'decode-named-character-reference',
   'hast-util-whitespace',
@@ -18,12 +20,16 @@ const esModules = [
   'mdast-util-to-hast',
   'mdast-util-to-string',
   'micromark',
+  'n8ao',
+  'openbim-clay',
+  'openbim-components',
   'property-information',
   'space-separated-tokens',
   'remark-rehype',
   'react-markdown',
   'remark-parse',
   'three',
+  'top-tool-package-reader',
   'trim-lines',
   'trough',
   'unified',
@@ -58,6 +64,8 @@ module.exports = {
   ],
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
+    // https://github.com/dexie/Dexie.js/issues/1601
+    '^dexie$': require.resolve('dexie'),
   },
   setupFilesAfterEnv: [
     '<rootDir>/tools/jest/setupTests.js',

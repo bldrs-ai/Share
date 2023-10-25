@@ -1,6 +1,7 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
+import ShareNextRoutes from './ShareNextRoutes'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import {useAuth0} from '@auth0/auth0-react'
@@ -67,6 +68,16 @@ export default function BaseRoutes({testElt = null}) {
           element={
             testElt ||
               <ShareRoutes
+                installPrefix={installPrefix}
+                appPrefix={`${installPrefix }/share`}
+              />
+          }
+        />
+        <Route
+          path="share-next/*"
+          element={
+            testElt ||
+              <ShareNextRoutes
                 installPrefix={installPrefix}
                 appPrefix={`${installPrefix }/share`}
               />

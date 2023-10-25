@@ -4,6 +4,7 @@ import svgrPlugin from 'esbuild-plugin-svgr'
 import {fileURLToPath} from 'url'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import ifcjsImportRewritePlugin from './ifcjsImportRewritePlugin.js'
 
 
 const __filename = fileURLToPath(import.meta.url)
@@ -34,6 +35,7 @@ export const buildConfig = (useWebIfcShim) => {
       src: assetsDir,
       dest: buildDir,
     }),
+    ifcjsImportRewritePlugin,
   ]
 
 
