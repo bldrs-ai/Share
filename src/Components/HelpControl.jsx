@@ -218,6 +218,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             }}
           >
             <ArrowBackIcon
+              color='secondary'
               sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
               onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
             />
@@ -245,6 +246,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               </Stack>
             </Stack>
             <ArrowForwardIcon
+              color='secondary'
               sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
               onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
             />
