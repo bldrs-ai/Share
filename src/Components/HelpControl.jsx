@@ -181,7 +181,7 @@ const HelpList = ({pageIndex}) => {
     helpContent.slice(0, 3),
     helpContent.slice(3, 7),
     helpContent.slice(7, 10),
-    helpContent.slice(9),
+    helpContent.slice(10),
   ]
 
   return (
