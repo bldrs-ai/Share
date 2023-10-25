@@ -124,7 +124,7 @@ const HelpList = ({pageIndex}) => {
       >
         <LogoB/>
       </Box>,
-      description: 'Double click/tap the model to select an element',
+      description: 'Show / Hide Bldrs tools',
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
@@ -132,23 +132,23 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Double click/tap the model to select an element',
+      description: 'Double click / tap the model to select model element',
     },
     {
       icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
-      description: 'Isolate selected model element',
-    },
-    {
-      icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Study element properties',
+      description: 'Isolate selected element',
     },
     {
       icon: <VisibilityOffOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Hide selected model element',
+      description: 'Hide selected element',
     },
     {
       icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Unhide all of the hidden model element',
+      description: 'Unhide all of the hidden elements',
+    },
+    {
+      icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
+      description: 'Study properties attached to selected element',
     },
     {
       icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
