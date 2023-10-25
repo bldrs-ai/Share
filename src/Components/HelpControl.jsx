@@ -88,7 +88,7 @@ const HelpComponent = ({icon, description}) => {
         variant='overline'
         sx={{
           marginLeft: '30px',
-          width: '150px',
+          width: '220px',
           textAlign: 'left',
           lineHeight: '1.4em',
         }}
@@ -232,7 +232,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<InfoOutlinedIcon/>}
-      headerText={<Typography variant='body1'>Bldrs.ai</Typography>}
+      headerText={'Bldrs.ai'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
@@ -241,7 +241,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={
         <Box
           sx={{
-            width: '220px',
+            width: '250px',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
