@@ -234,16 +234,23 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'space-between',
-              width: '60%',
+              width: '68%',
               marginTop: '6px',
               alignItems: 'center',
             }}
           >
-            <ArrowBackIcon
-              color='secondary'
-              sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+            <TooltipIconButton
+              title='Next'
+              placement='right'
+              variant='noBackground'
+              icon={
+                <ArrowBackIcon
+                  color='secondary'
+                  sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+                />}
               onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
             />
+
             <Stack
               sx={{width: '100%'}}
               direction="row"
@@ -267,9 +274,15 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                 ))}
               </Stack>
             </Stack>
-            <ArrowForwardIcon
-              color='secondary'
-              sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+            <TooltipIconButton
+              title='Next'
+              placement='right'
+              variant='noBackground'
+              icon={
+                <ArrowForwardIcon
+                  color='secondary'
+                  sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+                />}
               onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
             />
           </Box>
@@ -278,5 +291,6 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     />
   )
 }
+
 
 export {HelpDialog}
