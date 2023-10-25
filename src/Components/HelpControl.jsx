@@ -9,6 +9,7 @@ import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 import LogoB from '../assets/LogoB.svg'
+import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
@@ -87,7 +88,7 @@ const HelpComponent = ({icon, description}) => {
           marginLeft: '30px',
           width: '180px',
           textAlign: 'left',
-          lineHeight: '1.2em',
+          lineHeight: '1.4em',
         }}
       >
         {description}
@@ -147,8 +148,8 @@ const HelpList = ({pageIndex}) => {
       description: 'Unhide all of the hidden elements',
     },
     {
-      icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Study properties attached to selected element',
+      icon: <CloseIcon className='icon-share' color='secondary'/>,
+      description: 'Clear selected elements',
     },
     {
       icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
@@ -174,6 +175,10 @@ const HelpList = ({pageIndex}) => {
       icon: <ChatOutlinedIcon color='secondary'/>,
       description: 'Attach notes to 3D elements',
     },
+    {
+      icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
+      description: 'Study properties attached to selected element',
+    },
 
   ]
 
@@ -185,7 +190,7 @@ const HelpList = ({pageIndex}) => {
   ]
 
   return (
-    <Box sx={{marginLeft: '10px', height: '200px'}}>
+    <Box sx={{marginLeft: '10px', height: '220px'}}>
       {pageContents[pageIndex].map((item, index) => (
         <HelpComponent key={index} icon={item.icon} description={item.description}/>
       ))}
@@ -240,7 +245,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             }}
           >
             <TooltipIconButton
-              title='Next'
+              title='Previous'
               placement='right'
               variant='noBackground'
               icon={
