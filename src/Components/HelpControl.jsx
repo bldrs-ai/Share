@@ -1,5 +1,6 @@
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
+import {Swipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -128,12 +129,12 @@ const HelpList = ({pageIndex}) => {
       description: 'Show / Hide Bldrs tools',
     },
     {
-      icon: <CropOutlinedIcon color='secondary'/>,
-      description: 'Study the project using standard sections',
-    },
-    {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
       description: 'Double click / tap the model to select model element',
+    },
+    {
+      icon: <CropOutlinedIcon color='secondary'/>,
+      description: 'Study the project using standard sections',
     },
     {
       icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
@@ -213,6 +214,19 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const totalPages = 4
   const theme = useTheme()
 
+  const handlers = {
+    onSwipedLeft: () => {
+      if (pageIndex < totalPages - 1) {
+        setPageIndex(pageIndex + 1)
+      }
+    },
+    onSwipedRight: () => {
+      if (pageIndex > 0) {
+        setPageIndex(pageIndex - 1)
+      }
+    },
+  }
+
   return (
     <Dialog
       icon={<InfoOutlinedIcon/>}
@@ -223,75 +237,78 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       actionIcon={<InfoOutlinedIcon/>}
       actionCb={() => setIsDialogDisplayed(false)}
       content={
-        <Box
-          sx={{
-            width: '260px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <HelpList pageIndex={pageIndex}/>
-
+        <Swipeable {...handlers}>
           <Box
             sx={{
+              width: '260px',
               display: 'flex',
-              flexDirection: 'row',
+              flexDirection: 'column',
               justifyContent: 'space-between',
-              width: '68%',
-              marginTop: '6px',
               alignItems: 'center',
             }}
           >
-            <TooltipIconButton
-              title='Previous'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowBackIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
-            />
+            <HelpList pageIndex={pageIndex}/>
 
-            <Stack
-              sx={{width: '100%'}}
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
+            <Box
+              sx={{
+                display: 'flex',
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                width: '68%',
+                marginTop: '6px',
+                alignItems: 'center',
+              }}
             >
+              <TooltipIconButton
+                title='Previous'
+                placement='right'
+                variant='noBackground'
+                icon={
+                  <ArrowBackIcon
+                    color='secondary'
+                    sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+                  />}
+                onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
+              />
+
               <Stack
-                direction='row' sx={{width: '54px'}}
+                sx={{width: '100%'}}
+                direction="row"
+                justifyContent="center"
+                alignItems="center"
               >
-                {[...Array(totalPages)].map((_, idx) => (
-                  <Box
-                    key={idx}
-                    sx={{
-                      width: '10px',
-                      height: '10px',
-                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
-                      borderRadius: '50%',
-                      marginX: '2px',
-                    }}
-                  />
-                ))}
+                <Stack
+                  direction='row' sx={{width: '38px'}}
+                >
+                  {[...Array(totalPages)].map((_, idx) => (
+                    <Box
+                      key={idx}
+                      sx={{
+                        width: '6px',
+                        height: '6px',
+                        backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
+                        borderRadius: '50%',
+                        marginX: '2px',
+                      }}
+                    />
+                  ))}
+                </Stack>
               </Stack>
-            </Stack>
-            <TooltipIconButton
-              title='Next'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowForwardIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
-            />
+              <TooltipIconButton
+                title='Next'
+                placement='right'
+                variant='noBackground'
+                icon={
+                  <ArrowForwardIcon
+                    color='secondary'
+                    sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+                  />}
+                onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
+              />
+            </Box>
+
           </Box>
-        </Box>
+        </Swipeable>
       }
     />
   )
