@@ -5,7 +5,7 @@ describe('sample models', () => {
 
   context.skip('when no model is loaded', () => {
     beforeEach(() => {
-      cy.setCookie('isFirstTime', 'false')
+      cy.setCookie('isFirstTime', '1')
       cy.visit('/')
       cy.get('#viewer-container').get('canvas').should('be.visible')
       cy.get('[data-model-ready="true"]').should('exist')
