@@ -1,4 +1,4 @@
-import * as Analytics from './Analytics'
+import * as Analytics from './analytics'
 
 
 describe('Analytics', () => {
