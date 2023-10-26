@@ -47,7 +47,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
       <ButtonGroup
         orientation='horizontal'
         variant='outlined'
-        sx={{borderRadius: '20px', padding: '0px 20px'}}
+        sx={{borderRadius: '10px', padding: '0px 10px'}}
       >
         {isModelInteractionGroupVisible && !isIsolate &&
           <>
