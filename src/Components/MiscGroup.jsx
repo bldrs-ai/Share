@@ -23,8 +23,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
-  // const isSettingsVisible = useStore((state) => state.isSettingsVisible)
-  // const theme = useTheme()
 
   const isSelected = () => {
     const ifSelected = (
@@ -46,26 +44,11 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
         variant='outlined'
         sx={{borderRadius: '20px', padding: '0px 20px'}}
       >
-        {/* {isSettingsVisible &&
-          <>
-            <TooltipIconButton
-              title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
-              onClick={() => theme.toggleColorMode()}kk
-              placement={'top'}
-              variant='solid'
-              icon={
-                theme.palette.mode === 'light' ?
-                  <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
-                  <NightlightOutlinedIcon className='icon-share'/> }
-            />
-          </>
-        } */}
         {isModelInteractionGroupVisible && !isIsolate &&
           <>
             <CutPlaneMenu/>
           </>
         }
-
         {isSelected() && selectedElement !== null &&
             <TooltipIconButton
               showTitle={true}
@@ -79,6 +62,19 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               selected={isIsolate}
               icon={<FilterCenterFocusIcon color='secondary'/>}
             />}
+
+        {isHidden && !isIsolate &&
+          <TooltipIconButton
+            title='Un-hide all'
+            placement='top'
+            variant='solid'
+            onClick={() => {
+              viewer.isolator.unHideAllElements()
+              setIsHidden(false)
+            }}
+            icon={<ShowIcon className='icon-share'/>}
+          />
+        }
         {isSelected() && !isIsolate &&
             <TooltipIconButton
               showTitle={true}
@@ -92,18 +88,6 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               selected={isIsolate}
               icon={<HideIcon className='icon-share'/>}
             />
-        }
-        {isHidden && !isIsolate &&
-          <TooltipIconButton
-            title='Un-hide all'
-            placement='top'
-            variant='solid'
-            onClick={() => {
-              viewer.isolator.unHideAllElements()
-              setIsHidden(false)
-            }}
-            icon={<ShowIcon className='icon-share'/>}
-          />
         }
         {isSelected() && !isIsolate &&
             <TooltipIconButton
