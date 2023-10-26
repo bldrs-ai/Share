@@ -11,7 +11,7 @@ import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
+// import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 
 
 /**
@@ -27,11 +27,11 @@ export default function OperationsGroup({deselectItems, viewer}) {
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  // const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const cutPlanes = useStore((state) => state.cutPlanes)
-  const levelInstance = useStore((state) => state.levelInstance)
-  const selectedElement = useStore((state) => state.selectedElement)
+  // const cutPlanes = useStore((state) => state.cutPlanes)
+  // const levelInstance = useStore((state) => state.levelInstance)
+  // const selectedElement = useStore((state) => state.selectedElement)
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
@@ -43,14 +43,14 @@ export default function OperationsGroup({deselectItems, viewer}) {
     return isMobile ? turnOffIsHelpTooltips() : null
   }
 
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null ||
-      cutPlanes.length !== 0 ||
-      levelInstance !== null
-    )
-    return ifSelected
-  }
+  // const isSelected = () => {
+  //   const ifSelected = (
+  //     selectedElement !== null ||
+  //     cutPlanes.length !== 0 ||
+  //     levelInstance !== null
+  //   )
+  //   return ifSelected
+  // }
 
   const toggle = (panel) => {
     openDrawer()
@@ -115,7 +115,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
         {/* Invisible */}
         <CameraControl/>
 
-        {isSelected() && selectedElement !== null &&
+        {/* {isSelected() && selectedElement !== null &&
               <TooltipIconButton
                 title='Properties'
                 onClick={() => {
@@ -125,7 +125,7 @@ export default function OperationsGroup({deselectItems, viewer}) {
                 selected={isPropertiesOn}
                 icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
               />
-        }
+        } */}
       </ButtonGroup >
     </Stack>
   )

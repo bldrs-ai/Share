@@ -11,6 +11,7 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
+// import CropOutlinedIcon from '../assets/icons/Scissors.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import ElevationIcon from '../assets/icons/Elevation1.svg'
 import PlanIcon from '../assets/icons/Plan1.svg'

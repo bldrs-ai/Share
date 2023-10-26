@@ -12,12 +12,14 @@ import ShareIcon from '../assets/icons/Share.svg'
 import LogoB from '../assets/LogoB.svg'
 import VisibilityOutlinedIcon from '../assets/icons/ShowAll.svg'
 import VisibilityOffOutlinedIcon from '../assets/icons/Hide.svg'
+import ShiftIcon from '../assets/icons/Shift.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+// import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import HistoryIcon from '@mui/icons-material/History'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -44,7 +46,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
       <TooltipIconButton
         title={'Help'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<InfoOutlinedIcon color='secondary'/>}
+        icon={<HelpOutlineIcon color='secondary'/>}
         placement={'left'}
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
@@ -135,6 +137,10 @@ const HelpList = ({pageIndex}) => {
       </Typography>,
     },
     {
+      icon: <ShiftIcon className='icon-share'/>,
+      description: 'Hold shift to select multiple elements',
+    },
+    {
       icon: <CropOutlinedIcon color='secondary'/>,
       description: 'Study the project using standard sections',
     },
@@ -143,15 +149,15 @@ const HelpList = ({pageIndex}) => {
       description: 'Isolate selected element',
     },
     {
-      icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary'/>,
+      icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary' style={{marginLeft: '2px', width: '20px'}}/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Hide selected  <br/> element
       </Typography>,
     },
     {
-      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
-      description: `Unhide all of the hidden elements`,
+      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
+      description: `Show all hidden elements`,
     },
     {
       icon: <CloseIcon className='icon-share' color='secondary'/>,
@@ -165,7 +171,7 @@ const HelpList = ({pageIndex}) => {
       </Typography>,
     },
     {
-      icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px', width: '20px'}}/>,
+      icon: <TreeIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Navigate <br/> the project using element hierarchy
@@ -180,7 +186,7 @@ const HelpList = ({pageIndex}) => {
       description: 'Log in to get access to projects hosted on Github',
     },
     {
-      icon: <ShareIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
+      icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 2px'}}/>,
       description: 'Share sectioned portions of the project',
     },
     {
@@ -198,10 +204,10 @@ const HelpList = ({pageIndex}) => {
   ]
 
   const pageContents = [
-    helpContent.slice(0, 3),
-    helpContent.slice(3, 7),
-    helpContent.slice(7, 10),
-    helpContent.slice(10),
+    helpContent.slice(0, 4),
+    helpContent.slice(4, 8),
+    helpContent.slice(8, 11),
+    helpContent.slice(11),
   ]
 
   return (
@@ -244,12 +250,12 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<InfoOutlinedIcon/>}
+      icon={<HelpOutlineIcon/>}
       headerText={'Bldrs.ai'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
-      actionIcon={<InfoOutlinedIcon/>}
+      actionIcon={<HelpOutlineIcon/>}
       actionCb={() => setIsDialogDisplayed(false)}
       content={
         <Box

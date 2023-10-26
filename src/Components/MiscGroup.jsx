@@ -6,6 +6,7 @@ import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import CloseIcon from '@mui/icons-material/Close'
 import HideIcon from '../assets/icons/Hide.svg'
 import ShowIcon from '../assets/icons/ShowAll.svg'
@@ -21,6 +22,10 @@ import ShowIcon from '../assets/icons/ShowAll.svg'
 export default function MiscGroup({deselectItems, viewer, repo}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
@@ -50,6 +55,20 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
           </>
         }
         {isSelected() && selectedElement !== null &&
+              <TooltipIconButton
+                title='Properties'
+                onClick={() => {
+                  turnOffIsHelpTooltips()
+                  toggleIsPropertiesOn()
+                  openDrawer()
+                }}
+                selected={isPropertiesOn}
+                variant='solid'
+                placement='top'
+                icon={<InfoOutlinedIcon className='icon-share' color='secondary'/>}
+              />
+        }
+        {isSelected() && selectedElement !== null &&
             <TooltipIconButton
               showTitle={true}
               title='Isolate'
@@ -65,7 +84,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
 
         {isHidden && !isIsolate &&
           <TooltipIconButton
-            title='Un-hide all'
+            title='Show all'
             placement='top'
             variant='solid'
             onClick={() => {
