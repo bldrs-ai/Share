@@ -13,7 +13,7 @@ describe('home page', () => {
 
   context('with a false first-time visit cookie', () => {
     it('should NOT display the about dialog', () => {
-      cy.setCookie('isFirstTime', 'false')
+      cy.setCookie('isFirstTime', '1')
       cy.visit('/')
       cy.findByRole('dialog', {timeout: 300000})
           .should('not.exist')

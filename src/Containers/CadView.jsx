@@ -18,7 +18,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
-import * as Privacy from '../privacy/Privacy'
+import * as Analytics from '../privacy/analytics'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
@@ -318,7 +318,7 @@ export default function CadView({
 
     await viewer.isolator.setModel(loadedModel)
 
-    Privacy.recordEvent('select_content', {
+    Analytics.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
@@ -407,7 +407,7 @@ export default function CadView({
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      Privacy.recordEvent('search', {
+      Analytics.recordEvent('search', {
         search_term: query,
       })
     } else {
