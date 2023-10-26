@@ -79,18 +79,17 @@ const HelpComponent = ({icon, description}) => {
         marginBottom: '10px',
         paddingBottom: '2px',
         paddingTop: '2px',
-
-        // border: '1px solid red',
       }}
     >
       <Box sx={{marginLeft: '10px'}}>{icon}</Box>
       <Typography
         variant='overline'
         sx={{
-          marginLeft: '30px',
+          marginLeft: '34px',
           width: '220px',
           textAlign: 'left',
           lineHeight: '1.4em',
+          fontWeight: 600,
         }}
       >
         {description}
@@ -131,7 +130,10 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
-      description: <Typography variant='overline' sx={{lineHeight: '1.4em'}}>Double click the model to select <br/> an element</Typography>,
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+        Double click the model to select <br/> a model element
+      </Typography>,
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
@@ -143,7 +145,10 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary'/>,
-      description: 'Hide selected element',
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+        Hide selected  <br/> element
+      </Typography>,
     },
     {
       icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
@@ -155,11 +160,17 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
-      description: 'Open IFC projects from GITHUB or local drive',
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+        Open IFC projects from GITHUB  <br/> or local drive
+      </Typography>,
     },
     {
-      icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
-      description: 'Navigate the project using element hierarchy',
+      icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px', width: '20px'}}/>,
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+        Navigate <br/> the project using element hierarchy
+      </Typography>,
     },
     {
       icon: <HistoryIcon color='secondary'/>,
@@ -179,7 +190,10 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
-      description: 'Study properties attached to selected element',
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+        Study properties attached to  <br/> selected element
+      </Typography>,
     },
 
   ]
