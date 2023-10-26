@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r749",
+  "version": "1.0.0-r747",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -13,7 +13,7 @@
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
     "build-share": "yarn write-new-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js",
-    "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share && yarn build-share-copy-wasm-conway",
+    "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share",
     "build-share-webifc": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "build-share-copy-wasm-conway": "shx cp node_modules/bldrs-conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
