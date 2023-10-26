@@ -89,7 +89,6 @@ const HelpComponent = ({icon, description}) => {
           width: '220px',
           textAlign: 'left',
           lineHeight: '1.4em',
-          fontWeight: 600,
         }}
       >
         {description}
@@ -131,7 +130,7 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
       description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Double click the model to select <br/> a model element
       </Typography>,
     },
@@ -146,7 +145,7 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary'/>,
       description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Hide selected  <br/> element
       </Typography>,
     },
@@ -161,14 +160,14 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
       description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Open IFC projects from GITHUB  <br/> or local drive
       </Typography>,
     },
     {
       icon: <TreeIcon className='icon-share' color='secondary' style={{marginRight: '2px', width: '20px'}}/>,
       description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Navigate <br/> the project using element hierarchy
       </Typography>,
     },
@@ -191,7 +190,7 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
       description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em', fontWeight: 600}}>
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Study properties attached to  <br/> selected element
       </Typography>,
     },

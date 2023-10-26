@@ -670,7 +670,7 @@ export default function CadView({
           'justifyContent': 'flex-start',
           'alignItems': 'flex-start',
           'maxHeight': '95%',
-          'width': '275px',
+          'width': '280px',
           '@media (max-width: 600px)': {
             width: `78%`,
             maxWidth: `78%`,
