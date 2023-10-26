@@ -10,6 +10,8 @@ import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 import LogoB from '../assets/LogoB.svg'
+import VisibilityOutlinedIcon from '../assets/icons/ShowAll.svg'
+import VisibilityOffOutlinedIcon from '../assets/icons/Hide.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -22,8 +24,6 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import PortraitIcon from '@mui/icons-material/Portrait'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
 
 
 /**

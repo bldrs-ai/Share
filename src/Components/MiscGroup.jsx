@@ -7,8 +7,8 @@ import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import CloseIcon from '@mui/icons-material/Close'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined'
+import HideIcon from '../assets/icons/Hide.svg'
+import ShowIcon from '../assets/icons/ShowAll.svg'
 
 
 /**
@@ -90,7 +90,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
                 setIsHidden(true)
               }}
               selected={isIsolate}
-              icon={<VisibilityOffOutlinedIcon color='primary'/>}
+              icon={<HideIcon className='icon-share'/>}
             />
         }
         {isHidden && !isIsolate &&
@@ -102,7 +102,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
             }}
-            icon={<VisibilityOutlinedIcon className='icon-share' color='secondary'/>}
+            icon={<ShowIcon className='icon-share'/>}
           />
         }
         {isSelected() && !isIsolate &&
