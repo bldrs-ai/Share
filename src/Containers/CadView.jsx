@@ -655,7 +655,7 @@ export default function CadView({
         <Box
           sx={{
             position: 'fixed',
-            bottom: '1.5em',
+            bottom: '1.6em',
             width: '100%',
           }}
         >
@@ -732,7 +732,7 @@ export default function CadView({
           <TooltipIconButton
             title='Bldrs tools'
             onClick={() => setShowControls(!showControls)}
-            variant='rounded'
+            variant='noBackground'
             icon={
               <Box
                 sx={{
@@ -765,6 +765,9 @@ export default function CadView({
         {
           !isNavigationVisible && isMobile && !isVersionHistoryVisible && showControls &&
           <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
+        }
+        {isMobile && viewer && !showControls &&
+          <SideDrawer/>
         }
       </>
       }
