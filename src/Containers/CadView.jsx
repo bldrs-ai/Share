@@ -733,22 +733,7 @@ export default function CadView({
             title='Bldrs tools'
             onClick={() => setShowControls(!showControls)}
             variant='noBackground'
-            icon={
-              <Box
-                sx={{
-                  '& svg': {
-                    'marginTop': '6px',
-                    'width': '20px',
-                    '@media (max-width: 900px)': {
-                      marginTop: '4px',
-                      width: '20px',
-                    },
-                  },
-                }}
-              >
-                <LogoB/>
-              </Box>
-            }
+            icon={<LogoB/>}
           />
         </Box>
         <Box

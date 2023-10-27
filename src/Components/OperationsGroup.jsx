@@ -2,6 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
@@ -11,6 +12,8 @@ import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
+import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 // import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 
 
@@ -61,6 +64,9 @@ export default function OperationsGroup({deselectItems, viewer}) {
       toggleIsNotesOn()
     }
   }
+
+  const theme = useTheme()
+
 
   return (
     <Stack
@@ -126,6 +132,15 @@ export default function OperationsGroup({deselectItems, viewer}) {
                 icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
               />
         } */}
+        <TooltipIconButton
+          title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
+          onClick={() => theme.toggleColorMode()}
+          icon={
+          theme.palette.mode === 'light' ?
+            <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
+            <NightlightOutlinedIcon className='icon-share'/> }
+        />
+
       </ButtonGroup >
     </Stack>
   )

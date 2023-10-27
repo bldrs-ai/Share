@@ -116,7 +116,6 @@ const HelpList = ({pageIndex}) => {
       <Box
         sx={{
           '& svg': {
-            'marginTop': '6px',
             'marginLeft': '3px',
             'width': '20px',
             '@media (max-width: 900px)': {
@@ -183,11 +182,11 @@ const HelpList = ({pageIndex}) => {
       description: 'Access project version history',
     },
     {
-      icon: <PortraitIcon className='icon-share' color='secondary' style={{marginRight: '2px'}}/>,
+      icon: <PortraitIcon className='icon-share' color='secondary'/>,
       description: 'Log in to get access to projects hosted on Github',
     },
     {
-      icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 2px'}}/>,
+      icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 1px'}}/>,
       description: 'Share sectioned portions of the project',
     },
     {
