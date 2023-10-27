@@ -157,7 +157,7 @@ const HelpList = ({pageIndex}) => {
       </Typography>,
     },
     {
-      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
+      icon: <VisibilityOutlinedIcon color='secondary'/>,
       description: `Show all hidden elements`,
     },
     {
