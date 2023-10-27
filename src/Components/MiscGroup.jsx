@@ -8,8 +8,8 @@ import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import CloseIcon from '@mui/icons-material/Close'
-import HideIcon from '../assets/icons/Hide.svg'
-import ShowIcon from '../assets/icons/ShowAll.svg'
+import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 
 
 /**
@@ -91,7 +91,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
             }}
-            icon={<ShowIcon className='icon-share'/>}
+            icon={<VisibilityOutlinedIcon className='icon-share'/>}
           />
         }
         {isSelected() && !isIsolate &&
@@ -105,7 +105,7 @@ export default function MiscGroup({deselectItems, viewer, repo}) {
                 setIsHidden(true)
               }}
               selected={isIsolate}
-              icon={<HideIcon className='icon-share'/>}
+              icon={<HideSourceOutlinedIcon color='primary'/>}
             />
         }
         {isSelected() && !isIsolate &&

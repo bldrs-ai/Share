@@ -10,8 +10,9 @@ import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 import LogoB from '../assets/LogoB.svg'
-import VisibilityOutlinedIcon from '../assets/icons/ShowAll.svg'
-import VisibilityOffOutlinedIcon from '../assets/icons/Hide.svg'
+import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+// import VisibilityOffOutlinedIcon from '../assets/icons/Hide.svg'
 import ShiftIcon from '../assets/icons/Shift.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
@@ -149,14 +150,14 @@ const HelpList = ({pageIndex}) => {
       description: 'Isolate selected element',
     },
     {
-      icon: <VisibilityOffOutlinedIcon className='icon-share' color='primary' style={{marginLeft: '2px', width: '20px'}}/>,
+      icon: <HideSourceOutlinedIcon color='primary'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Hide selected  <br/> element
       </Typography>,
     },
     {
-      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
+      icon: <VisibilityOutlinedIcon className='icon-share' color='secondary'/>,
       description: `Show all hidden elements`,
     },
     {
