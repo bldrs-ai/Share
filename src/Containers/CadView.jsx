@@ -766,8 +766,17 @@ export default function CadView({
           !isNavigationVisible && isMobile && !isVersionHistoryVisible && showControls &&
           <OperationsGroupAndDrawer deselectItems={deselectItems} viewer={viewer}/>
         }
-        {isMobile && viewer && !showControls &&
-          <SideDrawer/>
+
+        {!isNavigationVisible && !isVersionHistoryVisible && !showControls &&
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 0,
+              right: 0,
+            }}
+          >
+            <SideDrawer/>
+          </Box>
         }
       </>
       }
