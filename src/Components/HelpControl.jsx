@@ -137,12 +137,12 @@ const HelpList = ({pageIndex}) => {
       </Typography>,
     },
     {
-      icon: <ShiftIcon className='icon-share'/>,
-      description: 'Hold shift to select multiple elements',
-    },
-    {
       icon: <CropOutlinedIcon color='secondary'/>,
       description: 'Study the project using standard sections',
+    },
+    {
+      icon: <ShiftIcon className='icon-share'/>,
+      description: 'Hold shift to select multiple elements',
     },
     {
       icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
