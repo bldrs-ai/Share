@@ -13,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
 import {styled} from '@mui/system'
+import debug from '../utils/debug'
 
 
 /**
@@ -114,6 +115,7 @@ function TimelineInfo({commit, active}) {
  */
 export default function CustomTimeline({commitData}) {
   const [active] = useState(0)
+  debug().log('commit data', commitData)
 
   return (
     <Timeline>
