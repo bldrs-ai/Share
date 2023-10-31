@@ -3,7 +3,6 @@ import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import CaretIcon from '../assets/icons/Caret.svg'
 
 
@@ -16,7 +15,6 @@ import CaretIcon from '../assets/icons/Caret.svg'
  * @return {React.ReactElement}
  */
 export default function ExpansionPanel({summary, detail, expandState}) {
-  const theme = useTheme()
   const [expanded, setExpanded] = useState(expandState)
 
 
@@ -32,14 +30,13 @@ export default function ExpansionPanel({summary, detail, expandState}) {
       sx={{
         '& .MuiAccordionSummary-root': {
           width: '100%',
-          padding: 0,
-          borderBottom: `.5px solid ${theme.palette.primary.contrastText}`,
+          padding: '0px 10px',
         },
         '& .MuiAccordionSummary-root.Mui-expanded': {
           marginBottom: '0.5em',
         },
         '& .MuiAccordionDetails-root': {
-          padding: 0,
+          padding: '0px 10px',
         },
         '& svg': {
           marginRight: '12px',

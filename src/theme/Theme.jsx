@@ -53,7 +53,7 @@ function loadTheme(mode, setMode, themeChangeListeners) {
   const activePalette = mode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
-    shape: {borderRadius: 0},
+    shape: {borderRadius: 10},
     palette: activePalette,
     zIndex: {
       modal: 2000,

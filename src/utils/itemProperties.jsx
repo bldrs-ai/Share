@@ -240,7 +240,7 @@ function Row({d1, d2}) {
         </td>
       </tr>
     ) : (
-      <tr onDoubleClick={toggleActive}>
+      <tr onDoubleClick={toggleActive} sx={{paddingLeft: '10px'}}>
         <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
         <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
       </tr>

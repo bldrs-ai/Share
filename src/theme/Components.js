@@ -107,6 +107,12 @@ export function getComponentOverrides(palette, typography) {
           },
         },
         {
+          props: {variant: 'solid'},
+          style: {
+            borderRadius: '0px',
+          },
+        },
+        {
           props: {variant: 'noBackground'},
           style: {
             'width': '40px',
@@ -211,5 +217,6 @@ export function getComponentOverrides(palette, typography) {
         transition: 'background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,border 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
       },
     },
+
   }
 }
