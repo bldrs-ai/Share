@@ -13,12 +13,12 @@ import LogoB from '../assets/LogoB.svg'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 // import VisibilityOffOutlinedIcon from '../assets/icons/Hide.svg'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import ShiftIcon from '../assets/icons/Shift.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 // import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import HistoryIcon from '@mui/icons-material/History'
@@ -145,6 +145,13 @@ const HelpList = ({pageIndex}) => {
       description: 'Hold shift to select multiple elements',
     },
     {
+      icon: <InfoOutlinedIcon className='icon-share' color='secondary'/>,
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
+        Study properties attached to  <br/> selected element
+      </Typography>,
+    },
+    {
       icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
       description: 'Isolate selected element',
     },
@@ -193,21 +200,13 @@ const HelpList = ({pageIndex}) => {
       icon: <ChatOutlinedIcon color='secondary'/>,
       description: 'Attach notes to 3D elements',
     },
-    {
-      icon: <FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Study properties attached to  <br/> selected element
-      </Typography>,
-    },
-
   ]
 
   const pageContents = [
     helpContent.slice(0, 4),
-    helpContent.slice(4, 8),
-    helpContent.slice(8, 11),
-    helpContent.slice(11),
+    helpContent.slice(4, 9),
+    helpContent.slice(9, 12),
+    helpContent.slice(12),
   ]
 
   return (
