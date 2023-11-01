@@ -649,7 +649,7 @@ export default function CadView({
             left: '1em',
           }}
           >
-            <ControlsGroup fileOpen={() => loadLocalFile(navigate)} repo={modelPath.repo}/>
+            <ControlsGroup fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)} repo={modelPath.repo}/>
           </Box>
         }
         <Box

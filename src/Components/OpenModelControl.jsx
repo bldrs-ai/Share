@@ -195,7 +195,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
       4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
       // eslint-disable-next-line max-len
       5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
-      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc/103/25873/113/122/743#c:59.624,-24.034,-59.987,5.532,-15.137,1.721',
+      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc/103/25873/113/122/743#c:182.816,35.074,233.133,15.587,19.012,-11.711',
     }
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navigate({pathname: modelPath[e.target.value]})
