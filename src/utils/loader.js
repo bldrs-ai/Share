@@ -1,4 +1,5 @@
 import debug from '../utils/debug'
+import {assertDefined} from '../utils/assert'
 
 
 /**
@@ -11,6 +12,7 @@ import debug from '../utils/debug'
 export function loadLocalFile(navigate, appPrefix, handleBeforeUnload) {
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
+  assertDefined(navigate, appPrefix, handleBeforeUnload)
   fileInput.setAttribute('type', 'file')
   fileInput.addEventListener(
       'change',
