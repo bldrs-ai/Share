@@ -13,7 +13,6 @@ import Typography from '@mui/material/Typography'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
 import {styled} from '@mui/system'
-// import {styled} from '@mui/system'
 
 /**
  * CustomTimelineItem is a styled version of MUI's TimelineItem component
