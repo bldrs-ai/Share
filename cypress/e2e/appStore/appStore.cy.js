@@ -1,7 +1,7 @@
 describe('appStore side drawer', () => {
   context('enable/disable feature using url parameter', () => {
     beforeEach(() => {
-      cy.setCookie('isFirstTime', 'false')
+      cy.setCookie('isFirstTime', '1')
       cy.visit('/')
     })
 

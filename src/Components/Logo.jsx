@@ -18,6 +18,7 @@ export default function Logo({onClick}) {
         'position': 'fixed',
         'bottom': '1em',
         'left': '1em',
+        'boxShadow': theme.shadows[1],
         '& svg': {
           'marginBottom': '4px',
           'marginTop': '4px',

@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useState} from 'react'
 import {createTheme} from '@mui/material/styles'
-import * as Privacy from '../privacy/Privacy'
+import * as Preferences from '../privacy/preferences'
 import {getComponentOverrides} from './Components'
 import {day, night} from './Palette'
 
@@ -9,11 +9,7 @@ import {day, night} from './Palette'
  * @return {object} theme
  */
 export default function useShareTheme() {
-  const [mode, setMode] = useState(Privacy.getCookie({
-    component: 'theme',
-    name: 'mode',
-    defaultValue: getSystemCurrentLightDark(),
-  }))
+  const [mode, setMode] = useState(Preferences.getTheme() || getSystemCurrentLightDark())
   const [themeChangeListeners] = useState({})
 
 
@@ -55,10 +51,13 @@ function loadTheme(mode, setMode, themeChangeListeners) {
     components: getComponentOverrides(activePalette),
     shape: {borderRadius: 0},
     palette: activePalette,
+    zIndex: {
+      modal: 2000,
+    },
     toggleColorMode: () => {
       setMode((prevMode) => {
         const newMode = prevMode === Themes.Day ? Themes.Night : Themes.Day
-        Privacy.setCookie({component: 'theme', name: 'mode', value: newMode})
+        Preferences.setTheme(newMode)
         return newMode
       })
     },

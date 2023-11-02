@@ -13,7 +13,7 @@ on:
 
 jobs:
   install-cypress-webifc:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04-4vcpu-16gb
     steps:
       - name: checkout
         id: checkout
@@ -35,7 +35,7 @@ jobs:
           path: docs/
 
   run-cypress-on-linux-webifc:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04-4vcpu-16gb
     needs: install-cypress-webifc
     steps:
       - name: checkout
@@ -57,7 +57,7 @@ jobs:
           start: yarn serve-share-webifc
 
   install-cypress-conway:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04-4vcpu-16gb
     needs: run-cypress-on-linux-webifc
     steps:
       - name: checkout
@@ -80,7 +80,7 @@ jobs:
           path: docs/
 
   run-cypress-on-linux-conway:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04-4vcpu-16gb
     needs: install-cypress-conway
     steps:
       - name: checkout

@@ -1,5 +1,5 @@
 import React from 'react'
-import {useSelect, useValue} from 'react-cosmos/fixture'
+import {useSelect, useValue} from 'react-cosmos/client'
 import FixtureContext from '../FixtureContext'
 import Toast from './Toast'
 

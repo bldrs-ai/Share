@@ -5,8 +5,8 @@
 import '@testing-library/jest-dom'
 // Needed for async test
 import 'regenerator-runtime/runtime'
-import {disableDebug} from './utils/debug'
-import {server} from './__mocks__/server'
+import {disableDebug} from '../../src/utils/debug'
+import {server} from '../../src/__mocks__/server'
 
 
 // TODO(pablo): this is somehow implicitly referenced in all tests,

@@ -3,7 +3,7 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
-import {getCookieBoolean, setCookieBoolean} from '../../privacy/Privacy'
+import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
@@ -19,18 +19,14 @@ import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(getCookieBoolean({
-    component: 'about',
-    name: 'isFirstTime',
-    defaultValue: true,
-  }))
+  const [isDialogDisplayed, setIsDialogDisplayed] = useState(FirstTime.isFirst())
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
   }
 
   const setIsDialogDisplayedForDialog = () => {
     setIsDialogDisplayed(false)
-    setCookieBoolean({component: 'about', name: 'isFirstTime', value: false})
+    FirstTime.setVisited()
   }
 
   return (
