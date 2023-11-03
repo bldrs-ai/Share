@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r755",
+  "version": "1.0.0-r756",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -16,7 +16,7 @@
     "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share",
     "build-share-webifc": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
-    "build-share-copy-wasm-conway": "shx cp node_modules/bldrs-conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
+    "build-share-copy-wasm-conway": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
     "clean": "shx rm -rf docs",
     "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
