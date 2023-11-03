@@ -36,4 +36,17 @@ describe('loadLocalFile', () => {
     expect(window.removeEventListener).toHaveBeenCalledWith('beforeunload', handleBeforeUnloadMock)
     expect(navigateMock).toHaveBeenCalledWith(`${appPrefix}/v/new/testId.ifc`)
   })
+
+  it('throws an error if viewer-container is missing', () => {
+    document.body.innerHTML = ''
+    expect(() => {
+      loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true)
+    }).toThrow()
+  })
+
+  it('removes the file input after click if skipAutoRemove is false', () => {
+    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, false)
+    const inputElement = document.querySelector('input[type="file"]')
+    expect(inputElement).toBeNull()
+  })
 })

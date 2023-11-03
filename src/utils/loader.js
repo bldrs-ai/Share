@@ -9,7 +9,7 @@ import {assertDefined} from '../utils/assert'
  * @param {string} appPrefix
  * @param {Function} handleBeforeUnload
  */
-export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, skipAutoRemove = true) {
+export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, skipAutoRemove = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
