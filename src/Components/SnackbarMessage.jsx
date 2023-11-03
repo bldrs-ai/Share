@@ -13,7 +13,11 @@ export default function SnackBarMessage({message, severity, open}) {
     <Snackbar
       anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
       open={open}
-      message={message}
+      message={
+        <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px'}}>
+          {message}
+        </div>
+      }
     />
   )
 }

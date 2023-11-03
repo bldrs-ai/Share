@@ -26,7 +26,6 @@ export default function ExpansionPanel({summary, detail, expandState}) {
   return (
     <Accordion
       elevation={0}
-      PaperProps={{variant: 'control'}}
       sx={{
         '& .MuiAccordionSummary-root': {
           width: '100%',
@@ -37,10 +36,6 @@ export default function ExpansionPanel({summary, detail, expandState}) {
         },
         '& .MuiAccordionDetails-root': {
           padding: '0px 10px',
-        },
-        '& svg': {
-          marginRight: '12px',
-          marginLeft: '12px',
         },
       }}
       expanded={expanded}

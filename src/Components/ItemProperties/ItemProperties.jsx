@@ -2,10 +2,10 @@ import React, {useEffect, useState} from 'react'
 import {decodeIFCString} from '@bldrs-ai/ifclib'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
+// import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {useIsMobile} from '../Hooks'
-import {hexToRgba} from '../../utils/color'
+// import {hexToRgba} from '../../utils/color'
 import {createPropertyTable} from '../../utils/itemProperties'
 import ExpansionPanel from '../ExpansionPanel'
 import Toggle from '../Toggle'
@@ -22,7 +22,7 @@ export default function ItemProperties() {
   const [expandAll, setExpandAll] = useState(false)
   const model = useStore((state) => state.model)
   const element = useStore((state) => state.selectedElement)
-  const theme = useTheme()
+  // const theme = useTheme()
   const isMobile = useIsMobile()
 
 
@@ -36,8 +36,8 @@ export default function ItemProperties() {
   }, [model, element, expandAll])
 
 
-  const propSeparatorBorderOpacity = 0.3
-  const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
+  // const propSeparatorBorderOpacity = 0.3
+  // const propSeparatorColor = hexToRgba(theme.palette.primary.contrastText, propSeparatorBorderOpacity)
   return (
     <Box sx={{
       'paddingBottom': isMobile ? '80px' : '0px',
@@ -47,7 +47,6 @@ export default function ItemProperties() {
         verticalAlign: 'top',
         cursor: 'pointer',
         padding: '3px 0',
-        borderBottom: `.2px solid ${propSeparatorColor}`,
       },
       '& table': {
         tableLayout: 'fixed',

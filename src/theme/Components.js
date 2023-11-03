@@ -149,7 +149,7 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'control'},
           style: ({ownerState, theme}) => ({
-            backgroundColor: palette.secondary.background,
+            backgroundColor: palette.primary.background,
             boxShadow: theme.shadows[ownerState.elevation],
           }),
         },

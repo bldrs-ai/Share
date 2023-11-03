@@ -233,14 +233,14 @@ function Row({d1, d2}) {
   }
   return (
     isActive ? (
-      <tr onDoubleClick={toggleActive}>
+      <tr onDoubleClick={toggleActive} >
         <td colSpan={2}>
           <Typography variant='propTitle' sx={{display: 'block'}}>{d1}</Typography>
           <Typography variant='propValue'>{d2}</Typography>
         </td>
       </tr>
     ) : (
-      <tr onDoubleClick={toggleActive} sx={{paddingLeft: '10px'}}>
+      <tr onDoubleClick={toggleActive}>
         <td style={rowStyleInactive}><Typography variant='propTitle'>{d1}</Typography></td>
         <td style={rowStyleInactive}><Typography variant='propValue'>{d2}</Typography></td>
       </tr>
