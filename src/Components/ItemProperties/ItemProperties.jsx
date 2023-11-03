@@ -47,6 +47,7 @@ export default function ItemProperties() {
         verticalAlign: 'top',
         cursor: 'pointer',
         padding: '3px 0',
+        // borderBottom: `.2px solid ${propSeparatorColor}`,
       },
       '& table': {
         tableLayout: 'fixed',

@@ -4,6 +4,7 @@ import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
 import CaretIcon from '../assets/icons/Caret.svg'
+import useTheme from '@mui/styles/useTheme'
 
 
 /**
@@ -16,6 +17,7 @@ import CaretIcon from '../assets/icons/Caret.svg'
  */
 export default function ExpansionPanel({summary, detail, expandState}) {
   const [expanded, setExpanded] = useState(expandState)
+  const theme = useTheme()
 
 
   useEffect(() => {
@@ -27,15 +29,18 @@ export default function ExpansionPanel({summary, detail, expandState}) {
     <Accordion
       elevation={0}
       sx={{
+        'marginBottom': '10px',
+        'borderRadius': '10px',
+        'border': 'none',
+        'backgroundColor': theme.palette.scene.background,
         '& .MuiAccordionSummary-root': {
           width: '100%',
-          padding: '0px 10px',
         },
         '& .MuiAccordionSummary-root.Mui-expanded': {
           marginBottom: '0.5em',
         },
-        '& .MuiAccordionDetails-root': {
-          padding: '0px 10px',
+        '&:before': {
+          backgroundColor: 'transparent',
         },
       }}
       expanded={expanded}
