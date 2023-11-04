@@ -691,7 +691,7 @@ export default function CadView({
         <Box
           sx={{
             position: 'fixed',
-            bottom: '1.6em',
+            bottom: '1.0em',
             width: '100%',
           }}
         >
