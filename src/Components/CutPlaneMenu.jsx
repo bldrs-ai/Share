@@ -98,6 +98,7 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
+        placement={'top'}
         icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length}
