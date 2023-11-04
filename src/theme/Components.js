@@ -57,8 +57,8 @@ export function getComponentOverrides(palette, typography) {
     MuiToggleButton: {
       styleOverrides: {
         sizeMedium: {
-          'width': '50px',
-          'height': '50px',
+          'width': '40px',
+          'height': '40px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: palette.primary.background,

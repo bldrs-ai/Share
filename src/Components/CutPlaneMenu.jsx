@@ -3,6 +3,7 @@ import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
@@ -10,7 +11,10 @@ import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '.
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-// import CropOutlinedIcon from '../assets/icons/Cutplane.svg'
+import CloseIcon from '@mui/icons-material/Close'
+import ElevationIcon from '../assets/icons/Elevation.svg'
+import PlanIcon from '../assets/icons/Plan.svg'
+import SectionIcon from '../assets/icons/Section.svg'
 
 
 const PLANE_PREFIX = 'p'
@@ -31,13 +35,14 @@ export default function CutPlaneMenu() {
   const addCutPlaneDirection = useStore((state) => state.addCutPlaneDirection)
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
+  const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
-
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -56,6 +61,7 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
+        setIsCutPlane(true)
         planes.forEach((plane) => {
           togglePlane(plane)
         })
@@ -81,6 +87,7 @@ export default function CutPlaneMenu() {
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+      setIsCutPlane(false)
       restCutPlanes.forEach((restCutPlane) => {
         const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
         viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
@@ -98,10 +105,11 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
-        placement={'top'}
+        placement='top'
+        variant='solid'
         icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
         onClick={handleClick}
-        selected={anchorEl !== null || !!cutPlanes.length}
+        selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
       />
       <Menu
         elevation={1}
@@ -114,7 +122,8 @@ export default function CutPlaneMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(-54px)',
+            transform: 'translateX(0px) translateY(-70px)',
+            borderRadius: '10px',
           },
           sx: {
             'color': theme.palette.primary.contrastText,
@@ -125,17 +134,35 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => togglePlane({direction: 'x'})}
-          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
-        >X - Section
-        </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
-        >Y - Plan
+        >
+          <PlanIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => togglePlane({direction: 'x'})}
+          selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+        >
+          <SectionIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
         </MenuItem>
         <MenuItem onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
-        >Z - Section
+        >
+          <ElevationIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setCutPlaneDirections([])
+            removePlanes(viewer)
+            setAnchorEl(null)
+            setIsCutPlane(false)
+            removeHashParams(window.location, PLANE_PREFIX, ['x', 'y', 'z'])
+          } }
+        >
+          <CloseIcon className='icon-share'/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
         </MenuItem>
       </Menu>
     </>

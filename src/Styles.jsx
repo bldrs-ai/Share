@@ -64,13 +64,6 @@ export default function Styles({theme}) {
           width: '12px',
           height: '12px',
         },
-        '*::-webkit-scrollbar': {
-          width: '2px',
-          background: theme.palette.secondary.background,
-        },
-        '*::-webkit-scrollbar-thumb': {
-          backgroundColor: theme.palette.primary.main,
-        },
       }}
     />
   )
