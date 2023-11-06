@@ -68,7 +68,11 @@ describe('ElementGroup', () => {
     expect(clearButton).toBeInTheDocument()
   })
 
-  it('should render and trigger Hide button when a selected element is present and not in Isolate mode', () => {
+  it('should render and trigger Hide button when a selected element is present and not in Isolate mode', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setSelectedElement({id: 123})
+    })
     const {getByTitle} = render(
         <ShareMock
           initialEntries={['/v/p/index.ifc#p:x']}
@@ -90,7 +94,6 @@ describe('ElementGroup', () => {
     const isolateButton = getByTitle('Isolate')
     fireEvent.click(isolateButton)
     expect(viewerMock.isolator.toggleIsolationMode).toHaveBeenCalled()
-    // You can also check for the `isIsolate` state update here using another render cycle, but it might be complex.
   })
 
   it('should trigger unHideAllElements when Show all button is clicked', () => {
