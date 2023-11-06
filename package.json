@@ -33,7 +33,7 @@
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node tools/esbuild/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node tools/esbuild/serve.js",
     "test": "jest --config tools/jest/jest.config.js",
-    "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
+    "update-version": "./scripts/updateVersion.mjs"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.0.0",
