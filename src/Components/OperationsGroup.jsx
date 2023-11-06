@@ -14,6 +14,7 @@ import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import AboutControl from './About/AboutControl'
 
 
 /**
@@ -103,6 +104,7 @@ export default function OperationsGroup({deselectItems}) {
                 <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
+          <AboutControl/>
           <TooltipIconButton
             title='Help'
             onClick={() => toggleIsHelpTooltips()}
@@ -111,7 +113,7 @@ export default function OperationsGroup({deselectItems}) {
           />
         </>
       }
-      {/* Invisible */}
+      {/* Invisible */}s
       <CameraControl/>
     </ButtonGroup>
   )
