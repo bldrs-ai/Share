@@ -2,7 +2,6 @@ import React, {useState} from 'react'
 import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
-import CameraControl from './CameraControl'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
@@ -19,9 +18,8 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function ElementGroup({deselectItems, viewer, repo}) {
+export default function ElementGroup({deselectItems, viewer}) {
   const selectedElement = useStore((state) => state.selectedElement)
-  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
@@ -48,7 +46,7 @@ export default function ElementGroup({deselectItems, viewer, repo}) {
         orientation='horizontal'
         variant='contained'
       >
-        {isModelInteractionGroupVisible && !isIsolate &&
+        {!isIsolate &&
           <>
             <CutPlaneMenu/>
           </>
@@ -118,8 +116,6 @@ export default function ElementGroup({deselectItems, viewer, repo}) {
               icon={<CloseIcon className='icon-share'color='secondary'/>}
             />
         }
-        {/* Invisible */}
-        <CameraControl/>
       </ButtonGroup >
     </Stack>
   )
