@@ -113,7 +113,7 @@ export default function OperationsGroup({deselectItems}) {
           />
         </>
       }
-      {/* Invisible */}s
+      {/* Invisible */}
       <CameraControl/>
     </ButtonGroup>
   )
