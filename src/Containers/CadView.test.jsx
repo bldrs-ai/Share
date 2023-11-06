@@ -8,8 +8,10 @@ import * as AllLoader from '../utils/loader'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView, {getFinalURL} from './CadView'
+import PkgJson from '../../package.json'
 
 
+const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
 jest.mock('react-router-dom', () => {
@@ -59,7 +61,7 @@ describe('CadView', () => {
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await waitFor(() => screen.getByTitle(bldrsVersionString))
   })
 
 
@@ -83,7 +85,7 @@ describe('CadView', () => {
           />
         </ShareMock>)
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
     const numCallsExpected = 2 // First for root, second from URL path
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
@@ -180,7 +182,7 @@ describe('CadView', () => {
         </ShareMock>,
     )
     await actAsyncFlush()
-    await waitFor(() => screen.getByTitle(/Bldrs: 1.0.0/i))
+    await waitFor(() => screen.getByTitle(bldrsVersionString))
     await actAsyncFlush()
     render(
         <ShareMock>
