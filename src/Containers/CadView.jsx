@@ -5,6 +5,7 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
+import ElementGroup from '../Components/ElementGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
 import Logo from '../Components/Logo'
@@ -686,6 +687,17 @@ export default function CadView({
       )}
       <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
+      {viewer &&
+        <Box
+          sx={{
+            position: 'fixed',
+            bottom: '1.0em',
+            width: '100%',
+          }}
+        >
+          <ElementGroup deselectItems={deselectItems} viewer={viewer}/>
+        </Box>
+      }
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
     </Box>
