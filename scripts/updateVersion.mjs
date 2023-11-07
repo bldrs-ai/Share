@@ -12,19 +12,32 @@ import fs from 'fs'
  * @see https://semver.org/
  */
 
-const pkgJsonFilename = 'package.json'
 const gitRevCountCmd = 'git rev-list HEAD --count'
-const versionPattern =
-      /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.(?<minor>\d+)\.\d+"\s*(?<comma>,)?$/m
-
 // Calculate new semver patch as revision count + 1
 const revisionCount = parseInt(execSync(gitRevCountCmd).toString().trim())
 const newPatch = revisionCount + 1
 
-// Read package.json and replace version
-const file = fs.readFileSync(pkgJsonFilename).toString('utf8')
-const updatedFile =
-      file.replace(versionPattern, `$<indent>"version": "$<major>.$<minor>.${newPatch}"$<comma>`)
+/**
+ * In-place rewrite of the file content to update the version string
+ *
+ * @param {string} filename
+ * @param {RegExp} versionPattern Including groups for backrefs
+ * @param {string} replaceWithGroups Replacement string using backrefs
+ */
+function rewriteVersion(filename, versionPattern, replaceWithGroups) {
+  // Read package.json and replace version
+  const file = fs.readFileSync(filename).toString('utf8')
+  const updatedFile = file.replace(versionPattern, replaceWithGroups)
 
-// Rewrite package.json with new content.
-fs.writeFileSync(pkgJsonFilename, updatedFile)
+  // Rewrite package.json with new content.
+  fs.writeFileSync(filename, updatedFile)
+}
+
+// Rewrite line like:
+//
+//   "version": "0.1.370",
+rewriteVersion(
+    'package.json',
+    /^(?<indent>\s*)"version"\s*:\s*"(?<major>\d+)\.(?<minor>\d+)\.\d+"\s*(?<trailingComma>,)?$/m,
+    `$<indent>"version": "$<major>.$<minor>.${newPatch}"$<trailingComma>`,
+)
