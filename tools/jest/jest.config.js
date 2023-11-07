@@ -1,3 +1,6 @@
+global.TextEncoder = global.TextEncoder || require('util').TextEncoder
+global.TextDecoder = global.TextDecoder || require('util').TextDecoder
+
 /**
  * TODO(pablo): this is a work-around for jest not understanding es6
  * modules.  I don't really understand the problem, just that this
@@ -44,9 +47,11 @@ module.exports = {
   verbose: false,
   testEnvironment: 'jsdom',
   testPathIgnorePatterns: [],
+  rootDir: '../../',
+  roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
   transform: {
     '\\.[jt]sx?$': 'babel-jest',
-    '^.+\\.svg$': '<rootDir>/svgTransform.js',
+    '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
   },
   transformIgnorePatterns: [
     `/node_modules/(?!${esModules}/)`,
@@ -55,7 +60,7 @@ module.exports = {
     '^.+\\.css$': 'identity-obj-proxy',
   },
   setupFilesAfterEnv: [
-    '<rootDir>/src/setupTests.js',
+    '<rootDir>/tools/jest/setupTests.js',
     '@alex_neo/jest-expect-message',
   ],
 }

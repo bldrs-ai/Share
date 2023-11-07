@@ -1,17 +1,17 @@
 import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import Box from '@mui/material/Box'
-import InputBase from '@mui/material/InputBase'
 import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
-import useTheme from '@mui/styles/useTheme'
+import Autocomplete from '@mui/material/Autocomplete'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
+import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import OpenModelControl from './OpenModelControl'
-import {TooltipIconButton} from './Buttons'
 import HighlightOffIcon from '@mui/icons-material/HighlightOff'
+import SearchIcon from '@mui/icons-material/Search'
+import useTheme from '@mui/styles/useTheme'
 
 
 /**
@@ -26,14 +26,7 @@ export default function SearchBar({fileOpen}) {
   const [searchParams, setSearchParams] = useSearchParams()
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
-  const onInputChange = (event) => setInputText(event.target.value)
   const searchInputRef = useRef(null)
-  // input length is dynamically calculated in order to fit the input string into the Text input
-  const widthPerChar = 6.5
-  const minWidthPx = 230
-  const widthPx = (Number(inputText.length) * widthPerChar) + minWidthPx
-  // it is passed into the styles as a property the input width needs to change when the query exceeds the minWidth
-  // TODO(oleg): find a cleaner way to achieve this
   const theme = useTheme()
 
 
@@ -93,68 +86,86 @@ export default function SearchBar({fileOpen}) {
   // to have them share the same width, which is now set in the parent
   // container (CadView).
   return (
-    <Stack
-      direction="row"
-      sx={{width: '100%'}}
-    >
-      <OpenModelControl fileOpen={fileOpen}/>
-      <Paper
-        component='form'
-        onSubmit={onSubmit}
-        elevation={0}
-        variant='control'
-        sx={{
-          'display': 'flex',
-          'width': `${widthPx}px`,
-          'alignItems': 'center',
-
-          'padding': '2px 6px',
-          'borderLeft': `1px solid ${theme.palette.scene.background}`,
-          '@media (max-width: 900px)': {
-            width: '100%',
-          },
-          '& .MuiInputBase-root': {
-            flex: 1,
-          },
-        }}
-      >
-        <InputBase
-          inputRef={searchInputRef}
+    <form onSubmit={onSubmit}>
+      <Paper elevation={1} variant='control' sx={{opacity: '.9'}}>
+        <Autocomplete
+          fullWidth
+          freeSolo
+          options={['together', 'dach', 'fen', 'wand']}
           value={inputText}
-          onChange={onInputChange}
-          error={true}
-          placeholder={'Search'}
-          sx={{
-            ...theme.typography.tree,
-            marginTop: '4px',
-            marginLeft: '16px',
-          }}
+          onChange={(_, newValue) => setInputText(newValue || '')}
+          onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
+          inputValue={inputText}
+          PaperComponent={({children}) => (
+            <Paper
+              sx={{
+                'backgroundColor': theme.palette.scene.background,
+                '.MuiAutocomplete-option': {
+                  backgroundColor: theme.palette.scene.background,
+                },
+              }}
+            >
+              {children}
+            </Paper>
+          )}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              inputRef={searchInputRef}
+              size="small"
+              error={!!error.length}
+              placeholder='Search'
+              variant="outlined"
+              sx={{
+                'width': '100%',
+                'border': 'none',
+                '& fieldset': {
+                  border: 'none',
+                },
+                '&:hover fieldset': {
+                  border: 'none',
+                },
+                '&.Mui-focused fieldset': {
+                  border: 'none',
+                },
+                '& .MuiOutlinedInput-root': {
+                  border: 'none',
+                  height: '50px',
+                },
+              }}
+              InputProps={{
+                ...params.InputProps,
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon sx={{opacity: 0.8, marginLeft: '10px'}} color="secondary"/>
+                  </InputAdornment>
+                ),
+                endAdornment: inputText.length > 0 ? (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => {
+                        setInputText('')
+                        setError('')
+                        navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
+                      }}
+                      style={{padding: 0, opacity: 0.8}}
+                    >
+                      <HighlightOffIcon
+                        className="icon-share"
+                        sx={{opacity: 0.8}}
+                        ize="inherit"
+                        color="secondary"
+                      />
+                    </IconButton>
+                  </InputAdornment>
+                ) : null,
+              }}
+            />
+          )}
         />
-        {inputText.length > 0 &&
-          <TooltipIconButton
-            title='clear'
-            size='small'
-            onClick={() => {
-              setInputText('')
-              setError('')
-              navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-            }}
-            icon={<HighlightOffIcon className='icon-share' color='secondary'/>}
-          />
-        }
       </Paper>
-      { inputText.length > 0 &&
-        error.length > 0 &&
-        <Box sx={{
-          marginLeft: '10px',
-          marginTop: '3px',
-          fontSize: '10px',
-          color: 'red',
-        }}
-        >{error}
-        </Box>
-      }
-    </Stack>
+    </form>
   )
 }
 

@@ -1,40 +1,47 @@
 import React from 'react'
-import {render, screen, fireEvent} from '@testing-library/react'
-import VersionsTimeline from './Timeline' // adjust the import to your file structure
+import {render, screen, within, fireEvent} from '@testing-library/react'
 import '@testing-library/jest-dom/extend-expect'
+import CustomTimeline from './Timeline'
 
 
-describe('VersionsTimeline component', () => {
-  const mockVersionHistory = [
-    {name: 'v1.0', date: '09.17.2023', icon: 'architecture', description: 'Intital model'},
-    {name: 'v1.1', date: '09.88.2023', icon: 'engineering', description: 'Fix structural details'},
+describe('CustomTimeline', () => {
+  const mockCommitData = [
+    {
+      authorName: 'John Doe',
+      commitDate: '2023-10-13',
+      commitMessage: 'Create initial structure',
+    },
+    {
+      authorName: 'Jane Smith',
+      commitDate: '2023-10-14',
+      commitMessage: 'Add new feature',
+    },
   ]
 
-  it('renders without crashing', () => {
-    render(<VersionsTimeline versionHistory={mockVersionHistory}/>)
+  beforeEach(() => {
+    render(<CustomTimeline commitData={mockCommitData}/>)
   })
 
-  it('displays all timeline items from versionHistory prop', () => {
-    render(<VersionsTimeline versionHistory={mockVersionHistory}/>)
-    expect(screen.getByText('v1.0')).toBeInTheDocument()
-    expect(screen.getByText('v1.1')).toBeInTheDocument()
-    expect(screen.getByText('09.17.2023')).toBeInTheDocument()
-    expect(screen.getByText('Fix structural details')).toBeInTheDocument()
+  test('renders correctly', () => {
+    const items = screen.getAllByText(/Create initial structure|Add new feature/)
+    // eslint-disable-next-line no-magic-numbers
+    expect(items).toHaveLength(2)
   })
 
-  it('sets active timeline item when clicked', () => {
-    render(<VersionsTimeline versionHistory={mockVersionHistory}/>)
-    const firstItem = screen.getByText('v1.0')
-    const secondItem = screen.getByText('v1.1')
+  test('displays the correct number of timeline items', () => {
+    const timelineItems = screen.getAllByText((item) =>
+      item === 'John Doe' || item === 'Jane Smith',
+    )
+    expect(timelineItems).toHaveLength(mockCommitData.length)
+  })
+
+  test('updates the active timeline item on click', () => {
+    const firstItem = screen.getByText('Create initial structure')
+    const firstItemContainer = firstItem.closest('div')
+
     fireEvent.click(firstItem)
-    expect(firstItem).toHaveStyle('color: text.primary')
-    fireEvent.click(secondItem)
-    expect(secondItem).toHaveStyle('color: text.primary')
-  })
 
-  it('displays the correct icons for each item', () => {
-    render(<VersionsTimeline versionHistory={mockVersionHistory}/>)
-    expect(screen.getByTestId('architecture-icon')).toBeInTheDocument()
-    expect(screen.getByTestId('engineering-icon')).toBeInTheDocument()
+    // Adjust this check based on the styling attributes you have for active items.
+    expect(within(firstItemContainer).getByText('John Doe')).toHaveStyle({color: 'text.primary'})
   })
 })

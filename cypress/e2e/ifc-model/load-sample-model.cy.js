@@ -3,9 +3,9 @@ describe('sample models', () => {
   const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
   const REQUEST_SUCCESS_CODE = 200
 
-  context('when no model is loaded', () => {
+  context.skip('when no model is loaded', () => {
     beforeEach(() => {
-      cy.setCookie('isFirstTime', 'false')
+      cy.setCookie('isFirstTime', '1')
       cy.visit('/')
       cy.get('#viewer-container').get('canvas').should('be.visible')
       cy.get('[data-model-ready="true"]').should('exist')

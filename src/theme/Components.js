@@ -42,6 +42,18 @@ export function getComponentOverrides(palette, typography) {
         disableRipple: true,
       },
     },
+    MuiButtonGroup: {
+      variants: [
+        {
+          props: {variant: 'contained'},
+          style: ({theme}) => ({
+            backgroundColor: palette.scene.background,
+            boxShadow: theme.shadows[1],
+            opacity: .9,
+          }),
+        },
+      ],
+    },
     MuiToggleButton: {
       styleOverrides: {
         sizeMedium: {
@@ -50,7 +62,7 @@ export function getComponentOverrides(palette, typography) {
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             backgroundColor: palette.primary.background,
-            opacity: .8,
+            opacity: .9,
           },
         },
         sizeSmall: {
@@ -77,9 +89,10 @@ export function getComponentOverrides(palette, typography) {
       variants: [
         {
           props: {variant: 'control'},
-          style: {
-            backgroundColor: palette.primary.background,
-          },
+          style: ({ownerState, theme}) => ({
+            backgroundColor: palette.secondary.background,
+            boxShadow: theme.shadows[ownerState.elevation],
+          }),
         },
         {
           props: {variant: 'background'},

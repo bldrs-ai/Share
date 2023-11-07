@@ -5,8 +5,8 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
+import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
-import {useWindowDimensions} from '../Components/Hooks'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -15,9 +15,10 @@ import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
-import * as Privacy from '../privacy/Privacy'
+import * as Analytics from '../privacy/analytics'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
 import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
@@ -27,9 +28,9 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
+import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
-
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -37,7 +38,6 @@ import {groupElementsByTypes} from '../utils/ifc'
  */
 export const searchIndex = new SearchIndex()
 let count = 0
-
 
 /**
  * Only container for the for the app.  Hosts the IfcViewer as well as
@@ -101,6 +101,9 @@ export default function CadView({
   // Granular visibility controls for the UI components
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
   const isNavigationPanelVisible = useStore((state) => state.isNavigationPanelVisible)
+  const isSearchVisible = useStore((state) => state.isSearchVisible)
+  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
+  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
 
 
   // Place Mark
@@ -315,7 +318,7 @@ export default function CadView({
 
     await viewer.isolator.setModel(loadedModel)
 
-    Privacy.recordEvent('select_content', {
+    Analytics.recordEvent('select_content', {
       content_type: 'ifc_model',
       item_id: filepath,
     })
@@ -404,7 +407,7 @@ export default function CadView({
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
-      Privacy.recordEvent('search', {
+      Analytics.recordEvent('search', {
         search_term: query,
       })
     } else {
@@ -593,7 +596,7 @@ export default function CadView({
 
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 60
+  const operationsGroupWidthPx = 100
   const searchAndNavWidthPx = windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
   const searchAndNavMaxWidthPx = 300
   return (
@@ -646,14 +649,15 @@ export default function CadView({
           },
         }}
         >
-          {isSearchBarVisible &&
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>}
-          {
-            modelPath.repo !== undefined &&
-            <BranchesControl location={location}/>
+          <ControlsGroup fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)} repo={modelPath.repo}/>
+          {isSearchBarVisible && isSearchVisible &&
+          <Box sx={{marginTop: '10px', width: '100%'}}>
+            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+          </Box>
           }
           {isNavPanelOpen &&
             isNavigationPanelVisible &&
+            isNavigationVisible &&
             <NavPanel
               model={model}
               element={rootElement}
@@ -670,6 +674,13 @@ export default function CadView({
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
               }
             />
+          }
+          {
+            modelPath.repo !== undefined && isVersionHistoryVisible &&
+            <>
+              <BranchesControl location={location}/>
+              <VersionsHistoryPanel branch={modelPath.branch}/>
+            </>
           }
         </Box>
       )}
@@ -726,7 +737,9 @@ function OperationsGroupAndDrawer({deselectItems}) {
           flexDirection: 'row',
         }}
       >
-        <OperationsGroup deselectItems={deselectItems}/>
+        <Box>
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
         <SideDrawer/>
         <AppStoreSideDrawer/>
       </Box>

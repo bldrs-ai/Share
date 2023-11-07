@@ -1,6 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Timeline from '@mui/lab/Timeline'
 import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineSeparator from '@mui/lab/TimelineSeparator'
@@ -9,67 +10,118 @@ import TimelineContent from '@mui/lab/TimelineContent'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineDot from '@mui/lab/TimelineDot'
 import Typography from '@mui/material/Typography'
-import ArchitectureIcon from '@mui/icons-material/Architecture'
-import EngineeringIcon from '@mui/icons-material/Engineering'
+import CommitIcon from '@mui/icons-material/Commit'
+import ControlPointIcon from '@mui/icons-material/ControlPoint'
+import {styled} from '@mui/system'
 
 
 /**
- * Verison history timeline component
- *
- * @property {Array<object>} versionHistory object containing versions information
- * @return {React.Component}
+ * CustomTimelineItem is a styled version of MUI's TimelineItem component
+ * with specific styles applied when the MuiTimelineItem-missingOppositeContent
+ * class is present.
  */
-export default function VersionsTimeline({versionHistory}) {
-  const [active, setActive] = useState(0)
+const CustomTimelineItem = styled(TimelineItem)(({theme}) => ({
+  '&.MuiTimelineItem-missingOppositeContent': {
+    '&::before': {
+      padding: 0,
+    },
+    '& .MuiTimelineOppositeContent-root': {
+      textAlign: 'left',
+    },
+  },
+}))
+
+
+/**
+ * TimelineInfo displays detailed information related to a version on the timeline.
+ *
+ * @param {object} version - The version data to be displayed.
+ * @param {boolean} active - Indicates if the current item is active.
+ * @return {object} A component that displays version details.
+ */
+function TimelineInfo({commit, active}) {
   return (
-    <Paper sx={{overflow: 'scroll'}}>
-      <Timeline>
-        {versionHistory.map((version, i) => {
-          return (
-            <TimelineItem key={i} onClick={() => setActive(i)} sx={{cursor: 'pointer'}}>
-              <TimelineOppositeContent
-                sx={{m: 'auto 0'}}
-                align="center"
-                color={active === i ? 'text.primary' : 'text.secondary'}
-              >
-                <Typography variant="body2" >
-                  {version.name}
-                </Typography>
-                <Typography variant="caption" >
-                  {version.date}
-                </Typography>
-              </TimelineOppositeContent>
-              <TimelineSeparator>
-                <TimelineConnector/>
-                <TimelineDot
-                  color={active === i ? 'primary' : 'secondary'}
-                >
-                  {version.icon === 'architecture' ?
-                    <ArchitectureIcon data-testid="architecture-icon"/> :
-                    <EngineeringIcon data-testid="engineering-icon"/>
-                  }
-                </TimelineDot>
-                <TimelineConnector/>
-              </TimelineSeparator>
-              <TimelineContent sx={{py: '12px', px: 2, lineHeight: '1em'}} >
-                <Paper
-                  variant='background'
-                  elevation={active === i ? 4 : 1}
-                  sx={{padding: '10px'}}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{wordBreak: 'normal'}}
-                  >
-                    {version.description}
-                  </Typography>
-                </Paper>
-              </TimelineContent>
-            </TimelineItem>
-          )
-        })
-        }
-      </Timeline>
-    </Paper>
+    <>
+      <TimelineSeparator>
+        <TimelineConnector/>
+        <TimelineDot color={active ? 'primary' : 'inherit'} data-testid='commit'>
+          {(commit.commitMessage.includes('Create') || commit.commitMessage.includes('Add')) ?
+            <ControlPointIcon/> :
+            <CommitIcon sx={{transform: 'rotate(90deg)'}}/>
+          }
+        </TimelineDot>
+        <TimelineConnector/>
+      </TimelineSeparator>
+      <TimelineOppositeContent
+        sx={{padding: '10px 0px 10px 10px'}}
+        color={active ? 'text.primary' : 'text.secondary'}
+      >
+        <Paper
+          elevation={active ? 4 : 1}
+          sx={{
+            overflow: 'hidden',
+            width: '174px',
+            borderRadius: '10px',
+          }}
+        >
+          <Stack
+            direction='column'
+            justifyContent='flex-start'
+            alignItems='flex-start'
+            sx={{padding: '6px 10px'}}
+          >
+            <Stack
+              direction='column'
+              justifyContent='flex-start'
+              alignItems='flex-start'
+              sx={{
+                marginBottom: '10px',
+                width: '100%',
+              }}
+            >
+              <Typography variant='caption'>
+                {commit.authorName}
+              </Typography>
+              <Typography variant='caption'>
+                {commit.commitDate}
+              </Typography>
+            </Stack>
+            <Typography variant='caption'
+              sx={{
+                wordBreak: 'break-word',
+                whiteSpace: 'normal',
+                overflowWrap: 'break-word',
+              }}
+            >
+              {commit.commitMessage}
+            </Typography>
+          </Stack>
+        </Paper>
+      </TimelineOppositeContent>
+      <TimelineContent sx={{width: '40px', py: '12px', px: 2, lineHeight: '1em'}}/>
+    </>
+  )
+}
+
+/**
+ * VersionsTimeline displays a series of versions in a timeline format.
+ * Each version corresponds to a commit, and this component fetches
+ * commit data for the provided branch and displays it.
+ *
+ * @param {Array} versionHistory - An array containing the version history data.
+ * @param {string} branch - The git branch for which commits are fetched.
+ * @return {object} A timeline of versions.
+ */
+export default function CustomTimeline({commitData}) {
+  const [active] = useState(0)
+
+  return (
+    <Timeline>
+      {commitData.map((commit, i) => (
+        <CustomTimelineItem key={i} >
+          <TimelineInfo commit={commit} active={active === i}/>
+        </CustomTimelineItem>
+      ))}
+    </Timeline>
   )
 }

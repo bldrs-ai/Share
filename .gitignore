@@ -4,14 +4,12 @@
 # no longer check-in docs for builds.  This is handled by Netlify
 /docs
 
+cypress/downloads
+
+/coverage
+
 # misc
 .DS_Store
 .vscode
 .idea
 *.log
-/coverage
-
-cypress/videos
-cypress/screenshots
-
-storybook-static

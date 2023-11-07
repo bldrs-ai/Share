@@ -3,6 +3,7 @@ const path = require('path')
 
 
 module.exports = {
+  target: ['web', 'es2021'],
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   devServer: {
     publicPath: '/cosmos/',
@@ -19,8 +20,8 @@ module.exports = {
   module: {
     rules: [
       {
-        test: /\.jsx$/,
-        exclude: /node_modules/,
+        test: /\.(js|jsx)$/,
+        exclude: /node_modules\/(?!@bldrs-ai\\conway)/,  // Exclude all of node_modules except @bldrs-ai
         use: {
           loader: 'babel-loader',
           options: {
