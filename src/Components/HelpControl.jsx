@@ -117,15 +117,15 @@ const HelpList = ({pageIndex}) => {
       </Typography>,
     },
     {
-      icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
+      icon: <CropOutlinedIcon color='secondary'/>,
+      description: 'Study the project using standard sections',
+    },
+    {
+      icon: <TouchAppOutlinedIcon className='icon-share' color='primary'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Double click the model to select <br/> a model element
       </Typography>,
-    },
-    {
-      icon: <CropOutlinedIcon color='secondary'/>,
-      description: 'Study the project using standard sections',
     },
     {
       icon: <ShiftIcon className='icon-share'/>,
@@ -143,7 +143,7 @@ const HelpList = ({pageIndex}) => {
       description: 'Isolate selected element',
     },
     {
-      icon: <HideSourceOutlinedIcon color='primary'/>,
+      icon: <HideSourceOutlinedIcon color='secondary'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Hide selected  <br/> element
