@@ -59,6 +59,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
   )
 }
 
+
 /**
  * Represents a single help entry with an icon and a description.
  *
@@ -202,6 +203,7 @@ const HelpList = ({pageIndex}) => {
   )
 }
 
+
 /**
  * The main dialog displaying the help contents.
  * Provides controls for navigating between pages of help entries.
@@ -310,7 +312,6 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
             />
           </Box>
-
         </Box>
       }
     />
