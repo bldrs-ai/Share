@@ -202,14 +202,21 @@ describe('CadView', () => {
 
 
   it('select multiple elements and then clears selection, then reselect', async () => {
+    const selectedId = '123'
+    const selectedIdsAsString = ['0', '1']
+    const elementCount = 2
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setSelectedElement({id: 123})
+    await act(async () => {
+      await result.current.setSelectedElement(selectedId)
+      await result.current.setSelectedElements(selectedIdsAsString)
     })
+    expect(result.current.selectedElement).toBe(selectedId)
+    expect(result.current.selectedElements).toBe(selectedIdsAsString)
+
     const {getByTitle} = render(
         <ShareMock>
           <CadView
@@ -218,14 +225,20 @@ describe('CadView', () => {
             pathPrefix={'/'}
             modelPath={modelPath}
           />
-        </ShareMock>)
-    // debug()
+        </ShareMock>,
+    )
     expect(getByTitle('Section')).toBeInTheDocument()
     expect(getByTitle('Clear')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
+    expect(result.current.selectedElement).toBe(null)
+    expect(result.current.selectedElements).toHaveLength(0)
+    await act(async () => {
+      await result.current.setSelectedElements(selectedIdsAsString)
+    })
+    expect(result.current.selectedElements).toHaveLength(elementCount)
   })
 
 
