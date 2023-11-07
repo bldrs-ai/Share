@@ -37,7 +37,6 @@ const esModules = [
   'vfile',
   'vfile-message',
   'web-ifc',
-  'bldrs-conway',
   'web-ifc-three',
   'web-ifc-viewer',
   'use-double-tap',

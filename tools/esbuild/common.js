@@ -18,7 +18,7 @@ const webIfcShimAliasPlugin = {
   setup(build) {
     build.onResolve({filter: /^web-ifc$/}, (args) => {
       return {
-        path: path.resolve(__root, 'node_modules/bldrs-conway/compiled/src/shim/ifc_api.js'),
+        path: path.resolve(__root, 'node_modules/@bldrs-ai/conway/compiled/src/shim/ifc_api.js'),
       }
     })
   },
