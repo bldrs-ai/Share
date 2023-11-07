@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import CloseIcon from '@mui/icons-material/Close'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
@@ -62,7 +62,7 @@ export default function ElementGroup({deselectItems, viewer}) {
                 selected={isPropertiesOn}
                 variant='solid'
                 placement='top'
-                icon={<InfoOutlinedIcon className='icon-share' color='secondary'/>}
+                icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
               />
         }
         {isSelected() && selectedElement !== null &&

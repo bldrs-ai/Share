@@ -13,6 +13,7 @@ import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import AboutControl from './About/AboutControl'
 
 
@@ -35,6 +36,8 @@ export default function OperationsGroup({deselectItems}) {
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
+  const toggleIsHelpTooltips = useStore((state) => state.toggleIsHelpTooltips)
+  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
   const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
@@ -102,6 +105,12 @@ export default function OperationsGroup({deselectItems}) {
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
           <AboutControl/>
+          <TooltipIconButton
+            title='Help'
+            onClick={() => toggleIsHelpTooltips()}
+            selected={isHelpTooltips}
+            icon={<HelpOutlineIcon className='icon-share' color='secondary'/>}
+          />
         </>
       }
       {/* Invisible */}
