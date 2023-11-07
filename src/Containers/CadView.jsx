@@ -638,7 +638,7 @@ export default function CadView({
         sx={{
           position: 'fixed',
           bottom: '1.5em',
-          right: '1em',
+          right: '.5em',
         }}
       >
         <HelpControl/>
