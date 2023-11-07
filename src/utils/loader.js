@@ -9,7 +9,7 @@ import {assertDefined} from '../utils/assert'
  * @param {string} appPrefix
  * @param {Function} handleBeforeUnload
  */
-export function loadLocalFile(navigate, appPrefix, handleBeforeUnload) {
+export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, testingSkipAutoRemove = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
@@ -32,7 +32,9 @@ export function loadLocalFile(navigate, appPrefix, handleBeforeUnload) {
   )
   viewerContainer.appendChild(fileInput)
   fileInput.click()
-  viewerContainer.removeChild(fileInput)
+  if (!testingSkipAutoRemove) {
+    viewerContainer.removeChild(fileInput)
+  }
 }
 
 
