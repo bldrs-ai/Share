@@ -9,10 +9,9 @@ import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
-import LogoB from '../assets/LogoB.svg'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import ShiftIcon from '../assets/icons/Shift.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
@@ -25,6 +24,7 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import PortraitIcon from '@mui/icons-material/Portrait'
+import SearchIcon from '@mui/icons-material/Search'
 
 
 /**
@@ -110,22 +110,11 @@ const HelpComponent = ({icon, description}) => {
 const HelpList = ({pageIndex}) => {
   const helpContent = [
     {
-      icon:
-      <Box
-        sx={{
-          '& svg': {
-            'marginLeft': '3px',
-            'width': '20px',
-            '@media (max-width: 900px)': {
-              marginTop: '4px',
-              width: '20px',
-            },
-          },
-        }}
-      >
-        <LogoB/>
-      </Box>,
-      description: 'Show / Hide Bldrs tools',
+      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
+      description:
+      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
+        Open IFC projects from GITHUB  <br/> or local drive
+      </Typography>,
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='secondary'/>,
@@ -143,7 +132,7 @@ const HelpList = ({pageIndex}) => {
       description: 'Hold shift to select multiple elements',
     },
     {
-      icon: <InfoOutlinedIcon className='icon-share' color='secondary'/>,
+      icon: <FormatListBulletedIcon className='icon-share' color='secondary'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Study properties attached to  <br/> selected element
@@ -169,13 +158,6 @@ const HelpList = ({pageIndex}) => {
       description: 'Clear selected elements',
     },
     {
-      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Open IFC projects from GITHUB  <br/> or local drive
-      </Typography>,
-    },
-    {
       icon: <TreeIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
@@ -185,6 +167,10 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <HistoryIcon color='secondary'/>,
       description: 'Access project version history',
+    },
+    {
+      icon: <SearchIcon color='secondary'/>,
+      description: 'Search the model using ifc name',
     },
     {
       icon: <PortraitIcon className='icon-share' color='secondary'/>,
