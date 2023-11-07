@@ -8,6 +8,7 @@ import Alert from '../Components/Alert'
 import ElementGroup from '../Components/ElementGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
+import HelpControl from '../Components/HelpControl'
 import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -633,6 +634,15 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: '1.5em',
+          right: '.5em',
+        }}
+      >
+        <HelpControl/>
+      </Box>
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
