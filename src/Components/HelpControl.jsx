@@ -143,7 +143,7 @@ const HelpList = ({pageIndex}) => {
       description: 'Isolate selected element',
     },
     {
-      icon: <HideSourceOutlinedIcon color='secondary'/>,
+      icon: <HideSourceOutlinedIcon color='secondarygit p'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
         Hide selected  <br/> element
