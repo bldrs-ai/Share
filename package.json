@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.0-r749",
+  "version": "1.0.764",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -12,11 +12,11 @@
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
-    "build-share": "yarn write-new-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js",
+    "build-share": "yarn update-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js",
     "build-share-conway": "USE_WEBIFC_SHIM=true yarn build-share",
     "build-share-webifc": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
-    "build-share-copy-wasm-conway": "shx cp node_modules/bldrs-conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
+    "build-share-copy-wasm-conway": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
     "clean": "shx rm -rf docs",
     "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
@@ -33,11 +33,12 @@
     "serve-share-conway": "yarn build-share-conway && USE_WEBIFC_SHIM=true node tools/esbuild/serve.js",
     "serve-share-webifc": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node tools/esbuild/serve.js",
     "test": "jest --config tools/jest/jest.config.js",
-    "write-new-version": "node src/utils/version.mjs > package.json.new && shx mv package.json.new package.json"
+    "update-version": "./scripts/updateVersion.mjs"
   },
   "dependencies": {
     "@auth0/auth0-react": "^2.0.0",
     "@babel/core": "^7.18.10",
+    "@bldrs-ai/conway": "./bldrs-ai-conway-v0.1.378.tgz",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
     "@emotion/styled": "^11.10.0",
@@ -50,7 +51,6 @@
     "@octokit/rest": "^19.0.3",
     "@sentry/react": "^7.61.0",
     "@sentry/tracing": "^7.61.0",
-    "bldrs-conway": "./bldrs-conway-v0.0.1.tgz",
     "clsx": "^1.2.1",
     "cypress-react-router": "^2.0.1",
     "js-cookie": "^3.0.5",

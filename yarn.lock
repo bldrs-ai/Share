@@ -2085,6 +2085,16 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
+"@bldrs-ai/conway@./bldrs-ai-conway-v0.1.378.tgz":
+  version "0.1.378"
+  resolved "./bldrs-ai-conway-v0.1.378.tgz#05bb7c1880491a4883653b9b195d958a7cf18d38"
+  dependencies:
+    buffer "^6.0.3"
+    gl-matrix "^3.4.3"
+    seedrandom "^3.0.5"
+    smart-buffer "^4.2.0"
+    yargs "^17.7.1"
+
 "@bldrs-ai/ifclib@^5.3.3":
   version "5.3.3"
   resolved "https://registry.npmjs.org/@bldrs-ai/ifclib/-/ifclib-5.3.3.tgz"
@@ -4540,16 +4550,6 @@ bl@^4.1.0:
     buffer "^5.5.0"
     inherits "^2.0.4"
     readable-stream "^3.4.0"
-
-bldrs-conway@./bldrs-conway-v0.0.1.tgz:
-  version "0.0.1"
-  resolved "./bldrs-conway-v0.0.1.tgz#fb515339a20d717d414936f39d629bd64f06cda9"
-  dependencies:
-    buffer "^6.0.3"
-    gl-matrix "^3.4.3"
-    seedrandom "^3.0.5"
-    smart-buffer "^4.2.0"
-    yargs "^17.7.1"
 
 blob-util@^2.0.2:
   version "2.0.2"

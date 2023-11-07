@@ -21,7 +21,7 @@ module.exports = {
     rules: [
       {
         test: /\.(js|jsx)$/,
-        exclude: /node_modules\/(?!bldrs-conway)/,  // Exclude all of node_modules except bldrs-conway
+        exclude: /node_modules\/(?!@bldrs-ai\\conway)/,  // Exclude all of node_modules except @bldrs-ai
         use: {
           loader: 'babel-loader',
           options: {
