@@ -634,15 +634,7 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: '1.5em',
-          right: '.5em',
-        }}
-      >
-        <HelpControl/>
-      </Box>
+
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -710,6 +702,15 @@ export default function CadView({
       }
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: '1.0em',
+          right: '.5em',
+        }}
+      >
+        <HelpControl/>
+      </Box>
     </Box>
   )
 }
