@@ -113,12 +113,12 @@ const HelpList = ({pageIndex}) => {
       icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Open IFC projects from GITHUB  <br/> or local drive
+        Open IFC models from GITHUB  <br/> or local drive
       </Typography>,
     },
     {
       icon: <CropOutlinedIcon color='secondary'/>,
-      description: 'Study the project using standard sections',
+      description: 'Study the model using standard sections',
     },
     {
       icon: <TouchAppOutlinedIcon className='icon-share' color='primary'/>,
@@ -161,16 +161,16 @@ const HelpList = ({pageIndex}) => {
       icon: <TreeIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
       description:
       <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Navigate <br/> the project using element hierarchy
+        Navigate <br/> the model using element hierarchy
       </Typography>,
     },
     {
       icon: <HistoryIcon color='secondary'/>,
-      description: 'Access project version history',
+      description: 'Access project model version history',
     },
     {
       icon: <SearchIcon color='secondary'/>,
-      description: 'Search the model using ifc name',
+      description: 'Search the model',
     },
     {
       icon: <PortraitIcon className='icon-share' color='secondary'/>,
@@ -178,7 +178,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 1px'}}/>,
-      description: 'Share sectioned portions of the project',
+      description: 'Share sectioned portions of the model',
     },
     {
       icon: <ChatOutlinedIcon color='secondary'/>,
@@ -234,7 +234,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<HelpOutlineIcon/>}
-      headerText={'Bldrs.ai'}
+      headerText={'bldrs.ai'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
