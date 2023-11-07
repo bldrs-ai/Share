@@ -4,20 +4,17 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
-import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
-import CutPlaneMenu from './CutPlaneMenu'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import FormatListBulletedOutlinedIcon from '@mui/icons-material/FormatListBulletedOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import AboutControl from './About/AboutControl'
 
 
 /**
@@ -33,11 +30,7 @@ export default function OperationsGroup({deselectItems}) {
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const cutPlanes = useStore((state) => state.cutPlanes)
-  const levelInstance = useStore((state) => state.levelInstance)
-  const selectedElement = useStore((state) => state.selectedElement)
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
@@ -51,14 +44,6 @@ export default function OperationsGroup({deselectItems}) {
     return isMobile ? turnOffIsHelpTooltips() : null
   }
 
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null ||
-      cutPlanes.length !== 0 ||
-      levelInstance !== null
-    )
-    return ifSelected
-  }
 
   const toggle = (panel) => {
     openDrawer()
@@ -97,22 +82,6 @@ export default function OperationsGroup({deselectItems}) {
               turnOffTooltips()
               toggle('Notes')
             }}
-          />
-          <TooltipIconButton
-            title='Properties'
-            onClick={() => {
-              turnOffTooltips()
-              toggle('Properties')
-            }}
-            selected={isPropertiesOn}
-            icon={<FormatListBulletedOutlinedIcon className='icon-share' color='secondary'/>}
-          />
-          <CutPlaneMenu/>
-          <TooltipIconButton
-            title='Clear'
-            onClick={deselectItems}
-            selected={isSelected()}
-            icon={<HighlightOffIcon className='icon-share'color='secondary'/>}
           />
         </>
       }

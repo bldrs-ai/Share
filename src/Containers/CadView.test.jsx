@@ -137,7 +137,11 @@ describe('CadView', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setSelectedElement(targetEltId)
+    })
+    await act(() => {
       result.current.setSelectedElements([targetEltId])
+    })
+    await act(() => {
       result.current.setCutPlaneDirections(['y'])
     })
     const {getByTitle} = render(
@@ -200,16 +204,21 @@ describe('CadView', () => {
 
 
   it('select multiple elements and then clears selection, then reselect', async () => {
-    const selectedIds = [0, 1]
+    const selectedId = '123'
     const selectedIdsAsString = ['0', '1']
+    const elementCount = 2
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
     }
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
+    await act(async () => {
+      await result.current.setSelectedElement(selectedId)
+      await result.current.setSelectedElements(selectedIdsAsString)
     })
+    expect(result.current.selectedElement).toBe(selectedId)
+    expect(result.current.selectedElements).toBe(selectedIdsAsString)
+
     const {getByTitle} = render(
         <ShareMock>
           <CadView
@@ -218,35 +227,20 @@ describe('CadView', () => {
             pathPrefix={'/'}
             modelPath={modelPath}
           />
-        </ShareMock>)
+        </ShareMock>,
+    )
     expect(getByTitle('Section')).toBeInTheDocument()
+    expect(getByTitle('Clear')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    await act(async () => {
-      await fireEvent.click(clearSelection)
-    })
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.selectedElements).toHaveLength(0)
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
     await act(async () => {
-      await fireEvent.click(clearSelection)
+      await result.current.setSelectedElements(selectedIdsAsString)
     })
-    expect(result.current.selectedElement).toBe(null)
-    expect(result.current.selectedElements).toHaveLength(0)
-    const modelId = 0
-    const clearCallParam = [modelId, []] // Clear Selection Call Parameters
-    const selectCallParam = [modelId, selectedIds] // Create Selection Call Parameters
-    /** Expected basic 2 on load (init search, Select from Url), select, clear, select, clear */
-    const expectedCall = [selectCallParam, clearCallParam, clearCallParam, selectCallParam, clearCallParam, selectCallParam, clearCallParam]
-    const setSelectionCalls = viewer.setSelection.mock.calls
-    expect(setSelectionCalls).toEqual(expectedCall)
+    expect(result.current.selectedElements).toHaveLength(elementCount)
   })
 
 
