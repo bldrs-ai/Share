@@ -3,8 +3,8 @@ import Accordion from '@mui/material/Accordion'
 import AccordionSummary from '@mui/material/AccordionSummary'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import CaretIcon from '../assets/icons/Caret.svg'
+import useTheme from '@mui/styles/useTheme'
 
 
 /**
@@ -16,8 +16,8 @@ import CaretIcon from '../assets/icons/Caret.svg'
  * @return {React.ReactElement}
  */
 export default function ExpansionPanel({summary, detail, expandState}) {
-  const theme = useTheme()
   const [expanded, setExpanded] = useState(expandState)
+  const theme = useTheme()
 
 
   useEffect(() => {
@@ -28,22 +28,19 @@ export default function ExpansionPanel({summary, detail, expandState}) {
   return (
     <Accordion
       elevation={0}
-      PaperProps={{variant: 'control'}}
       sx={{
+        'marginBottom': '10px',
+        'borderRadius': '10px',
+        'border': 'none',
+        'backgroundColor': theme.palette.scene.background,
         '& .MuiAccordionSummary-root': {
           width: '100%',
-          padding: 0,
-          borderBottom: `.5px solid ${theme.palette.primary.contrastText}`,
         },
         '& .MuiAccordionSummary-root.Mui-expanded': {
           marginBottom: '0.5em',
         },
-        '& .MuiAccordionDetails-root': {
-          padding: 0,
-        },
-        '& svg': {
-          marginRight: '12px',
-          marginLeft: '12px',
+        '&:before': {
+          backgroundColor: 'transparent',
         },
       }}
       expanded={expanded}
