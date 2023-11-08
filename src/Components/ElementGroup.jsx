@@ -44,7 +44,8 @@ export default function ElementGroup({deselectItems, viewer}) {
     >
       <ButtonGroup
         orientation='horizontal'
-        variant='contained'
+        variant='outlined'
+        sx={{borderRadius: '10px', padding: '0px 10px'}}
       >
         {!isIsolate &&
           <>
