@@ -35,7 +35,16 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <LogoB/>
+        <Box
+          sx={{
+            '& svg': {
+              marginTop: '6px',
+              width: '18px',
+            },
+          }}
+        >
+          <LogoB/>
+        </Box>
       }
       dialog={
         <AboutDialog
