@@ -107,6 +107,7 @@ export default function NotesNavBar() {
             onClick={toggleIsCreateNoteActive}
             icon={<BackIcon className='icon-share'/>}
             size='medium'
+            variant='noBackground'
           /> :
           <TooltipIconButton
             title='ADD A NOTE'
@@ -114,6 +115,7 @@ export default function NotesNavBar() {
             onClick={toggleIsCreateNoteActive}
             icon={<AddNoteIcon className='icon-share' color='secondary'/>}
             size='medium'
+            variant='noBackground'
           />
         )}
         <CloseButton onClick={closeNotes}/>

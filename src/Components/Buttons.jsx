@@ -107,6 +107,7 @@ export function CloseButton({onClick}) {
       icon={<CloseIcon className='icon-share icon-small'/>}
       aboutInfo={false}
       className='closeButton'
+      variant='noBackground'
     />
   )
 }
