@@ -20,7 +20,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
         alignItems: 'center',
         justifyContent: 'space-between',
         borderRadius: '5px',
-        height: '3em',
+        height: '40px',
       }}
     >
       <Box sx={{
@@ -38,7 +38,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
           }} src={iconSrc} alt={title}
           /> : <></>
         }
-        <Typography variant='body1'>
+        <Typography variant='body1' >
           {title}
         </Typography>
       </Box>
