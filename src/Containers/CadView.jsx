@@ -698,8 +698,6 @@ export default function CadView({
           <ElementGroup deselectItems={deselectItems} viewer={viewer}/>
         </Box>
       }
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-      }
       <Box
         sx={{
           position: 'fixed',
@@ -727,6 +725,9 @@ export default function CadView({
       >
         <AboutControl/>
       </Box>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      }
+
     </Box>
   )
 }
