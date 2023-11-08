@@ -718,6 +718,15 @@ export default function CadView({
       >
         <HelpControl/>
       </Box>
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: '1.0em',
+          left: '1.0em',
+        }}
+      >
+        <AboutControl/>
+      </Box>
     </Box>
   )
 }
