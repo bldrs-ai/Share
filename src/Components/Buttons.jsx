@@ -28,6 +28,7 @@ export function TooltipIconButton({
   size = 'medium',
   dataTestId = '',
   aboutInfo = true,
+  variant = 'rounded',
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
@@ -51,7 +52,7 @@ export function TooltipIconButton({
         data-testid={dataTestId || title}
         PopperProps={{style: {zIndex: 0}}}
       >
-        <ToggleButton selected={selected} onClick={onClick} value={''} size={size}>
+        <ToggleButton selected={selected} onClick={onClick} value={''} size={size} variant={variant}>
           {icon}
         </ToggleButton>
       </Tooltip>
