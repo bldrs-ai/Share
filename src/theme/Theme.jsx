@@ -10,6 +10,7 @@ import {day, night} from './Palette'
  */
 export default function useShareTheme() {
   const [mode, setMode] = useState(Preferences.getTheme() || getSystemCurrentLightDark())
+
   const [themeChangeListeners] = useState({})
 
 
@@ -49,7 +50,7 @@ function loadTheme(mode, setMode, themeChangeListeners) {
   const activePalette = mode === Themes.Day ? day : night
   const theme = {
     components: getComponentOverrides(activePalette),
-    shape: {borderRadius: 0},
+    shape: {borderRadius: 10},
     palette: activePalette,
     zIndex: {
       modal: 2000,
