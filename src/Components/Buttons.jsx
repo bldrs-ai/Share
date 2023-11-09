@@ -77,6 +77,7 @@ export function ControlButton({
   icon,
   dialog,
   placement = 'left',
+  variant = 'rounded',
 }) {
   assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
   return (
@@ -87,6 +88,7 @@ export function ControlButton({
         icon={icon}
         selected={isDialogDisplayed}
         className='icon-share'
+        variant={variant}
       />
       {isDialogDisplayed && dialog}
     </>

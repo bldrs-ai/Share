@@ -58,7 +58,6 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'contained'},
           style: ({theme}) => ({
-            backgroundColor: theme.palette.scene.background,
             boxShadow: theme.shadows[0],
             opacity: .9,
           }),
@@ -98,7 +97,6 @@ export function getComponentOverrides(palette, typography) {
             'height': '40px',
             'borderRadius': '10px',
             'border': 'none',
-            'margin': '0px 4px 4px 0px',
             'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
               backgroundColor: palette.primary.background,
@@ -109,7 +107,11 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'solid'},
           style: {
-            borderRadius: '0px',
+            'borderRadius': '0px',
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.scene.background,
+              opacity: .9,
+            },
           },
         },
         {
