@@ -74,7 +74,7 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  // const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
@@ -83,6 +83,8 @@ export default function CadView({
   // setModelStore instead of setModel since there's already a state var with this name
   const setModelStore = useStore((state) => state.setModelStore)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
+  const isLoading = useStore((state) => state.isLoading)
+  const setIsLoading = useStore((state) => state.setIsLoading)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
@@ -761,7 +763,10 @@ export default function CadView({
                 },
               }}
             >
-              <Box className="circleLoader"/>
+              <Box
+                data-testid="loader"
+                className="circleLoader"
+              />
             </Box>
           </Box>
         </Box>

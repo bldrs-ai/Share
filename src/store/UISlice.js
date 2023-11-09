@@ -19,6 +19,7 @@ export default function createUISlice(set, get) {
     isVersionHistoryVisible: false,
     isOpenControlHighlighted: true,
     isPropertiesOn: false,
+    isLoading: false,
     snackMessage: null,
     cutPlanes: [],
     levelInstance: null,
@@ -56,6 +57,7 @@ export default function createUISlice(set, get) {
       return {cutPlanes: filterPlanes}
     }),
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
+    setIsLoading: (isLoading) => set(() => ({isLoading: isLoading})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
