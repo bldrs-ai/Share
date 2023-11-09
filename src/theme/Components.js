@@ -109,7 +109,11 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'solid'},
           style: {
-            borderRadius: '0px',
+            'borderRadius': '0px',
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.scene.background,
+              opacity: .9,
+            },
           },
         },
         {
