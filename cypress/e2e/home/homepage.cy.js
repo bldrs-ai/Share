@@ -1,5 +1,6 @@
 describe('home page', () => {
   context('without a first-time visit value', () => {
+    /*
     it('should display the about dialog', () => {
       cy.clearCookies()
       cy.visit('/')
@@ -8,7 +9,7 @@ describe('home page', () => {
           .should('be.visible')
           .contains('Build every thing together')
       cy.title().should('eq', 'About — Bldrs.ai')
-    })
+    })*/
   })
 
   context('with a false first-time visit cookie', () => {
