@@ -109,7 +109,7 @@ export default function NavPanel({
               zIndex: 1,
             }}
           >
-            <Typography variant='overline' sx={{marginLeft: '1em'}}>Spatial Navigation</Typography>
+            <Typography variant='overline' sx={{marginLeft: '1em'}}>Navigation</Typography>
             <Box sx={{marginRight: '.4em'}}>
               <IconButton aria-label="close" size="small" onClick={toggleIsNavigationVisible}>
                 <CloseIcon fontSize="inherit"/>
