@@ -5,7 +5,6 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
-import AboutControl from '../Components/About/AboutControl'
 import ElementGroup from '../Components/ElementGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
@@ -13,6 +12,7 @@ import HelpControl from '../Components/HelpControl'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import Logo from '../Components/Logo'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
@@ -699,6 +699,7 @@ export default function CadView({
           <ElementGroup deselectItems={deselectItems} viewer={viewer}/>
         </Box>
       }
+      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
       <Box
@@ -709,15 +710,6 @@ export default function CadView({
         }}
       >
         <HelpControl/>
-      </Box>
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: '1.0em',
-          left: '1.0em',
-        }}
-      >
-        <AboutControl/>
       </Box>
     </Box>
   )
