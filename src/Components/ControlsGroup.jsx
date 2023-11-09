@@ -28,7 +28,7 @@ export default function OperationsGroup({fileOpen, repo}) {
     <ButtonGroup
       orientation='horizontal'
       variant='contained'
-      sx={{'& > *:not(:last-of-type)': {mr: .6}}} // Add horizontal spacing except for the last button
+      sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
       <OpenModelControl fileOpen={fileOpen}/>
       <TooltipIconButton
