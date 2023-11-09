@@ -696,7 +696,7 @@ export default function CadView({
             width: '100%',
           }}
         >
-          <ElementGroup deselectItems={deselectItems} viewer={viewer}/>
+          <ElementGroup deselectItems={deselectItems}/>
         </Box>
       }
       <Box
