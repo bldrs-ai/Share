@@ -29,8 +29,8 @@ const UserProfile = ({size = 'medium'}) => {
         className={'no-hover'}
         {...bindTrigger(popupState)}
         sx={{
-          'width': '50px',
-          'height': '50px',
+          'width': '40px',
+          'height': '40px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
             opacity: .9,
