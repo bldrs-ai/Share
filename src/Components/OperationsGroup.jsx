@@ -100,7 +100,6 @@ export default function OperationsGroup({deselectItems}) {
            openDrawer()
          }}
          selected={isPropertiesOn}
-         variant='solid'
          icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
        />
       }
