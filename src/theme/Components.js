@@ -98,7 +98,7 @@ export function getComponentOverrides(palette, typography) {
             'height': '40px',
             'borderRadius': '10px',
             'border': 'none',
-            'margin': '0px 4px 4px 0px',
+            // 'margin': '0px 4px 4px 0px',
             'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
               backgroundColor: palette.primary.background,

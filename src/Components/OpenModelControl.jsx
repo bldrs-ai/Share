@@ -50,7 +50,7 @@ export default function OpenModelControl({fileOpen}) {
 
 
   return (
-    <Box>
+    <Box sx={{marginRight: '6px'}}>
       <TooltipIconButton
         title={'Open IFC'}
         onClick={() => setIsDialogDisplayed(true)}

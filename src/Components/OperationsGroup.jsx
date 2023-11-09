@@ -55,14 +55,13 @@ export default function OperationsGroup({deselectItems}) {
     <ButtonGroup
       orientation='vertical'
       variant='contained'
-      sx={{margin: '1em 1em'}}
+      sx={{'margin': '1em', '& > *:not(:last-child)': {mb: .6}}} // Add space between buttons
     >
       {isLoginVisible &&
           <AuthNav/>
       }
-
       {isCollaborationGroupVisible &&
-        <Box>
+        <Box sx={{marginTop: '8px'}}>
           <ShareControl/>
         </Box>
       }
