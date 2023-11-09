@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Timeline from '@mui/lab/Timeline'
@@ -115,12 +115,28 @@ function TimelineInfo({commit, active}) {
  */
 export default function CustomTimeline({commitData}) {
   const [active] = useState(0)
+  const [showLoginMessage, setShowLoginMessage] = useState(false)
+
+  useEffect(() => {
+    // Set a timeout to display the login message after 7 seconds if commitData is still empty
+    const timer = setTimeout(() => {
+      if (commitData.length === 0) {
+        setShowLoginMessage(true)
+      }
+    }, 7000)
+
+    // Clear the timeout if commitData is populated or the component unmounts
+    return () => clearTimeout(timer)
+  }, [commitData])
 
   return (
     <Timeline>
-      {commitData.length === 0 && <Loader/>}
+      {commitData.length === 0 && !showLoginMessage && <Loader/>}
+      {showLoginMessage && (
+        <p>Please log in using your GitHub account to get access to the project timeline.</p>
+      )}
       {commitData.map((commit, i) => (
-        <CustomTimelineItem key={i} >
+        <CustomTimelineItem key={i}>
           <TimelineInfo commit={commit} active={active === i}/>
         </CustomTimelineItem>
       ))}
