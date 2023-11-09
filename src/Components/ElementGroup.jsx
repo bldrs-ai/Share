@@ -1,12 +1,11 @@
 import React, {useState} from 'react'
-import Stack from '@mui/material/Stack'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import Stack from '@mui/material/Stack'
 import useStore from '../store/useStore'
-import CutPlaneMenu from './CutPlaneMenu'
 import {TooltipIconButton} from './Buttons'
-import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import CutPlaneMenu from './CutPlaneMenu'
 import CloseIcon from '@mui/icons-material/Close'
+import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 
@@ -18,12 +17,9 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function ElementGroup({deselectItems, viewer}) {
+export default function ElementGroup({deselectItems}) {
+  const viewer = useStore((state) => state.viewer)
   const selectedElement = useStore((state) => state.selectedElement)
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const openDrawer = useStore((state) => state.openDrawer)
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
 
@@ -51,20 +47,6 @@ export default function ElementGroup({deselectItems, viewer}) {
           <>
             <CutPlaneMenu/>
           </>
-        }
-        {isSelected() && selectedElement !== null &&
-              <TooltipIconButton
-                title='Properties'
-                onClick={() => {
-                  turnOffIsHelpTooltips()
-                  toggleIsPropertiesOn()
-                  openDrawer()
-                }}
-                selected={isPropertiesOn}
-                variant='solid'
-                placement='top'
-                icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
-              />
         }
         {isSelected() && selectedElement !== null &&
             <TooltipIconButton
