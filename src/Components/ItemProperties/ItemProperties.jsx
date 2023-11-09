@@ -66,6 +66,8 @@ export default function ItemProperties() {
           <Typography variant='body1' sx={{
             position: 'sticky',
             top: '0px',
+            zIndex: 10,
+            backgroundColor: theme.palette.background.paper,
             display: 'flex',
             flexDirection: 'row',
             alignItems: 'center',
