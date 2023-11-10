@@ -86,7 +86,7 @@ export default function SearchBar({fileOpen}) {
   // container (CadView).
   return (
     <form onSubmit={onSubmit}>
-      <Paper elevation={1} variant='control' sx={{opacity: '.9'}}>
+      <Paper elevation={0} variant='control' sx={{opacity: '.9'}}>
         <Autocomplete
           fullWidth
           freeSolo
