@@ -12,8 +12,10 @@ import TimelineDot from '@mui/lab/TimelineDot'
 import Typography from '@mui/material/Typography'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
-import Loader from './Loader'
 import {styled} from '@mui/system'
+import Loader from './Loader'
+import useStore from '../store/useStore'
+import {navigateBaseOnModelPath} from '../utils/location'
 
 
 /**
@@ -63,6 +65,7 @@ function TimelineInfo({commit, active}) {
             overflow: 'hidden',
             width: '174px',
             borderRadius: '10px',
+            cursor: 'pointer',
           }}
         >
           <Stack
@@ -113,9 +116,11 @@ function TimelineInfo({commit, active}) {
  * @param {string} branch - The git branch for which commits are fetched.
  * @return {object} A timeline of versions.
  */
-export default function CustomTimeline({commitData}) {
-  const [active] = useState(0)
+export default function CustomTimeline({commitData, commitNavigate}) {
+  const [active, setActive] = useState(commitData.length)
   const [showLoginMessage, setShowLoginMessage] = useState(false)
+  const modelPath = useStore((state) => state.modelPath)
+
 
   useEffect(() => {
     // Set a timeout to display the login message after 7 seconds if commitData is still empty
@@ -124,10 +129,19 @@ export default function CustomTimeline({commitData}) {
         setShowLoginMessage(true)
       }
     }, 7000)
-
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
   }, [commitData])
+
+  // Function to handle item click
+  const handleItemClick = (index) => {
+    setActive(index)
+    const sha = commitData[index].sha
+    if (modelPath) {
+      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      commitNavigate(commitPath)
+    }
+  }
 
   return (
     <Timeline>
@@ -136,7 +150,7 @@ export default function CustomTimeline({commitData}) {
         <p>Please log in using your GitHub account to get access to the project timeline.</p>
       )}
       {commitData.map((commit, i) => (
-        <CustomTimelineItem key={i}>
+        <CustomTimelineItem key={i} onClick={() => handleItemClick(i)}>
           <TimelineInfo commit={commit} active={active === i}/>
         </CustomTimelineItem>
       ))}
