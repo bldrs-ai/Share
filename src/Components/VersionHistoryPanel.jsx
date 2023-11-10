@@ -2,6 +2,7 @@ import React, {useState, useEffect} from 'react'
 import Timeline from './Timeline'
 import Panel from './Panel'
 import useStore from '../store/useStore'
+import {useNavigate} from 'react-router-dom'
 import {getCommitsForBranch} from '../utils/GitHub'
 
 
@@ -18,6 +19,7 @@ export default function VersionsHistoryPanel({branch}) {
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
+  const navigate = useNavigate()
 
   useEffect(() => {
     const fetchCommits = async () => {
@@ -27,6 +29,7 @@ export default function VersionsHistoryPanel({branch}) {
           authorName: entry.commit.author.name,
           commitMessage: entry.commit.message,
           commitDate: entry.commit.author.date,
+          sha: entry.sha,
         }
         return extractedData
       })
@@ -35,9 +38,16 @@ export default function VersionsHistoryPanel({branch}) {
     fetchCommits()
   }, [repository, branch, accessToken])
 
+  const commitNavigate = (commitPath) => {
+    navigate({
+      pathname: commitPath,
+    })
+  }
+
+
   return (
     <Panel
-      content={<Timeline commitData={commitData}/>}
+      content={<Timeline commitData={commitData} commitNavigate={commitNavigate}/>}
       title='Version History'
       onClose={toggleIsVersionHistoryVisible}
     />
