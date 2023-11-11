@@ -48,7 +48,7 @@ function TimelineInfo({commit, active}) {
       <TimelineSeparator>
         <TimelineConnector/>
         <TimelineDot color={active ? 'primary' : 'inherit'} data-testid='commit'>
-          {(commit.commitMessage.includes('Create') || commit.commitMessage.includes('Add')) ?
+          {(commit.commitMessage.includes('Create') || commit.commitMessage.includes('Add') || commit.commitMessage.includes('Merge')) ?
             <ControlPointIcon/> :
             <CommitIcon sx={{transform: 'rotate(90deg)'}}/>
           }

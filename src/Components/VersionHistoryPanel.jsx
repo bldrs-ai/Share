@@ -63,7 +63,7 @@ export default function VersionsHistoryPanel({branch}) {
       content={<Timeline commitData={commitData} commitNavigate={commitNavigate}/>}
       title='Version History'
       action={
-        <Tooltip title="Navigate to the latest commit">
+        <Tooltip title="Navigate to the tip of version history">
           <IconButton aria-label="close" size="small" onClick={navigteToMain} >
             <RestartAltIcon fontSize="inherit"/>
           </IconButton>
