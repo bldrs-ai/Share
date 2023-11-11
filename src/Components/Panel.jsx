@@ -15,7 +15,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * @param {React.ReactNode} content The content to be displayed in the panel.
  * @return {React.ReactElement} A rendered Panel component.
  */
-export default function Panel({title, onClose, content}) {
+export default function Panel({title, onClose, content, action = null}) {
   return (
     <Paper
       variant='control'
@@ -41,6 +41,7 @@ export default function Panel({title, onClose, content}) {
       >
         <Typography variant='overline' sx={{marginLeft: '1em'}}>{title}</Typography>
         <Box sx={{marginRight: '.4em'}}>
+          {action}
           <IconButton aria-label="close" size="small" onClick={onClose}>
             <CloseIcon fontSize="inherit"/>
           </IconButton>
