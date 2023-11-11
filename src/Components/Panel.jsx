@@ -16,7 +16,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * @param {React.ReactNode} content The content to be displayed in the panel.
  * @return {React.ReactElement} A rendered Panel component.
  */
-export default function Panel({title, onClose, content, testId = ''}) {
+export default function Panel({title, onClose, content, testId = '', action = null}) {
   const theme = useTheme()
   return (
     <Paper

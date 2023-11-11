@@ -1,9 +1,13 @@
 import React, {useState, useEffect} from 'react'
 import Timeline from './Timeline'
 import Panel from './Panel'
+import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import {useNavigate} from 'react-router-dom'
 import {getCommitsForBranch} from '../utils/GitHub'
+import RestartAltIcon from '@mui/icons-material/RestartAlt'
+import {navigateBaseOnModelPath} from '../utils/location'
+import {Tooltip} from '@mui/material'
 
 
 /**
@@ -18,6 +22,7 @@ export default function VersionsHistoryPanel({branch}) {
   const [commitData, setCommitData] = useState([])
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
+  const modelPath = useStore((state) => state.modelPath)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
   const navigate = useNavigate()
 
@@ -43,13 +48,28 @@ export default function VersionsHistoryPanel({branch}) {
       pathname: commitPath,
     })
   }
+  const navigteToMain = () => {
+    if (modelPath) {
+      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
+      navigate({
+        pathname: mainPath,
+      })
+    }
+  }
 
 
   return (
     <Panel
+      content={<Timeline commitData={commitData} commitNavigate={commitNavigate}/>}
       testId='Version Panel'
-      content={<Timeline commitData={commitData}/>}
       title='Versions'
+      action={
+        <Tooltip title="Navigate to the latest commit">
+          <IconButton aria-label="close" size="small" onClick={navigteToMain} >
+            <RestartAltIcon fontSize="inherit"/>
+          </IconButton>
+        </Tooltip>
+      }
       onClose={toggleIsVersionHistoryVisible}
     />
   )
