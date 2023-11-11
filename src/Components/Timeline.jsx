@@ -148,7 +148,7 @@ export default function CustomTimeline({commitData, commitNavigate}) {
     <Timeline>
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
-        <Typography variant=''>Please log in using your GitHub account to get access to the project timeline.</Typography>
+        <Typography variant='body1'>Please log in using your GitHub account to get access to the project timeline.</Typography>
       )}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i} onClick={() => handleItemClick(i)}>
