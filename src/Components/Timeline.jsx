@@ -2,6 +2,7 @@
 import React, {useState, useEffect} from 'react'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
+import Typography from '@mui/material/Typography'
 import Timeline from '@mui/lab/Timeline'
 import TimelineItem from '@mui/lab/TimelineItem'
 import TimelineSeparator from '@mui/lab/TimelineSeparator'
@@ -9,7 +10,6 @@ import TimelineConnector from '@mui/lab/TimelineConnector'
 import TimelineContent from '@mui/lab/TimelineContent'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineDot from '@mui/lab/TimelineDot'
-import Typography from '@mui/material/Typography'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
 import Loader from './Loader'
@@ -123,7 +123,7 @@ export default function CustomTimeline({commitData}) {
       if (commitData.length === 0) {
         setShowLoginMessage(true)
       }
-    }, 7000)
+    }, 5000)
 
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
@@ -133,7 +133,7 @@ export default function CustomTimeline({commitData}) {
     <Timeline>
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
-        <p>Please log in using your GitHub account to get access to the project timeline.</p>
+        <Typography variant=''>Please log in using your GitHub account to get access to the project timeline.</Typography>
       )}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i}>
