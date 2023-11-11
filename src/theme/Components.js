@@ -189,6 +189,14 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          backgroundColor: palette.primary.background,
+          borderRadius: '10px',
+        },
+      },
+    },
     MuiSwitch: {
       root: {
         width: 42,

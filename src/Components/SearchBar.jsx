@@ -1,16 +1,11 @@
 import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
-import Paper from '@mui/material/Paper'
 import Autocomplete from '@mui/material/Autocomplete'
-import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../ShareRoutes'
 import debug from '../utils/debug'
 import {navWithSearchParamRemoved} from '../utils/navigate'
 import {handleBeforeUnload} from '../utils/event'
-import HighlightOffIcon from '@mui/icons-material/HighlightOff'
-import useTheme from '@mui/styles/useTheme'
 
 
 /**
@@ -26,7 +21,6 @@ export default function SearchBar({fileOpen}) {
   const [inputText, setInputText] = useState('')
   const [error, setError] = useState('')
   const searchInputRef = useRef(null)
-  const theme = useTheme()
 
 
   useEffect(() => {
@@ -86,79 +80,27 @@ export default function SearchBar({fileOpen}) {
   // container (CadView).
   return (
     <form onSubmit={onSubmit}>
-      <Paper elevation={0} variant='control' sx={{opacity: '.9'}}>
-        <Autocomplete
-          fullWidth
-          freeSolo
-          options={['together', 'dach', 'fen', 'wand']}
-          value={inputText}
-          onChange={(_, newValue) => setInputText(newValue || '')}
-          onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
-          inputValue={inputText}
-          PaperComponent={({children}) => (
-            <Paper
-              sx={{
-                'backgroundColor': theme.palette.scene.background,
-                '.MuiAutocomplete-option': {
-                  backgroundColor: theme.palette.scene.background,
-                },
-              }}
-            >
-              {children}
-            </Paper>
-          )}
-          renderInput={(params) => (
-            <TextField
-              {...params}
-              inputRef={searchInputRef}
-              size="small"
-              error={!!error.length}
-              placeholder='Search'
-              variant="outlined"
-              sx={{
-                'width': '100%',
-                'border': 'none',
-                '& fieldset': {
-                  border: 'none',
-                },
-                '&:hover fieldset': {
-                  border: 'none',
-                },
-                '&.Mui-focused fieldset': {
-                  border: 'none',
-                },
-                '& .MuiOutlinedInput-root': {
-                  border: 'none',
-                  height: '50px',
-                },
-              }}
-              InputProps={{
-                ...params.InputProps,
-                endAdornment: inputText.length > 0 ? (
-                  <InputAdornment position="end">
-                    <IconButton
-                      size="small"
-                      onClick={() => {
-                        setInputText('')
-                        setError('')
-                        navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
-                      }}
-                      style={{padding: 0, opacity: 0.8}}
-                    >
-                      <HighlightOffIcon
-                        className="icon-share"
-                        sx={{opacity: 0.8}}
-                        ize="inherit"
-                        color="secondary"
-                      />
-                    </IconButton>
-                  </InputAdornment>
-                ) : null,
-              }}
-            />
-          )}
-        />
-      </Paper>
+      <Autocomplete
+        freeSolo
+        options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}
+        value={inputText}
+        onChange={(_, newValue) => setInputText(newValue || '')}
+        onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
+        inputValue={inputText}
+        renderInput={(params) => (
+          <TextField
+            {...params}
+            inputRef={searchInputRef}
+            size="small"
+            error={!!error.length}
+            placeholder='Search'
+            variant="outlined"
+            sx={{
+              width: '100%',
+            }}
+          />
+        )}
+      />
     </form>
   )
 }
