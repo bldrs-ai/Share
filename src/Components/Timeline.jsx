@@ -14,6 +14,7 @@ import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
 import {styled} from '@mui/system'
 import Loader from './Loader'
+import NoContent from './NoContent'
 import useStore from '../store/useStore'
 import {navigateBaseOnModelPath} from '../utils/location'
 
@@ -147,7 +148,7 @@ export default function CustomTimeline({commitData, commitNavigate}) {
     <Timeline>
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
-        <p>Please log in using your GitHub account to get access to the project timeline.</p>
+        <NoContent message='Please log in using your GitHub account to get access to the project timeline'/>
       )}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i} onClick={() => handleItemClick(i)}>
