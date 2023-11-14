@@ -12,7 +12,7 @@ import {assertDefined} from './assert'
 export async function getCommitsForBranch(repository, branch, accessToken = '') {
   const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
   const commitsArr = res.data
-  debug.log('commit array', commitsArr)
+  debug().log('commit array', commitsArr)
   return commitsArr
 }
 
