@@ -4,6 +4,7 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
+import AboutControl from './About/AboutControl'
 import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
 import {TooltipIconButton} from './Buttons'
@@ -99,7 +100,9 @@ export default function OperationsGroup({deselectItems}) {
                 <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
+          <AboutControl/>
         </>
+
       }
       {/* Invisible */}
       <CameraControl/>

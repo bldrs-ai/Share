@@ -10,7 +10,7 @@ import {ControlButton} from '../Buttons'
 import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
-import PkgJson from '../../../package.json'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 /**
  * Button to toggle About panel on and off
@@ -31,11 +31,11 @@ export default function AboutControl() {
 
   return (
     <ControlButton
-      title={`Bldrs: ${PkgJson.version}`}
+      title='About'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <LogoB/>
+        <InfoOutlinedIcon className='icon-share' color='secondary'/>
       }
       dialog={
         <AboutDialog
