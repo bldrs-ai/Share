@@ -30,9 +30,10 @@ export function getComponentOverrides(palette, typography) {
           style: {
             width: '180px',
             height: '40px',
-            textTransform: 'none',
+            borderRadius: '20px',
             border: 'none',
             backgroundColor: palette.primary.main,
+            color: 'white',
           },
         },
       ],
@@ -42,13 +43,31 @@ export function getComponentOverrides(palette, typography) {
         disableRipple: true,
       },
     },
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          color: 'white',
+          backgroundColor: palette.primary.main,
+          maxWidth: '20em',
+          borderRadius: '10px',
+        },
+      },
+    },
     MuiButtonGroup: {
       variants: [
         {
           props: {variant: 'contained'},
           style: ({theme}) => ({
-            backgroundColor: palette.primary.background,
-            boxShadow: theme.shadows[1],
+            backgroundColor: theme.palette.scene.background,
+            boxShadow: theme.shadows[0],
+            opacity: .9,
+          }),
+        },
+        {
+          props: {variant: 'outlined'},
+          style: ({theme}) => ({
+            backgroundColor: theme.palette.primary.background,
+            boxShadow: theme.shadows[0],
             opacity: .9,
           }),
         },
@@ -67,14 +86,53 @@ export function getComponentOverrides(palette, typography) {
         },
         sizeSmall: {
           border: 'none',
-          width: '40px',
-          height: '40px',
+          width: '30px',
+          height: '30px',
         },
       },
+      variants: [
+        {
+          props: {variant: 'rounded'},
+          style: {
+            'width': '40px',
+            'height': '40px',
+            'borderRadius': '10px',
+            'border': 'none',
+            'margin': '0px 4px 4px 0px',
+            'backgroundColor': palette.scene.background,
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.primary.background,
+              opacity: .9,
+            },
+          },
+        },
+        {
+          props: {variant: 'solid'},
+          style: {
+            borderRadius: '0px',
+          },
+        },
+        {
+          props: {variant: 'noBackground'},
+          style: {
+            'width': '40px',
+            'height': '40px',
+            'borderRadius': '10px',
+            'border': 'none',
+            'margin': '0px 4px 2px 0px',
+            // 'backgroundColor': palette.scene.background,
+            '&.Mui-selected, &.Mui-selected:hover': {
+              backgroundColor: palette.primary.background,
+              opacity: .9,
+            },
+          },
+        },
+      ],
     },
     MuiDialog: {
       styleOverrides: {
-        root: {
+        paper: {
+          borderRadius: '10px',
         },
       },
     },
@@ -82,6 +140,7 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           padding: '0px 10px',
+          overflowX: 'hidden',
         },
       },
     },
@@ -90,7 +149,7 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'control'},
           style: ({ownerState, theme}) => ({
-            backgroundColor: palette.secondary.background,
+            backgroundColor: palette.primary.background,
             boxShadow: theme.shadows[ownerState.elevation],
           }),
         },
@@ -115,7 +174,7 @@ export function getComponentOverrides(palette, typography) {
         root: {
           fontWeight: 400,
           textAlign: 'center',
-          capitalize: 'none',
+          textTransform: 'uppercase',
         },
       },
 
@@ -158,5 +217,6 @@ export function getComponentOverrides(palette, typography) {
         transition: 'background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,border 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
       },
     },
+
   }
 }
