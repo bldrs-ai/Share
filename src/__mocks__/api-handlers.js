@@ -5,6 +5,8 @@ import {
   MOCK_ORGANIZATIONS,
   MOCK_REPOSITORY,
   MOCK_FILES,
+  MOCK_COMMITS,
+  MOCK_BRANCHES,
 } from '../utils/GitHub'
 
 
@@ -245,6 +247,23 @@ function githubHandlers() {
           ctx.status(httpOk),
           ctx.json({
             data: [MOCK_FILES],
+          }),
+      )
+    }),
+
+    rest.get('https://api.github.com/repos/:owner/:repo/commits?sha=${branch}', (req, res, ctx) => {
+      return res(
+          ctx.status(httpOk),
+          ctx.json({
+            data: [MOCK_COMMITS],
+          }),
+      )
+    }),
+    rest.get('https://api.github.com/repos/:owner/:repo/contents/branches', (req, res, ctx) => {
+      return res(
+          ctx.status(httpOk),
+          ctx.json({
+            data: [MOCK_BRANCHES],
           }),
       )
     }),

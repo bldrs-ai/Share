@@ -12,7 +12,6 @@ import {assertDefined} from './assert'
 export async function getCommitsForBranch(repository, branch, accessToken = '') {
   const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
   const commitsArr = res.data
-  debug().log('commit array', commitsArr)
   return commitsArr
 }
 
@@ -693,108 +692,81 @@ export const MOCK_COMMENTS = {
 }
 
 export const MOCK_COMMITS = {
-  data: [
-    {
-      url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
-      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
-      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935480,
-      node_id: 'IC_kwDOFwgxOc5EPlQ3',
-      number: 1,
-      user: {
-        login: 'OlegMoshkovich',
-        id: 3433607,
-        node_id: 'MDQ6VXNlcjM0MzM2MDY=',
-        avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-        gravatar_id: '',
-        url: 'https://api.github.com/users/OlegMoshkovich',
-        html_url: 'https://github.com/OlegMoshkovich',
-        followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
-        organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
-        repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
-        type: 'User',
-        site_admin: false,
-      },
-      created_at: '2022-06-02T14:31:04Z',
-      updated_at: '2022-06-08T08:18:43Z',
-      author_association: 'NONE',
-      body: `The Architecture, Engineering and Construction industries are trying
-      to face challenging problems of the future with tools anchored in the
-      past. Meanwhile, a new dynamic has propelled the Tech industry:
-      online, collaborative, open development.
-
-      We can't imagine a future where building the rest of the world hasn't
-      been transformed by these new ways of working. We are part of that
-      transformation.
-
-      [a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
-      reactions: {
-        'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
-        'total_count': 0,
-        '+1': 0,
-        '-1': 0,
-        'laugh': 0,
-        'hooray': 0,
-        'confused': 0,
-        'heart': 0,
-        'rocket': 0,
-        'eyes': 0,
-      },
-      performed_via_github_app: null,
+  sha: '898ebc440aa60c8d7e704bead63342400a567b9c',
+  node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
+  commit: {
+    author: {
+      name: 'Markus',
+      email: '74647806+MarkusSteinbrecher@users.noreply.github.com',
+      date: '2022-09-22T10:30:27Z',
     },
+    committer: {
+      name: 'GitHub',
+      email: 'noreply@github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    message: 'Create License',
+    tree: {
+      sha: 'ab6f0517905f88b158c05fbb7578c34c239fba9b',
+      url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+    },
+    url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    comment_count: 0,
+    verification: {
+      verified: true,
+      reason: 'valid',
+      signature: '-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQJjLDlDCRBK7hj4Ov3rIwA',
+      payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
+    },
+  },
+  url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits',
+  author: {
+    login: 'MarkusSteinbrecher',
+    id: 74647806,
+    node_id: 'MDQ6VXNlcjc0NjQ3ODA2',
+    avatar_url: 'https://avatars.githubusercontent.com/u/74647806?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/MarkusSteinbrecher',
+    html_url: 'https://github.com/MarkusSteinbrecher',
+    followers_url: 'https://api.github.com/users/MarkusSteinbrecher/followers',
+    following_url: 'https://api.github.com/users/MarkusSteinbrecher/following{/other_user}',
+    gists_url: 'https://api.github.com/users/MarkusSteinbrecher/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/MarkusSteinbrecher/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/MarkusSteinbrecher/subscriptions',
+    organizations_url: 'https://api.github.com/users/MarkusSteinbrecher/orgs',
+    repos_url: 'https://api.github.com/users/MarkusSteinbrecher/repos',
+    events_url: 'https://api.github.com/users/MarkusSteinbrecher/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/MarkusSteinbrecher/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  committer: {
+    login: 'web-flow',
+    id: 19864447,
+    node_id: 'MDQ6VXNlcjE5ODY0NDQ3',
+    avatar_url: 'https://avatars.githubusercontent.com/u/19864447?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/web-flow',
+    html_url: 'https://github.com/web-flow',
+    followers_url: 'https://api.github.com/users/web-flow/followers',
+    following_url: 'https://api.github.com/users/web-flow/following{/other_user}',
+    gists_url: 'https://api.github.com/users/web-flow/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/web-flow/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/web-flow/subscriptions',
+    organizations_url: 'https://api.github.com/users/web-flow/orgs',
+    repos_url: 'https://api.github.com/users/web-flow/repos',
+    events_url: 'https://api.github.com/users/web-flow/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/web-flow/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  parents: [
     {
-      url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
-      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
-      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
-      id: 1144935481,
-      number: 2,
-      node_id: 'IC_kwDOFwgxOc5EPlQ3',
-      user: {
-        login: 'OlegMoshkovich',
-        id: 3433606,
-        node_id: 'MDQ6VXNlcjM0MzM2MDY=',
-        avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-        gravatar_id: '',
-        url: 'https://api.github.com/users/OlegMoshkovich',
-        html_url: 'https://github.com/OlegMoshkovich',
-        followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
-        organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
-        repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
-        type: 'User',
-        site_admin: false,
-      },
-      created_at: '2022-06-02T14:31:04Z',
-      updated_at: '2022-06-08T08:18:43Z',
-      author_association: 'NONE',
-      body: `Email is the medium that still facilitates major portion of communication.
-
-      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
-      [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
-      reactions: {
-        'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
-        'total_count': 0,
-        '+1': 0,
-        '-1': 0,
-        'laugh': 0,
-        'hooray': 0,
-        'confused': 0,
-        'heart': 0,
-        'rocket': 0,
-        'eyes': 0,
-      },
-      performed_via_github_app: null,
+      sha: 'd945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
     },
   ],
 }
@@ -889,6 +861,7 @@ export const MOCK_FILES = {
   download_url: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/window.ifc',
   type: 'file',
 }
+
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.
