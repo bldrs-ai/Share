@@ -7,7 +7,8 @@ import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-import PrivacyControl from './PrivacyControl'
+// TODO(pablo): re-enable after prod freeze bug fixed
+// import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
 import PkgJson from '../../../package.json'
@@ -114,8 +115,11 @@ function AboutContent({setIsDialogDisplayed}) {
               discord
             </Link>.
           </Typography>
+          {
+            // TODO(pablo): re-enable after freeze bug fixed.
+            // <PrivacyControl/>
+          }
         </Box>
-        <PrivacyControl/>
       </Stack>
     </Box>)
 }

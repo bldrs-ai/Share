@@ -34,7 +34,9 @@ let isInitialized = false
  */
 export function recordEvent(actionName, additionalConfigInfo) {
   assertDefined(actionName)
-  if (isAllowed()) {
+  // TODO(pablo): re-enable after prod freeze bug fixed.
+  const enableGA = false
+  if (enableGA && isAllowed()) {
     if (!isInitialized) {
       ReactGA.initialize(GA_ID)
       isInitialized = true
