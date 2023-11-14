@@ -88,12 +88,14 @@ export default function NotesNavBar() {
               onClick={() => selectNote('previous')}
               icon={<NavigateBeforeIcon className='icon-share' color='secondary'/>}
               placement='bottom'
+              variant='noBackground'
             />
             <TooltipIconButton
               title='Next Note'
               onClick={() => selectNote('next')}
               icon={<NavigateNextIcon className='icon-share' color='secondary'/>}
               placement='bottom'
+              variant='noBackground'
             />
           </>
         }
@@ -113,6 +115,7 @@ export default function NotesNavBar() {
             onClick={toggleIsCreateNoteActive}
             icon={<ArrowBackIcon className='icon-share' color='secondary'/>}
             size='medium'
+            variant='noBackground'
           /> :
           <TooltipIconButton
             title='ADD A NOTE'
@@ -120,6 +123,7 @@ export default function NotesNavBar() {
             onClick={toggleIsCreateNoteActive}
             icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
             size='medium'
+            variant='noBackground'
           />
         )}
         <CloseButton onClick={closeNotes}/>
