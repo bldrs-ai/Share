@@ -13,8 +13,6 @@ import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
-import AboutControl from './About/AboutControl'
-
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -57,7 +55,7 @@ export default function OperationsGroup({deselectItems}) {
     <ButtonGroup
       orientation='vertical'
       variant='contained'
-      sx={{margin: '1em .5em'}}
+      sx={{margin: '1em 1em'}}
     >
       {isLoginVisible &&
           <AuthNav/>
@@ -101,7 +99,6 @@ export default function OperationsGroup({deselectItems}) {
                 <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
-          <AboutControl/>
         </>
       }
       {/* Invisible */}
