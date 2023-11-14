@@ -12,6 +12,7 @@ import {assertDefined} from './assert'
 export async function getCommitsForBranch(repository, branch, accessToken = '') {
   const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
   const commitsArr = res.data
+  debug.log('commit array', commitsArr)
   return commitsArr
 }
 
@@ -585,6 +586,113 @@ export const MOCK_ISSUES = {
 }
 
 export const MOCK_COMMENTS = {
+  data: [
+    {
+      url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
+      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
+      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
+      id: 1144935480,
+      node_id: 'IC_kwDOFwgxOc5EPlQ3',
+      number: 1,
+      user: {
+        login: 'OlegMoshkovich',
+        id: 3433607,
+        node_id: 'MDQ6VXNlcjM0MzM2MDY=',
+        avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+        gravatar_id: '',
+        url: 'https://api.github.com/users/OlegMoshkovich',
+        html_url: 'https://github.com/OlegMoshkovich',
+        followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
+        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
+        repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
+        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        type: 'User',
+        site_admin: false,
+      },
+      created_at: '2022-06-02T14:31:04Z',
+      updated_at: '2022-06-08T08:18:43Z',
+      author_association: 'NONE',
+      body: `The Architecture, Engineering and Construction industries are trying
+      to face challenging problems of the future with tools anchored in the
+      past. Meanwhile, a new dynamic has propelled the Tech industry:
+      online, collaborative, open development.
+
+      We can't imagine a future where building the rest of the world hasn't
+      been transformed by these new ways of working. We are part of that
+      transformation.
+
+      [a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      reactions: {
+        'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
+        'total_count': 0,
+        '+1': 0,
+        '-1': 0,
+        'laugh': 0,
+        'hooray': 0,
+        'confused': 0,
+        'heart': 0,
+        'rocket': 0,
+        'eyes': 0,
+      },
+      performed_via_github_app: null,
+    },
+    {
+      url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
+      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/17#issuecomment-1144935479',
+      issue_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/17',
+      id: 1144935481,
+      number: 2,
+      node_id: 'IC_kwDOFwgxOc5EPlQ3',
+      user: {
+        login: 'OlegMoshkovich',
+        id: 3433606,
+        node_id: 'MDQ6VXNlcjM0MzM2MDY=',
+        avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+        gravatar_id: '',
+        url: 'https://api.github.com/users/OlegMoshkovich',
+        html_url: 'https://github.com/OlegMoshkovich',
+        followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
+        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
+        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
+        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
+        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
+        organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
+        repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
+        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
+        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
+        type: 'User',
+        site_admin: false,
+      },
+      created_at: '2022-06-02T14:31:04Z',
+      updated_at: '2022-06-08T08:18:43Z',
+      author_association: 'NONE',
+      body: `Email is the medium that still facilitates major portion of communication.
+
+      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
+      [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      reactions: {
+        'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
+        'total_count': 0,
+        '+1': 0,
+        '-1': 0,
+        'laugh': 0,
+        'hooray': 0,
+        'confused': 0,
+        'heart': 0,
+        'rocket': 0,
+        'eyes': 0,
+      },
+      performed_via_github_app: null,
+    },
+  ],
+}
+
+export const MOCK_COMMITS = {
   data: [
     {
       url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479',
