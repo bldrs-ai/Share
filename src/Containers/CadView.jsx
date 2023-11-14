@@ -5,11 +5,11 @@ import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
+import AboutControl from '../Components/About/AboutControl'
 import ElementGroup from '../Components/ElementGroup'
 import ControlsGroup from '../Components/ControlsGroup'
 import BranchesControl from '../Components/BranchesControl'
 import HelpControl from '../Components/HelpControl'
-import Logo from '../Components/Logo'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
@@ -634,7 +634,6 @@ export default function CadView({
         severity={'info'}
         open={isLoading || snackMessage !== null}
       />
-
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -687,7 +686,6 @@ export default function CadView({
           }
         </Box>
       )}
-      <Logo onClick={() => navToDefault(navigate, appPrefix)}/>
       {alert}
       {viewer &&
         <Box
@@ -706,7 +704,16 @@ export default function CadView({
         sx={{
           position: 'fixed',
           bottom: '1.0em',
-          right: '.5em',
+          left: '1.0em',
+        }}
+      >
+        <AboutControl/>
+      </Box>
+      <Box
+        sx={{
+          position: 'fixed',
+          bottom: '1.0em',
+          right: '1.0em',
         }}
       >
         <HelpControl/>
