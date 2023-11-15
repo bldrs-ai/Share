@@ -12,6 +12,7 @@ import TimelineDot from '@mui/lab/TimelineDot'
 import Typography from '@mui/material/Typography'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
+import Loader from './Loader'
 import {styled} from '@mui/system'
 
 
@@ -117,6 +118,7 @@ export default function CustomTimeline({commitData}) {
 
   return (
     <Timeline>
+      {commitData.length === 0 && <Loader/>}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i} >
           <TimelineInfo commit={commit} active={active === i}/>

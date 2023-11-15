@@ -35,6 +35,7 @@ export default function AboutControl() {
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
+      variant='noBackground'
       icon={
         <Box
           sx={{
@@ -69,15 +70,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       headerText={
-        <Box sx={{
-          'display': 'inline-flex',
-          'flexDirection': 'column',
-          'justifyContent': 'center',
-          'alignItems': 'center',
-          '& svg': {
-            width: '50px',
-          }}}
-        >
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
           <LogoB/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>

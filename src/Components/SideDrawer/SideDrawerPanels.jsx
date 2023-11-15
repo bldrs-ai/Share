@@ -7,7 +7,7 @@ import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
-import NotesNavBar from '../Notes/NotesNavBar_original'
+import NotesNavBar from '../Notes/NotesNavBar'
 import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
@@ -16,7 +16,7 @@ import PanelTitle from '../PanelTitle'
  * @return {React.Component}
  */
 export function PanelWithTitle(props) {
-  const titleHeight = '3em'
+  const titleHeight = '2.8em'
   const paddingBottom = '0.6em'
   const theme = useTheme()
   // This isn't visible, but the alignment is important for debugging, so leaving.
@@ -45,7 +45,7 @@ export function PanelWithTitle(props) {
         sx={{
           height: `calc(100% - ${titleHeight})`,
           overflow: 'auto',
-          padding: isMobile ? '0 0.5em 0 0' : '1em 0.5em 1em 0',
+          padding: isMobile ? '0 0.5em 0 0' : '0em 0.5em 1em 0',
         }}
         ref={drawerRef}
       >

@@ -1,15 +1,14 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import ListSubheader from '@mui/material/ListSubheader'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
 import {NOTE_PREFIX} from './Notes'
-import AddNoteIcon from '../../assets/icons/AddNote.svg'
-import BackIcon from '../../assets/icons/Back.svg'
-import NextIcon from '../../assets/icons/NavNext.svg'
-import PreviousIcon from '../../assets/icons/NavPrev.svg'
+import ArrowBackIcon from '@mui/icons-material/ArrowBack'
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
+import NavigateNextIcon from '@mui/icons-material/NavigateNext'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 
 
 /** @return {React.Component} */
@@ -43,7 +42,14 @@ export default function NotesNavBar() {
 
 
   return (
-    <ListSubheader>
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}
+    >
       <Box
         sx={{
           'display': 'flex',
@@ -58,12 +64,13 @@ export default function NotesNavBar() {
         {selectedNoteId && !isCreateNoteActive &&
          <TooltipIconButton
            title='Back to the list'
+           variant='noBackground'
            placement='bottom'
            onClick={() => {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={<BackIcon className='icon-share'/>}
+           icon={<ArrowBackIcon className='icon-share'/>}
          />
         }
       </Box>
@@ -80,14 +87,16 @@ export default function NotesNavBar() {
             <TooltipIconButton
               title='Previous Note'
               onClick={() => selectNote('previous')}
-              icon={<PreviousIcon className='icon-share' color='secondary'/>}
+              icon={<NavigateBeforeIcon className='icon-share' color='secondary'/>}
               placement='bottom'
+              variant='noBackground'
             />
             <TooltipIconButton
               title='Next Note'
               onClick={() => selectNote('next')}
-              icon={<NextIcon className='icon-share' color='secondary'/>}
+              icon={<NavigateNextIcon className='icon-share' color='secondary'/>}
               placement='bottom'
+              variant='noBackground'
             />
           </>
         }
@@ -105,19 +114,21 @@ export default function NotesNavBar() {
             title='Back to the list'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<BackIcon className='icon-share'/>}
+            icon={<ArrowBackIcon className='icon-share' color='secondary'/>}
             size='medium'
+            variant='noBackground'
           /> :
           <TooltipIconButton
             title='ADD A NOTE'
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<AddNoteIcon className='icon-share' color='secondary'/>}
+            icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
             size='medium'
+            variant='noBackground'
           />
         )}
         <CloseButton onClick={closeNotes}/>
       </Box>
-    </ListSubheader>
+    </Box>
   )
 }
