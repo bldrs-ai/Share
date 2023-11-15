@@ -250,21 +250,17 @@ function githubHandlers() {
           }),
       )
     }),
-
-    rest.get('https://api.github.com/repos/:owner/:repo/commits?sha=${branch}', (req, res, ctx) => {
+    rest.get('https://api.github.com/repos/:owner/:repo/commits', (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
-          ctx.json({
-            data: [MOCK_COMMITS],
-          }),
+          ctx.json(MOCK_COMMITS),
       )
     }),
-    rest.get('https://api.github.com/repos/:owner/:repo/contents/branches', (req, res, ctx) => {
+    rest.get('https://api.github.com/repos/:owner/:repo/branches', (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
-          ctx.json({
-            data: [MOCK_BRANCHES],
-          }),
+          ctx.json(MOCK_BRANCHES),
+
       )
     }),
   ]

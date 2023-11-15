@@ -691,7 +691,7 @@ export const MOCK_COMMENTS = {
   ],
 }
 
-export const MOCK_COMMITS = {
+export const MOCK_COMMITS = [{
   sha: '898ebc440aa60c8d7e704bead63342400a567b9c',
   node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
   commit: {
@@ -769,7 +769,7 @@ export const MOCK_COMMITS = {
       html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
     },
   ],
-}
+}]
 
 export const MOCK_BRANCHES = {
   data: [
