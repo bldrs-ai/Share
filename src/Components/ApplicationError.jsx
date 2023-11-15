@@ -14,15 +14,15 @@ const ApplicationError = () => {
         borderRadius: '10px',
       }}
     >
-      <Typography variant={'body1'} sx={{color: 'primary.light', fontWeight: 600, pb: 2}}>
+      <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}}>
         Oh no!
       </Typography>
 
-      <Typography variant={'body1'} sx={{color: 'success.dark', fontWeight: 1000, pb: 2}}>
+      <Typography variant={'body1'}>
         We&apos;re not quite sure what went wrong.
       </Typography>
 
-      <Typography sx={{pb: 2, lineHeight: 1.75}}>
+      <Typography sx={{pb: 2}}>
         Not to worry.<br/>
         You can <a href="/">click here to start a new session</a>.
       </Typography>
