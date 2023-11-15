@@ -36,7 +36,16 @@ export default function AboutControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       icon={
-        <LogoB/>
+        <Box
+          sx={{
+            '& svg': {
+              marginTop: '6px',
+              width: '18px',
+            },
+          }}
+        >
+          <LogoB/>
+        </Box>
       }
       dialog={
         <AboutDialog
@@ -60,7 +69,15 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center'}}>
+        <Box sx={{
+          'display': 'inline-flex',
+          'flexDirection': 'column',
+          'justifyContent': 'center',
+          'alignItems': 'center',
+          '& svg': {
+            width: '50px',
+          }}}
+        >
           <LogoB/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>
