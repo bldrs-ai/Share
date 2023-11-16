@@ -1,46 +1,37 @@
 import React from 'react'
 import ShareMock from '../ShareMock'
-import {render} from '@testing-library/react'
-// import {getCommitsForBranch} from '../utils/GitHub'
-// import VersionHistoryPanel from './VersionHistoryPanel'
+import {render, renderHook, act, waitFor} from '@testing-library/react'
+import VersionHistoryPanel from './VersionHistoryPanel'
+import {getCommitsForBranch} from '../utils/GitHub'
+import {
+  MOCK_MODEL_PATH_GIT,
+  MOCK_REPOSITORY,
+  MOCK_COMMITS,
+} from '../utils/GitHub'
+import useStore from '../store/useStore'
 
-
-jest.mock('react-router-dom', () => ({
-  ...jest.requireActual('react-router-dom'),
-  useNavigate: () => jest.fn(),
-}))
 
 jest.mock('../utils/GitHub', () => ({
-  getCommitsForBranch: jest.fn(),
+  getCommitsForBranch: jest.fn(() => Promise.resolve([
+    MOCK_COMMITS,
+  ])),
 }))
 
 describe('VersionsHistoryPanel', () => {
-  it('fetches commits on mount', () => {
+  it('fetches commits on mount', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath(MOCK_MODEL_PATH_GIT)
+      result.current.setRepository(MOCK_REPOSITORY)
+    })
+    getCommitsForBranch.mockResolvedValueOnce(MOCK_COMMITS)
     render(
-        <ShareMock/>,
-        // <ShareMock>
-        //   <VersionHistoryPanel branch="main"/>
-        // </ShareMock>,
+        <ShareMock>
+          <VersionHistoryPanel branch="main"/>
+        </ShareMock>,
     )
-
-    // await waitFor(() => {
-    //   // expect(getCommitsForBranch).toHaveBeenCalled()
-    // })
+    await waitFor(() => {
+      expect(getCommitsForBranch).toHaveBeenCalled()
+    })
   })
-
-  // it('navigates to main on button click', () => {
-  //   const navigate = useNavigate()
-
-  //   const {getByLabelText} = render(
-  //       <ShareMock>
-  //         <VersionHistoryPanel branch="main"/>
-  //       </ShareMock>,
-  //   )
-
-  //   fireEvent.click(getByLabelText('navigate_to_tip'))
-
-  //   expect(navigate).toHaveBeenCalledWith({
-  //     pathname: expect.any(String), // Replace with expected pathname
-  //   })
-  // })
 })

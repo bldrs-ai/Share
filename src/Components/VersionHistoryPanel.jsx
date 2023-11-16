@@ -7,6 +7,7 @@ import {useNavigate} from 'react-router-dom'
 import {getCommitsForBranch} from '../utils/GitHub'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import {navigateBaseOnModelPath} from '../utils/location'
+import debug from '../utils/debug'
 import {Tooltip} from '@mui/material'
 
 
@@ -29,17 +30,23 @@ export default function VersionsHistoryPanel({branch}) {
 
   useEffect(() => {
     const fetchCommits = async () => {
-      const commits = await getCommitsForBranch(repository, branch, accessToken)
-      const versionsInfo = commits.map((entry) => {
-        const extractedData = {
-          authorName: entry.commit.author.name,
-          commitMessage: entry.commit.message,
-          commitDate: entry.commit.author.date,
-          sha: entry.sha,
+      try {
+        const commits = await getCommitsForBranch(repository, branch, accessToken)
+        if (commits) {
+          const versionsInfo = commits.map((entry) => {
+            const extractedData = {
+              authorName: entry.commit.author.name,
+              commitMessage: entry.commit.message,
+              commitDate: entry.commit.author.date,
+              sha: entry.sha,
+            }
+            return extractedData
+          })
+          setCommitData(versionsInfo)
         }
-        return extractedData
-      })
-      setCommitData(versionsInfo)
+      } catch (error) {
+        debug().log(error)
+      }
     }
     fetchCommits()
   }, [repository, branch, accessToken])
