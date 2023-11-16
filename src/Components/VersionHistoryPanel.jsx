@@ -26,6 +26,7 @@ export default function VersionsHistoryPanel({branch}) {
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
   const navigate = useNavigate()
 
+
   useEffect(() => {
     const fetchCommits = async () => {
       const commits = await getCommitsForBranch(repository, branch, accessToken)
@@ -65,7 +66,7 @@ export default function VersionsHistoryPanel({branch}) {
       title='Versions'
       action={
         <Tooltip title="Navigate to the tip of version history">
-          <IconButton aria-label="close" size="small" onClick={navigteToMain} >
+          <IconButton aria-label="navigate_to_tip" size="small" onClick={navigteToMain} >
             <RestartAltIcon fontSize="inherit"/>
           </IconButton>
         </Tooltip>
