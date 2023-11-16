@@ -303,7 +303,6 @@ describe('CadView', () => {
   })
 
   it('displays the loader when isLoading is true', async () => {
-    // Arrange: Render the component with the isLoading prop set to true
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,
