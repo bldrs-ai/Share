@@ -13,6 +13,8 @@ import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
@@ -23,20 +25,29 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
  */
 export default function OperationsGroup({deselectItems}) {
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
-  const openDrawer = useStore((state) => state.openDrawer)
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const isNotesOn = useStore((state) => state.isNotesOn)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const isMobile = useIsMobile()
   const turnOffTooltips = () => {
     return isMobile ? turnOffIsHelpTooltips() : null
+  }
+  // Properties
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
+  const selectedElement = useStore((state) => state.selectedElement)
+  const isSelected = () => {
+    const ifSelected = (
+      selectedElement !== null
+    )
+    return ifSelected
   }
 
 
@@ -78,6 +89,19 @@ export default function OperationsGroup({deselectItems}) {
             }}
           />
         </>
+      }
+
+      {isSelected() && selectedElement !== null &&
+       <TooltipIconButton
+         title='Properties'
+         onClick={() => {
+           turnOffIsHelpTooltips()
+           toggleIsPropertiesOn()
+           openDrawer()
+         }}
+         selected={isPropertiesOn}
+         icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
+       />
       }
 
       {isSettingsVisible &&
