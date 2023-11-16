@@ -73,7 +73,6 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  // const [isLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
