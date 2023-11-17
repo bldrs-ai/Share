@@ -2,7 +2,6 @@ import React from 'react'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
-import useTheme from '@mui/styles/useTheme'
 import {handleBeforeUnload} from '../utils/event'
 
 
@@ -16,7 +15,6 @@ import {handleBeforeUnload} from '../utils/event'
  * @return {React.ReactElement}
  */
 export default function Selector({setIsDialogDisplayed, label, selected, setSelected, list, testId = 'Selector'}) {
-  const theme = useTheme()
   const handleSelect = (e) => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
     setSelected(e.target.value)
@@ -25,7 +23,7 @@ export default function Selector({setIsDialogDisplayed, label, selected, setSele
 
   return (
     <TextField
-      sx={selectorStyles(theme)}
+      sx={{width: '260px', marginBottom: '.5em'}}
       value={selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
@@ -43,38 +41,3 @@ export default function Selector({setIsDialogDisplayed, label, selected, setSele
   )
 }
 
-const selectorStyles = (theme) => {
-  return (
-    {
-      'width': '260px',
-      'padding': '0px 0px 12px 0px',
-      '& .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
-      },
-      '& .MuiInputLabel-root': {
-        color: theme.palette.secondary.main,
-      },
-      '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
-      },
-      '&:hover .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
-      },
-      '&:hover .MuiInputLabel-root': {
-        color: theme.palette.secondary.main,
-      },
-      '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
-      },
-      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-        color: theme.palette.secondary.main,
-      },
-      '& .MuiInputLabel-root.Mui-focused': {
-        color: theme.palette.secondary.main,
-      },
-      '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-        borderColor: theme.palette.secondary.main,
-      },
-    }
-  )
-}
