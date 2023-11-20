@@ -94,7 +94,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           justifyContent='flex-start'
           spacing={1}
           sx={{
-            width: '300px',
+            width: '266px',
           }}
         >
           <Helmet>
