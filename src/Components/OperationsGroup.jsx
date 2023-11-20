@@ -6,6 +6,7 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
+import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
@@ -123,6 +124,11 @@ export default function OperationsGroup({deselectItems}) {
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
         </>
+      }
+      {isCollaborationGroupVisible &&
+        <Box sx={{marginTop: '8px'}}>
+          <ImagineControl/>
+        </Box>
       }
       {/* Invisible */}
       <CameraControl/>
