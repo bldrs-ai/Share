@@ -1,7 +1,7 @@
 import React, {createRef, useEffect, useState} from 'react'
+import Link from '@mui/material/Link'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import useStore from '../store/useStore'
 import Dialog from './Dialog'
@@ -31,7 +31,7 @@ export default function ShareControl() {
 
   return (
     <ControlButton
-      title='Imagine AI rendering'
+      title='AI rendering'
       icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
@@ -90,55 +90,54 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<AutoFixHighIcon className='icon-share'/>}
-      headerText='AI rendering'
+      headerText='AI Rendering'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
-      actionTitle='Acces the bot'
+      actionTitle='Access the bot'
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
       content={
         <Stack
           alignItems='center'
           justifyContent='flex-start'
-          spacing={1}
+          spacing={0}
           sx={{
             width: '266px',
+            marginBottom: '4px',
           }}
         >
           <Helmet>
-            <title>AI rendering</title>
+            <title>AI Rendering</title>
           </Helmet>
           <Stack
             spacing={1}
             sx={{textAlign: 'left', width: '240px'}}
           >
             <Typography variant={'body1'}>
-            At the moment we create imagine rendeings using  {' '}
+              Our AI agent currently resides on discord.
+              To join our server please click on the {' '}
               <Link
                 underline="always"
-                href='https://discord.com/channels/853953158560743424/1126526910495740005'
+                href='https://github.com/bldrs-ai/Share'
                 color='inherit'
                 variant='overline'
-                sx={{
-                  lineHeight: '1.4em',
-                }}
               >
-            discord bot
+                  Invite Link
               </Link>
             </Typography>
             <Typography variant={'body1'}>
-              To use it please:
-              <ul style={{marginTop: '16px', padding: '0px', paddingLeft: '20px'}}>
+              To access the bot follow these steps:
+              <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px'}}>
                 <li>Copy the link</li>
-                <li>Click Access the bot</li>
-                <li>Type /imagine</li>
-                <li>Input the rendering description</li>
+                <li>Click Access the Bot</li>
+                <li>Enter /imagine command</li>
+                <li>Input a description prompt</li>
               </ul>
             </Typography>
           </Stack>
           <TextField
             sx={{
-              width: '252px',
+              width: '246px',
             }}
             value={String(window.location)}
             inputRef={urlTextFieldRef}
