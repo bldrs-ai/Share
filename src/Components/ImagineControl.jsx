@@ -118,7 +118,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               To join our server please click on the {' '}
               <Link
                 underline="always"
-                href='https://github.com/bldrs-ai/Share'
+                href='https://discord.gg/fY9Pa3DD'
                 color='inherit'
                 variant='overline'
               >
