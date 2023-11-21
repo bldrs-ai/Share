@@ -6,20 +6,22 @@ import {MockComponent} from '../__mocks__/MockComponent'
 
 describe('ImagineControl', () => {
   it('renders the dialog in the document', () => {
-    const {getByTitle} = render(<ImagineControl/>, {
+    const {getByTitle, debug} = render(<ImagineControl/>, {
       wrapper: MockComponent,
     })
-    const component = getByTitle('AI rendering')
+    debug()
+    const component = getByTitle('Bldr Bot Rendering')
     expect(component).toBeInTheDocument()
   })
 
   it('updates the title when the dialog is open', async () => {
-    const {getByTitle} = render(<ImagineControl/>, {
+    const {getByTitle, debug} = render(<ImagineControl/>, {
       wrapper: MockComponent,
     })
 
-    const button = getByTitle('AI rendering')
+    const button = getByTitle('Bldr Bot Rendering')
     fireEvent.click(button)
-    await(waitFor(() => expect(document.title).toBe('AI Rendering — BLDRS')))
+    debug()
+    await(waitFor(() => expect(document.title).toBe('BLDR Bot')))
   })
 })

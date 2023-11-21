@@ -174,9 +174,8 @@ export function getComponentOverrides(palette, typography) {
     MuiDialogTitle: {
       styleOverrides: {
         root: {
-          fontWeight: 600,
+          fontWeight: 400,
           textAlign: 'center',
-          // textTransform: 'uppercase',
         },
       },
     },

@@ -1,4 +1,5 @@
 import React, {createRef, useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -15,28 +16,29 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
+import BotIcon from '../assets/icons/Bot.svg'
 
 
 /**
- * This button hosts the ShareDialog component and toggles it open and
+ * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
  * @return {React.ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
-export default function ShareControl() {
+export default function ImagineControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const openedDialog = !!isDialogDisplayed
 
 
   return (
     <ControlButton
-      title='AI rendering'
+      title='Bldr Bot Rendering'
       icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
-        <ShareDialog
+        <ImagineDialog
           isDialogDisplayed={openedDialog}
           setIsDialogDisplayed={setIsDialogDisplayed}
         />
@@ -47,15 +49,13 @@ export default function ShareControl() {
 
 
 /**
- * The ShareDialog component lets the user control what state is
- * included in the shared URL and assists in copying the URL to
- * clipboard.
+ * The ImagineDialog component contain instructions on how to access the bot.
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
  * @return {React.Component} The react component
  */
-function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const cameraControls = useStore((state) => state.cameraControls)
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
@@ -90,7 +90,12 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<AutoFixHighIcon className='icon-share'/>}
-      headerText='AI Rendering'
+      headerText={
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '120px', marginTop: '10px'}}>
+          <BotIcon/>
+          <Typography variant={'overline'}>Bldr Bot</Typography>
+        </Box>
+      }
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Access the bot'
@@ -107,31 +112,32 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           }}
         >
           <Helmet>
-            <title>AI Rendering — BLDRS</title>
+            <title>BLDR Bot</title>
           </Helmet>
           <Stack
             spacing={1}
             sx={{textAlign: 'left', width: '240px'}}
           >
             <Typography variant={'body1'}>
-              Our AI agent currently resides on discord.
-              To join our server please click on the {' '}
+              Bldr Bot runs on our Discord.
+              <br/>
+              To join our server please follow {' '}
               <Link
                 underline="always"
                 href='https://discord.gg/fY9Pa3DD'
                 color='inherit'
                 variant='overline'
               >
-                  Invite Link
+                  the Invite Link
               </Link>
             </Typography>
             <Typography component="div">
-              To access the bot follow these steps:
+              To access the bot:
               <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px'}}>
                 <li>Copy the link</li>
                 <li>Click Access the Bot</li>
                 <li>Enter /imagine command</li>
-                <li>Input a description prompt</li>
+                <li>Give an imaginative prompt!</li>
               </ul>
             </Typography>
           </Stack>
