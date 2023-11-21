@@ -107,7 +107,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           }}
         >
           <Helmet>
-            <title>AI Rendering</title>
+            <title>AI Rendering — BLDRS</title>
           </Helmet>
           <Stack
             spacing={1}
