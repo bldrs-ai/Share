@@ -12,6 +12,9 @@ import {ControlButton} from './Buttons'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
 
 
 /**
@@ -29,7 +32,7 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Imagine AI rendering'
-      icon={<AutoFixHighIcon className='icon-share'/>}
+      icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -78,6 +81,11 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     closeDialog()
   }
 
+  const handleCopyClick = async () => {
+    await navigator.clipboard.writeText(window.location.href)
+    // You can add some state or UI feedback to show that the link has been copied
+  }
+
 
   return (
     <Dialog
@@ -85,7 +93,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText='AI rendering'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
-      actionTitle='Copy Link and go to Discord'
+      actionTitle='Acces the bot'
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
       content={
@@ -102,9 +110,10 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           </Helmet>
           <Stack
             spacing={1}
+            sx={{textAlign: 'left', width: '240px'}}
           >
             <Typography variant={'body1'}>
-            At the moment our AI agent lives on  {' '}
+            At the moment we create imagine rendeings using  {' '}
               <Link
                 underline="always"
                 href='https://discord.com/channels/853953158560743424/1126526910495740005'
@@ -114,16 +123,22 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                   lineHeight: '1.4em',
                 }}
               >
-            discrord.
+            discord bot
               </Link>
             </Typography>
             <Typography variant={'body1'}>
-              To use it is please go to discord channel, type /imagine and follow the intstructions.
+              To use it please:
+              <ul style={{marginTop: '16px', padding: '0px', paddingLeft: '20px'}}>
+                <li>Copy the link</li>
+                <li>Click Access the bot</li>
+                <li>Type /imagine</li>
+                <li>Input the rendering description</li>
+              </ul>
             </Typography>
           </Stack>
           <TextField
             sx={{
-              width: '266px',
+              width: '252px',
             }}
             value={String(window.location)}
             inputRef={urlTextFieldRef}
@@ -132,6 +147,17 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             rows={1}
             InputProps={{
               readOnly: true,
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={handleCopyClick}
+                    edge="end"
+                    size='small'
+                  >
+                    <ContentCopyIcon size='inherit' color='primary' sx={{width: '16px', height: '16px'}}/>
+                  </IconButton>
+                </InputAdornment>
+              ),
             }}
           />
         </Stack>
