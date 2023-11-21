@@ -1,6 +1,6 @@
 import React from 'react'
 import Timeline from './Timeline'
-import FixtureContext from '../FixtureContext'
+import FixtureContext from '../../FixtureContext'
 
 
 const commitData = [
@@ -21,6 +21,7 @@ const commitData = [
     commitMessage: 'commit 4',
   },
 ]
+
 
 export default (
   <FixtureContext>

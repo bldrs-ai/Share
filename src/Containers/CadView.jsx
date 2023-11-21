@@ -29,7 +29,7 @@ import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
 import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
-import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
+import VersionsContainer from '../Components/Versions/VersionsContainer'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 
@@ -680,7 +680,7 @@ export default function CadView({
             }
             {
               modelPath.repo !== undefined && isVersionHistoryVisible &&
-              <VersionsHistoryPanel branch={modelPath.branch}/>
+              <VersionsContainer branch={modelPath.branch}/>
             }
           </Box>
         </Box>

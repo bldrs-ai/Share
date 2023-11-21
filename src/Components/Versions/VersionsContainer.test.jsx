@@ -1,14 +1,14 @@
 import React from 'react'
-import ShareMock from '../ShareMock'
+import ShareMock from '../../ShareMock'
 import {render, renderHook, act, waitFor} from '@testing-library/react'
-import VersionHistoryPanel from './VersionHistoryPanel'
-import {getCommitsForBranch} from '../utils/GitHub'
+import VersionsContainer from './VersionsContainer'
+import {getCommitsForBranch} from '../../utils/GitHub'
 import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
   MOCK_COMMITS,
-} from '../utils/GitHub'
-import useStore from '../store/useStore'
+} from '../../utils/GitHub'
+import useStore from '../../store/useStore'
 
 
 jest.mock('../utils/GitHub', () => ({
@@ -17,7 +17,7 @@ jest.mock('../utils/GitHub', () => ({
   ])),
 }))
 
-describe('VersionsHistoryPanel', () => {
+describe('VersionsContainer', () => {
   it('fetches commits on mount', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
@@ -27,7 +27,7 @@ describe('VersionsHistoryPanel', () => {
     getCommitsForBranch.mockResolvedValueOnce(MOCK_COMMITS)
     render(
         <ShareMock>
-          <VersionHistoryPanel branch="main"/>
+          <VersionsContainer branch="main"/>
         </ShareMock>,
     )
     await waitFor(() => {
@@ -42,7 +42,7 @@ describe('VersionsHistoryPanel', () => {
     })
     const {getByText} = render(
         <ShareMock>
-          <VersionHistoryPanel branch="main"/>
+          <VersionsContainer branch="main"/>
         </ShareMock>,
     )
     const dialogTitle = getByText('Version History')

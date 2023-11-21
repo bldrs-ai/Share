@@ -10,13 +10,11 @@ import TimelineContent from '@mui/lab/TimelineContent'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineDot from '@mui/lab/TimelineDot'
 import Typography from '@mui/material/Typography'
+import {styled} from '@mui/system'
+import Loader from '../Loader'
+import NoContent from '../NoContent'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
-import {styled} from '@mui/system'
-import Loader from './Loader'
-import NoContent from './NoContent'
-import useStore from '../store/useStore'
-import {navigateBaseOnModelPath} from '../utils/location'
 
 
 /**
@@ -113,15 +111,13 @@ function TimelineInfo({commit, active}) {
  * Each version corresponds to a commit, and this component fetches
  * commit data for the provided branch and displays it.
  *
- * @param {Array} versionHistory - An array containing the version history data.
- * @param {string} branch - The git branch for which commits are fetched.
+ * @param {Array} commitData - An array of commits.
+ * @param {Function} commitNavigateCb - A callback function to navigate to a specific commit.
  * @return {object} A timeline of versions.
  */
-export default function CustomTimeline({commitData, commitNavigate}) {
-  const [active, setActive] = useState(commitData.length)
+export default function VersionsTimeline({commitData, commitNavigateCb}) {
+  const [activeCommit, setActiveCommit] = useState(commitData.length)
   const [showLoginMessage, setShowLoginMessage] = useState(false)
-  const modelPath = useStore((state) => state.modelPath)
-
 
   useEffect(() => {
     // Set a timeout to display the login message after 7 seconds if commitData is still empty
@@ -136,12 +132,8 @@ export default function CustomTimeline({commitData, commitNavigate}) {
 
   // Function to handle item click
   const handleItemClick = (index) => {
-    setActive(index)
-    const sha = commitData[index].sha
-    if (modelPath) {
-      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
-      commitNavigate(commitPath)
-    }
+    commitNavigateCb(index)
+    setActiveCommit(index)
   }
 
   return (
@@ -152,7 +144,7 @@ export default function CustomTimeline({commitData, commitNavigate}) {
       )}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i} onClick={() => handleItemClick(i)}>
-          <TimelineInfo commit={commit} active={active === i}/>
+          <TimelineInfo commit={commit} active={activeCommit === i}/>
         </CustomTimelineItem>
       ))}
     </Timeline>

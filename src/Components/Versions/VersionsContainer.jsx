@@ -1,13 +1,13 @@
 import React, {useState, useEffect} from 'react'
-import Timeline from './Timeline'
-import Panel from './Panel'
+import Timeline from './VersionsTimeline'
+import Panel from '../Panel'
 import IconButton from '@mui/material/IconButton'
-import useStore from '../store/useStore'
+import useStore from '../../store/useStore'
 import {useNavigate} from 'react-router-dom'
-import {getCommitsForBranch} from '../utils/GitHub'
+import {getCommitsForBranch} from '../../utils/GitHub'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
-import {navigateBaseOnModelPath} from '../utils/location'
-import debug from '../utils/debug'
+import {navigateBaseOnModelPath} from '../../utils/location'
+import debug from '../../utils/debug'
 import {Tooltip} from '@mui/material'
 
 
@@ -19,7 +19,7 @@ import {Tooltip} from '@mui/material'
  * @param {string} branch The git branch for which commits are fetched.
  * @return {object} A timeline panel of versions.
  */
-export default function VersionsHistoryPanel({branch}) {
+export default function Container({branch}) {
   const [commitData, setCommitData] = useState([])
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
@@ -51,10 +51,19 @@ export default function VersionsHistoryPanel({branch}) {
     fetchCommits()
   }, [repository, branch, accessToken])
 
-  const commitNavigate = (commitPath) => {
-    navigate({
-      pathname: commitPath,
-    })
+  /**
+   * This is the call back that changes navigation to the selected commit
+   *
+   * @param {string} index - the index of the active commit
+   */
+  const commitNavigate = (index) => {
+    const sha = commitData[index].sha
+    if (modelPath) {
+      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      navigate({
+        pathname: commitPath,
+      })
+    }
   }
   const navigteToMain = () => {
     if (modelPath) {
