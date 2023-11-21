@@ -125,7 +125,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                   Invite Link
               </Link>
             </Typography>
-            <Typography variant={'body1'}>
+            <Typography component="div">
               To access the bot follow these steps:
               <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px'}}>
                 <li>Copy the link</li>
