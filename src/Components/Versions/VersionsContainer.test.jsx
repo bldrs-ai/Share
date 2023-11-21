@@ -11,7 +11,7 @@ import {
 import useStore from '../../store/useStore'
 
 
-jest.mock('../utils/GitHub', () => ({
+jest.mock('../../utils/GitHub', () => ({
   getCommitsForBranch: jest.fn(() => Promise.resolve([
     MOCK_COMMITS,
   ])),
@@ -45,7 +45,7 @@ describe('VersionsContainer', () => {
           <VersionsContainer branch="main"/>
         </ShareMock>,
     )
-    const dialogTitle = getByText('Version History')
+    const dialogTitle = getByText('Versions')
     expect(dialogTitle).toBeInTheDocument()
   })
 })
