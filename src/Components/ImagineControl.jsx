@@ -16,7 +16,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import BotIcon from '../assets/icons/Bot.svg'
+import BotIcon from '../assets/icons/Bot4.svg'
 
 
 /**
@@ -136,8 +136,8 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px'}}>
                 <li>Copy the link</li>
                 <li>Click Access the Bot</li>
-                <li>Enter /imagine command</li>
-                <li>Give an imaginative prompt!</li>
+                <li>Enter <Typography variant='overline' sx={{fontWeight: 'bold'}}>/imagine</Typography> command</li>
+                <li>Experiment with prompts!</li>
               </ul>
             </Typography>
           </Stack>
