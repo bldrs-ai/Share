@@ -16,7 +16,7 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import BotIcon from '../assets/icons/Bot4.svg'
+import BotIcon from '../assets/icons/Bot1.svg'
 
 
 /**
