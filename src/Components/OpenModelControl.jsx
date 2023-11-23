@@ -188,7 +188,7 @@ function SampleModelFileSelector({setIsDialogDisplayed}) {
   const handleSelect = (e, closeDialog) => {
     setSelected(e.target.value)
     const modelPath = {
-      0: '/share/v/gh/bldrs-ai/testModels/test/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
+      0: '/share/v/gh/bldrs-ai/test-models/main/ifc/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
       1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
       2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
       3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
