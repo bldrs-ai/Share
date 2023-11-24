@@ -33,13 +33,16 @@ export default function AboutControl() {
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
-      variant='solid'
+      variant='noBackground'
       icon={
         <Box
           sx={{
             '& svg': {
-              marginTop: '8px',
-              width: '20px',
+              'marginTop': '6px',
+              'width': '18px',
+              '@media (max-width: MOBILE_WIDTH)': {
+                marginTop: '2px',
+              },
             },
           }}
         >
