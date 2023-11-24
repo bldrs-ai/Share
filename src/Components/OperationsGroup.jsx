@@ -1,19 +1,16 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
+import LoginMenu from './LoginMenu'
 import ShareControl from './ShareControl'
 import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
-import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
-import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 
 
@@ -62,7 +59,6 @@ export default function OperationsGroup({deselectItems}) {
     }
   }
 
-  const theme = useTheme()
   return (
     <ButtonGroup
       orientation='vertical'
@@ -70,7 +66,7 @@ export default function OperationsGroup({deselectItems}) {
       sx={{'margin': '1em', '& > *:not(:last-child)': {mb: .6}}} // Add space between buttons
     >
       {isLoginVisible &&
-          <AuthNav/>
+        <LoginMenu/>
       }
       {isCollaborationGroupVisible &&
         <Box sx={{marginTop: '8px'}}>
@@ -105,25 +101,13 @@ export default function OperationsGroup({deselectItems}) {
        />
       }
 
-      {isSettingsVisible &&
-        <>
-          {isAppStoreEnabled &&
+      {isSettingsVisible && isAppStoreEnabled &&
           <TooltipIconButton
             title='Open App Store'
             icon={<AppStoreIcon/>}
             selected={isAppStoreOpen}
             onClick={() => toggleAppStoreDrawer()}
           />
-          }
-          <TooltipIconButton
-            title={`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
-            onClick={() => theme.toggleColorMode()}
-            icon={
-              theme.palette.mode === 'light' ?
-                <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
-                <NightlightOutlinedIcon className='icon-share'/> }
-          />
-        </>
       }
       {isCollaborationGroupVisible &&
         <Box sx={{marginTop: '8px'}}>
