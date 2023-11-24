@@ -142,22 +142,27 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       content={
         <Stack spacing={1}>
           <Helmet>
-            <title>Share IFC Model — BLDRS</title>
+            <title>Share IFC Model</title>
           </Helmet>
           <Box>
             <QRCode
               data-testid="qrcode"
-              style={{height: 'auto', maxWidth: '96%'}}
+              style={{
+                height: 'auto',
+                maxWidth: '82%',
+                marginBottom: '18px',
+                borderRadius: '6px',
+              }}
               value={String(window.location)}
               viewBox={`0 0 100 100`}
             />
           </Box>
-
           <TextField
             value={String(window.location)}
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
+            size='small'
             rows={1}
             InputProps={{
               readOnly: true,
