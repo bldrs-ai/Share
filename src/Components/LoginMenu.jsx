@@ -98,8 +98,8 @@ export default function CutPlaneMenu() {
         >
           <GitHubIcon/>
           {isAuthenticated ?
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Logout</Typography> :
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Login with Github</Typography>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography> :
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>
           }
 
         </MenuItem>
