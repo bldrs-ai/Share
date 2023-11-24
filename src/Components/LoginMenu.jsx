@@ -28,7 +28,7 @@ export default function CutPlaneMenu() {
   const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
-  const {isAuthenticated, user} = useAuth0()
+  const {isAuthenticated, user, logout} = useAuth0()
   const {loginWithRedirect} = useAuth0()
 
   debug().log('CutPlaneMenu: location: ', location)
@@ -48,6 +48,10 @@ export default function CutPlaneMenu() {
         returnTo: window.location.pathname,
       },
     })
+  }
+
+  const handleLogout = () => {
+    logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
   }
 
 
@@ -88,7 +92,10 @@ export default function CutPlaneMenu() {
           },
         }}
       >
-        <MenuItem onClick={() => handleLogin()}>
+        <MenuItem onClick={
+          isAuthenticated ? () => handleLogout() :
+          () => handleLogin()}
+        >
           <GitHubIcon/>
           {isAuthenticated ?
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Logout</Typography> :
