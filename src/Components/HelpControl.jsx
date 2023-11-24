@@ -243,7 +243,13 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={<HelpOutlineIcon/>}
       headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
+        <Box sx={{
+          display: 'inline-flex',
+          flexDirection: 'column',
+          textAlign: 'center',
+          height: '76px',
+        }}
+        >
           <LogoB/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>}
