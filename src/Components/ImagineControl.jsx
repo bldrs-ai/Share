@@ -16,7 +16,10 @@ import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import BotIcon from '../assets/icons/Bot1.svg'
+import BotIcon1 from '../assets/icons/Bot1.svg'
+import BotIcon2 from '../assets/icons/Bot2.svg'
+import BotIcon3 from '../assets/icons/Bot3.svg'
+import BotIcon4 from '../assets/icons/Bot4.svg'
 
 
 /**
@@ -61,6 +64,8 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
 
+  const [botIconIndex, setBotIconIndex] = useState(0)
+  const botIcons = [BotIcon1, BotIcon2, BotIcon3, BotIcon4]
 
   useEffect(() => {
     if (viewer) {
@@ -68,6 +73,15 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
+
+  useEffect(() => {
+    if (isDialogDisplayed) {
+      // Set a random icon index when the dialog is opened
+      setBotIconIndex(Math.floor(Math.random() * botIcons.length))
+    }
+  }, [isDialogDisplayed, botIcons.length])
+
+  const CurrentBotIcon = botIcons[botIconIndex]
 
 
   const closeDialog = () => {
@@ -92,7 +106,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       icon={<AutoFixHighIcon className='icon-share'/>}
       headerText={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '120px', marginTop: '10px'}}>
-          <BotIcon/>
+          <CurrentBotIcon/>
           <Typography variant={'overline'}>Bldr Bot</Typography>
         </Box>
       }
