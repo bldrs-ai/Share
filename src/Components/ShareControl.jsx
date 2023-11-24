@@ -1,4 +1,7 @@
 import React, {createRef, useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
@@ -16,6 +19,8 @@ import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
 import ShareIcon from '../assets/icons/Share.svg'
+import ShareGraphic from '../assets/icons/ShareGraphic.svg'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
 
 /**
@@ -93,7 +98,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(location)
     urlTextFieldRef.current.select()
-    closeDialog()
   }
 
 
@@ -124,24 +128,31 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<ShareIcon className='icon-share'/>}
-      headerText='Share'
+      headerText={
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px', marginTop: '10px'}}>
+          <ShareGraphic/>
+          <Typography variant={'overline'}>Share</Typography>
+        </Box>
+      }
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
-      actionTitle='Copy Link'
+      actionTitle='ok'
       actionIcon={<CopyIcon className='icon-share'/>}
-      actionCb={onCopy}
+      actionCb={closeDialog}
       content={
         <Stack spacing={1}>
           <Helmet>
             <title>Share IFC Model — BLDRS</title>
           </Helmet>
-          <QRCode
-            data-testid="qrcode"
-            size={100}
-            style={{height: 'auto', maxWidth: '100%', width: '100%'}}
-            value={String(window.location)}
-            viewBox={`0 0 256 256`}
-          />
+          <Box>
+            <QRCode
+              data-testid="qrcode"
+              style={{height: 'auto', maxWidth: '96%'}}
+              value={String(window.location)}
+              viewBox={`0 0 100 100`}
+            />
+          </Box>
+
           <TextField
             value={String(window.location)}
             inputRef={urlTextFieldRef}
@@ -150,6 +161,17 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             rows={1}
             InputProps={{
               readOnly: true,
+              endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton
+                    onClick={onCopy}
+                    edge="end"
+                    size='small'
+                  >
+                    <ContentCopyIcon size='inherit' sx={{width: '16px', height: '16px'}}/>
+                  </IconButton>
+                </InputAdornment>
+              ),
             }}
           />
           <Stack spacing={0}>

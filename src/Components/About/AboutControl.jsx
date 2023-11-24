@@ -7,8 +7,6 @@ import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
-// TODO(pablo): re-enable after prod freeze bug fixed
-// import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
 import PkgJson from '../../../package.json'
@@ -35,13 +33,13 @@ export default function AboutControl() {
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
-      variant='noBackground'
+      variant='solid'
       icon={
         <Box
           sx={{
             '& svg': {
-              marginTop: '6px',
-              width: '18px',
+              marginTop: '8px',
+              width: '20px',
             },
           }}
         >

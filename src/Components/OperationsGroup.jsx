@@ -110,9 +110,7 @@ export default function OperationsGroup({deselectItems}) {
           />
       }
       {isCollaborationGroupVisible &&
-        <Box sx={{marginTop: '8px'}}>
-          <ImagineControl/>
-        </Box>
+        <ImagineControl/>
       }
       {/* Invisible */}
       <CameraControl/>
