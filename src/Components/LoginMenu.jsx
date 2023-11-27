@@ -66,8 +66,8 @@ export default function LoginMenu() {
         anchorEl={anchorEl}
         open={open}
         onClose={handleClose}
-        anchorOrigin={{vertical: 'left', horizontal: 'center'}}
-        transformOrigin={{vertical: 'left', horizontal: 'center'}}
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
         PaperProps={{
           style: {
             left: '300px',
