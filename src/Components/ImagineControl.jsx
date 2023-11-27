@@ -147,7 +147,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
             </Typography>
             <Typography component="div">
               To access the bot:
-              <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px'}}>
+              <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px', lineHeight: '1.8em'}}>
                 <li>Copy the link</li>
                 <li>Click Access the Bot</li>
                 <li>Enter <Typography variant='overline' sx={{fontWeight: 'bold'}}>/imagine</Typography> command</li>
