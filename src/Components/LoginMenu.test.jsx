@@ -36,7 +36,7 @@ describe('LoginMenu', () => {
     expect(dayThemeButton).toBeInTheDocument()
   })
 
-  it.only('renders the night theme when selected', async () => {
+  it('renders the night theme when selected', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {debug, findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
     const usersMenu = await findByTitle('Users menu')
@@ -48,7 +48,7 @@ describe('LoginMenu', () => {
     expect(nighThemeButton).toBeInTheDocument()
   })
 
-  it.only('renders users avatar when logged in', async () => {
+  it('renders users avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {debug, findByAltText} = render(<ShareMock><LoginMenu/></ShareMock>)
     debug()
