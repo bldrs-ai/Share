@@ -17,9 +17,8 @@ import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import BotIcon1 from '../assets/icons/Bot1.svg'
-import BotIcon2 from '../assets/icons/Bot2.svg'
-import BotIcon3 from '../assets/icons/Bot3.svg'
-import BotIcon4 from '../assets/icons/Bot4.svg'
+import BotIcon2 from '../assets/icons/Bot3.svg'
+import BotIcon3 from '../assets/icons/Bot4.svg'
 
 
 /**
@@ -31,8 +30,8 @@ import BotIcon4 from '../assets/icons/Bot4.svg'
  */
 export default function ImagineControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const [botIconIndex, setBotIconIndex] = useState(0)
   const openedDialog = !!isDialogDisplayed
-
 
   return (
     <ControlButton
@@ -44,6 +43,8 @@ export default function ImagineControl() {
         <ImagineDialog
           isDialogDisplayed={openedDialog}
           setIsDialogDisplayed={setIsDialogDisplayed}
+          botIconIndex={botIconIndex} // Pass botIconIndex as a prop
+          setBotIconIndex={setBotIconIndex} // Pass setBotIconIndex as a prop
         />
       }
     />
@@ -56,16 +57,16 @@ export default function ImagineControl() {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
+ * @param {number} botIconIndex The current index of the bot icon which is kept track of in the wrapper component
+ * @param {Function} setBotIconIndex The function to update the botIconIndex
  * @return {React.Component} The react component
  */
-function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, setBotIconIndex}) {
   const cameraControls = useStore((state) => state.cameraControls)
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
-
-  const [botIconIndex, setBotIconIndex] = useState(0)
-  const botIcons = [BotIcon1, BotIcon2, BotIcon3, BotIcon4]
+  const botIcons = [BotIcon2, BotIcon3, BotIcon1]
 
   useEffect(() => {
     if (viewer) {
@@ -76,10 +77,10 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   useEffect(() => {
     if (isDialogDisplayed) {
-      // Set a random icon index when the dialog is opened
-      setBotIconIndex(Math.floor(Math.random() * botIcons.length))
+      setBotIconIndex((prevIndex) => (prevIndex + 1) % botIcons.length)
     }
-  }, [isDialogDisplayed, botIcons.length])
+  }, [isDialogDisplayed, botIcons.length, setBotIconIndex])
+
 
   const CurrentBotIcon = botIcons[botIconIndex]
 
@@ -97,7 +98,6 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   const handleCopyClick = async () => {
     await navigator.clipboard.writeText(window.location.href)
-    // You can add some state or UI feedback to show that the link has been copied
   }
 
 
