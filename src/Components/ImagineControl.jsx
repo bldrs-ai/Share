@@ -19,6 +19,7 @@ import IconButton from '@mui/material/IconButton'
 import BotIcon1 from '../assets/icons/Bot1.svg'
 import BotIcon2 from '../assets/icons/Bot3.svg'
 import BotIcon3 from '../assets/icons/Bot4.svg'
+import BotIcon4 from '../assets/icons/Bot2.svg'
 
 
 /**
@@ -66,7 +67,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
-  const botIcons = [BotIcon2, BotIcon3, BotIcon1]
+  const botIcons = [BotIcon2, BotIcon3, BotIcon1, BotIcon4]
 
   useEffect(() => {
     if (viewer) {
