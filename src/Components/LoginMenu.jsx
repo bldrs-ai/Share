@@ -1,13 +1,10 @@
 import React, {useState} from 'react'
-import {useLocation} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
 import {TooltipIconButton} from './Buttons'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
@@ -16,23 +13,16 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 
 /**
- * BasicMenu used when there are several option behind UI button
- * show/hide from the right of the screen.
+ * LoginMenu contains the option to log in/log out and to theme control
  *
- * @param {Array} listOfOptions Title for the drawer
- * @return {object} ItemPropertiesDrawer react component
+ * @return {object} LoginMenu react component
  */
-export default function CutPlaneMenu() {
+export default function LoginMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
-  const cutPlanes = useStore((state) => state.cutPlanes)
-  const location = useLocation()
   const open = Boolean(anchorEl)
   const theme = useTheme()
   const {isAuthenticated, user, logout} = useAuth0()
   const {loginWithRedirect} = useAuth0()
-
-  debug().log('CutPlaneMenu: location: ', location)
-  debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
