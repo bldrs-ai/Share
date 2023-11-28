@@ -33,7 +33,7 @@ export default function AboutControl() {
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
-      variant='noBackground'
+      variant='rounded'
       icon={
         <Box
           sx={{
