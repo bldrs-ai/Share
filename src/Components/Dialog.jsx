@@ -5,6 +5,8 @@ import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import MuiDialog from '@mui/material/Dialog'
 import {assertDefined} from '../utils/assert'
+import {IconButton} from '@mui/material'
+import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
@@ -42,6 +44,9 @@ export default function Dialog({
       <DialogTitle>
         {headerText}
       </DialogTitle>
+      <IconButton onClick={close} size="small">
+        <CloseIcon fontSize="inherit"/>
+      </IconButton>
       <DialogContent>{content}</DialogContent>
       <DialogActions>
         <Button variant="contained" onClick={actionCb} >

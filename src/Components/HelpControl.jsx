@@ -52,7 +52,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
         selected={isDialogDisplayed}
         dataTestId='open-ifc'
         showTitle={true}
-        variant='noBackground'
+        variant='rounded'
       />
       {isDialogDisplayed && (
         <HelpDialog isDialogDisplayed={isDialogDisplayed} setIsDialogDisplayed={setIsDialogDisplayed}/>

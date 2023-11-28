@@ -96,10 +96,9 @@ export function getComponentOverrides(palette, typography) {
             'width': '40px',
             'height': '40px',
             'borderRadius': '10px',
-            'border': 'none',
-            'backgroundColor': palette.scene.background,
+            'backgroundColor': palette.primary.background,
             '&.Mui-selected, &.Mui-selected:hover': {
-              backgroundColor: palette.primary.background,
+              backgroundColor: palette.scene.background,
               opacity: .9,
             },
           },
@@ -122,7 +121,6 @@ export function getComponentOverrides(palette, typography) {
             'borderRadius': '10px',
             'border': 'none',
             'margin': '0px 4px 2px 0px',
-            // 'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
               backgroundColor: palette.primary.background,
               opacity: .9,
