@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.784",
+  "version": "1.0.785",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -32,7 +32,7 @@
     "lint-src": "yarn eslint src && tsc -p tools/tsconfig.json",
     "lint-tools": "yarn eslint --rule no-console:off cypress tools",
     "precommit": "yarn lint && yarn test",
-    "serve": "yarn serve-share-webifc",
+    "serve": "yarn serve-share-conway",
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share-conway": "run-script-os",
     "serve-share-conway:win32": "yarn build-share-conway && set USE_WEBIFC_SHIM=true&& node tools/esbuild/serve.js",
@@ -46,7 +46,7 @@
   "dependencies": {
     "@auth0/auth0-react": "^2.0.0",
     "@babel/core": "^7.18.10",
-    "@bldrs-ai/conway": "./bldrs-ai-conway-0.1.408.tgz",
+    "@bldrs-ai/conway": "./bldrs-ai-conway-0.1.424.tgz",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
     "@emotion/styled": "^11.10.0",
