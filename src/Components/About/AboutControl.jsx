@@ -3,6 +3,7 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
@@ -19,6 +20,7 @@ import PkgJson from '../../../package.json'
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(FirstTime.isFirst())
+  const theme = useTheme()
   const setIsDialogDisplayedLocal = (value) => {
     setIsDialogDisplayed(value)
   }
@@ -46,7 +48,7 @@ export default function AboutControl() {
             },
           }}
         >
-          <LogoB/>
+          <LogoB style={{color: theme.palette.secondary.main}}/>
         </Box>
       }
       dialog={
