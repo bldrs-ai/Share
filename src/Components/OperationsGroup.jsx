@@ -6,7 +6,6 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import ShareControl from './ShareControl'
-import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
 import AuthNav from './AuthNav'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
@@ -123,7 +122,6 @@ export default function OperationsGroup({deselectItems}) {
                 <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
                 <NightlightOutlinedIcon className='icon-share'/> }
           />
-          <ImagineControl/>
         </>
       }
       {/* Invisible */}
