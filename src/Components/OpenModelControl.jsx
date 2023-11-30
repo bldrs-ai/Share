@@ -16,7 +16,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
-import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolder'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
 /**
