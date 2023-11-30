@@ -1,9 +1,11 @@
 import React from 'react'
+import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
 import MuiDialog from '@mui/material/Dialog'
+import Typography from '@mui/material/Typography'
 import {assertDefined} from '../utils/assert'
 import {IconButton} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
@@ -42,7 +44,10 @@ export default function Dialog({
       onClose={close}
     >
       <DialogTitle>
-        {headerText}
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px', marginTop: '10px'}}>
+          {/* <ShareGraphic/> */}
+          <Typography variant={'overline'}>{headerText}</Typography>
+        </Box>
       </DialogTitle>
       <IconButton onClick={close} size="small">
         <CloseIcon fontSize="inherit"/>
