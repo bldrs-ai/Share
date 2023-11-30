@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.785",
+  "version": "1.0.788",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -46,7 +46,7 @@
   "dependencies": {
     "@auth0/auth0-react": "^2.0.0",
     "@babel/core": "^7.18.10",
-    "@bldrs-ai/conway": "./bldrs-ai-conway-0.1.424.tgz",
+    "@bldrs-ai/conway": "./bldrs-ai-conway-0.1.425.tgz",
     "@bldrs-ai/ifclib": "^5.3.3",
     "@emotion/react": "^11.10.0",
     "@emotion/styled": "^11.10.0",
