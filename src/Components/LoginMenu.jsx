@@ -71,7 +71,7 @@ export default function LoginMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(-60px) translateY(0px)',
+            transform: 'translateX(-49px) translateY(0px)',
           },
           sx: {
             'color': theme.palette.primary.contrastText,
