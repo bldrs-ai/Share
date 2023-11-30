@@ -106,14 +106,21 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
     <Dialog
       icon={<AutoFixHighIcon className='icon-share'/>}
       headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '120px', marginTop: '10px'}}>
+        <Box
+          sx={{
+            display: 'inline-flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+            height: '120px',
+            marginTop: '10px'}}
+        >
           <CurrentBotIcon/>
           <Typography variant={'overline'}>Bldr Bot</Typography>
         </Box>
       }
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
-      actionTitle='Access the bot'
+      actionTitle='Go to #bot-the-bldr on Bldrs Discord'
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
       content={
@@ -122,7 +129,6 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
           justifyContent='flex-start'
           spacing={0}
           sx={{
-            width: '266px',
             marginBottom: '4px',
           }}
         >
@@ -131,55 +137,71 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
           </Helmet>
           <Stack
             spacing={1}
-            sx={{textAlign: 'left', width: '240px'}}
+            sx={{textAlign: 'left'}}
           >
             <Typography variant={'body1'}>
-              Bldr Bot runs on our Discord.
-              <br/>
-              To join our server please follow {' '}
-              <Link
-                underline="always"
-                href='https://discord.gg/fY9Pa3DD'
-                color='inherit'
-                variant='overline'
-              >
-                  the Invite Link
-              </Link>
+              Bldr Bot creates realistic images of CAD models using Generative AI.
             </Typography>
             <Typography component="div">
-              To access the bot:
-              <ul style={{marginTop: '6px', padding: '0px', paddingLeft: '30px', lineHeight: '1.8em'}}>
-                <li>Copy the link</li>
-                <li>Click Access the Bot</li>
-                <li>Enter <Typography variant='overline' sx={{fontWeight: 'bold'}}>/imagine</Typography> command</li>
-                <li>Experiment with prompts!</li>
-              </ul>
+              To use:
+              <ol style={{marginTop: '6px', padding: '0px', paddingLeft: '30px', lineHeight: '1.8em'}}>
+                <li>Copy this page&apos;s link<br/>
+                  <TextField
+                    sx={{
+                      width: '90%',
+                    }}
+                    value={String(window.location)}
+                    inputRef={urlTextFieldRef}
+                    variant='outlined'
+                    size='small'
+                    rows={1}
+                    InputProps={{
+                      readOnly: true,
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton
+                            onClick={handleCopyClick}
+                            edge="end"
+                            size='small'
+                          >
+                            <ContentCopyIcon size='inherit' color='primary' sx={{width: '16px', height: '16px'}}/>
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </li>
+                <li>Click the button below to go to our #bot-the-bldr channel</li>
+                <ul>
+                  <li>(You first may need to join {' '}
+                    <Link
+                      underline="always"
+                      href='https://discord.gg/fY9Pa3DD'
+                      color='inherit'
+                    >
+                      The Bldrs Discord
+                    </Link>)
+                  </li>
+                </ul>
+                <li>When you&apos;re there:
+                  <ol>
+                    <li>Type {' '}
+                      <Typography
+                        variant='overline'
+                        sx={{fontWeight: 'bold'}}
+                      >
+                        /imagine
+                      </Typography>
+                    </li>
+                    <li>Paste the link you copied for this model</li>
+                    <li>Enter some text like &apos;Model on display in warehouse&apos;</li>
+                    <li>Hit Enter and Bldr Bot will imagine your image!</li>
+                  </ol>
+                </li>
+                <li>Experiment with different prompts and share your creations 👨‍🎨</li>
+              </ol>
             </Typography>
           </Stack>
-          <TextField
-            sx={{
-              width: '246px',
-            }}
-            value={String(window.location)}
-            inputRef={urlTextFieldRef}
-            variant='outlined'
-            size='small'
-            rows={1}
-            InputProps={{
-              readOnly: true,
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={handleCopyClick}
-                    edge="end"
-                    size='small'
-                  >
-                    <ContentCopyIcon size='inherit' color='primary' sx={{width: '16px', height: '16px'}}/>
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
         </Stack>
       }
     />)
