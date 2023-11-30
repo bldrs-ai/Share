@@ -14,7 +14,7 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import ShiftIcon from '../assets/icons/Shift.svg'
-import LogoB from '../assets/LogoB.svg'
+import LogoColor from '../assets/LogoB_Color.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -250,7 +250,7 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           height: '76px',
         }}
         >
-          <LogoB/>
+          <LogoColor/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>}
       isDialogDisplayed={isDialogDisplayed}

@@ -9,6 +9,7 @@ import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 import LogoB from '../../assets/LogoB.svg'
+import LogoColor from '../../assets/LogoB_Color.svg'
 import {Helmet} from 'react-helmet-async'
 import PkgJson from '../../../package.json'
 
@@ -74,7 +75,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       headerText={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
-          <LogoB/>
+          <LogoColor/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>
       }
