@@ -636,7 +636,7 @@ export default function CadView({
       />
       {showSearchBar && (
         <Box sx={{
-          'position': 'absolute',
+          'position': 'fixed',
           'top': `1em`,
           'left': '1em',
           'display': 'flex',
@@ -785,7 +785,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         this is a shim for the misalignment you see with tooltips without it */}
         <Box
           sx={{
-            position: 'absolute',
+            position: 'fixed',
             top: 0,
             right: 0,
           }}
@@ -794,7 +794,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         </Box>
         <Box
           sx={{
-            position: 'absolute',
+            position: 'fixed',
             bottom: 0,
             width: '100%',
           }}
