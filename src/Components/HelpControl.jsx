@@ -9,6 +9,7 @@ import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShareIcon from '../assets/icons/Share.svg'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
@@ -184,6 +185,10 @@ const HelpList = ({pageIndex}) => {
     {
       icon: <ChatOutlinedIcon color='secondary'/>,
       description: 'Attach notes to 3D elements',
+    },
+    {
+      icon: <AutoFixHighIcon color='secondary'/>,
+      description: 'Renerate renderings using BLDR AI Agent',
     },
   ]
 
