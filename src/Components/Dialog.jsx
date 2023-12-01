@@ -45,7 +45,7 @@ export default function Dialog({
       onClose={close}
     >
       <DialogTitle>
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', width: '50px', marginTop: '10px'}}>
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', width: '50px', marginTop: '8px'}}>
           {headerIcon}
           <Typography variant={'overline'}>{headerText}</Typography>
         </Box>
