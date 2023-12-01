@@ -18,7 +18,7 @@ import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
-import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
+import ShareHeaderIcon from '../assets/icons/ShareGraphic.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
@@ -130,7 +130,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={<ShareIcon className='icon-share'/>}
       headerText='Share'
-      headerIcon={<OpenHeaderIcon/>}
+      headerIcon={<ShareHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
