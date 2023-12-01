@@ -27,6 +27,7 @@ import CloseIcon from '@mui/icons-material/Close'
 export default function Dialog({
   icon,
   headerText,
+  headerIcon,
   isDialogDisplayed,
   setIsDialogDisplayed,
   content,
@@ -45,7 +46,7 @@ export default function Dialog({
     >
       <DialogTitle>
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px', marginTop: '10px'}}>
-          {/* <ShareGraphic/> */}
+          {headerIcon}
           <Typography variant={'overline'}>{headerText}</Typography>
         </Box>
       </DialogTitle>

@@ -126,6 +126,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     <Dialog
       icon={<CreateNewFolderIcon className='icon-share'/>}
       headerText={'Open'}
+      headerIcon={<CreateNewFolderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
