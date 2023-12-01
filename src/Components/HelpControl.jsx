@@ -14,7 +14,7 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import ShiftIcon from '../assets/icons/Shift.svg'
-import LogoB from '../assets/LogoB.svg'
+import QuestionGraphic from '../assets/icons/QuestionGraphic.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -242,12 +242,8 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<HelpOutlineIcon/>}
-      headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px'}}>
-          <LogoB/>
-          <Typography variant={'overline'}>bldrs.ai</Typography>
-        </Box>
-      }
+      headerText='Help'
+      headerIcon={<QuestionGraphic/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
