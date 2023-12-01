@@ -15,6 +15,7 @@ import {ControlButton} from './Buttons'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
+import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 
 
@@ -125,6 +126,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={<ShareIcon className='icon-share'/>}
       headerText='Share'
+      headerIcon={<OpenHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
@@ -147,6 +149,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             inputRef={urlTextFieldRef}
             variant='outlined'
             multiline
+            size='small'
             rows={1}
             InputProps={{
               readOnly: true,
