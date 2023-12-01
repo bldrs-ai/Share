@@ -29,7 +29,7 @@ describe('ShareControl', () => {
     const button = getByTitle('Share')
     fireEvent.click(button)
 
-    await(waitFor(() => expect(document.title).toBe('Share IFC Model — BLDRS')))
+    await(waitFor(() => expect(document.title).toBe('Share IFC Model')))
   })
 
   test('renders QRCode component', () => {
