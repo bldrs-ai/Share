@@ -14,7 +14,6 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import ShiftIcon from '../assets/icons/Shift.svg'
-import QuestionGraphic from '../assets/icons/QuestionGraphic.svg'
 import CloseIcon from '@mui/icons-material/Close'
 import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -27,7 +26,7 @@ import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import PortraitIcon from '@mui/icons-material/Portrait'
 import SearchIcon from '@mui/icons-material/Search'
-
+import LogoB from '../assets/LogoB.svg'
 
 /**
  * The main component to display a help control button and a help dialog.
@@ -242,8 +241,12 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       icon={<HelpOutlineIcon/>}
-      headerText='Help'
-      headerIcon={<QuestionGraphic/>}
+      headerText={
+        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px'}}>
+          <LogoB/>
+          <Typography variant={'overline'}>bldrs.ai</Typography>
+        </Box>
+      }
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'OK'}
