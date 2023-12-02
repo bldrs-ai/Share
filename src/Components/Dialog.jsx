@@ -4,10 +4,10 @@ import Button from '@mui/material/Button'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
+import IconButton from '@mui/material/IconButton'
 import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
 import {assertDefined} from '../utils/assert'
-import {IconButton} from '@mui/material'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -46,7 +46,7 @@ export default function Dialog({
     >
       <DialogTitle>
         {headerIcon ?
-          <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', width: '42px', marginTop: '8px'}}>
+          <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', width: '46px', marginTop: '8px'}}>
             {headerIcon}
             <Typography variant={'overline'}>{headerText}</Typography>
           </Box> : headerText

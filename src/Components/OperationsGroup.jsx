@@ -69,7 +69,7 @@ export default function OperationsGroup({deselectItems}) {
         <LoginMenu/>
       }
       {isCollaborationGroupVisible &&
-        <Box sx={{marginTop: '8px'}}>
+        <Box sx={{marginTop: '.5em'}}>
           <ShareControl/>
         </Box>
       }
