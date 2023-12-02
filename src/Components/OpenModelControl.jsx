@@ -16,6 +16,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
+import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
@@ -126,6 +127,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     <Dialog
       icon={<CreateNewFolderIcon className='icon-share'/>}
       headerText={'Open'}
+      headerIcon={<OpenHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Open local file'}
