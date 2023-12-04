@@ -1,24 +1,20 @@
 import React from 'react'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
 import ListIcon from '@mui/icons-material/List'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
-import Typography from '@mui/material/Typography'
 import TreeView from '@mui/lab/TreeView'
 import {styled} from '@mui/material/styles'
 import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
+import Panel from './Panel'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {useExistInFeature} from '../hooks/useExistInFeature'
 import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
 import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
-import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
@@ -78,46 +74,8 @@ export default function NavPanel({
 
   return (
     <div style={{width: '100%'}}>
-      <Paper
-        elevation={1}
-        aria-label='Navigation Panel'
-        variant='control'
-        sx={{
-          'marginTop': '14px',
-          'overflow': 'auto',
-          'width': '100%',
-          'opacity': 0.8,
-          'justifyContent': 'space-around',
-          'alignItems': 'center',
-          'maxHeight': '300px',
-          '@media (max-width: 900px)': {
-            maxHeight: '300PX',
-            top: '86px',
-          },
-        }}
-      >
-        <Stack direction='column'>
-          {/* Sticky Header */}
-          <Stack
-            direction='row'
-            justifyContent='space-between'
-            alignItems='center'
-            sx={{
-              position: 'sticky',
-              top: 0,
-              backgroundColor: 'background.paper',
-              zIndex: 1,
-            }}
-          >
-            <Typography variant='overline' sx={{marginLeft: '1em'}}>Navigation</Typography>
-            <Box sx={{marginRight: '.4em'}}>
-              <IconButton aria-label="close" size="small" onClick={toggleIsNavigationVisible}>
-                <CloseIcon fontSize="inherit"/>
-              </IconButton>
-            </Box>
-          </Stack>
-
-          {/* Content */}
+      <Panel
+        content={
           <Box>
             {existNavTypesInFeature && (
               <StyledToggleButtonGroup
@@ -189,24 +147,26 @@ export default function NavPanel({
               }}
             >
               {isNavTree ? (
-                <NavTree
-                  model={model}
-                  selectWithShiftClickEvents={selectWithShiftClickEvents}
-                  element={element}
-                  pathPrefix={pathPrefix}
-                />
-              ) : (
-                <TypesNavTree
-                  model={model}
-                  types={elementTypesMap}
-                  selectWithShiftClickEvents={selectWithShiftClickEvents}
-                  pathPrefix={pathPrefix}
-                />
-              )}
+              <NavTree
+                model={model}s
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
+                element={element}
+                pathPrefix={pathPrefix}
+              />
+            ) : (
+              <TypesNavTree
+                model={model}
+                types={elementTypesMap}
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
+                pathPrefix={pathPrefix}
+              />
+            )}
             </TreeView>
           </Box>
-        </Stack>
-      </Paper>
+        }
+        title='Navigation'
+        onClose={toggleIsNavigationVisible}
+      />
     </div>
   )
 }
