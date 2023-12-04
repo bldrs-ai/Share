@@ -1,14 +1,14 @@
 import React, {useState, useEffect} from 'react'
+import IconButton from '@mui/material/IconButton'
+import Tooltip from '@mui/material/Tooltip'
 import Timeline from './VersionsTimeline'
 import Panel from '../Panel'
-import IconButton from '@mui/material/IconButton'
 import useStore from '../../store/useStore'
 import {useNavigate} from 'react-router-dom'
 import {getCommitsForBranch} from '../../utils/GitHub'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import debug from '../../utils/debug'
-import {Tooltip} from '@mui/material'
 
 
 /**
