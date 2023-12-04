@@ -115,7 +115,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
             marginTop: '10px'}}
         >
           <CurrentBotIcon/>
-          <Typography variant={'overline'}>Bldr Bot</Typography>
+          <Typography variant={'overline'}>Bot-the-Bldr</Typography>
         </Box>
       }
       isDialogDisplayed={isDialogDisplayed}
