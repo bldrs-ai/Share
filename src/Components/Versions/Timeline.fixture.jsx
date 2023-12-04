@@ -1,5 +1,5 @@
 import React from 'react'
-import Timeline from './Timeline'
+import VersionsTimeline from './VersionsTimeline'
 import FixtureContext from '../../FixtureContext'
 
 
@@ -25,6 +25,6 @@ const commitData = [
 
 export default (
   <FixtureContext>
-    <Timeline commitData={commitData}/>
+    <VersionsTimeline commitData={commitData}/>
   </FixtureContext>
 )
