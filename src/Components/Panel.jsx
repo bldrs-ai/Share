@@ -22,14 +22,14 @@ export default function Panel({title, onClose, content}) {
     <Paper
       sx={{
         'overflowY': 'scroll',
-        'maxHeight': '390px',
+        'maxHeight': '490px',
         'width': '100%',
         'opacity': .9,
         'position': 'relative',
         'borderRadius': '10px',
         'backgroundColor': theme.palette.scene.background,
         '@media (max-width: 800px)': {
-          maxHeight: '216px',
+          maxHeight: '400px',
         },
       }}
     >
