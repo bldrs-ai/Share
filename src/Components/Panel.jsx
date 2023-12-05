@@ -16,10 +16,11 @@ import CloseIcon from '@mui/icons-material/Close'
  * @param {React.ReactNode} content The content to be displayed in the panel.
  * @return {React.ReactElement} A rendered Panel component.
  */
-export default function Panel({title, onClose, content}) {
+export default function Panel({title, onClose, content, testId = ''}) {
   const theme = useTheme()
   return (
     <Paper
+      data-testId={testId}
       sx={{
         'overflowY': 'scroll',
         'maxHeight': '490px',
