@@ -75,7 +75,7 @@ export default function NavPanel({
   return (
     <div style={{width: '100%'}}>
       <Panel
-        testId='Navigation panel'
+        testId='Navigation_panel'
         content={
           <Box>
             {existNavTypesInFeature && (
