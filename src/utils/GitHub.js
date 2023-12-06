@@ -708,9 +708,9 @@ export const MOCK_COMMITS = [{
     message: 'Create License',
     tree: {
       sha: '123',
-      url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
     },
-    url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    url: 'https://api.github.com/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
     comment_count: 0,
     verification: {
       verified: true,
@@ -719,9 +719,9 @@ export const MOCK_COMMITS = [{
       payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
     },
   },
-  url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
-  html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
-  comments_url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits',
+  url: 'https://api.github.com/repos/user2/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/user2/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/user2/Momentum-Public/commits',
   author: {
     login: 'User1',
     id: 74647806,
@@ -765,8 +765,8 @@ export const MOCK_COMMITS = [{
   parents: [
     {
       sha: '123',
-      url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
-      html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/user2/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
     },
   ],
 }]
@@ -777,7 +777,7 @@ export const MOCK_BRANCHES = {
       name: 'Version-1',
       commit: {
         sha: '123',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
       },
       protected: false,
     },
@@ -785,7 +785,7 @@ export const MOCK_BRANCHES = {
       name: 'main',
       commit: {
         sha: '456',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -798,7 +798,7 @@ export const MOCK_ONE_BRANCH = {
       name: 'main',
       commit: {
         sha: '456',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -808,12 +808,12 @@ export const MOCK_ONE_BRANCH = {
 export const MOCK_ISSUES_EMPTY = {data: []}
 
 export const MOCK_MODEL_PATH_GIT = {
-  org: 'Swiss-Property-AG',
+  org: 'user2',
   repo: 'Schneestock-Public',
   branch: 'main',
   filepath: '/ZGRAGGEN.ifc',
   eltPath: '',
-  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+  gitpath: 'https://raw.githubusercontent.com/user2/Schneestock-Public/main/ZGRAGGEN.ifc',
 }
 
 export const MOCK_MODEL_PATH_LOCAL = {
