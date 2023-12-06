@@ -120,12 +120,12 @@ export default function VersionsTimeline({commitData, commitNavigateCb}) {
   const [showLoginMessage, setShowLoginMessage] = useState(false)
 
   useEffect(() => {
-    // Set a timeout to display the login message after 7 seconds if commitData is still empty
+    // Set a timeout to display the login message after 4 seconds if commitData is still empty
     const timer = setTimeout(() => {
       if (commitData.length === 0) {
         setShowLoginMessage(true)
       }
-    }, 7000)
+    }, 4000)
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
   }, [commitData])
