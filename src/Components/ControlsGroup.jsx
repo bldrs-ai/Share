@@ -57,7 +57,7 @@ export default function OperationsGroup({fileOpen, repo}) {
       />
       {repo !== undefined &&
         <TooltipIconButton
-          title='Project History'
+          title='Versions'
           icon={<HistoryIcon className='icon-share' color='secondary'/>}
           placement='bottom'
           selected={isVersionHistoryVisible}
