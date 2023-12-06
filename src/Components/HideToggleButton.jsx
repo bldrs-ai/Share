@@ -38,7 +38,6 @@ export default function HideToggleButton({elementId}) {
     marginTop: '2px',
     height: '20px',
     opacity: 0.3,
-    visibility: 'hidden',
   }
   if (isTempIsolationModeOn) {
     iconStyle.pointerEvents = 'none'
