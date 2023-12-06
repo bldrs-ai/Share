@@ -18,7 +18,7 @@ describe('CustomTimeline', () => {
     },
   ]
 
-  it.only('displays the correct number of timeline items', () => {
+  it('displays the correct number of timeline items', () => {
     const commitNavigateCb = jest.fn()
     const {getByText} = render(<VersionsTimeline commitData={mockCommitData} commitNavigateCb={commitNavigateCb}/>)
     const firstItem = getByText('User1')
