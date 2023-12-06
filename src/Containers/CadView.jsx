@@ -8,7 +8,6 @@ import Alert from '../Components/Alert'
 import AboutControl from '../Components/About/AboutControl'
 import ElementGroup from '../Components/ElementGroup'
 import ControlsGroup from '../Components/ControlsGroup'
-import BranchesControl from '../Components/BranchesControl'
 import HelpControl from '../Components/HelpControl'
 import NavPanel from '../Components/NavPanel'
 import SearchBar from '../Components/SearchBar'
@@ -657,7 +656,8 @@ export default function CadView({
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
           </Box>
           }
-          {isNavPanelOpen &&
+          <Box sx={{marginTop: '10px', width: '100%'}}>
+            {isNavPanelOpen &&
             isNavigationPanelVisible &&
             isNavigationVisible &&
             <NavPanel
@@ -676,14 +676,12 @@ export default function CadView({
                 pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
               }
             />
-          }
-          {
-            modelPath.repo !== undefined && isVersionHistoryVisible &&
-            <>
-              <BranchesControl location={location}/>
+            }
+            {
+              modelPath.repo !== undefined && isVersionHistoryVisible &&
               <VersionsHistoryPanel branch={modelPath.branch}/>
-            </>
-          }
+            }
+          </Box>
         </Box>
       )}
       {alert}

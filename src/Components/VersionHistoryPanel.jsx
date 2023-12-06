@@ -37,8 +37,9 @@ export default function VersionsHistoryPanel({branch}) {
 
   return (
     <Panel
+      testId='Version Panel'
       content={<Timeline commitData={commitData}/>}
-      title='Version History'
+      title='Versions'
       onClose={toggleIsVersionHistoryVisible}
     />
   )
