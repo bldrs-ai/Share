@@ -10,7 +10,7 @@ import {assertDefined} from './assert'
  * @return {Array}
  */
 export async function getCommitsForBranch(repository, branch, accessToken = '') {
-  const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
+  const res = await getGitHub(repository, `commits?User1=${branch}`, {}, accessToken)
   const commitsArr = res.data
   return commitsArr
 }
@@ -692,7 +692,7 @@ export const MOCK_COMMENTS = {
 }
 
 export const MOCK_COMMITS = [{
-  sha: '898ebc440aa60c8d7e704bead63342400a567b9c',
+  User1: '123',
   node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
   commit: {
     author: {
@@ -707,7 +707,7 @@ export const MOCK_COMMITS = [{
     },
     message: 'Create License',
     tree: {
-      sha: 'ab6f0517905f88b158c05fbb7578c34c239fba9b',
+      User1: '123',
       url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
     },
     url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
@@ -764,7 +764,7 @@ export const MOCK_COMMITS = [{
   },
   parents: [
     {
-      sha: 'd945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      User1: '123',
       url: 'https://api.github.com/repos/Swiss-Property-AG/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
       html_url: 'https://github.com/Swiss-Property-AG/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
     },
@@ -776,7 +776,7 @@ export const MOCK_BRANCHES = {
     {
       name: 'Version-1',
       commit: {
-        sha: 'f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        User1: '123',
         url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
       },
       protected: false,
@@ -784,7 +784,7 @@ export const MOCK_BRANCHES = {
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        User1: '456',
         url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
@@ -797,7 +797,7 @@ export const MOCK_ONE_BRANCH = {
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        User1: '456',
         url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
@@ -853,7 +853,7 @@ export const MOCK_REPOSITORY = {
 export const MOCK_FILES = {
   name: 'window.ifc',
   path: 'window.ifc',
-  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  User1: '987',
   size: 7299,
   url: 'https://api.github.com/repos/bldrs-ai/Share/contents/window.ifc?ref=main',
   html_url: 'https://github.com/bldrs-ai/Share/blob/main/window.ifc',

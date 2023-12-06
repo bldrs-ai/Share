@@ -12,14 +12,14 @@ import debug from '../../utils/debug'
 
 
 /**
- * VersionsHistoryPanel displays a series of versions in a timeline format.
+ * VersionsContainer displays a series of versions in a timeline format.
  * Each version corresponds to a commit, and this component fetches
  * commit data for the provided branch and displays it.
  *
  * @param {string} branch The git branch for which commits are fetched.
  * @return {object} A timeline panel of versions.
  */
-export default function Container({branch}) {
+export default function VersionsContainer({branch}) {
   const [commitData, setCommitData] = useState([])
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)

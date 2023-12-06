@@ -5,16 +5,9 @@ import VersionsContainer from './VersionsContainer'
 import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
-  MOCK_COMMITS,
 } from '../../utils/GitHub'
 import useStore from '../../store/useStore'
 
-
-jest.mock('../../utils/GitHub', () => ({
-  getCommitsForBranch: jest.fn(() => Promise.resolve([
-    MOCK_COMMITS,
-  ])),
-}))
 
 describe('VersionsContainer', () => {
   it('renders the panel', async () => {
