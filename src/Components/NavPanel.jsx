@@ -87,7 +87,6 @@ export default function NavPanel({
                 sx={{
                   'marginLeft': '16px',
                   'marginTop': '8px',
-                  'visibility': 'hidden',
                   '& button': {
                     height: '30px',
                     width: '30px',
