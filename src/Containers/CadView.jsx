@@ -653,11 +653,11 @@ export default function CadView({
         >
           <ControlsGroup fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)} repo={modelPath.repo}/>
           {isSearchBarVisible && isSearchVisible &&
-          <Box sx={{marginTop: '12px', width: '100%'}}>
+          <Box sx={{marginTop: '.82em', width: '100%'}}>
             <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
           </Box>
           }
-          <Box sx={{marginTop: '12px', width: '100%'}}>
+          <Box sx={{marginTop: '.82em', width: '100%'}}>
             {isNavPanelOpen &&
             isNavigationPanelVisible &&
             isNavigationVisible &&
