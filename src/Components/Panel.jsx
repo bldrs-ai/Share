@@ -25,7 +25,7 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         'overflowY': 'scroll',
         'maxHeight': '490px',
         'width': '100%',
-        'opacity': .9,
+        'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
         'backgroundColor': theme.palette.scene.background,
