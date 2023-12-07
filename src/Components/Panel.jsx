@@ -47,11 +47,19 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         }}
       >
         <Typography variant='body1' sx={{marginLeft: '.9em', textTransform: 'uppercase'}}>{title}</Typography>
-        <Box sx={{marginRight: '.3em'}}>
+        <Stack
+          direction='row'
+          justifyContent={'center'}
+          alignItems={'center'}
+          sx={{marginRight: '.3em'}}
+        >
+          <Box>
+            {action}
+          </Box>
           <IconButton aria-label="close" size="small" onClick={onClose} sx={{borderRadius: '5px'}}>
             <CloseIcon fontSize="small" color='secondary'/>
           </IconButton>
-        </Box>
+        </Stack>
       </Stack>
       <Box sx={{padding: '1px 0px'}}>
         {content}

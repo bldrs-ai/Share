@@ -77,7 +77,7 @@ export default function VersionsContainer({branch}) {
 
   return (
     <Panel
-      content={<Timeline commitData={commitData} commitNavigate={commitNavigate}/>}
+      content={<Timeline commitData={commitData} commitNavigateCb={commitNavigate}/>}
       testId='Version Panel'
       title='Versions'
       action={
