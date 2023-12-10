@@ -130,7 +130,6 @@ export default function VersionsTimeline({commitData, commitNavigateCb}) {
     return () => clearTimeout(timer)
   }, [commitData])
 
-  // Function to handle item click
   const handleItemClick = (index) => {
     commitNavigateCb(index)
     setActiveCommit(index)

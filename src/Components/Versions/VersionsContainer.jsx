@@ -52,9 +52,9 @@ export default function VersionsContainer({branch}) {
   }, [repository, branch, accessToken])
 
   /**
-   * This is the call back that changes navigation to the selected commit
+   * This callBack navigated to the selected commit
    *
-   * @param {string} index - the index of the active commit
+   * @param {string} index active commit index
    */
   const commitNavigate = (index) => {
     const sha = commitData[index].sha
