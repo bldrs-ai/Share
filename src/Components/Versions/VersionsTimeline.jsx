@@ -16,6 +16,7 @@ import NoContent from '../NoContent'
 import useStore from '../../store/useStore'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
+import debug from '../../utils/debug'
 
 
 /**
@@ -121,15 +122,16 @@ export default function VersionsTimeline({commitData, commitNavigateCb}) {
   const [showLoginMessage, setShowLoginMessage] = useState(false)
   const activeVersion = useStore((state) => state.activeVersion)
   const setActiveVersion = useStore((state) => state.setActiveVersion)
+  debug().log(`activeVersion: `, activeVersion)
 
 
   useEffect(() => {
     // Set a timeout to display the login message after 4 seconds if commitData is still empty
+    setActiveVersion(commitData.length)
     const timer = setTimeout(() => {
       if (commitData.length === 0) {
         setShowLoginMessage(true)
       }
-      setActiveVersion(commitData.length)
     }, 4000)
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
