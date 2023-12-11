@@ -13,7 +13,6 @@ import Typography from '@mui/material/Typography'
 import {styled} from '@mui/system'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import useStore from '../../store/useStore'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
 
@@ -117,12 +116,8 @@ function TimelineInfo({commit, active}) {
  * @return {object} A timeline of versions.
  */
 export default function VersionsTimeline({commitData, commitNavigateCb}) {
-  // const [activeCommit, setActiveCommit] = useState(0)
+  const [activeVersion, setActiveVersion] = useState(0)
   const [showLoginMessage, setShowLoginMessage] = useState(false)
-  const activeVersion = useStore((state) => state.activeVersion)
-  const setActiveVersion = useStore((state) => state.setActiveVersion)
-  // eslint-disable-next-line no-console
-  console.log('activeVersion', activeVersion)
 
   useEffect(() => {
     // Set a timeout to display the login message after 4 seconds if commitData is still empty
