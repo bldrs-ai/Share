@@ -16,7 +16,6 @@ import NoContent from '../NoContent'
 import useStore from '../../store/useStore'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
-import debug from '../../utils/debug'
 
 
 /**
@@ -122,7 +121,8 @@ export default function VersionsTimeline({commitData, commitNavigateCb}) {
   const [showLoginMessage, setShowLoginMessage] = useState(false)
   const activeVersion = useStore((state) => state.activeVersion)
   const setActiveVersion = useStore((state) => state.setActiveVersion)
-  debug().log(`activeVersion: `, activeVersion)
+  // eslint-disable-next-line no-console
+  console.log(`activeVersion: `, activeVersion)
 
 
   useEffect(() => {
