@@ -117,17 +117,15 @@ function TimelineInfo({commit, active}) {
  * @return {object} A timeline of versions.
  */
 export default function VersionsTimeline({commitData, commitNavigateCb}) {
-  // const [activeCommit, setActiveCommit] = useState(commitData.length)
+  // const [activeCommit, setActiveCommit] = useState(0)
   const [showLoginMessage, setShowLoginMessage] = useState(false)
   const activeVersion = useStore((state) => state.activeVersion)
   const setActiveVersion = useStore((state) => state.setActiveVersion)
   // eslint-disable-next-line no-console
-  console.log(`activeVersion: `, activeVersion)
-
+  console.log('activeVersion', activeVersion)
 
   useEffect(() => {
     // Set a timeout to display the login message after 4 seconds if commitData is still empty
-    setActiveVersion(commitData.length)
     const timer = setTimeout(() => {
       if (commitData.length === 0) {
         setShowLoginMessage(true)
@@ -135,7 +133,7 @@ export default function VersionsTimeline({commitData, commitNavigateCb}) {
     }, 4000)
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
-  }, [commitData, setActiveVersion])
+  }, [commitData])
 
   const handleItemClick = (index) => {
     commitNavigateCb(index)
