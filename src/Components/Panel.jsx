@@ -20,7 +20,7 @@ export default function Panel({title, onClose, content, testId = '', action = nu
   const theme = useTheme()
   return (
     <Paper
-      data-testId={testId}
+      data-testid={testId}
       sx={{
         'overflowY': 'scroll',
         'maxHeight': '490px',
