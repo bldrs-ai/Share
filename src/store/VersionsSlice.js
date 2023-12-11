@@ -8,6 +8,8 @@
 export default function VersionsSlice(set, get) {
   return {
     versions: {},
-    setVetsion: (versions) => set(() => ({versions: versions})),
+    setVersions: (versions) => set(() => ({versions: versions})),
+    activeVersion: null,
+    setActiveVersion: (activeVersion) => set(() => ({activeVersion: activeVersion})),
   }
 }

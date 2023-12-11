@@ -5,6 +5,7 @@ import createUISlice from './UISlice'
 import createUIVisibilitySlice from './UIVisibilitySlice'
 import createRepositorySlice from './RepositorySlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
+import createVersionsSlice from './VersionsSlice'
 
 
 const useStore = create((set, get) => ({
@@ -14,6 +15,7 @@ const useStore = create((set, get) => ({
   ...createUISlice(set, get),
   ...createUIVisibilitySlice(set, get),
   ...createIsolatorSlice(set, get),
+  ...createVersionsSlice(set, get),
 }))
 
 export default useStore
