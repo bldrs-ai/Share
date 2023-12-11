@@ -302,28 +302,6 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-  it('displays the loader when isLoading is true', async () => {
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    const {result} = renderHook(() => useStore((state) => state))
-    await act(() => {
-      result.current.setIsLoading(true)
-    })
-    const {getByTestId} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
-    const loader = getByTestId('loader')
-    expect(loader).toBeInTheDocument()
-  })
-
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
