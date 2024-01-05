@@ -22,7 +22,7 @@ export default function LoginMenu() {
   const open = Boolean(anchorEl)
   const theme = useTheme()
   const {isAuthenticated, user, logout} = useAuth0()
-  const {loginWithRedirect} = useAuth0()
+  const {loginWithPopup} = useAuth0()
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -33,7 +33,7 @@ export default function LoginMenu() {
   }
 
   const handleLogin = async () => {
-    await loginWithRedirect({
+    await loginWithPopup({
       appState: {
         returnTo: window.location.pathname,
       },
