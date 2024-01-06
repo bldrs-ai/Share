@@ -4,9 +4,13 @@ import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
+import CardActions from '@mui/material/CardActions'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
+import Menu from '@mui/material/Menu'
+import Typography from '@mui/material/Typography'
+import MenuItem from '@mui/material/MenuItem'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -26,6 +30,7 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import {NOTE_PREFIX} from './Notes'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
@@ -64,6 +69,7 @@ export default function NoteCard({
 }) {
   assertDefined(body, id, index)
   const [expandText, setExpandText] = useState(false)
+  const [anchorEl, setAnchorEl] = useState(null)
   // eslint-disable-next-line no-unused-vars
   const [expandImage, setExpandImage] = useState(expandedImage)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
@@ -91,6 +97,7 @@ export default function NoteCard({
       })
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const isMobile = useIsMobile()
+  const open = Boolean(anchorEl)
 
 
   useEffect(() => {
@@ -183,6 +190,14 @@ export default function NoteCard({
     toggleSynchSidebar()
   }
 
+  const handleClose = () => {
+    setAnchorEl(null)
+  }
+
+  const handleClick = (event) => {
+    setAnchorEl(event.currentTarget)
+  }
+
 
   const dateParts = date.split('T')
   const theme = useTheme()
@@ -200,32 +215,71 @@ export default function NoteCard({
         />
       }
       {!isComment &&
+        <CardHeader
+          title={title}
+          avatar={<Avatar alt={username} src={avatarUrl}/>}
+          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+          action={
+            <>
+              <TooltipIconButton
+                title={'Menu'}
+                placement='left'
+                icon={<MoreVertIcon className='icon-share' color='secondary'/>}
+                onClick={handleClick}
+                // selected={anchorEl !== null}
+              />
+              <Menu
+                elevation={1}
+                id='basic-menu'
+                anchorEl={anchorEl}
+                open={open}
+                onClose={handleClose}
+                anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+                transformOrigin={{vertical: 'top', horizontal: 'center'}}
+                PaperProps={{
+                  style: {
+                    left: '200px',
+                    transform: 'translateX(-70px) translateY(0px)',
+                  },
+                  sx: {
+                    'color': theme.palette.primary.contrastText,
+                    '& .Mui-selected': {
+                      color: theme.palette.secondary.main,
+                      fontWeight: 800,
+                    },
+                  },
+                }}
+              >
+                <MenuItem onClick={handleClose}>
+                  <Typography variant='overline'>Edit</Typography>
+                </MenuItem>
+                <MenuItem onClick={handleClose}>
+                  <Typography variant='overline'>Delete</Typography>
+                </MenuItem>
+              </Menu>
+            </>
+          }
+          sx={{
+            backgroundColor: theme.palette.scene.background,
+          }}
+        />
+      }
       <CardActionArea
         sx={{cursor: 'pointer'}}
         onClick={() => selectCard()}
         onKeyPress={() => selectCard()}
         data-testid="selectionContainer"
       >
-        <CardHeader
-          title={title}
-          avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+        <CardContent
           sx={{
-            backgroundColor: theme.palette.scene.background,
+            'padding': '0px 20px',
+            '& img': {
+              width: '100%',
+            },
           }}
-        />
-      </CardActionArea>
-      }
-      <CardContent
-        sx={{
-          'padding': '0px 20px',
-          '& img': {
-            width: '100%',
-          },
-        }}
-      >
-        <ReactMarkdown>{body}</ReactMarkdown>
-        {textOverflow &&
+        >
+          <ReactMarkdown>{body}</ReactMarkdown>
+          {textOverflow &&
           <ShowMore
             expandText={expandText}
             onClick={(event) => {
@@ -233,8 +287,9 @@ export default function NoteCard({
               setExpandText(!expandText)
             }}
           />
-        }
-      </CardContent>
+          }
+        </CardContent>
+      </CardActionArea>
       {(embeddedCameraParams || numberOfComments > 0) &&
         <CardFooter
           id={id}
@@ -313,24 +368,8 @@ const CardFooter = ({
 
 
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '0px 5px 0px 14px',
-        height: '50px',
-      }}
-    >
-      <Box sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-      }}
-      >
-        {hasCameras &&
+    <CardActions disableSpacing>
+      {hasCameras &&
           <TooltipIconButton
             title='Show the camera view'
             size='small'
@@ -339,7 +378,7 @@ const CardFooter = ({
             icon={<CameraIcon className='icon-share'/>}
             aboutInfo={false}
           />}
-        {selected &&
+      {selected &&
           <TooltipIconButton
             title='Share'
             size='small'
@@ -350,9 +389,9 @@ const CardFooter = ({
             }}
             icon={<ShareIcon className='icon-share'/>}
           />
-        }
-        {
-          !isComment && selected && synched && existPlaceMarkInFeature &&
+      }
+      {
+        !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
@@ -370,87 +409,77 @@ const CardFooter = ({
               icon={<PlaceMarkIcon className='icon-share'/>}
             />
           </Box>
-        }
-      </Box>
+      }
+      {!isComment && synched && user && user.nickname === username &&
+        <TooltipIconButton
+          title='Delete note'
+          size='small'
+          placement='bottom'
+          onClick={async () => {
+            await deleteNote(repository, accessToken, noteNumber)
+          }}
+          icon={<DeleteIcon className='icon-share'/>}
+        />
+      }
+      {isComment && synched && user && user.nickname === username &&
+        <TooltipIconButton
+          title='Delete comment'
+          size='small'
+          placement='bottom'
+          onClick={async () => {
+            await removeComment(repository, accessToken, id)
+          }}
+          icon={<DeleteIcon className='icon-share'/>}
+        />
+      }
+      {!synched &&
+        <TooltipIconButton
+          title='Synch to GitHub'
+          size='small'
+          placement='bottom'
+          onClick={() => toggleSynchSidebar()}
+          icon={<SynchIcon className='icon-share'/>}
+        />
+      }
+      {isScreenshotEnabled && screenshotUri &&
+       <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
+      }
+      {isScreenshotEnabled &&
+        <TooltipIconButton
+          title='Take Screenshot'
+          size='small'
+          placement='bottom'
+          onClick={() => {
+            setScreenshotUri(viewer.takeScreenshot())
+          }}
+          icon={<PhotoCameraIcon className='icon-share'/>}
+        />
+      }
+      {numberOfComments > 0 &&
       <Box
         sx={{
+          width: '20px',
+          height: '20px',
+          borderRadius: '50%',
+          marginLeft: 'auto',
+          backgroundColor: theme.palette.primary.main,
           display: 'flex',
           flexDirection: 'row',
           justifyContent: 'center',
           alignItems: 'center',
-          marginRight: '4px',
+          fontSize: '12px',
+          color: theme.palette.primary.contrastText,
+          cursor: 'pointer',
         }}
+        role='button'
+        tabIndex={0}
+        onClick={selectCard}
+        onKeyPress={selectCard}
       >
-        {!isComment && synched && user && user.nickname === username &&
-          <TooltipIconButton
-            title='Delete note'
-            size='small'
-            placement='bottom'
-            onClick={async () => {
-              await deleteNote(repository, accessToken, noteNumber)
-            }}
-            icon={<DeleteIcon className='icon-share'/>}
-          />
-        }
-        {isComment && synched && user && user.nickname === username &&
-          <TooltipIconButton
-            title='Delete comment'
-            size='small'
-            placement='bottom'
-            onClick={async () => {
-              await removeComment(repository, accessToken, id)
-            }}
-            icon={<DeleteIcon className='icon-share'/>}
-          />
-        }
-        {!synched &&
-          <TooltipIconButton
-            title='Synch to GitHub'
-            size='small'
-            placement='bottom'
-            onClick={() => toggleSynchSidebar()}
-            icon={<SynchIcon className='icon-share'/>}
-          />
-        }
-        {isScreenshotEnabled && screenshotUri &&
-         <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
-        }
-        {isScreenshotEnabled &&
-          <TooltipIconButton
-            title='Take Screenshot'
-            size='small'
-            placement='bottom'
-            onClick={() => {
-              setScreenshotUri(viewer.takeScreenshot())
-            }}
-            icon={<PhotoCameraIcon className='icon-share'/>}
-          />
-        }
-        {numberOfComments > 0 &&
-          <Box
-            sx={{
-              width: '20px',
-              height: '20px',
-              marginLeft: '4px',
-              borderRadius: '50%',
-              backgroundColor: theme.palette.primary.main,
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'center',
-              alignItems: 'center',
-              fontSize: '12px',
-              color: theme.palette.primary.contrastText,
-              cursor: 'pointer',
-            }}
-            role='button'
-            tabIndex={0}
-            onClick={selectCard}
-            onKeyPress={selectCard}
-          >
-            {numberOfComments}
-          </Box>
-        }
+        {numberOfComments}
       </Box>
-    </Box>
+
+      }
+    </CardActions>
   )
 }
