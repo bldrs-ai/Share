@@ -84,13 +84,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
+  const [selectedFolderName, setSelectedFolderName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
+  const [foldersArr, setFoldersArr] = useState([''])
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
+  const folderName = foldersArr[selectedFolderName]
   const fileName = filesArr[selectedFileName]
 
   const saveFile = () => {
@@ -111,12 +114,20 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   }
 
   const selectRepo = async (repo) => {
-    setSelectedRepoName(repo)
-    const owner = orgNamesArr[selectedOrgName]
-    const files = await getFiles(repoNamesArr[repo], owner, accessToken)
-    const fileNames = Object.keys(files).map((key) => files[key].name)
-    setFilesArr(fileNames)
+    setSelectedRepoName(repo);
+    const owner = orgNamesArr[selectedOrgName];
+    const { files, directories } = await getFiles(repoNamesArr[repo], owner, '', accessToken);
+  
+    console.log("Files:", files);
+    console.log("Directories:", directories);
+  
+    const fileNames = files.map(file => file.name);
+    const directoryNames = directories.map(directory => directory.name);
+  
+    setFilesArr(fileNames);
+    setFoldersArr(['/', ...directoryNames]); // Prepending '/' to the folders array
   }
+  
 
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
@@ -148,6 +159,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
             <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
+            <Selector label={'Folder'} list={foldersArr} selected={selectedFolderName} setSelected={setSelectedFolderName} testId={'Folder'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
             {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
