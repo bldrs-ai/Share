@@ -31,6 +31,8 @@ import {useExistInFeature} from '../../hooks/useExistInFeature'
 import {NOTE_PREFIX} from './Notes'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
@@ -251,10 +253,12 @@ export default function NoteCard({
                 }}
               >
                 <MenuItem onClick={handleClose}>
-                  <Typography variant='overline'>Edit</Typography>
+                  <EditOutlinedIcon/>
+                  <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
                 </MenuItem>
                 <MenuItem onClick={handleClose}>
-                  <Typography variant='overline'>Delete</Typography>
+                  <DeleteOutlineOutlinedIcon/>
+                  <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
                 </MenuItem>
               </Menu>
             </>
