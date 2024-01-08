@@ -74,7 +74,7 @@ describe('NoteCard', () => {
     const username = 'testing'
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
-    const {getByTitle} = render(
+    const {getByTitle, getByText} = render(
         <ShareMock>
           <NoteCard
             id={id}
@@ -83,7 +83,10 @@ describe('NoteCard', () => {
             synched={true}
           />
         </ShareMock>)
-    expect(getByTitle('Delete note')).toBeInTheDocument()
+    expect(getByTitle('Note Actions')).toBeInTheDocument()
+    const noteActionsMenu = getByTitle('Note Actions')
+    fireEvent.click(noteActionsMenu)
+    expect(getByText('Delete')).toBeInTheDocument()
   })
 
   it('Delete is working', async () => {
@@ -101,7 +104,7 @@ describe('NoteCard', () => {
     await act(() => {
       result.current.setNotes(MOCK_NOTES)
     })
-    const {getByTitle} = render(
+    const {getByTitle, getByText} = render(
         <ShareMock>
           <NoteCard
             id={id}
@@ -114,7 +117,10 @@ describe('NoteCard', () => {
             synchedNote={synchedNote}
           />
         </ShareMock>)
-    const deleteButton = getByTitle('Delete note')
+    expect(getByTitle('Note Actions')).toBeInTheDocument()
+    const noteActionsMenu = getByTitle('Note Actions')
+    fireEvent.click(noteActionsMenu)
+    const deleteButton = getByText('Delete')
     expect(deleteButton).toBeInTheDocument()
     const res = fireEvent.click(deleteButton)
     expect(res).toBe(true)

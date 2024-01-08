@@ -30,7 +30,7 @@ export function getComponentOverrides(palette, typography) {
           style: {
             width: '180px',
             height: '40px',
-            borderRadius: '20px',
+            borderRadius: '10px',
             border: 'none',
             backgroundColor: palette.primary.main,
             color: 'white',

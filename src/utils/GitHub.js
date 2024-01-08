@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
@@ -52,6 +53,25 @@ export async function getIssue(repository, issueNumber, accessToken) {
   const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
   debug().log('GitHub#getIssue: issue: ', issue)
   return issue
+}
+
+
+/**
+ * @param {object} repository
+ * @param {object} issueNumber
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} result
+ */
+export async function updateIssue(repository, issueNumber, body, title, accessToken) {
+  const args = {
+    issue_number: issueNumber,
+    body,
+    title,
+  }
+  console.log('repository', repository)
+  const res = await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
+  debug().log('GitHub#closeIssue: res: ', res)
+  return res
 }
 
 
@@ -396,13 +416,14 @@ async function deleteGitHub(repository, path, args = {}, accessToken = '') {
 async function patchGitHub(repository, path, args = {}, accessToken = '') {
   assertDefined(repository.orgName, repository.name)
   if (accessToken) {
+    console.log('accessToken from if: ', accessToken)
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
     }
   }
   debug().log('Dispatching GitHub request for repo:', repository)
-  const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
+  const res = await octokit.request(`PATCH /repos/${repository.orgName}/${repository.name}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
