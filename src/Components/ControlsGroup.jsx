@@ -6,6 +6,7 @@ import {TooltipIconButton} from './Buttons'
 import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
 import TreeIcon from '../assets/icons/Tree.svg'
+import SaveModelControl from './SaveModelControl'
 
 
 /**
@@ -15,7 +16,7 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({fileOpen, repo}) {
+export default function OperationsGroup({fileOpen, fileSave, repo}) {
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
   const isSearchVisible = useStore((state) => state.isSearchVisible)
@@ -55,6 +56,7 @@ export default function OperationsGroup({fileOpen, repo}) {
           }
         }}
       />
+      <SaveModelControl fileSave={fileSave}/>
       {repo !== undefined &&
         <TooltipIconButton
           title='Project History'
