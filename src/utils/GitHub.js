@@ -261,6 +261,39 @@ export async function getFiles(repo, owner, accessToken = '') {
   return res.data
 }
 
+/**
+ * Retrieves files and folders associated with a repository
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {
+
+
+  const res = await octokit.request('/repos/{owner}/{repo}/contents/{path}', {
+    owner,
+    repo,
+    path: (subfolder === '') ? null : subfolder, // Add the subfolder path here
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  const files = [];
+  const directories = [];
+
+  res.data.forEach(item => {
+    if (item.type === 'file') {
+      files.push(item);
+    } else if (item.type === 'dir') {
+      directories.push(item);
+    }
+  });
+
+  return { files, directories };
+}
+
+
 
 /**
  * Parses a github repository url and returns a structure

@@ -11,9 +11,10 @@ import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
+import SelectorSeparator from './SelectorSeparator'
 import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
-import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories, getFilesAndFolders} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -84,17 +85,20 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
+  const [createFolderName, setCreateFolderName] = useState('')
+  const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
   const [foldersArr, setFoldersArr] = useState([''])
+  const [currentPath, setCurrentPath] = useState('')
   const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  const folderName = foldersArr[selectedFolderName]
   const fileName = filesArr[selectedFileName]
+  let createFolderSelected = false
 
   const saveFile = () => {
     fileSave()
@@ -111,12 +115,59 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     }
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
+    setFoldersArr(['/'])
+    //setSelectedFolderName('test')
   }
 
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo);
+    //setSelectedFolderName(0); // This will set it to '/'
     const owner = orgNamesArr[selectedOrgName];
-    const { files, directories } = await getFiles(repoNamesArr[repo], owner, '', accessToken);
+    const { files, directories } = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken);
+  
+    const fileNames = files.map(file => file.name);
+    const directoryNames = directories.map(directory => directory.name);
+  
+    setFilesArr(fileNames);
+    const foldersArrWithSeparator = [
+      ...directoryNames, // All the folders
+      { isSeparator: true }, // Separator item
+      "Create a folder"
+    ];
+
+    setFoldersArr([...foldersArrWithSeparator]);
+  }
+
+  const selectFolder = async (folderIndex) => {
+    const owner = orgNamesArr[selectedOrgName];
+  
+    // Get the selected folder name using the index
+    const selectedFolderName_ = foldersArr[folderIndex];
+  
+    let newPath;
+    if (selectedFolderName_ === '[Parent Directory]') {
+      // Move one directory up
+      const pathSegments = currentPath.split('/').filter(Boolean);
+      pathSegments.pop();
+      newPath = pathSegments.join('/');
+      
+      setRequestCreateFolder(false)
+    } else if (selectedFolderName_ === 'Create a folder') {
+      newPath = currentPath
+      setRequestCreateFolder(true)
+    }
+    else {
+      // Navigate into a subfolder or stay at the root
+      newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/');
+      
+      setRequestCreateFolder(false)
+    }
+
+    setSelectedFolderName('none');
+  
+    setCurrentPath(newPath);
+  
+    const { files, directories } = await getFilesAndFolders(repoName, owner, newPath, accessToken);
   
     console.log("Files:", files);
     console.log("Directories:", directories);
@@ -124,10 +175,18 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     const fileNames = files.map(file => file.name);
     const directoryNames = directories.map(directory => directory.name);
   
+    // Adjust navigation options based on the current level
+    let navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames];
+    
     setFilesArr(fileNames);
-    setFoldersArr(['/', ...directoryNames]); // Prepending '/' to the folders array
+    const foldersArrWithSeparator = [
+      ...navigationOptions, // All the folders
+      { isSeparator: true }, // Separator item
+      "Create a folder"
+    ];
+
+    setFoldersArr(foldersArrWithSeparator);
   }
-  
 
   const navigateToFile = () => {
     if (filesArr[selectedFileName].includes('.ifc')) {
@@ -153,14 +212,34 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
           alignItems="center"
           sx={{paddingTop: '6px', width: '280px'}}
         >
-          <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
           {isAuthenticated ?
           <Stack>
             <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
-            <Selector label={'Folder'} list={foldersArr} selected={selectedFolderName} setSelected={setSelectedFolderName} testId={'Folder'}/>
-            <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
+            <SelectorSeparator label={(currentPath === "") ?  'Folder' : 'Folder: ' + currentPath} list={foldersArr} selected={selectedFolderName} setSelected={selectFolder} testId={'Folder'}/>
+            {requestCreateFolder && (
+            <TextField
+            sx={{
+              marginBottom: '.5em',
+            }}
+              label="Enter folder name"
+              variant='outlined'
+              size='small'
+              onChange={(e) => setCreateFolderName(e.target.value)}
+              data-testid="CreateFolderId"
+            />
+          )}
+          <TextField
+            sx={{
+              marginBottom: '.5em',
+            }}
+              label="Enter file name"
+              variant='outlined'
+              size='small'
+              onChange={(e) => setCreateFolderName(e.target.value)}
+              data-testid="CreateFileId"
+            />
             {selectedFileName !== '' &&
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton
@@ -190,80 +269,3 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     />
   )
 }
-
-
-/**
- * @property {Function} setIsDialogDisplayed callback
- * @return {React.ReactElement}
- */
-function SampleModelFileSelector({setIsDialogDisplayed}) {
-  const navigate = useNavigate()
-  const [selected, setSelected] = useState('')
-  const theme = useTheme()
-  const handleSelect = (e, closeDialog) => {
-    setSelected(e.target.value)
-    const modelPath = {
-      0: '/share/v/gh/bldrs-ai/test-models/main/ifc/Schependomlaan.ifc#c:60.45,-4.32,60.59,1.17,5.93,-3.77',
-      1: '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc#c:-38.64,12.52,35.4,-5.29,0.94,0.86',
-      2: '/share/v/gh/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc#c:80.66,11.66,-94.06,6.32,2.93,-8.72',
-      3: '/share/v/gh/Swiss-Property-AG/Eisvogel-Public/main/EISVOGEL.ifc#c:107.36,8.46,156.67,3.52,2.03,16.71',
-      4: '/share/v/gh/Swiss-Property-AG/Seestrasse-Public/main/SEESTRASSE.ifc#c:119.61,50.37,73.68,16.18,11.25,5.74',
-      // eslint-disable-next-line max-len
-      5: '/share/v/gh/sujal23ks/BCF/main/packages/fileimport-service/ifc/ifcs/171210AISC_Sculpture_brep.ifc/120010/120020/120023/4998/2867#c:-163.46,16.12,223.99,12.03,-28.04,-15.28',
-      6: '/share/v/gh/OlegMoshkovich/Logo/main/IFC_STUDY.ifc#c:220.607,-9.595,191.198,12.582,27.007,-21.842',
-    }
-    window.removeEventListener('beforeunload', handleBeforeUnload)
-    navigate({pathname: modelPath[e.target.value]})
-    closeDialog()
-  }
-
-  return (
-    <TextField
-      sx={{
-        'width': '260px',
-        '& .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiInputLabel-root': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-        '&:hover .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '&:hover .MuiInputLabel-root': {
-          color: theme.palette.secondary.main,
-        },
-        '&:hover .MuiOutlinedInput-root .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-input': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiInputLabel-root.Mui-focused': {
-          color: theme.palette.secondary.main,
-        },
-        '& .MuiOutlinedInput-root.Mui-focused .MuiOutlinedInput-notchedOutline': {
-          borderColor: theme.palette.secondary.main,
-        },
-      }}
-      value={selected}
-      onChange={(e) => handleSelect(e, () => setIsDialogDisplayed(false))}
-      variant='outlined'
-      label='Sample Projects'
-      select
-      size='small'
-    >
-      <MenuItem value={1}><Typography variant='p'>Momentum</Typography></MenuItem>
-      <MenuItem value={2}><Typography variant='p'>Schneestock</Typography></MenuItem>
-      <MenuItem value={3}><Typography variant='p'>Eisvogel</Typography></MenuItem>
-      <MenuItem value={4}><Typography variant='p'>Seestrasse</Typography></MenuItem>
-      <MenuItem value={0}><Typography variant='p'>Schependomlaan</Typography></MenuItem>
-      <MenuItem value={5}><Typography variant='p'>Structural Detail</Typography></MenuItem>
-      <MenuItem value={6}><Typography variant='p'>Bldrs plaza</Typography></MenuItem>
-    </TextField>
-  )
-}
-
