@@ -102,7 +102,7 @@ export default function NoteCardCreate({
               await createNote()
             }}
             sx={{marginLeft: 'auto'}}
-            icon={<CheckIcon style={{width: '15px', height: '15px'}}/>}
+            icon={<CheckIcon/>}
           />
         </Stack>
       </CardActions>
