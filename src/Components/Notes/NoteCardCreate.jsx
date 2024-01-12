@@ -2,12 +2,11 @@ import React, {useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import Card from '@mui/material/Card'
 import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
-import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
@@ -32,7 +31,6 @@ export default function NoteCardCreate({
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
-  const theme = useTheme()
 
 
   /**
@@ -51,14 +49,9 @@ export default function NoteCardCreate({
   }
 
   return (
-    <Paper
+    <Card
       elevation={1}
       variant='note'
-      square
-      sx={{
-        width: '100%',
-
-      }}
     >
       <CardHeader
         title={
@@ -76,9 +69,7 @@ export default function NoteCardCreate({
               src={user.picture}
             /> :
             <Avatar alt={username} src={avatarUrl}/>
-        } sx={{
-          backgroundColor: theme.palette.primary.main,
-        }}
+        }
       />
       <CardContent>
         <Box
@@ -106,7 +97,7 @@ export default function NoteCardCreate({
           icon={<Submit style={{width: '15px', height: '15px'}}/>}
         />
       </CardActions>
-    </Paper>
+    </Card>
   )
 }
 
