@@ -11,7 +11,7 @@ import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
-import Submit from '../../assets/icons/Submit.svg'
+import CheckIcon from '@mui/icons-material/Check'
 
 
 /**
@@ -102,7 +102,7 @@ export default function NoteCardCreate({
               await createNote()
             }}
             sx={{marginLeft: 'auto'}}
-            icon={<Submit style={{width: '15px', height: '15px'}}/>}
+            icon={<CheckIcon style={{width: '15px', height: '15px'}}/>}
           />
         </Stack>
       </CardActions>
