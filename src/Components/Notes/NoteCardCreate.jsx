@@ -7,6 +7,7 @@ import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
+import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
@@ -87,15 +88,23 @@ export default function NoteCardCreate({
         </Box>
       </CardContent>
       <CardActions>
-        <TooltipIconButton
-          title='Submit'
-          size='small'
-          placement='bottom'
-          onClick={async () => {
-            await createNote()
-          }}
-          icon={<Submit style={{width: '15px', height: '15px'}}/>}
-        />
+        <Stack
+          justifyContent='flex-end'
+          alignContent='flex-end'
+          direction='row'
+          sx={{width: '100%'}}
+        >
+          <TooltipIconButton
+            title='Submit'
+            size='small'
+            placement='bottom'
+            onClick={async () => {
+              await createNote()
+            }}
+            sx={{marginLeft: 'auto'}}
+            icon={<Submit style={{width: '15px', height: '15px'}}/>}
+          />
+        </Stack>
       </CardActions>
     </Card>
   )
