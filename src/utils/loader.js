@@ -1,5 +1,7 @@
 import debug from '../utils/debug'
-import {assertDefined} from '../utils/assert'
+import { assertDefined } from '../utils/assert'
+// In your non-React JS file
+import { initializeWorker, opfsWriteFile, onWorkerMessage, terminateWorker, opfsWrite } from '../OPFS/OPFSService.js';
 
 
 /**
@@ -14,22 +16,38 @@ export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, testingSk
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
   fileInput.setAttribute('type', 'file')
+  const workerRef = initializeWorker();
   fileInput.addEventListener(
-      'change',
-      (event) => {
-        debug().log('loader#loadLocalFile#event:', event)
-        let tmpUrl = URL.createObjectURL(event.target.files[0])
-        debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-        const parts = tmpUrl.split('/')
-        tmpUrl = parts[parts.length - 1]
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        // TODO(pablo): detect content and set appropriate suffix.
-        // Alternatively, leave it without suffix, but this also
-        // triggers downstream handling issues.
-        navigate(`${appPrefix}/v/new/${tmpUrl}.ifc`)
-      },
-      false,
+    'change',
+    (event) => {
+      debug().log('loader#loadLocalFile#event:', event)
+      let tmpUrl = URL.createObjectURL(event.target.files[0])
+      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+      // Post message to the worker to handle the file
+      const parts = tmpUrl.split('/')
+      const fileNametmpUrl = parts[parts.length - 1]
+      opfsWriteFile(tmpUrl, fileNametmpUrl)
+
+      // Listener for messages from the worker
+      workerRef.addEventListener('message', (event) => {
+        if (event.data.error) {
+          console.error('Error from worker:', event.data.error);
+        } else {
+
+          if (event.data.completed) {
+            console.log('Worker finished processing file');
+
+            // Perform the navigation logic after the worker is done
+            const fileName = event.data.fileName;
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+            navigate(`${appPrefix}/v/new/${fileName}.ifc`);
+          }
+        }
+      });
+    },
+    false,
   )
+
   viewerContainer.appendChild(fileInput)
   fileInput.click()
   if (!testingSkipAutoRemove) {

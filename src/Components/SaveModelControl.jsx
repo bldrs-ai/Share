@@ -20,6 +20,8 @@ import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import SaveHeaderIcon from '../assets/icons/SaveGraphic.svg'
 import SaveIcon from '@mui/icons-material/Save'
+import IconButton from '@mui/material/IconButton'
+import ClearIcon from '@mui/icons-material/Clear'
 
 
 /**
@@ -219,16 +221,22 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <SelectorSeparator label={(currentPath === "") ?  'Folder' : 'Folder: ' + currentPath} list={foldersArr} selected={selectedFolderName} setSelected={selectFolder} testId={'Folder'}/>
             {requestCreateFolder && (
-            <TextField
-            sx={{
-              marginBottom: '.5em',
-            }}
-              label="Enter folder name"
-              variant='outlined'
-              size='small'
-              onChange={(e) => setCreateFolderName(e.target.value)}
-              data-testid="CreateFolderId"
-            />
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '.5em' }}>
+              <TextField
+                label="Enter folder name"
+                variant='outlined'
+                size='small'
+                onChange={(e) => setCreateFolderName(e.target.value)}
+                data-testid="CreateFolderId"
+                sx={{ flexGrow: 1 }}
+              />
+              <IconButton
+                onClick={() => setRequestCreateFolder(false)}
+                size="small"
+              >
+                <ClearIcon />
+              </IconButton>
+            </div>
           )}
           <TextField
             sx={{
