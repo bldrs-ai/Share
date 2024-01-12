@@ -219,6 +219,8 @@ export default function NoteCard({
       <CardContent
         sx={{
           'padding': '0px 20px',
+          'width': '100%',
+          'wordWrap': 'break-word',
           '& img': {
             width: '100%',
           },

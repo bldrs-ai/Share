@@ -56,12 +56,14 @@ export default function NoteCardCreate({
     >
       <CardHeader
         title={
-          <InputField
+          <InputBase
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            fullWidth
+            multiline
             placeholder={'Note Title'}
-            inputText={title}
-            setInputText={setTitle}
-            multiline={false}
-            maxLength={256}
+            inputProps={{maxLength: 256}}
+            fullWidths
           />}
         avatar={
           isAuthenticated ?
@@ -78,12 +80,14 @@ export default function NoteCardCreate({
             margin: '10px 0px',
           }}
         >
-          <InputField
+          <InputBase
+            value={body}
+            onChange={(event) => setBody(event.target.value)}
+            fullWidth
+            multiline
             placeholder={'Note Body'}
-            inputText={body}
-            setInputText={setBody}
-            multiline={true}
-            maxLength={65000}
+            inputProps={{maxLength: 256}}
+            fullWidths
           />
         </Box>
       </CardContent>
@@ -107,35 +111,5 @@ export default function NoteCardCreate({
         </Stack>
       </CardActions>
     </Card>
-  )
-}
-
-
-/**
- * Input
- *
- * @property {string} placeholder input placeholder
- * @property {string} inputText tring to display as input
- * @property {string} setInputText function to save the current input string
- * @property {boolean} multiline is multiline input allowed
- * @property {number} maxLength maximum length of the input string
- * @return {React.Component} React component
- */
-function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
-  return (
-    <InputBase
-      value={inputText}
-      onChange={(event) => setInputText(event.target.value)}
-      error={true}
-      placeholder={placeholder}
-      fullWidth
-      multiline={multiline}
-      inputProps={{maxLength: maxLength}}
-      sx={{
-        '& input::placeholder': {
-          opacity: .3,
-        },
-      }}
-    />
   )
 }
