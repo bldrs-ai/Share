@@ -1,7 +1,6 @@
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import List from '@mui/material/List'
-import Stack from '@mui/material/Stack'
 import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
@@ -132,7 +131,6 @@ export default function Notes() {
 
 
   return hasError ? <ApplicationError/> : (
-    <Stack justifyContent={'center'} alignItems={'center'}>
       <List
         spacing={1}
         sx={isMobile ? {paddingBottom: '100px'} : {}}
@@ -194,6 +192,5 @@ export default function Notes() {
           </>
         }
       </List>
-    </Stack>
   )
 }
