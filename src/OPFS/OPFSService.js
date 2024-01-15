@@ -1,43 +1,42 @@
 import debug from '../utils/debug'
+
 // OPFSService.js
-let workerRef = null;
+let workerRef = null
 
 export const initializeWorker = () => {
-    if (workerRef === null) {
-        workerRef = workerRef = new Worker('/OPFS.Worker.js');
-    }
+  if (workerRef === null) {
+    workerRef = workerRef = new Worker('/OPFS.Worker.js')
+  }
 
-    debug()
-
-    return workerRef
-};
+  return workerRef
+}
 
 export const terminateWorker = () => {
-    if (workerRef) {
-        workerRef.terminate();
-        workerRef = null;
-    }
-};
+  if (workerRef) {
+    workerRef.terminate()
+    workerRef = null
+  }
+}
 
-export const opfsWriteFile = async (objectUrl, fileName) => {
-    if (!workerRef) {
-        console.error("Worker not initialized");
-        return;
-    }
-    workerRef.postMessage({ command: 'writeObjectURLToFile', objectUrl: objectUrl, fileName: fileName});
-};
+export const opfsWriteFile = (objectUrl, fileName) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({command: 'writeObjectURLToFile', objectUrl: objectUrl, fileName: fileName})
+}
 
-export const opfsReadFile = async (fileName) => {
-    if (!workerRef) {
-        console.error("Worker not initialized");
-        return;
-    }
+export const opfsReadFile = (fileName) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
 
-    workerRef.postMessage({command: 'readObjectFromStorage', fileName: fileName})
+  workerRef.postMessage({command: 'readObjectFromStorage', fileName: fileName})
 }
 
 export const onWorkerMessage = (callback) => {
-    if (workerRef) {
-        workerRef.onmessage = callback;
-    }
-};
+  if (workerRef) {
+    workerRef.onmessage = callback
+  }
+}

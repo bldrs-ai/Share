@@ -268,8 +268,6 @@ export async function getFiles(repo, owner, accessToken = '') {
  * @return {Promise} the list of organization
  */
 export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {
-
-
   const res = await octokit.request('/repos/{owner}/{repo}/contents/{path}', {
     owner,
     repo,
@@ -277,22 +275,21 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
     headers: {
       authorization: `Bearer ${accessToken}`,
     },
-  });
+  })
 
-  const files = [];
-  const directories = [];
+  const files = []
+  const directories = []
 
-  res.data.forEach(item => {
+  res.data.forEach((item) => {
     if (item.type === 'file') {
-      files.push(item);
+      files.push(item)
     } else if (item.type === 'dir') {
-      directories.push(item);
+      directories.push(item)
     }
-  });
+  })
 
-  return { files, directories };
+  return {files, directories}
 }
-
 
 
 /**

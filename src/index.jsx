@@ -39,15 +39,6 @@ Sentry.init({
   ],
 })
 
-console.log("process.env.DISABLE_MOCK_SERVICE_WORKER: " + process.env.DISABLE_MOCK_SERVICE_WORKER)
-console.log("process.env.OAUTH2_CLIENT_ID: " + process.env.OAUTH2_CLIENT_ID)
-console.log("process.env.OAUTH2_REDIRECT_URI: " + process.env.OAUTH2_REDIRECT_URI)
-console.log("process.env.AUTH0_DOMAIN: " + process.env.AUTH0_DOMAIN)
-console.log("process.env.GITHUB_API_TOKEN: " + process.env.GITHUB_API_TOKEN)
-console.log("process.env.GITHUB_BASE_URL: " + process.env.GITHUB_BASE_URL)
-console.log("process.env.RAW_GIT_PROXY_URL: " + process.env.RAW_GIT_PROXY_URL)
-console.log("process.env.USE_WEBIFC_SHIM: " + process.env.USE_WEBIFC_SHIM)
-console.log("window.location.origin: " +  window.location.origin)
 if (process.env.DISABLE_MOCK_SERVICE_WORKER !== true) {
   const {worker} = require('./__mocks__/browser')
   worker.start({

@@ -2,19 +2,16 @@ import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
-import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import useStore from '../store/useStore'
-import {handleBeforeUnload} from '../utils/event'
-import {getOrganizations, getRepositories, getFiles, getUserRepositories, getFilesAndFolders} from '../utils/GitHub'
+import {getOrganizations, getRepositories, getUserRepositories, getFilesAndFolders} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -86,7 +83,9 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
+  // eslint-disable-next-line no-unused-vars
   const [selectedFileName, setSelectedFileName] = useState('')
+  // eslint-disable-next-line no-unused-vars
   const [createFolderName, setCreateFolderName] = useState('')
   const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
@@ -100,7 +99,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
-  let createFolderSelected = false
 
   const saveFile = () => {
     fileSave()
@@ -118,76 +116,72 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
     setFoldersArr(['/'])
-    //setSelectedFolderName('test')
+    // setSelectedFolderName('test')
   }
 
   const selectRepo = async (repo) => {
-    setSelectedRepoName(repo);
-    //setSelectedFolderName(0); // This will set it to '/'
-    const owner = orgNamesArr[selectedOrgName];
-    const { files, directories } = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken);
-  
-    const fileNames = files.map(file => file.name);
-    const directoryNames = directories.map(directory => directory.name);
-  
-    setFilesArr(fileNames);
+    setSelectedRepoName(repo)
+    // setSelectedFolderName(0); // This will set it to '/'
+    const owner = orgNamesArr[selectedOrgName]
+    const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
+
+    const fileNames = files.map((file) => file.name)
+    const directoryNames = directories.map((directory) => directory.name)
+
+    setFilesArr(fileNames)
     const foldersArrWithSeparator = [
       ...directoryNames, // All the folders
-      { isSeparator: true }, // Separator item
-      "Create a folder"
-    ];
+      {isSeparator: true}, // Separator item
+      'Create a folder',
+    ]
 
-    setFoldersArr([...foldersArrWithSeparator]);
+    setFoldersArr([...foldersArrWithSeparator])
   }
 
   const selectFolder = async (folderIndex) => {
-    const owner = orgNamesArr[selectedOrgName];
-  
+    const owner = orgNamesArr[selectedOrgName]
+
     // Get the selected folder name using the index
-    const selectedFolderName_ = foldersArr[folderIndex];
-  
-    let newPath;
+    const selectedFolderName_ = foldersArr[folderIndex]
+
+    let newPath
     if (selectedFolderName_ === '[Parent Directory]') {
       // Move one directory up
-      const pathSegments = currentPath.split('/').filter(Boolean);
-      pathSegments.pop();
-      newPath = pathSegments.join('/');
-      
+      const pathSegments = currentPath.split('/').filter(Boolean)
+      pathSegments.pop()
+      newPath = pathSegments.join('/')
+
       setRequestCreateFolder(false)
     } else if (selectedFolderName_ === 'Create a folder') {
       newPath = currentPath
       setRequestCreateFolder(true)
-    }
-    else {
+    } else {
       // Navigate into a subfolder or stay at the root
-      newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/');
-      
+      newPath = selectedFolderName_ === '/' ? '' : `${currentPath}/${selectedFolderName_}`.replace('//', '/')
+
       setRequestCreateFolder(false)
     }
 
-    setSelectedFolderName('none');
-  
-    setCurrentPath(newPath);
-  
-    const { files, directories } = await getFilesAndFolders(repoName, owner, newPath, accessToken);
-  
-    console.log("Files:", files);
-    console.log("Directories:", directories);
-  
-    const fileNames = files.map(file => file.name);
-    const directoryNames = directories.map(directory => directory.name);
-  
+    setSelectedFolderName('none')
+
+    setCurrentPath(newPath)
+
+    const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
+
+    const fileNames = files.map((file) => file.name)
+    const directoryNames = directories.map((directory) => directory.name)
+
     // Adjust navigation options based on the current level
-    let navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames];
-    
-    setFilesArr(fileNames);
+    const navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
+
+    setFilesArr(fileNames)
     const foldersArrWithSeparator = [
       ...navigationOptions, // All the folders
-      { isSeparator: true }, // Separator item
-      "Create a folder"
-    ];
+      {isSeparator: true}, // Separator item
+      'Create a folder',
+    ]
 
-    setFoldersArr(foldersArrWithSeparator);
+    setFoldersArr(foldersArrWithSeparator)
   }
 
   const navigateToFile = () => {
@@ -219,29 +213,32 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
             <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
-            <SelectorSeparator label={(currentPath === "") ?  'Folder' : 'Folder: ' + currentPath} list={foldersArr} selected={selectedFolderName} setSelected={selectFolder} testId={'Folder'}/>
+            <SelectorSeparator label={(currentPath === '') ? 'Folder' :
+            `Folder: ${ currentPath}`} list={foldersArr} selected={selectedFolderName}
+            setSelected={selectFolder} testId={'Folder'}
+            />
             {requestCreateFolder && (
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: '.5em' }}>
-              <TextField
-                label="Enter folder name"
-                variant='outlined'
-                size='small'
-                onChange={(e) => setCreateFolderName(e.target.value)}
-                data-testid="CreateFolderId"
-                sx={{ flexGrow: 1 }}
-              />
-              <IconButton
-                onClick={() => setRequestCreateFolder(false)}
-                size="small"
-              >
-                <ClearIcon />
-              </IconButton>
-            </div>
-          )}
-          <TextField
-            sx={{
-              marginBottom: '.5em',
-            }}
+              <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                <TextField
+                  label="Enter folder name"
+                  variant='outlined'
+                  size='small'
+                  onChange={(e) => setCreateFolderName(e.target.value)}
+                  data-testid="CreateFolderId"
+                  sx={{flexGrow: 1}}
+                />
+                <IconButton
+                  onClick={() => setRequestCreateFolder(false)}
+                  size="small"
+                >
+                  <ClearIcon/>
+                </IconButton>
+              </div>
+            )}
+            <TextField
+              sx={{
+                marginBottom: '.5em',
+              }}
               label="Enter file name"
               variant='outlined'
               size='small'
