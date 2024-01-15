@@ -51,6 +51,7 @@ export default function CadView({
   appPrefix,
   pathPrefix,
   modelPath,
+  jestTestingDisableWebWorker = false,
 }) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
@@ -300,7 +301,7 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
-    if (uploadedFile) {
+    if (uploadedFile && !jestTestingDisableWebWorker) {
       const file = await getFileFromOPFS(filepath)
 
       loadedModel = await viewer.loadIfc(
@@ -668,10 +669,22 @@ export default function CadView({
           },
         }}
         >
-          <ControlsGroup fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)} repo={modelPath.repo}/>
+          <ControlsGroup fileOpen={() => loadLocalFile(
+              navigate,
+              appPrefix,
+              handleBeforeUnload,
+              false,
+              jestTestingDisableWebWorker)} repo={modelPath.repo}
+          />
           {isSearchBarVisible && isSearchVisible &&
             <Box sx={{marginTop: '10px', width: '100%'}}>
-              <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
+              <SearchBar fileOpen={() => loadLocalFile(
+                  navigate,
+                  appPrefix,
+                  handleBeforeUnload,
+                  false,
+                  jestTestingDisableWebWorker)}
+              />
             </Box>
           }
           <Box sx={{marginTop: '10px', width: '100%'}}>

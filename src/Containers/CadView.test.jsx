@@ -55,6 +55,7 @@ describe('CadView', () => {
             appPrefix={''}
             pathPrefix={''}
             modelPath={result.current[0]}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -82,6 +83,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={result.current[0]}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
@@ -112,6 +114,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
@@ -151,6 +154,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
@@ -182,6 +186,7 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix='/v/new'
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -195,6 +200,7 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix=''
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -226,6 +232,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -259,6 +266,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
@@ -289,6 +297,7 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
+            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()

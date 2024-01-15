@@ -10,12 +10,20 @@ import {initializeWorker, opfsReadFile, opfsWriteFile} from '../OPFS/OPFSService
  * @param {string} appPrefix
  * @param {Function} handleBeforeUnload
  */
-export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, testingSkipAutoRemove = false) {
+export function loadLocalFile(
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    testingSkipAutoRemove = false,
+    testingDisableWebWorker = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
   fileInput.setAttribute('type', 'file')
-  const workerRef = initializeWorker()
+  let workerRef = null
+  if (!testingDisableWebWorker) {
+    workerRef = initializeWorker()
+  }
   fileInput.addEventListener(
       'change',
       (event) => {
@@ -25,28 +33,33 @@ export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, testingSk
         // Post message to the worker to handle the file
         const parts = tmpUrl.split('/')
         const fileNametmpUrl = parts[parts.length - 1]
-        opfsWriteFile(tmpUrl, fileNametmpUrl)
 
-        // Listener for messages from the worker
-        workerRef.addEventListener('message', (workerEvent) => {
-          if (workerEvent.data.error) {
-            debug().error('Error from worker:', workerEvent.data.error)
-          } else if (workerEvent.data.completed) {
-            if (workerEvent.data.event === 'write') {
-              debug().log('Worker finished writing file')
+        if (!testingDisableWebWorker) {
+          opfsWriteFile(tmpUrl, fileNametmpUrl)
+          // Listener for messages from the worker
+          workerRef.addEventListener('message', (workerEvent) => {
+            if (workerEvent.data.error) {
+              debug().error('Error from worker:', workerEvent.data.error)
+            } else if (workerEvent.data.completed) {
+              if (workerEvent.data.event === 'write') {
+                debug().log('Worker finished writing file')
 
-              // Perform the navigation logic after the worker is done
-              const fileName = workerEvent.data.fileName
-              window.removeEventListener('beforeunload', handleBeforeUnload)
-              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
-            } else if (workerEvent.data.event === 'read') {
-              debug().log('Worker finished reading file')
-              const fileName = workerEvent.data.file.name
-              window.removeEventListener('beforeunload', handleBeforeUnload)
-              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+                // Perform the navigation logic after the worker is done
+                const fileName = workerEvent.data.fileName
+                window.removeEventListener('beforeunload', handleBeforeUnload)
+                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+              } else if (workerEvent.data.event === 'read') {
+                debug().log('Worker finished reading file')
+                const fileName = workerEvent.data.file.name
+                window.removeEventListener('beforeunload', handleBeforeUnload)
+                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+              }
             }
-          }
-        })
+          })
+        } else {
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
+        }
       },
       false,
   )
