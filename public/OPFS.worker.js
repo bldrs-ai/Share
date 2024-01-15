@@ -121,14 +121,14 @@ self.addEventListener('message', async (event) => {
                     await accessHandle.close();
 
                     if (writeSize > 0) {
-                    console.log(`${fileName} written successfully.`);
+                        console.log(`${fileName} written successfully.`);
 
-                    self.postMessage({completed: true, fileName: fileName});
+                        self.postMessage({ completed: true, event:"write", fileName: fileName });
 
                     } else {
                         const workerMessage = "Error writing to file: " + fileName;
                         console.log(workerMessage);
-                        self.postMessage({error: workerMessage})
+                        self.postMessage({ error: workerMessage })
                     }
 
                 } catch (error) {
@@ -136,6 +136,38 @@ self.addEventListener('message', async (event) => {
                 }
             } catch (error) {
                 console.error("Error writing object URL to file:", error);
+            }
+        } else if (event.data.command === 'readObjectFromStorage') {
+            try {
+                const fileName = event.data.fileName;
+                const opfsRoot = await navigator.storage.getDirectory();
+
+                // Try to access an existing file
+                let existingFileHandle;
+                try {
+                    existingFileHandle = await opfsRoot.getFileHandle(fileName);
+                } catch (error) {
+                    const errorMessage = `File ${fileName} not found.`;
+                    console.log(errorMessage);
+                    self.postMessage({ error: errorMessage })
+                }
+
+                try {
+                    console.log(`Getting File handle from ${fileName}...`)
+
+                    const fileHandle = await existingFileHandle.getFile()
+
+                    self.postMessage({ completed: true, event:"read", file: fileHandle });
+
+                } catch (error) {
+                    const errorMessage = `Error retrieving File from ${fileName}: ${error}.`;
+                    console.log(errorMessage);
+                    self.postMessage({ error: errorMessage })
+                }
+            } catch (error) {
+                const errorMessage = `Error retrieving File from ${fileName}: ${error}.`;
+                console.log(errorMessage);
+                self.postMessage({ error: errorMessage })
             }
         }
     } catch (error) {

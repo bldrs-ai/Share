@@ -1,7 +1,6 @@
 import debug from '../utils/debug'
 import { assertDefined } from '../utils/assert'
-// In your non-React JS file
-import { initializeWorker, opfsWriteFile, onWorkerMessage, terminateWorker, opfsWrite } from '../OPFS/OPFSService.js';
+import { initializeWorker, opfsReadFile, onWorkerMessage, terminateWorker, opfsWrite, opfsWriteFile } from '../OPFS/OPFSService.js';
 
 
 /**
@@ -35,12 +34,21 @@ export function loadLocalFile(navigate, appPrefix, handleBeforeUnload, testingSk
         } else {
 
           if (event.data.completed) {
-            console.log('Worker finished processing file');
 
-            // Perform the navigation logic after the worker is done
-            const fileName = event.data.fileName;
-            window.removeEventListener('beforeunload', handleBeforeUnload);
-            navigate(`${appPrefix}/v/new/${fileName}.ifc`);
+            if (event.data.event === "write") {
+              console.log('Worker finished writing file');
+
+              // Perform the navigation logic after the worker is done
+              const fileName = event.data.fileName;
+              window.removeEventListener('beforeunload', handleBeforeUnload);
+              navigate(`${appPrefix}/v/new/${fileName}.ifc`);
+            } else if (event.data.event === "read") {
+              
+              console.log('Worker finished reading file'); 
+              const fileName = event.data.file.name;
+              window.removeEventListener('beforeunload', handleBeforeUnload);
+              navigate(`${appPrefix}/v/new/${fileName}.ifc`);
+            }
           }
         }
       });
@@ -71,3 +79,37 @@ export function getUploadedBlobPath(filepath) {
   filepath = `blob:${l.protocol}//${l.hostname + (l.port ? `:${l.port}` : '')}/${filepath}`
   return filepath
 }
+/**
+ * Retrieve file from OPFS.
+ *
+ * @param {string} filepath
+ * @return {string}
+ */
+export function getFileFromOPFS(filepath) {
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker();
+    if (workerRef !== null) {
+      filepath = filepath.split('.ifc')[0];
+      const parts = filepath.split('/');
+      filepath = parts[parts.length - 1];
+      opfsReadFile(filepath);
+
+      // Listener for messages from the worker
+      workerRef.addEventListener('message', (event) => {
+        if (event.data.error) {
+          console.error('Error from worker:', event.data.error);
+          reject(new Error(event.data.error));
+        } else {
+          if (event.data.completed) {
+            console.log('Worker finished retrieving file');
+            const file = event.data.file;
+            resolve(file); // Resolve the promise with the file
+          }
+        }
+      });
+    } else {
+      reject(new Error('Worker initialization failed'));
+    }
+  });
+}
+

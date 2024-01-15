@@ -27,6 +27,15 @@ export const opfsWriteFile = async (objectUrl, fileName) => {
     workerRef.postMessage({ command: 'writeObjectURLToFile', objectUrl: objectUrl, fileName: fileName});
 };
 
+export const opfsReadFile = async (fileName) => {
+    if (!workerRef) {
+        console.error("Worker not initialized");
+        return;
+    }
+
+    workerRef.postMessage({command: 'readObjectFromStorage', fileName: fileName})
+}
+
 export const onWorkerMessage = (callback) => {
     if (workerRef) {
         workerRef.onmessage = callback;
