@@ -3,7 +3,7 @@ import {
   LogoB,
   LogoBWithDomain,
 } from './Logo'
-import {ThemeCtx} from '../theme/Theme.fixture'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 
 
 export const ThemeLogoB = () => <ThemeCtx><LogoB/></ThemeCtx>
