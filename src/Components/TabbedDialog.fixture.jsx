@@ -1,7 +1,7 @@
 /* eslint-disable no-magic-numbers */
 import React from 'react'
-import FixtureContext from '../FixtureContext'
 import debug from '../utils/debug'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import TabbedDialog from './TabbedDialog'
 
 
@@ -10,7 +10,7 @@ const loremIpsum = (size) => `Lorem ipsum dolor sit amet, consectetur adipiscing
 
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <TabbedDialog
       tabLabels={['Explore', 'Open', 'Save']}
       headerLabels={['Explore Sample Projects', 'Open Project', 'Save Project']}
@@ -27,5 +27,5 @@ export default (
       isDialogDisplayed={true}
       setIsDialogDisplayed={() => debug().log('setIsDialogDisplayed')}
     />
-  </FixtureContext>
+  </ThemeCtx>
 )

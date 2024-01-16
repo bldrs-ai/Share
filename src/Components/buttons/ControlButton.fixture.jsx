@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
-import FixtureContext from '../../FixtureContext'
 import {ControlButton} from '../../Components/Buttons'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 import AnnouncementIcon from '@mui/icons-material/Announcement'
 
 
@@ -12,7 +12,7 @@ import AnnouncementIcon from '@mui/icons-material/Announcement'
 export default function ControlButtonFixture() {
   const [isDisplayed, setIsDisplayed] = useState(false)
   return (
-    <FixtureContext>
+    <ThemeCtx>
       <ControlButton
         title={'title'}
         isDialogDisplayed={isDisplayed}
@@ -30,6 +30,6 @@ export default function ControlButtonFixture() {
         }
         placement={'left'}
       />
-    </FixtureContext>
+    </ThemeCtx>
   )
 }
