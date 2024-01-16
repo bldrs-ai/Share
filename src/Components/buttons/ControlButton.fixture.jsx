@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {ControlButton} from '../../Components/Buttons'
-import {ThemeCtx} from '../theme/Theme.fixture'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 import AnnouncementIcon from '@mui/icons-material/Announcement'
 
 

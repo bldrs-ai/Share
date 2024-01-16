@@ -1,17 +1,17 @@
 import React from 'react'
-import FixtureContext from '../../FixtureContext'
 import {AboutDialog} from './AboutControl'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 
 
 /** @return {React.Component} */
 export default function AboutDialogFixture() {
   return (
-    <FixtureContext>
+    <ThemeCtx>
       <AboutDialog
         isDialogDisplayed={true}
         // eslint-disable-next-line no-empty-function
         setIsDialogDisplayed={() => {}}
       />
-    </FixtureContext>
+    </ThemeCtx>
   )
 }
