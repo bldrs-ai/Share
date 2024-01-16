@@ -1,6 +1,57 @@
 import debug from '../utils/debug'
-import {assertDefined} from '../utils/assert'
-import {initializeWorker, opfsReadFile, opfsWriteFile} from '../OPFS/OPFSService.js'
+import { assertDefined } from '../utils/assert'
+import { initializeWorker, opfsReadFile, opfsWriteFile } from '../OPFS/OPFSService.js'
+
+/**
+ * Upload a local file for display from Drag And Drop.
+ *
+ * @param {Function} navigate
+ * @param {string} appPrefix
+ * @param {Function} handleBeforeUnload
+ */
+export function loadLocalFileDragAndDrop(
+  navigate,
+  appPrefix,
+  handleBeforeUnload,
+  file,
+  testingDisableWebWorker = false) {
+  assertDefined(navigate, appPrefix, handleBeforeUnload)
+  let workerRef = null
+  if (!testingDisableWebWorker) {
+    workerRef = initializeWorker()
+  }
+
+  debug().log('loader#loadLocalFileDragAndDrop#event:', event)
+  const tmpUrl = URL.createObjectURL(file)
+  debug().log('loader#loadLocalFileDragAndDrop#event: url: ', tmpUrl)
+  // Post message to the worker to handle the file
+  const parts = tmpUrl.split('/')
+  const fileNametmpUrl = parts[parts.length - 1]
+
+  // Listener for messages from the worker
+  workerRef.addEventListener('message', (workerEvent) => {
+    if (workerEvent.data.error) {
+      debug().error('Error from worker:', workerEvent.data.error)
+    } else if (workerEvent.data.completed) {
+      if (workerEvent.data.event === 'write') {
+        debug().log('Worker finished writing file')
+
+        // Perform the navigation logic after the worker is done
+        const fileName = workerEvent.data.fileName
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+      } else if (workerEvent.data.event === 'read') {
+        debug().log('Worker finished reading file')
+        const fileName = workerEvent.data.file.name
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+      }
+    }
+  })
+
+  opfsWriteFile(tmpUrl, fileNametmpUrl)
+
+}
 
 
 /**
@@ -11,11 +62,11 @@ import {initializeWorker, opfsReadFile, opfsWriteFile} from '../OPFS/OPFSService
  * @param {Function} handleBeforeUnload
  */
 export function loadLocalFile(
-    navigate,
-    appPrefix,
-    handleBeforeUnload,
-    testingSkipAutoRemove = false,
-    testingDisableWebWorker = false) {
+  navigate,
+  appPrefix,
+  handleBeforeUnload,
+  testingSkipAutoRemove = false,
+  testingDisableWebWorker = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
@@ -25,43 +76,43 @@ export function loadLocalFile(
     workerRef = initializeWorker()
   }
   fileInput.addEventListener(
-      'change',
-      (event) => {
-        debug().log('loader#loadLocalFile#event:', event)
-        const tmpUrl = URL.createObjectURL(event.target.files[0])
-        debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-        // Post message to the worker to handle the file
-        const parts = tmpUrl.split('/')
-        const fileNametmpUrl = parts[parts.length - 1]
+    'change',
+    (event) => {
+      debug().log('loader#loadLocalFile#event:', event)
+      const tmpUrl = URL.createObjectURL(event.target.files[0])
+      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+      // Post message to the worker to handle the file
+      const parts = tmpUrl.split('/')
+      const fileNametmpUrl = parts[parts.length - 1]
 
-        if (!testingDisableWebWorker) {
-          opfsWriteFile(tmpUrl, fileNametmpUrl)
-          // Listener for messages from the worker
-          workerRef.addEventListener('message', (workerEvent) => {
-            if (workerEvent.data.error) {
-              debug().error('Error from worker:', workerEvent.data.error)
-            } else if (workerEvent.data.completed) {
-              if (workerEvent.data.event === 'write') {
-                debug().log('Worker finished writing file')
+      if (!testingDisableWebWorker) {
+        opfsWriteFile(tmpUrl, fileNametmpUrl)
+        // Listener for messages from the worker
+        workerRef.addEventListener('message', (workerEvent) => {
+          if (workerEvent.data.error) {
+            debug().error('Error from worker:', workerEvent.data.error)
+          } else if (workerEvent.data.completed) {
+            if (workerEvent.data.event === 'write') {
+              debug().log('Worker finished writing file')
 
-                // Perform the navigation logic after the worker is done
-                const fileName = workerEvent.data.fileName
-                window.removeEventListener('beforeunload', handleBeforeUnload)
-                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
-              } else if (workerEvent.data.event === 'read') {
-                debug().log('Worker finished reading file')
-                const fileName = workerEvent.data.file.name
-                window.removeEventListener('beforeunload', handleBeforeUnload)
-                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
-              }
+              // Perform the navigation logic after the worker is done
+              const fileName = workerEvent.data.fileName
+              window.removeEventListener('beforeunload', handleBeforeUnload)
+              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+            } else if (workerEvent.data.event === 'read') {
+              debug().log('Worker finished reading file')
+              const fileName = workerEvent.data.file.name
+              window.removeEventListener('beforeunload', handleBeforeUnload)
+              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
             }
-          })
-        } else {
-          window.removeEventListener('beforeunload', handleBeforeUnload)
-          navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
-        }
-      },
-      false,
+          }
+        })
+      } else {
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
+      }
+    },
+    false,
   )
 
   viewerContainer.appendChild(fileInput)
