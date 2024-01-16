@@ -63,7 +63,6 @@ export default function NoteCardCreate({
             multiline
             placeholder={'Note Title'}
             inputProps={{maxLength: 256}}
-            fullWidths
           />}
         avatar={
           isAuthenticated ?
@@ -87,7 +86,6 @@ export default function NoteCardCreate({
             multiline
             placeholder={'Note Body'}
             inputProps={{maxLength: 256}}
-            fullWidths
           />
         </Box>
       </CardContent>

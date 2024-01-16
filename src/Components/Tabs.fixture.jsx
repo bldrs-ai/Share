@@ -1,14 +1,14 @@
 import React from 'react'
 import Tabs from './Tabs'
-import FixtureContext from '../FixtureContext'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import debug from '../utils/debug'
 
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <Tabs
       tabLabels={['Explore', 'Open', 'Save']}
       actionCb={() => debug().log('Clicked')}
     />
-  </FixtureContext>
+  </ThemeCtx>
 )

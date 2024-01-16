@@ -1,10 +1,10 @@
 import React from 'react'
-import FixtureContext from '../FixtureContext'
 import Loader from './Loader'
+import {ThemeCtx} from '../theme/Theme.fixture'
 
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <Loader/>
-  </FixtureContext>
+  </ThemeCtx>
 )
