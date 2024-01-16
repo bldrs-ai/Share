@@ -1,17 +1,17 @@
-import React from 'react'
+import React, {useState} from 'react'
 import {AboutDialog} from './AboutControl'
-import {ThemeCtx} from '../../theme/Theme.fixture'
+import {HelmetStoreRouteThemeCtx} from '../../Share.fixture'
 
 
 /** @return {React.Component} */
 export default function AboutDialogFixture() {
+  const [isDisplayed, setIsDisplayed] = useState(true)
   return (
-    <ThemeCtx>
+    <HelmetStoreRouteThemeCtx>
       <AboutDialog
-        isDialogDisplayed={true}
-        // eslint-disable-next-line no-empty-function
-        setIsDialogDisplayed={() => {}}
+        isDialogDisplayed={isDisplayed}
+        setIsDialogDisplayed={setIsDisplayed}
       />
-    </ThemeCtx>
+    </HelmetStoreRouteThemeCtx>
   )
 }
