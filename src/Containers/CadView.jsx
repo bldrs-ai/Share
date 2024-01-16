@@ -32,6 +32,7 @@ import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import { usePlaceMark } from '../hooks/usePlaceMark'
 import { groupElementsByTypes } from '../utils/ifc'
+import { useAuth0 } from '@auth0/auth0-react'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -110,7 +111,7 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isModelLoading, setIsLoading] = useState(false)
   const [loadingMessage, setLoadingMessage] = useState()
   const [model, setModel] = useState(null)
   const viewer = useStore((state) => state.viewer)
@@ -146,6 +147,23 @@ export default function CadView({
 
   // Place Mark
   const { createPlaceMark, onSceneSingleTap, onSceneDoubleTap } = usePlaceMark()
+
+  //Auth 
+  const { isLoading, isAuthenticated } = useAuth0()
+
+  if (!jestTestingDisableWebWorker) {
+    useEffect(() => {
+      // This function gets called whenever there's a change in authentication state
+      debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+      if (!isLoading &&
+        (isAuthenticated && accessToken !== '') ||
+        (!isLoading && !isAuthenticated)) { 
+        (async () => {
+          await onViewer();
+        })();
+      }
+    }, [isLoading, isAuthenticated, accessToken]);
+  }
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -251,6 +269,13 @@ export default function CadView({
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
+    }
+
+    if (!jestTestingDisableWebWorker) {
+      if (isLoading || !isLoading && isAuthenticated && accessToken === '') {
+        debug().warn('Do not have auth token yet, waiting.')
+        return
+      }
     }
 
     setModelReady(false)
@@ -696,7 +721,7 @@ export default function CadView({
       <SnackBarMessage
         message={snackMessage ? snackMessage : loadingMessage}
         severity={'info'}
-        open={isLoading || snackMessage !== null}
+        open={isModelLoading || snackMessage !== null}
       />
       {showSearchBar && (
         <Box sx={{
@@ -794,7 +819,7 @@ export default function CadView({
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} />
       }
 
-      {isLoading &&
+      {isModelLoading &&
         <Box
           sx={{
             position: 'relative',
