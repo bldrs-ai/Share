@@ -1,14 +1,14 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import {CloseButton, TooltipIconButton} from '../Buttons'
-import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
-import {addHashParams, removeHashParams} from '../../utils/location'
-import useStore from '../../store/useStore'
-import {NOTE_PREFIX} from './Notes'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import useStore from '../../store/useStore'
+import {addHashParams, removeHashParams} from '../../utils/location'
+import {CloseButton, TooltipIconButton} from '../Buttons'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
+import {NOTE_PREFIX} from './Notes'
 
 
 /** @return {React.Component} */
@@ -63,14 +63,14 @@ export default function NotesNavBar() {
       >
         {selectedNoteId && !isCreateNoteActive &&
          <TooltipIconButton
-           title='Back to the list'
+           tooltip='Back to the list'
+           icon={<ArrowBackIcon className='icon-share'/>}
            variant='noBackground'
            placement='bottom'
            onClick={() => {
              removeHashParams(window.location, NOTE_PREFIX)
              setSelectedNoteId(null)
            }}
-           icon={<ArrowBackIcon className='icon-share'/>}
          />
         }
       </Box>
@@ -85,16 +85,16 @@ export default function NotesNavBar() {
         {(notes && selectedNoteId) && !isCreateNoteActive && notes.length > 1 &&
           <>
             <TooltipIconButton
-              title='Previous Note'
-              onClick={() => selectNote('previous')}
+              tooltip='Previous Note'
               icon={<NavigateBeforeIcon className='icon-share' color='secondary'/>}
+              onClick={() => selectNote('previous')}
               placement='bottom'
               variant='noBackground'
             />
             <TooltipIconButton
-              title='Next Note'
-              onClick={() => selectNote('next')}
+              tooltip='Next Note'
               icon={<NavigateNextIcon className='icon-share' color='secondary'/>}
+              onClick={() => selectNote('next')}
               placement='bottom'
               variant='noBackground'
             />
@@ -111,18 +111,18 @@ export default function NotesNavBar() {
 
         {!selectedNoteId && (isCreateNoteActive ?
           <TooltipIconButton
-            title='Back to the list'
+            tooltip='Back to the list'
+            icon={<ArrowBackIcon className='icon-share' color='secondary'/>}
             placement='bottom'
             onClick={toggleIsCreateNoteActive}
-            icon={<ArrowBackIcon className='icon-share' color='secondary'/>}
             size='medium'
             variant='noBackground'
           /> :
           <TooltipIconButton
-            title='ADD A NOTE'
-            placement='bottom'
-            onClick={toggleIsCreateNoteActive}
+            tooltip='ADD A NOTE'
             icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
+            onClick={toggleIsCreateNoteActive}
+            placement='bottom'
             size='medium'
             variant='noBackground'
           />

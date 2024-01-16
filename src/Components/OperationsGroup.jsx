@@ -1,17 +1,17 @@
 import React from 'react'
-import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import useStore from '../store/useStore'
-import {useIsMobile} from './Hooks'
-import CameraControl from './CameraControl'
-import LoginMenu from './LoginMenu'
-import ShareControl from './ShareControl'
-import ImagineControl from './ImagineControl'
-import {TooltipIconButton} from './Buttons'
-import AppStoreIcon from '../assets/icons/AppStore.svg'
-import {useExistInFeature} from '../hooks/useExistInFeature'
+import Box from '@mui/material/Box'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import {useExistInFeature} from '../hooks/useExistInFeature'
+import useStore from '../store/useStore'
+import CameraControl from './CameraControl'
+import {useIsMobile} from './Hooks'
+import ImagineControl from './ImagineControl'
+import LoginMenu from './LoginMenu'
+import ShareControl from './ShareControl'
+import {TooltipIconButton} from './Buttons'
+import AppStoreIcon from '../assets/icons/AppStore.svg'
 
 
 /**
@@ -77,7 +77,7 @@ export default function OperationsGroup({deselectItems}) {
       {isModelInteractionGroupVisible &&
         <>
           <TooltipIconButton
-            title='Notes'
+            tooltip='Notes'
             icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
             selected={isNotesOn}
             onClick={() => {
@@ -90,21 +90,21 @@ export default function OperationsGroup({deselectItems}) {
 
       {isSelected() && selectedElement !== null &&
        <TooltipIconButton
-         title='Properties'
+         tooltip='Properties'
+         icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
+         selected={isPropertiesOn}
          onClick={() => {
            turnOffIsHelpTooltips()
            toggleIsPropertiesOn()
            openDrawer()
          }}
-         selected={isPropertiesOn}
-         icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
        />
       }
 
       {isSettingsVisible && isAppStoreEnabled &&
           <TooltipIconButton
-            title='Open App Store'
-            icon={<AppStoreIcon/>}
+            tooltip='Open App Store'
+            icon={<AppStoreIcon className='icon-share'/>}
             selected={isAppStoreOpen}
             onClick={() => toggleAppStoreDrawer()}
           />

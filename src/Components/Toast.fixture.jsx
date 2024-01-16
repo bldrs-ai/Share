@@ -4,8 +4,8 @@ import {ThemeCtx} from '../theme/Theme.fixture'
 import Toast from './Toast'
 
 
-// eslint-disable-next-line react/display-name
-export default () => {
+/** @return {React.Element} */
+export default function ToastFixture() {
   const [severity] = useSelect('severity', {
     options: [
       'error',

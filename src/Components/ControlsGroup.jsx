@@ -1,10 +1,10 @@
 import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import OpenModelControl from './OpenModelControl'
-import useStore from '../store/useStore'
-import {TooltipIconButton} from './Buttons'
 import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
+import useStore from '../store/useStore'
+import {TooltipIconButton} from './Buttons'
+import OpenModelControl from './OpenModelControl'
 import TreeIcon from '../assets/icons/Tree.svg'
 
 
@@ -32,19 +32,18 @@ export default function OperationsGroup({fileOpen, repo}) {
     >
       <OpenModelControl fileOpen={fileOpen}/>
       <TooltipIconButton
-        title='Search'
+        tooltip='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
         placement='bottom'
-        aboutInfo={false}
+        isHelpTooltip={false}
         selected={isSearchVisible}
         onClick={toggleIsSearchVisible}
       />
       <TooltipIconButton
-        title='Navigation'
+        tooltip='Navigation'
         icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
         placement='bottom'
-        dataTestId='Navigation'
-        aboutInfo={false}
+        isHelpTooltip={false}
         selected={isNavigationVisible}
         onClick={() => {
           if (isVersionHistoryVisible) {
@@ -57,7 +56,7 @@ export default function OperationsGroup({fileOpen, repo}) {
       />
       {repo !== undefined &&
         <TooltipIconButton
-          title='Project History'
+          tooltip='Project History'
           icon={<HistoryIcon className='icon-share' color='secondary'/>}
           placement='bottom'
           selected={isVersionHistoryVisible}

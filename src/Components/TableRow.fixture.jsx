@@ -1,13 +1,10 @@
 import React from 'react'
-import Box from '@mui/material/Box'
-import {ThemeCtx} from '../theme/Theme.fixture'
 import TableRow from './TableRow'
+import {ThemeCtx} from '../theme/Theme.fixture'
 
 
 export default (
   <ThemeCtx>
-    <Box sx={{width: '400px'}}>
-      <TableRow heading='hello' subtext='hello' inputType='select' options={['Option1', 'Option2', 'Option3']}/>
-    </Box>
+    <TableRow heading='hello' subtext='hello' inputType='select' options={['Option1', 'Option2', 'Option3']}/>
   </ThemeCtx>
 )

@@ -1,33 +1,33 @@
 import React, {createRef, useEffect, useState} from 'react'
+import {Helmet} from 'react-helmet-async'
 import Box from '@mui/material/Box'
+import InputAdornment from '@mui/material/InputAdornment'
 import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import Stack from '@mui/material/Stack'
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
+import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import Dialog from './Dialog'
 import {
   addCameraUrlParams,
 } from './CameraControl'
 import {ControlButton} from './Buttons'
+import Bot1Icon from '../assets/icons/Bot1.svg'
+import Bot2Icon from '../assets/icons/Bot2.svg'
+import Bot3Icon from '../assets/icons/Bot3.svg'
+import Bot4Icon from '../assets/icons/Bot4.svg'
 import CopyIcon from '../assets/icons/Copy.svg'
-import {Helmet} from 'react-helmet-async'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
-import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
-import BotIcon1 from '../assets/icons/Bot1.svg'
-import BotIcon2 from '../assets/icons/Bot3.svg'
-import BotIcon3 from '../assets/icons/Bot4.svg'
-import BotIcon4 from '../assets/icons/Bot2.svg'
 
 
 /**
  * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
- * @return {React.ReactElement} The button react component, with a hosted
- *   ShareDialog component
+ * @return {React.Component} The control button for display, with a
+ *   hosted ShareDialog
  */
 export default function ImagineControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -36,8 +36,8 @@ export default function ImagineControl() {
 
   return (
     <ControlButton
-      title='Bldr Bot Rendering'
       icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
+      tooltip='Bldr Bot Rendering'
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -67,7 +67,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
-  const botIcons = [BotIcon2, BotIcon3, BotIcon1, BotIcon4]
+  const botIcons = [Bot3Icon, Bot4Icon, Bot1Icon, Bot2Icon]
 
   useEffect(() => {
     if (viewer) {
@@ -164,7 +164,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
                             edge="end"
                             size='small'
                           >
-                            <ContentCopyIcon size='inherit' color='primary' sx={{width: '16px', height: '16px'}}/>
+                            <ContentCopyIcon className='icon-share' size='inherit' color='primary'/>
                           </IconButton>
                         </InputAdornment>
                       ),

@@ -1,31 +1,32 @@
 import React from 'react'
 import {render, fireEvent, waitFor} from '@testing-library/react'
-import {MockComponent} from '../../__mocks__/MockComponent'
-import AboutControl from './AboutControl'
 import PkgJson from '../../../package.json'
+import AboutFixture from './About.fixture'
 
+
+const AboutTestComponent = () => <>{AboutFixture.AboutControl}</>
 
 const bldrsVersionString = `Bldrs: ${PkgJson.version}`
-describe('About control tests', () => {
-  test('renders the AboutControl button', () => {
-    const {getByTitle} = render(<MockComponent><AboutControl/></MockComponent>)
-    const aboutControl = getByTitle(bldrsVersionString)
-    expect(aboutControl).toBeInTheDocument()
+
+
+describe('AboutControl', () => {
+  it('renders the AboutControl button', () => {
+    const {getByTitle} = render(<AboutTestComponent/>)
+    const controlButton = getByTitle(bldrsVersionString)
+    expect(controlButton).toBeInTheDocument()
   })
 
-  test('renders AboutDialog when control is pressed', () => {
-    const {getByTitle, getByText} = render(<MockComponent><AboutControl/></MockComponent>)
-    const aboutControl = getByTitle(bldrsVersionString)
-    fireEvent.click(aboutControl)
-    const dialogTitle = getByText('Build every thing together')
+
+  it('renders AboutDialog when controlButton is pressed', async () => {
+    const {getByText, getByTitle} = render(<AboutTestComponent/>)
+    const controlButton = getByTitle(bldrsVersionString)
+    fireEvent.click(controlButton)
+
+    // Dialog title
+    const dialogTitle = getByText('Build Every Thing Together')
     expect(dialogTitle).toBeInTheDocument()
-  })
 
-  it('updates the title when the dialog is open', async () => {
-    render(<AboutControl/>, {
-      wrapper: MockComponent,
-    })
-
+    // Document title
     await(waitFor(() => expect(document.title).toBe('About — Bldrs.ai')))
   })
 })

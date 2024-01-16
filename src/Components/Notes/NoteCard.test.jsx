@@ -1,12 +1,16 @@
 import React from 'react'
-import {render,
-  act, renderHook,
-  screen, fireEvent} from '@testing-library/react'
+import {
+  render,
+  act,
+  renderHook,
+  screen,
+  fireEvent} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
-import NoteCard from './NoteCard'
 import {MOCK_NOTES} from '../../utils/GitHub'
+import NoteCard from './NoteCard'
+import {RouteThemeCtx} from '../../Share.fixture'
 
 
 describe('NoteCard', () => {
@@ -15,7 +19,7 @@ describe('NoteCard', () => {
     const index = 123
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     render(
-        <ShareMock>
+        <RouteThemeCtx>
           <NoteCard
             id={id}
             date='2000-01-01T00:00:00Z'
@@ -23,50 +27,57 @@ describe('NoteCard', () => {
             index={index}
             title="new_title"
           />
-        </ShareMock>)
+        </RouteThemeCtx>)
     expect(screen.getByText('new_title')).toBeInTheDocument()
     expect(screen.getByText(/2000-01-01/)).toBeInTheDocument()
     expect(screen.getByText(/00:00:00Z/)).toBeInTheDocument()
     expect(screen.getByText(/bob/)).toBeInTheDocument()
   })
 
+
   it('Number of comments', () => {
     const id = 123
     const index = 123
     const commentCount = 10
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    render(<ShareMock><NoteCard id={id} index={index} numberOfComments={commentCount}/></ShareMock>)
+    render(
+        <RouteThemeCtx>
+          <NoteCard id={id} index={index} numberOfComments={commentCount}/>
+        </RouteThemeCtx>)
     expect(screen.getByText(commentCount)).toBeInTheDocument()
   })
+
 
   it('Select the note card', () => {
     const id = 123
     const index = 123
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const rendered = render(
-        <ShareMock>
+        <RouteThemeCtx>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
-        </ShareMock>)
+        </RouteThemeCtx>)
     const selectIssueButton = rendered.getByTestId('selectionContainer')
     fireEvent.click(selectIssueButton)
     expect(screen.getByText('Select the note card - title')).toBeInTheDocument()
   })
+
 
   it('Camera Position control', () => {
     const id = 123
     const index = 123
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const rendered = render(
-        <ShareMock>
+        <RouteThemeCtx>
           <NoteCard
             id={id}
             index={index}
             body="Test body [test link](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-4.34)"
           />
-        </ShareMock>)
+        </RouteThemeCtx>)
     const showCamera = rendered.getByTitle('Show the camera view')
     expect(showCamera).toBeInTheDocument()
   })
+
 
   it('Delete button is present', () => {
     const id = 123
@@ -75,16 +86,17 @@ describe('NoteCard', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
 
     const {getByTitle} = render(
-        <ShareMock>
+        <RouteThemeCtx>
           <NoteCard
             id={id}
             index={index}
             username={username}
             synched={true}
           />
-        </ShareMock>)
+        </RouteThemeCtx>)
     expect(getByTitle('Delete note')).toBeInTheDocument()
   })
+
 
   it('Delete is working', async () => {
     const id = 123

@@ -50,53 +50,51 @@ export default function ElementGroup({deselectItems}) {
         }
         {isSelected() && selectedElement !== null &&
             <TooltipIconButton
-              showTitle={true}
-              title='Isolate'
+              tooltip='Isolate'
+              icon={<FilterCenterFocusIcon className='icon-share' color='secondary'/>}
+              selected={isIsolate}
               placement='top'
               variant='solid'
               onClick={() => {
                 viewer.isolator.toggleIsolationMode()
                 setIsIsolate(!isIsolate)
               }}
-              selected={isIsolate}
-              icon={<FilterCenterFocusIcon color='secondary'/>}
             />}
 
         {isHidden && !isIsolate &&
           <TooltipIconButton
-            title='Show all'
+            tooltip='Show all'
+            icon={<VisibilityOutlinedIcon className='icon-share'/>}
             placement='top'
             variant='solid'
             onClick={() => {
               viewer.isolator.unHideAllElements()
               setIsHidden(false)
             }}
-            icon={<VisibilityOutlinedIcon className='icon-share'/>}
           />
         }
         {isSelected() && !isIsolate &&
             <TooltipIconButton
-              showTitle={true}
-              title='Hide'
+              tooltip='Hide'
+              icon={<HideSourceOutlinedIcon className='icon-share' color='primary'/>}
+              selected={isIsolate}
               placement='top'
               variant='solid'
               onClick={() => {
                 viewer.isolator.hideSelectedElements()
                 setIsHidden(true)
               }}
-              selected={isIsolate}
-              icon={<HideSourceOutlinedIcon color='primary'/>}
             />
         }
         {isSelected() && !isIsolate &&
             <TooltipIconButton
-              title='Clear'
+              tooltip='Clear'
+              icon={<CloseIcon className='icon-share' color='secondary'/>}
               placement='top'
               variant='solid'
               onClick={() => {
                 deselectItems()
               }}
-              icon={<CloseIcon className='icon-share'color='secondary'/>}
             />
         }
       </ButtonGroup >

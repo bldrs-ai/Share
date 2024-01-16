@@ -38,8 +38,12 @@ export default function ItemPanelControl({model, element, isOpenState}) {
       <>
         {Object.keys(element).length > 0 &&
          <TooltipIconButton
-           title='Properties'
-           icon={isOpenState.value ? <CloseIcon/> : <ListIcon/>}
+           tooltip='Properties'
+           icon={
+             isOpenState.value ?
+               <CloseIcon className='icon-share'/> :
+               <ListIcon className='icon-share'/>
+           }
            onClick={() => isOpenState.set(!isOpenState.value)}
          />
         }
@@ -47,7 +51,7 @@ export default function ItemPanelControl({model, element, isOpenState}) {
          (isMobile ? <MobileDrawer content={itemProps}/> :
          <ItemPropertiesDrawer
            content={itemProps}
-           title={titleStr}
+           tooltip={titleStr}
            onClose={() => isOpenState.set(false)}
          />)
         }

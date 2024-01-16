@@ -48,17 +48,18 @@ export default function LoginMenu() {
   return (
     <>
       <TooltipIconButton
-        title={'Users menu'}
+        tooltip={'Users menu'}
         placement='left'
-        variant='rounded'
-        icon={isAuthenticated ?
+        onClick={handleClick}
+        icon={
+          isAuthenticated ?
           <Avatar
             alt={user.name}
             src={user.picture}
             sx={{width: 22, height: 22}}
           /> :
-        <AccountBoxOutlinedIcon className='icon-share' color='secondary'/>}
-        onClick={handleClick}
+          <AccountBoxOutlinedIcon className='icon-share' color='secondary'/>
+        }
       />
       <Menu
         elevation={1}

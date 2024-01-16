@@ -1,7 +1,7 @@
 import React, {useState} from 'react'
-import {ControlButton} from '../../Components/Buttons'
-import {ThemeCtx} from '../../theme/Theme.fixture'
 import AnnouncementIcon from '@mui/icons-material/Announcement'
+import {ThemeCtx} from '../../theme/Theme.fixture'
+import {ControlButton} from '../Buttons'
 
 
 /**
@@ -14,10 +14,11 @@ export default function ControlButtonFixture() {
   return (
     <ThemeCtx>
       <ControlButton
-        title={'title'}
+        icon={<AnnouncementIcon className='icon-share'/>}
+        tooltip={'title'}
         isDialogDisplayed={isDisplayed}
         setIsDialogDisplayed={setIsDisplayed}
-        icon={<AnnouncementIcon/>}
+        placement={'left'}
         dialog={
           <div style={{border: 'solid 1px black'}}>
             {isDisplayed ?
@@ -28,7 +29,6 @@ export default function ControlButtonFixture() {
              null}
           </div>
         }
-        placement={'left'}
       />
     </ThemeCtx>
   )

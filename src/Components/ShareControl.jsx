@@ -1,44 +1,41 @@
 import React, {createRef, useEffect, useState} from 'react'
+import {Helmet} from 'react-helmet-async'
+import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import Stack from '@mui/material/Stack'
-import QRCode from 'react-qr-code'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import useStore from '../store/useStore'
-import {addPlaneLocationToUrl} from './CutPlaneMenu'
 import {removeHashParams} from '../utils/location'
-import Dialog from './Dialog'
+import {ControlButton} from './Buttons'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import {ControlButton} from './Buttons'
+import {addPlaneLocationToUrl} from './CutPlaneMenu'
+import Dialog from './Dialog'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
-import {Helmet} from 'react-helmet-async'
-import ShareHeaderIcon from '../assets/icons/ShareGraphic.svg'
 import ShareIcon from '../assets/icons/Share.svg'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
 
 /**
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * @return {React.ReactElement} The button react component, with a hosted
- *   ShareDialog component
+ * @return {React.Component} The control button, with a hosted
+ *     ShareDialog component
  */
 export default function ShareControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const openedDialog = !!isDialogDisplayed
-
-
   return (
     <ControlButton
-      title='Share'
       icon={<ShareIcon className='icon-share'/>}
+      tooltip='Share the model'
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -59,7 +56,7 @@ export default function ShareControl() {
  *
  * @param {boolean} isDialogDisplayed
  * @param {Function} setIsDialogDisplayed
- * @return {React.Component} The react component
+ * @return {React.Component}
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
@@ -128,18 +125,17 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<ShareIcon className='icon-share'/>}
+      headerIcon={<ShareIcon/>}
       headerText='Share'
-      headerIcon={<ShareHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Copy Link'
-      actionIcon={<CopyIcon className='icon-share'/>}
+      actionIcon={<CopyIcon/>}
       actionCb={onCopy}
       content={
         <Stack spacing={1}>
           <Helmet>
-            <title>Share IFC Model</title>
+            <title>Share the model</title>
           </Helmet>
           <Box>
             <QRCode

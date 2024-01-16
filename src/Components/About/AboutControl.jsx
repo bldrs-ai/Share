@@ -1,4 +1,5 @@
 import React, {useState} from 'react'
+import {Helmet} from 'react-helmet-async'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
@@ -9,9 +10,9 @@ import Dialog from '../Dialog'
 import {ControlButton} from '../Buttons'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
-import LogoB from '../../assets/LogoB.svg'
-import {Helmet} from 'react-helmet-async'
+import {LogoB, LogoBWithDomain} from '../Logo'
 import PkgJson from '../../../package.json'
+
 
 /**
  * Button to toggle About panel on and off
@@ -32,22 +33,11 @@ export default function AboutControl() {
 
   return (
     <ControlButton
-      title={`Bldrs: ${PkgJson.version}`}
+      icon={<LogoB/>}
+      tooltip={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayedLocal}
       variant='noBackground'
-      icon={
-        <Box
-          sx={{
-            '& svg': {
-              marginTop: '6px',
-              width: '18px',
-            },
-          }}
-        >
-          <LogoB/>
-        </Box>
-      }
       dialog={
         <AboutDialog
           isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
@@ -62,22 +52,18 @@ export default function AboutControl() {
 /**
  * The AboutDialog component
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
+ * @property {boolean} isDialogDisplayed react state
+ * @property {Function} setIsDialogDisplayed Toggle dialog displayed
  * @return {React.ReactElement} React component
  */
 export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
-      headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
-          <LogoB/>
-          <Typography variant={'overline'}>bldrs.ai</Typography>
-        </Box>
-      }
+      headerIcon={<LogoBWithDomain/>}
+      headerText={'Build Every Thing Together'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
+      content={<AboutContent/>}
       actionTitle='OK'
       actionCb={() => setIsDialogDisplayed(false)}
     />
@@ -90,7 +76,7 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
  *
  * @return {React.ReactElement} React component
  */
-function AboutContent({setIsDialogDisplayed}) {
+export function AboutContent() {
   return (
     <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
@@ -103,7 +89,6 @@ function AboutContent({setIsDialogDisplayed}) {
         alignItems="center"
       >
         <Stack spacing={0}>
-          <Typography variant='body1'>Build every thing together</Typography>
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'

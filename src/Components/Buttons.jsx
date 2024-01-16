@@ -2,38 +2,38 @@ import React from 'react'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
+import CloseIcon from '@mui/icons-material/Close'
 import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
-import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
-import CloseIcon from '@mui/icons-material/Close'
+import ExpandIcon from '../assets/icons/Expand.svg'
 
 
 /**
- * @property {string} title Tooltip text
+ * @property {string} tooltip Tooltip text
  * @property {Function} onClick callback
  * @property {object} icon button icon
- * @property {string} [placement] Tooltip location. Default: left
  * @property {boolean} [selected] Selected state.  Default: false
- * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
- * @property {string} dataTestId Internal attribute for component testing. Default: ''
+ * @property {string} [placement] Tooltip location enum: right (default), left, top, bottom
+ * @property {string} [size] Size enum: small (default), medium or large
+ * @property {string} [variant] Style enum: rounded (default) or rectangular
+ * @property {boolean} [isHelpTooltip] Whether acts as help tooltip.
  * @return {React.Component} React component
  */
 export function TooltipIconButton({
-  title,
+  tooltip,
   onClick,
   icon,
   placement = 'right',
   selected = false,
   size = 'medium',
-  dataTestId = '',
-  aboutInfo = true,
   variant = 'rounded',
+  isHelpTooltip = true,
 }) {
-  assertDefined(title, onClick, icon)
+  assertDefined(tooltip, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
-  const open = aboutInfo ? isHelpTooltips : false
+  const open = isHelpTooltip && isHelpTooltips
   const handleClose = () => {
     setOpenLocal(false)
   }
@@ -46,10 +46,10 @@ export function TooltipIconButton({
         open={openLocal || open}
         onClose={handleClose}
         onOpen={handleOpen}
-        title={title}
+        title={tooltip}
         describeChild
         placement={placement}
-        data-testid={dataTestId || title}
+        data-testid={tooltip}
         PopperProps={{style: {zIndex: 0}}}
       >
         <ToggleButton selected={selected} onClick={onClick} value={''} size={size} variant={variant}>
@@ -62,32 +62,34 @@ export function TooltipIconButton({
 
 
 /**
- * @property {string} title The text for tooltip
+ * Displayed as an icon with tooltip.
+ *
+ * @property {object} icon The icon is the only visual element of the button.
+ * @property {string} tooltip The text for tooltip
+ * @property {object} dialog The controlled dialog
  * @property {boolean} isDialogDisplayed Initial state
  * @property {Function} setIsDialogDisplayed Handler
- * @property {object} icon The header icon
- * @property {object} dialog The controlled dialog
- * @property {string} placement Default: left
- * @return {React.Component} React component
+ * @property {string} [placement] Default: left
+ * @property {string} [variant] Default: rounded
+ * @return {React.Component}
  */
 export function ControlButton({
-  title,
+  icon,
+  tooltip,
+  dialog,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  icon,
-  dialog,
   placement = 'left',
   variant = 'rounded',
 }) {
-  assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
+  assertDefined(icon, tooltip, dialog, isDialogDisplayed, setIsDialogDisplayed)
   return (
     <>
       <TooltipIconButton
-        title={title}
-        onClick={() => setIsDialogDisplayed(true)}
+        tooltip={tooltip}
         icon={icon}
+        onClick={() => setIsDialogDisplayed(true)}
         selected={isDialogDisplayed}
-        className='icon-share'
         variant={variant}
       />
       {isDialogDisplayed && dialog}
@@ -101,14 +103,14 @@ export function ControlButton({
  * @return {React.Component}
  */
 export function CloseButton({onClick}) {
+  assertDefined(onClick)
   return (
     <TooltipIconButton
-      title='Close'
+      tooltip='Close'
+      icon={<CloseIcon className='icon-share icon-small'/>}
       onClick={onClick}
       placement='bottom'
-      icon={<CloseIcon className='icon-share icon-small'/>}
-      aboutInfo={false}
-      className='closeButton'
+      isHelpTooltip={false}
       variant='noBackground'
     />
   )
@@ -148,9 +150,9 @@ export function RectangularButton({
 export function FullScreenButton({onClick}) {
   return (
     <TooltipIconButton
-      title='Full screen'
+      tooltip='Full screen'
+      icon={<ExpandIcon className='icon-share'/>}
       onClick={onClick}
-      icon={<ExpandIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
     />
   )
@@ -158,15 +160,15 @@ export function FullScreenButton({onClick}) {
 
 
 /**
- * @property {Function} onClick Handler for close event.
+ * @property {Function} onClick Handler for back event.
  * @return {React.Component}
  */
 export function BackButton({onClick}) {
   return (
     <TooltipIconButton
-      title='Back'
+      tooltip='Back'
+      icon={<BackIcon className='icon-share'/>}
       onClick={onClick}
-      icon={<BackIcon style={{width: '15px', height: '15px'}}/>}
       size='medium'
     />
   )

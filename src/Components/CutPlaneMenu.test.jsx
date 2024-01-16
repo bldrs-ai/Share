@@ -65,17 +65,14 @@ describe('CutPlaneMenu', () => {
 
 
   it('Plane in the scene', async () => {
-    const {getByTitle, getByText} = render(
-        <ShareMock>
-          <ShareControl/>
-        </ShareMock>)
+    const {getByTitle, getByText} = render(<ShareMock><ShareControl/></ShareMock>)
     const {result} = renderHook(() => useStore((state) => state))
     // mock contains one plane
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
       result.current.setViewer(viewer)
     })
-    const shareButton = getByTitle('Share')
+    const shareButton = getByTitle('Share the model')
     fireEvent.click(shareButton)
     expect(getByText('Cutplane position')).toBeInTheDocument()
   })

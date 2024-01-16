@@ -1,3 +1,4 @@
+const webpack = require('webpack')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const path = require('path')
 
@@ -5,6 +6,7 @@ const path = require('path')
 module.exports = {
   target: ['web', 'es2021'],
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
+  devtool: 'inline-source-map',
   devServer: {
     publicPath: '/cosmos/',
     contentBase: path.join(__dirname, 'docs'),
@@ -16,7 +18,9 @@ module.exports = {
     publicPath: '/cosmos/',
     filename: 'index.html',
   },
-  plugins: [new HtmlWebpackPlugin()],
+  plugins: [new HtmlWebpackPlugin(), new webpack.EnvironmentPlugin({
+    GITHUB_BASE_URL: 'nothing',
+  })],
   module: {
     rules: [
       {

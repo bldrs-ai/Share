@@ -1,5 +1,6 @@
 import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
@@ -7,23 +8,22 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import {useAuth0} from '@auth0/auth0-react'
-import Dialog from './Dialog'
-import {TooltipIconButton} from './Buttons'
-import Selector from './Selector'
-import useStore from '../store/useStore'
-import {handleBeforeUnload} from '../utils/event'
-import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
-import {RectangularButton} from '../Components/Buttons'
-import UploadIcon from '../assets/icons/Upload.svg'
-import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
+import {RectangularButton} from '../Components/Buttons'
+import useStore from '../store/useStore'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
+import {handleBeforeUnload} from '../utils/event'
+import {TooltipIconButton} from './Buttons'
+import Dialog from './Dialog'
+import Selector from './Selector'
+import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
+import UploadIcon from '../assets/icons/Upload.svg'
 
 
 /**
  * Displays model open dialog.
  *
- * @return {React.ReactElement}
+ * @return {React.Component}
  */
 export default function OpenModelControl({fileOpen}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -53,12 +53,11 @@ export default function OpenModelControl({fileOpen}) {
   return (
     <Box sx={{marginRight: '6px'}}>
       <TooltipIconButton
-        title={'Open IFC'}
-        onClick={() => setIsDialogDisplayed(true)}
+        tooltip={'Open IFC'}
         icon={<CreateNewFolderIcon className='icon-share' color='secondary'/>}
+        onClick={() => setIsDialogDisplayed(true)}
         placement={'bottom'}
         selected={isDialogDisplayed}
-        dataTestId='open-ifc'
       />
       {isDialogDisplayed &&
         <OpenModelDialog

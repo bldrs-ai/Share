@@ -8,23 +8,23 @@ import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
 import Stack from '@mui/material/Stack'
-import {TooltipIconButton} from '../Buttons'
+import Paper from '@mui/material/Paper'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
+import {TooltipIconButton} from '../Buttons'
 import CheckIcon from '@mui/icons-material/Check'
+import Submit from '../../assets/icons/Submit.svg'
 
 
 /**
  * Note card create
  *
- * @param {string} username
- * @param {string} avatarUrl
- * @return {React.Component} React component
+ * @property {string} [username] Username
+ * @property {string} [avatarUrl] Avatar link
+ * @return {React.Component}
  */
-export default function NoteCardCreate({
-  username = '',
-  avatarUrl = '',
-}) {
+export default function NoteCardCreate({username = '', avatarUrl = ''}) {
   const repository = useStore((state) => state.repository)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
@@ -34,11 +34,7 @@ export default function NoteCardCreate({
   const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
 
 
-  /**
-   * create issue takes in the title and body of the note from the state
-   *
-   * @return {void}
-   */
+  /** Create issue takes in the title and body of the note from the state */
   async function createNote() {
     const issuePayload = {
       title,

@@ -36,33 +36,34 @@ import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 /**
  * Note card
  *
- * @param {number} id note id
- * @param {number} index note index
- * @param {string} username username of the note author
- * @param {string} title note title
- * @param {string} avatarUrl user avatarUrl
- * @param {string} body note body
- * @param {string} date note date
- * @param {number} numberOfComments number of replies to the note - referred to as comments in GH
- * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
- * @param {boolean} isComment Comments/replies are formatted differently
- * @return {object} React component
+ * @property {number} id note id
+ * @property {number} index note index
+ * @property {string} body note body
+ * @property {string} title note title
+ * @property {string} username username of the note author
+ * @property {string} date note date
+ * @property {string} [avatarUrl] user avatarUrl
+ * @property {number} [numberOfComments] number of replies to the note - referred to as comments in GH
+ * @property {boolean} [expandedImage] governs the size of the image, small proportions on mobile to start
+ * @property {boolean} [isComment] Comments/replies are formatted differently
+ * @property {boolean} [synched] Has comment been updated from server.
+ * @return {React.Component}
  */
 export default function NoteCard({
-  id = null,
-  index = null,
-  username = '',
-  title = 'Title',
+  id,
+  index,
+  body,
+  title,
+  username,
+  date,
   noteNumber = '',
   avatarUrl = '',
-  body = '',
-  date = '',
   numberOfComments = null,
   expandedImage = true,
   isComment = false,
   synched = true,
 }) {
-  assertDefined(body, id, index)
+  assertDefined(id, index, body, title, username)
   const [expandText, setExpandText] = useState(false)
   // eslint-disable-next-line no-unused-vars
   const [expandImage, setExpandImage] = useState(expandedImage)
@@ -334,23 +335,23 @@ const CardFooter = ({
       >
         {hasCameras &&
           <TooltipIconButton
-            title='Show the camera view'
+            tooltip='Show the camera view'
+            icon={<CameraIcon className='icon-share'/>}
+            onClick={onClickCamera}
             size='small'
             placement='bottom'
-            onClick={onClickCamera}
-            icon={<CameraIcon className='icon-share'/>}
             aboutInfo={false}
           />}
         {selected &&
           <TooltipIconButton
-            title='Share'
+            tooltip='Share'
+            icon={<ShareIcon className='icon-share'/>}
             size='small'
             placement='bottom'
             onClick={() => {
               onClickShare()
               setShareIssue(!shareIssue)
             }}
-            icon={<ShareIcon className='icon-share'/>}
           />
         }
         {
@@ -363,13 +364,13 @@ const CardFooter = ({
           }}
           >
             <TooltipIconButton
-              title='Place Mark'
+              tooltip='Place Mark'
+              icon={<PlaceMarkIcon className='icon-share'/>}
               size='small'
               placement='bottom'
               onClick={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceMarkIcon className='icon-share'/>}
             />
           </Box>
         }
@@ -385,33 +386,33 @@ const CardFooter = ({
       >
         {!isComment && synched && user && user.nickname === username &&
           <TooltipIconButton
-            title='Delete note'
+            tooltip='Delete note'
+            icon={<DeleteIcon className='icon-share'/>}
             size='small'
             placement='bottom'
             onClick={async () => {
               await deleteNote(repository, accessToken, noteNumber)
             }}
-            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {isComment && synched && user && user.nickname === username &&
           <TooltipIconButton
-            title='Delete comment'
+            tooltip='Delete comment'
+            icon={<DeleteIcon className='icon-share'/>}
             size='small'
             placement='bottom'
             onClick={async () => {
               await removeComment(repository, accessToken, id)
             }}
-            icon={<DeleteIcon className='icon-share'/>}
           />
         }
         {!synched &&
           <TooltipIconButton
-            title='Synch to GitHub'
+            tooltip='Synch to GitHub'
+            icon={<SynchIcon className='icon-share'/>}
             size='small'
             placement='bottom'
             onClick={() => toggleSynchSidebar()}
-            icon={<SynchIcon className='icon-share'/>}
           />
         }
         {isScreenshotEnabled && screenshotUri &&
@@ -419,13 +420,13 @@ const CardFooter = ({
         }
         {isScreenshotEnabled &&
           <TooltipIconButton
-            title='Take Screenshot'
+            tooltip='Take Screenshot'
+            icon={<PhotoCameraIcon className='icon-share'/>}
             size='small'
             placement='bottom'
             onClick={() => {
               setScreenshotUri(viewer.takeScreenshot())
             }}
-            icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
         {numberOfComments > 0 &&

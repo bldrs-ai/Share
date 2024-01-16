@@ -5,7 +5,7 @@ import {HelmetProvider} from 'react-helmet-async'
 
 
 /**
- * @property {object} children React component(s)
+ * @property {Array.<React.Component>} children Wrapped components
  * @return {React.Component}
  */
 export const MockComponent = ({children}) => {

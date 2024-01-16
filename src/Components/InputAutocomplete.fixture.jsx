@@ -3,15 +3,26 @@ import InputAutocomplete from './InputAutocomplete'
 import {ThemeCtx} from '../theme/Theme.fixture'
 
 
-const elements = [
+/**
+ * @property {Array<object>} exampleElements fixture sample elts
+ * @property {string} examplePlaceholderText fixture placeholder text
+ * @return {React.Element}
+ */
+export function createFixture({exampleElements, examplePlaceholderText}) {
+  return (
+    <ThemeCtx>
+      <InputAutocomplete elements={exampleElements} placeholder={examplePlaceholderText}/>
+    </ThemeCtx>
+  )
+}
+
+
+export const exampleElements = [
   {title: 'Surfaces'},
   {title: 'Case'},
   {title: 'Gears'},
   {title: 'Electonics'},
 ]
 
-export default (
-  <ThemeCtx>
-    <InputAutocomplete elements={elements} placeholder={'IFC property'}/>
-  </ThemeCtx>
-)
+
+export const examplePlaceholderText = 'Type something'

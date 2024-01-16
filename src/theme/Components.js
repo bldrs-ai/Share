@@ -4,20 +4,6 @@
  */
 export function getComponentOverrides(palette, typography) {
   return {
-    MuiTreeItem: {
-      styleOverrides: {
-        root: {
-          '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            color: palette.primary.contrastText,
-            backgroundColor: palette.primary.main,
-            borderRadius: '5px',
-          },
-          '& > div.MuiTreeItem-content': {
-            borderRadius: '5px',
-          },
-        },
-      },
-    },
     MuiButton: {
       styleOverrides: {
         root: {
@@ -131,21 +117,6 @@ export function getComponentOverrides(palette, typography) {
         },
       ],
     },
-    MuiDialog: {
-      styleOverrides: {
-        paper: {
-          borderRadius: '10px',
-        },
-      },
-    },
-    MuiDialogContent: {
-      styleOverrides: {
-        root: {
-          padding: '0px 10px',
-          overflowX: 'hidden',
-        },
-      },
-    },
     MuiPaper: {
       variants: [
         {
@@ -170,6 +141,21 @@ export function getComponentOverrides(palette, typography) {
           },
         },
       ],
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          borderRadius: '10px',
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          padding: '0px 10px',
+          overflowX: 'hidden',
+        },
+      },
     },
     MuiDialogTitle: {
       styleOverrides: {
@@ -230,6 +216,20 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           background: palette.primary.background,
+        },
+      },
+    },
+    MuiTreeItem: {
+      styleOverrides: {
+        root: {
+          '& > div.Mui-selected, & > div.Mui-selected:hover': {
+            color: palette.primary.contrastText,
+            backgroundColor: palette.primary.main,
+            borderRadius: '5px',
+          },
+          '& > div.MuiTreeItem-content': {
+            borderRadius: '5px',
+          },
         },
       },
     },

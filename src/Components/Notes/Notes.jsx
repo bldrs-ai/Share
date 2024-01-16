@@ -2,15 +2,15 @@ import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import List from '@mui/material/List'
 import * as Sentry from '@sentry/react'
-import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
-import {useIsMobile} from '../Hooks'
 import {getIssues, getIssueComments} from '../../utils/GitHub'
+import debug from '../../utils/debug'
+import ApplicationError from '../ApplicationError'
+import {useIsMobile} from '../Hooks'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
-import ApplicationError from '../ApplicationError'
 
 
 /** The prefix to use for the note ID within the URL hash. */

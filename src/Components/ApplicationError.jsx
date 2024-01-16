@@ -2,7 +2,7 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {grey} from '@mui/material/colors'
-import Logo from '../assets/LogoB.svg'
+import {LogoB} from './Logo'
 
 
 const ApplicationError = () => {
@@ -27,9 +27,7 @@ const ApplicationError = () => {
         You can <a href="/">click here to start a new session</a>.
       </Typography>
 
-      <Box>
-        <a href="/"><Logo style={{width: '30px'}}/></a>
-      </Box>
+      <a href="/"><LogoB/></a>
     </Box>
   )
 }

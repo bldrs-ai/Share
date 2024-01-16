@@ -1,7 +1,7 @@
 import React from 'react'
-import Tabs from './Tabs'
 import {ThemeCtx} from '../theme/Theme.fixture'
 import debug from '../utils/debug'
+import Tabs from './Tabs'
 
 
 export default (
