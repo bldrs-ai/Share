@@ -1,49 +1,52 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {TooltipIconButton} from './Buttons'
-import LogoIcon from '../assets/LogoB.svg'
-import PkgJson from '../../package.json'
+import LogoBIcon from '../assets/LogoB.svg'
+import LogoBWithDomainIcon from '../assets/LogoBWithDomain.svg'
+
+
+/** @return {React.Element} */
+export function LogoB() {
+  return (
+    <ThemeBox>
+      <LogoBIcon/>
+    </ThemeBox>
+  )
+}
+
+
+/** @return {React.Element} */
+export function LogoBWithDomain() {
+  return (
+    <ThemeBox>
+      <LogoBWithDomainIcon/>
+    </ThemeBox>
+  )
+}
 
 
 /**
- * @param {Function} onClick function triggered when logo is clicked
- * @return {React.ReactElement}
+ * @property {Array.<React.Element>} children The logo
+ * @return {React.Element}
  */
-export default function Logo({onClick}) {
+function ThemeBox({children}) {
   const theme = useTheme()
   return (
     <Box
       sx={{
-        'position': 'fixed',
-        'bottom': '1em',
-        'left': '1em',
-        'boxShadow': theme.shadows[1],
+        'width': '70px',
+        'margin': '0 auto',
         '& svg': {
-          'marginBottom': '4px',
-          'marginTop': '4px',
-          '@media (max-width: 900px)': {
-            width: '40px',
+          '& text': {
+            fill: theme.palette.primary.contrastText,
           },
-          '& .left-face': {
-            fill: theme.palette.secondary.background,
-          },
-          '& .right-face': {
-            fill: theme.palette.secondary.main,
-          },
-          '& #logo path': {
-            stroke: theme.palette.primary.main,
+          '& .face': {
+            stroke: theme.palette.primary.contrastText,
           },
         },
       }}
     >
-      <TooltipIconButton
-        title={`Bldrs: ${PkgJson.version}`}
-        placement='right'
-        icon={<LogoIcon/>}
-        onClick={onClick}
-        aboutInfo={false}
-      />
+      {children}
     </Box>
   )
 }
