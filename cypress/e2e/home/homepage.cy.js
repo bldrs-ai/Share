@@ -6,7 +6,7 @@ describe('home page', () => {
       cy.findByRole('dialog', {timeout: 300000})
           .should('exist')
           .should('be.visible')
-          .contains('Build every thing together')
+          .contains('Build Every Thing Together')
       cy.title().should('eq', 'About — Bldrs.ai')
     })
   })
