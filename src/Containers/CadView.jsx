@@ -150,17 +150,20 @@ export default function CadView({
 
   //Auth 
   const { isLoading, isAuthenticated } = useAuth0()
+  const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
   if (!jestTestingDisableWebWorker) {
     useEffect(() => {
-      // This function gets called whenever there's a change in authentication state
-      debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
-      if (!isLoading &&
-        (isAuthenticated && accessToken !== '') ||
-        (!isLoading && !isAuthenticated)) { 
-        (async () => {
-          await onViewer();
-        })();
+      if (!isViewerLoaded) {
+        // This function gets called whenever there's a change in authentication state
+        debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated);
+        if (!isLoading &&
+          (isAuthenticated && accessToken !== '') ||
+          (!isLoading && !isAuthenticated)) {
+          (async () => {
+            await onViewer();
+          })();
+        }
       }
     }, [isLoading, isAuthenticated, accessToken]);
   }
@@ -316,6 +319,8 @@ export default function CadView({
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
+
+    setIsViewerLoaded(true)
   }
 
 
