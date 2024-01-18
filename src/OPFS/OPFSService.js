@@ -26,6 +26,18 @@ export const opfsWriteFile = (objectUrl, fileName) => {
   workerRef.postMessage({command: 'writeObjectURLToFile', objectUrl: objectUrl, fileName: fileName})
 }
 
+export const opfsWriteModel = (objectUrl, objectKey, originalFileName, commitHash) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({command: 'writeObjectModel',
+    objectUrl: objectUrl,
+    objectKey: objectKey,
+    originalFileName: originalFileName,
+    commitHash: commitHash})
+}
+
 export const opfsReadFile = (fileName) => {
   if (!workerRef) {
     debug().error('Worker not initialized')
@@ -33,6 +45,15 @@ export const opfsReadFile = (fileName) => {
   }
 
   workerRef.postMessage({command: 'readObjectFromStorage', fileName: fileName})
+}
+
+export const opfsReadModel = (modelKey) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+
+  workerRef.postMessage({command: 'readModelFromStorage', modelKey: modelKey})
 }
 
 export const onWorkerMessage = (callback) => {
