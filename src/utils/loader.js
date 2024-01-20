@@ -1,6 +1,6 @@
 import debug from '../utils/debug'
-import { assertDefined } from '../utils/assert'
-import { initializeWorker, opfsWriteModel, opfsReadModel, opfsDownloadToOPFS } from '../OPFS/OPFSService.js'
+import {assertDefined} from '../utils/assert'
+import {initializeWorker, opfsWriteModel, opfsReadModel, opfsDownloadToOPFS} from '../OPFS/OPFSService.js'
 
 /**
  * Upload a local file for display from Drag And Drop.
@@ -10,11 +10,11 @@ import { initializeWorker, opfsWriteModel, opfsReadModel, opfsDownloadToOPFS } f
  * @param {Function} handleBeforeUnload
  */
 export function loadLocalFileDragAndDrop(
-  navigate,
-  appPrefix,
-  handleBeforeUnload,
-  file,
-  testingDisableWebWorker = false) {
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    file,
+    testingDisableWebWorker = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   let workerRef = null
   if (!testingDisableWebWorker) {
@@ -32,7 +32,7 @@ export function loadLocalFileDragAndDrop(
   const listener = (workerEvent) => {
     if (workerEvent.data.error) {
       debug().error('Error from worker:', workerEvent.data.error)
-      workerRef.removeEventListener('message', listener); // Remove the event listener
+      workerRef.removeEventListener('message', listener) // Remove the event listener
     } else if (workerEvent.data.completed) {
       if (workerEvent.data.event === 'write') {
         debug().log('Worker finished writing file')
@@ -40,19 +40,19 @@ export function loadLocalFileDragAndDrop(
         // Perform the navigation logic after the worker is done
         const fileName = workerEvent.data.fileName
         window.removeEventListener('beforeunload', handleBeforeUnload)
-        workerRef.removeEventListener('message', listener); // Remove the event listener
+        workerRef.removeEventListener('message', listener) // Remove the event listener
         navigate(`${appPrefix}/v/new/${fileName}.ifc`)
       } else if (workerEvent.data.event === 'read') {
         debug().log('Worker finished reading file')
         const fileName = workerEvent.data.file.name
         window.removeEventListener('beforeunload', handleBeforeUnload)
-        workerRef.removeEventListener('message', listener); // Remove the event listener
+        workerRef.removeEventListener('message', listener) // Remove the event listener
         navigate(`${appPrefix}/v/new/${fileName}.ifc`)
       }
     }
-  };
+  }
 
-  workerRef.addEventListener('message', listener);
+  workerRef.addEventListener('message', listener)
 
   const commitHash = ''
   opfsWriteModel(tmpUrl, fileNametmpUrl, file.name, commitHash)
@@ -67,11 +67,11 @@ export function loadLocalFileDragAndDrop(
  * @param {Function} handleBeforeUnload
  */
 export function loadLocalFile(
-  navigate,
-  appPrefix,
-  handleBeforeUnload,
-  testingSkipAutoRemove = false,
-  testingDisableWebWorker = false) {
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    testingSkipAutoRemove = false,
+    testingDisableWebWorker = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   const viewerContainer = document.getElementById('viewer-container')
   const fileInput = document.createElement('input')
@@ -81,48 +81,48 @@ export function loadLocalFile(
     workerRef = initializeWorker()
   }
   fileInput.addEventListener(
-    'change',
-    (event) => {
-      debug().log('loader#loadLocalFile#event:', event)
-      const tmpUrl = URL.createObjectURL(event.target.files[0])
-      debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
-      // Post message to the worker to handle the file
-      const parts = tmpUrl.split('/')
-      const fileNametmpUrl = parts[parts.length - 1]
+      'change',
+      (event) => {
+        debug().log('loader#loadLocalFile#event:', event)
+        const tmpUrl = URL.createObjectURL(event.target.files[0])
+        debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+        // Post message to the worker to handle the file
+        const parts = tmpUrl.split('/')
+        const fileNametmpUrl = parts[parts.length - 1]
 
-      if (!testingDisableWebWorker) {
-        const commitHash = ''
-        opfsWriteModel(tmpUrl, fileNametmpUrl, event.target.files[0].name, commitHash)
-        // Listener for messages from the worker
-        const listener = (workerEvent) => {
-          if (workerEvent.data.error) {
-            debug().error('Error from worker:', workerEvent.data.error)
-            workerRef.removeEventListener('message', listener); // Remove the event listener
-          } else if (workerEvent.data.completed) {
-            if (workerEvent.data.event === 'write') {
-              debug().log('Worker finished writing file')
+        if (!testingDisableWebWorker) {
+          const commitHash = ''
+          opfsWriteModel(tmpUrl, fileNametmpUrl, event.target.files[0].name, commitHash)
+          // Listener for messages from the worker
+          const listener = (workerEvent) => {
+            if (workerEvent.data.error) {
+              debug().error('Error from worker:', workerEvent.data.error)
+              workerRef.removeEventListener('message', listener) // Remove the event listener
+            } else if (workerEvent.data.completed) {
+              if (workerEvent.data.event === 'write') {
+                debug().log('Worker finished writing file')
 
-              // Perform the navigation logic after the worker is done
-              const fileName = workerEvent.data.fileName
-              window.removeEventListener('beforeunload', handleBeforeUnload)
-              workerRef.removeEventListener('message', listener); // Remove the event listener
-              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
-            } else if (workerEvent.data.event === 'read') {
-              debug().log('Worker finished reading file')
-              const fileName = workerEvent.data.file.name
-              window.removeEventListener('beforeunload', handleBeforeUnload)
-              workerRef.removeEventListener('message', listener); // Remove the event listener
-              navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+                // Perform the navigation logic after the worker is done
+                const fileName = workerEvent.data.fileName
+                window.removeEventListener('beforeunload', handleBeforeUnload)
+                workerRef.removeEventListener('message', listener) // Remove the event listener
+                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+              } else if (workerEvent.data.event === 'read') {
+                debug().log('Worker finished reading file')
+                const fileName = workerEvent.data.file.name
+                window.removeEventListener('beforeunload', handleBeforeUnload)
+                workerRef.removeEventListener('message', listener) // Remove the event listener
+                navigate(`${appPrefix}/v/new/${fileName}.ifc`)
+              }
             }
           }
-        };
-        workerRef.addEventListener('message', listener)
-      } else {
-        window.removeEventListener('beforeunload', handleBeforeUnload)
-        navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
-      }
-    },
-    false,
+          workerRef.addEventListener('message', listener)
+        } else {
+          window.removeEventListener('beforeunload', handleBeforeUnload)
+          navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
+        }
+      },
+      false,
   )
 
   viewerContainer.appendChild(fileInput)
@@ -167,16 +167,16 @@ export function getModelFromOPFS(filepath) {
       const listener = (event) => {
         if (event.data.error) {
           debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener); // Remove the event listener
+          workerRef.removeEventListener('message', listener) // Remove the event listener
           reject(new Error(event.data.error))
         } else if (event.data.completed) {
           debug().log('Worker finished retrieving file')
           const file = event.data.file
           debug().log(`Metadata: ${event.data.metaDataString}`)
-          workerRef.removeEventListener('message', listener); // Remove the event listener
+          workerRef.removeEventListener('message', listener) // Remove the event listener
           resolve(file) // Resolve the promise with the file
         }
-      };
+      }
 
       workerRef.addEventListener('message', listener)
     } else {
@@ -194,15 +194,14 @@ export function getModelFromOPFS(filepath) {
  * @param {string} commitHash
  * @return {File}
  */
-export async function downloadToOPFS(
-  navigate,
-  appPrefix,
-  handleBeforeUnload,
-  objectUrl,
-  originalFilePath,
-  commitHash,
-  onProgress) {
-
+export function downloadToOPFS(
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    objectUrl,
+    originalFilePath,
+    commitHash,
+    onProgress) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
 
   return new Promise((resolve, reject) => {
@@ -212,7 +211,7 @@ export async function downloadToOPFS(
       const listener = (event) => {
         if (event.data.error) {
           debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener); // Remove the event listener
+          workerRef.removeEventListener('message', listener) // Remove the event listener
           reject(new Error(event.data.error))
         } else if (event.data.progressEvent) {
           if (onProgress) {
@@ -220,40 +219,38 @@ export async function downloadToOPFS(
               lengthComputable: event.data.contentLength !== 0,
               contentLength: event.data.contentLength,
               receivedLength: event.data.receivedLength,
-            }); // Custom progress event
+            }) // Custom progress event
           }
-        }
-        else if (event.data.completed) {
+        } else if (event.data.completed) {
           debug().log('Worker finished downloading file')
           const fileName = event.data.fileName
           debug().log(`Metadata: ${event.data.metaDataString}`)
           window.removeEventListener('beforeunload', handleBeforeUnload)
-          workerRef.removeEventListener('message', listener); // Remove the event listener
+          workerRef.removeEventListener('message', listener) // Remove the event listener
           navigate(`${appPrefix}/v/new/${fileName}.ifc`)
           resolve(true) // Resolve the promise with the file
         }
-      };
+      }
       workerRef.addEventListener('message', listener)
     } else {
       reject(new Error('Worker initialization failed'))
     }
 
 
-    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, (onProgress) ? true : false)
+    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, !!(onProgress))
   })
 
-  /*// Combine chunks into single Uint8Array
+  /* // Combine chunks into single Uint8Array
   let chunksAll = new Uint8Array(receivedLength);
   let position = 0;
   for (let chunk of chunks) {
     chunksAll.set(chunk, position);
     position += chunk.length;
   }
-  
+
   // Create a blob from the chunks
   const fileBuffer = new Blob([chunksAll]);
-  
-  return fileBuffer*/
 
+  return fileBuffer*/
 }
 

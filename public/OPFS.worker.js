@@ -27,10 +27,13 @@ self.addEventListener('message', async (event) => {
       await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onProgress)
     }
   } catch (error) {
-    self.postMessage({ error: error.message })
+    self.postMessage({error: error.message})
   }
 })
 
+/**
+ *
+ */
 async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onProgress) {
   const textEncoder = new TextEncoder()
   const opfsRoot = await navigator.storage.getDirectory()
@@ -38,10 +41,10 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
 
   // Get folder handle
   try {
-    newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, { create: true })
+    newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, {create: true})
   } catch (error) {
     const workerMessage = `Error getting folder handle for ${commitHash}: ${error}`
-    self.postMessage({ error: workerMessage })
+    self.postMessage({error: workerMessage})
     return
   }
 
@@ -50,85 +53,83 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
   let blobAccessHandle = null
   // Get file handle for file blob
   try {
-    modelBlobFileHandle = await newFolderHandle.getFileHandle(commitHash, { create: true })
+    modelBlobFileHandle = await newFolderHandle.getFileHandle(commitHash, {create: true})
     // Create FileSystemSyncAccessHandle on the file.
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
   } catch (error) {
     const workerMessage = `Error getting file handle for ${commitHash}: ${error}`
-    self.postMessage({ error: workerMessage })
+    self.postMessage({error: workerMessage})
     return
   }
   // Fetch the file from the object URL
-  const response = await fetch(objectUrl);
+  const response = await fetch(objectUrl)
 
   if (!response.body) {
-    throw new Error('ReadableStream not supported in this browser.');
+    throw new Error('ReadableStream not supported in this browser.')
   }
 
-  const reader = response.body.getReader();
-  const contentLength = +response.headers.get('Content-Length');
+  const reader = response.body.getReader()
+  const contentLength = +response.headers.get('Content-Length')
 
-  let receivedLength = 0; // length of received bytes
-  let chunks = []; // array of received binary chunks (comprises the body)
+  let receivedLength = 0 // length of received bytes
 
-  let isDone = false;
+  let isDone = false
 
   try {
-    while (true) {
-      const { done, value } = await reader.read();
+    while (!isDone) {
+      const {done, value} = await reader.read()
 
       if (done) {
-        isDone = true;
-        break;
+        isDone = true
+        break
       }
 
       try {
-
         if (value !== undefined) {
           // Write buffer
-          const blobWriteSize = await blobAccessHandle.write(value, { at: receivedLength })
+          // eslint-disable-next-line no-unused-vars
+          const blobWriteSize = await blobAccessHandle.write(value, {at: receivedLength})
 
-          if (blobWriteSize !== value.length) {
-            console.log("blob write size !== chunk length")
-          }
-        } else {
-          console.log("nothing was read")
-        }
-        
+          /* if (blobWriteSize !== value.length) {
+            console.log('blob write size !== chunk length')
+          }*/
+        } /* else {
+          console.log('nothing was read')
+        }*/
       } catch (error) {
-        const workerMessage = `Error writing to ${objectKey}: ${error}.`
+        const workerMessage = `Error writing to ${commitHash}: ${error}.`
         // Close the access handle when done
         await blobAccessHandle.close()
-        self.postMessage({ error: workerMessage })
+        self.postMessage({error: workerMessage})
         return
       }
 
-      receivedLength += value.length;
+      receivedLength += value.length
 
       if (onProgress) {
         self.postMessage({
           progressEvent: onProgress,
           lengthComputable: contentLength !== 0,
           contentLength: contentLength,
-          receivedLength: receivedLength
+          receivedLength: receivedLength,
         })
       }
     }
 
     if (isDone) {
-      //close blob handle 
-      // Close the access handle when done
+      // close blob handle
       await blobAccessHandle.close()
-      //if done, the file should be written. Write the metadata and signal the worker has completed. 
+      const metaDataFileName = `${commitHash}.json`
+      // if done, the file should be written. Write the metadata and signal the worker has completed.
       try {
         // Get file handle for metadata
         let metaDataFileHandle = null
-        const metaDataFileName = `${commitHash}.json`
+
         try {
-          metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, { create: true })
+          metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, {create: true})
         } catch (error) {
           const workerMessage = `Error getting file handle for ${metaDataFileName}: ${error}`
-          self.postMessage({ error: workerMessage })
+          self.postMessage({error: workerMessage})
           return
         }
 
@@ -147,22 +148,22 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
         const content = textEncoder.encode(metaDataJsonString)
 
         // Write buffer at the beginning of the file
-        const metaDataWriteSize = await metaDataAccessHandle.write(content, { at: 0 })
+        const metaDataWriteSize = await metaDataAccessHandle.write(content, {at: 0})
         // Close the access handle when done
         await metaDataAccessHandle.close()
 
         if (metaDataWriteSize > 0) {
-          self.postMessage({ completed: true, event: 'write', fileName: commitHash })
+          self.postMessage({completed: true, event: 'write', fileName: commitHash})
         }
       } catch (error) {
-        const workerMessage = `Error writing to ${commitHash}: ${error}.`
-        self.postMessage({ error: workerMessage })
+        const workerMessage = `Error writing to ${metaDataFileName}: ${error}.`
+        self.postMessage({error: workerMessage})
         return
       }
     }
   } catch (error) {
-    reader.cancel();
-    self.postMessage({ error: error })
+    reader.cancel()
+    self.postMessage({error: error})
   }
 }
 
@@ -178,10 +179,10 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, commitHa
 
     // Get folder handle
     try {
-      newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, { create: true })
+      newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting folder handle for ${objectKey}: ${error}`
-      self.postMessage({ error: workerMessage })
+      self.postMessage({error: workerMessage})
       return
     }
 
@@ -190,10 +191,10 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, commitHa
 
     // Get file handle for file blob
     try {
-      modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, { create: true })
+      modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${objectKey}: ${error}`
-      self.postMessage({ error: workerMessage })
+      self.postMessage({error: workerMessage})
       return
     }
 
@@ -208,7 +209,7 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, commitHa
       const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
-      const blobWriteSize = await blobAccessHandle.write(fileArrayBuffer, { at: 0 })
+      const blobWriteSize = await blobAccessHandle.write(fileArrayBuffer, {at: 0})
       // Close the access handle when done
       await blobAccessHandle.close()
 
@@ -218,10 +219,10 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, commitHa
           let metaDataFileHandle = null
           const metaDataFileName = `${objectKey}.json`
           try {
-            metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, { create: true })
+            metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, {create: true})
           } catch (error) {
             const workerMessage = `Error getting file handle for ${metaDataFileName}: ${error}`
-            self.postMessage({ error: workerMessage })
+            self.postMessage({error: workerMessage})
             return
           }
 
@@ -240,30 +241,30 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, commitHa
           const content = textEncoder.encode(metaDataJsonString)
 
           // Write buffer at the beginning of the file
-          const metaDataWriteSize = await metaDataAccessHandle.write(content, { at: 0 })
+          const metaDataWriteSize = await metaDataAccessHandle.write(content, {at: 0})
           // Close the access handle when done
           await metaDataAccessHandle.close()
 
           if (metaDataWriteSize > 0) {
-            self.postMessage({ completed: true, event: 'write', fileName: objectKey })
+            self.postMessage({completed: true, event: 'write', fileName: objectKey})
           }
         } catch (error) {
           const workerMessage = `Error writing to ${objectKey}: ${error}.`
-          self.postMessage({ error: workerMessage })
+          self.postMessage({error: workerMessage})
           return
         }
       } else {
         const workerMessage = `Error writing to file: ${objectKey}`
-        self.postMessage({ error: workerMessage })
+        self.postMessage({error: workerMessage})
       }
     } catch (error) {
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
-      self.postMessage({ error: workerMessage })
+      self.postMessage({error: workerMessage})
       return
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    self.postMessage({ error: workerMessage })
+    self.postMessage({error: workerMessage})
   }
 }
 
@@ -280,7 +281,7 @@ async function readModelFromOPFS(objectKey) {
       modelFolderHandle = await opfsRoot.getDirectoryHandle(objectKey)
     } catch (error) {
       const errorMessage = `Folder ${objectKey} not found: ${error}`
-      self.postMessage({ error: errorMessage })
+      self.postMessage({error: errorMessage})
       return // Exit if the file is not found
     }
 
@@ -292,7 +293,7 @@ async function readModelFromOPFS(objectKey) {
       metaDataString = await metaDataFileHandle.text()
     } catch (error) {
       const errorMessage = `File ${objectKey} not found: ${error}`
-      self.postMessage({ error: errorMessage })
+      self.postMessage({error: errorMessage})
       return // Exit if the file is not found
     }
 
@@ -302,15 +303,15 @@ async function readModelFromOPFS(objectKey) {
 
       const blobFile = await blobFileHandle.getFile()
 
-      self.postMessage({ completed: true, event: 'read', file: blobFile, metaDataString: metaDataString })
+      self.postMessage({completed: true, event: 'read', file: blobFile, metaDataString: metaDataString})
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
-      self.postMessage({ error: errorMessage })
+      self.postMessage({error: errorMessage})
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    self.postMessage({ error: errorMessage })
+    self.postMessage({error: errorMessage})
   }
 }
 
@@ -326,10 +327,10 @@ async function writeFileToOPFS(objectUrl, fileName) {
 
     // Get file handle
     try {
-      newFileHandle = await opfsRoot.getFileHandle(fileName, { create: true })
+      newFileHandle = await opfsRoot.getFileHandle(fileName, {create: true})
     } catch (error) {
       const workerMessage = `Error getting file handle for ${fileName}: ${error}`
-      self.postMessage({ error: workerMessage })
+      self.postMessage({error: workerMessage})
       return
     }
 
@@ -344,24 +345,24 @@ async function writeFileToOPFS(objectUrl, fileName) {
       const accessHandle = await newFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
-      const writeSize = await accessHandle.write(fileArrayBuffer, { at: 0 })
+      const writeSize = await accessHandle.write(fileArrayBuffer, {at: 0})
       // Close the access handle when done
       await accessHandle.close()
 
       if (writeSize > 0) {
-        self.postMessage({ completed: true, event: 'write', fileName: fileName })
+        self.postMessage({completed: true, event: 'write', fileName: fileName})
       } else {
         const workerMessage = `Error writing to file: ${fileName}`
-        self.postMessage({ error: workerMessage })
+        self.postMessage({error: workerMessage})
       }
     } catch (error) {
       const workerMessage = `Error writing to ${fileName}: ${error}.`
-      self.postMessage({ error: workerMessage })
+      self.postMessage({error: workerMessage})
       return
     }
   } catch (error) {
     const workerMessage = `Error writing object URL to file: ${error}`
-    self.postMessage({ error: workerMessage })
+    self.postMessage({error: workerMessage})
   }
 }
 
@@ -378,22 +379,22 @@ async function readFileFromOPFS(fileName) {
       newFileHandle = await opfsRoot.getFileHandle(fileName)
     } catch (error) {
       const errorMessage = `File ${fileName} not found: ${error}`
-      self.postMessage({ error: errorMessage })
+      self.postMessage({error: errorMessage})
       return // Exit if the file is not found
     }
 
     try {
       const fileHandle = await newFileHandle.getFile()
 
-      self.postMessage({ completed: true, event: 'read', file: fileHandle })
+      self.postMessage({completed: true, event: 'read', file: fileHandle})
     } catch (error) {
       const errorMessage = `Error retrieving File from ${fileName}: ${error}.`
-      self.postMessage({ error: errorMessage })
+      self.postMessage({error: errorMessage})
       return
     }
   } catch (error) {
     const errorMessage = `Error retrieving File: ${error}.`
-    self.postMessage({ error: errorMessage })
+    self.postMessage({error: errorMessage})
   }
 }
 

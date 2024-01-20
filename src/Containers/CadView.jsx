@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from 'react'
-import { Color, MeshLambertMaterial } from 'three'
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom'
+import React, {useEffect, useState} from 'react'
+import {Color, MeshLambertMaterial} from 'three'
+import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import { navToDefault } from '../Share'
+import {navToDefault} from '../Share'
 import Alert from '../Components/Alert'
 import AboutControl from '../Components/About/AboutControl'
 import ElementGroup from '../Components/ElementGroup'
@@ -15,24 +15,24 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import { hasValidUrlParams as urlHasCameraParams } from '../Components/CameraControl'
-import { useWindowDimensions } from '../Components/Hooks'
-import { useIsMobile } from '../Components/Hooks'
-import { IfcViewerAPIExtended } from '../Infrastructure/IfcViewerAPIExtended'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {useWindowDimensions} from '../Components/Hooks'
+import {useIsMobile} from '../Components/Hooks'
+import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Analytics from '../privacy/analytics'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
-import { loadLocalFile, getUploadedBlobPath, getModelFromOPFS, loadLocalFileDragAndDrop, downloadToOPFS } from '../utils/loader'
-import { getDownloadURL, parseGitHubRepositoryURL, getLatestCommitHash } from '../utils/GitHub'
-import { computeElementPathIds, setupLookupAndParentLinks } from '../utils/TreeUtils'
-import { assertDefined } from '../utils/assert'
-import { handleBeforeUnload } from '../utils/event'
-import { navWith } from '../utils/navigate'
+import {loadLocalFile, getUploadedBlobPath, getModelFromOPFS, loadLocalFileDragAndDrop, downloadToOPFS} from '../utils/loader'
+import {getDownloadURL, parseGitHubRepositoryURL, getLatestCommitHash} from '../utils/GitHub'
+import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {assertDefined} from '../utils/assert'
+import {handleBeforeUnload} from '../utils/event'
+import {navWith} from '../utils/navigate'
 import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
-import { usePlaceMark } from '../hooks/usePlaceMark'
-import { groupElementsByTypes } from '../utils/ifc'
-import { useAuth0 } from '@auth0/auth0-react'
+import {usePlaceMark} from '../hooks/usePlaceMark'
+import {groupElementsByTypes} from '../utils/ifc'
+import {useAuth0} from '@auth0/auth0-react'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -90,11 +90,11 @@ export default function CadView({
     // Here you can handle the files as needed
     if (files.length === 1) {
       loadLocalFileDragAndDrop(
-        navigate,
-        appPrefix,
-        handleBeforeUnload,
-        files[0],
-        jestTestingDisableWebWorker)
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          files[0],
+          jestTestingDisableWebWorker)
     }
   }
 
@@ -146,10 +146,10 @@ export default function CadView({
 
 
   // Place Mark
-  const { createPlaceMark, onSceneSingleTap, onSceneDoubleTap } = usePlaceMark()
+  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   // Auth
-  const { isLoading, isAuthenticated } = useAuth0()
+  const {isLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
   /* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
@@ -262,8 +262,8 @@ export default function CadView({
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
       const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.scene.background))
+          pathPrefix,
+          assertDefined(themeArg.palette.scene.background))
       setViewer(initializedViewer)
     }
     initViewerCb(undefined, theme)
@@ -318,7 +318,7 @@ export default function CadView({
     setModelReady(true)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-      .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
+        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
     if (previouslyHiddenELements.length > 0) {
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
@@ -342,10 +342,10 @@ export default function CadView({
 
   const setAlertMessage = (msg) =>
     setAlert(
-      <Alert onCloseCb={() => {
-        navToDefault(navigate, appPrefix)
-      }} message={msg}
-      />,
+        <Alert onCloseCb={() => {
+          navToDefault(navigate, appPrefix)
+        }} message={msg}
+        />,
     )
 
 
@@ -375,17 +375,18 @@ export default function CadView({
       const file = await getModelFromOPFS(filepath)
 
       loadedModel = await viewer.loadIfc(
-        file,
-        !urlHasCameraParams(),
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}`)
-        }, customViewSettings)
-    } else {
-      if (ifcURL === '/index.ifc') {
-        loadedModel = await viewer.loadIfcUrl(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+      // TODO(nickcastel50): need a more permanent way to
+      // prevent redirect here for bundled ifc files
+    } else if (ifcURL === '/index.ifc' || ifcURL === '/haus.ifc') {
+      loadedModel = await viewer.loadIfcUrl(
           ifcURL,
           !urlHasCameraParams(), // fit to frame
           (progressEvent) => {
@@ -403,29 +404,27 @@ export default function CadView({
             setIsLoading(false)
             setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
-      } else {
+    } else {
+      // Split the pathname part of the URL into components
+      const url = new URL(ifcURL)
+      const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
 
+      // Extract the owner, repo, and filePath
+      const owner = pathComponents[0]
+      const repo = pathComponents[1]
+      // Join the remaining parts to form the filePath
+      // eslint-disable-next-line no-magic-numbers
+      const filePath = pathComponents.slice(3).join('/')
 
+      // get commit hash
+      const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
 
-        // Split the pathname part of the URL into components
-        const url = new URL(ifcURL);
-        const pathComponents = url.pathname.split('/').filter(component => component.length > 0);
+      if (commitHash === null) {
+        debug().error(`Error obtaining commit hash for: ${ ifcURL}`)
+      }
 
-        // Extract the owner, repo, and filePath
-        const owner = pathComponents[0]
-        const repo = pathComponents[1]
-        // Join the remaining parts to form the filePath
-        const filePath = pathComponents.slice(3).join('/')
-
-        //get commit hash 
-        const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
-
-        if (commitHash === null) {
-          debug().error("Error obtaining commit hash for: " + ifcURL)
-        }
-
-        //download file from github
-        const result = await downloadToOPFS(
+      // download file from github
+      const result = downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
@@ -442,9 +441,8 @@ export default function CadView({
             }
           })
 
-        if (result) {
-          return;
-        }
+      if (result) {
+        return
       }
     }
 
@@ -514,7 +512,7 @@ export default function CadView({
     searchIndex.clearIndex()
     debug().log('CadView#initSearch: ', m, rootElt)
     debug().time('build searchIndex')
-    searchIndex.indexElement({ properties: m }, rootElt)
+    searchIndex.indexElement({properties: m}, rootElt)
     debug().timeEnd('build searchIndex')
     onSearchParams()
     setShowSearchBar(true)
@@ -570,7 +568,7 @@ export default function CadView({
     resetState()
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
-    navWith(navigate, `${pathPrefix}${repoFilePath}`, { search: '', hash: '' })
+    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
   }
 
   /**
@@ -593,7 +591,7 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, { search: '', hash: '' })
+        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -724,7 +722,7 @@ export default function CadView({
         },
       })
     } else if (githubRegex.test(ifcUrl)) {
-      setLoadedFileInfo({ source: 'github', info: { url: ifcUrl } })
+      setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
     }
   }
 
@@ -794,24 +792,24 @@ export default function CadView({
         }}
         >
           <ControlsGroup fileOpen={() => loadLocalFile(
-            navigate,
-            appPrefix,
-            handleBeforeUnload,
-            false,
-            jestTestingDisableWebWorker)} repo={modelPath.repo}
+              navigate,
+              appPrefix,
+              handleBeforeUnload,
+              false,
+              jestTestingDisableWebWorker)} repo={modelPath.repo}
           />
           {isSearchBarVisible && isSearchVisible &&
-            <Box sx={{ marginTop: '10px', width: '100%' }}>
+            <Box sx={{marginTop: '10px', width: '100%'}}>
               <SearchBar fileOpen={() => loadLocalFile(
-                navigate,
-                appPrefix,
-                handleBeforeUnload,
-                false,
-                jestTestingDisableWebWorker)}
+                  navigate,
+                  appPrefix,
+                  handleBeforeUnload,
+                  false,
+                  jestTestingDisableWebWorker)}
               />
             </Box>
           }
-          <Box sx={{ marginTop: '10px', width: '100%' }}>
+          <Box sx={{marginTop: '10px', width: '100%'}}>
             {isNavPanelOpen &&
               isNavigationPanelVisible &&
               isNavigationVisible &&
@@ -834,7 +832,7 @@ export default function CadView({
             }
             {
               modelPath.repo !== undefined && isVersionHistoryVisible &&
-              <VersionsHistoryPanel branch={modelPath.branch} />
+              <VersionsHistoryPanel branch={modelPath.branch}/>
             }
           </Box>
         </Box>
@@ -848,7 +846,7 @@ export default function CadView({
             width: '100%',
           }}
         >
-          <ElementGroup deselectItems={deselectItems} />
+          <ElementGroup deselectItems={deselectItems}/>
         </Box>
       }
       <Box
@@ -858,7 +856,7 @@ export default function CadView({
           left: '1.0em',
         }}
       >
-        <AboutControl />
+        <AboutControl/>
       </Box>
       <Box
         sx={{
@@ -867,9 +865,9 @@ export default function CadView({
           right: '1.0em',
         }}
       >
-        <HelpControl />
+        <HelpControl/>
       </Box>
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems} />
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
 
       {isModelLoading &&
@@ -913,7 +911,7 @@ export default function CadView({
                 },
               }}
             >
-              <Box className="circleLoader" />
+              <Box className="circleLoader"/>
             </Box>
           </Box>
         </Box>
@@ -927,7 +925,7 @@ export default function CadView({
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.Component}
  */
-function OperationsGroupAndDrawer({ deselectItems }) {
+function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()
 
   return (
@@ -943,7 +941,7 @@ function OperationsGroupAndDrawer({ deselectItems }) {
             right: 0,
           }}
         >
-          <OperationsGroup deselectItems={deselectItems} />
+          <OperationsGroup deselectItems={deselectItems}/>
         </Box>
         <Box
           sx={{
@@ -952,8 +950,8 @@ function OperationsGroupAndDrawer({ deselectItems }) {
             width: '100%',
           }}
         >
-          <SideDrawer />
-          <AppStoreSideDrawer />
+          <SideDrawer/>
+          <AppStoreSideDrawer/>
         </Box>
       </>
     ) : (
@@ -968,10 +966,10 @@ function OperationsGroupAndDrawer({ deselectItems }) {
         }}
       >
         <Box>
-          <OperationsGroup deselectItems={deselectItems} />
+          <OperationsGroup deselectItems={deselectItems}/>
         </Box>
-        <SideDrawer />
-        <AppStoreSideDrawer />
+        <SideDrawer/>
+        <AppStoreSideDrawer/>
       </Box>
     )
   )
@@ -1013,7 +1011,7 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
 
 const getGitHubDownloadURL = async (url, accessToken) => {
   const repo = parseGitHubRepositoryURL(url)
-  const downloadURL = await getDownloadURL({ orgName: repo.owner, name: repo.repository }, repo.path, repo.ref, accessToken)
+  const downloadURL = await getDownloadURL({orgName: repo.owner, name: repo.repository}, repo.path, repo.ref, accessToken)
   return downloadURL
 }
 
