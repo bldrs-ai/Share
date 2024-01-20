@@ -291,6 +291,31 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
   return {files, directories}
 }
 
+export async function getLatestCommitHash(owner, repo, filePath, accessToken)  {
+  try {
+      const commits = await octokit.repos.listCommits({
+          owner,
+          repo,
+          path: filePath,
+          headers: {
+            authorization: `Bearer ${accessToken}`,
+          }
+      });
+
+      if (commits.data.length === 0) {
+          console.log("No commits found for the specified file.");
+          return null;
+      }
+
+      const latestCommitHash = commits.data[0].sha;
+      console.log(`The latest commit hash for the file is: ${latestCommitHash}`);
+      return latestCommitHash;
+  } catch (error) {
+      console.error("Error fetching the latest commit hash: ", error);
+      return null;
+  }
+}
+
 
 /**
  * Parses a github repository url and returns a structure
