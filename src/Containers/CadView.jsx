@@ -435,6 +435,8 @@ export default function CadView({
           ifcURL,
           filePath,
           commitHash,
+          owner,
+          repo,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.receivedLength)) {
               const loadedBytes = progressEvent.receivedLength

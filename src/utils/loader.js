@@ -201,6 +201,8 @@ export function downloadToOPFS(
     objectUrl,
     originalFilePath,
     commitHash,
+    owner,
+    repo,
     onProgress) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
 
@@ -241,7 +243,7 @@ export function downloadToOPFS(
     }
 
 
-    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, !!(onProgress))
+    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, !!(onProgress))
   })
 
   /* // Combine chunks into single Uint8Array

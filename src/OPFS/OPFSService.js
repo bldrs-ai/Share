@@ -38,7 +38,7 @@ export const opfsWriteModel = (objectUrl, objectKey, originalFileName, commitHas
     commitHash: commitHash})
 }
 
-export const opfsDownloadToOPFS = (objectUrl, commitHash, originalFilePath, onProgress) => {
+export const opfsDownloadToOPFS = (objectUrl, commitHash, originalFilePath, owner, repo, onProgress) => {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -47,6 +47,8 @@ export const opfsDownloadToOPFS = (objectUrl, commitHash, originalFilePath, onPr
     objectUrl: objectUrl,
     commitHash: commitHash,
     originalFilePath: originalFilePath,
+    owner: owner,
+    repo: repo,
     onProgress: onProgress})
 }
 

@@ -22,9 +22,11 @@ self.addEventListener('message', async (event) => {
     } else if (event.data.command === 'downloadToOPFS') {
       const objectUrl = event.data.objectUrl
       const commitHash = event.data.commitHash
+      const owner = event.data.owner
+      const repo = event.data.repo
       const onProgress = event.data.onProgress
       const originalFilePath = event.data.originalFilePath
-      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onProgress)
+      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, onProgress)
     }
   } catch (error) {
     self.postMessage({error: error.message})
@@ -34,7 +36,7 @@ self.addEventListener('message', async (event) => {
 /**
  *
  */
-async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onProgress) {
+async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, onProgress) {
   const textEncoder = new TextEncoder()
   const opfsRoot = await navigator.storage.getDirectory()
   let newFolderHandle = null
@@ -147,6 +149,8 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
         // create metadata string
         const metaData = {
           fileName: originalFilePath,
+          owner: owner,
+          repo: repo,
           commitHash: commitHash,
         }
 
@@ -164,7 +168,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
         await metaDataAccessHandle.close()
 
         if (metaDataWriteSize > 0) {
-          self.postMessage({completed: true, event: 'download', fileName: commitHash})
+          self.postMessage({completed: true, event: 'download', fileName: commitHash, metaDataString: metaDataJsonString})
         }
       } catch (error) {
         const workerMessage = `Error writing to ${metaDataFileName}: ${error}.`
