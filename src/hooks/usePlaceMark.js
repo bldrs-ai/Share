@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
@@ -129,11 +130,13 @@ export function usePlaceMark() {
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
+    console.log('the placemark is created')
   }
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
     debug().log('usePlaceMark#onSceneDoubleTap')
+    console.log('double tap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -162,6 +165,7 @@ export function usePlaceMark() {
 
   const onSceneSingleTap = async (event, callback) => {
     debug().log('usePlaceMark#onSceneSingleTap')
+    console.log('single tap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -251,9 +255,9 @@ export function usePlaceMark() {
 
   const togglePlaceMarkActive = (id) => {
     debug().log('usePlaceMark#togglePlaceMarkActive: id: ', id)
-    if (!existPlaceMarkInFeature) {
-      return
-    }
+    // if (!existPlaceMarkInFeature) {
+    //   return
+    // }
 
     if (placeMark) {
       if (placeMarkId === id && placeMark.activated) {
@@ -277,9 +281,9 @@ export function usePlaceMark() {
 
 
   const activatePlaceMark = () => {
-    if (!existPlaceMarkInFeature) {
-      return
-    }
+    // if (!existPlaceMarkInFeature) {
+    //   return
+    // }
     placeMark.activate()
     setPlaceMarkActivated(true)
   }
