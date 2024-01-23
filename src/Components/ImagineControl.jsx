@@ -12,7 +12,7 @@ import {
 import {ControlButton} from './Buttons'
 import CopyIcon from '../assets/icons/Copy.svg'
 import {Helmet} from 'react-helmet-async'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
@@ -37,7 +37,7 @@ export default function ImagineControl() {
   return (
     <ControlButton
       title='Bldr Bot Rendering'
-      icon={<AutoFixHighIcon className='icon-share' color='secondary'/>}
+      icon={<AutoFixHighOutlinedIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
       dialog={
@@ -104,7 +104,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
 
   return (
     <Dialog
-      icon={<AutoFixHighIcon className='icon-share'/>}
+      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
       headerText={
         <Box
           sx={{
