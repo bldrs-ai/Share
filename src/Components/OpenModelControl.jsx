@@ -101,7 +101,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     setSelectedOrgName(org)
     let repos
     if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(user.nickname, accessToken)
+      repos = await getUserRepositories(accessToken)
     } else {
       repos = await getRepositories(orgNamesArr[org], accessToken)
     }

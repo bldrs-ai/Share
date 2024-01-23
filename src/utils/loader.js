@@ -1,6 +1,11 @@
 import debug from '../utils/debug'
 import {assertDefined} from '../utils/assert'
-import {initializeWorker, opfsWriteModel, opfsReadModel, opfsDownloadToOPFS} from '../OPFS/OPFSService.js'
+import {
+  initializeWorker,
+  opfsWriteModel,
+  opfsReadModel,
+  opfsDownloadToOPFS,
+  opfsWriteModelFileHandle} from '../OPFS/OPFSService.js'
 
 /**
  * Upload a local file for display from Drag And Drop.
@@ -54,8 +59,7 @@ export function loadLocalFileDragAndDrop(
 
   workerRef.addEventListener('message', listener)
 
-  const commitHash = ''
-  opfsWriteModel(tmpUrl, fileNametmpUrl, file.name, commitHash)
+  opfsWriteModel(tmpUrl, file.name, fileNametmpUrl)
 }
 
 
@@ -91,8 +95,6 @@ export function loadLocalFile(
         const fileNametmpUrl = parts[parts.length - 1]
 
         if (!testingDisableWebWorker) {
-          const commitHash = ''
-          opfsWriteModel(tmpUrl, fileNametmpUrl, event.target.files[0].name, commitHash)
           // Listener for messages from the worker
           const listener = (workerEvent) => {
             if (workerEvent.data.error) {
@@ -117,6 +119,8 @@ export function loadLocalFile(
             }
           }
           workerRef.addEventListener('message', listener)
+
+          opfsWriteModel(tmpUrl, event.target.files[0].name, fileNametmpUrl)
         } else {
           window.removeEventListener('beforeunload', handleBeforeUnload)
           navigate(`${appPrefix}/v/new/${fileNametmpUrl}.ifc`)
@@ -161,7 +165,7 @@ export function getModelFromOPFS(filepath) {
       filepath = filepath.split('.ifc')[0]
       const parts = filepath.split('/')
       filepath = parts[parts.length - 1]
-      opfsReadModel(filepath)
+
 
       // Listener for messages from the worker
       const listener = (event) => {
@@ -179,6 +183,39 @@ export function getModelFromOPFS(filepath) {
       }
 
       workerRef.addEventListener('message', listener)
+      opfsReadModel(filepath)
+    } else {
+      reject(new Error('Worker initialization failed'))
+    }
+  })
+}
+
+/**
+ * Retrieve model from OPFS.
+ *
+ * @param {string} filepath
+ * @return {File}
+ */
+export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHash, repo, owner) {
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (workerEvent) => {
+        if (workerEvent.data.error) {
+          debug().error('Error from worker:', workerEvent.data.error)
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          resolve(false)
+        } else if (workerEvent.data.completed) {
+          if (workerEvent.data.event === 'write') {
+            debug().log('Worker finished writing file')
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(true)
+          }
+        }
+      }
+      workerRef.addEventListener('message', listener)
+      opfsWriteModelFileHandle(modelFile, originalFileName, commitHash, owner, repo)
     } else {
       reject(new Error('Worker initialization failed'))
     }

@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {useState, useContext, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
@@ -11,14 +11,16 @@ import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import useStore from '../store/useStore'
-import {getOrganizations, getRepositories, getUserRepositories, getFilesAndFolders} from '../utils/GitHub'
-import {RectangularButton} from '../Components/Buttons'
+import {getOrganizations, getRepositories, getUserRepositories, getFilesAndFolders, commitFile} from '../utils/GitHub'
+import {writeSavedGithubModelOPFS} from '../utils/loader'
 import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import SaveHeaderIcon from '../assets/icons/SaveGraphic.svg'
 import SaveIcon from '@mui/icons-material/Save'
 import IconButton from '@mui/material/IconButton'
 import ClearIcon from '@mui/icons-material/Clear'
+import FileContext from '../OPFS/FileContext'
+import debug from '../utils/debug'
 
 
 /**
@@ -26,11 +28,12 @@ import ClearIcon from '@mui/icons-material/Clear'
  *
  * @return {React.ReactElement}
  */
-export default function SaveModelControl({fileOpen}) {
+export default function SaveModelControl({fileSave}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
+
   useEffect(() => {
     /**
      * Asynchronously fetch organizations
@@ -65,7 +68,7 @@ export default function SaveModelControl({fileOpen}) {
         <SaveModelDialog
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
-          fileOpen={fileOpen}
+          fileSave={fileSave}
           orgNamesArr={orgNamesArr}
         />
       }
@@ -83,13 +86,14 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
-  // eslint-disable-next-line no-unused-vars
+
   const [selectedFileName, setSelectedFileName] = useState('')
   // eslint-disable-next-line no-unused-vars
   const [createFolderName, setCreateFolderName] = useState('')
   const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
+  // eslint-disable-next-line no-unused-vars
   const [filesArr, setFilesArr] = useState([''])
   const [foldersArr, setFoldersArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
@@ -98,18 +102,50 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  const fileName = filesArr[selectedFileName]
+  // const fileName = filesArr[selectedFileName]
+  const {file} = useContext(FileContext) // Consume the context
 
-  const saveFile = () => {
-    fileSave()
-    setIsDialogDisplayed(false)
+  const saveFile = async () => {
+    if (file instanceof File) {
+      let pathWithFileName = ''
+      if (currentPath === '/') {
+        pathWithFileName = selectedFileName
+      } else if (currentPath.startsWith('/')) {
+        pathWithFileName = currentPath.substring(1, currentPath.length - 1) + selectedFileName
+      } else {
+        pathWithFileName = currentPath + selectedFileName
+      }
+      const commitHash = await commitFile(
+          orgName,
+          repoName,
+          pathWithFileName,
+          file,
+          `Created file ${selectedFileName}`,
+          'main',
+          accessToken)
+
+      if (commitHash !== null) {
+        // save to opfs
+        const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, repoName, orgName)
+
+        if (opfsResult) {
+          setIsDialogDisplayed(false)
+
+          navigate({pathname: `/share/v/new/${commitHash}.ifc`})
+        } else {
+          debug().error('Error saving file to OPFS')
+        }
+      }
+    }
+    // fileSave()
+    // setIsDialogDisplayed(false)
   }
 
   const selectOrg = async (org) => {
     setSelectedOrgName(org)
     let repos
     if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(user.nickname, accessToken)
+      repos = await getUserRepositories(accessToken)
     } else {
       repos = await getRepositories(orgNamesArr[org], accessToken)
     }
@@ -125,6 +161,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     const owner = orgNamesArr[selectedOrgName]
     const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
 
+    // eslint-disable-next-line no-shadow
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
 
@@ -136,6 +173,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     ]
 
     setFoldersArr([...foldersArrWithSeparator])
+    setCurrentPath('/')
   }
 
   const selectFolder = async (folderIndex) => {
@@ -167,7 +205,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     setCurrentPath(newPath)
 
     const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
-
+    // eslint-disable-next-line no-shadow
     const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
 
@@ -182,12 +220,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
     ]
 
     setFoldersArr(foldersArrWithSeparator)
-  }
-
-  const navigateToFile = () => {
-    if (filesArr[selectedFileName].includes('.ifc')) {
-      navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
-    }
   }
 
   return (
@@ -209,65 +241,59 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
           sx={{paddingTop: '6px', width: '280px'}}
         >
           {isAuthenticated ?
-          <Stack>
-            <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
-            <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
-            <SelectorSeparator label={(currentPath === '') ? 'Folder' :
-            `Folder: ${ currentPath}`} list={foldersArr} selected={selectedFolderName}
-            setSelected={selectFolder} testId={'Folder'}
-            />
-            {requestCreateFolder && (
-              <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-                <TextField
-                  label="Enter folder name"
-                  variant='outlined'
-                  size='small'
-                  onChange={(e) => setCreateFolderName(e.target.value)}
-                  data-testid="CreateFolderId"
-                  sx={{flexGrow: 1}}
-                />
-                <IconButton
-                  onClick={() => setRequestCreateFolder(false)}
-                  size="small"
-                >
-                  <ClearIcon/>
-                </IconButton>
-              </div>
-            )}
-            <TextField
-              sx={{
-                marginBottom: '.5em',
-              }}
-              label="Enter file name"
-              variant='outlined'
-              size='small'
-              onChange={(e) => setCreateFolderName(e.target.value)}
-              data-testid="CreateFileId"
-            />
-            {selectedFileName !== '' &&
-              <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-                <RectangularButton
-                  title={'SAVE FILE'}
-                  onClick={navigateToFile}
-                />
-              </Box>
-            }
-          </Stack> :
-          <Box sx={{padding: '0px 10px'}} elevation={0}>
-            <Stack sx={{textAlign: 'left'}}>
-              <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-                Please login to GitHub to get access to your projects.
-                Visit our {' '}
-                <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
-                  wiki
-                </Link> to learn more about GitHub hosting.
-              </Typography>
-              <Typography variant={'caption'} sx={{marginTop: '10px'}}>
-               * Local files cannot yet be saved or shared.
-              </Typography>
-            </Stack>
-          </Box>
+            <Stack>
+              <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
+              <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+              <Selector label={'Repository'}
+                list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}
+              />
+              <SelectorSeparator label={(currentPath === '') ? 'Folder' :
+                `Folder: ${currentPath}`} list={foldersArr} selected={selectedFolderName}
+              setSelected={selectFolder} testId={'Folder'}
+              />
+              {requestCreateFolder && (
+                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                  <TextField
+                    label="Enter folder name"
+                    variant='outlined'
+                    size='small'
+                    onChange={(e) => setCreateFolderName(e.target.value)}
+                    data-testid="CreateFolderId"
+                    sx={{flexGrow: 1}}
+                  />
+                  <IconButton
+                    onClick={() => setRequestCreateFolder(false)}
+                    size="small"
+                  >
+                    <ClearIcon/>
+                  </IconButton>
+                </div>
+              )}
+              <TextField
+                sx={{
+                  marginBottom: '.5em',
+                }}
+                label="Enter file name"
+                variant='outlined'
+                size='small'
+                onChange={(e) => setSelectedFileName(e.target.value)}
+                data-testid="CreateFileId"
+              />
+            </Stack> :
+            <Box sx={{padding: '0px 10px'}} elevation={0}>
+              <Stack sx={{textAlign: 'left'}}>
+                <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+                  Please login to GitHub to get access to your projects.
+                  Visit our {' '}
+                  <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
+                    wiki
+                  </Link> to learn more about GitHub hosting.
+                </Typography>
+                <Typography variant={'caption'} sx={{marginTop: '10px'}}>
+                  * Local files cannot yet be saved or shared.
+                </Typography>
+              </Stack>
+            </Box>
           }
         </Stack>
       }

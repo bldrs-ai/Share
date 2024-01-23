@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {useEffect, useContext, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
@@ -33,6 +33,7 @@ import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 import {useAuth0} from '@auth0/auth0-react'
+import FileContext from '../OPFS/FileContext'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -55,6 +56,8 @@ export default function CadView({
   jestTestingDisableWebWorker = false,
 }) {
   assertDefined(...arguments)
+
+  const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
   // React router
   const navigate = useNavigate()
@@ -377,6 +380,13 @@ export default function CadView({
     let loadedModel
     if (uploadedFile && !jestTestingDisableWebWorker) {
       const file = await getModelFromOPFS(filepath)
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
 
       loadedModel = await viewer.loadIfc(
           file,

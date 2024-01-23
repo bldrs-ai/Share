@@ -26,16 +26,33 @@ export const opfsWriteFile = (objectUrl, fileName) => {
   workerRef.postMessage({command: 'writeObjectURLToFile', objectUrl: objectUrl, fileName: fileName})
 }
 
-export const opfsWriteModel = (objectUrl, objectKey, originalFileName, commitHash) => {
+export const opfsWriteModel = (objectUrl, originalFileName, commitHash) => {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
   }
-  workerRef.postMessage({command: 'writeObjectModel',
+  workerRef.postMessage({
+    command: 'writeObjectModel',
     objectUrl: objectUrl,
-    objectKey: objectKey,
+    objectKey: commitHash,
     originalFileName: originalFileName,
-    commitHash: commitHash})
+  })
+}
+
+export const opfsWriteModelFileHandle = (file, originalFileName, commitHash, owner, repo) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+
+  workerRef.postMessage({
+    command: 'writeObjectModelFileHandle',
+    file: file,
+    objectKey: commitHash,
+    originalFileName: originalFileName,
+    owner: owner,
+    repo: repo,
+  })
 }
 
 export const opfsDownloadToOPFS = (objectUrl, commitHash, originalFilePath, owner, repo, onProgress) => {
@@ -43,13 +60,15 @@ export const opfsDownloadToOPFS = (objectUrl, commitHash, originalFilePath, owne
     debug().error('Worker not initialized')
     return
   }
-  workerRef.postMessage({command: 'downloadToOPFS',
+  workerRef.postMessage({
+    command: 'downloadToOPFS',
     objectUrl: objectUrl,
     commitHash: commitHash,
     originalFilePath: originalFilePath,
     owner: owner,
     repo: repo,
-    onProgress: onProgress})
+    onProgress: onProgress,
+  })
 }
 
 export const opfsReadFile = (fileName) => {
