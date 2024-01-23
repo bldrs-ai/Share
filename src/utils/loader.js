@@ -192,7 +192,7 @@ export function getModelFromOPFS(filepath) {
  *
  * @param {string} filepath
  * @param {string} commitHash
- * @return {File}
+ * @return {boolean}
  */
 export function downloadToOPFS(
     navigate,
@@ -222,9 +222,13 @@ export function downloadToOPFS(
             }) // Custom progress event
           }
         } else if (event.data.completed) {
-          debug().log('Worker finished downloading file')
+          if (event.data.event === 'download') {
+            debug().warn('Worker finished downloading file')
+            debug().warn(`Metadata: ${event.data.metaDataString}`)
+          } else if (event.data.event === 'exists') {
+            debug().warn('Commit exists in OPFS, redirecting to local project.')
+          }
           const fileName = event.data.fileName
-          debug().log(`Metadata: ${event.data.metaDataString}`)
           window.removeEventListener('beforeunload', handleBeforeUnload)
           workerRef.removeEventListener('message', listener) // Remove the event listener
           navigate(`${appPrefix}/v/new/${fileName}.ifc`)

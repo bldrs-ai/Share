@@ -39,7 +39,18 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
   const opfsRoot = await navigator.storage.getDirectory()
   let newFolderHandle = null
 
-  // Get folder handle
+  // See if folder handle exists
+  try {
+    newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, {create: false})
+    if (newFolderHandle !== null) {
+      self.postMessage({completed: true, event: 'exists', fileName: commitHash})
+      return
+    }
+  } catch (error) {
+    //Ignore errors here, as it is a valid operation if the folder does
+    //not exist yet. 
+  }
+
   try {
     newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, {create: true})
   } catch (error) {
@@ -153,7 +164,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, onPr
         await metaDataAccessHandle.close()
 
         if (metaDataWriteSize > 0) {
-          self.postMessage({completed: true, event: 'write', fileName: commitHash})
+          self.postMessage({completed: true, event: 'download', fileName: commitHash})
         }
       } catch (error) {
         const workerMessage = `Error writing to ${metaDataFileName}: ${error}.`

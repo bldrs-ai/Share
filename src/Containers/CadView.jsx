@@ -307,6 +307,10 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
+
+    if (tmpModelRef === 'redirect') {
+      return
+    }
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -424,7 +428,7 @@ export default function CadView({
       }
 
       // download file from github
-      const result = downloadToOPFS(
+      const opfsResult = downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
@@ -441,8 +445,8 @@ export default function CadView({
             }
           })
 
-      if (result) {
-        return
+      if (opfsResult) {
+        return 'redirect'
       }
     }
 
