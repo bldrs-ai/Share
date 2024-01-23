@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -30,7 +31,7 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import PlaceIcon from '@mui/icons-material/Place'
 
 
 /**
@@ -309,10 +310,15 @@ const CardFooter = ({
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
-  const existPlaceMarkInFeature = useExistInFeature('placemark')
+  // const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const existPlaceMarkInFeature = true
   const isScreenshotEnabled = useExistInFeature('screenshot')
   const [screenshotUri, setScreenshotUri] = useState(null)
-
+  console.log( 'placemark not a comment', !isComment )
+  console.log( 'placemark selected', selected)
+  console.log( 'placemark synched', synched )
+  console.log( 'placemark exist placemark in feature', existPlaceMarkInFeature )
+  console.log('placemark id', id)
 
   return (
     <Box
@@ -356,12 +362,6 @@ const CardFooter = ({
         {
           !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
-          <Box sx={{
-            '& svg': {
-              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
-            },
-          }}
-          >
             <TooltipIconButton
               title='Place Mark'
               size='small'
@@ -369,9 +369,8 @@ const CardFooter = ({
               onClick={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceMarkIcon className='icon-share'/>}
+              icon={<PlaceIcon color={(placeMarkId === id && placeMarkActivated) ? 'primary' : 'secondary'}/>}
             />
-          </Box>
         }
       </Box>
       <Box

@@ -49,7 +49,7 @@ export default class PlaceMark extends EventDispatcher {
 
     this.activate = () => {
       this.activated = true
-      _domElement.style.cursor = 'alias'
+      _domElement.style.cursor = 'copy'
     }
 
 
