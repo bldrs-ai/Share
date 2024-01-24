@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -8,6 +8,7 @@ import CardActionArea from '@mui/material/CardActionArea'
 import Card from '@mui/material/Card'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -15,6 +16,7 @@ import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../u
 import {findUrls} from '../../utils/strings'
 import {closeIssue, deleteComment} from '../../utils/GitHub'
 import {TooltipIconButton} from '../Buttons'
+import Toggle from '../Toggle'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
@@ -31,7 +33,7 @@ import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
 import SynchIcon from '../../assets/icons/Synch.svg'
-import PlaceIcon from '@mui/icons-material/Place'
+// import PlaceIcon from '@mui/icons-material/Place'
 
 
 /**
@@ -314,11 +316,6 @@ const CardFooter = ({
   const existPlaceMarkInFeature = true
   const isScreenshotEnabled = useExistInFeature('screenshot')
   const [screenshotUri, setScreenshotUri] = useState(null)
-  console.log( 'placemark not a comment', !isComment )
-  console.log( 'placemark selected', selected)
-  console.log( 'placemark synched', synched )
-  console.log( 'placemark exist placemark in feature', existPlaceMarkInFeature )
-  console.log('placemark id', id)
 
   return (
     <Box
@@ -362,15 +359,21 @@ const CardFooter = ({
         {
           !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
-            <TooltipIconButton
-              title='Place Mark'
-              size='small'
-              placement='bottom'
-              onClick={() => {
+          <Box sx={{marginLeft: '10px'}}>
+            <Toggle
+              onChange={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceIcon color={(placeMarkId === id && placeMarkActivated) ? 'primary' : 'secondary'}/>}
+              checked={placeMarkId === id && placeMarkActivated}
+              labelPlacement='end'
+              label={
+                <Typography variant='overline'>
+                  Placemark
+                </Typography>
+
+              }
             />
+          </Box>
         }
       </Box>
       <Box

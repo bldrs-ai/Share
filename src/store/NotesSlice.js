@@ -17,7 +17,7 @@ export default function createNotesSlice(set, get) {
     selectedNoteIndex: null,
     placeMark: null,
     placeMarkId: null,
-    placeMarkActivated: false,
+    placeMarkActivated: true,
     setNotes: (notes) => set(() => ({notes: notes})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
     toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),

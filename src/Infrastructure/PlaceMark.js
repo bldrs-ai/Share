@@ -66,7 +66,6 @@ export default class PlaceMark extends EventDispatcher {
 
     this.onSceneDoubleClick = (event) => {
       let res = {}
-
       switch (event.button) {
         case 0: // Main button (left button)
           res = dropPlaceMark(event)

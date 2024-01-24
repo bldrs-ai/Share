@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {useEffect, useState} from 'react'
 import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
@@ -105,6 +106,7 @@ export default function CadView({
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
 
 
   // Place Mark
@@ -148,6 +150,7 @@ export default function CadView({
         const lastId = selectedElements.slice(-1)
         const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
+
         // Update the expanded elements in NavPanel
         const pathIds = getPathIdsForElements(lastId)
         if (pathIds) {
@@ -535,6 +538,9 @@ export default function CadView({
     if (!viewer.isolator.canBePickedInScene(expressId)) {
       return
     }
+    if (placeMarkActivated) {
+      return
+    }
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
@@ -847,9 +853,9 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
-  window.onmousemove = (event) => {
-    viewer.highlightIfcItem()
-  }
+  // window.onmousemove = (event) => {
+  //   viewer.highlightIfcItem()
+  // }
 
   viewer.container = container
   return viewer

@@ -1,3 +1,4 @@
+/* eslint-disable no-magic-numbers */
 /* eslint-disable no-console */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
@@ -40,6 +41,7 @@ export function usePlaceMark() {
 
   useEffect(() => {
     (async () => {
+      console.log('in the place mark useeffect')
       debug().log('usePlaceMark#useEffect[synchSidebar]: repository: ', repository)
       debug().log('usePlaceMark#useEffect[synchSidebar]: placeMark: ', placeMark)
       debug().log('usePlaceMark#useEffect[synchSidebar]: prevSynchSidebar: ', prevSynchSidebar)
@@ -127,16 +129,15 @@ export function usePlaceMark() {
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
     debug().log('usePlaceMark#createPlaceMark')
+    console.log('in the createPlaceMark')
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
-    console.log('the placemark is created')
   }
 
 
   const onSceneDoubleTap = useDoubleTap(async (event) => {
     debug().log('usePlaceMark#onSceneDoubleTap')
-    console.log('double tap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -148,13 +149,10 @@ export function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:
@@ -165,7 +163,6 @@ export function usePlaceMark() {
 
   const onSceneSingleTap = async (event, callback) => {
     debug().log('usePlaceMark#onSceneSingleTap')
-    console.log('single tap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
@@ -181,13 +178,10 @@ export function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:
