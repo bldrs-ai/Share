@@ -22,8 +22,15 @@ import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import * as Analytics from '../privacy/analytics'
 import debug from '../utils/debug'
 import useStore from '../store/useStore'
-import {loadLocalFile, getUploadedBlobPath, getModelFromOPFS, loadLocalFileDragAndDrop, downloadToOPFS} from '../utils/loader'
-import {getDownloadURL, parseGitHubRepositoryURL, getLatestCommitHash} from '../utils/GitHub'
+import {
+  loadLocalFile,
+  getUploadedBlobPath,
+  getModelFromOPFS,
+  loadLocalFileDragAndDrop,
+  downloadToOPFS,
+  writeSavedGithubModelOPFS,
+} from '../utils/loader'
+import {getDownloadURL, parseGitHubRepositoryURL, getLatestCommitHash, commitFile} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
@@ -153,6 +160,10 @@ export default function CadView({
   // Auth
   const {isLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
+
+  // commiting
+  const [savingMessage, setSavingMessage] = useState()
+  const [isModelSaving, setIsSaving] = useState(false)
 
   /* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
   if (!jestTestingDisableWebWorker) {
@@ -719,6 +730,45 @@ export default function CadView({
     }
   }
 
+  /**
+   *
+   */
+  async function saveFile(
+      file,
+      pathWithFileName,
+      selectedFileName,
+      orgName,
+      repoName,
+      token,
+  ) {
+    if (file instanceof File) {
+      const savingMessageBase = `Committing ${pathWithFileName} to GitHub...`
+      setSavingMessage(savingMessageBase)
+      setIsSaving(true)
+      const commitHash = await commitFile(
+          orgName,
+          repoName,
+          pathWithFileName,
+          file,
+          `Created file ${selectedFileName}`,
+          'main',
+          token)
+
+      if (commitHash !== null) {
+        // save to opfs
+        const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, repoName, orgName)
+
+        if (opfsResult) {
+          setIsSaving(false)
+
+          navigate({pathname: `/share/v/new/${commitHash}.ifc`})
+        } else {
+          debug().error('Error saving file to OPFS')
+        }
+      }
+    }
+  }
+
 
   /**
    * handles updating the stored file meta data for all cases except local files.
@@ -748,7 +798,7 @@ export default function CadView({
   const searchAndNavMaxWidthPx = 300
   return (
     <Box
-      title="cadview-dropzone"
+      title={jestTestingDisableWebWorker ? 'cadview-dropzone' : ''}
       sx={{
         position: 'absolute',
         top: '0px',
@@ -790,6 +840,13 @@ export default function CadView({
         severity={'info'}
         open={isModelLoading || snackMessage !== null}
       />
+      <SnackBarMessage
+        message={snackMessage ? snackMessage : savingMessage}
+        severity={'info'}
+        open={isModelSaving || snackMessage !== null}
+        anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
+        style={{marginBottom: '30px'}}
+      />
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -813,6 +870,7 @@ export default function CadView({
               handleBeforeUnload,
               false,
               jestTestingDisableWebWorker)} repo={modelPath.repo}
+          fileSave={saveFile}
           />
           {isSearchBarVisible && isSearchVisible &&
             <Box sx={{marginTop: '10px', width: '100%'}}>

@@ -1,5 +1,4 @@
 import React, {useState, useContext, useEffect} from 'react'
-import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
@@ -11,8 +10,7 @@ import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import useStore from '../store/useStore'
-import {getOrganizations, getRepositories, getUserRepositories, getFilesAndFolders, commitFile} from '../utils/GitHub'
-import {writeSavedGithubModelOPFS} from '../utils/loader'
+import {getOrganizations, getRepositories, getUserRepositories, getFilesAndFolders} from '../utils/GitHub'
 import UploadIcon from '../assets/icons/Upload.svg'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import SaveHeaderIcon from '../assets/icons/SaveGraphic.svg'
@@ -20,8 +18,6 @@ import SaveIcon from '@mui/icons-material/Save'
 import IconButton from '@mui/material/IconButton'
 import ClearIcon from '@mui/icons-material/Clear'
 import FileContext from '../OPFS/FileContext'
-import debug from '../utils/debug'
-import SnackBarMessage from '../Components/SnackbarMessage'
 
 
 /**
@@ -98,18 +94,14 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const [filesArr, setFilesArr] = useState([''])
   const [foldersArr, setFoldersArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
-  const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   // const fileName = filesArr[selectedFileName]
   const {file} = useContext(FileContext) // Consume the context
-  const snackMessage = useStore((state) => state.snackMessage)
-  const [savingMessage, setSavingMessage] = useState()
-  const [isModelSaving, setIsSaving] = useState(false)
 
-  const saveFile = async () => {
+  const saveFile = () => {
     if (file instanceof File) {
       let pathWithFileName = ''
       if (currentPath === '/') {
@@ -125,34 +117,17 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
         pathWithFileName = `${currentPath.substring(1, currentPath.length)
         }/${ selectedFileName}`
       }
-      const savingMessageBase = `Committing ${pathWithFileName} to GitHub...`
-      setSavingMessage(savingMessageBase)
-      setIsSaving(true)
-      const commitHash = await commitFile(
+
+      fileSave(
+          file,
+          pathWithFileName,
+          selectedFileName,
           orgName,
           repoName,
-          pathWithFileName,
-          file,
-          `Created file ${selectedFileName}`,
-          'main',
-          accessToken)
-
-      if (commitHash !== null) {
-        // save to opfs
-        const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, repoName, orgName)
-
-        if (opfsResult) {
-          setIsSaving(false)
-          setIsDialogDisplayed(false)
-
-          navigate({pathname: `/share/v/new/${commitHash}.ifc`})
-        } else {
-          debug().error('Error saving file to OPFS')
-        }
-      }
+          accessToken,
+      )
+      setIsDialogDisplayed(false)
     }
-    // fileSave()
-    // setIsDialogDisplayed(false)
   }
 
   const selectOrg = async (org) => {
@@ -320,13 +295,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
             }
           </Stack>
         }
-      />
-      <SnackBarMessage
-        message={snackMessage ? snackMessage : savingMessage}
-        severity={'info'}
-        open={isModelSaving || snackMessage !== null}
-        anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
-        style={{marginBottom: '30px'}}
       />
     </>
   )
