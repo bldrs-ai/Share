@@ -21,6 +21,7 @@ import IconButton from '@mui/material/IconButton'
 import ClearIcon from '@mui/icons-material/Clear'
 import FileContext from '../OPFS/FileContext'
 import debug from '../utils/debug'
+import SnackBarMessage from '../Components/SnackbarMessage'
 
 
 /**
@@ -88,7 +89,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const [selectedRepoName, setSelectedRepoName] = useState('')
 
   const [selectedFileName, setSelectedFileName] = useState('')
-  // eslint-disable-next-line no-unused-vars
+
   const [createFolderName, setCreateFolderName] = useState('')
   const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
@@ -104,17 +105,29 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   const repoName = repoNamesArr[selectedRepoName]
   // const fileName = filesArr[selectedFileName]
   const {file} = useContext(FileContext) // Consume the context
+  const snackMessage = useStore((state) => state.snackMessage)
+  const [savingMessage, setSavingMessage] = useState()
+  const [isModelSaving, setIsSaving] = useState(false)
 
   const saveFile = async () => {
     if (file instanceof File) {
       let pathWithFileName = ''
       if (currentPath === '/') {
-        pathWithFileName = selectedFileName
-      } else if (currentPath.startsWith('/')) {
-        pathWithFileName = currentPath.substring(1, currentPath.length - 1) + selectedFileName
+        if (createFolderName !== null && createFolderName !== '') {
+          pathWithFileName = `${createFolderName }/${ selectedFileName}`
+        } else {
+          pathWithFileName = selectedFileName
+        }
+      } else if (createFolderName !== null && createFolderName !== '') {
+        pathWithFileName = `${currentPath.substring(1, currentPath.length)
+        }/${ createFolderName }/${ selectedFileName}`
       } else {
-        pathWithFileName = currentPath + selectedFileName
+        pathWithFileName = `${currentPath.substring(1, currentPath.length)
+        }/${ selectedFileName}`
       }
+      const savingMessageBase = `Committing ${pathWithFileName} to GitHub...`
+      setSavingMessage(savingMessageBase)
+      setIsSaving(true)
       const commitHash = await commitFile(
           orgName,
           repoName,
@@ -129,6 +142,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
         const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, repoName, orgName)
 
         if (opfsResult) {
+          setIsSaving(false)
           setIsDialogDisplayed(false)
 
           navigate({pathname: `/share/v/new/${commitHash}.ifc`})
@@ -223,88 +237,97 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
   }
 
   return (
-    <Dialog
-      icon={<CreateNewFolderIcon className='icon-share'/>}
-      headerText={'Save'}
-      headerIcon={<SaveHeaderIcon/>}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Save File'}
-      actionIcon={<UploadIcon className='icon-share'/>}
-      actionCb={saveFile}
-      content={
-        <Stack
-          spacing={1}
-          direction="column"
-          justifyContent="center"
-          alignItems="center"
-          sx={{paddingTop: '6px', width: '280px'}}
-        >
-          {isAuthenticated ?
-            <Stack>
-              <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-              <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
-              <Selector label={'Repository'}
-                list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}
-              />
-              <SelectorSeparator label={(currentPath === '') ? 'Folder' :
-                `Folder: ${currentPath}`} list={foldersArr} selected={selectedFolderName}
-              setSelected={selectFolder} testId={'Folder'}
-              />
-              {requestCreateFolder && (
-                <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-                  <TextField
-                    label="Enter folder name"
-                    variant='outlined'
-                    size='small'
-                    onChange={(e) => setCreateFolderName(e.target.value)}
-                    data-testid="CreateFolderId"
-                    sx={{flexGrow: 1}}
-                    onKeyDown={(e) => {
-                      // Stops the event from propagating up to parent elements
-                      e.stopPropagation()
-                    }}
-                  />
-                  <IconButton
-                    onClick={() => setRequestCreateFolder(false)}
-                    size="small"
-                  >
-                    <ClearIcon/>
-                  </IconButton>
-                </div>
-              )}
-              <TextField
-                sx={{
-                  marginBottom: '.5em',
-                }}
-                label="Enter file name"
-                variant='outlined'
-                size='small'
-                onChange={(e) => setSelectedFileName(e.target.value)}
-                data-testid="CreateFileId"
-                onKeyDown={(e) => {
-                  // Stops the event from propagating up to parent elements
-                  e.stopPropagation()
-                }}
-              />
-            </Stack> :
-            <Box sx={{padding: '0px 10px'}} elevation={0}>
-              <Stack sx={{textAlign: 'left'}}>
-                <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-                  Please login to GitHub to get access to your projects.
-                  Visit our {' '}
-                  <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
-                    wiki
-                  </Link> to learn more about GitHub hosting.
-                </Typography>
-                <Typography variant={'caption'} sx={{marginTop: '10px'}}>
-                  * Local files cannot yet be saved or shared.
-                </Typography>
-              </Stack>
-            </Box>
-          }
-        </Stack>
-      }
-    />
+    <>
+      <Dialog
+        icon={<CreateNewFolderIcon className='icon-share'/>}
+        headerText={'Save'}
+        headerIcon={<SaveHeaderIcon/>}
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+        actionTitle={'Save File'}
+        actionIcon={<UploadIcon className='icon-share'/>}
+        actionCb={saveFile}
+        content={
+          <Stack
+            spacing={1}
+            direction="column"
+            justifyContent="center"
+            alignItems="center"
+            sx={{paddingTop: '6px', width: '280px'}}
+          >
+            {isAuthenticated ?
+              <Stack>
+                <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
+                <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+                <Selector label={'Repository'}
+                  list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}
+                />
+                <SelectorSeparator label={(currentPath === '') ? 'Folder' :
+                  `Folder: ${currentPath}`} list={foldersArr} selected={selectedFolderName}
+                setSelected={selectFolder} testId={'Folder'}
+                />
+                {requestCreateFolder && (
+                  <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+                    <TextField
+                      label="Enter folder name"
+                      variant='outlined'
+                      size='small'
+                      onChange={(e) => setCreateFolderName(e.target.value)}
+                      data-testid="CreateFolderId"
+                      sx={{flexGrow: 1}}
+                      onKeyDown={(e) => {
+                        // Stops the event from propagating up to parent elements
+                        e.stopPropagation()
+                      }}
+                    />
+                    <IconButton
+                      onClick={() => setRequestCreateFolder(false)}
+                      size="small"
+                    >
+                      <ClearIcon/>
+                    </IconButton>
+                  </div>
+                )}
+                <TextField
+                  sx={{
+                    marginBottom: '.5em',
+                  }}
+                  label="Enter file name"
+                  variant='outlined'
+                  size='small'
+                  onChange={(e) => setSelectedFileName(e.target.value)}
+                  data-testid="CreateFileId"
+                  onKeyDown={(e) => {
+                    // Stops the event from propagating up to parent elements
+                    e.stopPropagation()
+                  }}
+                />
+              </Stack> :
+              <Box sx={{padding: '0px 10px'}} elevation={0}>
+                <Stack sx={{textAlign: 'left'}}>
+                  <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+                    Please login to GitHub to get access to your projects.
+                    Visit our {' '}
+                    <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
+                      wiki
+                    </Link> to learn more about GitHub hosting.
+                  </Typography>
+                  <Typography variant={'caption'} sx={{marginTop: '10px'}}>
+                    * Local files cannot yet be saved or shared.
+                  </Typography>
+                </Stack>
+              </Box>
+            }
+          </Stack>
+        }
+      />
+      <SnackBarMessage
+        message={snackMessage ? snackMessage : savingMessage}
+        severity={'info'}
+        open={isModelSaving || snackMessage !== null}
+        anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
+        style={{marginBottom: '30px'}}
+      />
+    </>
   )
 }
