@@ -14,6 +14,10 @@ import PkgJson from '../../package.json'
 const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
+// mock createObjectURL
+global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+
+
 jest.mock('react-router-dom', () => {
   return {
     ...jest.requireActual('react-router-dom'),
@@ -26,6 +30,13 @@ jest.mock('postprocessing')
 
 describe('CadView', () => {
   let viewer
+
+  let originalWorker
+
+  beforeAll(() => {
+    // Store the original Worker in case other tests need it
+    originalWorker = global.Worker
+  })
 
 
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
@@ -40,6 +51,7 @@ describe('CadView', () => {
 
   afterEach(() => {
     jest.clearAllMocks()
+    global.Worker = originalWorker
   })
 
 
@@ -63,6 +75,64 @@ describe('CadView', () => {
     // act() warnings from testing-library.
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
+  })
+
+  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+    // mock webworker
+    const mockWorker = {
+      addEventListener: jest.fn(),
+      postMessage: jest.fn(),
+      // ... any other methods you need to mock ...
+    }
+    global.Worker = jest.fn(() => mockWorker)
+    const modelPath = {
+      filepath: `/index.ifc`,
+    }
+    const {result} = renderHook(() => useState(modelPath))
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix={''}
+            appPrefix={''}
+            pathPrefix={''}
+            modelPath={result.current[0]}
+            jestTestingDisableWebWorker={true}
+          />
+        </ShareMock>,
+    )
+
+    // Wait for component to be fully loaded
+    // Necessary to wait for some of the component to render to avoid
+    // act() warnings from testing-library.
+    await actAsyncFlush()
+    await waitFor(() => screen.getByTitle(bldrsVersionString))
+
+    // Identify the drop zone element using the data-model-ready attribute
+    const dropZone = screen.getByTitle('cadview-dropzone') // Replace 'data-model-ready' with the actual attribute if different
+
+    // Create a mock file
+    const file = new File(['content'], 'test.ifc', {type: 'application/ifc'})
+
+    // Create a mock DataTransfer object
+    const dataTransfer = {
+      files: [file],
+      items: [{
+        kind: 'file',
+        type: file.type,
+        getAsFile: () => file,
+      }],
+      types: ['Files'],
+    }
+
+    // Simulate the drag over and drop events
+    fireEvent.dragOver(dropZone, {dataTransfer})
+    fireEvent.drop(dropZone, {dataTransfer})
+
+    // Verify that URL.createObjectURL was called
+    expect(global.URL.createObjectURL).toHaveBeenCalled()
+
+    // this is about as far as we can go since OPFS doesn't work in this context
+    await actAsyncFlush()
   })
 
 

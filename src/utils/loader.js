@@ -22,9 +22,9 @@ export function loadLocalFileDragAndDrop(
     testingDisableWebWorker = false) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
   let workerRef = null
-  if (!testingDisableWebWorker) {
-    workerRef = initializeWorker()
-  }
+  // if (!testingDisableWebWorker) {
+  workerRef = initializeWorker()
+  // }
 
   debug().log('loader#loadLocalFileDragAndDrop#event:', event)
   const tmpUrl = URL.createObjectURL(file)

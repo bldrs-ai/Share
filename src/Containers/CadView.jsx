@@ -96,8 +96,7 @@ export default function CadView({
           navigate,
           appPrefix,
           handleBeforeUnload,
-          files[0],
-          jestTestingDisableWebWorker)
+          files[0])
     }
   }
 
@@ -434,7 +433,7 @@ export default function CadView({
       const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
 
       if (commitHash === null) {
-        debug().error(`Error obtaining commit hash for: ${ ifcURL}`)
+        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
       }
 
       // download file from github
@@ -749,6 +748,7 @@ export default function CadView({
   const searchAndNavMaxWidthPx = 300
   return (
     <Box
+      title="cadview-dropzone"
       sx={{
         position: 'absolute',
         top: '0px',
