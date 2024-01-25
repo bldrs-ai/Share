@@ -8,12 +8,17 @@ import Snackbar from '@mui/material/Snackbar'
  * @property {Function} open Progress callback
  * @return {object}
  */
-export default function SnackBarMessage({message, severity, open}) {
+export default function SnackBarMessage({
+  message,
+  severity,
+  open,
+  anchorOrigin = {vertical: 'bottom', horizontal: 'center'},
+  style = {bottom: '1em'}}) {
   return (
     <Snackbar
-      anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
+      anchorOrigin={anchorOrigin}
       open={open}
-      style={{bottom: '1em'}}
+      style={style}
       message={
         <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px'}}>
           {message}
