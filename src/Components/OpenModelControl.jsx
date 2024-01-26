@@ -166,9 +166,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                   wiki
                 </Link> to learn more about GitHub hosting.
               </Typography>
-              <Typography variant={'caption'} sx={{marginTop: '10px'}}>
-               * Local files cannot yet be saved or shared.
-              </Typography>
             </Stack>
           </Box>
           }
