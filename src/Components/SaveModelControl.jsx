@@ -222,7 +222,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
         actionTitle={'Save File'}
         actionIcon={<UploadIcon className='icon-share'/>}
         actionCb={saveFile}
-        hideActionButton={isAuthenticated ? false : true}
+        hideActionButton={!isAuthenticated}
         content={
           <Stack
             spacing={1}
