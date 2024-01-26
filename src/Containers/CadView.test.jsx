@@ -82,7 +82,6 @@ describe('CadView', () => {
     const mockWorker = {
       addEventListener: jest.fn(),
       postMessage: jest.fn(),
-      // ... any other methods you need to mock ...
     }
     global.Worker = jest.fn(() => mockWorker)
     const modelPath = {
@@ -107,8 +106,8 @@ describe('CadView', () => {
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
 
-    // Identify the drop zone element using the data-model-ready attribute
-    const dropZone = screen.getByTitle('cadview-dropzone') // Replace 'data-model-ready' with the actual attribute if different
+    // Identify the drop zone element using the cadview-dropzone attribute
+    const dropZone = screen.getByTitle('cadview-dropzone')
 
     // Create a mock file
     const file = new File(['content'], 'test.ifc', {type: 'application/ifc'})
