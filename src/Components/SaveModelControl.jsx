@@ -222,6 +222,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
         actionTitle={'Save File'}
         actionIcon={<UploadIcon className='icon-share'/>}
         actionCb={saveFile}
+        hideActionButton={isAuthenticated ? false : true}
         content={
           <Stack
             spacing={1}
@@ -286,9 +287,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileSave, org
                     <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
                       wiki
                     </Link> to learn more about GitHub hosting.
-                  </Typography>
-                  <Typography variant={'caption'} sx={{marginTop: '10px'}}>
-                    * Local files cannot yet be saved or shared.
                   </Typography>
                 </Stack>
               </Box>
