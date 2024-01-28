@@ -1,17 +1,16 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import {grey} from '@mui/material/colors'
 import Logo from '../assets/LogoB.svg'
 
 
 const ApplicationError = () => {
   return (
-    <Box p={4} mx={'auto'}
+    <Paper p={4} mx={'auto'}
       sx={{
-        width: 400,
-        bgcolor: grey[100],
         borderRadius: '10px',
+        padding: '20px',
       }}
     >
       <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}}>
@@ -30,7 +29,7 @@ const ApplicationError = () => {
       <Box>
         <a href="/"><Logo style={{width: '30px'}}/></a>
       </Box>
-    </Box>
+    </Paper>
   )
 }
 
