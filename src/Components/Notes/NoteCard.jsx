@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+
 import React, {useState, useEffect} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -86,14 +86,14 @@ export default function NoteCard({
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
-  const setNotes = useStore((state) => state.setNotes)
   const selected = selectedNoteId === id
   const bodyWidthChars = 80
   const dateParts = date.split('T')
   const textOverflow = body.length > bodyWidthChars
-  const {user, authResult} = useAuth0()
+  const {user} = useAuth0()
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -106,11 +106,9 @@ export default function NoteCard({
       })
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const open = Boolean(anchorEl)
-  const theme = useTheme()
-  console.log('user from a note', user)
-  console.log('authResult', authResult)
-
-
+  useEffect(() => {
+    setEditBody(body)
+  }, [selectedNoteId, body])
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
@@ -128,7 +126,6 @@ export default function NoteCard({
     removeHashParams(window.location, NOTE_PREFIX)
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
-
 
   /**
    * Moves the camera to the position specified in the url attached to
@@ -221,7 +218,10 @@ export default function NoteCard({
    *Submit update
    */
   async function submitUpdate() {
-    await updateIssue(repository, noteNumber, editBody, title, accessToken)
+    const res = await updateIssue(repository, noteNumber, editBody, title, accessToken)
+    const editedNote = notes.find((note) => note.id === id)
+    editedNote.body = res.data.body
+    setNotes(notes)
     setEditMode(false)
   }
   /**
@@ -247,7 +247,7 @@ export default function NoteCard({
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
           action={
-            // synched && user && user.nickname === username &&
+            synched && user && user.nickname === username &&
             <>
               <TooltipIconButton
                 title={'Note Actions'}
@@ -283,7 +283,7 @@ export default function NoteCard({
           }
         />
       }
-      {!editMode ?
+      {!editMode && !isComment && !selected &&
         <CardActionArea
           onClick={() => selectCard()}
           onKeyPress={() => selectCard()}
@@ -299,7 +299,11 @@ export default function NoteCard({
               },
             }}
           >
-            <ReactMarkdown>{body}</ReactMarkdown>
+            <Typography>
+              <ReactMarkdown>
+                {editBody}
+              </ReactMarkdown>
+            </Typography>
             {textOverflow &&
             <ShowMore
               expandText={expandText}
@@ -310,37 +314,77 @@ export default function NoteCard({
             />
             }
           </CardContent>
-        </CardActionArea> :
-      <CardContent sx={{
-        backgroundColor: theme.palette.primary.background,
-        border: `1px solid ${theme.palette.scene.background}`,
-      }}
-      >
-        <Stack
-          spacing={1}
-          direction="column"
-          justifyContent="center"
-          alignItems="flex-end"
-        >
-          <TextField
-            fullWidth
-            multiline
-            id="outlined-error"
-            label="Note content"
-            value={editBody}
-            onChange={handleTextUpdate}
-          />
-          <TooltipIconButton
-            title='Save'
-            placement='left'
-            icon={<CheckIcon className='icon-share'/>}
-            onClick={() => submitUpdate(repository, accessToken, id)}
-          />
-        </Stack>
-      </CardContent>
+        </CardActionArea> }
+      {selected && !editMode &&
+          <CardContent
+            sx={{
+              'padding': '0px 20px',
+              '& img': {
+                width: '100%',
+              },
+            }}
+          >
+            <Typography>
+              <ReactMarkdown>
+                {editBody}
+              </ReactMarkdown>
+            </Typography>
+            {textOverflow &&
+            <ShowMore
+              expandText={expandText}
+              onClick={(event) => {
+                event.preventDefault()
+                setExpandText(!expandText)
+              }}
+            />
+            }
+          </CardContent> }
+      {isComment &&
+          <CardContent
+            sx={{
+              'padding': '0px 20px',
+              '& img': {
+                width: '100%',
+              },
+            }}
+          >
+            <Typography>
+              <ReactMarkdown>
+                {editBody}
+              </ReactMarkdown>
+            </Typography>
+            {textOverflow &&
+            <ShowMore
+              expandText={expandText}
+              onClick={(event) => {
+                event.preventDefault()
+                setExpandText(!expandText)
+              }}
+            />
+            }
+          </CardContent> }
+      {editMode &&
+        <CardContent>
+          <Stack
+            spacing={1}
+            direction="column"
+            justifyContent="center"
+            alignItems="flex-end"
+          >
+            <TextField
+              fullWidth
+              multiline
+              id="outlined-error"
+              label="Note content"
+              value={editBody}
+              onChange={handleTextUpdate}
+            />
+          </Stack>
+        </CardContent>
       }
       {(embeddedCameraParams || numberOfComments > 0) &&
         <CardFooter
+          editMode={editMode}
           id={id}
           noteNumber={noteNumber}
           username={username}
@@ -354,6 +398,7 @@ export default function NoteCard({
           removeComment={removeComment}
           isComment={isComment}
           synched={synched}
+          submitUpdate={submitUpdate}
         />
       }
     </Card>
@@ -388,6 +433,7 @@ const ShowMore = ({onClick, expandText}) => {
 const CardFooter = ({
   id,
   noteNumber,
+  editMode,
   username,
   onClickCamera,
   onClickShare,
@@ -399,6 +445,7 @@ const CardFooter = ({
   removeComment,
   isComment,
   synched,
+  submitUpdate,
 }) => {
   const [shareIssue, setShareIssue] = useState(false)
   const viewer = useStore((state) => state.viewer)
@@ -519,12 +566,22 @@ const CardFooter = ({
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
-        {numberOfComments > 0 &&
+        {editMode &&
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
+
+        {numberOfComments > 0 && !editMode &&
           <Box
             sx={{
               width: '20px',
               height: '20px',
-              marginLeft: '4px',
+              marginLeft: '8px',
+              marginRight: '10px',
               borderRadius: '50%',
               backgroundColor: theme.palette.primary.main,
               display: 'flex',
@@ -533,12 +590,11 @@ const CardFooter = ({
               alignItems: 'center',
               fontSize: '12px',
               color: theme.palette.primary.contrastText,
-              cursor: 'pointer',
+              cursor: !selected && 'pointer',
             }}
             role='button'
             tabIndex={0}
-            onClick={selectCard}
-            onKeyPress={selectCard}
+            onClick={!selected && selectCard}
           >
             {numberOfComments}
           </Box>

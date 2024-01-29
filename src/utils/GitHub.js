@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
@@ -68,7 +67,6 @@ export async function updateIssue(repository, issueNumber, body, title, accessTo
     body,
     title,
   }
-  console.log('repository', repository)
   const res = await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
   debug().log('GitHub#closeIssue: res: ', res)
   return res
@@ -416,7 +414,6 @@ async function deleteGitHub(repository, path, args = {}, accessToken = '') {
 async function patchGitHub(repository, path, args = {}, accessToken = '') {
   assertDefined(repository.orgName, repository.name)
   if (accessToken) {
-    console.log('accessToken from if: ', accessToken)
     args.headers = {
       authorization: `Bearer ${accessToken}`,
       ...args.headers,
