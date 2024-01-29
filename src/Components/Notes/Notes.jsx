@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import List from '@mui/material/List'
