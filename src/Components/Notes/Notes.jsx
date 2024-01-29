@@ -21,6 +21,7 @@ export const NOTE_PREFIX = 'i'
 /** @return {object} List of notes and comments as react component. */
 export default function Notes() {
   const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const model = useStore((state) => state.model)
   const {user} = useAuth0()
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
@@ -84,7 +85,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [model])
 
 
   useEffect(() => {
