@@ -581,7 +581,7 @@ const CardFooter = ({
               width: '20px',
               height: '20px',
               marginLeft: '8px',
-              marginRight: '10px',
+              marginRight: '8px',
               borderRadius: '50%',
               backgroundColor: theme.palette.primary.main,
               display: 'flex',
