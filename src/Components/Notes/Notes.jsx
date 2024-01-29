@@ -83,7 +83,6 @@ export default function Notes() {
         handleError(e)
       }
     })()
-    console.log('in the fetch use effect')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
