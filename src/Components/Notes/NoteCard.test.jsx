@@ -68,24 +68,6 @@ describe('NoteCard', () => {
     expect(showCamera).toBeInTheDocument()
   })
 
-  it('Delete button is present', () => {
-    const id = 123
-    const index = 123
-    const username = 'testing'
-    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-
-    const {getByTitle} = render(
-        <ShareMock>
-          <NoteCard
-            id={id}
-            index={index}
-            username={username}
-            synched={true}
-          />
-        </ShareMock>)
-    expect(getByTitle('Delete note')).toBeInTheDocument()
-  })
-
   it('Delete is working', async () => {
     const id = 123
     const index = 123
@@ -101,7 +83,7 @@ describe('NoteCard', () => {
     await act(() => {
       result.current.setNotes(MOCK_NOTES)
     })
-    const {getByTitle} = render(
+    const {getByTitle, getByText} = render(
         <ShareMock>
           <NoteCard
             id={id}
@@ -114,9 +96,49 @@ describe('NoteCard', () => {
             synchedNote={synchedNote}
           />
         </ShareMock>)
-    const deleteButton = getByTitle('Delete note')
+    expect(getByTitle('Note Actions')).toBeInTheDocument()
+    const noteActionsMenu = getByTitle('Note Actions')
+    fireEvent.click(noteActionsMenu)
+    const deleteButton = getByText('Delete')
     expect(deleteButton).toBeInTheDocument()
     const res = fireEvent.click(deleteButton)
+    expect(res).toBe(true)
+  })
+
+  it('Edit is working', async () => {
+    const id = 123
+    const index = 123
+    const username = 'testing'
+    const title = 'Title'
+    const noteNumber = 1
+    const date = ''
+    const synchedNote = true
+    const {result} = renderHook(() => useStore((state) => state))
+
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+    await act(() => {
+      result.current.setNotes(MOCK_NOTES)
+    })
+    const {getByTitle, getByText} = render(
+        <ShareMock>
+          <NoteCard
+            id={id}
+            index={index}
+            username={username}
+            synched={true}
+            noteNumber={noteNumber}
+            title={title}
+            date={date}
+            synchedNote={synchedNote}
+          />
+        </ShareMock>)
+    expect(getByTitle('Note Actions')).toBeInTheDocument()
+    const noteActionsMenu = getByTitle('Note Actions')
+    fireEvent.click(noteActionsMenu)
+    const editButton = getByText('Edit')
+    expect(editButton).toBeInTheDocument()
+    const res = fireEvent.click(editButton)
     expect(res).toBe(true)
   })
 })
