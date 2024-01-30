@@ -299,11 +299,9 @@ export default function NoteCard({
               },
             }}
           >
-            <Typography>
-              <ReactMarkdown>
-                {editBody}
-              </ReactMarkdown>
-            </Typography>
+            <ReactMarkdown>
+              {editBody}
+            </ReactMarkdown>
             {textOverflow &&
             <ShowMore
               expandText={expandText}
@@ -324,11 +322,9 @@ export default function NoteCard({
               },
             }}
           >
-            <Typography>
-              <ReactMarkdown>
-                {editBody}
-              </ReactMarkdown>
-            </Typography>
+            <ReactMarkdown>
+              {editBody}
+            </ReactMarkdown>
             {textOverflow &&
             <ShowMore
               expandText={expandText}
