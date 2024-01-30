@@ -73,7 +73,6 @@ export default function NoteCard({
 }) {
   assertDefined(body, id, index)
   assertDefined(body, id, index)
-  const [expandText, setExpandText] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
@@ -89,9 +88,7 @@ export default function NoteCard({
   const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
   const selected = selectedNoteId === id
-  const bodyWidthChars = 80
   const dateParts = date.split('T')
-  const textOverflow = body.length > bodyWidthChars
   const {user} = useAuth0()
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -222,11 +219,11 @@ export default function NoteCard({
     setEditBody(event.target.value)
   }
 
-
   return (
     <Card
       elevation={1}
       variant='note'
+      sx={{fontSize: '1em'}}
     >
       {isComment ?
         <CardHeader
@@ -287,20 +284,13 @@ export default function NoteCard({
               '& img': {
                 width: '100%',
               },
+              'fontSize': '1rem',
+              'lineHeight': 1.5,
             }}
           >
             <ReactMarkdown>
               {editBody}
             </ReactMarkdown>
-            {textOverflow &&
-            <ShowMore
-              expandText={expandText}
-              onClick={(event) => {
-                event.preventDefault()
-                setExpandText(!expandText)
-              }}
-            />
-            }
           </CardContent>
         </CardActionArea> }
       {selected && !editMode &&
@@ -310,20 +300,13 @@ export default function NoteCard({
               '& img': {
                 width: '100%',
               },
+              'fontSize': '1rem',
+              'lineHeight': 1.5,
             }}
           >
             <ReactMarkdown>
               {editBody}
             </ReactMarkdown>
-            {textOverflow &&
-            <ShowMore
-              expandText={expandText}
-              onClick={(event) => {
-                event.preventDefault()
-                setExpandText(!expandText)
-              }}
-            />
-            }
           </CardContent> }
       {isComment &&
           <CardContent
@@ -332,20 +315,13 @@ export default function NoteCard({
               '& img': {
                 width: '100%',
               },
+              'fontSize': '1rem',
+              'lineHeight': 1.5,
             }}
           >
             <ReactMarkdown>
               {editBody}
             </ReactMarkdown>
-            {textOverflow &&
-            <ShowMore
-              expandText={expandText}
-              onClick={(event) => {
-                event.preventDefault()
-                setExpandText(!expandText)
-              }}
-            />
-            }
           </CardContent> }
       {editMode &&
         <CardContent>
@@ -385,30 +361,6 @@ export default function NoteCard({
         />
       }
     </Card>
-  )
-}
-
-
-const ShowMore = ({onClick, expandText}) => {
-  const theme = useTheme()
-
-
-  return (
-    <Box
-      sx={{
-        display: 'none',
-        cursor: 'pointer',
-        margin: '5px 5px 15px 10px',
-        fontSize: '0.9em',
-        color: theme.palette.primary.contrastText,
-      }}
-      onClick={onClick}
-      role='button'
-      tabIndex={0}
-      onKeyPress={onClick}
-    >
-      {expandText ? 'show less' : 'show more'}
-    </Box>
   )
 }
 
