@@ -76,7 +76,7 @@ export default function LoginMenu() {
           style: {
             left: '300px',
             width: '210px',
-            transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-140px' : '-54px'}) translateY(0px)`,
+            transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-142px' : '-54px'}) translateY(0px)`,
           },
           sx: {
             'color': theme.palette.primary.contrastText,
