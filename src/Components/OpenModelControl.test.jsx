@@ -5,14 +5,13 @@ import {
   mockedUserLoggedIn,
   mockedUserLoggedOut,
 } from '../__mocks__/authentication'
-import OpenModelControl from './OpenModelControl'
-import ShareMock from '../ShareMock'
+import {OpenModelControlFixture} from './OpenModelControl.fixture'
 
 
 describe('Open Model Dialog', () => {
   it('Renders a login message if the user is not logged in', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTitle, getByText} = render(<ShareMock><OpenModelControl/></ShareMock>)
+    const {getByTitle, getByText} = render(<OpenModelControlFixture/>)
     const button = getByTitle('Open IFC')
     fireEvent.click(button)
     const loginTextMatcher = (content, node) => {
@@ -27,9 +26,11 @@ describe('Open Model Dialog', () => {
     const loginText = getByText(loginTextMatcher)
     expect(loginText).toBeInTheDocument()
   })
+
+
   it('Renders file selector if the user is logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {getByTitle, getByTestId} = render(<ShareMock><OpenModelControl/></ShareMock>)
+    const {getByTitle, getByTestId} = render(<OpenModelControlFixture/>)
     const button = getByTitle('Open IFC')
     fireEvent.click(button)
     const File = getByTestId('File')

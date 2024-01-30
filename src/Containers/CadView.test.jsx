@@ -26,6 +26,17 @@ jest.mock('react-router-dom', () => {
   }
 })
 jest.mock('postprocessing')
+jest.mock('@auth0/auth0-react', () => {
+  return {
+    ...jest.requireActual('@auth0/auth0-react'),
+    useAuth0: () => jest.fn(() => {
+      return {
+        isLoading: () => false,
+        isAuthenticated: () => false,
+      }
+    }),
+  }
+})
 
 
 describe('CadView', () => {
@@ -67,7 +78,6 @@ describe('CadView', () => {
             appPrefix={''}
             pathPrefix={''}
             modelPath={result.current[0]}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -95,7 +105,6 @@ describe('CadView', () => {
             appPrefix={''}
             pathPrefix={''}
             modelPath={result.current[0]}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -107,7 +116,7 @@ describe('CadView', () => {
     await waitFor(() => screen.getByTitle(bldrsVersionString))
 
     // Identify the drop zone element using the cadview-dropzone attribute
-    const dropZone = screen.getByTitle('cadview-dropzone')
+    const dropZone = screen.getByTestId('cadview-dropzone')
 
     // Create a mock file
     const file = new File(['content'], 'test.ifc', {type: 'application/ifc'})
@@ -152,13 +161,12 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={result.current[0]}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
-    const numCallsExpected = 2 // First for root, second from URL path
+    const numCallsExpected = 3 // First for root, second from URL path
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
@@ -183,7 +191,6 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
@@ -223,7 +230,6 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     expect(getByTitle('Section')).toBeInTheDocument()
@@ -255,7 +261,6 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix='/v/new'
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -269,7 +274,6 @@ describe('CadView', () => {
             appPrefix=''
             pathPrefix=''
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -301,7 +305,6 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>,
     )
@@ -335,7 +338,6 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()
@@ -366,7 +368,6 @@ describe('CadView', () => {
             appPrefix={'/'}
             pathPrefix={'/'}
             modelPath={modelPath}
-            jestTestingDisableWebWorker={true}
           />
         </ShareMock>)
     await actAsyncFlush()

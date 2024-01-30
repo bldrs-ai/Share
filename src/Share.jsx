@@ -29,6 +29,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
+  // TODO(pablo): move this into where appPrefix is defined.  Only
+  // used by OpenModelControl currently, but refactor there let it be
+  // standalone component.
+  const setAppPrefix = useStore((state) => state.setAppPrefix)
+  setAppPrefix(appPrefix)
   const [file, setFile] = useState(null)
 
   useMemo(() => {

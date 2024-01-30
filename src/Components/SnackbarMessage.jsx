@@ -1,24 +1,19 @@
 import React from 'react'
 import Snackbar from '@mui/material/Snackbar'
+import useStore from '../store/useStore'
 
 
 /**
- * @property {string} message Message for user
- * @property {string} severity Alert severity
  * @property {Function} open Progress callback
  * @return {object}
  */
-export default function SnackBarMessage({
-  message,
-  severity,
-  open,
-  anchorOrigin = {vertical: 'bottom', horizontal: 'center'},
-  style = {bottom: '1em'}}) {
+export default function SnackBarMessage() {
+  const message = useStore((state) => state.snackMessage)
   return (
     <Snackbar
-      anchorOrigin={anchorOrigin}
-      open={open}
-      style={style}
+      anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
+      open={message !== ''}
+      style={{bottom: '1em'}}
       message={
         <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px'}}>
           {message}
