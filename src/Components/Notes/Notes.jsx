@@ -12,7 +12,7 @@ import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
 import ApplicationError from '../ApplicationError'
 
-
+// test
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
 
