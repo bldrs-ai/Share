@@ -61,7 +61,7 @@ export default function LoginMenu() {
             src={user.picture}
             sx={{width: 22, height: 22}}
           /> :
-        <AccountBoxOutlinedIcon className='icon-share' color='secondary'/>}
+        <AccountBoxOutlinedIcon color='secondary'/>}
         onClick={handleClick}
       />
       <Menu
@@ -75,7 +75,8 @@ export default function LoginMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-114px' : '-54px'}) translateY(0px)`,
+            width: '210px',
+            transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-140px' : '-54px'}) translateY(0px)`,
           },
           sx: {
             'color': theme.palette.primary.contrastText,
