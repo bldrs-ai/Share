@@ -72,7 +72,13 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText={
         <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
           <LogoB/>
-          <Typography variant={'overline'}>bldrs.ai</Typography>
+          <Link
+            href='/'
+            color='inherit'
+            sx={{textDecoration: 'none'}}
+          >
+            <Typography variant={'overline'}>bldrs.ai</Typography>
+          </Link>
         </Box>
       }
       isDialogDisplayed={isDialogDisplayed}
@@ -103,7 +109,9 @@ function AboutContent({setIsDialogDisplayed}) {
         alignItems="center"
       >
         <Stack spacing={0}>
-          <Typography variant='body1'>Build every thing together</Typography>
+          <Typography variant='body1'>
+              Build every thing together
+          </Typography>
           <Link
             underline="always"
             href='https://github.com/bldrs-ai/Share'
