@@ -163,25 +163,26 @@ export default function CadView({
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
   // Auth
-  const {isLoading, isAuthenticated} = useAuth0()
+  const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
+
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
       // This function gets called whenever there's a change in authentication state
-      debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated)
+      debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
-      if (!isLoading &&
+      if (!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isLoading && !isAuthenticated)) {
+          (!isAuthLoading && !isAuthenticated)) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isLoading, isAuthenticated, accessToken])
+  }, [isAuthLoading, isAuthenticated, accessToken])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -289,7 +290,7 @@ export default function CadView({
       return
     }
 
-    if (isLoading || (!isLoading && isAuthenticated && accessToken === '')) {
+    if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }

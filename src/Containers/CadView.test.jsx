@@ -26,6 +26,17 @@ jest.mock('react-router-dom', () => {
   }
 })
 jest.mock('postprocessing')
+jest.mock('@auth0/auth0-react', () => {
+  return {
+    ...jest.requireActual('@auth0/auth0-react'),
+    useAuth0: () => jest.fn(() => {
+      return {
+        isLoading: () => false,
+        isAuthenticated: () => false,
+      }
+    }),
+  }
+})
 
 
 describe('CadView', () => {
@@ -76,7 +87,7 @@ describe('CadView', () => {
     await waitFor(() => screen.getByTitle(bldrsVersionString))
   })
 
-  it.only('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
@@ -155,7 +166,7 @@ describe('CadView', () => {
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
-    const numCallsExpected = 2 // First for root, second from URL path
+    const numCallsExpected = 3 // First for root, second from URL path
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
