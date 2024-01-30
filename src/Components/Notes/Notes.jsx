@@ -32,6 +32,7 @@ export default function Notes() {
   const repository = useStore((state) => state.repository)
   const drawer = useStore((state) => state.drawer)
   const accessToken = useStore((state) => state.accessToken)
+  const model = useStore((state) => state.model)
   const [hasError, setHasError] = useState(false)
   const handleError = (err) => {
     if (!err) {
@@ -83,7 +84,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, synchSidebar])
+  }, [model])
 
 
   useEffect(() => {
