@@ -82,7 +82,6 @@ export default function NoteCard({
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const notes = useStore((state) => state.notes)
@@ -161,14 +160,8 @@ export default function NoteCard({
    * @return {object} return github return object
    */
   async function deleteNote(noteNumberToDelete) {
-    const newNotes = notes.map((note) => ({
-      ...note,
-      synched: (note.number !== noteNumberToDelete) && note.synched,
-    }))
-    setNotes(newNotes)
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
-    setSelectedNoteId(null)
-    toggleSynchSidebar()
+    handleMenuClose()
     return closeResponse
   }
 
@@ -188,8 +181,6 @@ export default function NoteCard({
     }))
     setComments(newComments)
     await deleteComment(repository, commentId, accessToken)
-
-    toggleSynchSidebar()
   }
 
   /**
@@ -274,7 +265,7 @@ export default function NoteCard({
                   <EditOutlinedIcon/>
                   <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
                 </MenuItem>
-                <MenuItem onClick={handleMenuClose}>
+                <MenuItem onClick={() => deleteNote(noteNumber)}>
                   <DeleteOutlineOutlinedIcon/>
                   <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
                 </MenuItem>
@@ -286,7 +277,6 @@ export default function NoteCard({
       {!editMode && !isComment && !selected &&
         <CardActionArea
           onClick={() => selectCard()}
-          onKeyPress={() => selectCard()}
           data-testid="selectionContainer"
           disableRipple
           disableTouchRipple
@@ -388,7 +378,6 @@ export default function NoteCard({
           selected={selected}
           onClickCamera={showCameraView}
           onClickShare={shareIssue}
-          deleteNote={deleteNote}
           removeComment={removeComment}
           isComment={isComment}
           synched={synched}
@@ -435,7 +424,6 @@ const CardFooter = ({
   selectCard,
   embeddedCameras,
   selected,
-  deleteNote,
   removeComment,
   isComment,
   synched,
