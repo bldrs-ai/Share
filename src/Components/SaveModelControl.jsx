@@ -1,5 +1,4 @@
 import React, {useState, useContext, useEffect} from 'react'
-import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
@@ -32,9 +31,10 @@ import UploadIcon from '../assets/icons/Upload.svg'
 /**
  * Displays model open dialog.
  *
+ * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
  */
-export default function SaveModelControl() {
+export default function SaveModelControl({navigate}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
@@ -74,6 +74,7 @@ export default function SaveModelControl() {
         <SaveModelDialog
           isDialogDisplayed={isDialogDisplayed}
           setIsDialogDisplayed={setIsDialogDisplayed}
+          navigate={navigate}
           orgNamesArr={orgNamesArr}
         />
       }
@@ -85,10 +86,11 @@ export default function SaveModelControl() {
 /**
  * @property {boolean} isDialogDisplayed Is SaveModelDialog displayed
  * @property {Function} setIsDialogDisplayed Show SaveModelDialog
- * @property {Array.<string>} orgNamesArr The current user's GH orgs
+ * @property {Function} navigate Callback from CadView to change page url
+ * @property {Array<string>} orgNamesArr The current user's GH orgs
  * @return {object} React component
  */
-function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, orgNamesArr}) {
+function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, orgNamesArr}) {
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
@@ -110,7 +112,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, orgNamesArr})
   // const fileName = filesArr[selectedFileName]
   const {file} = useContext(FileContext) // Consume the context
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const navigate = useNavigate()
 
   const saveFile = () => {
     if (file instanceof File) {

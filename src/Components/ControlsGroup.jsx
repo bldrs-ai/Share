@@ -1,12 +1,12 @@
 import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import OpenModelControl from './OpenModelControl'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
+import OpenModelControl from './OpenModelControl'
+import SaveModelControl from './SaveModelControl'
 import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
 import TreeIcon from '../assets/icons/Tree.svg'
-import SaveModelControl from './SaveModelControl'
 
 
 /**
@@ -54,7 +54,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
           }
         }}
       />
-      <SaveModelControl/>
+      <SaveModelControl navigate={navigate}/>
       {isRepoActive &&
         <TooltipIconButton
           title='Project History'
