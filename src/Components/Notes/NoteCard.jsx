@@ -67,7 +67,6 @@ export default function NoteCard({
   body = '',
   date = '',
   numberOfComments = null,
-  expandedImage = true,
   isComment = false,
   synched = true,
 }) {
@@ -76,19 +75,17 @@ export default function NoteCard({
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
-  const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const cameraControls = useStore((state) => state.cameraControls)
-  const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
-  const notes = useStore((state) => state.notes)
-  const setNotes = useStore((state) => state.setNotes)
-  const repository = useStore((state) => state.repository)
   const accessToken = useStore((state) => state.accessToken)
-  const selected = selectedNoteId === id
-  const dateParts = date.split('T')
+  const comments = useStore((state) => state.comments)
+  const cameraControls = useStore((state) => state.cameraControls)
+  const notes = useStore((state) => state.notes)
+  const repository = useStore((state) => state.repository)
+  const setComments = useStore((state) => state.setComments)
+  const setNotes = useStore((state) => state.setNotes)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
+  const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -101,7 +98,10 @@ export default function NoteCard({
         return encoded && parseHashParams(encoded)
       })
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
+  const dateParts = date.split('T')
   const open = Boolean(anchorEl)
+  const selected = selectedNoteId === id
+
   useEffect(() => {
     setEditBody(body)
   }, [selectedNoteId, body])
@@ -110,7 +110,6 @@ export default function NoteCard({
       setCameraFromParams(firstCamera, cameraControls)
     }
   }, [selected, firstCamera, cameraControls])
-
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
@@ -135,7 +134,6 @@ export default function NoteCard({
     }
   }
 
-
   /**
    * Copies the issue url which contains the issue id, camera position
    * and selected element path.
@@ -146,7 +144,6 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
-
 
   /**
    * deletes the note
@@ -161,7 +158,6 @@ export default function NoteCard({
     handleMenuClose()
     return closeResponse
   }
-
 
   /**
    * Remove comment
@@ -212,6 +208,7 @@ export default function NoteCard({
     setNotes(notes)
     setEditMode(false)
   }
+
   /**
    * Update body
    */
