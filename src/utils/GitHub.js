@@ -59,6 +59,26 @@ export async function getIssue(repository, issueNumber, accessToken) {
  * @param {object} repository
  * @param {object} issueNumber
  * @param {string} accessToken Github API OAuth access token
+ * @param {string} body Note body
+ * @param {string} title Note title
+ * @return {object} result
+ */
+export async function updateIssue(repository, accessToken, issueNumber, title, body) {
+  const args = {
+    issue_number: issueNumber,
+    body,
+    title,
+  }
+  const res = await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
+  debug().log('GitHub#closeIssue: res: ', res)
+  return res
+}
+
+
+/**
+ * @param {object} repository
+ * @param {object} issueNumber
+ * @param {string} accessToken Github API OAuth access token
  * @return {object} result
  */
 export async function closeIssue(repository, issueNumber, accessToken) {
@@ -402,7 +422,7 @@ async function patchGitHub(repository, path, args = {}, accessToken = '') {
     }
   }
   debug().log('Dispatching GitHub request for repo:', repository)
-  const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
+  const res = await octokit.request(`PATCH /repos/${repository.orgName}/${repository.name}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
