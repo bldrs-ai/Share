@@ -1,4 +1,5 @@
 import create from 'zustand'
+import createAppSlice from './AppSlice'
 import createIFCSlice from './IFCSlice'
 import createNotesSlice from './NotesSlice'
 import createUISlice from './UISlice'
@@ -8,6 +9,7 @@ import createIsolatorSlice from './IfcIsolatorSlice'
 
 
 const useStore = create((set, get) => ({
+  ...createAppSlice(set, get),
   ...createIFCSlice(set, get),
   ...createNotesSlice(set, get),
   ...createRepositorySlice(set, get),

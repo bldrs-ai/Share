@@ -19,18 +19,23 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import {useWindowDimensions} from '../Components/Hooks'
 import {useIsMobile} from '../Components/Hooks'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
-import * as Analytics from '../privacy/analytics'
-import debug from '../utils/debug'
-import useStore from '../store/useStore'
 import {
-  loadLocalFile,
-  getUploadedBlobPath,
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
-  writeSavedGithubModelOPFS,
+} from '../OPFS/utils'
+import * as Analytics from '../privacy/analytics'
+import useStore from '../store/useStore'
+import debug from '../utils/debug'
+import {
+  loadLocalFile,
+  getUploadedBlobPath,
 } from '../utils/loader'
-import {getDownloadURL, parseGitHubRepositoryURL, getLatestCommitHash, commitFile} from '../utils/GitHub'
+import {
+  getDownloadURL,
+  getLatestCommitHash,
+  parseGitHubRepositoryURL,
+} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import {handleBeforeUnload} from '../utils/event'
@@ -60,7 +65,6 @@ export default function CadView({
   appPrefix,
   pathPrefix,
   modelPath,
-  jestTestingDisableWebWorker = false,
 }) {
   assertDefined(...arguments)
 
@@ -120,9 +124,10 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isModelLoading, setIsLoading] = useState(false)
-  const [loadingMessage, setLoadingMessage] = useState()
+  const [isModelLoading, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
+
+  // Zustand store
   const viewer = useStore((state) => state.viewer)
   const setViewer = useStore((state) => state.setViewer)
   const customViewSettings = useStore((state) => state.customViewSettings)
@@ -139,7 +144,7 @@ export default function CadView({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
-  const snackMessage = useStore((state) => state.snackMessage)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -161,29 +166,22 @@ export default function CadView({
   const {isLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
-  // commiting
-  const [savingMessage, setSavingMessage] = useState()
-  const [isModelSaving, setIsSaving] = useState(false)
-
-  /* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
-  if (!jestTestingDisableWebWorker) {
-    useEffect(() => {
-      if (!isViewerLoaded) {
-        // This function gets called whenever there's a change in authentication state
-        debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated)
-        /* eslint-disable no-mixed-operators */
-        if (!isLoading &&
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!isViewerLoaded) {
+      // This function gets called whenever there's a change in authentication state
+      debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated)
+      /* eslint-disable no-mixed-operators */
+      if (!isLoading &&
           (isAuthenticated && accessToken !== '') ||
           (!isLoading && !isAuthenticated)) {
-          (async () => {
-            await onViewer()
-          })()
-        }
-        /* eslint-enable no-mixed-operators */
+        (async () => {
+          await onViewer()
+        })()
       }
-    }, [isLoading, isAuthenticated, accessToken])
-  }
-  /* eslint-enable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
+      /* eslint-enable no-mixed-operators */
+    }
+  }, [isLoading, isAuthenticated, accessToken])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -291,11 +289,9 @@ export default function CadView({
       return
     }
 
-    if (!jestTestingDisableWebWorker) {
-      if (isLoading || (!isLoading && isAuthenticated && accessToken === '')) {
-        debug().warn('Do not have auth token yet, waiting.')
-        return
-      }
+    if (isLoading || (!isLoading && isAuthenticated && accessToken === '')) {
+      debug().warn('Do not have auth token yet, waiting.')
+      return
     }
 
     setModelReady(false)
@@ -382,13 +378,12 @@ export default function CadView({
     }
 
     const loadingMessageBase = `Loading ${filepath}`
-    setLoadingMessage(loadingMessageBase)
-    setIsLoading(true)
+    setIsModelLoading(true)
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
-    if (uploadedFile && !jestTestingDisableWebWorker) {
+    if (uploadedFile) {
       const file = await getModelFromOPFS(filepath)
 
       if (file instanceof File) {
@@ -404,7 +399,7 @@ export default function CadView({
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             // TODO(pablo): error modal.
-            setIsLoading(false)
+            setIsModelLoading(false)
             setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
       // TODO(nickcastel50): need a more permanent way to
@@ -418,14 +413,15 @@ export default function CadView({
               const loadedBytes = progressEvent.loaded
               // eslint-disable-next-line no-magic-numbers
               const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
               debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
             }
           },
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             // TODO(pablo): error modal.
-            setIsLoading(false)
+            setIsModelLoading(false)
+            setSnackMessage('')
             setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else {
@@ -462,7 +458,7 @@ export default function CadView({
               const loadedBytes = progressEvent.receivedLength
               // eslint-disable-next-line no-magic-numbers
               const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
               debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
             }
           })
@@ -478,7 +474,8 @@ export default function CadView({
       content_type: 'ifc_model',
       item_id: filepath,
     })
-    setIsLoading(false)
+    setIsModelLoading(false)
+    setSnackMessage('')
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -730,45 +727,6 @@ export default function CadView({
     }
   }
 
-  /**
-   *
-   */
-  async function saveFile(
-      file,
-      pathWithFileName,
-      selectedFileName,
-      orgName,
-      repoName,
-      token,
-  ) {
-    if (file instanceof File) {
-      const savingMessageBase = `Committing ${pathWithFileName} to GitHub...`
-      setSavingMessage(savingMessageBase)
-      setIsSaving(true)
-      const commitHash = await commitFile(
-          orgName,
-          repoName,
-          pathWithFileName,
-          file,
-          `Created file ${selectedFileName}`,
-          'main',
-          token)
-
-      if (commitHash !== null) {
-        // save to opfs
-        const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, repoName, orgName)
-
-        if (opfsResult) {
-          setIsSaving(false)
-
-          navigate({pathname: `/share/v/new/${commitHash}.ifc`})
-        } else {
-          debug().error('Error saving file to OPFS')
-        }
-      }
-    }
-  }
-
 
   /**
    * handles updating the stored file meta data for all cases except local files.
@@ -798,7 +756,6 @@ export default function CadView({
   const searchAndNavMaxWidthPx = 300
   return (
     <Box
-      title={jestTestingDisableWebWorker ? 'cadview-dropzone' : ''}
       sx={{
         position: 'absolute',
         top: '0px',
@@ -817,6 +774,7 @@ export default function CadView({
         border: dragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
         // ... other styling as needed
       }}
+      data-testid={'cadview-dropzone'}
       data-model-ready={modelReady}
     >
       <Box
@@ -835,18 +793,7 @@ export default function CadView({
         }}
         {...onSceneDoubleTap}
       />
-      <SnackBarMessage
-        message={snackMessage ? snackMessage : loadingMessage}
-        severity={'info'}
-        open={isModelLoading || snackMessage !== null}
-      />
-      <SnackBarMessage
-        message={snackMessage ? snackMessage : savingMessage}
-        severity={'info'}
-        open={isModelSaving || snackMessage !== null}
-        anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
-        style={{marginBottom: '30px'}}
-      />
+      <SnackBarMessage/>
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -864,13 +811,9 @@ export default function CadView({
           },
         }}
         >
-          <ControlsGroup fileOpen={() => loadLocalFile(
-              navigate,
-              appPrefix,
-              handleBeforeUnload,
-              false,
-              jestTestingDisableWebWorker)} repo={modelPath.repo}
-          fileSave={saveFile}
+          <ControlsGroup
+            navigate={navigate}
+            isRepoActive={modelPath.repo !== undefined}
           />
           {isSearchBarVisible && isSearchVisible &&
             <Box sx={{marginTop: '10px', width: '100%'}}>
@@ -878,8 +821,7 @@ export default function CadView({
                   navigate,
                   appPrefix,
                   handleBeforeUnload,
-                  false,
-                  jestTestingDisableWebWorker)}
+                  false)}
               />
             </Box>
           }

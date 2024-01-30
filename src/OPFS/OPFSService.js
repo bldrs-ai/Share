@@ -1,6 +1,7 @@
 import debug from '../utils/debug'
 
-// OPFSService.js
+// TODO(pablo): probably don't need global state, can
+// pass worker refs as needed.
 let workerRef = null
 
 export const initializeWorker = () => {
