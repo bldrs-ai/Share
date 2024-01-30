@@ -418,7 +418,6 @@ const ShowMore = ({onClick, expandText}) => {
       onClick={onClick}
       role='button'
       tabIndex={0}
-      onKeyPress={onClick}
     >
       {expandText ? 'show less' : 'show more'}
     </Box>
@@ -590,7 +589,7 @@ const CardFooter = ({
             }}
             role='button'
             tabIndex={0}
-            onClick={!selected && selectCard}
+            onClick={selectCard}
           >
             {numberOfComments}
           </Box>
