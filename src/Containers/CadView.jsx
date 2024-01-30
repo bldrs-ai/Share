@@ -166,7 +166,7 @@ export default function CadView({
   const [isModelSaving, setIsSaving] = useState(false)
 
   /* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
-  if (!jestTestingDisableWebWorker) {
+  //if (!jestTestingDisableWebWorker) {
     useEffect(() => {
       if (!isViewerLoaded) {
         // This function gets called whenever there's a change in authentication state
@@ -182,7 +182,7 @@ export default function CadView({
         /* eslint-enable no-mixed-operators */
       }
     }, [isLoading, isAuthenticated, accessToken])
-  }
+ // }
   /* eslint-enable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -291,12 +291,12 @@ export default function CadView({
       return
     }
 
-    if (!jestTestingDisableWebWorker) {
+    //if (!jestTestingDisableWebWorker) {
       if (isLoading || (!isLoading && isAuthenticated && accessToken === '')) {
         debug().warn('Do not have auth token yet, waiting.')
         return
       }
-    }
+   // }
 
     setModelReady(false)
 
@@ -432,16 +432,29 @@ export default function CadView({
       // Split the pathname part of the URL into components
       const url = new URL(ifcURL)
       const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
-
+      let owner = null
+      let repo = null
+      let filePath = null
+      let commitHash = null
+      if (pathComponents[0] === 'r') {
+        // Extract the owner, repo, and filePath
+        owner = pathComponents[1]
+        repo = pathComponents[2]
+        // Join the remaining parts to form the filePath
+        // eslint-disable-next-line no-magic-numbers
+        filePath = pathComponents.slice(4).join('/')
+        // get commit hash
+        commitHash = await getLatestCommitHash(owner, repo, filePath, '')
+      } else {
       // Extract the owner, repo, and filePath
-      const owner = pathComponents[0]
-      const repo = pathComponents[1]
+      owner = pathComponents[0]
+      repo = pathComponents[1]
       // Join the remaining parts to form the filePath
       // eslint-disable-next-line no-magic-numbers
-      const filePath = pathComponents.slice(3).join('/')
-
+      filePath = pathComponents.slice(3).join('/')
       // get commit hash
-      const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
+      commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
+    }
 
       if (commitHash === null) {
         debug().error(`Error obtaining commit hash for: ${ifcURL}`)
