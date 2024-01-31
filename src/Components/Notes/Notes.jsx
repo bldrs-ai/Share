@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {useIsMobile} from '../Hooks'
-import {getIssues, getIssueComments} from '../../utils/GitHub'
+import {getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
@@ -27,13 +27,11 @@ export default function Notes() {
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const drawer = useStore((state) => state.drawer)
-  const model = useStore((state) => state.model)
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
-  const setNotes = useStore((state) => state.setNotes)
   const selectedNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
 
 
@@ -44,48 +42,6 @@ export default function Notes() {
     Sentry.captureException(err)
     setHasError(true)
   }
-  // Fetch issues/notes
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!repository) {
-          debug().warn('IssuesControl#Notes: 1, no repo defined')
-          return
-        }
-
-        const newNotes = []
-        let issueIndex = 0
-        const issueArr = await getIssues(repository, accessToken)
-        debug().log('Notes#useEffect: issueArr: ', issueArr)
-
-        issueArr.reverse().map((issue, index) => {
-          if (issue.body === null) {
-            debug().warn(`issue ${index} has no body: `, issue)
-            return
-          }
-
-          newNotes.push({
-            index: issueIndex++,
-            id: issue.id,
-            number: issue.number,
-            title: issue.title,
-            body: issue.body,
-            date: issue.created_at,
-            username: issue.user.login,
-            avatarUrl: issue.user.avatar_url,
-            numberOfComments: issue.comments,
-            synched: true,
-          })
-        })
-
-        setNotes(newNotes)
-      } catch (e) {
-        debug().warn('failed to fetch notes: ', e)
-        handleError(e)
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model, isCreateNoteActive])
 
   // Fetch comments based on selected note id
   useEffect(() => {

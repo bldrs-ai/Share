@@ -32,6 +32,7 @@ import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
+import {getIssues} from '../utils/GitHub'
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -105,6 +106,10 @@ export default function CadView({
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
+
+  const repository = useStore((state) => state.repository)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const setNotes = useStore((state) => state.setNotes)
 
 
   // Place Mark
@@ -188,6 +193,47 @@ export default function CadView({
   }, [location, model])
   /* eslint-enable */
 
+  // Fetch issues/notes
+  useEffect(() => {
+    (async () => {
+      try {
+        if (!repository) {
+          debug().warn('IssuesControl#Notes: 1, no repo defined')
+          return
+        }
+
+        const newNotes = []
+        let issueIndex = 0
+        const issueArr = await getIssues(repository, accessToken)
+        debug().log('Notes#useEffect: issueArr: ', issueArr)
+
+        issueArr.reverse().map((issue, index) => {
+          if (issue.body === null) {
+            debug().warn(`issue ${index} has no body: `, issue)
+            return
+          }
+
+          newNotes.push({
+            index: issueIndex++,
+            id: issue.id,
+            number: issue.number,
+            title: issue.title,
+            body: issue.body,
+            date: issue.created_at,
+            username: issue.user.login,
+            avatarUrl: issue.user.avatar_url,
+            numberOfComments: issue.comments,
+            synched: true,
+          })
+        })
+
+        setNotes(newNotes)
+      } catch (e) {
+        debug().warn('failed to fetch notes: ', e)
+      }
+    })()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, isCreateNoteActive])
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init

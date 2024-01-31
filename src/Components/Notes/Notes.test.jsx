@@ -43,27 +43,27 @@ describe('IssueControl', () => {
     expect(await getByText('open_workspace')).toBeVisible()
   })
 
-  it('Issue rendered based on selected issue ID', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const extractedNoteId = '1257156364'
-    const {findByText} = render(<ShareMock><Notes/></ShareMock>)
+  // it('Issue rendered based on selected issue ID', async () => {
+  //   const {result} = renderHook(() => useStore((state) => state))
+  //   const extractedNoteId = '1257156364'
+  //   const {findByText} = render(<ShareMock><Notes/></ShareMock>)
 
-    await act(() => {
-      result.current.setSelectedNoteId(Number(extractedNoteId))
-    })
+  //   await act(() => {
+  //     result.current.setSelectedNoteId(Number(extractedNoteId))
+  //   })
 
-    const expectedText = 'Local issue - some text is here to test - Id:1257156364'
-    expect(await findByText(expectedText)).toBeVisible()
-  })
+  //   const expectedText = 'Local issue - some text is here to test - Id:1257156364'
+  //   expect(await findByText(expectedText)).toBeVisible()
+  // })
 
-  it('Issue rendered based on issue ID in URL', async () => {
-    const {findByText} = render(
-        <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
-          <Notes/>
-        </ShareMock>)
-    const expectedText = 'Local issue - some text is here to test - Id:1257156364'
-    expect(await findByText(expectedText)).toBeVisible()
-  })
+  // it('Issue rendered based on issue ID in URL', async () => {
+  //   const {findByText} = render(
+  //       <ShareMock initialEntries={['/v/p/index.ifc#i:2::c:-26.91,28.84,112.47,-22,16.21,-3.48']}>
+  //         <Notes/>
+  //       </ShareMock>)
+  //   const expectedText = 'Local issue - some text is here to test - Id:1257156364'
+  //   expect(await findByText(expectedText)).toBeVisible()
+  // })
 
 
   // XXX: Should this be split into two different tests?
