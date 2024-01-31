@@ -139,6 +139,8 @@ export default function NoteCard({
    */
   async function deleteNote(noteNumberToDelete) {
     const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
+    const updatedNotes = notes.filter((note) => note.number !== noteNumberToDelete)
+    setNotes(updatedNotes)
     handleMenuClose()
     return closeResponse
   }

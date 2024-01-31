@@ -31,7 +31,6 @@ export default function Notes() {
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
-  const synchSidebar = useStore((state) => state.synchSidebar)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
@@ -123,7 +122,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, selectedNoteId, synchSidebar, selectedNote])
+  }, [repository, selectedNoteId, selectedNote])
 
   // On any change in side drawer always scroll up to the start of the notes list
   useEffect(() => {
