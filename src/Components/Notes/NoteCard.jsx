@@ -222,52 +222,29 @@ export default function NoteCard({
       variant='note'
       sx={{fontSize: '1em'}}
     >
-      {isComment ?
+      {isComment &&
         <CardHeader
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
-        /> :
+        /> }
+      {!isComment &&
         <CardHeader
           title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
           action={
             synched && user && user.nickname === username &&
-            <>
-              <TooltipIconButton
-                title={'Note Actions'}
-                placement='left'
-                icon={<MoreVertIcon className='icon-share' color='secondary'/>}
-                onClick={handleMenuClick}
-              />
-              <Menu
-                elevation={1}
-                id='basic-menu'
-                anchorEl={anchorEl}
-                open={open}
-                onClose={handleMenuClose}
-                anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-                transformOrigin={{vertical: 'top', horizontal: 'center'}}
-                PaperProps={{
-                  style: {
-                    left: '200px',
-                    transform: 'translateX(-70px) translateY(0px)',
-                  },
-                }}
-              >
-                <MenuItem onClick={actviateEditMode}>
-                  <EditOutlinedIcon/>
-                  <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
-                </MenuItem>
-                <MenuItem onClick={() => deleteNote(noteNumber)}>
-                  <DeleteOutlineOutlinedIcon/>
-                  <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
-                </MenuItem>
-              </Menu>
-            </>
+          <CardMenu
+            handleMenuClick={handleMenuClick}
+            handleMenuClose={handleMenuClose}
+            anchorEl={anchorEl}
+            actviateEditMode={actviateEditMode}
+            deleteNote={deleteNote}
+            noteNumber={noteNumber}
+            open={open}
+          />
           }
-        />
-      }
+        /> }
       {!editMode && !isComment && !selected && <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
       {selected && !editMode && <SelectedCardbody editBody={editBody}/>}
       {isComment && <CommentCardBody editBody={editBody}/>}
@@ -289,6 +266,51 @@ export default function NoteCard({
         submitUpdate={submitUpdate}
       />
     </Card>
+  )
+}
+const CardMenu = ({
+  handleMenuClick,
+  handleMenuClose,
+  anchorEl,
+  actviateEditMode,
+  deleteNote,
+  noteNumber,
+  open,
+}) => {
+  return (
+    <>
+      <TooltipIconButton
+        title={'Note Actions'}
+        placement='left'
+        icon={<MoreVertIcon className='icon-share' color='secondary'/>}
+        onClick={handleMenuClick}
+      />
+      <Menu
+        elevation={1}
+        id='basic-menu'
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleMenuClose}
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        PaperProps={{
+          style: {
+            left: '200px',
+            transform: 'translateX(-70px) translateY(0px)',
+          },
+        }}
+      >
+        <MenuItem onClick={actviateEditMode}>
+          <EditOutlinedIcon/>
+          <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => deleteNote(noteNumber)}>
+          <DeleteOutlineOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
+        </MenuItem>
+      </Menu>
+    </>
+
   )
 }
 const RegularCardBody = ({selectCard, editBody}) => {
