@@ -1,0 +1,328 @@
+
+import React, {useState} from 'react'
+import ReactMarkdown from 'react-markdown'
+import {useAuth0} from '@auth0/auth0-react'
+import Box from '@mui/material/Box'
+import CardActionArea from '@mui/material/CardActionArea'
+import CardContent from '@mui/material/CardContent'
+import Menu from '@mui/material/Menu'
+import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
+import MenuItem from '@mui/material/MenuItem'
+import useTheme from '@mui/styles/useTheme'
+import Stack from '@mui/material/Stack'
+import useStore from '../../store/useStore'
+import {TooltipIconButton} from '../Buttons'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
+import CheckIcon from '@mui/icons-material/Check'
+import CameraIcon from '../../assets/icons/Camera.svg'
+import ShareIcon from '../../assets/icons/Share.svg'
+import DeleteIcon from '../../assets/icons/Delete.svg'
+import SynchIcon from '../../assets/icons/Synch.svg'
+import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+
+
+export const CardMenu = ({
+  handleMenuClick,
+  handleMenuClose,
+  anchorEl,
+  actviateEditMode,
+  deleteNote,
+  noteNumber,
+  open,
+}) => {
+  return (
+    <>
+      <TooltipIconButton
+        title={'Note Actions'}
+        placement='left'
+        icon={<MoreVertIcon className='icon-share' color='secondary'/>}
+        onClick={handleMenuClick}
+      />
+      <Menu
+        elevation={1}
+        id='basic-menu'
+        anchorEl={anchorEl}
+        open={open}
+        onClose={handleMenuClose}
+        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+        transformOrigin={{vertical: 'top', horizontal: 'center'}}
+        PaperProps={{
+          style: {
+            left: '200px',
+            transform: 'translateX(-70px) translateY(0px)',
+          },
+        }}
+      >
+        <MenuItem onClick={actviateEditMode}>
+          <EditOutlinedIcon/>
+          <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
+        </MenuItem>
+        <MenuItem onClick={() => deleteNote(noteNumber)}>
+          <DeleteOutlineOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
+        </MenuItem>
+      </Menu>
+    </>
+
+  )
+}
+export const RegularCardBody = ({selectCard, editBody}) => {
+  return (
+    <CardActionArea
+      onClick={() => selectCard()}
+      data-testid="selectionContainer"
+      disableRipple
+      disableTouchRipple
+    >
+      <CardContent
+        sx={{
+          'padding': '0px 20px',
+          '& img': {
+            width: '100%',
+          },
+          'fontSize': '1rem',
+          'lineHeight': 1.5,
+        }}
+      >
+        <ReactMarkdown>
+          {editBody}
+        </ReactMarkdown>
+      </CardContent>
+    </CardActionArea>
+  )
+}
+export const SelectedCardBody = ({editBody}) => {
+  return (
+    <CardContent
+      sx={{
+        'padding': '0px 20px',
+        '& img': {
+          width: '100%',
+        },
+        'fontSize': '1rem',
+        'lineHeight': 1.5,
+      }}
+    >
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
+  )
+}
+export const EditCardBody = ({handleTextUpdate, editBody}) => {
+  return (
+    <CardContent>
+      <Stack
+        spacing={1}
+        direction="column"
+        justifyContent="center"
+        alignItems="flex-end"
+      >
+        <TextField
+          fullWidth
+          multiline
+          id="outlined-error"
+          label="Note content"
+          value={editBody}
+          onChange={handleTextUpdate}
+        />
+      </Stack>
+    </CardContent>
+  )
+}
+export const CommentCardBody = ({editBody}) => {
+  return (
+    <CardContent
+      sx={{
+        'padding': '0px 20px',
+        '& img': {
+          width: '100%',
+        },
+        'fontSize': '1rem',
+        'lineHeight': 1.5,
+      }}
+    >
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
+  )
+}
+export const CardFooter = ({
+  id,
+  noteNumber,
+  editMode,
+  username,
+  onClickCamera,
+  onClickShare,
+  numberOfComments,
+  selectCard,
+  embeddedCameras,
+  selected,
+  removeComment,
+  isComment,
+  synched,
+  submitUpdate,
+}) => {
+  const [shareIssue, setShareIssue] = useState(false)
+  const viewer = useStore((state) => state.viewer)
+  const repository = useStore((state) => state.repository)
+  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
+  const accessToken = useStore((state) => state.accessToken)
+  const placeMarkId = useStore((state) => state.placeMarkId)
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const hasCameras = embeddedCameras.length > 0
+  const theme = useTheme()
+  const {user} = useAuth0()
+  const {togglePlaceMarkActive} = usePlaceMark()
+  const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const isScreenshotEnabled = useExistInFeature('screenshot')
+  const [screenshotUri, setScreenshotUri] = useState(null)
+
+
+  return (
+    <Box
+      sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: '0px 5px 0px 14px',
+        height: '50px',
+      }}
+    >
+      <Box sx={{
+        display: 'flex',
+        flexDirection: 'row',
+        justifyContent: 'flex-start',
+        alignItems: 'center',
+      }}
+      >
+        {hasCameras &&
+          <TooltipIconButton
+            title='Show the camera view'
+            size='small'
+            placement='bottom'
+            onClick={onClickCamera}
+            icon={<CameraIcon className='icon-share'/>}
+            aboutInfo={false}
+          />}
+        {selected &&
+          <TooltipIconButton
+            title='Share'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              onClickShare()
+              setShareIssue(!shareIssue)
+            }}
+            icon={<ShareIcon className='icon-share'/>}
+          />
+        }
+        {
+          !isComment && selected && synched && existPlaceMarkInFeature &&
+          user && user.nickname === username &&
+          <Box sx={{
+            '& svg': {
+              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
+            },
+          }}
+          >
+            <TooltipIconButton
+              title='Place Mark'
+              size='small'
+              placement='bottom'
+              onClick={() => {
+                togglePlaceMarkActive(id)
+              }}
+              icon={<PlaceMarkIcon className='icon-share'/>}
+            />
+          </Box>
+        }
+      </Box>
+      <Box
+        sx={{
+          display: 'flex',
+          flexDirection: 'row',
+          justifyContent: 'center',
+          alignItems: 'center',
+          marginRight: '4px',
+        }}
+      >
+        {isComment && synched && user && user.nickname === username &&
+          <TooltipIconButton
+            title='Delete comment'
+            size='small'
+            placement='bottom'
+            onClick={async () => {
+              await removeComment(repository, accessToken, id)
+            }}
+            icon={<DeleteIcon className='icon-share'/>}
+          />
+        }
+        {!synched &&
+          <TooltipIconButton
+            title='Synch to GitHub'
+            size='small'
+            placement='bottom'
+            onClick={() => toggleSynchSidebar()}
+            icon={<SynchIcon className='icon-share'/>}
+          />
+        }
+        {isScreenshotEnabled && screenshotUri &&
+         <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
+        }
+        {isScreenshotEnabled &&
+          <TooltipIconButton
+            title='Take Screenshot'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              setScreenshotUri(viewer.takeScreenshot())
+            }}
+            icon={<PhotoCameraIcon className='icon-share'/>}
+          />
+        }
+        {editMode &&
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
+
+        {numberOfComments > 0 && !editMode &&
+          <Box
+            sx={{
+              width: '20px',
+              height: '20px',
+              marginLeft: '8px',
+              marginRight: '8px',
+              borderRadius: '50%',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '12px',
+              color: theme.palette.primary.contrastText,
+              cursor: !selected && 'pointer',
+            }}
+            role='button'
+            tabIndex={0}
+            onClick={selectCard}
+          >
+            {numberOfComments}
+          </Box>
+        }
+      </Box>
+    </Box>
+  )
+}
