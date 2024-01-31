@@ -15,13 +15,13 @@
       fill: green;
     }
     .face {
-      stroke: green;
+      stroke: black;
     }
     .face-left {
-      fill: #6D8752;
+      fill: #03ff00;
     }
     .face-front {
-      fill: #E9E8E2;
+      fill: white;
     }
   </style>
   <g>
