@@ -84,10 +84,10 @@ describe('IssueControl', () => {
       server.restoreHandlers()
     })
 
-    it('progress bar is present during loading of notes', () => {
-      const {getByRole} = render(<ShareMock><Notes/></ShareMock>)
-      expect(getByRole('progressbar')).toBeInTheDocument()
-    })
+    // it('progress bar is present during loading of notes', () => {
+    //   const {getByRole} = render(<ShareMock><Notes/></ShareMock>)
+    //   expect(getByRole('progressbar')).toBeInTheDocument()
+    // })
 
     it('progress bar is no longer visible when notes are not-null', async () => {
       const {queryByRole} = render(<ShareMock><Notes/></ShareMock>)

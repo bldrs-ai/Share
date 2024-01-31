@@ -13,6 +13,9 @@ import debug from '../../utils/debug'
  * @return {React.Component}
  */
 export default function NotesControl() {
+  const drawer = useStore((state) => state.drawer)
+  // const isLoadingNotes = useStore((state) => state.isLoadingNotes)
+  const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const isNotesOn = useStore((state) => state.isNotesOn)
   const repository = useStore((state) => state.repository)
@@ -31,6 +34,7 @@ export default function NotesControl() {
   // Fetch issues/notes
   useEffect(() => {
     (async () => {
+      toggleIsLoadingNotes()
       try {
         if (!repository) {
           debug().warn('IssuesControl#Notes: 1, no repo defined')
@@ -61,14 +65,19 @@ export default function NotesControl() {
             synched: true,
           })
         })
-
         setNotes(newNotes)
+        if (drawer) {
+          drawer.scrollTop = 0
+        }
+        toggleIsLoadingNotes()
       } catch (e) {
         debug().warn('failed to fetch notes: ', e)
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, isCreateNoteActive])
+
+
   const toggle = () => {
     openDrawer()
     toggleIsNotesOn()

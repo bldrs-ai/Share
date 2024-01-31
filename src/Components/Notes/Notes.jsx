@@ -29,6 +29,7 @@ export default function Notes() {
   const drawer = useStore((state) => state.drawer)
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
+  const isLoadingNotes = useStore((state) => state.isLoadingNotes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setComments = useStore((state) => state.setComments)
@@ -93,11 +94,11 @@ export default function Notes() {
     spacing={1}
     sx={isMobile ? {paddingBottom: '100px'} : {}}
   >
-    {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
+    {isLoadingNotes && <Loader type={'linear'}/>}
+    {notes && notes.length === 0 && !isCreateNoteActive && !isLoadingNotes && <NoContent/>}
     {!user && isCreateNoteActive && <NoContent message={'Please login to create notes.'}/>}
-    {notes === null && <Loader type={'linear'}/>}
     {user && isCreateNoteActive && <NoteCardCreate/>}
-    {!selectedNoteId && !isCreateNoteActive && notes &&
+    {!selectedNoteId && !isCreateNoteActive && notes && !isLoadingNotes &&
         notes.map((note, index) => {
           return (
             <NoteCard

@@ -39,10 +39,14 @@ export default function NoteCardCreate({
    * @return {void}
    */
   async function createNote() {
+    const issueTitle = title.length === 0 ? 'Empty title' : title
+    const issueBody = body.length === 0 ? 'Empty body' : body
+
     const issuePayload = {
-      title,
-      body,
+      title: issueTitle,
+      body: issueBody,
     }
+
     await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
   }
