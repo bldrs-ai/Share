@@ -805,4 +805,7 @@ export const MOCK_FILES = {
 const octokit = new Octokit({
   baseUrl: process.env.GITHUB_BASE_URL,
   userAgent: `bldrs/${PkgJson.version}`,
+  headers: {
+    'If-None-Match': '',
+  },
 })
