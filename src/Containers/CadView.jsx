@@ -444,14 +444,14 @@ export default function CadView({
         commitHash = await getLatestCommitHash(owner, repo, filePath, '')
       } else {
       // Extract the owner, repo, and filePath
-      owner = pathComponents[0]
-      repo = pathComponents[1]
-      // Join the remaining parts to form the filePath
-      // eslint-disable-next-line no-magic-numbers
-      filePath = pathComponents.slice(3).join('/')
-      // get commit hash
-      commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
-    }
+        owner = pathComponents[0]
+        repo = pathComponents[1]
+        // Join the remaining parts to form the filePath
+        // eslint-disable-next-line no-magic-numbers
+        filePath = pathComponents.slice(3).join('/')
+        // get commit hash
+        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
+      }
 
       if (commitHash === null) {
         debug().error(`Error obtaining commit hash for: ${ifcURL}`)

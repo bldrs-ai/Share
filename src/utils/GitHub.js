@@ -1,7 +1,7 @@
-import { Octokit } from '@octokit/rest'
+import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
-import { assertDefined } from './assert'
+import {assertDefined} from './assert'
 
 /**
  * @param {object} repository
@@ -49,7 +49,7 @@ export async function createIssue(repository, payload, accessToken) {
  * @return {object}
  */
 export async function getIssue(repository, issueNumber, accessToken) {
-  const issue = await getGitHub(repository, 'issues/{issueNumber}', { issueNumber }, accessToken)
+  const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
   debug().log('GitHub#getIssue: issue: ', issue)
   return issue
 }
@@ -105,7 +105,7 @@ export async function getComments(repository, accessToken) {
  * @return {object}
  */
 export async function getComment(repository, commentId, accessToken) {
-  const comment = await getGitHub(repository, 'issues/comments/{commentId}', { commentId }, accessToken)
+  const comment = await getGitHub(repository, 'issues/comments/{commentId}', {commentId}, accessToken)
   debug().log('GitHub#getComment: comment: ', comment)
   return comment
 }
@@ -118,7 +118,7 @@ export async function getComment(repository, commentId, accessToken) {
  * @return {object} result
  */
 export async function deleteComment(repository, commentId, accessToken) {
-  const res = await deleteGitHub(repository, `issues/comments/{commentId}`, { commentId }, accessToken)
+  const res = await deleteGitHub(repository, `issues/comments/{commentId}`, {commentId}, accessToken)
   return res
 }
 
@@ -132,7 +132,7 @@ export async function deleteComment(repository, commentId, accessToken) {
  * @return {Array}
  */
 export async function getIssueComments(repository, issueNumber, accessToken) {
-  const res = await getGitHub(repository, 'issues/{issueNumber}/comments', { issueNumber }, accessToken)
+  const res = await getGitHub(repository, 'issues/{issueNumber}/comments', {issueNumber}, accessToken)
   const comments = res.data
   debug().log('GitHub#getIssueComments: comments: ', comments)
   return comments
@@ -231,6 +231,10 @@ export async function getRepositories(org, accessToken = '') {
  *
  */
 export async function commitFile(owner, repo, path, file, message, branch, accessToken = '') {
+  if (accessToken === '') {
+    return 'Not authenticated'
+  }
+
   // Create a new FileReader object
   const reader = new FileReader()
 
@@ -253,7 +257,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   }
 
   // 1. Get the SHA of the latest commit on the branch
-  const { data: refData } = await octokit.rest.git.getRef({
+  const {data: refData} = await octokit.rest.git.getRef({
     owner,
     repo,
     ref: `heads/${branch}`,
@@ -262,7 +266,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   const parentSha = refData.object.sha
 
   // 2. Get the SHA of the tree associated with the latest commit
-  const { data: commitData } = await octokit.rest.git.getCommit({
+  const {data: commitData} = await octokit.rest.git.getCommit({
     owner,
     repo,
     commit_sha: parentSha,
@@ -271,7 +275,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   const treeSha = commitData.tree.sha
 
   // 3. Create a blob with your file content
-  const { data: blobData } = await octokit.rest.git.createBlob({
+  const {data: blobData} = await octokit.rest.git.createBlob({
     owner,
     repo,
     content,
@@ -281,7 +285,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   const blobSha = blobData.sha
 
   // 4. Create a new tree with the base tree and the blob
-  const { data: treeData } = await octokit.rest.git.createTree({
+  const {data: treeData} = await octokit.rest.git.createTree({
     owner,
     repo,
     base_tree: treeSha,
@@ -298,7 +302,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   const newTreeSha = treeData.sha
 
   // 5. Create a new commit
-  const { data: newCommitData } = await octokit.rest.git.createCommit({
+  const {data: newCommitData} = await octokit.rest.git.createCommit({
     owner,
     repo,
     message,
@@ -403,7 +407,7 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
     }
   })
 
-  return { files, directories }
+  return {files, directories}
 }
 
 /**
@@ -412,16 +416,19 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
 export async function getLatestCommitHash(owner, repo, filePath, accessToken) {
   try {
     assertDefined(owner, repo, filePath)
-    args = {}
-    if (accessToken) {
-      args.headers = {
-        authorization: `Bearer ${accessToken}`,
-        ...args.headers,
-      }
+    let commits = null
+    if (accessToken !== '') {
+      commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, {
+        path: filePath,
+        headers: {
+          authorization: `Bearer ${accessToken}`,
+        },
+      })
+    } else {
+      commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, {
+        path: filePath,
+      })
     }
-    const commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, {
-      path:filePath,
-    })
 
     if (commits.data.length === 0) {
       debug().warn('No commits found for the specified file.')
@@ -463,7 +470,7 @@ export const parseGitHubRepositoryURL = (githubUrl) => {
   if (match === null) {
     throw new Error('Could not match GitHub repository URL')
   }
-  const { groups: { owner, repository, ref, path } } = match
+  const {groups: {owner, repository, ref, path}} = match
   return {
     url: url,
     owner: owner,
@@ -901,7 +908,7 @@ export const MOCK_ONE_BRANCH = {
   ],
 }
 
-export const MOCK_ISSUES_EMPTY = { data: [] }
+export const MOCK_ISSUES_EMPTY = {data: []}
 
 export const MOCK_MODEL_PATH_GIT = {
   org: 'Swiss-Property-AG',

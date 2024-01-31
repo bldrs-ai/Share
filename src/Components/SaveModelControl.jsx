@@ -61,7 +61,7 @@ export default function SaveModelControl({navigate}) {
 
 
   return (
-    <Box sx={{marginRight: '6px'}}>
+    <Box sx={{}}>
       <TooltipIconButton
         title={'Save IFC'}
         onClick={() => setIsDialogDisplayed(true)}
