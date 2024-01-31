@@ -167,16 +167,6 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
 
-<<<<<<< HEAD
-  /* eslint-disable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
-  //if (!jestTestingDisableWebWorker) {
-    useEffect(() => {
-      if (!isViewerLoaded) {
-        // This function gets called whenever there's a change in authentication state
-        debug().log('Auth state changed. isAuthLoading:', isLoading, 'isAuthenticated:', isAuthenticated)
-        /* eslint-disable no-mixed-operators */
-        if (!isLoading &&
-=======
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
@@ -184,22 +174,15 @@ export default function CadView({
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
->>>>>>> 58803f3e5fb29436409b35d96439a3ed6de987ff
           (isAuthenticated && accessToken !== '') ||
           (!isAuthLoading && !isAuthenticated)) {
         (async () => {
           await onViewer()
         })()
       }
-<<<<<<< HEAD
-    }, [isLoading, isAuthenticated, accessToken])
- // }
-  /* eslint-enable react-hooks/rules-of-hooks, react-hooks/exhaustive-deps */
-=======
       /* eslint-enable no-mixed-operators */
     }
   }, [isAuthLoading, isAuthenticated, accessToken])
->>>>>>> 58803f3e5fb29436409b35d96439a3ed6de987ff
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -307,19 +290,10 @@ export default function CadView({
       return
     }
 
-<<<<<<< HEAD
-    //if (!jestTestingDisableWebWorker) {
-      if (isLoading || (!isLoading && isAuthenticated && accessToken === '')) {
-        debug().warn('Do not have auth token yet, waiting.')
-        return
-      }
-   // }
-=======
     if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
       debug().warn('Do not have auth token yet, waiting.')
       return
     }
->>>>>>> 58803f3e5fb29436409b35d96439a3ed6de987ff
 
     setModelReady(false)
 
