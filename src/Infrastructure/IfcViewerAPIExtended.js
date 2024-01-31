@@ -58,7 +58,7 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
    * @return {IfcModel} ifcModel object
    */
-  async loadIfc(file, fitToFrame, onError, customViewSettings) {
+  async loadIfcFile(file, fitToFrame, onError, customViewSettings) {
     this.viewsManager.setViewSettings(customViewSettings)
     return await this.IFC.loadIfc(file, fitToFrame, onError)
   }

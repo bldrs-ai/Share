@@ -394,7 +394,7 @@ export default function CadView({
       }
 
 
-      loadedModel = await viewer.loadIfc(
+      loadedModel = await viewer.loadIfcFile(
           file,
           !urlHasCameraParams(),
           (error) => {
