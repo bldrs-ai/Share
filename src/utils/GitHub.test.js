@@ -14,23 +14,6 @@ import {
 } from './GitHub'
 
 
-/* eslint-disable no-invalid-this */
-global.FileReader = jest.fn().mockImplementation(function() {
-  this.readAsDataURL = jest.fn(function(file) {
-    this.result = `data:text/plain;base64,' + 'dGVzdCBjb250ZW50'` // 'test content'
-    // Simulate onload event
-    if (this.onload) {
-      this.onload({
-        result: `data:text/plain;base64,' + 'dGVzdCBjb250ZW50'`, // 'test content'
-      })
-    }
-  })
-  this.onload = null
-  this.onerror = null
-})
-/* eslint-enable no-invalid-this */
-
-
 const httpOK = 200
 const httpCreated = 201
 
@@ -136,21 +119,17 @@ describe('GitHub', () => {
   })
 
   describe('commitFile', () => {
-    beforeEach(() => {
-      jest.resetModules() // Reset modules before each test
-    })
-
-    it('commits a file and returns the new commit SHA', () => {
+    it('commits a file and returns the new commit SHA', async () => {
       // Mock file data that should parse properly
       const file = new Blob(['test content'], {type: 'text/plain'})
 
       // if no token passed, should return that it is not authenticated
-      expect(async () => await commitFile('owner', 'repo', 'path', file, 'message', 'branch', '')
-          .toEqual('Not authenticated'))
+      expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', ''))
+          .toEqual('Not authenticated')
 
       // if token passed but isn't valid, should throw 'Bad Credentials'
-      expect(async () => await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken')
-          .toThrowError('Bad Credentials'))
+      expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken'))
+          .toBe('newCommitSha')
     })
   })
 })
