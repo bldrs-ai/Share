@@ -2,15 +2,14 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
-import {useIsMobile} from './Hooks'
 import CameraControl from './CameraControl'
 import LoginMenu from './LoginMenu'
+import NotesControl from './Notes/NotesContol'
 import ShareControl from './ShareControl'
 import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 
 
@@ -22,19 +21,13 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
  * @return {React.Component}
  */
 export default function OperationsGroup({deselectItems}) {
-  const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  const isNotesOn = useStore((state) => state.isNotesOn)
   const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
   const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
-  const isMobile = useIsMobile()
-  const turnOffTooltips = () => {
-    return isMobile ? turnOffIsHelpTooltips() : null
-  }
   // Properties
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
@@ -46,17 +39,6 @@ export default function OperationsGroup({deselectItems}) {
       selectedElement !== null
     )
     return ifSelected
-  }
-
-
-  const toggle = (panel) => {
-    openDrawer()
-    if (panel === 'Properties') {
-      toggleIsPropertiesOn()
-    }
-    if (panel === 'Notes') {
-      toggleIsNotesOn()
-    }
   }
 
   return (
@@ -75,17 +57,7 @@ export default function OperationsGroup({deselectItems}) {
       }
 
       {isModelInteractionGroupVisible &&
-        <>
-          <TooltipIconButton
-            title='Notes'
-            icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
-            selected={isNotesOn}
-            onClick={() => {
-              turnOffTooltips()
-              toggle('Notes')
-            }}
-          />
-        </>
+      <NotesControl/>
       }
 
       {isSelected() && selectedElement !== null &&
