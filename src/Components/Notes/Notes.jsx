@@ -94,7 +94,7 @@ export default function Notes() {
     spacing={1}
     sx={isMobile ? {paddingBottom: '100px'} : {}}
   >
-    {isLoadingNotes && <Loader type={'linear'}/>}
+    {isLoadingNotes && !isCreateNoteActive && <Loader type={'linear'}/>}
     {notes && notes.length === 0 && !isCreateNoteActive && !isLoadingNotes && <NoContent/>}
     {!user && isCreateNoteActive && <NoContent message={'Please login to create notes.'}/>}
     {user && isCreateNoteActive && <NoteCardCreate/>}
