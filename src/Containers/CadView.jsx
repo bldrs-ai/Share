@@ -89,6 +89,7 @@ export default function CadView({
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
+  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -201,7 +202,7 @@ export default function CadView({
           debug().warn('IssuesControl#Notes: 1, no repo defined')
           return
         }
-
+        setSelectedNoteId(null)
         const newNotes = []
         let issueIndex = 0
         const issueArr = await getIssues(repository, accessToken)

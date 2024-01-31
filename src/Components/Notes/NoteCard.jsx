@@ -142,6 +142,7 @@ export default function NoteCard({
     const updatedNotes = notes.filter((note) => note.number !== noteNumberToDelete)
     setNotes(updatedNotes)
     handleMenuClose()
+    setSelectedNoteId(null)
     return closeResponse
   }
 

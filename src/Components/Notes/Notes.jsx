@@ -70,7 +70,6 @@ export default function Notes() {
             })
           })
         }
-
         setComments(newComments)
       } catch (e) {
         debug().warn('failed to fetch comments: ', e)
@@ -78,7 +77,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, selectedNoteId, selectedNote])
+  }, [selectedNote])
 
   // On any change in side drawer always scroll up to the start of the notes list
   useEffect(() => {
