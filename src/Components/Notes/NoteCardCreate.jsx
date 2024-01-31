@@ -31,7 +31,6 @@ export default function NoteCardCreate({
   const [body, setBody] = useState('')
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
-  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
 
 
   /**
@@ -46,7 +45,6 @@ export default function NoteCardCreate({
     }
     await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
-    toggleSynchSidebar()
   }
 
   return (

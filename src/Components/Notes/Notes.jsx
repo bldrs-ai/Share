@@ -37,6 +37,7 @@ export default function Notes() {
   const setNotes = useStore((state) => state.setNotes)
   const selectedNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
 
+
   const handleError = (err) => {
     if (!err) {
       return
@@ -85,7 +86,7 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [model])
+  }, [model, isCreateNoteActive])
 
   // Fetch comments based on selected note id
   useEffect(() => {
@@ -141,8 +142,6 @@ export default function Notes() {
     {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
     {!user && isCreateNoteActive && <NoContent message={'Please login to create notes.'}/>}
     {notes === null && <Loader type={'linear'}/>}
-
-
     {user && isCreateNoteActive && <NoteCardCreate/>}
     {!selectedNoteId && !isCreateNoteActive && notes &&
         notes.map((note, index) => {
