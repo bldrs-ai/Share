@@ -268,100 +268,111 @@ export default function NoteCard({
           }
         />
       }
-      {!editMode && !isComment && !selected &&
-        <CardActionArea
-          onClick={() => selectCard()}
-          data-testid="selectionContainer"
-          disableRipple
-          disableTouchRipple
-        >
-          <CardContent
-            sx={{
-              'padding': '0px 20px',
-              '& img': {
-                width: '100%',
-              },
-              'fontSize': '1rem',
-              'lineHeight': 1.5,
-            }}
-          >
-            <ReactMarkdown>
-              {editBody}
-            </ReactMarkdown>
-          </CardContent>
-        </CardActionArea> }
-      {selected && !editMode &&
-          <CardContent
-            sx={{
-              'padding': '0px 20px',
-              '& img': {
-                width: '100%',
-              },
-              'fontSize': '1rem',
-              'lineHeight': 1.5,
-            }}
-          >
-            <ReactMarkdown>
-              {editBody}
-            </ReactMarkdown>
-          </CardContent> }
-      {isComment &&
-          <CardContent
-            sx={{
-              'padding': '0px 20px',
-              '& img': {
-                width: '100%',
-              },
-              'fontSize': '1rem',
-              'lineHeight': 1.5,
-            }}
-          >
-            <ReactMarkdown>
-              {editBody}
-            </ReactMarkdown>
-          </CardContent> }
-      {editMode &&
-        <CardContent>
-          <Stack
-            spacing={1}
-            direction="column"
-            justifyContent="center"
-            alignItems="flex-end"
-          >
-            <TextField
-              fullWidth
-              multiline
-              id="outlined-error"
-              label="Note content"
-              value={editBody}
-              onChange={handleTextUpdate}
-            />
-          </Stack>
-        </CardContent>
-      }
-      {(embeddedCameraParams || numberOfComments > 0) &&
-        <CardFooter
-          editMode={editMode}
-          id={id}
-          noteNumber={noteNumber}
-          username={username}
-          selectCard={selectCard}
-          numberOfComments={numberOfComments}
-          embeddedCameras={embeddedCameraParams}
-          selected={selected}
-          onClickCamera={showCameraView}
-          onClickShare={shareIssue}
-          removeComment={removeComment}
-          isComment={isComment}
-          synched={synched}
-          submitUpdate={submitUpdate}
-        />
-      }
+      {!editMode && !isComment && !selected && <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
+      {selected && !editMode && <SelectedCardbody editBody={editBody}/>}
+      {isComment && <CommentCardBody editBody={editBody}/>}
+      {editMode && <EditCardBody editBody={editBody} handleTextUpdate={handleTextUpdate}/>}
+      <CardFooter
+        editMode={editMode}
+        id={id}
+        noteNumber={noteNumber}
+        username={username}
+        selectCard={selectCard}
+        numberOfComments={numberOfComments}
+        embeddedCameras={embeddedCameraParams}
+        selected={selected}
+        onClickCamera={showCameraView}
+        onClickShare={shareIssue}
+        removeComment={removeComment}
+        isComment={isComment}
+        synched={synched}
+        submitUpdate={submitUpdate}
+      />
     </Card>
   )
 }
-
-
+const RegularCardBody = ({selectCard, editBody}) => {
+  return (
+    <CardActionArea
+      onClick={() => selectCard()}
+      data-testid="selectionContainer"
+      disableRipple
+      disableTouchRipple
+    >
+      <CardContent
+        sx={{
+          'padding': '0px 20px',
+          '& img': {
+            width: '100%',
+          },
+          'fontSize': '1rem',
+          'lineHeight': 1.5,
+        }}
+      >
+        <ReactMarkdown>
+          {editBody}
+        </ReactMarkdown>
+      </CardContent>
+    </CardActionArea>
+  )
+}
+const SelectedCardbody = ({editBody}) => {
+  return (
+    <CardContent
+      sx={{
+        'padding': '0px 20px',
+        '& img': {
+          width: '100%',
+        },
+        'fontSize': '1rem',
+        'lineHeight': 1.5,
+      }}
+    >
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
+  )
+}
+const EditCardBody = ({handleTextUpdate, editBody}) => {
+  return (
+    <CardContent>
+      <Stack
+        spacing={1}
+        direction="column"
+        justifyContent="center"
+        alignItems="flex-end"
+      >
+        <TextField
+          fullWidth
+          multiline
+          id="outlined-error"
+          label="Note content"
+          value={editBody}
+          onChange={handleTextUpdate}
+        />
+      </Stack>
+    </CardContent>
+  )
+}
+const CommentCardBody = ({editBody}) => {
+  return (
+    <CardContent
+      sx={{
+        'padding': '0px 20px',
+        '& img': {
+          width: '100%',
+        },
+        'fontSize': '1rem',
+        'lineHeight': 1.5,
+      }}
+    >
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
+  )
+}
 const CardFooter = ({
   id,
   noteNumber,
