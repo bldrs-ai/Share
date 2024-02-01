@@ -248,15 +248,13 @@ function githubHandlers() {
 
     // octokit.rest.git.getlatestCommitHash
     rest.get(
-      'https://api.github.com/repos/:owner/:repo/commits',
-      (req, res, ctx) => {
-        return res(
-            ctx.status(httpOk),
-            ctx.json([{ sha: 'testsha' }]),
-        )
-      }),
-
-
+        'https://api.github.com/repos/:owner/:repo/commits',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json([{sha: 'testsha'}]),
+          )
+        }),
 
     /* Begin support for GitHub commitFile.  HTTP_BAD_REQUEST(400) is
      * used to indicate missing args, tho we're not sure what actual
