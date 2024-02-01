@@ -8,9 +8,11 @@ import {
   getOrganizations,
   getRepositories,
   getFiles,
+  getFilesAndFolders,
   MOCK_REPOSITORY,
   MOCK_FILES,
   commitFile,
+  getLatestCommitHash,
 } from './GitHub'
 
 
@@ -99,7 +101,20 @@ describe('GitHub', () => {
 
     it('successfully get files', async () => {
       const res = await getFiles('Share', 'pablo-mayrgundter')
-      expect(res.data).toEqual([MOCK_FILES])
+      expect(res).toEqual(MOCK_FILES)
+    })
+
+    it('successfully get files and folders', async () => {
+      const {files, directories} = await getFilesAndFolders('Share', 'pablo-mayrgundter', '/', '')
+      expect(files.length).toEqual(1)
+      expect(directories.length).toEqual(1)
+    })
+  })
+
+  describe('get latest commit hash', () => {
+    it('get latest commit hash', async () => {
+      const result = await getLatestCommitHash('testowner', 'testrepo', '', '')
+      expect(result).toEqual('testsha')
     })
   })
 

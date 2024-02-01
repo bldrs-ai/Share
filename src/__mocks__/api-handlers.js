@@ -242,11 +242,20 @@ function githubHandlers() {
     rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
-          ctx.json({
-            data: [MOCK_FILES],
-          }),
+          ctx.json(MOCK_FILES),
       )
     }),
+
+    // octokit.rest.git.getlatestCommitHash
+    rest.get(
+      'https://api.github.com/repos/:owner/:repo/commits',
+      (req, res, ctx) => {
+        return res(
+            ctx.status(httpOk),
+            ctx.json([{ sha: 'testsha' }]),
+        )
+      }),
+
 
 
     /* Begin support for GitHub commitFile.  HTTP_BAD_REQUEST(400) is
