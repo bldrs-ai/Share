@@ -106,10 +106,7 @@ export default function NoteCard({
     addHashParams(window.location, NOTE_PREFIX, {id: id})
   }
 
-  /**
-   * Moves the camera to the position specified in the url attached to
-   * the issue/comment.
-   */
+  /** Moves the camera to the position specified in the url attached to the issue/comment.*/
   function showCameraView() {
     setCameraFromParams(firstCamera, cameraControls)
     addCameraUrlParams(cameraControls)
@@ -118,10 +115,7 @@ export default function NoteCard({
     }
   }
 
-  /**
-   * Copies the issue url which contains the issue id, camera position
-   * and selected element path.
-   */
+  /** Copies the issue url which contains the issue id, camera position and selected element path.*/
   function shareIssue() {
     navigator.clipboard.writeText(window.location)
     setSnackMessage('The url path is copied to the clipboard')
@@ -163,31 +157,23 @@ export default function NoteCard({
     await deleteComment(repository, commentId, accessToken)
   }
 
-  /**
-   * Triggerred when menu is closed
-   */
+  /** Triggerred when menu is closed*/
   function handleMenuClose() {
     setAnchorEl(null)
   }
 
-  /**
-   * Triggerred when menu icon is activated
-   */
+  /** Triggerred when menu icon is activated*/
   function handleMenuClick(event) {
     setAnchorEl(event.currentTarget)
   }
 
-  /**
-   * Activate note edit mode
-   */
+  /** Activate note edit mode*/
   function actviateEditMode() {
     handleMenuClose()
     setEditMode(true)
   }
 
-  /**
-   *Submit update
-   */
+  /** Submit update*/
   async function submitUpdate() {
     const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
     const editedNote = notes.find((note) => note.id === id)
@@ -196,9 +182,7 @@ export default function NoteCard({
     setEditMode(false)
   }
 
-  /**
-   * Update body
-   */
+  /** Update body */
   const handleTextUpdate = (event) => {
     setEditBody(event.target.value)
   }
