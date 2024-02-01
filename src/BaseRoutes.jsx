@@ -60,6 +60,7 @@ export default function BaseRoutes({testElt = null}) {
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basePath, installPrefix, location, navigate, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
 
   return (
