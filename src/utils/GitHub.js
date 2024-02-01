@@ -20,7 +20,7 @@ export async function getCommitsForBranch(repository, branch, accessToken = '') 
 /**
  * @param {object} repository
  * @param {string} accessToken
- * @return {Array}
+ * @return {Array} Array of issues response from GH
  */
 export async function getIssues(repository, accessToken) {
   const res = await getGitHub(repository, 'issues', {}, accessToken)
@@ -34,7 +34,7 @@ export async function getIssues(repository, accessToken) {
  * @param {object} repository
  * @param {object} payload issue payload shall contain title and body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} result
+ * @return {object} response from GH
  */
 export async function createIssue(repository, payload, accessToken) {
   const res = await postGitHub(repository, 'issues', payload, accessToken)
@@ -47,7 +47,7 @@ export async function createIssue(repository, payload, accessToken) {
  * @param {object} repository
  * @param {number} issueNumber
  * @param {string} accessToken
- * @return {object}
+ * @return {object} response from GH sinle issue
  */
 export async function getIssue(repository, issueNumber, accessToken) {
   const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
@@ -58,11 +58,11 @@ export async function getIssue(repository, issueNumber, accessToken) {
 
 /**
  * @param {object} repository
- * @param {object} issueNumber
+ * @param {number} issueNumber
  * @param {string} title Issue/Note title
  * @param {string} body Issue/Note body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} result
+ * @return {object} response from GH
  */
 export async function updateIssue(repository, issueNumber, title, body, accessToken) {
   const args = {
@@ -78,9 +78,9 @@ export async function updateIssue(repository, issueNumber, title, body, accessTo
 
 /**
  * @param {object} repository
- * @param {object} issueNumber
+ * @param {number} issueNumber
  * @param {string} accessToken Github API OAuth access token
- * @return {object} result
+ * @return {object} responce from GH with the closed issue object
  */
 export async function closeIssue(repository, issueNumber, accessToken) {
   const args = {
