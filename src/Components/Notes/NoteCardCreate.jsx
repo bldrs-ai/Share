@@ -11,6 +11,7 @@ import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
+import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
 
 
@@ -25,12 +26,12 @@ export default function NoteCardCreate({
   username = '',
   avatarUrl = '',
 }) {
+  const {user, isAuthenticated} = useAuth0()
+  const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-  const {user, isAuthenticated} = useAuth0()
-  const accessToken = useStore((state) => state.accessToken)
+  const [body, setBody] = useState(null)
 
 
   /**
@@ -39,18 +40,17 @@ export default function NoteCardCreate({
    * @return {void}
    */
   async function createNote() {
-    const issueTitle = title.length === 0 ? 'Empty title' : title
-    const issueBody = body.length === 0 ? 'Empty body' : body
-
+    assertStringNotEmpty(title)
     const issuePayload = {
-      title: issueTitle,
-      body: issueBody,
+      title,
+      body: body || '',
     }
 
     await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
   }
 
+  const submitEnabled = title !== null && title !== ''
   return (
     <Card
       elevation={1}
@@ -100,13 +100,13 @@ export default function NoteCardCreate({
         >
           <TooltipIconButton
             title='Submit'
-            size='small'
-            placement='bottom'
             onClick={async () => {
               await createNote()
             }}
-            sx={{marginLeft: 'auto'}}
             icon={<CheckIcon/>}
+            enabled={submitEnabled}
+            size='small'
+            placement='bottom'
           />
         </Stack>
       </CardActions>

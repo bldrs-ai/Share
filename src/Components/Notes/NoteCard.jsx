@@ -1,4 +1,3 @@
-
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
@@ -9,9 +8,9 @@ import {
   CardMenu,
   RegularCardBody,
   SelectedCardBody,
-  EditCardBody,
   CommentCardBody,
 } from './NoteCardSupportComponents'
+import EditCardBody from './EditCardBody'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
@@ -25,6 +24,7 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {NOTE_PREFIX} from './Notes'
+
 
 /**
  * Note card
@@ -181,11 +181,6 @@ export default function NoteCard({
     setEditMode(false)
   }
 
-  /** Update body */
-  const handleTextUpdate = (event) => {
-    setEditBody(event.target.value)
-  }
-
   return (
     <Card
       elevation={1}
@@ -215,10 +210,16 @@ export default function NoteCard({
           />
           }
         /> }
-      {!editMode && !isComment && !selected && <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
+      {!editMode && !isComment && !selected &&
+       <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
       {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
       {isComment && <CommentCardBody editBody={editBody}/>}
-      {editMode && <EditCardBody editBody={editBody} handleTextUpdate={handleTextUpdate}/>}
+      {editMode &&
+       <EditCardBody
+         handleTextUpdate={(event) => setEditBody(event.target.value)}
+         value={editBody}
+       />
+      }
       <CardFooter
         editMode={editMode}
         id={id}

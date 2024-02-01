@@ -37,11 +37,6 @@ export function getComponentOverrides(palette, typography) {
           },
         },
       ],
-      defaultProps: {
-        disableElevation: true,
-        disableFocusRipple: true,
-        disableRipple: true,
-      },
     },
     MuiSnackbarContent: {
       styleOverrides: {

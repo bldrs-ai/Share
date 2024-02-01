@@ -13,6 +13,7 @@ import CloseIcon from '@mui/icons-material/Close'
  * @property {string} title Tooltip text
  * @property {Function} onClick callback
  * @property {object} icon button icon
+ * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
  * @property {string} [placement] Tooltip location. Default: left
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
@@ -23,6 +24,7 @@ export function TooltipIconButton({
   title,
   onClick,
   icon,
+  enabled = true,
   placement = 'right',
   selected = false,
   size = 'medium',
@@ -41,22 +43,31 @@ export function TooltipIconButton({
     setOpenLocal(true)
   }
   return (
-    <>
-      <Tooltip
-        open={openLocal || open}
-        onClose={handleClose}
-        onOpen={handleOpen}
-        title={title}
-        describeChild
-        placement={placement}
-        data-testid={dataTestId || title}
-        PopperProps={{style: {zIndex: 0}}}
+    <Tooltip
+      open={openLocal || open}
+      onClose={handleClose}
+      onOpen={handleOpen}
+      title={title}
+      describeChild
+      placement={placement}
+      data-testid={dataTestId || title}
+      PopperProps={{style: {zIndex: 0}}}
+    >
+      <ToggleButton
+        selected={selected}
+        onClick={onClick}
+        value={''}
+        size={size}
+        variant={variant}
+        disabled={!enabled}
+        sx={{
+          // TODO(pablo): couldn't figure how to set this in theme
+          opacity: enabled ? '1.0' : '0.35',
+        }}
       >
-        <ToggleButton selected={selected} onClick={onClick} value={''} size={size} variant={variant}>
-          {icon}
-        </ToggleButton>
-      </Tooltip>
-    </>
+        {icon}
+      </ToggleButton>
+    </Tooltip>
   )
 }
 
