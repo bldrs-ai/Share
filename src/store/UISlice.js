@@ -19,14 +19,14 @@ export default function createUISlice(set, get) {
     isVersionHistoryVisible: false,
     isOpenControlHighlighted: true,
     isPropertiesOn: false,
+    isHelpTooltips: false,
+    isAppStoreOpen: false,
     snackMessage: null,
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
     sidebarWidth: MOBILE_WIDTH,
     sidebarHeight: MOBILE_HEIGHT,
-    isHelpTooltips: false,
-    isAppStoreOpen: false,
     appStoreSidebarWidth: MOBILE_WIDTH,
     appStoreSidebarHeight: MOBILE_HEIGHT,
     selectedStoreApp: null,
@@ -41,7 +41,6 @@ export default function createUISlice(set, get) {
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
     turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
     closeProperties: () => set(() => ({isPropertiesOn: false})),
-    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       debug().log('UISlice#addCutPlaneDirection: cutPlanes(start): ', state.cutPlanes)
       if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
@@ -55,6 +54,7 @@ export default function createUISlice(set, get) {
       debug().log('UISlice#removeCutPlaneDirection: filterPlanes: ', filterPlanes)
       return {cutPlanes: filterPlanes}
     }),
+    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
