@@ -634,16 +634,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `The Architecture, Engineering and Construction industries are trying
-      to face challenging problems of the future with tools anchored in the
-      past. Meanwhile, a new dynamic has propelled the Tech industry:
-      online, collaborative, open development.
-
-      We can't imagine a future where building the rest of the world hasn't
-      been transformed by these new ways of working. We are part of that
-      transformation.
-
-      [a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      body: `Test Comment 1`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
@@ -688,10 +679,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `Email is the medium that still facilitates major portion of communication.
-
-      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
-      [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      body: `Test Comment 2`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
