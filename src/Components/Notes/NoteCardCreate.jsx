@@ -39,12 +39,9 @@ export default function NoteCardCreate({
    * @return {void}
    */
   async function createNote() {
-    const issueTitle = title.length === 0 ? 'Empty title' : title
-    const issueBody = body.length === 0 ? 'Empty body' : body
-
     const issuePayload = {
-      title: issueTitle,
-      body: issueBody,
+      title,
+      body,
     }
 
     await createIssue(repository, issuePayload, accessToken)
@@ -107,6 +104,7 @@ export default function NoteCardCreate({
             }}
             sx={{marginLeft: 'auto'}}
             icon={<CheckIcon/>}
+            disabled={title === ''}
           />
         </Stack>
       </CardActions>
