@@ -1,4 +1,3 @@
-
 import React, {useState} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -6,20 +5,20 @@ import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
 import Menu from '@mui/material/Menu'
+import MenuItem from '@mui/material/MenuItem'
+import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import MenuItem from '@mui/material/MenuItem'
 import useTheme from '@mui/styles/useTheme'
-import Stack from '@mui/material/Stack'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
-import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
-import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
-import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
-import MoreVertIcon from '@mui/icons-material/MoreVert'
 import CheckIcon from '@mui/icons-material/Check'
+import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import MoreVertIcon from '@mui/icons-material/MoreVert'
+import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
@@ -80,16 +79,7 @@ export const RegularCardBody = ({selectCard, editBody}) => {
       disableRipple
       disableTouchRipple
     >
-      <CardContent
-        sx={{
-          'padding': '0px 20px',
-          '& img': {
-            width: '100%',
-          },
-          'fontSize': '1rem',
-          'lineHeight': 1.5,
-        }}
-      >
+      <CardContent>
         <ReactMarkdown>
           {editBody}
         </ReactMarkdown>
@@ -99,16 +89,7 @@ export const RegularCardBody = ({selectCard, editBody}) => {
 }
 export const SelectedCardBody = ({editBody}) => {
   return (
-    <CardContent
-      sx={{
-        'padding': '0px 20px',
-        '& img': {
-          width: '100%',
-        },
-        'fontSize': '1rem',
-        'lineHeight': 1.5,
-      }}
-    >
+    <CardContent>
       <ReactMarkdown>
         {editBody}
       </ReactMarkdown>
@@ -138,16 +119,7 @@ export const EditCardBody = ({handleTextUpdate, editBody}) => {
 }
 export const CommentCardBody = ({editBody}) => {
   return (
-    <CardContent
-      sx={{
-        'padding': '0px 20px',
-        '& img': {
-          width: '100%',
-        },
-        'fontSize': '1rem',
-        'lineHeight': 1.5,
-      }}
-    >
+    <CardContent>
       <ReactMarkdown>
         {editBody}
       </ReactMarkdown>

@@ -11,7 +11,7 @@ import {
   SelectedCardBody,
   EditCardBody,
   CommentCardBody,
-} from './NoteCardSupportCompoents'
+} from './NoteCardSupportComponents'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'

@@ -233,5 +233,17 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          'padding': '0px 20px',
+          '& img': {
+            width: '100%',
+          },
+          'fontSize': '1rem',
+          'lineHeight': 1.5,
+        },
+      },
+    },
   }
 }
