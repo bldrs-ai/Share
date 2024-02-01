@@ -24,6 +24,8 @@ export function loadLocalFile(
   const fileInput = document.createElement('input')
   fileInput.setAttribute('type', 'file')
   let workerRef = null
+
+  // TODO(nickcastel50): set up proper testing for web workers and OPFS
   if (!testingDisableWebWorker) {
     workerRef = initializeWorker()
   }

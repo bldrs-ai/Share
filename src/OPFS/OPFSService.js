@@ -6,7 +6,7 @@ let workerRef = null
 
 export const initializeWorker = () => {
   if (workerRef === null) {
-    workerRef = workerRef = new Worker('/OPFS.Worker.js')
+    workerRef = new Worker('/OPFS.Worker.js')
   }
 
   return workerRef
