@@ -348,8 +348,14 @@ export async function getUserRepositories(accessToken = '', owner = '') {
     })
 
     // Filter out forks from the current page of results
-    const nonForkRepos = res.data.filter((repo) => !repo.fork && repo.owner.login === owner)
-    allRepos = allRepos.concat(nonForkRepos)
+
+    if (owner === '') {
+      const nonForkRepos = res.data.filter((repo) => !repo.fork)
+      allRepos = allRepos.concat(nonForkRepos)
+    } else {
+      const nonForkRepos = res.data.filter((repo) => !repo.fork && repo.owner.login === owner)
+      allRepos = allRepos.concat(nonForkRepos)
+    }
 
     if (res.data.length < perPage) {
       // If the number of repositories is less than 'perPage', it means we are on the last page
