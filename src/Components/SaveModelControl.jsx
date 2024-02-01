@@ -150,7 +150,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     setSelectedOrgName(org)
     let repos
     if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(accessToken)
+      repos = await getUserRepositories(accessToken, orgNamesArr[org])
     } else {
       repos = await getRepositories(orgNamesArr[org], accessToken)
     }

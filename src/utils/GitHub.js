@@ -331,7 +331,7 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
  * @param {string} [accessToken]
  * @return {Promise} the list of organization
  */
-export async function getUserRepositories(accessToken = '') {
+export async function getUserRepositories(accessToken = '', owner = '') {
   let allRepos = []
   let page = 1
   let isDone = false
@@ -348,7 +348,7 @@ export async function getUserRepositories(accessToken = '') {
     })
 
     // Filter out forks from the current page of results
-    const nonForkRepos = res.data.filter((repo) => !repo.fork)
+    const nonForkRepos = res.data.filter((repo) => !repo.fork && repo.owner.login === owner)
     allRepos = allRepos.concat(nonForkRepos)
 
     if (res.data.length < perPage) {
