@@ -189,7 +189,7 @@ export default function NoteCard({
    *Submit update
    */
   async function submitUpdate() {
-    const res = await updateIssue(repository, noteNumber, editBody, title, accessToken)
+    const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
     const editedNote = notes.find((note) => note.id === id)
     editedNote.body = res.data.body
     setNotes(notes)

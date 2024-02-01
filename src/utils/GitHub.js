@@ -59,10 +59,12 @@ export async function getIssue(repository, issueNumber, accessToken) {
 /**
  * @param {object} repository
  * @param {object} issueNumber
+ * @param {string} title Issue/Note title
+ * @param {string} body Issue/Note body
  * @param {string} accessToken Github API OAuth access token
  * @return {object} result
  */
-export async function updateIssue(repository, issueNumber, body, title, accessToken) {
+export async function updateIssue(repository, issueNumber, title, body, accessToken) {
   const args = {
     issue_number: issueNumber,
     body,
@@ -794,6 +796,8 @@ export const MOCK_FILES = {
 const octokit = new Octokit({
   baseUrl: process.env.GITHUB_BASE_URL,
   userAgent: `bldrs/${PkgJson.version}`,
+  // This comment instructs GitHub to always use the latest response instead of using a cached version. Especially relevant for notee.
+  // https://github.com/octokit/octokit.js/issues/890#issuecomment-392193948 the source of the solution
   headers: {
     'If-None-Match': '',
   },
