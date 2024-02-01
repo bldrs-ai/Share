@@ -5,44 +5,46 @@ import * as Sentry from '@sentry/react'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {useIsMobile} from '../Hooks'
-import {getIssues, getIssueComments} from '../../utils/GitHub'
+import {getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
 import ApplicationError from '../ApplicationError'
 
-
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
 
-
-/** @return {object} List of notes and comments as react component. */
+/**
+ * List of Notes
+ *
+ * @return {object} List of notes and comments as react component.
+ */
 export default function Notes() {
-  const selectedNoteId = useStore((state) => state.selectedNoteId)
-  const {user} = useAuth0()
-  const notes = useStore((state) => state.notes)
-  const synchSidebar = useStore((state) => state.synchSidebar)
-  const setNotes = useStore((state) => state.setNotes)
-  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
-  const isMobile = useIsMobile()
-  const comments = useStore((state) => state.comments)
-  const setComments = useStore((state) => state.setComments)
-  const filteredNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
-  const repository = useStore((state) => state.repository)
-  const drawer = useStore((state) => state.drawer)
-  const accessToken = useStore((state) => state.accessToken)
   const [hasError, setHasError] = useState(false)
+  const {user} = useAuth0()
+  const isMobile = useIsMobile()
+  const accessToken = useStore((state) => state.accessToken)
+  const comments = useStore((state) => state.comments)
+  const drawer = useStore((state) => state.drawer)
+  const notes = useStore((state) => state.notes)
+  const repository = useStore((state) => state.repository)
+  const isLoadingNotes = useStore((state) => state.isLoadingNotes)
+  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const setComments = useStore((state) => state.setComments)
+  const selectedNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+
+
   const handleError = (err) => {
     if (!err) {
       return
     }
-
     Sentry.captureException(err)
     setHasError(true)
   }
 
-
+  // Fetch comments based on selected note id
   useEffect(() => {
     (async () => {
       try {
@@ -50,54 +52,11 @@ export default function Notes() {
           debug().warn('IssuesControl#Notes: 1, no repo defined')
           return
         }
-
-        const newNotes = []
-        let issueIndex = 0
-        const issueArr = await getIssues(repository, accessToken)
-        debug().log('Notes#useEffect: issueArr: ', issueArr)
-
-        issueArr.reverse().map((issue, index) => {
-          if (issue.body === null) {
-            debug().warn(`issue ${index} has no body: `, issue)
-            return
-          }
-
-          newNotes.push({
-            index: issueIndex++,
-            id: issue.id,
-            number: issue.number,
-            title: issue.title,
-            body: issue.body,
-            date: issue.created_at,
-            username: issue.user.login,
-            avatarUrl: issue.user.avatar_url,
-            numberOfComments: issue.comments,
-            synched: true,
-          })
-        })
-
-        setNotes(newNotes)
-      } catch (e) {
-        debug().warn('failed to fetch notes: ', e)
-        handleError(e)
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, synchSidebar])
-
-
-  useEffect(() => {
-    (async () => {
-      try {
-        if (!repository) {
-          debug().warn('IssuesControl#Notes: 1, no repo defined')
-          return
-        }
-        if (!selectedNoteId || !filteredNote) {
+        if (!selectedNoteId || !selectedNote) {
           return
         }
         const newComments = []
-        const commentArr = await getIssueComments(repository, filteredNote.number, accessToken)
+        const commentArr = await getIssueComments(repository, selectedNote.number, accessToken)
         debug().log('Notes#useEffect: commentArr: ', commentArr)
 
         if (commentArr) {
@@ -112,7 +71,6 @@ export default function Notes() {
             })
           })
         }
-
         setComments(newComments)
       } catch (e) {
         debug().warn('failed to fetch comments: ', e)
@@ -120,9 +78,9 @@ export default function Notes() {
       }
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [repository, selectedNoteId, synchSidebar, filteredNote])
+  }, [selectedNote])
 
-
+  // On any change in side drawer always scroll up to the start of the notes list
   useEffect(() => {
     if (drawer) {
       drawer.scrollTop = 0
@@ -130,67 +88,66 @@ export default function Notes() {
   }, [drawer, selectedNoteId])
 
 
-  return hasError ? <ApplicationError/> : (
-      <List
-        spacing={1}
-        sx={isMobile ? {paddingBottom: '100px'} : {}}
-      >
-        {isCreateNoteActive && user && <NoteCardCreate/>}
-        {isCreateNoteActive && !user && <NoContent message={'Please login to create notes.'}/>}
-        {notes === null && <Loader type={'linear'}/>}
-        {notes && notes.length === 0 && !isCreateNoteActive && <NoContent/>}
-        {notes && !selectedNoteId && !isCreateNoteActive ?
-          notes.map((note, index) => {
-            return (
-              <NoteCard
-                key={index}
-                index={note.index}
-                id={note.id}
-                noteNumber={note.number}
-                title={note.title}
-                date={note.date}
-                body={note.body}
-                username={note.username}
-                numberOfComments={note.numberOfComments}
-                avatarUrl={note.avatarUrl}
-                synched={note.synched}
-              />
-            )
-          }) :
-          <>
-            {(filteredNote && !isCreateNoteActive) ?
-              <NoteCard
-                index={filteredNote.index}
-                id={filteredNote.id}
-                noteNumber={filteredNote.number}
-                title={filteredNote.title}
-                date={filteredNote.date}
-                body={filteredNote.body}
-                username={filteredNote.username}
-                numberOfComments={filteredNote.numberOfComments}
-                avatarUrl={filteredNote.avatarUrl}
-                synched={filteredNote.synched}
-              /> : null
-            }
-            {comments && !isCreateNoteActive &&
-              comments.map((comment, index) => {
-                return (
-                  <NoteCard
-                    key={index}
-                    isComment={true}
-                    id={comment.id}
-                    index=''
-                    body={comment.body}
-                    date={comment.date}
-                    username={comment.username}
-                    avatarUrl={comment.avatarUrl}
-                    synched={comment.synched}
-                  />
-                )
-              })
-            }
-          </>
-        }
-      </List>
+  return hasError ?
+  <ApplicationError/> : (
+  <List
+    spacing={1}
+    sx={isMobile ? {paddingBottom: '100px'} : {}}
+  >
+    {isLoadingNotes && !isCreateNoteActive && <Loader type={'linear'}/>}
+    {notes && notes.length === 0 && !isCreateNoteActive && !isLoadingNotes && <NoContent/>}
+    {!user && isCreateNoteActive && <NoContent message={'Please login to create notes.'}/>}
+    {user && isCreateNoteActive && <NoteCardCreate/>}
+    {!selectedNoteId && !isCreateNoteActive && notes && !isLoadingNotes &&
+        notes.map((note, index) => {
+          return (
+            <NoteCard
+              key={index}
+              index={note.index}
+              id={note.id}
+              noteNumber={note.number}
+              title={note.title}
+              date={note.date}
+              body={note.body}
+              username={note.username}
+              numberOfComments={note.numberOfComments}
+              avatarUrl={note.avatarUrl}
+              synched={note.synched}
+            />
+          )
+        })
+    }
+    {selectedNote &&
+      <NoteCard
+        index={selectedNote.index}
+        id={selectedNote.id}
+        noteNumber={selectedNote.number}
+        title={selectedNote.title}
+        date={selectedNote.date}
+        body={selectedNote.body}
+        username={selectedNote.username}
+        numberOfComments={selectedNote.numberOfComments}
+        avatarUrl={selectedNote.avatarUrl}
+        synched={selectedNote.synched}
+      />
+    }
+    {comments && selectedNote &&
+      comments.map((comment, index) => {
+        return (
+          <NoteCard
+            key={index}
+            isComment={true}
+            id={comment.id}
+            index=''
+            body={comment.body}
+            date={comment.date}
+            username={comment.username}
+            avatarUrl={comment.avatarUrl}
+            synched={comment.synched}
+          />
+        )
+      })
+    }
+  </List>
   )
 }
