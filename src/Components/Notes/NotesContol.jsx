@@ -14,7 +14,6 @@ import debug from '../../utils/debug'
  */
 export default function NotesControl() {
   const drawer = useStore((state) => state.drawer)
-  // const isLoadingNotes = useStore((state) => state.isLoadingNotes)
   const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
   const toggleIsNotesOn = useStore((state) => state.toggleIsNotesOn)
   const isNotesOn = useStore((state) => state.isNotesOn)
@@ -36,10 +35,6 @@ export default function NotesControl() {
     (async () => {
       toggleIsLoadingNotes()
       try {
-        if (!repository) {
-          debug().warn('IssuesControl#Notes: 1, no repo defined')
-          return
-        }
         setSelectedNoteId(null)
         const newNotes = []
         let issueIndex = 0
