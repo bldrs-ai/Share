@@ -6,24 +6,22 @@ import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
-import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import {TooltipIconButton} from '../Buttons'
-import useStore from '../../store/useStore'
 import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
+import {TooltipIconButton} from '../Buttons'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
-import ShareIcon from '../../assets/icons/Share.svg'
 import DeleteIcon from '../../assets/icons/Delete.svg'
-import SynchIcon from '../../assets/icons/Synch.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
+import ShareIcon from '../../assets/icons/Share.svg'
+import SynchIcon from '../../assets/icons/Synch.svg'
 
 
 export const CardMenu = ({
@@ -71,6 +69,8 @@ export const CardMenu = ({
 
   )
 }
+
+
 export const RegularCardBody = ({selectCard, editBody}) => {
   return (
     <CardActionArea
@@ -87,6 +87,8 @@ export const RegularCardBody = ({selectCard, editBody}) => {
     </CardActionArea>
   )
 }
+
+
 export const SelectedCardBody = ({editBody}) => {
   return (
     <CardContent>
@@ -96,27 +98,8 @@ export const SelectedCardBody = ({editBody}) => {
     </CardContent>
   )
 }
-export const EditCardBody = ({handleTextUpdate, editBody}) => {
-  return (
-    <CardContent>
-      <Stack
-        spacing={1}
-        direction="column"
-        justifyContent="center"
-        alignItems="flex-end"
-      >
-        <TextField
-          fullWidth
-          multiline
-          id="outlined-error"
-          label="Note content"
-          value={editBody}
-          onChange={handleTextUpdate}
-        />
-      </Stack>
-    </CardContent>
-  )
-}
+
+
 export const CommentCardBody = ({editBody}) => {
   return (
     <CardContent>

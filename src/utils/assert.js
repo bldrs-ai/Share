@@ -69,3 +69,15 @@ export function assertArraysEqualLength(...arrays) {
   }
   return arrays
 }
+
+
+/**
+ * String must be defined and not the empty string.
+ *
+ * @param {string} str
+ */
+export function assertStringNotEmpty(str) {
+  if (str === undefined || str === null || str === '') {
+    throw new Error('String must be defined and not empty')
+  }
+}
