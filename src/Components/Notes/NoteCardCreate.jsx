@@ -59,7 +59,7 @@ export default function NoteCardCreate({
       <CardHeader
         title={
           <InputBase
-            value={title}
+            value={title || ''}
             onChange={(event) => setTitle(event.target.value)}
             fullWidth
             multiline
@@ -82,7 +82,7 @@ export default function NoteCardCreate({
           }}
         >
           <InputBase
-            value={body}
+            value={body || ''}
             onChange={(event) => setBody(event.target.value)}
             fullWidth
             multiline
