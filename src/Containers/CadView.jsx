@@ -33,7 +33,6 @@ import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import {groupElementsByTypes} from '../utils/ifc'
 
-
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
  * when new models load.
@@ -89,7 +88,6 @@ export default function CadView({
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
-
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -189,6 +187,7 @@ export default function CadView({
     }
   }, [location, model])
   /* eslint-enable */
+
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
