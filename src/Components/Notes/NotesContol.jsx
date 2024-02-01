@@ -42,17 +42,12 @@ export default function NotesControl() {
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 
         issueArr.reverse().map((issue, index) => {
-          if (issue.body === null) {
-            debug().warn(`issue ${index} has no body: `, issue)
-            return
-          }
-
           newNotes.push({
             index: issueIndex++,
             id: issue.id,
             number: issue.number,
-            title: issue.title,
-            body: issue.body,
+            title: issue.title || '',
+            body: issue.body || '',
             date: issue.created_at,
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,

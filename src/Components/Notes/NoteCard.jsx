@@ -45,17 +45,16 @@ export default function NoteCard({
   id = null,
   index = null,
   username = '',
-  title = 'Title',
+  title = '',
+  body = '',
   noteNumber = '',
   avatarUrl = '',
-  body = '',
   date = '',
   numberOfComments = null,
   isComment = false,
   synched = true,
 }) {
-  assertDefined(body, id, index)
-  assertDefined(body, id, index)
+  assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
