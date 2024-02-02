@@ -16,6 +16,7 @@ self.addEventListener('message', async (event) => {
 
       writeModelToOPFS(objectUrl, objectKey, originalFileName)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
+      // eslint-disable-next-line no-unused-vars
       const {file, objectKey, originalFileName, owner, repo, branch} =
           assertValues(event.data,
               ['file', 'objectKey', 'originalFileName', 'owner', 'repo', 'branch'])
