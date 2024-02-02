@@ -193,6 +193,7 @@ export function loadLocalFileDragAndDrop(
 /**
  * Checks if OPFS is available on the browser
  * // HACK: Issue might be with a specific function, look later
+ * // Ref: https://bugs.webkit.org/show_bug.cgi?id=251460
  *
  * @return {boolean}
  */
