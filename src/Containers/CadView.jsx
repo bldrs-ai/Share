@@ -24,6 +24,7 @@ import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
+  checkOPFSAvailability,
 } from '../OPFS/utils'
 import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -43,7 +44,6 @@ import {
   loadLocalFile,
   loadLocalFileFallback,
   loadLocalFileDragAndDropFallback,
-  checkOPFSAvailability,
   getUploadedBlobPath,
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
