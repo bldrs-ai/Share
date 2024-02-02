@@ -15,6 +15,7 @@ import {TooltipIconButton} from '../Buttons'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
@@ -70,7 +71,6 @@ export const CardMenu = ({
   )
 }
 
-
 export const RegularCardBody = ({selectCard, editBody}) => {
   return (
     <CardActionArea
@@ -88,7 +88,6 @@ export const RegularCardBody = ({selectCard, editBody}) => {
   )
 }
 
-
 export const SelectedCardBody = ({editBody}) => {
   return (
     <CardContent>
@@ -99,7 +98,6 @@ export const SelectedCardBody = ({editBody}) => {
   )
 }
 
-
 export const CommentCardBody = ({editBody}) => {
   return (
     <CardContent>
@@ -109,6 +107,7 @@ export const CommentCardBody = ({editBody}) => {
     </CardContent>
   )
 }
+
 export const CardFooter = ({
   id,
   noteNumber,
@@ -140,6 +139,15 @@ export const CardFooter = ({
   const isScreenshotEnabled = useExistInFeature('screenshot')
   const [screenshotUri, setScreenshotUri] = useState(null)
 
+  /**
+   * Navigate to github issue
+   *
+   * @param {Array} noteNumber Array of expressIDs
+   */
+  function openGithubIssue() {
+    window.open(`https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`, '_blank')
+  }
+
 
   return (
     <Box
@@ -159,6 +167,14 @@ export const CardFooter = ({
         alignItems: 'center',
       }}
       >
+        <TooltipIconButton
+          title='Open in Github'
+          size='small'
+          placement='bottom'
+          onClick={openGithubIssue}
+          icon={<GitHubIcon className='icon-share'/>}
+          aboutInfo={false}
+        />
         {hasCameras &&
           <TooltipIconButton
             title='Show the camera view'
