@@ -32,9 +32,10 @@ self.addEventListener('message', async (event) => {
       const commitHash = event.data.commitHash
       const owner = event.data.owner
       const repo = event.data.repo
+      const branch = event.data.branch
       const onProgress = event.data.onProgress
       const originalFilePath = event.data.originalFilePath
-      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, onProgress)
+      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
     }
   } catch (error) {
     self.postMessage({error: error.message})
@@ -44,41 +45,107 @@ self.addEventListener('message', async (event) => {
 /**
  *
  */
-async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, onProgress) {
-  const textEncoder = new TextEncoder()
+async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
-  let newFolderHandle = null
-
-  // See if folder handle exists
+  let ownerFolderHandle = null
+  let repoFolderHandle = null
+  let branchFolderHandle = null
+  // See if owner folder handle exists
   try {
-    newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, {create: false})
-    if (newFolderHandle !== null) {
-      self.postMessage({completed: true, event: 'exists', fileName: commitHash})
-      return
-    }
+    ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
   } catch (error) {
     // Ignore errors here, as it is a valid operation if the folder does
     // not exist yet.
   }
 
+  if (ownerFolderHandle === null) {
+    try {
+      ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: true})
+    } catch (error) {
+      const workerMessage = `Error getting folder handle for ${owner}: ${error}`
+      self.postMessage({error: workerMessage})
+      return
+    }
+  }
+
+  // See if repo folder handle exists
   try {
-    newFolderHandle = await opfsRoot.getDirectoryHandle(commitHash, {create: true})
+    repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
   } catch (error) {
-    const workerMessage = `Error getting folder handle for ${commitHash}: ${error}`
-    self.postMessage({error: workerMessage})
-    return
+    // Ignore errors here, as it is a valid operation if the folder does
+    // not exist yet.
+  }
+
+  if (repoFolderHandle === null) {
+    try {
+      repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: true})
+    } catch (error) {
+      const workerMessage = `Error getting folder handle for ${repo}: ${error}`
+      self.postMessage({error: workerMessage})
+      return
+    }
+  }
+
+  // See if branch folder handle exists
+  try {
+    branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
+  } catch (error) {
+    // Ignore errors here, as it is a valid operation if the folder does
+    // not exist yet.
+  }
+
+  if (branchFolderHandle === null) {
+    try {
+      branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: true})
+    } catch (error) {
+      const workerMessage = `Error getting folder handle for ${branch}: ${error}`
+      self.postMessage({error: workerMessage})
+      return
+    }
   }
 
   // Get a file handle in the folder for the model
   let modelBlobFileHandle = null
+  let modelDirectoryHandle = null
   let blobAccessHandle = null
+  const pathSegments = originalFilePath.split('/')
+  const strippedFileName = pathSegments[pathSegments.length - 1]
+  // lets see if our commit hash matches
   // Get file handle for file blob
   try {
-    modelBlobFileHandle = await newFolderHandle.getFileHandle(commitHash, {create: true})
+    [modelDirectoryHandle, modelBlobFileHandle] = await
+    retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
+  } catch (error) {
+    // expected if file not found
+  }
+
+  let fileIsCached = false
+  if (modelBlobFileHandle !== null) {
+    // file name is name.ifc.commitHash, we just want to compare commitHash
+    const testCommitHash = modelBlobFileHandle.name.split(strippedFileName)[1].slice(1)
+    if (commitHash === testCommitHash) {
+      fileIsCached = true
+    }
+  }
+
+  // if we have a file, we can delete it and will write a new one
+  if (modelBlobFileHandle !== null ) {
+    if (fileIsCached) {
+      const blobFile = await modelBlobFileHandle.getFile()
+
+      self.postMessage({completed: true, event: 'exists', file: blobFile})
+      return
+    } else {
+      await modelBlobFileHandle.remove()
+    }
+  }
+  try {
+    // eslint-disable-next-line no-unused-vars
+    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, true)
     // Create FileSystemSyncAccessHandle on the file.
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
   } catch (error) {
-    const workerMessage = `Error getting file handle for ${commitHash}: ${error}`
+    const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     self.postMessage({error: workerMessage})
     return
   }
@@ -140,46 +207,13 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
     if (isDone) {
       // close blob handle
       await blobAccessHandle.close()
-      const metaDataFileName = `${commitHash}.json`
       // if done, the file should be written. Write the metadata and signal the worker has completed.
       try {
-        // Get file handle for metadata
-        let metaDataFileHandle = null
+        const blobFile = await modelBlobFileHandle.getFile()
 
-        try {
-          metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, {create: true})
-        } catch (error) {
-          const workerMessage = `Error getting file handle for ${metaDataFileName}: ${error}`
-          self.postMessage({error: workerMessage})
-          return
-        }
-
-        // create metadata string
-        const metaData = {
-          fileName: originalFilePath,
-          owner: owner,
-          repo: repo,
-          commitHash: commitHash,
-        }
-
-        const metaDataJsonString = JSON.stringify(metaData)
-
-        // Create FileSystemSyncAccessHandle on the file.
-        const metaDataAccessHandle = await metaDataFileHandle.createSyncAccessHandle()
-
-        // Encode content to write to the file.
-        const content = textEncoder.encode(metaDataJsonString)
-
-        // Write buffer at the beginning of the file
-        const metaDataWriteSize = await metaDataAccessHandle.write(content, {at: 0})
-        // Close the access handle when done
-        await metaDataAccessHandle.close()
-
-        if (metaDataWriteSize > 0) {
-          self.postMessage({completed: true, event: 'download', fileName: commitHash, metaDataString: metaDataJsonString})
-        }
+        self.postMessage({completed: true, event: 'download', file: blobFile})
       } catch (error) {
-        const workerMessage = `Error writing to ${metaDataFileName}: ${error}.`
+        const workerMessage = `Error Getting file handle: ${error}.`
         self.postMessage({error: workerMessage})
         return
       }
@@ -193,9 +227,46 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
 /**
  *
  */
+async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCreate = true) {
+  const pathSegments = filePath.split('/') // Split the path into segments
+  let currentHandle = rootHandle
+
+  for (let i = 0; i < pathSegments.length; i++) {
+    const segment = pathSegments[i]
+    const isLastSegment = i === pathSegments.length - 1
+
+    if (!isLastSegment) {
+      // Try to get the directory handle; if it doesn't exist, create it
+      try {
+        currentHandle = await currentHandle.getDirectoryHandle(segment, {create: true})
+      } catch (error) {
+        const workerMessage = `Error getting/creating directory handle for segment: ${error}.`
+        self.postMessage({error: workerMessage})
+        return null
+      }
+    } else {
+      // Last segment, treat it as a file
+      try {
+        // Create or get the file handle
+        const fileHandle = await currentHandle.getFileHandle(`${segment }.${ commitHash}`, {create: shouldCreate})
+        return [currentHandle, fileHandle] // Return the file handle for further processing
+      } catch (error) {
+        if (!shouldCreate) {
+          return null
+        }
+        const workerMessage = `Error getting/creating file handle for file ${segment}: ${error}.`
+        self.postMessage({error: workerMessage})
+        return null
+      }
+    }
+  }
+}
+
+/**
+ *
+ */
 async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, owner, repo) {
   try {
-    const textEncoder = new TextEncoder()
     const opfsRoot = await navigator.storage.getDirectory()
 
     let newFolderHandle = null
@@ -233,47 +304,8 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, 
       await blobAccessHandle.close()
 
       if (blobWriteSize > 0) {
-        try {
-          // Get file handle for metadata
-          let metaDataFileHandle = null
-          const metaDataFileName = `${objectKey}.json`
-          try {
-            metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, {create: true})
-          } catch (error) {
-            const workerMessage = `Error getting file handle for ${metaDataFileName}: ${error}`
-            self.postMessage({error: workerMessage})
-            return
-          }
-
-          // create metadata string
-          const metaData = {
-            fileName: originalFileName,
-            owner: owner,
-            repo: repo,
-            commitHash: objectKey,
-          }
-
-          const metaDataJsonString = JSON.stringify(metaData)
-
-          // Create FileSystemSyncAccessHandle on the file.
-          const metaDataAccessHandle = await metaDataFileHandle.createSyncAccessHandle()
-
-          // Encode content to write to the file.
-          const content = textEncoder.encode(metaDataJsonString)
-
-          // Write buffer at the beginning of the file
-          const metaDataWriteSize = await metaDataAccessHandle.write(content, {at: 0})
-          // Close the access handle when done
-          await metaDataAccessHandle.close()
-
-          if (metaDataWriteSize > 0) {
-            self.postMessage({completed: true, event: 'write', fileName: objectKey})
-          }
-        } catch (error) {
-          const workerMessage = `Error writing to ${objectKey}: ${error}.`
-          self.postMessage({error: workerMessage})
-          return
-        }
+        self.postMessage({completed: true, event: 'write', fileName: objectKey})
+        return
       } else {
         const workerMessage = `Error writing to file: ${objectKey}`
         self.postMessage({error: workerMessage})
@@ -294,7 +326,6 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, 
  */
 async function writeModelToOPFS(objectUrl, objectKey, originalFileName, owner, repo) {
   try {
-    const textEncoder = new TextEncoder()
     const opfsRoot = await navigator.storage.getDirectory()
 
     let newFolderHandle = null
@@ -331,56 +362,11 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName, owner, r
       const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
       // Write buffer at the beginning of the file
-      const blobWriteSize = await blobAccessHandle.write(fileArrayBuffer, {at: 0})
+      await blobAccessHandle.write(fileArrayBuffer, {at: 0})
       // Close the access handle when done
       await blobAccessHandle.close()
 
-      if (blobWriteSize > 0) {
-        try {
-          // Get file handle for metadata
-          let metaDataFileHandle = null
-          const metaDataFileName = `${objectKey}.json`
-          try {
-            metaDataFileHandle = await newFolderHandle.getFileHandle(metaDataFileName, {create: true})
-          } catch (error) {
-            const workerMessage = `Error getting file handle for ${metaDataFileName}: ${error}`
-            self.postMessage({error: workerMessage})
-            return
-          }
-
-          // create metadata string
-          const metaData = {
-            fileName: originalFileName,
-            owner: owner,
-            repo: repo,
-            commitHash: objectKey,
-          }
-
-          const metaDataJsonString = JSON.stringify(metaData)
-
-          // Create FileSystemSyncAccessHandle on the file.
-          const metaDataAccessHandle = await metaDataFileHandle.createSyncAccessHandle()
-
-          // Encode content to write to the file.
-          const content = textEncoder.encode(metaDataJsonString)
-
-          // Write buffer at the beginning of the file
-          const metaDataWriteSize = await metaDataAccessHandle.write(content, {at: 0})
-          // Close the access handle when done
-          await metaDataAccessHandle.close()
-
-          if (metaDataWriteSize > 0) {
-            self.postMessage({completed: true, event: 'write', fileName: objectKey})
-          }
-        } catch (error) {
-          const workerMessage = `Error writing to ${objectKey}: ${error}.`
-          self.postMessage({error: workerMessage})
-          return
-        }
-      } else {
-        const workerMessage = `Error writing to file: ${objectKey}`
-        self.postMessage({error: workerMessage})
-      }
+      self.postMessage({completed: true, event: 'write', fileName: objectKey})
     } catch (error) {
       const workerMessage = `Error writing to ${objectKey}: ${error}.`
       self.postMessage({error: workerMessage})
@@ -409,25 +395,13 @@ async function readModelFromOPFS(objectKey) {
       return // Exit if the file is not found
     }
 
-    // Try to access metadata json
-    let metaDataString = null
-    try {
-      const metaDataJsonHandle = await modelFolderHandle.getFileHandle(`${objectKey}.json`)
-      const metaDataFileHandle = await metaDataJsonHandle.getFile()
-      metaDataString = await metaDataFileHandle.text()
-    } catch (error) {
-      const errorMessage = `File ${objectKey} not found: ${error}`
-      self.postMessage({error: errorMessage})
-      return // Exit if the file is not found
-    }
-
     // Try to access model blob
     try {
       const blobFileHandle = await modelFolderHandle.getFileHandle(objectKey)
 
       const blobFile = await blobFileHandle.getFile()
 
-      self.postMessage({completed: true, event: 'read', file: blobFile, metaDataString: metaDataString})
+      self.postMessage({completed: true, event: 'read', file: blobFile})
     } catch (error) {
       const errorMessage = `Error retrieving File from ${objectKey}: ${error}.`
       self.postMessage({error: errorMessage})

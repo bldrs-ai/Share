@@ -15,7 +15,7 @@ import debug from '../utils/debug'
  * @param {string} filepath
  * @return {File}
  */
-export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHash, repo, owner) {
+export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHash, owner, repo, branch) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
@@ -34,7 +34,7 @@ export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHas
         }
       }
       workerRef.addEventListener('message', listener)
-      opfsWriteModelFileHandle(modelFile, originalFileName, commitHash, owner, repo)
+      opfsWriteModelFileHandle(modelFile, originalFileName, commitHash, owner, repo, branch)
     } else {
       reject(new Error('Worker initialization failed'))
     }
@@ -48,7 +48,7 @@ export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHas
  * @param {string} filepath
  * @return {File}
  */
-export function getModelFromOPFS(filepath) {
+export function getModelFromOPFS(owner, repo, branch, filepath) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
@@ -65,7 +65,6 @@ export function getModelFromOPFS(filepath) {
         } else if (event.data.completed) {
           debug().log('Worker finished retrieving file')
           const file = event.data.file
-          debug().log(`Metadata: ${event.data.metaDataString}`)
           workerRef.removeEventListener('message', listener) // Remove the event listener
           resolve(file) // Resolve the promise with the file
         }
@@ -86,7 +85,7 @@ export function getModelFromOPFS(filepath) {
  *
  * @param {string} filepath
  * @param {string} commitHash
- * @return {boolean}
+ * @return {File}
  */
 export function downloadToOPFS(
     navigate,
@@ -97,6 +96,7 @@ export function downloadToOPFS(
     commitHash,
     owner,
     repo,
+    branch,
     onProgress) {
   assertDefined(navigate, appPrefix, handleBeforeUnload)
 
@@ -120,15 +120,12 @@ export function downloadToOPFS(
         } else if (event.data.completed) {
           if (event.data.event === 'download') {
             debug().warn('Worker finished downloading file')
-            debug().warn(`Metadata: ${event.data.metaDataString}`)
           } else if (event.data.event === 'exists') {
-            debug().warn('Commit exists in OPFS, redirecting to local project.')
+            debug().warn('Commit exists in OPFS.')
           }
-          const fileName = event.data.fileName
-          window.removeEventListener('beforeunload', handleBeforeUnload)
+          const file = event.data.file
           workerRef.removeEventListener('message', listener) // Remove the event listener
-          navigate(`${appPrefix}/v/new/${fileName}.ifc`)
-          resolve(true) // Resolve the promise with the file
+          resolve(file) // Resolve the promise with the file
         }
       }
       workerRef.addEventListener('message', listener)
@@ -136,7 +133,7 @@ export function downloadToOPFS(
       reject(new Error('Worker initialization failed'))
     }
 
-    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, !!(onProgress))
+    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
   })
 }
 

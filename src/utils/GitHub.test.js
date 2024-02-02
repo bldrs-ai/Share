@@ -113,7 +113,7 @@ describe('GitHub', () => {
 
   describe('get latest commit hash', () => {
     it('get latest commit hash', async () => {
-      const result = await getLatestCommitHash('testowner', 'testrepo', '', '')
+      const result = await getLatestCommitHash('testowner', 'testrepo', '', '', '')
       expect(result).toEqual('testsha')
     })
   })

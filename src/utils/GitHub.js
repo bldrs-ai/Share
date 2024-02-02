@@ -420,22 +420,26 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
 /**
  *
  */
-export async function getLatestCommitHash(owner, repo, filePath, accessToken) {
+export async function getLatestCommitHash(owner, repo, filePath, accessToken, branch = 'main') {
   try {
     assertDefined(owner, repo, filePath)
     let commits = null
-    if (accessToken !== '') {
-      commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, {
-        path: filePath,
-        headers: {
-          authorization: `Bearer ${accessToken}`,
-        },
-      })
-    } else {
-      commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, {
-        path: filePath,
-      })
+    const requestOptions = {
+      path: filePath,
+      headers: {},
     }
+
+    // Add the authorization header if accessToken is provided
+    if (accessToken !== '') {
+      requestOptions.headers.authorization = `Bearer ${accessToken}`
+    }
+
+    // Add the branch (sha) to the request if provided
+    if (branch && branch !== '') {
+      requestOptions.sha = branch
+    }
+
+    commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
 
     if (commits.data.length === 0) {
       debug().warn('No commits found for the specified file.')

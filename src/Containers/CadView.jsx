@@ -380,12 +380,13 @@ export default function CadView({
 
     const loadingMessageBase = `Loading ${filepath}`
     setIsModelLoading(true)
+    setSnackMessage(`${loadingMessageBase}`)
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
     if (uploadedFile) {
-      const file = await getModelFromOPFS(filepath)
+      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
       if (file instanceof File) {
         setFile(file)
@@ -405,7 +406,43 @@ export default function CadView({
           }, customViewSettings)
       // TODO(nickcastel50): need a more permanent way to
       // prevent redirect here for bundled ifc files
-    } else if (ifcURL === '/index.ifc' || ifcURL === '/haus.ifc') {
+    } else if (ifcURL === '/index.ifc') {
+      const file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcURL,
+          'index.ifc',
+          'bldrs-ai',
+          'BldrsLocalStorage',
+          'V1',
+          'Projects',
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.receivedLength)) {
+              const loadedBytes = progressEvent.receivedLength
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          })
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
+      loadedModel = await viewer.loadIfcFile(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else if (ifcURL === '/haus.ifc') {
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
           !urlHasCameraParams(), // fit to frame
@@ -431,34 +468,36 @@ export default function CadView({
       const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
       let owner = null
       let repo = null
+      let branch = null
       let filePath = null
       let commitHash = null
       if (pathComponents[0] === 'r') {
         // Extract the owner, repo, and filePath
         owner = pathComponents[1]
         repo = pathComponents[2]
+        branch = pathComponents[3]
         // Join the remaining parts to form the filePath
         // eslint-disable-next-line no-magic-numbers
         filePath = pathComponents.slice(4).join('/')
         // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, '')
+        commitHash = await getLatestCommitHash(owner, repo, filePath, '', branch)
       } else {
       // Extract the owner, repo, and filePath
         owner = pathComponents[0]
         repo = pathComponents[1]
+        branch = pathComponents[2]
         // Join the remaining parts to form the filePath
         // eslint-disable-next-line no-magic-numbers
         filePath = pathComponents.slice(3).join('/')
         // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
+        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
       }
 
       if (commitHash === null) {
         debug().error(`Error obtaining commit hash for: ${ifcURL}`)
       }
 
-      // download file from github
-      const opfsResult = downloadToOPFS(
+      const file = await downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
@@ -467,6 +506,7 @@ export default function CadView({
           commitHash,
           owner,
           repo,
+          branch,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.receivedLength)) {
               const loadedBytes = progressEvent.receivedLength
@@ -477,9 +517,21 @@ export default function CadView({
             }
           })
 
-      if (opfsResult) {
-        return 'redirect'
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
       }
+
+      loadedModel = await viewer.loadIfcFile(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
     }
 
     await viewer.isolator.setModel(loadedModel)
