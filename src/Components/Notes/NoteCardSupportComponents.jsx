@@ -238,13 +238,16 @@ export const CardFooter = ({
         }
         {numberOfComments > 0 && !editMode &&
         <>
-          <TooltipIconButton
-            title='Synch'
-            size='small'
-            placement='bottom'
-            onClick={selectCard}
-            icon={<ForumOutlinedIcon className='icon-share'/>}
-          />
+          {!selected &&
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='bottom'
+              onClick={selectCard}
+              icon={<ForumOutlinedIcon className='icon-share'/>}
+            />
+          }
+
           <Box
             sx={{
               width: '20px',
