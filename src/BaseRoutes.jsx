@@ -32,11 +32,14 @@ export default function BaseRoutes({testElt = null}) {
   const basePath = `${installPrefix }/`
   const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const setAccessToken = useStore((state) => state.setAccessToken)
+  const appPrefix = `${basePath}share`
+  const setAppPrefix = useStore((state) => state.setAppPrefix)
+  setAppPrefix(appPrefix)
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
-      const fwdPath = `${installPrefix}/share`
+      const fwdPath = `${appPrefix}`
       debug().log('BaseRoutes#useEffect[], forwarding to: ', fwdPath)
       navWith(navigate, fwdPath)
     }
@@ -57,6 +60,7 @@ export default function BaseRoutes({testElt = null}) {
         }
       })
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [basePath, installPrefix, location, navigate, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
 
   return (
@@ -68,7 +72,7 @@ export default function BaseRoutes({testElt = null}) {
             testElt ||
               <ShareRoutes
                 installPrefix={installPrefix}
-                appPrefix={`${installPrefix }/share`}
+                appPrefix={`${appPrefix}`}
               />
           }
         />

@@ -1,38 +1,55 @@
-import React, {useEffect, useState} from 'react'
-import {Color, MeshLambertMaterial} from 'three'
+import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {Color, MeshLambertMaterial} from 'three'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {navToDefault} from '../Share'
-import Alert from '../Components/Alert'
 import AboutControl from '../Components/About/AboutControl'
-import ElementGroup from '../Components/ElementGroup'
+import Alert from '../Components/Alert'
+import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ControlsGroup from '../Components/ControlsGroup'
+import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
+import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavPanel'
+import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
-import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
-import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {useWindowDimensions} from '../Components/Hooks'
-import {useIsMobile} from '../Components/Hooks'
+import VersionsContainer from '../Components/Versions/VersionsContainer'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import FileContext from '../OPFS/FileContext'
+import {
+  getModelFromOPFS,
+  loadLocalFileDragAndDrop,
+  downloadToOPFS,
+  checkOPFSAvailability,
+} from '../OPFS/utils'
+import {navToDefault} from '../Share'
+import {usePlaceMark} from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {getDownloadURL, parseGitHubRepositoryURL} from '../utils/GitHub'
+import {
+  getDownloadURL,
+  getLatestCommitHash,
+  parseGitHubRepositoryURL,
+} from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
-import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
+import {groupElementsByTypes} from '../utils/ifc'
+import {
+  loadLocalFile,
+  loadLocalFileFallback,
+  loadLocalFileDragAndDropFallback,
+  getUploadedBlobPath,
+} from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import SearchIndex from './SearchIndex'
-import VersionsContainer from '../Components/Versions/VersionsContainer'
-import {usePlaceMark} from '../hooks/usePlaceMark'
-import {groupElementsByTypes} from '../utils/ifc'
+
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
@@ -54,12 +71,60 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
+
+  const isOPFSAvailable = checkOPFSAvailability()
+
+  const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
   // React router
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   // eslint-disable-next-line no-unused-vars
   const [searchParams, setSearchParams] = useSearchParams()
+
+  // Drag and Drop
+  // Add a new state for drag over effect
+  const [dragOver, setDragOver] = useState(false)
+
+  // Drag event handlers
+  const handleDragOver = (event) => {
+    event.preventDefault()
+    setDragOver(true)
+  }
+
+  const handleDragEnter = (event) => {
+    event.preventDefault()
+    setDragOver(true)
+  }
+
+  const handleDragLeave = (event) => {
+    event.preventDefault()
+    setDragOver(false)
+  }
+
+  const handleDrop = (event) => {
+    event.preventDefault()
+    setDragOver(false)
+    const files =
+      event.dataTransfer.files
+    // Here you can handle the files as needed
+    if (files.length === 1) {
+      if (isOPFSAvailable) {
+        loadLocalFileDragAndDrop(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0])
+      } else {
+        loadLocalFileDragAndDropFallback(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0],
+        )
+      }
+    }
+  }
 
   // IFC
   const [rootElement, setRootElement] = useState({})
@@ -74,16 +139,16 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [loadingMessage, setLoadingMessage] = useState()
+  const [isModelLoading, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
+
+  // Zustand store
   const viewer = useStore((state) => state.viewer)
   const setViewer = useStore((state) => state.setViewer)
   const customViewSettings = useStore((state) => state.customViewSettings)
   // setModelStore instead of setModel since there's already a state var with this name
   const setModelStore = useStore((state) => state.setModelStore)
   const isNavPanelOpen = useStore((state) => state.isNavPanelOpen)
-  const isLoading = useStore((state) => state.isLoading)
-  const setIsLoading = useStore((state) => state.setIsLoading)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
@@ -94,7 +159,7 @@ export default function CadView({
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const selectedElements = useStore((state) => state.selectedElements)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
-  const snackMessage = useStore((state) => state.snackMessage)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const accessToken = useStore((state) => state.accessToken)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const [modelReady, setModelReady] = useState(false)
@@ -110,6 +175,28 @@ export default function CadView({
 
   // Place Mark
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
+
+  // Auth
+  const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
+  const [isViewerLoaded, setIsViewerLoaded] = useState(false)
+
+
+  /* eslint-disable react-hooks/exhaustive-deps */
+  useEffect(() => {
+    if (!isViewerLoaded) {
+      // This function gets called whenever there's a change in authentication state
+      debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
+      /* eslint-disable no-mixed-operators */
+      if (!isAuthLoading &&
+          (isAuthenticated && accessToken !== '') ||
+          (!isAuthLoading && !isAuthenticated)) {
+        (async () => {
+          await onViewer()
+        })()
+      }
+      /* eslint-enable no-mixed-operators */
+    }
+  }, [isAuthLoading, isAuthenticated, accessToken])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -217,6 +304,11 @@ export default function CadView({
       return
     }
 
+    if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
+      debug().warn('Do not have auth token yet, waiting.')
+      return
+    }
+
     setModelReady(false)
 
     // define mesh colors for selected and preselected element
@@ -239,6 +331,10 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
+
+    if (tmpModelRef === 'redirect') {
+      return
+    }
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -255,6 +351,8 @@ export default function CadView({
       viewer.isolator.unHideAllElements()
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
+
+    setIsViewerLoaded(true)
   }
 
 
@@ -295,28 +393,181 @@ export default function CadView({
     }
 
     const loadingMessageBase = `Loading ${filepath}`
-    setLoadingMessage(loadingMessageBase)
-    setIsLoading(true)
+    setIsModelLoading(true)
+    setSnackMessage(`${loadingMessageBase}`)
 
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
-    const loadedModel = await viewer.loadIfcUrl(
-        ifcURL,
-        !urlHasCameraParams(), // fit to frame
-        (progressEvent) => {
-          if (Number.isFinite(progressEvent.loaded)) {
-            const loadedBytes = progressEvent.loaded
-            // eslint-disable-next-line no-magic-numbers
-            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-            setLoadingMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-          }
-        },
-        (error) => {
-          debug().log('CadView#loadIfc$onError: ', error)
-          // TODO(pablo): error modal.
-          setIsLoading(false)
-          setAlertMessage(`Could not load file: ${filepath}`)
-        }, customViewSettings)
+
+    let loadedModel
+    if (!isOPFSAvailable) {
+      // fallback to loadIfcUrl
+      loadedModel = await viewer.loadIfcUrl(
+          ifcURL,
+          !urlHasCameraParams(), // fit to frame
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.loaded)) {
+              const loadedBytes = progressEvent.loaded
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          },
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setSnackMessage('')
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else if (uploadedFile) {
+      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
+
+      loadedModel = await viewer.loadIfcFile(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+      // TODO(nickcastel50): need a more permanent way to
+      // prevent redirect here for bundled ifc files
+    } else if (ifcURL === '/index.ifc') {
+      const file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcURL,
+          'index.ifc',
+          'bldrs-ai',
+          'BldrsLocalStorage',
+          'V1',
+          'Projects',
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.receivedLength)) {
+              const loadedBytes = progressEvent.receivedLength
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          })
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
+      loadedModel = await viewer.loadIfcFile(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else if (ifcURL === '/haus.ifc') {
+      loadedModel = await viewer.loadIfcUrl(
+          ifcURL,
+          !urlHasCameraParams(), // fit to frame
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.loaded)) {
+              const loadedBytes = progressEvent.loaded
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          },
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setSnackMessage('')
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else {
+      // Split the pathname part of the URL into components
+      const url = new URL(ifcURL)
+      const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
+      let owner = null
+      let repo = null
+      let branch = null
+      let filePath = null
+      let commitHash = null
+      if (pathComponents[0] === 'r') {
+        // Extract the owner, repo, and filePath
+        owner = pathComponents[1]
+        repo = pathComponents[2]
+        branch = pathComponents[3]
+        // Join the remaining parts to form the filePath
+        // eslint-disable-next-line no-magic-numbers
+        filePath = pathComponents.slice(4).join('/')
+        // get commit hash
+        commitHash = await getLatestCommitHash(owner, repo, filePath, '', branch)
+      } else {
+      // Extract the owner, repo, and filePath
+        owner = pathComponents[0]
+        repo = pathComponents[1]
+        branch = pathComponents[2]
+        // Join the remaining parts to form the filePath
+        // eslint-disable-next-line no-magic-numbers
+        filePath = pathComponents.slice(3).join('/')
+        // get commit hash
+        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
+      }
+
+      if (commitHash === null) {
+        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+      }
+
+      const file = await downloadToOPFS(
+          navigate,
+          appPrefix,
+          handleBeforeUnload,
+          ifcURL,
+          filePath,
+          commitHash,
+          owner,
+          repo,
+          branch,
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.receivedLength)) {
+              const loadedBytes = progressEvent.receivedLength
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          })
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
+      loadedModel = await viewer.loadIfcFile(
+          file,
+          !urlHasCameraParams(),
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    }
 
     await viewer.isolator.setModel(loadedModel)
 
@@ -324,7 +575,8 @@ export default function CadView({
       content_type: 'ifc_model',
       item_id: filepath,
     })
-    setIsLoading(false)
+    setIsModelLoading(false)
+    setSnackMessage('')
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -564,9 +816,11 @@ export default function CadView({
     }
     const githubRegex = /(raw.githubusercontent|github.com)/gi
     if (ifcUrl.indexOf('/') === 0) {
-      setLoadedFileInfo({source: 'share', info: {
-        url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
-      }})
+      setLoadedFileInfo({
+        source: 'share', info: {
+          url: `${window.location.protocol}//${window.location.host}${ifcUrl}`,
+        },
+      })
     } else if (githubRegex.test(ifcUrl)) {
       setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
     }
@@ -586,7 +840,18 @@ export default function CadView({
         flex: 1,
         width: '100vw',
         height: '100vh',
+        zIndex: 10, // Adjust if needed
+        boxSizing: 'border-box', // Adjust if needed
       }}
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{
+        border: dragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
+        // ... other styling as needed
+      }}
+      data-testid={'cadview-dropzone'}
       data-model-ready={modelReady}
     >
       <Box
@@ -605,11 +870,7 @@ export default function CadView({
         }}
         {...onSceneDoubleTap}
       />
-      <SnackBarMessage
-        message={snackMessage ? snackMessage : loadingMessage}
-        severity={'info'}
-        open={isLoading || snackMessage !== null}
-      />
+      <SnackBarMessage/>
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -627,32 +888,55 @@ export default function CadView({
           },
         }}
         >
-          <ControlsGroup fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)} repo={modelPath.repo}/>
+          <ControlsGroup
+            navigate={navigate}
+            isRepoActive={modelPath.repo !== undefined}
+          />
           {isSearchBarVisible && isSearchVisible &&
-          <Box sx={{marginTop: '.82em', width: '100%'}}>
-            <SearchBar fileOpen={() => loadLocalFile(navigate, appPrefix, handleBeforeUnload)}/>
-          </Box>
+           <Box sx={{marginTop: '0.82em', width: '100%'}}>
+             <SearchBar
+               fileOpen={
+                 () => {
+                   // Use loadLocalFile if OPFS is available, else use loadLocalFileFallback
+                   if (isOPFSAvailable) {
+                     loadLocalFile(
+                         navigate,
+                         appPrefix,
+                         handleBeforeUnload,
+                         false,
+                     )
+                   } else {
+                     loadLocalFileFallback(
+                         navigate,
+                         appPrefix,
+                         handleBeforeUnload,
+                         false,
+                     )
+                   }
+                 }}
+             />
+           </Box>
           }
           <Box sx={{marginTop: '.82em', width: '100%'}}>
             {isNavPanelOpen &&
-            isNavigationPanelVisible &&
-            isNavigationVisible &&
-            <NavPanel
-              model={model}
-              element={rootElement}
-              defaultExpandedElements={defaultExpandedElements}
-              defaultExpandedTypes={defaultExpandedTypes}
-              expandedElements={expandedElements}
-              setExpandedElements={setExpandedElements}
-              expandedTypes={expandedTypes}
-              setExpandedTypes={setExpandedTypes}
-              navigationMode={navigationMode}
-              setNavigationMode={setNavigationMode}
-              selectWithShiftClickEvents={selectWithShiftClickEvents}
-              pathPrefix={
-                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-              }
-            />
+              isNavigationPanelVisible &&
+              isNavigationVisible &&
+              <NavPanel
+                model={model}
+                element={rootElement}
+                defaultExpandedElements={defaultExpandedElements}
+                defaultExpandedTypes={defaultExpandedTypes}
+                expandedElements={expandedElements}
+                setExpandedElements={setExpandedElements}
+                expandedTypes={expandedTypes}
+                setExpandedTypes={setExpandedTypes}
+                navigationMode={navigationMode}
+                setNavigationMode={setNavigationMode}
+                selectWithShiftClickEvents={selectWithShiftClickEvents}
+                pathPrefix={
+                  pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
+                }
+              />
             }
             {
               modelPath.repo !== undefined && isVersionHistoryVisible &&
@@ -694,7 +978,7 @@ export default function CadView({
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
 
-      {isLoading &&
+      {isModelLoading &&
         <Box
           sx={{
             position: 'relative',
