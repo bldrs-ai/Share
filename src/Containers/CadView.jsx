@@ -41,6 +41,7 @@ import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {
   loadLocalFile,
+  checkOPFSAvailability,
   getUploadedBlobPath,
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
@@ -68,6 +69,9 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
+
+  // Usage
+  const isOPFSAvailable = checkOPFSAvailability()
 
   const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)

@@ -7,6 +7,20 @@ import {
 
 
 /**
+ * Checks if OPFS is available on the browser
+ * @return {boolean}
+ */
+export function checkOPFSAvailability() {
+  // Check for FileSystemDirectoryHandle availability
+  if ('FileSystemDirectoryHandle' in window) {
+      return true
+  } else {
+      return false
+  }
+}
+
+
+/**
  * Upload a local file for display.
  *
  * @param {Function} navigate
