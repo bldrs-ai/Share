@@ -1,4 +1,5 @@
 import React, {createRef, useEffect, useState} from 'react'
+import axios from 'axios'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import TextField from '@mui/material/TextField'
@@ -52,6 +53,97 @@ export default function ImagineControl() {
   )
 }
 
+/**
+ * The ImagineDialog component contain instructions on how to access the bot.
+ *
+ * @param {boolean} isDialogDisplayed
+ * @param {Function} setIsDialogDisplayed
+ * @param {number} botIconIndex The current index of the bot icon which is kept track of in the wrapper component
+ * @param {Function} setBotIconIndex The function to update the botIconIndex
+ * @return {React.Component} The react component
+ */
+function ImagineDialog({
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+  botIconIndex,
+  setBotIconIndex
+}) {
+  const viewer = useStore((state) => state.viewer)
+  // const canvas = viewer.context.getDomElement()
+  // console.log('canvas', canvas, viewer)
+  // const glCtx = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+  const glCtx = viewer.context.renderer.renderer.getContext()
+  const width = glCtx.drawingBufferWidth
+  const height = glCtx.drawingBufferHeight
+  const pixels = new Uint8Array(width * height * 4)
+  glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels)
+
+  // Create a 2D canvas to put the image
+  const canvas2d = document.createElement('canvas')
+  canvas2d.width = width
+  canvas2d.height = height
+  const context = canvas2d.getContext('2d')
+
+  // Copy the pixels to a 2D canvas
+  const imageData = context.createImageData(width, height)
+  imageData.data.set(pixels)
+  context.putImageData(imageData, 0, 0)
+
+  // Flip the canvas vertically
+  const imageDataFlipped = context.getImageData(0, 0, width, height)
+  for (let i = 0; i < height; i++) {
+    context.putImageData(imageDataFlipped, 0, (height - 1) - i, 0, i, width, 1)
+  }
+
+  // Convert canvas to PNG Data URL
+  const pngUrl = canvas2d.toDataURL()
+
+  console.log(pngUrl)
+  // downloadPng(pngUrl)
+  sendToWarhol(pngUrl)
+}
+
+
+function sendToWarhol(dataUrl) {
+  const base64Content = dataUrl.split(',')[1];
+
+  const req = {
+    prompt: 'modern buildings in a city',
+    negative_prompt: 'people',
+    batch_size: 1,
+    steps: 10,
+    cfg_scale: 7,
+    seed: 1234,
+    image: base64Content,
+  }
+
+  axios.post('https://warhol.bldrs.dev/generate', req, {
+    headers: {
+      'Content-Type': 'application/octet-stream'
+    }
+  })
+    .then(response => {
+      console.log('Screenshot uploaded successfully, response: ', response)
+    })
+    .catch(error => {
+      console.error('Error uploading screenshot:', error)
+    })
+}
+
+
+function downloadPng(pngUrl) {
+  // Optional: Display the PNG in an image tag
+  const img = document.createElement('img')
+  img.src = pngUrl
+  document.body.appendChild(img)
+
+  // Optional: Download the PNG
+  const downloadLink = document.createElement('a')
+  downloadLink.href = pngUrl
+  downloadLink.download = 'screenshot.png'
+  downloadLink.click()
+}
+
 
 /**
  * The ImagineDialog component contain instructions on how to access the bot.
@@ -62,13 +154,10 @@ export default function ImagineControl() {
  * @param {Function} setBotIconIndex The function to update the botIconIndex
  * @return {React.Component} The react component
  */
-function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, setBotIconIndex}) {
+function ImagineDialogOld({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, setBotIconIndex}) {
   const cameraControls = useStore((state) => state.cameraControls)
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
-  const urlTextFieldRef = createRef()
-  const botIcons = [BotIcon2, BotIcon3, BotIcon1, BotIcon4]
-
   useEffect(() => {
     if (viewer) {
       addCameraUrlParams(cameraControls)
@@ -76,6 +165,7 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
 
+  const botIcons = [BotIcon2, BotIcon3, BotIcon1, BotIcon4]
   useEffect(() => {
     if (isDialogDisplayed) {
       setBotIconIndex((prevIndex) => (prevIndex + 1) % botIcons.length)
@@ -85,11 +175,11 @@ function ImagineDialog({isDialogDisplayed, setIsDialogDisplayed, botIconIndex, s
 
   const CurrentBotIcon = botIcons[botIconIndex]
 
-
   const closeDialog = () => {
     setIsDialogDisplayed(false)
   }
 
+  const urlTextFieldRef = createRef()
   const onCopy = async (event) => {
     await navigator.clipboard.writeText(window.location.href)
     window.open('https://discord.com/channels/853953158560743424/1126526910495740005', '_blank')
