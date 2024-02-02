@@ -1,11 +1,11 @@
 import React from 'react'
-import FixtureContext from '../FixtureContext'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import Dialog from './Dialog'
 import AttentionIcon from '../assets/icons/Attention.svg'
 
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <Dialog
       icon={<AttentionIcon className='icon-share'/>}
       headerText={'Here\'s the thing!'}
@@ -18,5 +18,5 @@ export default (
         alert('You did the thing')
       }}
     />
-  </FixtureContext>
+  </ThemeCtx>
 )

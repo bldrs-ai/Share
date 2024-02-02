@@ -2,6 +2,7 @@ import {Octokit} from '@octokit/rest'
 import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
+// TODO(pablo): unit tests after nicks OPFS changes go in
 
 /**
  * @param {object} repository
@@ -19,7 +20,7 @@ export async function getCommitsForBranch(repository, branch, accessToken = '') 
 /**
  * @param {object} repository
  * @param {string} accessToken
- * @return {Array}
+ * @return {Array} Array of issues response from GH
  */
 export async function getIssues(repository, accessToken) {
   const res = await getGitHub(repository, 'issues', {}, accessToken)
@@ -33,7 +34,7 @@ export async function getIssues(repository, accessToken) {
  * @param {object} repository
  * @param {object} payload issue payload shall contain title and body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} result
+ * @return {object} response from GH
  */
 export async function createIssue(repository, payload, accessToken) {
   const res = await postGitHub(repository, 'issues', payload, accessToken)
@@ -46,7 +47,7 @@ export async function createIssue(repository, payload, accessToken) {
  * @param {object} repository
  * @param {number} issueNumber
  * @param {string} accessToken
- * @return {object}
+ * @return {object} response from GH sinle issue
  */
 export async function getIssue(repository, issueNumber, accessToken) {
   const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
@@ -57,9 +58,29 @@ export async function getIssue(repository, issueNumber, accessToken) {
 
 /**
  * @param {object} repository
- * @param {object} issueNumber
+ * @param {number} issueNumber
+ * @param {string} title Issue/Note title
+ * @param {string} body Issue/Note body
  * @param {string} accessToken Github API OAuth access token
- * @return {object} result
+ * @return {object} response from GH
+ */
+export async function updateIssue(repository, issueNumber, title, body, accessToken) {
+  const args = {
+    issue_number: issueNumber,
+    body,
+    title,
+  }
+  const res = await patchGitHub(repository, `issues/${issueNumber}`, args, accessToken)
+  debug().log('GitHub#closeIssue: res: ', res)
+  return res
+}
+
+
+/**
+ * @param {object} repository
+ * @param {number} issueNumber
+ * @param {string} accessToken Github API OAuth access token
+ * @return {object} responce from GH with the closed issue object
  */
 export async function closeIssue(repository, issueNumber, accessToken) {
   const args = {
@@ -402,7 +423,7 @@ async function patchGitHub(repository, path, args = {}, accessToken = '') {
     }
   }
   debug().log('Dispatching GitHub request for repo:', repository)
-  const res = await octokit.request(`PATCH /repos/{org}/{repo}/${path}`, {
+  const res = await octokit.request(`PATCH /repos/${repository.orgName}/${repository.name}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
@@ -616,16 +637,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `The Architecture, Engineering and Construction industries are trying
-      to face challenging problems of the future with tools anchored in the
-      past. Meanwhile, a new dynamic has propelled the Tech industry:
-      online, collaborative, open development.
-
-      We can't imagine a future where building the rest of the world hasn't
-      been transformed by these new ways of working. We are part of that
-      transformation.
-
-      [a link](https://bldrs.ai/share/v/gh/pablo-mayrgundter/ifctool/main/index.ifc#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      body: `Test Comment 1`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
@@ -670,10 +682,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `Email is the medium that still facilitates major portion of communication.
-
-      [Camera 1](http://localhost:8080/share/v/p/index.ifc#c:-141.9,72.88,21.66,-43.48,15.73,-1.34)
-      [Camera 2](http://localhost:8080/share/v/p/index.ifc#c:-#c:-108.43,86.02,62.15,-27.83,27.16,1.58)`,
+      body: `Test Comment 2`,
       reactions: {
         'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions',
         'total_count': 0,
@@ -948,4 +957,9 @@ export const MOCK_FILES = {
 const octokit = new Octokit({
   baseUrl: process.env.GITHUB_BASE_URL,
   userAgent: `bldrs/${PkgJson.version}`,
+  // This comment instructs GitHub to always use the latest response instead of using a cached version. Especially relevant for notee.
+  // https://github.com/octokit/octokit.js/issues/890#issuecomment-392193948 the source of the solution
+  headers: {
+    'If-None-Match': '',
+  },
 })

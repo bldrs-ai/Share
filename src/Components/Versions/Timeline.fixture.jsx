@@ -1,6 +1,6 @@
 import React from 'react'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 import VersionsTimeline from './VersionsTimeline'
-import FixtureContext from '../../FixtureContext'
 
 
 const commitData = [
@@ -24,7 +24,7 @@ const commitData = [
 
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <VersionsTimeline commitData={commitData}/>
-  </FixtureContext>
+  </ThemeCtx>
 )

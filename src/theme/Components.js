@@ -30,18 +30,13 @@ export function getComponentOverrides(palette, typography) {
           style: {
             width: '180px',
             height: '40px',
-            borderRadius: '20px',
+            borderRadius: '10px',
             border: 'none',
             backgroundColor: palette.primary.main,
             color: 'white',
           },
         },
       ],
-      defaultProps: {
-        disableElevation: true,
-        disableFocusRipple: true,
-        disableRipple: true,
-      },
     },
     MuiSnackbarContent: {
       styleOverrides: {
@@ -230,6 +225,18 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           background: palette.primary.background,
+        },
+      },
+    },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          'padding': '0px 20px',
+          '& img': {
+            width: '100%',
+          },
+          'fontSize': '1rem',
+          'lineHeight': 1.5,
         },
       },
     },
