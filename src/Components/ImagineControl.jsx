@@ -1,18 +1,18 @@
-import React, {createRef, useEffect, useState} from 'react'
 import axios from 'axios'
+import React, {createRef, useEffect, useState} from 'react'
+import {Helmet} from 'react-helmet-async'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import Stack from '@mui/material/Stack'
 import useStore from '../store/useStore'
-import Dialog from './Dialog'
+import debug from '../utils/debug'
+import {ControlButton} from './Buttons'
 import {
   addCameraUrlParams,
 } from './CameraControl'
-import {ControlButton} from './Buttons'
-import CopyIcon from '../assets/icons/Copy.svg'
-import {Helmet} from 'react-helmet-async'
+import Dialog from './Dialog'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import InputAdornment from '@mui/material/InputAdornment'
@@ -21,6 +21,7 @@ import BotIcon1 from '../assets/icons/Bot1.svg'
 import BotIcon2 from '../assets/icons/Bot3.svg'
 import BotIcon3 from '../assets/icons/Bot4.svg'
 import BotIcon4 from '../assets/icons/Bot2.svg'
+import CopyIcon from '../assets/icons/Copy.svg'
 
 
 /**
@@ -66,16 +67,14 @@ function ImagineDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
   botIconIndex,
-  setBotIconIndex
+  setBotIconIndex,
 }) {
   const viewer = useStore((state) => state.viewer)
-  // const canvas = viewer.context.getDomElement()
-  // console.log('canvas', canvas, viewer)
-  // const glCtx = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
   const glCtx = viewer.context.renderer.renderer.getContext()
   const width = glCtx.drawingBufferWidth
   const height = glCtx.drawingBufferHeight
-  const pixels = new Uint8Array(width * height * 4)
+  const bytesPerPixel = 4
+  const pixels = new Uint8Array(width * height * bytesPerPixel)
   glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels)
 
   // Create a 2D canvas to put the image
@@ -84,28 +83,33 @@ function ImagineDialog({
   canvas2d.height = height
   const context = canvas2d.getContext('2d')
 
-  // Copy the pixels to a 2D canvas
-  const imageData = context.createImageData(width, height)
-  imageData.data.set(pixels)
-  context.putImageData(imageData, 0, 0)
-
-  // Flip the canvas vertically
-  const imageDataFlipped = context.getImageData(0, 0, width, height)
-  for (let i = 0; i < height; i++) {
-    context.putImageData(imageDataFlipped, 0, (height - 1) - i, 0, i, width, 1)
+  const dataArr = []
+  for (let y = 0; y < height; ++y) {
+    for (let x = 0; x < width; ++x) {
+      const offset = (y * width + x) * bytesPerPixel
+      const srcOffset = ((height - y - 1) * width + x) * bytesPerPixel
+      for (let i = 0; i < 4; ++i) {
+        dataArr[offset + i] = pixels[srcOffset + i]
+      }
+    }
   }
+  const imageData = context.createImageData(width, height)
+  imageData.data.set(dataArr)
+  context.putImageData(imageData, 0, 0)
 
   // Convert canvas to PNG Data URL
   const pngUrl = canvas2d.toDataURL()
 
-  console.log(pngUrl)
   // downloadPng(pngUrl)
   sendToWarhol(pngUrl)
 }
 
 
+/**
+ * @param {string} dataUrl The screenshot
+ */
 function sendToWarhol(dataUrl) {
-  const base64Content = dataUrl.split(',')[1];
+  const base64Content = dataUrl.split(',')[1]
 
   const req = {
     prompt: 'modern buildings in a city',
@@ -117,29 +121,36 @@ function sendToWarhol(dataUrl) {
     image: base64Content,
   }
 
-  axios.post('https://warhol.bldrs.dev/generate', req, {
-    headers: {
-      'Content-Type': 'application/octet-stream'
-    }
-  })
-    .then(response => {
-      console.log('Screenshot uploaded successfully, response: ', response)
-    })
-    .catch(error => {
-      console.error('Error uploading screenshot:', error)
-    })
+  axios
+      .post('https://warhol.bldrs.dev/generate', req, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then((response) => {
+        const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
+        downloadPng(renderDataUrl)
+      })
+      .catch((error) => {
+        debug().error('Error uploading screenshot:', error)
+      })
 }
 
 
-function downloadPng(pngUrl) {
+/**
+ * Opens save dialog in user's browser to save the dataUrl
+ *
+ * @param {string} dataUrl
+ */
+function downloadPng(dataUrl) {
   // Optional: Display the PNG in an image tag
   const img = document.createElement('img')
-  img.src = pngUrl
+  img.src = dataUrl
   document.body.appendChild(img)
 
   // Optional: Download the PNG
   const downloadLink = document.createElement('a')
-  downloadLink.href = pngUrl
+  downloadLink.href = dataUrl
   downloadLink.download = 'screenshot.png'
   downloadLink.click()
 }
