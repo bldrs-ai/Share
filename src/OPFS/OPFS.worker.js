@@ -3,38 +3,30 @@
 self.addEventListener('message', async (event) => {
   try {
     if (event.data.command === 'writeObjectURLToFile') {
-      const objectUrl = event.data.objectUrl
-      const fileName = event.data.fileName
+      const {objectUrl, fileName} =
+      assertValues(event.data, ['objectUrl', 'fileName'])
       await writeFileToOPFS(objectUrl, fileName)
     } else if (event.data.command === 'readObjectFromStorage') {
-      const fileName = event.data.fileName
+      const {fileName} = assertValues(event.data, ['fileName'])
       await readFileFromOPFS(fileName)
     } else if (event.data.command === 'writeObjectModel') {
-      const objectUrl = event.data.objectUrl
-      const objectKey = event.data.objectKey
-      const originalFileName = event.data.originalFileName
-      const owner = event.data.owner
-      const repo = event.data.repo
+      const {objectUrl, objectKey, originalFileName, owner, repo} =
+          assertValues(event.data,
+              ['objectUrl', 'objectKey', 'originalFileName', 'owner', 'repo'])
 
       writeModelToOPFS(objectUrl, objectKey, originalFileName, owner, repo)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
-      const file = event.data.file
-      const objectKey = event.data.objectKey
-      const originalFileName = event.data.originalFileName
-      const owner = event.data.owner
-      const repo = event.data.repo
+      const {file, objectKey, originalFileName, owner, repo} =
+          assertValues(event.data,
+              ['file', 'objectKey', 'originalFileName', 'owner', 'repo'])
       writeModelToOPFSFromFile(file, objectKey, originalFileName, owner, repo)
     } else if (event.data.command === 'readModelFromStorage') {
-      const modelKey = event.data.modelKey
+      const {modelKey} = assertValues(event.data, ['modelKey'])
       await readModelFromOPFS(modelKey)
     } else if (event.data.command === 'downloadToOPFS') {
-      const objectUrl = event.data.objectUrl
-      const commitHash = event.data.commitHash
-      const owner = event.data.owner
-      const repo = event.data.repo
-      const branch = event.data.branch
-      const onProgress = event.data.onProgress
-      const originalFilePath = event.data.originalFilePath
+      const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
+          assertValues(event.data,
+              ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
       await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
     }
   } catch (error) {
@@ -177,13 +169,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
           // Write buffer
           // eslint-disable-next-line no-unused-vars
           const blobWriteSize = await blobAccessHandle.write(value, {at: receivedLength})
-
-          /* if (blobWriteSize !== value.length) {
-            console.log('blob write size !== chunk length')
-          }*/
-        } /* else {
-          console.log('nothing was read')
-        }*/
+        }
       } catch (error) {
         const workerMessage = `Error writing to ${commitHash}: ${error}.`
         // Close the access handle when done
@@ -494,5 +480,22 @@ async function readFileFromOPFS(fileName) {
     const errorMessage = `Error retrieving File: ${error}.`
     self.postMessage({error: errorMessage})
   }
+}
+
+/**
+ * Checks that each named param is defined and returns the object for chaining.
+ *
+ * @param {any} obj Variable length arguments to assert are defined.
+ * @param {Array<string>} keys That was passed in
+ * @return {any} obj That object that was passed in, if valid
+ * @throws If any argument is not defined.
+ */
+function assertValues(obj, keys) {
+  const undefinedKeys = keys.filter((key) => obj[key] === undefined)
+  if (undefinedKeys.length > 0) {
+    throw new Error(`The following keys are undefined: 
+      ${undefinedKeys.join(', ')}`)
+  }
+  return obj
 }
 

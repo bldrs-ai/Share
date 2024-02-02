@@ -1,37 +1,34 @@
 import React, {useEffect, useContext, useState} from 'react'
-import {Color, MeshLambertMaterial} from 'three'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
+import {Color, MeshLambertMaterial} from 'three'
+import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {useAuth0} from '@auth0/auth0-react'
-import {navToDefault} from '../Share'
-import Alert from '../Components/Alert'
 import AboutControl from '../Components/About/AboutControl'
-import ElementGroup from '../Components/ElementGroup'
+import Alert from '../Components/Alert'
+import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
+import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ControlsGroup from '../Components/ControlsGroup'
+import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
+import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavPanel'
+import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
-import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
-import OperationsGroup from '../Components/OperationsGroup'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import {useWindowDimensions} from '../Components/Hooks'
-import {useIsMobile} from '../Components/Hooks'
+import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
+import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
 } from '../OPFS/utils'
+import {navToDefault} from '../Share'
+import {usePlaceMark} from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-import debug from '../utils/debug'
-import {
-  loadLocalFile,
-  getUploadedBlobPath,
-} from '../utils/loader'
 import {
   getDownloadURL,
   getLatestCommitHash,
@@ -41,14 +38,15 @@ import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUti
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
-import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
+import {groupElementsByTypes} from '../utils/ifc'
+import {
+  loadLocalFile,
+  getUploadedBlobPath,
+} from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import SearchIndex from './SearchIndex'
-import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
-import {usePlaceMark} from '../hooks/usePlaceMark'
-import {groupElementsByTypes} from '../utils/ifc'
-import FileContext from '../OPFS/FileContext'
+
 
 /**
  * Experimenting with a global. Just calling #indexElement and #clear
