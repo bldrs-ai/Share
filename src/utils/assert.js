@@ -81,3 +81,20 @@ export function assertStringNotEmpty(str) {
     throw new Error('String must be defined and not empty')
   }
 }
+
+/**
+ * Checks that each named param is defined and returns the object for chaining.
+ *
+ * @param {any} obj Variable length arguments to assert are defined.
+ * @param {Array<string>} keys That was passed in
+ * @return {any} obj That object that was passed in, if valid
+ * @throws If any argument is not defined.
+ */
+export function assertValues(obj, keys) {
+  const undefinedKeys = keys.filter((key) => obj[key] === undefined)
+  if (undefinedKeys.length > 0) {
+    throw new Error(`The following keys are undefined: 
+      ${undefinedKeys.join(', ')}`)
+  }
+  return obj
+}

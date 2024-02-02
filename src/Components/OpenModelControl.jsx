@@ -1,5 +1,4 @@
 import React, {useState, useEffect} from 'react'
-import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import MenuItem from '@mui/material/MenuItem'
@@ -13,6 +12,9 @@ import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
 import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
+import {
+  loadLocalFile,
+} from '../utils/loader'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
@@ -21,11 +23,12 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
 /**
- * Displays model open dialog.
+ * Displays Open Model dialog.
  *
+ * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
  */
-export default function OpenModelControl({fileOpen}) {
+export default function OpenModelControl({navigate}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
@@ -61,12 +64,12 @@ export default function OpenModelControl({fileOpen}) {
         dataTestId='open-ifc'
       />
       {isDialogDisplayed &&
-        <OpenModelDialog
-          isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-          fileOpen={fileOpen}
-          orgNamesArr={orgNamesArr}
-        />
+         <OpenModelDialog
+           isDialogDisplayed={isDialogDisplayed}
+           setIsDialogDisplayed={setIsDialogDisplayed}
+           navigate={navigate}
+           orgNamesArr={orgNamesArr}
+         />
       }
     </Box>
   )
@@ -74,26 +77,33 @@ export default function OpenModelControl({fileOpen}) {
 
 
 /**
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {object} React component
+ * @property {boolean} isDialogDisplayed Control uses this to control dialog vis.
+ * @property {Function} setIsDialogDisplayed Set dialog vis.
+ * @property {Function} navigate Callback from CadView to change page url
+ * @property {Array<string>} orgNamesArr List of org names for the current user.
+ * @return {React.ReactElement}
  */
-function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, orgNamesArr}) {
+function OpenModelDialog({
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+  navigate,
+  orgNamesArr,
+}) {
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
-  const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
+  const appPrefix = useStore((state) => state.appPrefix)
 
   const openFile = () => {
-    fileOpen()
+    loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
     setIsDialogDisplayed(false)
   }
 
@@ -101,7 +111,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
     setSelectedOrgName(org)
     let repos
     if (orgNamesArr[org] === user.nickname) {
-      repos = await getUserRepositories(user.nickname, accessToken)
+      repos = await getUserRepositories(accessToken)
     } else {
       repos = await getRepositories(orgNamesArr[org], accessToken)
     }
@@ -141,7 +151,10 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
           alignItems="center"
           sx={{paddingTop: '6px', width: '280px'}}
         >
-          <SampleModelFileSelector setIsDialogDisplayed={setIsDialogDisplayed}/>
+          <SampleModelFileSelector
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
           {isAuthenticated ?
           <Stack>
             <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
@@ -166,9 +179,6 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
                   wiki
                 </Link> to learn more about GitHub hosting.
               </Typography>
-              <Typography variant={'caption'} sx={{marginTop: '10px'}}>
-               * Local files cannot yet be saved or shared.
-              </Typography>
             </Stack>
           </Box>
           }
@@ -183,8 +193,7 @@ function OpenModelDialog({isDialogDisplayed, setIsDialogDisplayed, fileOpen, org
  * @property {Function} setIsDialogDisplayed callback
  * @return {React.ReactElement}
  */
-function SampleModelFileSelector({setIsDialogDisplayed}) {
-  const navigate = useNavigate()
+function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
   const [selected, setSelected] = useState('')
   const theme = useTheme()
   const handleSelect = (e, closeDialog) => {

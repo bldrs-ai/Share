@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.839",
+  "version": "1.0.860",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,11 +8,11 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "build": "yarn clean && yarn build-share-conway && yarn build-cosmos",
+    "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
     "build-cosmos": "shx rm -rf docs/cosmos; shx mkdir -p docs ; cosmos-export --config .cosmos.config.json && shx mv cosmos-export docs/cosmos",
-    "build-share": "yarn update-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js",
+    "build-share": "yarn update-version && node tools/esbuild/build.js && shx mkdir -p docs/static/js && shx cp src/OPFS/OPFS.worker.js docs/",
     "build-share-conway": "run-script-os",
     "build-share-conway:win32": "set USE_WEBIFC_SHIM=true&& yarn build-share",
     "build-share-conway:linux:darwin": "USE_WEBIFC_SHIM=true yarn build-share",

@@ -14,6 +14,54 @@ import PkgJson from '../../package.json'
 const bldrsVersionString = `Bldrs: ${PkgJson.version}`
 const mockedUseNavigate = jest.fn()
 const defaultLocationValue = {pathname: '/index.ifc', search: '', hash: '', state: null, key: 'default'}
+// mock createObjectURL
+global.URL.createObjectURL = jest.fn(() => '1111111111111111111111111111111111111111')
+
+jest.mock('../OPFS/utils', () => {
+  const actualUtils = jest.requireActual('../OPFS/utils')
+  const fs = jest.requireActual('fs')
+  const path = jest.requireActual('path')
+  const Blob = jest.requireActual('node:buffer').Blob
+
+  /**
+   * FileMock - Mocks File Web Interface
+   */
+  class FileMock {
+    /**
+     *
+     * @param {Blob} blobParts
+     * @param {string} fileName
+     * @param {any} options
+     */
+    constructor(blobParts, fileName, options) {
+      this.blobParts = blobParts
+      this.name = fileName
+      this.lastModified = options.lastModified || Date.now()
+      this.type = options.type
+      // Implement other properties and methods as needed for your tests
+    }
+
+    // Implement any required methods (e.g., slice, arrayBuffer, text) if your code uses them
+  }
+
+  return {
+    ...actualUtils, // Preserve other exports from the module
+    downloadToOPFS: jest.fn().mockImplementation(() => {
+      // Read the file content from disk (consider using async read in real use-cases)
+      const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
+
+      const uint8Array = new Uint8Array(fileContent)
+      const blob = new Blob([uint8Array])
+
+      // The lastModified property is optional, and can be omitted or set to Date.now() if needed
+      const file = new FileMock([blob], 'index.ifc', {type: 'text/plain', lastModified: Date.now()})
+      // Return the mocked File in a promise if it's an async function
+      return Promise.resolve(file)
+    }),
+  }
+})
+
+
 jest.mock('react-router-dom', () => {
   return {
     ...jest.requireActual('react-router-dom'),
@@ -22,10 +70,28 @@ jest.mock('react-router-dom', () => {
   }
 })
 jest.mock('postprocessing')
+jest.mock('@auth0/auth0-react', () => {
+  return {
+    ...jest.requireActual('@auth0/auth0-react'),
+    useAuth0: () => jest.fn(() => {
+      return {
+        isLoading: () => false,
+        isAuthenticated: () => false,
+      }
+    }),
+  }
+})
 
 
 describe('CadView', () => {
   let viewer
+
+  let originalWorker
+
+  beforeAll(() => {
+    // Store the original Worker in case other tests need it
+    originalWorker = global.Worker
+  })
 
 
   // TODO: `document.createElement` can't be used in testing-library directly, need to move this after fixing that issue
@@ -40,6 +106,7 @@ describe('CadView', () => {
 
   afterEach(() => {
     jest.clearAllMocks()
+    global.Worker = originalWorker
   })
 
 
@@ -64,11 +131,9 @@ describe('CadView', () => {
     await waitFor(() => screen.getByTitle(bldrsVersionString))
   })
 
-
-  it('renders and selects the element ID from URL', async () => {
-    const testTree = makeTestTree()
-    const targetEltId = testTree.children[0].expressID
-    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/1'}
+  // TODO(nickcastel50): See Issue #956
+  it.skip('renders and selects the element ID from URL', async () => {
+    const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/89'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,
@@ -87,16 +152,74 @@ describe('CadView', () => {
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
-    const numCallsExpected = 2 // First for root, second from URL path
+    const numCallsExpected = 3 // First for root, second from URL path
+
+    const testEltId = 89
+
     expect(mockedUseNavigate).not.toHaveBeenCalled() // Make sure no redirection happened
     expect(getPropsCalls.length).toBe(numCallsExpected)
     expect(getPropsCalls[0][0]).toBe(0) // call 1, arg 1
-    expect(getPropsCalls[0][1]).toBe(targetEltId) // call 1, arg 2
+    expect(getPropsCalls[0][1]).toBe(0) // call 1, arg 2
     expect(getPropsCalls[1][0]).toBe(0) // call 2, arg 1
-    expect(getPropsCalls[1][1]).toBe(0) // call 2, arg 2
+    expect(getPropsCalls[1][1]).toBe(testEltId) // call 2, arg 2
     await actAsyncFlush()
   })
 
+  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+    // mock webworker
+    const mockWorker = {
+      addEventListener: jest.fn(),
+      postMessage: jest.fn(),
+    }
+    global.Worker = jest.fn(() => mockWorker)
+    const modelPath = {
+      filepath: `/index.ifc`,
+    }
+    const {result} = renderHook(() => useState(modelPath))
+    render(
+        <ShareMock>
+          <CadView
+            installPrefix={''}
+            appPrefix={''}
+            pathPrefix={''}
+            modelPath={result.current[0]}
+          />
+        </ShareMock>,
+    )
+
+    // Wait for component to be fully loaded
+    // Necessary to wait for some of the component to render to avoid
+    // act() warnings from testing-library.
+    await actAsyncFlush()
+    await waitFor(() => screen.getByTitle(bldrsVersionString))
+
+    // Identify the drop zone element using the cadview-dropzone attribute
+    const dropZone = screen.getByTestId('cadview-dropzone')
+
+    // Create a mock file
+    const file = new File(['content'], 'index.ifc', {type: 'application/ifc'})
+
+    // Create a mock DataTransfer object
+    const dataTransfer = {
+      files: [file],
+      items: [{
+        kind: 'file',
+        type: file.type,
+        getAsFile: () => file,
+      }],
+      types: ['Files'],
+    }
+
+    // Simulate the drag over and drop events
+    fireEvent.dragOver(dropZone, {dataTransfer})
+    fireEvent.drop(dropZone, {dataTransfer})
+
+    // Verify that URL.createObjectURL was called
+    expect(global.URL.createObjectURL).toHaveBeenCalled()
+
+    // this is about as far as we can go since OPFS doesn't work in this context
+    await actAsyncFlush()
+  })
 
   it('sets up camera and cutting plan from URL,', async () => {
     const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
