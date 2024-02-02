@@ -14,6 +14,8 @@ import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {
   loadLocalFile,
+  loadLocalFileFallback,
+  checkOPFSAvailability,
 } from '../utils/loader'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
@@ -101,9 +103,14 @@ function OpenModelDialog({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
+  const isOPFSAvailable = checkOPFSAvailability()
 
   const openFile = () => {
-    loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
+    if (isOPFSAvailable) {
+      loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
+    } else {
+      loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, false)
+    }
     setIsDialogDisplayed(false)
   }
 
