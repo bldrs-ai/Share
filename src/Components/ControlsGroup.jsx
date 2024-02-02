@@ -30,6 +30,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
       <OpenModelControl navigate={navigate}/>
+      <SaveModelControl navigate={navigate}/>
       <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
@@ -54,7 +55,6 @@ export default function ControlsGroup({navigate, isRepoActive}) {
           }
         }}
       />
-      <SaveModelControl navigate={navigate}/>
       {isRepoActive &&
         <TooltipIconButton
           title='Project History'

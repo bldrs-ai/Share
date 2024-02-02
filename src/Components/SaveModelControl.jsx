@@ -22,7 +22,7 @@ import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 import IconButton from '@mui/material/IconButton'
-import SaveIcon from '@mui/icons-material/Save'
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 import SaveHeaderIcon from '../assets/icons/SaveGraphic.svg'
 import UploadIcon from '../assets/icons/Upload.svg'
 
@@ -60,11 +60,11 @@ export default function SaveModelControl({navigate}) {
 
 
   return (
-    <Box sx={{}}>
+    <Box sx={{marginRight: '6px'}}>
       <TooltipIconButton
         title={'Save IFC'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<SaveIcon className='icon-share' color='secondary'/>}
+        icon={<SaveOutlinedIcon className='icon-share' color='secondary'/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
         dataTestId='save-ifc'
