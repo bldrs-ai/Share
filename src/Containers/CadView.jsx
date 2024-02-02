@@ -24,6 +24,7 @@ import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
+  checkOPFSAvailability,
 } from '../OPFS/utils'
 import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -41,6 +42,8 @@ import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {
   loadLocalFile,
+  loadLocalFileFallback,
+  loadLocalFileDragAndDropFallback,
   getUploadedBlobPath,
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
@@ -68,6 +71,8 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
+
+  const isOPFSAvailable = checkOPFSAvailability()
 
   const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
@@ -104,11 +109,20 @@ export default function CadView({
       event.dataTransfer.files
     // Here you can handle the files as needed
     if (files.length === 1) {
-      loadLocalFileDragAndDrop(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0])
+      if (isOPFSAvailable) {
+        loadLocalFileDragAndDrop(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0])
+      } else {
+        loadLocalFileDragAndDropFallback(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0],
+        )
+      }
     }
   }
 
@@ -385,7 +399,28 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
-    if (uploadedFile) {
+    if (!isOPFSAvailable) {
+      // fallback to loadIfcUrl
+      loadedModel = await viewer.loadIfcUrl(
+          ifcURL,
+          !urlHasCameraParams(), // fit to frame
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.loaded)) {
+              const loadedBytes = progressEvent.loaded
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          },
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setSnackMessage('')
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
       if (file instanceof File) {
@@ -858,14 +893,27 @@ export default function CadView({
             isRepoActive={modelPath.repo !== undefined}
           />
           {isSearchBarVisible && isSearchVisible &&
-            <Box sx={{marginTop: '10px', width: '100%'}}>
-              <SearchBar fileOpen={() => loadLocalFile(
-                  navigate,
-                  appPrefix,
-                  handleBeforeUnload,
-                  false)}
-              />
-            </Box>
+    <Box sx={{marginTop: '10px', width: '100%'}}>
+      <SearchBar fileOpen={() => {
+        // Use loadLocalFile if OPFS is available, else use loadLocalFileFallback
+        if (isOPFSAvailable) {
+          loadLocalFile(
+              navigate,
+              appPrefix,
+              handleBeforeUnload,
+              false,
+          )
+        } else {
+          loadLocalFileFallback(
+              navigate,
+              appPrefix,
+              handleBeforeUnload,
+              false,
+          )
+        }
+      }}
+      />
+    </Box>
           }
           <Box sx={{marginTop: '10px', width: '100%'}}>
             {isNavPanelOpen &&

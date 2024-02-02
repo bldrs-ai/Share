@@ -5,6 +5,65 @@ import {
   opfsWriteModel,
 } from '../OPFS/OPFSService.js'
 
+/**
+ * Upload a local file for display.
+ *
+ * @param {Function} navigate
+ * @param {string} appPrefix
+ * @param {Function} handleBeforeUnload
+ */
+export function loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, testingSkipAutoRemove = false) {
+  assertDefined(navigate, appPrefix, handleBeforeUnload)
+  const viewerContainer = document.getElementById('viewer-container')
+  const fileInput = document.createElement('input')
+  fileInput.setAttribute('type', 'file')
+  fileInput.addEventListener(
+      'change',
+      (event) => {
+        debug().log('loader#loadLocalFile#event:', event)
+        let tmpUrl = URL.createObjectURL(event.target.files[0])
+        debug().log('loader#loadLocalFile#event: url: ', tmpUrl)
+        const parts = tmpUrl.split('/')
+        tmpUrl = parts[parts.length - 1]
+        window.removeEventListener('beforeunload', handleBeforeUnload)
+        // TODO(pablo): detect content and set appropriate suffix.
+        // Alternatively, leave it without suffix, but this also
+        // triggers downstream handling issues.
+        navigate(`${appPrefix}/v/new/${tmpUrl}.ifc`)
+      },
+      false,
+  )
+  viewerContainer.appendChild(fileInput)
+  fileInput.click()
+  if (!testingSkipAutoRemove) {
+    viewerContainer.removeChild(fileInput)
+  }
+}
+
+/**
+ * Upload a local file for display from Drag And Drop.
+ *
+ * @param {Function} navigate
+ * @param {string} appPrefix
+ * @param {Function} handleBeforeUnload
+ */
+export function loadLocalFileDragAndDropFallback(
+    navigate,
+    appPrefix,
+    handleBeforeUnload,
+    file) {
+  assertDefined(navigate, appPrefix, handleBeforeUnload)
+  let tmpUrl = URL.createObjectURL(file)
+  debug().log('loader#loadLocalFileDragAndDrop#event: url: ', tmpUrl)
+  const parts = tmpUrl.split('/')
+  tmpUrl = parts[parts.length - 1]
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  // TODO(pablo): detect content and set appropriate suffix.
+  // Alternatively, leave it without suffix, but this also
+  // triggers downstream handling issues.
+  navigate(`${appPrefix}/v/new/${tmpUrl}.ifc`)
+}
+
 
 /**
  * Upload a local file for display.
