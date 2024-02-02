@@ -5,6 +5,8 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
+import useStore from '../store/useStore'
+import {useIsMobile} from './Hooks'
 import {TooltipIconButton} from './Buttons'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
@@ -23,6 +25,8 @@ export default function LoginMenu() {
   const theme = useTheme()
   const {isAuthenticated, user, logout} = useAuth0()
   const {loginWithPopup} = useAuth0()
+  const IsDrawerOpen = useStore((state) => state.isDrawerOpen)
+  const isMobile = useIsMobile()
 
   const handleClick = (event) => {
     setAnchorEl(event.currentTarget)
@@ -57,7 +61,7 @@ export default function LoginMenu() {
             src={user.picture}
             sx={{width: 22, height: 22}}
           /> :
-        <AccountBoxOutlinedIcon className='icon-share' color='secondary'/>}
+        <AccountBoxOutlinedIcon color='secondary'/>}
         onClick={handleClick}
       />
       <Menu
@@ -71,7 +75,8 @@ export default function LoginMenu() {
         PaperProps={{
           style: {
             left: '300px',
-            transform: 'translateX(-49px) translateY(0px)',
+            width: '210px',
+            transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-142px' : '-54px'}) translateY(0px)`,
           },
           sx: {
             'color': theme.palette.primary.contrastText,

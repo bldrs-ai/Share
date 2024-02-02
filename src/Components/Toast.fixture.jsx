@@ -1,6 +1,6 @@
 import React from 'react'
 import {useSelect, useValue} from 'react-cosmos/client'
-import FixtureContext from '../FixtureContext'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import Toast from './Toast'
 
 
@@ -24,10 +24,10 @@ export default () => {
   })
 
   return (
-    <FixtureContext>
+    <ThemeCtx>
       <Toast severity={severity} title={title} closeTimeout={closeTimeout}>
         Your rendering has completed!
       </Toast>
-    </FixtureContext>
+    </ThemeCtx>
   )
 }

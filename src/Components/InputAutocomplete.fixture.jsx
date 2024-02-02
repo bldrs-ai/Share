@@ -1,6 +1,6 @@
 import React from 'react'
-import FixtureContext from '../FixtureContext'
 import InputAutocomplete from './InputAutocomplete'
+import {ThemeCtx} from '../theme/Theme.fixture'
 
 
 const elements = [
@@ -11,7 +11,7 @@ const elements = [
 ]
 
 export default (
-  <FixtureContext>
+  <ThemeCtx>
     <InputAutocomplete elements={elements} placeholder={'IFC property'}/>
-  </FixtureContext>
+  </ThemeCtx>
 )

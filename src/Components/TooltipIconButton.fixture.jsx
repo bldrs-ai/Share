@@ -1,5 +1,5 @@
 import React from 'react'
-import FixtureContext from '../FixtureContext'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import {TooltipIconButton} from './Buttons'
 import ShareIcon from '../assets/icons/Share.svg'
 
@@ -7,7 +7,7 @@ import ShareIcon from '../assets/icons/Share.svg'
 /** @return {React.Component} */
 export default function Example() {
   return (
-    <FixtureContext>
+    <ThemeCtx>
       <TooltipIconButton
         title={'Hello World'}
         icon={<ShareIcon className='icon-share'/>}
@@ -16,6 +16,6 @@ export default function Example() {
           console.log('clicked')
         }}
       />
-    </FixtureContext>
+    </ThemeCtx>
   )
 }

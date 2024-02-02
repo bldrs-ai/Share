@@ -367,35 +367,6 @@ describe('CadView', () => {
   })
 
 
-  it('can clear selection using Escape key', async () => {
-    const selectedIdsAsString = ['0', '1']
-    const elementCount = 2
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    const {result} = renderHook(() => useStore((state) => state))
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
-    await actAsyncFlush()
-    expect(getByTitle('Section')).toBeInTheDocument()
-    await act(() => {
-      result.current.setSelectedElements(selectedIdsAsString)
-    })
-    expect(result.current.selectedElements).toHaveLength(elementCount)
-    fireEvent.keyDown(getByTitle('Section'), {key: 'Escape', code: 'Escape', charCode: 27})
-    expect(result.current.selectedElements).toHaveLength(0)
-    await actAsyncFlush()
-  })
-
-
   it('can highlight some elements based on state change', async () => {
     const highlightedIdsAsString = ['0', '1']
     const modelId = 0

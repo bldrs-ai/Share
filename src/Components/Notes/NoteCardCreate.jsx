@@ -2,16 +2,17 @@ import React, {useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Box from '@mui/material/Box'
+import Card from '@mui/material/Card'
 import CardActions from '@mui/material/CardActions'
 import CardContent from '@mui/material/CardContent'
 import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
-import Paper from '@mui/material/Paper'
-import useTheme from '@mui/styles/useTheme'
+import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
-import Submit from '../../assets/icons/Submit.svg'
+import {assertStringNotEmpty} from '../../utils/assert'
+import CheckIcon from '@mui/icons-material/Check'
 
 
 /**
@@ -25,14 +26,12 @@ export default function NoteCardCreate({
   username = '',
   avatarUrl = '',
 }) {
+  const {user, isAuthenticated} = useAuth0()
+  const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
-  const [body, setBody] = useState('')
-  const {user, isAuthenticated} = useAuth0()
-  const accessToken = useStore((state) => state.accessToken)
-  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
-  const theme = useTheme()
+  const [body, setBody] = useState(null)
 
 
   /**
@@ -41,33 +40,31 @@ export default function NoteCardCreate({
    * @return {void}
    */
   async function createNote() {
+    assertStringNotEmpty(title)
     const issuePayload = {
       title,
-      body,
+      body: body || '',
     }
+
     await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
-    toggleSynchSidebar()
   }
 
+  const submitEnabled = title !== null && title !== ''
   return (
-    <Paper
+    <Card
       elevation={1}
       variant='note'
-      square
-      sx={{
-        width: '100%',
-
-      }}
     >
       <CardHeader
         title={
-          <InputField
+          <InputBase
+            value={title || ''}
+            onChange={(event) => setTitle(event.target.value)}
+            fullWidth
+            multiline
             placeholder={'Note Title'}
-            inputText={title}
-            setInputText={setTitle}
-            multiline={false}
-            maxLength={256}
+            inputProps={{maxLength: 256}}
           />}
         avatar={
           isAuthenticated ?
@@ -76,9 +73,7 @@ export default function NoteCardCreate({
               src={user.picture}
             /> :
             <Avatar alt={username} src={avatarUrl}/>
-        } sx={{
-          backgroundColor: theme.palette.primary.main,
-        }}
+        }
       />
       <CardContent>
         <Box
@@ -86,56 +81,35 @@ export default function NoteCardCreate({
             margin: '10px 0px',
           }}
         >
-          <InputField
+          <InputBase
+            value={body || ''}
+            onChange={(event) => setBody(event.target.value)}
+            fullWidth
+            multiline
             placeholder={'Note Body'}
-            inputText={body}
-            setInputText={setBody}
-            multiline={true}
-            maxLength={65000}
+            inputProps={{maxLength: 256}}
           />
         </Box>
       </CardContent>
       <CardActions>
-        <TooltipIconButton
-          title='Submit'
-          size='small'
-          placement='bottom'
-          onClick={async () => {
-            await createNote()
-          }}
-          icon={<Submit style={{width: '15px', height: '15px'}}/>}
-        />
+        <Stack
+          justifyContent='flex-end'
+          alignContent='flex-end'
+          direction='row'
+          sx={{width: '100%'}}
+        >
+          <TooltipIconButton
+            title='Submit'
+            onClick={async () => {
+              await createNote()
+            }}
+            icon={<CheckIcon/>}
+            enabled={submitEnabled}
+            size='small'
+            placement='bottom'
+          />
+        </Stack>
       </CardActions>
-    </Paper>
-  )
-}
-
-
-/**
- * Input
- *
- * @property {string} placeholder input placeholder
- * @property {string} inputText tring to display as input
- * @property {string} setInputText function to save the current input string
- * @property {boolean} multiline is multiline input allowed
- * @property {number} maxLength maximum length of the input string
- * @return {React.Component} React component
- */
-function InputField({placeholder, inputText, setInputText, multiline, maxLength}) {
-  return (
-    <InputBase
-      value={inputText}
-      onChange={(event) => setInputText(event.target.value)}
-      error={true}
-      placeholder={placeholder}
-      fullWidth
-      multiline={multiline}
-      inputProps={{maxLength: maxLength}}
-      sx={{
-        '& input::placeholder': {
-          opacity: .3,
-        },
-      }}
-    />
+    </Card>
   )
 }

@@ -39,8 +39,11 @@ import {
 } from '../utils/GitHub'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
+import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
+import {loadLocalFile, getUploadedBlobPath} from '../utils/loader'
 import {navWith} from '../utils/navigate'
+import {setKeydownListeners} from '../utils/shortcutKeys'
 import SearchIndex from './SearchIndex'
 import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -157,7 +160,6 @@ export default function CadView({
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
-
 
   // Place Mark
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
@@ -577,8 +579,8 @@ export default function CadView({
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
-    setDoubleClickListener()
-    setKeydownListeners()
+    setDblClickListener()
+    setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID)
     rootElt.Name = rootProps.Name
@@ -725,8 +727,8 @@ export default function CadView({
     }
   }
 
-  /** Select items in model when they are double-clicked. */
-  function setDoubleClickListener() {
+  /** Select items in model when they are double-clicked */
+  function setDblClickListener() {
     window.ondblclick = canvasDoubleClickHandler
   }
 
@@ -767,30 +769,6 @@ export default function CadView({
       newSelection = [expressId]
     }
     selectItemsInScene(newSelection)
-  }
-
-
-  /** Set Keyboard button Shortcuts */
-  function setKeydownListeners() {
-    window.onkeydown = (event) => {
-      // add a plane
-      if (event.code === 'KeyQ') {
-        viewer.clipper.createPlane()
-      } else if (event.code === 'KeyW') {
-        viewer.clipper.deletePlane()
-      } else if (event.code === 'KeyA' ||
-        event.code === 'Escape') {
-        selectItemsInScene([])
-      } else if (event.code === 'KeyH') {
-        viewer.isolator.hideSelectedElements()
-      } else if (event.code === 'KeyU') {
-        viewer.isolator.unHideAllElements()
-      } else if (event.code === 'KeyI') {
-        viewer.isolator.toggleIsolationMode()
-      } else if (event.code === 'KeyR') {
-        viewer.isolator.toggleRevealHiddenElements()
-      }
-    }
   }
 
 
@@ -1087,6 +1065,11 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   }
 
   viewer.container = container
+
+  // This is necessary so that canvas can receive key events for shortcuts.
+  const canvas = viewer.context.getDomElement()
+  canvas.setAttribute('tabIndex', '0')
+
   return viewer
 }
 
