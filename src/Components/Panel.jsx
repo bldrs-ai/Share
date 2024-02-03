@@ -16,16 +16,16 @@ import CloseIcon from '@mui/icons-material/Close'
  * @param {React.ReactNode} content The content to be displayed in the panel.
  * @return {React.ReactElement} A rendered Panel component.
  */
-export default function Panel({title, onClose, content, testId = ''}) {
+export default function Panel({title, onClose, content, testId = '', action = null}) {
   const theme = useTheme()
   return (
     <Paper
-      data-testId={testId}
+      data-testid={testId}
       sx={{
         'overflowY': 'scroll',
         'maxHeight': '490px',
         'width': '100%',
-        'opacity': .9,
+        'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
         'backgroundColor': theme.palette.scene.background,
@@ -47,11 +47,19 @@ export default function Panel({title, onClose, content, testId = ''}) {
         }}
       >
         <Typography variant='body1' sx={{marginLeft: '.9em', textTransform: 'uppercase'}}>{title}</Typography>
-        <Box sx={{marginRight: '.3em'}}>
+        <Stack
+          direction='row'
+          justifyContent={'center'}
+          alignItems={'center'}
+          sx={{marginRight: '.3em'}}
+        >
+          <Box>
+            {action}
+          </Box>
           <IconButton aria-label="close" size="small" onClick={onClose} sx={{borderRadius: '5px'}}>
             <CloseIcon fontSize="small" color='secondary'/>
           </IconButton>
-        </Box>
+        </Stack>
       </Stack>
       <Box sx={{padding: '1px 0px'}}>
         {content}

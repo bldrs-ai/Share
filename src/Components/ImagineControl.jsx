@@ -101,7 +101,7 @@ function ImagineDialog({
       actionTitle='Close'
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={closeDialog}
-      enableActions={false}
+      hideActionButton={true}
       content={
         <>
           <Helmet>

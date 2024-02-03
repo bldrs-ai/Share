@@ -24,7 +24,7 @@ describe('loadLocalFile', () => {
   })
 
   it('loads a local file and navigates to the appropriate URL', () => {
-    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true)
+    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true, true)
 
     // Mock input change event with a file
     const inputElement = document.querySelector('input[type="file"]')
@@ -40,12 +40,12 @@ describe('loadLocalFile', () => {
   it('throws an error if viewer-container is missing', () => {
     document.body.innerHTML = ''
     expect(() => {
-      loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true)
+      loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, true, true)
     }).toThrow()
   })
 
   it('removes the file input after click if skipAutoRemove is false', () => {
-    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, false)
+    loadLocalFile(navigateMock, appPrefix, handleBeforeUnloadMock, false, true)
     const inputElement = document.querySelector('input[type="file"]')
     expect(inputElement).toBeNull()
   })

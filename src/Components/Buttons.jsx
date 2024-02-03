@@ -31,7 +31,6 @@ export function TooltipIconButton({
   dataTestId = '',
   aboutInfo = true,
   variant = 'rounded',
-  disabled = false,
 }) {
   assertDefined(title, onClick, icon)
   const [openLocal, setOpenLocal] = React.useState(false)

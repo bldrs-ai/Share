@@ -5,6 +5,8 @@ import {
   MOCK_ORGANIZATIONS,
   MOCK_REPOSITORY,
   MOCK_FILES,
+  MOCK_COMMITS,
+  MOCK_BRANCHES,
 } from '../utils/GitHub'
 
 
@@ -12,7 +14,6 @@ const httpOk = 200
 const httpCreated = 201
 const httpAuthorizationRequired = 401
 const httpNotFound = 404
-
 
 /**
  * Initialize API handlers, including Google Analytics and GitHub.
@@ -243,10 +244,120 @@ function githubHandlers() {
     rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
-          ctx.json({
-            data: [MOCK_FILES],
-          }),
+          ctx.json(MOCK_FILES),
       )
     }),
+
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/commits',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json(MOCK_COMMITS),
+          )
+        }),
+
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/branches',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json(MOCK_BRANCHES),
+          )
+        }),
+
+    // octokit.rest.git.getlatestCommitHash
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/commits',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json([{sha: 'testsha'}]),
+          )
+        }),
+
+    /* Begin support for GitHub commitFile.  HTTP_BAD_REQUEST(400) is
+     * used to indicate missing args, tho we're not sure what actual
+     * GH returns for the various cases. */
+
+    // octokit.rest.git.getRef
+    rest.get('https://api.github.com/repos/:owner/:repo/git/ref/:ref', (req, res, ctx) => {
+      return res(
+          ctx.status(httpOk),
+          ctx.json({object: {sha: 'parentSha'}}),
+      )
+    }),
+
+    // octokit.rest.git.getCommit
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/git/commits/:commit_sha',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json({tree: {sha: 'treeSha'}}),
+          )
+        }),
+
+    // octokit.rest.git.createBlob
+    rest.post(
+        'https://api.github.com/repos/:owner/:repo/git/blobs',
+        async (req, res, ctx) => {
+          const {content, encoding} = await req.body
+          if (content === undefined || encoding === undefined) {
+            const HTTP_BAD_REQUEST = 400
+            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+          }
+          return res(
+              ctx.status(httpOk),
+              ctx.json({sha: 'blobSha'}),
+          )
+        }),
+
+    // octokit.rest.git.createTree
+    rest.post(
+        'https://api.github.com/repos/:owner/:repo/git/trees',
+        async (req, res, ctx) => {
+          // eslint-disable-next-line camelcase
+          const {base_tree, tree} = await req.body
+          // eslint-disable-next-line camelcase
+          if (base_tree === undefined || tree === undefined) {
+            const HTTP_BAD_REQUEST = 400
+            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+          }
+          return res(
+              ctx.status(httpOk),
+              ctx.json({sha: 'newTreeSha'}),
+          )
+        }),
+
+    // octokit.rest.git.createCommit
+    rest.post(
+        'https://api.github.com/repos/:owner/:repo/git/commits',
+        async (req, res, ctx) => {
+          const {message, tree, parents} = await req.body
+          if (message === undefined || tree === undefined || parents === undefined) {
+            const HTTP_BAD_REQUEST = 400
+            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+          }
+          return res(
+              ctx.status(httpOk),
+              ctx.json({sha: 'newCommitSha'}),
+          )
+        }),
+
+    // octokit.rest.git.updateRef
+    rest.patch(
+        'https://api.github.com/repos/:owner/:repo/git/refs/:ref',
+        async (req, res, ctx) => {
+          const {sha} = await req.body
+          if (sha === undefined) {
+            const HTTP_BAD_REQUEST = 400
+            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+          }
+          return res(
+              ctx.status(httpOk),
+              ctx.json({sha: 'smth'}),
+          )
+        }),
   ]
 }

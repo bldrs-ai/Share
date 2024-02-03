@@ -1,17 +1,20 @@
 import {Octokit} from '@octokit/rest'
-import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
+import debug from './debug'
 // TODO(pablo): unit tests after nicks OPFS changes go in
+
 
 /**
  * @param {object} repository
- * @param {string} branch
+ * @param {string} filepath
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getCommitsForBranch(repository, branch, accessToken = '') {
-  const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
+export async function getCommitsForFile(repository, filepath, accessToken = '') {
+  const res = await getGitHub(repository, `commits`, {
+    path: filepath,
+  }, accessToken)
   const commitsArr = res.data
   return commitsArr
 }
@@ -249,19 +252,144 @@ export async function getRepositories(org, accessToken = '') {
 }
 
 /**
+ *
+ */
+export async function commitFile(owner, repo, path, file, message, branch, accessToken = '') {
+  if (accessToken === '') {
+    return 'Not authenticated'
+  }
+
+  // Create a new FileReader object
+  const reader = new FileReader()
+
+  // Convert the file to a Base64 string
+  const contentPromise = new Promise((resolve, reject) => {
+    reader.onload = () => {
+      // Remove the prefix from the result (e.g., "data:text/plain;base64,") and resolve the Base64 encoded content
+      resolve(reader.result.split(',')[1])
+    }
+    reader.onerror = (error) => reject(error)
+    reader.readAsDataURL(file) // Read the file
+  })
+
+  // base 64 content string
+  const content = await contentPromise
+
+  // Set the authorization headers for each octokit request
+  const headers = {
+    authorization: `Bearer ${accessToken}`,
+  }
+
+  // 1. Get the SHA of the latest commit on the branch
+  const {data: refData} = await octokit.rest.git.getRef({
+    owner,
+    repo,
+    ref: `heads/${branch}`,
+    headers,
+  })
+  const parentSha = refData.object.sha
+
+  // 2. Get the SHA of the tree associated with the latest commit
+  const {data: commitData} = await octokit.rest.git.getCommit({
+    owner,
+    repo,
+    commit_sha: parentSha,
+    headers,
+  })
+  const treeSha = commitData.tree.sha
+
+  // 3. Create a blob with your file content
+  const {data: blobData} = await octokit.rest.git.createBlob({
+    owner,
+    repo,
+    content,
+    encoding: 'base64',
+    headers,
+  })
+  const blobSha = blobData.sha
+
+  // 4. Create a new tree with the base tree and the blob
+  const {data: treeData} = await octokit.rest.git.createTree({
+    owner,
+    repo,
+    base_tree: treeSha,
+    tree: [
+      {
+        path: path,
+        mode: '100644', // file mode; 100644 for normal file, 100755 for executable, 040000 for subdirectory
+        type: 'blob',
+        sha: blobSha,
+      },
+    ],
+    headers,
+  })
+  const newTreeSha = treeData.sha
+
+  // 5. Create a new commit
+  const {data: newCommitData} = await octokit.rest.git.createCommit({
+    owner,
+    repo,
+    message,
+    tree: newTreeSha,
+    parents: [parentSha],
+    headers,
+  })
+  const newCommitSha = newCommitData.sha
+
+  // 6. Update the reference of your branch to point to the new commit
+  await octokit.rest.git.updateRef({
+    owner,
+    repo,
+    ref: `heads/${branch}`,
+    sha: newCommitSha,
+    headers,
+  })
+
+  return newCommitSha
+}
+
+
+/**
  * Retrieves repositories associated with the authenticated user
  *
  * @param {string} [accessToken]
  * @return {Promise} the list of organization
  */
-export async function getUserRepositories(username, accessToken = '') {
-  const res = await octokit.request('GET /users/{username}/repos', {
-    username,
-    headers: {
-      authorization: `Bearer ${accessToken}`,
-    },
-  })
-  return res.data
+export async function getUserRepositories(accessToken = '', owner = '') {
+  let allRepos = []
+  let page = 1
+  let isDone = false
+  const perPage = 100 // Max value is 100
+
+  while (!isDone) {
+    const res = await octokit.request('GET /user/repos', {
+      headers: {
+        authorization: `Bearer ${accessToken}`,
+      },
+      type: 'all',
+      per_page: perPage,
+      page: page,
+    })
+
+    // Filter out forks from the current page of results
+
+    if (owner === '') {
+      const nonForkRepos = res.data.filter((repo) => !repo.fork)
+      allRepos = allRepos.concat(nonForkRepos)
+    } else {
+      const nonForkRepos = res.data.filter((repo) => !repo.fork && repo.owner.login === owner)
+      allRepos = allRepos.concat(nonForkRepos)
+    }
+
+    if (res.data.length < perPage) {
+      // If the number of repositories is less than 'perPage', it means we are on the last page
+      isDone = true
+      break
+    }
+    page++ // Go to the next page
+  }
+
+  return allRepos
 }
 
 
@@ -279,7 +407,76 @@ export async function getFiles(repo, owner, accessToken = '') {
       authorization: `Bearer ${accessToken}`,
     },
   })
+
   return res.data
+}
+
+/**
+ * Retrieves files and folders associated with a repository
+ *
+ * @param {string} [accessToken]
+ * @return {Promise} the list of organization
+ */
+export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {
+  const res = await octokit.request('/repos/{owner}/{repo}/contents/{path}', {
+    owner,
+    repo,
+    path: (subfolder === '' || subfolder === '/') ? null : subfolder, // Add the subfolder path here
+    headers: {
+      authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  const files = []
+  const directories = []
+
+  res.data.forEach((item) => {
+    if (item.type === 'file') {
+      files.push(item)
+    } else if (item.type === 'dir') {
+      directories.push(item)
+    }
+  })
+
+  return {files, directories}
+}
+
+/**
+ *
+ */
+export async function getLatestCommitHash(owner, repo, filePath, accessToken, branch = 'main') {
+  try {
+    assertDefined(owner, repo, filePath)
+    let commits = null
+    const requestOptions = {
+      path: filePath,
+      headers: {},
+    }
+
+    // Add the authorization header if accessToken is provided
+    if (accessToken !== '') {
+      requestOptions.headers.authorization = `Bearer ${accessToken}`
+    }
+
+    // Add the branch (sha) to the request if provided
+    if (branch && branch !== '') {
+      requestOptions.sha = branch
+    }
+
+    commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
+
+    if (commits.data.length === 0) {
+      debug().warn('No commits found for the specified file.')
+      return null
+    }
+
+    const latestCommitHash = commits.data[0].sha
+    debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
+    return latestCommitHash
+  } catch (error) {
+    debug().error('Error fetching the latest commit hash: ', error)
+    return null
+  }
 }
 
 
@@ -700,21 +897,181 @@ export const MOCK_COMMENTS = {
   ],
 }
 
+export const MOCK_COMMITS = [{
+  sha: 'testsha',
+  node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
+  commit: {
+    author: {
+      name: 'User1',
+      email: '74647806+User1@users.noreply.github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    committer: {
+      name: 'GitHub',
+      email: 'noreply@github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    message: 'First Commit',
+    tree: {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+    },
+    url: 'https://api.github.com/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    comment_count: 0,
+    verification: {
+      verified: true,
+      reason: 'valid',
+      signature: '-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQJjLDlDCRBK7hj4Ov3rIwA',
+      payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
+    },
+  },
+  url: 'https://api.github.com/repos/user2/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/user2/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/user2/Momentum-Public/commits',
+  author: {
+    login: 'User1',
+    id: 74647806,
+    node_id: 'MDQ6VXNlcjc0NjQ3ODA2',
+    avatar_url: 'https://avatars.githubusercontent.com/u/74647806?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/User1',
+    html_url: 'https://github.com/User1',
+    followers_url: 'https://api.github.com/users/User1/followers',
+    following_url: 'https://api.github.com/users/User1/following{/other_user}',
+    gists_url: 'https://api.github.com/users/User1/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/User1/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/User1/subscriptions',
+    organizations_url: 'https://api.github.com/users/User1/orgs',
+    repos_url: 'https://api.github.com/users/User1/repos',
+    events_url: 'https://api.github.com/users/User1/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/User1/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  committer: {
+    login: 'web-flow',
+    id: 19864447,
+    node_id: 'MDQ6VXNlcjE5ODY0NDQ3',
+    avatar_url: 'https://avatars.githubusercontent.com/u/19864447?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/web-flow',
+    html_url: 'https://github.com/web-flow',
+    followers_url: 'https://api.github.com/users/web-flow/followers',
+    following_url: 'https://api.github.com/users/web-flow/following{/other_user}',
+    gists_url: 'https://api.github.com/users/web-flow/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/web-flow/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/web-flow/subscriptions',
+    organizations_url: 'https://api.github.com/users/web-flow/orgs',
+    repos_url: 'https://api.github.com/users/web-flow/repos',
+    events_url: 'https://api.github.com/users/web-flow/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/web-flow/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  parents: [
+    {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/user2/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+    },
+  ],
+},
+{
+  sha: '123',
+  node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
+  commit: {
+    author: {
+      name: 'User1',
+      email: '74647806+User1@users.noreply.github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    committer: {
+      name: 'GitHub',
+      email: 'noreply@github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    message: 'Second Commit',
+    tree: {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+    },
+    url: 'https://api.github.com/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    comment_count: 0,
+    verification: {
+      verified: true,
+      reason: 'valid',
+      signature: '-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQJjLDlDCRBK7hj4Ov3rIwA',
+      payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
+    },
+  },
+  url: 'https://api.github.com/repos/user2/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/user2/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/user2/Momentum-Public/commits',
+  author: {
+    login: 'User1',
+    id: 74647806,
+    node_id: 'MDQ6VXNlcjc0NjQ3ODA2',
+    avatar_url: 'https://avatars.githubusercontent.com/u/74647806?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/User1',
+    html_url: 'https://github.com/User1',
+    followers_url: 'https://api.github.com/users/User1/followers',
+    following_url: 'https://api.github.com/users/User1/following{/other_user}',
+    gists_url: 'https://api.github.com/users/User1/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/User1/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/User1/subscriptions',
+    organizations_url: 'https://api.github.com/users/User1/orgs',
+    repos_url: 'https://api.github.com/users/User1/repos',
+    events_url: 'https://api.github.com/users/User1/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/User1/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  committer: {
+    login: 'web-flow',
+    id: 19864447,
+    node_id: 'MDQ6VXNlcjE5ODY0NDQ3',
+    avatar_url: 'https://avatars.githubusercontent.com/u/19864447?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/web-flow',
+    html_url: 'https://github.com/web-flow',
+    followers_url: 'https://api.github.com/users/web-flow/followers',
+    following_url: 'https://api.github.com/users/web-flow/following{/other_user}',
+    gists_url: 'https://api.github.com/users/web-flow/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/web-flow/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/web-flow/subscriptions',
+    organizations_url: 'https://api.github.com/users/web-flow/orgs',
+    repos_url: 'https://api.github.com/users/web-flow/repos',
+    events_url: 'https://api.github.com/users/web-flow/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/web-flow/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  parents: [
+    {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/user2/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+    },
+  ],
+},
+]
+
 export const MOCK_BRANCHES = {
   data: [
     {
       name: 'Version-1',
       commit: {
-        sha: 'f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        sha: '123',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
       },
       protected: false,
     },
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        sha: '456',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -726,8 +1083,8 @@ export const MOCK_ONE_BRANCH = {
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        sha: '456',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -737,12 +1094,12 @@ export const MOCK_ONE_BRANCH = {
 export const MOCK_ISSUES_EMPTY = {data: []}
 
 export const MOCK_MODEL_PATH_GIT = {
-  org: 'Swiss-Property-AG',
+  org: 'user2',
   repo: 'Schneestock-Public',
   branch: 'main',
   filepath: '/ZGRAGGEN.ifc',
   eltPath: '',
-  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+  gitpath: 'https://raw.githubusercontent.com/user2/Schneestock-Public/main/ZGRAGGEN.ifc',
 }
 
 export const MOCK_MODEL_PATH_LOCAL = {
@@ -779,17 +1136,29 @@ export const MOCK_REPOSITORY = {
   private: true,
 }
 
-export const MOCK_FILES = {
+export const MOCK_FILES = [{
   name: 'window.ifc',
   path: 'window.ifc',
-  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  sha: '987',
   size: 7299,
   url: 'https://api.github.com/repos/bldrs-ai/Share/contents/window.ifc?ref=main',
   html_url: 'https://github.com/bldrs-ai/Share/blob/main/window.ifc',
   git_url: 'https://api.github.com/repos/bldrs-ai/Share/git/blobs/7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
   download_url: 'https://raw.githubusercontent.com/bldrs-ai/Share/main/window.ifc',
   type: 'file',
-}
+},
+{
+  name: 'folder',
+  path: 'folder',
+  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd7',
+  size: 0,
+  url: 'https://api.github.com/test/folder',
+  html_url: '',
+  git_url: 'https://api.github.com/test/7fa3f2212cc4ea91a6539dd5f185a986574f4cd7',
+  download_url: 'https://raw.githubusercontent.com/test/folder',
+  type: 'dir',
+}]
+
 
 // All direct uses of octokit should be private to this file to
 // ensure we setup mocks for local use and unit testing.

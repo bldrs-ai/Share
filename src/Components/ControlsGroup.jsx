@@ -1,21 +1,20 @@
 import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import OpenModelControl from './OpenModelControl'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
+import OpenModelControl from './OpenModelControl'
+import SaveModelControl from './SaveModelControl'
 import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
 import TreeIcon from '../assets/icons/Tree.svg'
 
 
 /**
- * OperationsGroup contains tools for sharing, notes, properties, cut
- * plane, deselect, theme change and about.
- *
- * @property {Function} deselectItems deselects currently selected element
+ * @property {Function} navigate Callback from CadView to change page url
+ * @property {Function} isRepoActive deselects currently selected element
  * @return {React.Component}
  */
-export default function OperationsGroup({fileOpen, repo}) {
+export default function ControlsGroup({navigate, isRepoActive}) {
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
   const isSearchVisible = useStore((state) => state.isSearchVisible)
@@ -30,7 +29,8 @@ export default function OperationsGroup({fileOpen, repo}) {
       variant='contained'
       sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
-      <OpenModelControl fileOpen={fileOpen}/>
+      <OpenModelControl navigate={navigate}/>
+      <SaveModelControl navigate={navigate}/>
       <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
@@ -55,9 +55,9 @@ export default function OperationsGroup({fileOpen, repo}) {
           }
         }}
       />
-      {repo !== undefined &&
+      {isRepoActive &&
         <TooltipIconButton
-          title='Project History'
+          title='Versions'
           icon={<HistoryIcon className='icon-share' color='secondary'/>}
           placement='bottom'
           selected={isVersionHistoryVisible}

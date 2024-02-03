@@ -96,6 +96,7 @@ const impl = {
     }),
   },
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
+  loadIfcFile: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),

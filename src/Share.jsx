@@ -1,4 +1,4 @@
-import React, {useEffect, useMemo, useRef} from 'react'
+import React, {useEffect, useState, useMemo, useRef} from 'react'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
@@ -12,6 +12,7 @@ import {navWith} from './utils/navigate'
 import {handleBeforeUnload} from './utils/event'
 import {splitAroundExtension} from './Filetype'
 import Styles from './Styles'
+import FileContext from './OPFS/FileContext'
 
 
 /**
@@ -28,6 +29,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
   const modelPath = useStore((state) => state.modelPath)
   const setModelPath = useStore((state) => state.setModelPath)
+  const [file, setFile] = useState(null)
 
   useMemo(() => {
     new WidgetApi(navigation.current, searchIndex)
@@ -75,6 +77,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
   return (
     modelPath &&
+    <FileContext.Provider value={{file, setFile}}>
       <CssBaseline enableColorScheme>
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
@@ -85,7 +88,8 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
             modelPath={modelPath}
           />
         </ThemeProvider>
-      </CssBaseline>)
+      </CssBaseline>
+    </FileContext.Provider>)
 }
 
 
