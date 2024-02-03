@@ -111,13 +111,12 @@ function ImagineDialog({
             spacing={2}
             justifyContent={'center'}
             alignContent={'center'}
-            sx={{minHeight: '500px'}}
+            sx={{minHeight: '390px'}}
           >
 
             <Box
               sx={{
-                minHeight: '500px',
-                border: '1px solid lightgrey',
+                minHeight: '390px',
                 borderRadius: '10px',
                 display: 'flex',
                 justifyContent: 'center',
@@ -130,7 +129,7 @@ function ImagineDialog({
                <img
                  src={image}
                  alt='Imagine'
-                 height={'500px'}
+                 height={'390px'}
                />}
             </Box>
 
