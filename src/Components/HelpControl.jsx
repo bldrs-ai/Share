@@ -7,7 +7,7 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh'
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
@@ -168,7 +168,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <HistoryIcon color='secondary'/>,
-      description: 'Access project model version history',
+      description: 'Access project versions',
     },
     {
       icon: <SearchIcon color='secondary'/>,
@@ -187,8 +187,8 @@ const HelpList = ({pageIndex}) => {
       description: 'Attach notes to 3D elements',
     },
     {
-      icon: <AutoFixHighIcon color='secondary'/>,
-      description: 'Renerate renderings using BLDR AI Agent',
+      icon: <AutoFixHighOutlinedIcon color='secondary'/>,
+      description: 'Create renderings using BLDR AI Agent',
     },
   ]
 
