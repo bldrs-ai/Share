@@ -10,7 +10,7 @@ describe('ImagineControl', () => {
       wrapper: MockComponent,
     })
 
-    const component = getByTitle('Bldr Bot Rendering')
+    const component = getByTitle('AI Renderings')
     expect(component).toBeInTheDocument()
   })
 
@@ -19,9 +19,9 @@ describe('ImagineControl', () => {
       wrapper: MockComponent,
     })
 
-    const button = getByTitle('Bldr Bot Rendering')
+    const button = getByTitle('AI Renderings')
     fireEvent.click(button)
 
-    await(waitFor(() => expect(document.title).toBe('BLDR Bot')))
+    await(waitFor(() => expect(document.title).toBe('Bot the Bldr')))
   })
 })

@@ -142,12 +142,13 @@ export function RectangularButton({
   icon = null,
   border = false,
   background = true,
+  disabled = false,
 }) {
   assertDefined(title, onClick)
   return (
     icon ?
       <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button> :
-      <Button onClick={onClick} variant='rectangular'>{title}</Button>
+      <Button onClick={onClick} variant='rectangular' disabled={disabled}>{title}</Button>
   )
 }
 

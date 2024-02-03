@@ -59,11 +59,12 @@ export default function Dialog({
       </IconButton>
       <DialogContent>{content}</DialogContent>
       {hideActionButton ? null :
-      <DialogActions>
-        <Button variant="contained" onClick={actionCb} >
-          {actionTitle}
-        </Button>
-      </DialogActions>}
+       <DialogActions>
+         <Button variant="contained" onClick={actionCb} >
+           {actionTitle}
+         </Button>
+       </DialogActions>
+      }
     </MuiDialog>
   )
 }
