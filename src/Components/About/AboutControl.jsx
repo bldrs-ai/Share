@@ -118,15 +118,15 @@ function AboutContent({setIsDialogDisplayed}) {
         </Stack>
         <Stack spacing={2} direction={'row'}>
           <TooltipIconButton
-            title={'LinkedIn'}
+            title={'Twitter'}
             onClick={
               () => {
-                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
+                window.open(`https://twitter.com/bldrs_ai`, '_blank')
               }
             }
-            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
+            icon={<TwitterIcon className='icon-share' color='secondary'/>}
             placement={'bottom'}
-            dataTestId=''
+            dataTestId='twitter'
           />
           <TooltipIconButton
             title={'GitHub'}
@@ -139,16 +139,17 @@ function AboutContent({setIsDialogDisplayed}) {
             placement={'bottom'}
             dataTestId='github'
           />
+
           <TooltipIconButton
-            title={'Twitter'}
+            title={'LinkedIn'}
             onClick={
               () => {
-                window.open(`https://twitter.com/bldrs_ai`, '_blank')
+                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
               }
             }
-            icon={<TwitterIcon className='icon-share' color='secondary'/>}
+            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
             placement={'bottom'}
-            dataTestId='twitter'
+            dataTestId=''
           />
 
         </Stack>
