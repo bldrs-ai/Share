@@ -51,7 +51,7 @@ describe('IssueControl', () => {
     await act(() => {
       result.current.setSelectedNoteId(null)
     })
-    const addNote = getByTitle('ADD A NOTE')
+    const addNote = getByTitle('Add a note')
     expect(addNote).toBeInTheDocument()
     fireEvent.click(addNote)
     expect(getByTitle('Back to the list')).toBeInTheDocument()

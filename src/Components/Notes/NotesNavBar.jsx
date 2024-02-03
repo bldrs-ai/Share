@@ -2,8 +2,8 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
-import {addHashParams, removeHashParams} from '../../utils/location'
 import useStore from '../../store/useStore'
+import {addHashParams, removeHashParams} from '../../utils/location'
 import {NOTE_PREFIX} from './Notes'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -13,14 +13,14 @@ import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 
 /** @return {React.Component} */
 export default function NotesNavBar() {
+  const closeNotes = useStore((state) => state.closeNotes)
   const notes = useStore((state) => state.notes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
-  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
-  const closeNotes = useStore((state) => state.closeNotes)
+  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
 
 
   const selectNote = (direction) => {
@@ -118,14 +118,15 @@ export default function NotesNavBar() {
             size='medium'
             variant='noBackground'
           /> :
-          <TooltipIconButton
-            title='ADD A NOTE'
-            placement='bottom'
-            onClick={toggleIsCreateNoteActive}
-            icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
-            size='medium'
-            variant='noBackground'
-          />
+            <TooltipIconButton
+              title='Add a note'
+              placement='bottom'
+              onClick={toggleIsCreateNoteActive}
+              icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
+              size='medium'
+              variant='noBackground'
+            />
+
         )}
         <CloseButton onClick={closeNotes}/>
       </Box>
