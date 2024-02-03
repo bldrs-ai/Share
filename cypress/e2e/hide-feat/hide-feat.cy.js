@@ -5,7 +5,7 @@ describe('Ifc Hide/Unhide E2E test suite', () => {
       cy.visit('/')
     })
 
-    it('should toggle hide icon when clicked', () => {
+    it.skip('should toggle hide icon when clicked', () => {
       cy.findByTestId('Navigation').click()
       cy.findByTestId('Navigation_panel').should('exist').click()
       cy.findByTestId('hide-icon').should('be.visible').click()

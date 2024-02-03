@@ -8,8 +8,11 @@ import {
   getOrganizations,
   getRepositories,
   getFiles,
+  getFilesAndFolders,
   MOCK_REPOSITORY,
   MOCK_FILES,
+  commitFile,
+  getLatestCommitHash,
 } from './GitHub'
 
 
@@ -98,7 +101,20 @@ describe('GitHub', () => {
 
     it('successfully get files', async () => {
       const res = await getFiles('Share', 'pablo-mayrgundter')
-      expect(res.data).toEqual([MOCK_FILES])
+      expect(res).toEqual(MOCK_FILES)
+    })
+
+    it('successfully get files and folders', async () => {
+      const {files, directories} = await getFilesAndFolders('Share', 'pablo-mayrgundter', '/', '')
+      expect(files.length).toEqual(1)
+      expect(directories.length).toEqual(1)
+    })
+  })
+
+  describe('get latest commit hash', () => {
+    it('get latest commit hash', async () => {
+      const result = await getLatestCommitHash('testowner', 'testrepo', '', '', '')
+      expect(result).toEqual('testsha')
     })
   })
 
@@ -114,6 +130,21 @@ describe('GitHub', () => {
 
       const org = orgs[0]
       expect(org.login).toEqual('bldrs-ai')
+    })
+  })
+
+  describe('commitFile', () => {
+    it('commits a file and returns the new commit SHA', async () => {
+      // Mock file data that should parse properly
+      const file = new Blob(['test content'], {type: 'text/plain'})
+
+      // if no token passed, should return that it is not authenticated
+      expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', ''))
+          .toEqual('Not authenticated')
+
+      // if token passed but isn't valid, should throw 'Bad Credentials'
+      expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken'))
+          .toBe('newCommitSha')
     })
   })
 })

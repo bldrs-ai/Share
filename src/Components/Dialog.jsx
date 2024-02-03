@@ -34,6 +34,7 @@ export default function Dialog({
   actionTitle,
   actionCb,
   actionIcon,
+  hideActionButton = false,
 }) {
   assertDefined(
       headerText, isDialogDisplayed, setIsDialogDisplayed, content,
@@ -57,11 +58,12 @@ export default function Dialog({
         <CloseIcon fontSize="inherit"/>
       </IconButton>
       <DialogContent>{content}</DialogContent>
+      {hideActionButton ? null :
       <DialogActions>
         <Button variant="contained" onClick={actionCb} >
           {actionTitle}
         </Button>
-      </DialogActions>
+      </DialogActions>}
     </MuiDialog>
   )
 }

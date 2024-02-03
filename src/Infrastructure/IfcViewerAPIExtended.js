@@ -50,6 +50,20 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
   }
 
   /**
+   * Loads the given IFC in the current scene.
+   *
+   * @param {string} file IFC as File.
+   * @param {boolean} fitToFrame (optional) if true, brings the perspectiveCamera to the loaded IFC.
+   * @param {Function} onError (optional) a callback function to report on loading errors
+   * @param {IfcCustomViewSettings} customViewSettings (optional) override the ifc elements file colors
+   * @return {IfcModel} ifcModel object
+   */
+  async loadIfcFile(file, fitToFrame, onError, customViewSettings) {
+    this.viewsManager.setViewSettings(customViewSettings)
+    return await this.IFC.loadIfc(file, fitToFrame, onError)
+  }
+
+  /**
    * Gets the expressId of the element that the mouse is pointing at
    *
    * @return {object} the expressId of the element and modelId

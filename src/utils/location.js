@@ -256,3 +256,38 @@ export function getAllHashParams(url) {
   const allHashParams = splitHref[1]
   return allHashParams
 }
+
+
+/**
+ * @param {string} path the pathname part of a url, e.g. `/the/path/to/file.ifc`
+ * @return {object} owner, repo, branch, filePath, commitHash
+ */
+export function parseGitHubPath(path) {
+  const parts = path.split('/').filter((component) => component.length > 0)
+  let owner = null
+  let repo = null
+  let branch = null
+  let filePath = null
+  let isPublic = null
+  if (parts[0] === 'r') {
+    // Extract the owner, repo, and filePath
+    owner = parts[1]
+    repo = parts[2]
+    branch = parts[3]
+    // Join the remaining parts to form the filePath
+    // eslint-disable-next-line no-magic-numbers
+    filePath = parts.slice(4).join('/')
+    // get commit hash
+    isPublic = true
+  } else {
+    // Extract the owner, repo, and filePath
+    owner = parts[0]
+    repo = parts[1]
+    branch = parts[2]
+    // Join the remaining parts to form the filePath
+    // eslint-disable-next-line no-magic-numbers
+    filePath = parts.slice(3).join('/')
+    isPublic = false
+  }
+  return {isPublic, owner, repo, branch, filePath}
+}
