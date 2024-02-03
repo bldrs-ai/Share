@@ -11,7 +11,7 @@ export default function SnackBarMessage() {
   const message = useStore((state) => state.snackMessage)
   return (
     <Snackbar
-      anchorOrigin={{vertical: 'bottom', horizontal: 'left'}}
+      anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
       open={message !== ''}
       style={{bottom: '1em'}}
       message={
