@@ -4,30 +4,23 @@ import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import useStore from '../../store/useStore'
 import {addHashParams, removeHashParams} from '../../utils/location'
-import {getIssues} from '../../utils/GitHub'
-import debug from '../../utils/debug'
 import {NOTE_PREFIX} from './Notes'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
-import SyncIcon from '@mui/icons-material/Sync'
 
 
 /** @return {React.Component} */
 export default function NotesNavBar() {
-  const accessToken = useStore((state) => state.accessToken)
   const closeNotes = useStore((state) => state.closeNotes)
   const notes = useStore((state) => state.notes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
-  const repository = useStore((state) => state.repository)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
-  const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
-  const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
 
 
   const selectNote = (direction) => {
@@ -44,34 +37,6 @@ export default function NotesNavBar() {
       } else {
         removeCameraUrlParams()
       }
-    }
-  }
-
-  const fetchNotes = async () => {
-    toggleIsLoadingNotes()
-    try {
-      setSelectedNoteId(null)
-      const newNotes = []
-      let issueIndex = 0
-      const issueArr = await getIssues(repository, accessToken)
-      issueArr.reverse().map((issue, index) => {
-        newNotes.push({
-          index: issueIndex++,
-          id: issue.id,
-          number: issue.number,
-          title: issue.title || '',
-          body: issue.body || '',
-          date: issue.created_at,
-          username: issue.user.login,
-          avatarUrl: issue.user.avatar_url,
-          numberOfComments: issue.comments,
-          synched: true,
-        })
-      })
-      setNotes(newNotes)
-      toggleIsLoadingNotes()
-    } catch (e) {
-      debug().warn('failed to fetch notes: ', e)
     }
   }
 
@@ -153,15 +118,6 @@ export default function NotesNavBar() {
             size='medium'
             variant='noBackground'
           /> :
-          <>
-            <TooltipIconButton
-              title='Synch notes'
-              placement='bottom'
-              onClick={() => fetchNotes()}
-              icon={<SyncIcon className='icon-share' color='secondary'/>}
-              size='medium'
-              variant='noBackground'
-            />
             <TooltipIconButton
               title='Add a note'
               placement='bottom'
@@ -170,7 +126,6 @@ export default function NotesNavBar() {
               size='medium'
               variant='noBackground'
             />
-          </>
 
         )}
         <CloseButton onClick={closeNotes}/>

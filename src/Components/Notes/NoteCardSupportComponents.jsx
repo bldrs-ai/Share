@@ -259,7 +259,7 @@ export const CardFooter = ({
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
-              fontSize: '1em',
+              fontSize: '.7em',
               color: theme.palette.primary.contrastText,
             }}
             role='button'
