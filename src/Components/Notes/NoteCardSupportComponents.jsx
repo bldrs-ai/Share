@@ -12,6 +12,7 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
+import AddIcon from '@mui/icons-material/Add'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
@@ -245,6 +246,15 @@ export const CardFooter = ({
               placement='bottom'
               onClick={selectCard}
               icon={<ForumOutlinedIcon className='icon-share'/>}
+            />
+          }
+          {selected &&
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='bottom'
+              onClick={selectCard}
+              icon={<AddIcon className='icon-share'/>}
             />
           }
 
