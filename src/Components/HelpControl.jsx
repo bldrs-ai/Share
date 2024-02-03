@@ -188,7 +188,7 @@ const HelpList = ({pageIndex}) => {
     },
     {
       icon: <AutoFixHighOutlinedIcon color='secondary'/>,
-      description: 'Create renderings using BLDR AI Agent',
+      description: 'Create renderings using Bot the BLDR',
     },
   ]
 
