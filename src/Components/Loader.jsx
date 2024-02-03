@@ -14,10 +14,10 @@ export default function Loader({type = 'linear'}) {
   return (
     <Box sx={{width: '100%', alignItems: 'center'}} className={'progress-bar'}>
       {type === 'linear' &&
-        <LinearProgress color="success" sx={{height: '8px', width: '100%', borderRadius: '5px'}}/>
+        <LinearProgress color="primary" sx={{height: '8px', width: '100%', borderRadius: '5px'}}/>
       }
       {type === 'circular' &&
-        <CircularProgress color="success" sx={{height: '12px', width: '12px'}}/>
+        <CircularProgress color="primary" thickness={5} sx={{height: '12px', width: '12px'}}/>
       }
     </Box>
   )
