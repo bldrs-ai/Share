@@ -17,13 +17,14 @@ import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import VersionsHistoryPanel from '../Components/VersionHistoryPanel'
+import VersionsContainer from '../Components/Versions/VersionsContainer'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
+  checkOPFSAvailability,
 } from '../OPFS/utils'
 import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -34,6 +35,8 @@ import {
   getLatestCommitHash,
   parseGitHubRepositoryURL,
 } from '../utils/GitHub'
+// TODO(pablo): use ^^ instead of this
+import {parseGitHubPath} from '../utils/location'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
@@ -41,6 +44,8 @@ import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
 import {
   loadLocalFile,
+  loadLocalFileFallback,
+  loadLocalFileDragAndDropFallback,
   getUploadedBlobPath,
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
@@ -68,6 +73,8 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
+
+  const isOPFSAvailable = checkOPFSAvailability()
 
   const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
@@ -104,11 +111,20 @@ export default function CadView({
       event.dataTransfer.files
     // Here you can handle the files as needed
     if (files.length === 1) {
-      loadLocalFileDragAndDrop(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0])
+      if (isOPFSAvailable) {
+        loadLocalFileDragAndDrop(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0])
+      } else {
+        loadLocalFileDragAndDropFallback(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            files[0],
+        )
+      }
     }
   }
 
@@ -385,7 +401,28 @@ export default function CadView({
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
-    if (uploadedFile) {
+    if (!isOPFSAvailable) {
+      // fallback to loadIfcUrl
+      loadedModel = await viewer.loadIfcUrl(
+          ifcURL,
+          !urlHasCameraParams(), // fit to frame
+          (progressEvent) => {
+            if (Number.isFinite(progressEvent.loaded)) {
+              const loadedBytes = progressEvent.loaded
+              // eslint-disable-next-line no-magic-numbers
+              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+            }
+          },
+          (error) => {
+            debug().log('CadView#loadIfc$onError: ', error)
+            // TODO(pablo): error modal.
+            setIsModelLoading(false)
+            setSnackMessage('')
+            setAlertMessage(`Could not load file: ${filepath}`)
+          }, customViewSettings)
+    } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
       if (file instanceof File) {
@@ -463,35 +500,13 @@ export default function CadView({
             setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else {
-      // Split the pathname part of the URL into components
+      // TODO(pablo): probably already available in this scope, or use
+      // parseGitHubRepositoryURL instead.
       const url = new URL(ifcURL)
-      const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
-      let owner = null
-      let repo = null
-      let branch = null
-      let filePath = null
-      let commitHash = null
-      if (pathComponents[0] === 'r') {
-        // Extract the owner, repo, and filePath
-        owner = pathComponents[1]
-        repo = pathComponents[2]
-        branch = pathComponents[3]
-        // Join the remaining parts to form the filePath
-        // eslint-disable-next-line no-magic-numbers
-        filePath = pathComponents.slice(4).join('/')
-        // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, '', branch)
-      } else {
-      // Extract the owner, repo, and filePath
-        owner = pathComponents[0]
-        repo = pathComponents[1]
-        branch = pathComponents[2]
-        // Join the remaining parts to form the filePath
-        // eslint-disable-next-line no-magic-numbers
-        filePath = pathComponents.slice(3).join('/')
-        // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
-      }
+      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(url.pathname)
+      const commitHash = isPublic ?
+            await getLatestCommitHash(owner, repo, filePath, '', branch) :
+            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
       if (commitHash === null) {
         debug().error(`Error obtaining commit hash for: ${ifcURL}`)
@@ -791,6 +806,15 @@ export default function CadView({
     }
   }
 
+  // TODO(pablo): again, just need branch here for VersionsContainer
+  // below.  It's probably already available in this scope.
+  let ghPath = location.pathname
+  if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
+    ghPath = ghPath.substring(`${appPrefix}/v/gh`.length)
+  }
+  const {branch} = parseGitHubPath(ghPath)
+
+
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 100
@@ -858,16 +882,31 @@ export default function CadView({
             isRepoActive={modelPath.repo !== undefined}
           />
           {isSearchBarVisible && isSearchVisible &&
-            <Box sx={{marginTop: '10px', width: '100%'}}>
-              <SearchBar fileOpen={() => loadLocalFile(
-                  navigate,
-                  appPrefix,
-                  handleBeforeUnload,
-                  false)}
-              />
-            </Box>
+           <Box sx={{marginTop: '0.82em', width: '100%'}}>
+             <SearchBar
+               fileOpen={
+                 () => {
+                   // Use loadLocalFile if OPFS is available, else use loadLocalFileFallback
+                   if (isOPFSAvailable) {
+                     loadLocalFile(
+                         navigate,
+                         appPrefix,
+                         handleBeforeUnload,
+                         false,
+                     )
+                   } else {
+                     loadLocalFileFallback(
+                         navigate,
+                         appPrefix,
+                         handleBeforeUnload,
+                         false,
+                     )
+                   }
+                 }}
+             />
+           </Box>
           }
-          <Box sx={{marginTop: '10px', width: '100%'}}>
+          <Box sx={{marginTop: '.82em', width: '100%'}}>
             {isNavPanelOpen &&
               isNavigationPanelVisible &&
               isNavigationVisible &&
@@ -890,7 +929,10 @@ export default function CadView({
             }
             {
               modelPath.repo !== undefined && isVersionHistoryVisible &&
-              <VersionsHistoryPanel branch={modelPath.branch}/>
+              <VersionsContainer
+                filePath={modelPath.filepath}
+                currentRef={branch}
+              />
             }
           </Box>
         </Box>
@@ -969,7 +1011,10 @@ export default function CadView({
                 },
               }}
             >
-              <Box className="circleLoader"/>
+              <Box
+                data-testid="loader"
+                className="circleLoader"
+              />
             </Box>
           </Box>
         </Box>

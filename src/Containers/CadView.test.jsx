@@ -396,7 +396,6 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-
   // TODO(https://github.com/bldrs-ai/Share/issues/622): SceneLayer breaks postprocessing
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'

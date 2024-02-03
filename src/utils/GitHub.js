@@ -1,17 +1,20 @@
 import {Octokit} from '@octokit/rest'
-import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
+import debug from './debug'
 // TODO(pablo): unit tests after nicks OPFS changes go in
+
 
 /**
  * @param {object} repository
- * @param {string} branch
+ * @param {string} filepath
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getCommitsForBranch(repository, branch, accessToken = '') {
-  const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
+export async function getCommitsForFile(repository, filepath, accessToken = '') {
+  const res = await getGitHub(repository, `commits`, {
+    path: filepath,
+  }, accessToken)
   const commitsArr = res.data
   return commitsArr
 }
@@ -894,21 +897,181 @@ export const MOCK_COMMENTS = {
   ],
 }
 
+export const MOCK_COMMITS = [{
+  sha: 'testsha',
+  node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
+  commit: {
+    author: {
+      name: 'User1',
+      email: '74647806+User1@users.noreply.github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    committer: {
+      name: 'GitHub',
+      email: 'noreply@github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    message: 'First Commit',
+    tree: {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+    },
+    url: 'https://api.github.com/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    comment_count: 0,
+    verification: {
+      verified: true,
+      reason: 'valid',
+      signature: '-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQJjLDlDCRBK7hj4Ov3rIwA',
+      payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
+    },
+  },
+  url: 'https://api.github.com/repos/user2/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/user2/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/user2/Momentum-Public/commits',
+  author: {
+    login: 'User1',
+    id: 74647806,
+    node_id: 'MDQ6VXNlcjc0NjQ3ODA2',
+    avatar_url: 'https://avatars.githubusercontent.com/u/74647806?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/User1',
+    html_url: 'https://github.com/User1',
+    followers_url: 'https://api.github.com/users/User1/followers',
+    following_url: 'https://api.github.com/users/User1/following{/other_user}',
+    gists_url: 'https://api.github.com/users/User1/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/User1/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/User1/subscriptions',
+    organizations_url: 'https://api.github.com/users/User1/orgs',
+    repos_url: 'https://api.github.com/users/User1/repos',
+    events_url: 'https://api.github.com/users/User1/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/User1/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  committer: {
+    login: 'web-flow',
+    id: 19864447,
+    node_id: 'MDQ6VXNlcjE5ODY0NDQ3',
+    avatar_url: 'https://avatars.githubusercontent.com/u/19864447?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/web-flow',
+    html_url: 'https://github.com/web-flow',
+    followers_url: 'https://api.github.com/users/web-flow/followers',
+    following_url: 'https://api.github.com/users/web-flow/following{/other_user}',
+    gists_url: 'https://api.github.com/users/web-flow/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/web-flow/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/web-flow/subscriptions',
+    organizations_url: 'https://api.github.com/users/web-flow/orgs',
+    repos_url: 'https://api.github.com/users/web-flow/repos',
+    events_url: 'https://api.github.com/users/web-flow/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/web-flow/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  parents: [
+    {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/user2/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+    },
+  ],
+},
+{
+  sha: '123',
+  node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
+  commit: {
+    author: {
+      name: 'User1',
+      email: '74647806+User1@users.noreply.github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    committer: {
+      name: 'GitHub',
+      email: 'noreply@github.com',
+      date: '2022-09-22T10:30:27Z',
+    },
+    message: 'Second Commit',
+    tree: {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b',
+    },
+    url: 'https://api.github.com/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+    comment_count: 0,
+    verification: {
+      verified: true,
+      reason: 'valid',
+      signature: '-----BEGIN PGP SIGNATURE-----\n\nwsBcBAABCAAQBQJjLDlDCRBK7hj4Ov3rIwA',
+      payload: 'tree ab6f0517905f88b158c05fbb7578c34c239fba9b\nparent d945df4e3a58247aa357e07b8438e5860ffbf7',
+    },
+  },
+  url: 'https://api.github.com/repos/user2/Momentum-Public/commits/898ebc440aa60c8d7e704bead63342400a567b9c',
+  html_url: 'https://github.com/user2/Momentum-Public/commit/898ebc440aa60c8d7e704bead63342400a567b9c',
+  comments_url: 'https://api.github.com/repos/user2/Momentum-Public/commits',
+  author: {
+    login: 'User1',
+    id: 74647806,
+    node_id: 'MDQ6VXNlcjc0NjQ3ODA2',
+    avatar_url: 'https://avatars.githubusercontent.com/u/74647806?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/User1',
+    html_url: 'https://github.com/User1',
+    followers_url: 'https://api.github.com/users/User1/followers',
+    following_url: 'https://api.github.com/users/User1/following{/other_user}',
+    gists_url: 'https://api.github.com/users/User1/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/User1/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/User1/subscriptions',
+    organizations_url: 'https://api.github.com/users/User1/orgs',
+    repos_url: 'https://api.github.com/users/User1/repos',
+    events_url: 'https://api.github.com/users/User1/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/User1/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  committer: {
+    login: 'web-flow',
+    id: 19864447,
+    node_id: 'MDQ6VXNlcjE5ODY0NDQ3',
+    avatar_url: 'https://avatars.githubusercontent.com/u/19864447?v=4',
+    gravatar_id: '',
+    url: 'https://api.github.com/users/web-flow',
+    html_url: 'https://github.com/web-flow',
+    followers_url: 'https://api.github.com/users/web-flow/followers',
+    following_url: 'https://api.github.com/users/web-flow/following{/other_user}',
+    gists_url: 'https://api.github.com/users/web-flow/gists{/gist_id}',
+    starred_url: 'https://api.github.com/users/web-flow/starred{/owner}{/repo}',
+    subscriptions_url: 'https://api.github.com/users/web-flow/subscriptions',
+    organizations_url: 'https://api.github.com/users/web-flow/orgs',
+    repos_url: 'https://api.github.com/users/web-flow/repos',
+    events_url: 'https://api.github.com/users/web-flow/events{/privacy}',
+    received_events_url: 'https://api.github.com/users/web-flow/received_events',
+    type: 'User',
+    site_admin: false,
+  },
+  parents: [
+    {
+      sha: '123',
+      url: 'https://api.github.com/repos/user2/Momentum-Public/commits/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+      html_url: 'https://github.com/user2/Momentum-Public/commit/d945df4e3a58247aa357e07b8438e5860ffbf7e6',
+    },
+  ],
+},
+]
+
 export const MOCK_BRANCHES = {
   data: [
     {
       name: 'Version-1',
       commit: {
-        sha: 'f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
+        sha: '123',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/f51a6f2fd087d7562c4a63edbcff0b3a2b4226a7',
       },
       protected: false,
     },
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        sha: '456',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -920,8 +1083,8 @@ export const MOCK_ONE_BRANCH = {
     {
       name: 'main',
       commit: {
-        sha: 'dc8027a5eb1d386bab7b64440275e9ffba7520a0',
-        url: 'https://api.github.com/repos/Swiss-Property-AG/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
+        sha: '456',
+        url: 'https://api.github.com/repos/user2/Seestrasse-Public/commits/dc8027a5eb1d386bab7b64440275e9ffba7520a0',
       },
       protected: false,
     },
@@ -931,12 +1094,12 @@ export const MOCK_ONE_BRANCH = {
 export const MOCK_ISSUES_EMPTY = {data: []}
 
 export const MOCK_MODEL_PATH_GIT = {
-  org: 'Swiss-Property-AG',
+  org: 'user2',
   repo: 'Schneestock-Public',
   branch: 'main',
   filepath: '/ZGRAGGEN.ifc',
   eltPath: '',
-  gitpath: 'https://raw.githubusercontent.com/Swiss-Property-AG/Schneestock-Public/main/ZGRAGGEN.ifc',
+  gitpath: 'https://raw.githubusercontent.com/user2/Schneestock-Public/main/ZGRAGGEN.ifc',
 }
 
 export const MOCK_MODEL_PATH_LOCAL = {
@@ -976,7 +1139,7 @@ export const MOCK_REPOSITORY = {
 export const MOCK_FILES = [{
   name: 'window.ifc',
   path: 'window.ifc',
-  sha: '7fa3f2212cc4ea91a6539dd5f185a986574f4cd6',
+  sha: '987',
   size: 7299,
   url: 'https://api.github.com/repos/bldrs-ai/Share/contents/window.ifc?ref=main',
   html_url: 'https://github.com/bldrs-ai/Share/blob/main/window.ifc',
