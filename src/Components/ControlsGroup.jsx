@@ -1,5 +1,4 @@
 import React from 'react'
-import {useAuth0} from '@auth0/auth0-react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
@@ -16,7 +15,6 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @return {React.Component}
  */
 export default function ControlsGroup({navigate, isRepoActive}) {
-  const {isAuthenticated} = useAuth0()
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
   const isSearchVisible = useStore((state) => state.isSearchVisible)
@@ -32,6 +30,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
       <OpenModelControl navigate={navigate}/>
+      <SaveModelControl navigate={navigate}/>
       <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
@@ -56,8 +55,6 @@ export default function ControlsGroup({navigate, isRepoActive}) {
           }
         }}
       />
-      {isAuthenticated && <SaveModelControl navigate={navigate}/> }
-
       {isRepoActive &&
         <TooltipIconButton
           title='Versions'
