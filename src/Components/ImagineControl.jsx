@@ -1,17 +1,14 @@
-/* eslint-disable react-hooks/exhaustive-deps */
-
-// import axios from 'axios'
+import axios from 'axios'
 import React, {useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
-// import Typography from '@mui/material/Typography'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import {RectangularButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
-// import debug from '../utils/debug'
+import debug from '../utils/debug'
 import {ControlButton} from './Buttons'
 import {
   addCameraUrlParams,
@@ -65,61 +62,35 @@ function ImagineDialog({
   setIsDialogDisplayed,
 }) {
   const [prompt, setPrompt] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
+  const [screenshot, setScreenshot] = useState(null)
+  const [isImagineLoading, setIsImagineLoading] = useState(false)
+  const [imagine, setImagine] = useState(null)
+  const [image, setImage] = useState(null)
   const cameraControls = useStore((state) => state.cameraControls)
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
 
-
   useEffect(() => {
     if (viewer) {
       addCameraUrlParams(cameraControls)
+      const ss = takeScreenshot(viewer)
+      setScreenshot(ss)
+      setImage(ss)
+      // how to add to DOM?
     }
-  }, [viewer, model])
-
-  // const glCtx = viewer.context.renderer.renderer.getContext()
-  // const width = glCtx.drawingBufferWidth
-  // const height = glCtx.drawingBufferHeight
-  // const bytesPerPixel = 4
-  // const pixels = new Uint8Array(width * height * bytesPerPixel)
-  // glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels)
-
-  // Create a 2D canvas to put the image
-  // const canvas2d = document.createElement('canvas')
-  // canvas2d.width = width
-  // canvas2d.height = height
-  // const context = canvas2d.getContext('2d')
-
-  // const dataArr = []
-  // for (let y = 0; y < height; ++y) {
-  //   for (let x = 0; x < width; ++x) {
-  //     const offset = ((y * width) + x) * bytesPerPixel
-  //     const srcOffset = (((height - y - 1) * width) + x) * bytesPerPixel
-  //     for (let i = 0; i < 4; ++i) {
-  //       dataArr[offset + i] = pixels[srcOffset + i]
-  //     }
-  //   }
-  // }
-
-  // const imageData = context.createImageData(width, height)
-  // imageData.data.set(dataArr)
-  // context.putImageData(imageData, 0, 0)
-
-  // Convert canvas to PNG Data URL
-  // const pngUrl = canvas2d.toDataURL()
-
-  // downloadPng(pngUrl)
-  // sendToWarhol(pngUrl)
-
+  }, [viewer, model, cameraControls])
 
   const closeDialog = () => {
     setIsDialogDisplayed(false)
   }
+
   const handleClear = () => {
     setPrompt('')
-    setIsLoading(false)
+    setIsImagineLoading(false)
+    const ss = takeScreenshot(viewer)
+    setScreenshot(ss)
+    setImage(ss)
   }
-
 
   return (
     <Dialog
@@ -140,22 +111,27 @@ function ImagineDialog({
             spacing={2}
             justifyContent={'center'}
             alignContent={'center'}
-            sx={{width: '300px'}}
+            sx={{minHeight: '500px'}}
           >
 
             <Box
               sx={{
-                width: '300px',
-                height: '300px',
+                minHeight: '500px',
                 border: '1px solid lightgrey',
                 borderRadius: '10px',
                 display: 'flex',
                 justifyContent: 'center',
                 alignItems: 'center'}}
             >
-              {isLoading &&
+              {isImagineLoading &&
                 <Loader type='circular'/>
               }
+              {!isImagineLoading && image &&
+               <img
+                 src={image}
+                 alt='Imagine'
+                 height={'500px'}
+               />}
             </Box>
 
             <TextField
@@ -187,24 +163,27 @@ function ImagineDialog({
               direction={'row'}
               justifyContent={'center'}
               alignContent={'center'}
-              sx={{width: '300px', paddingBottom: '10px'}}
             >
               <RectangularButton
                 title={'Create'}
                 disabled={prompt.length === 0}
                 onClick={() => {
-                  setIsLoading(true)
+                  setIsImagineLoading(true)
+                  sendToWarhol(screenshot, prompt, (renderDataUrl) => {
+                    setIsImagineLoading(false)
+                    setImagine(renderDataUrl)
+                    setImage(renderDataUrl)
+                  })
                 }}
               />
               <RectangularButton
                 title={'Download'}
-                disabled={true}
+                disabled={imagine === null}
                 onClick={() => {
-                  setIsLoading(true)
+                  downloadImaginePng(imagine)
                 }}
               />
             </Stack>
-
           </Stack>
         </>
       }
@@ -212,53 +191,93 @@ function ImagineDialog({
 }
 
 
-// /**
-//  * @param {string} dataUrl The screenshot
-//  */
-// function sendToWarhol(dataUrl) {
-//   const base64Content = dataUrl.split(',')[1]
+/**
+ * @param {object} viewer
+ * @return {string} pngUrl
+ */
+function takeScreenshot(viewer) {
+  const glCtx = viewer.context.renderer.renderer.getContext()
+  const width = glCtx.drawingBufferWidth
+  const height = glCtx.drawingBufferHeight
+  const bytesPerPixel = 4
+  const pixels = new Uint8Array(width * height * bytesPerPixel)
+  glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels)
 
-//   const req = {
-//     prompt: 'modern buildings in a city',
-//     negative_prompt: 'people',
-//     batch_size: 1,
-//     steps: 10,
-//     cfg_scale: 7,
-//     seed: 1234,
-//     image: base64Content,
-//   }
+  // Create a 2D canvas to put the image
+  const canvas2d = document.createElement('canvas')
+  canvas2d.width = width
+  canvas2d.height = height
+  const context = canvas2d.getContext('2d')
 
-//   axios
-//       .post('https://warhol.bldrs.dev/generate', req, {
-//         headers: {
-//           'Content-Type': 'application/json',
-//         },
-//       })
-//       .then((response) => {
-//         const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
-//         downloadPng(renderDataUrl)
-//       })
-//       .catch((error) => {
-//         debug().error('Error uploading screenshot:', error)
-//       })
-// }
+  const dataArr = []
+  for (let y = 0; y < height; ++y) {
+    for (let x = 0; x < width; ++x) {
+      const offset = ((y * width) + x) * bytesPerPixel
+      const srcOffset = (((height - y - 1) * width) + x) * bytesPerPixel
+      for (let i = 0; i < bytesPerPixel; ++i) {
+        dataArr[offset + i] = pixels[srcOffset + i]
+      }
+    }
+  }
+
+  const imageData = context.createImageData(width, height)
+  imageData.data.set(dataArr)
+  context.putImageData(imageData, 0, 0)
+
+  // Convert canvas to PNG Data URL
+  const pngUrl = canvas2d.toDataURL()
+
+  return pngUrl
+}
 
 
-// /**
-//  * Opens save dialog in user's browser to save the dataUrl
-//  *
-//  * @param {string} dataUrl
-//  */
-// function downloadPng(dataUrl) {
-//   // Optional: Display the PNG in an image tag
-//   const img = document.createElement('img')
-//   img.src = dataUrl
-//   document.body.appendChild(img)
+/**
+ * @param {string} dataUrl The screenshot
+ */
+function sendToWarhol(dataUrl, prompt, onReady) {
+  const base64Content = dataUrl.split(',')[1]
 
-//   // Optional: Download the PNG
-//   const downloadLink = document.createElement('a')
-//   downloadLink.href = dataUrl
-//   downloadLink.download = 'screenshot.png'
-//   downloadLink.click()
-// }
+  const req = {
+    prompt: prompt,
+    negative_prompt: 'people',
+    batch_size: 1,
+    steps: 10,
+    cfg_scale: 7,
+    seed: 1234,
+    image: base64Content,
+  }
+
+  axios
+      .post('https://warhol.bldrs.dev/generate', req, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      })
+      .then((response) => {
+        const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
+        onReady(renderDataUrl)
+      })
+      .catch((error) => {
+        debug().error('Error uploading screenshot:', error)
+      })
+}
+
+
+/**
+ * Opens save dialog in user's browser to save the dataUrl
+ *
+ * @param {string} dataUrl
+ */
+function downloadImaginePng(dataUrl) {
+  // Optional: Display the PNG in an image tag
+  const img = document.createElement('img')
+  img.src = dataUrl
+  document.body.appendChild(img)
+
+  // Optional: Download the PNG
+  const downloadLink = document.createElement('a')
+  downloadLink.href = dataUrl
+  downloadLink.download = 'imagine.png'
+  downloadLink.click()
+}
 
