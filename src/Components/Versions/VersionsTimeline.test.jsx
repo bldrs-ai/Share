@@ -20,7 +20,12 @@ describe('CustomTimeline', () => {
 
   it('displays the correct number of timeline items', () => {
     const commitNavigateCb = jest.fn()
-    const {getByText} = render(<VersionsTimeline commitData={mockCommitData} commitNavigateCb={commitNavigateCb}/>)
+    const {getByText} = render(
+        <VersionsTimeline
+          commitData={mockCommitData}
+          currentRef={'main'}
+          commitNavigateCb={commitNavigateCb}
+        />)
     const firstItem = getByText('User1')
     const secondItem = getByText('User2')
     expect(firstItem).toBeInTheDocument()
@@ -29,7 +34,12 @@ describe('CustomTimeline', () => {
 
   it('updates the active timeline item on click', () => {
     const commitNavigateCb = jest.fn()
-    const {getByText} = render(<VersionsTimeline commitData={mockCommitData} commitNavigateCb={commitNavigateCb}/>)
+    const {getByText} = render(
+        <VersionsTimeline
+          commitData={mockCommitData}
+          currentRef={'main'}
+          commitNavigateCb={commitNavigateCb}
+        />)
     const firstItem = getByText('User1')
     fireEvent.click(firstItem)
     expect(commitNavigateCb).toHaveBeenCalledTimes(1)

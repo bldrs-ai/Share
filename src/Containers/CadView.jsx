@@ -35,6 +35,8 @@ import {
   getLatestCommitHash,
   parseGitHubRepositoryURL,
 } from '../utils/GitHub'
+// TODO(pablo): use ^^ instead of this
+import {parseGitHubPath} from '../utils/location'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
@@ -498,35 +500,13 @@ export default function CadView({
             setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else {
-      // Split the pathname part of the URL into components
+      // TODO(pablo): probably already available in this scope, or use
+      // parseGitHubRepositoryURL instead.
       const url = new URL(ifcURL)
-      const pathComponents = url.pathname.split('/').filter((component) => component.length > 0)
-      let owner = null
-      let repo = null
-      let branch = null
-      let filePath = null
-      let commitHash = null
-      if (pathComponents[0] === 'r') {
-        // Extract the owner, repo, and filePath
-        owner = pathComponents[1]
-        repo = pathComponents[2]
-        branch = pathComponents[3]
-        // Join the remaining parts to form the filePath
-        // eslint-disable-next-line no-magic-numbers
-        filePath = pathComponents.slice(4).join('/')
-        // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, '', branch)
-      } else {
-      // Extract the owner, repo, and filePath
-        owner = pathComponents[0]
-        repo = pathComponents[1]
-        branch = pathComponents[2]
-        // Join the remaining parts to form the filePath
-        // eslint-disable-next-line no-magic-numbers
-        filePath = pathComponents.slice(3).join('/')
-        // get commit hash
-        commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
-      }
+      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(url.pathname)
+      const commitHash = isPublic ?
+            await getLatestCommitHash(owner, repo, filePath, '', branch) :
+            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
       if (commitHash === null) {
         debug().error(`Error obtaining commit hash for: ${ifcURL}`)
@@ -826,6 +806,15 @@ export default function CadView({
     }
   }
 
+  // TODO(pablo): again, just need branch here for VersionsContainer
+  // below.  It's probably already available in this scope.
+  let ghPath = location.pathname
+  if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
+    ghPath = ghPath.substring(`${appPrefix}/v/gh`.length)
+  }
+  const {branch} = parseGitHubPath(ghPath)
+
+
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 100
@@ -940,7 +929,10 @@ export default function CadView({
             }
             {
               modelPath.repo !== undefined && isVersionHistoryVisible &&
-              <VersionsContainer branch={modelPath.branch}/>
+              <VersionsContainer
+                filePath={modelPath.filepath}
+                currentRef={branch}
+              />
             }
           </Box>
         </Box>

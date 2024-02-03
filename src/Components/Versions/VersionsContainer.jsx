@@ -1,25 +1,28 @@
 import React, {useState, useEffect} from 'react'
+import {useNavigate} from 'react-router-dom'
 import IconButton from '@mui/material/IconButton'
 import Tooltip from '@mui/material/Tooltip'
-import Timeline from './VersionsTimeline'
-import Panel from '../Panel'
 import useStore from '../../store/useStore'
-import {useNavigate} from 'react-router-dom'
-import {getCommitsForBranch} from '../../utils/GitHub'
-import RestartAltIcon from '@mui/icons-material/RestartAlt'
-import {navigateBaseOnModelPath} from '../../utils/location'
+import {getCommitsForFile} from '../../utils/GitHub'
+import {assertDefined} from '../../utils/assert'
 import debug from '../../utils/debug'
+import {navigateBaseOnModelPath} from '../../utils/location'
+import Panel from '../Panel'
+import VersionsTimeline from './VersionsTimeline'
+import RestartAltIcon from '@mui/icons-material/RestartAlt'
 
 
 /**
  * VersionsContainer displays a series of versions in a timeline format.
  * Each version corresponds to a commit, and this component fetches
- * commit data for the provided branch and displays it.
+ * commit data for the provided filepath and displays it.
  *
- * @param {string} branch The git branch for which commits are fetched.
+ * @param {string} filePath The file for which commits are fetched.
+ * @param {string} current The current branch or sha, to indicate is active in UI.
  * @return {object} A timeline panel of versions.
  */
-export default function VersionsContainer({branch}) {
+export default function VersionsContainer({filePath, currentRef}) {
+  assertDefined(filePath, currentRef)
   const [commitData, setCommitData] = useState([])
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
@@ -31,7 +34,7 @@ export default function VersionsContainer({branch}) {
   useEffect(() => {
     const fetchCommits = async () => {
       try {
-        const commits = await getCommitsForBranch(repository, branch, accessToken)
+        const commits = await getCommitsForFile(repository, filePath, accessToken)
         if (commits) {
           const versionsInfo = commits.map((entry) => {
             const extractedData = {
@@ -49,7 +52,7 @@ export default function VersionsContainer({branch}) {
       }
     }
     fetchCommits()
-  }, [repository, branch, accessToken])
+  }, [repository, filePath, accessToken])
 
   /**
    * This callBack navigated to the selected commit
@@ -65,7 +68,7 @@ export default function VersionsContainer({branch}) {
       })
     }
   }
-  const navigteToMain = () => {
+  const navigateToMain = () => {
     if (modelPath) {
       const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
       navigate({
@@ -77,12 +80,18 @@ export default function VersionsContainer({branch}) {
 
   return (
     <Panel
-      content={<Timeline commitData={commitData} commitNavigateCb={commitNavigate}/>}
+      content={
+        <VersionsTimeline
+          commitData={commitData}
+          currentRef={currentRef}
+          commitNavigateCb={commitNavigate}
+        />
+      }
       testId='Version Panel'
       title='Versions'
       action={
         <Tooltip title="Navigate to the tip of version history">
-          <IconButton aria-label="navigate_to_tip" size="small" onClick={navigteToMain} >
+          <IconButton aria-label="navigate_to_tip" size="small" onClick={navigateToMain} >
             <RestartAltIcon fontSize="inherit"/>
           </IconButton>
         </Tooltip>

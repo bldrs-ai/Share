@@ -1,12 +1,12 @@
 import React from 'react'
-import ShareMock from '../../ShareMock'
 import {render, renderHook, act} from '@testing-library/react'
-import VersionsContainer from './VersionsContainer'
+import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
 import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
 } from '../../utils/GitHub'
-import useStore from '../../store/useStore'
+import VersionsContainer from './VersionsContainer'
 
 
 describe('VersionsContainer', () => {
@@ -18,7 +18,7 @@ describe('VersionsContainer', () => {
     })
     const {getByText} = render(
         <ShareMock>
-          <VersionsContainer branch="main"/>
+          <VersionsContainer filePath="/ZGRAGGEN.ifc" currentRef={'main'}/>
         </ShareMock>,
     )
     const dialogTitle = getByText('Versions')

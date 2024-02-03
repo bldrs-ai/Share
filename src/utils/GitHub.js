@@ -1,17 +1,20 @@
 import {Octokit} from '@octokit/rest'
-import debug from './debug'
 import PkgJson from '../../package.json'
 import {assertDefined} from './assert'
+import debug from './debug'
 // TODO(pablo): unit tests after nicks OPFS changes go in
+
 
 /**
  * @param {object} repository
- * @param {string} branch
+ * @param {string} filepath
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getCommitsForBranch(repository, branch, accessToken = '') {
-  const res = await getGitHub(repository, `commits?sha=${branch}`, {}, accessToken)
+export async function getCommitsForFile(repository, filepath, accessToken = '') {
+  const res = await getGitHub(repository, `commits`, {
+    path: filepath,
+  }, accessToken)
   const commitsArr = res.data
   return commitsArr
 }
