@@ -57,7 +57,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       <SaveModelControl navigate={navigate}/>
       {isRepoActive &&
         <TooltipIconButton
-          title='Project History'
+          title='Versions'
           icon={<HistoryIcon className='icon-share' color='secondary'/>}
           placement='bottom'
           selected={isVersionHistoryVisible}

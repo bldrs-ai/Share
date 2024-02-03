@@ -5,6 +5,8 @@ import {
   MOCK_ORGANIZATIONS,
   MOCK_REPOSITORY,
   MOCK_FILES,
+  MOCK_COMMITS,
+  MOCK_BRANCHES,
 } from '../utils/GitHub'
 
 
@@ -245,6 +247,24 @@ function githubHandlers() {
           ctx.json(MOCK_FILES),
       )
     }),
+
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/commits',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json(MOCK_COMMITS),
+          )
+        }),
+
+    rest.get(
+        'https://api.github.com/repos/:owner/:repo/branches',
+        (req, res, ctx) => {
+          return res(
+              ctx.status(httpOk),
+              ctx.json(MOCK_BRANCHES),
+          )
+        }),
 
     // octokit.rest.git.getlatestCommitHash
     rest.get(

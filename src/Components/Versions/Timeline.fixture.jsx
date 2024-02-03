@@ -1,6 +1,6 @@
 import React from 'react'
-import {ThemeCtx} from '../theme/Theme.fixture'
-import Timeline from './Timeline'
+import {ThemeCtx} from '../../theme/Theme.fixture'
+import VersionsTimeline from './VersionsTimeline'
 
 
 const commitData = [
@@ -22,8 +22,9 @@ const commitData = [
   },
 ]
 
+
 export default (
   <ThemeCtx>
-    <Timeline commitData={commitData}/>
+    <VersionsTimeline commitData={commitData}/>
   </ThemeCtx>
 )
