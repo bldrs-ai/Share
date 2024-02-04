@@ -15,6 +15,8 @@ import PkgJson from '../../../package.json'
 import LinkedInIcon from '@mui/icons-material/LinkedIn'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import TwitterIcon from '@mui/icons-material/Twitter'
+import DiscordIcon from '../../assets/icons/Discord.svg'
+
 
 /**
  * Button to toggle About panel on and off
@@ -118,6 +120,17 @@ function AboutContent({setIsDialogDisplayed}) {
         </Stack>
         <Stack spacing={2} direction={'row'}>
           <TooltipIconButton
+            title={'Discord'}
+            onClick={
+              () => {
+                window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')
+              }
+            }
+            icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
+            placement={'bottom'}
+            dataTestId=''
+          />
+          <TooltipIconButton
             title={'Twitter'}
             onClick={
               () => {
@@ -127,6 +140,17 @@ function AboutContent({setIsDialogDisplayed}) {
             icon={<TwitterIcon className='icon-share' color='secondary'/>}
             placement={'bottom'}
             dataTestId='twitter'
+          />
+          <TooltipIconButton
+            title={'LinkedIn'}
+            onClick={
+              () => {
+                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
+              }
+            }
+            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
+            placement={'bottom'}
+            dataTestId=''
           />
           <TooltipIconButton
             title={'GitHub'}
@@ -140,35 +164,17 @@ function AboutContent({setIsDialogDisplayed}) {
             dataTestId='github'
           />
 
-          <TooltipIconButton
-            title={'LinkedIn'}
-            onClick={
-              () => {
-                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
-              }
-            }
-            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
-            placement={'bottom'}
-            dataTestId=''
-          />
-
         </Stack>
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
-            Welcome to Share.<br/>
-            Upload your IFC model,
-            position the camera, select elements and crop the model using section planes;
-            share the exact view using generated link.
-            With Share everyone has access to the same context in model space.<br/>
-            You can reach us on{' '}
-            <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
-              discord
-            </Link>.
+          Upload your IFC model, position the camera, select elements, crop the model using section planes and add notes;
+          then share the exact view using the generated link.
+          Everyone has access to the same context in model space.
           </Typography>
-          {
-            // TODO(pablo): re-enable after freeze bug fixed.
-            // <PrivacyControl/>
-          }
+          <Typography variant={'body1'}>
+            &nbsp;<br/>
+            And try the magic wand!
+          </Typography>
         </Box>
       </Stack>
     </Box>)
