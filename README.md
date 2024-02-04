@@ -10,7 +10,7 @@ Share is a web-based BIM & CAD integration environment from [bldrs.ai](https://b
 - *Extend* our platform with your Apps. (in development)
 
 # Contributing
-Please join in creating Bldrs!  Come chat with us at the [Bldrs Discord](https://discord.gg/apWHfDtkJs).
+Please join in creating Bldrs!  Come chat with us at the [Bldrs Discord](https://discord.gg/9SxguBkFfQ).
 
 If you have ideas or issues, please file them in our GitHub [issues](https://github.com/bldrs-ai/Share/issues) page, or mail info@bldrs.ai.
 
