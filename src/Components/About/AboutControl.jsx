@@ -172,7 +172,8 @@ function AboutContent({setIsDialogDisplayed}) {
           Everyone has access to the same context in model space.
           </Typography>
           <Typography variant={'body1'}>
-          And try the magic wand!
+            &nbsp;<br/>
+            And try the magic wand!
           </Typography>
         </Box>
       </Stack>
