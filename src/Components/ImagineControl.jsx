@@ -240,7 +240,7 @@ function sendToWarhol(dataUrl, prompt, onReady) {
     prompt: prompt,
     negative_prompt: 'people',
     batch_size: 1,
-    steps: 10,
+    steps: 30,
     cfg_scale: 7,
     seed: 1234,
     image: base64Content,
