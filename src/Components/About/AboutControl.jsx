@@ -123,7 +123,7 @@ function AboutContent({setIsDialogDisplayed}) {
             title={'Discord'}
             onClick={
               () => {
-                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
+                window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')
               }
             }
             icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
