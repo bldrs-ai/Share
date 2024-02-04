@@ -6,12 +6,17 @@ import Typography from '@mui/material/Typography'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
-import {ControlButton} from '../Buttons'
+import {ControlButton, TooltipIconButton} from '../Buttons'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
 import LogoB from '../../assets/LogoB.svg'
 import {Helmet} from 'react-helmet-async'
 import PkgJson from '../../../package.json'
+import LinkedInIcon from '@mui/icons-material/LinkedIn'
+import GitHubIcon from '@mui/icons-material/GitHub'
+import TwitterIcon from '@mui/icons-material/Twitter'
+import DiscordIcon from '../../assets/icons/Discord.svg'
+
 
 /**
  * Button to toggle About panel on and off
@@ -112,31 +117,64 @@ function AboutContent({setIsDialogDisplayed}) {
           <Typography variant='body1'>
               Build every thing together
           </Typography>
-          <Link
-            underline="always"
-            href='https://github.com/bldrs-ai/Share'
-            color='inherit'
-            variant='overline'
-          >
-            github.com/bldrs-ai/Share
-          </Link>
+        </Stack>
+        <Stack spacing={2} direction={'row'}>
+          <TooltipIconButton
+            title={'Discord'}
+            onClick={
+              () => {
+                window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')
+              }
+            }
+            icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
+            placement={'bottom'}
+            dataTestId=''
+          />
+          <TooltipIconButton
+            title={'Twitter'}
+            onClick={
+              () => {
+                window.open(`https://twitter.com/bldrs_ai`, '_blank')
+              }
+            }
+            icon={<TwitterIcon className='icon-share' color='secondary'/>}
+            placement={'bottom'}
+            dataTestId='twitter'
+          />
+          <TooltipIconButton
+            title={'LinkedIn'}
+            onClick={
+              () => {
+                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
+              }
+            }
+            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
+            placement={'bottom'}
+            dataTestId=''
+          />
+          <TooltipIconButton
+            title={'GitHub'}
+            onClick={
+              () => {
+                window.open(`https://github.com/bldrs-ai/Share`, '_blank')
+              }
+            }
+            icon={<GitHubIcon className='icon-share' color='secondary'/>}
+            placement={'bottom'}
+            dataTestId='github'
+          />
+
         </Stack>
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
-            Welcome to Share.<br/>
-            Upload your IFC model,
-            position the camera, select elements and crop the model using section planes;
-            share the exact view using generated link.
-            With Share everyone has access to the same context in model space.<br/>
-            You can reach us on{' '}
-            <Link href='https://discord.com/channels/853953158560743424/853953158560743426' color='inherit' variant='overline'>
-              discord
-            </Link>.
+          Upload your IFC model, position the camera, select elements, crop the model using section planes and add notes;
+          then share the exact view using the generated link.
+          Everyone has access to the same context in model space.
           </Typography>
-          {
-            // TODO(pablo): re-enable after freeze bug fixed.
-            // <PrivacyControl/>
-          }
+          <Typography variant={'body1'}>
+            &nbsp;<br/>
+            And try the magic wand!
+          </Typography>
         </Box>
       </Stack>
     </Box>)
