@@ -2,10 +2,17 @@ import React from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
-import Logo from '../assets/LogoB.svg'
+import {LogoB} from './Logo/Logo'
 
 
-const ApplicationError = () => {
+/**
+ * This is the placeholder when an js error happens in a component.
+ * Our fail whale.  It links the user back to the homepage to start
+ * over.
+ *
+ * @return {React.ReactElement}
+ */
+export default function ApplicationError() {
   return (
     <Paper p={4} mx={'auto'}
       sx={{
@@ -27,10 +34,8 @@ const ApplicationError = () => {
       </Typography>
 
       <Box>
-        <a href="/"><Logo style={{width: '24px'}}/></a>
+        <a href="/"><LogoB/></a>
       </Box>
     </Paper>
   )
 }
-
-export default ApplicationError

@@ -1,42 +1,40 @@
-/* eslint-disable no-magic-numbers */
 import React, {useState} from 'react'
 import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import CloseIcon from '@mui/icons-material/Close'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
-import HistoryIcon from '@mui/icons-material/History'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
+import Dialog from './Dialog'
+import {LogoB} from './Logo/Logo'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import CloseIcon from '@mui/icons-material/Close'
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
+import HistoryIcon from '@mui/icons-material/History'
 import PortraitIcon from '@mui/icons-material/Portrait'
 import SearchIcon from '@mui/icons-material/Search'
-import LogoB from '../assets/LogoB.svg'
+import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import TreeIcon from '../assets/icons/Tree.svg'
 import ShiftIcon from '../assets/icons/Shift.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 
+
 /**
  * The main component to display a help control button and a help dialog.
  *
- * @function
- * @param {object} props - Component props
- * @param {Function} fileOpen - Callback for file opening
- * @param {string} modelPath - Path to the model
- * @param {boolean} pisLocalModel - Determines if the model is local
- * @return {React.ReactElement} Rendered component
+ * @property {Function} fileOpen Callback for file opening
+ * @property {string} modelPath Path to the model
+ * @property {boolean} isLocalModel Determines if the model is local
+ * @return {React.ReactElement}
  */
 export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
@@ -54,7 +52,10 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
         variant='noBackground'
       />
       {isDialogDisplayed && (
-        <HelpDialog isDialogDisplayed={isDialogDisplayed} setIsDialogDisplayed={setIsDialogDisplayed}/>
+        <HelpDialog
+          isDialogDisplayed={isDialogDisplayed}
+          setIsDialogDisplayed={setIsDialogDisplayed}
+        />
       )}
     </Box>
   )
@@ -64,11 +65,9 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
 /**
  * Represents a single help entry with an icon and a description.
  *
- * @function
- * @param {object} props - Component props
- * @param {React.ReactElement} props.icon - Icon for the help entry
- * @param {string} props.description - Description text for the help entry
- * @return {React.ReactElement} Rendered component
+ * @property {React.ReactElement} icon Icon for the help entry
+ * @property {string} description Description text for the help entry
+ * @return {React.ReactElement}
  */
 const HelpComponent = ({icon, description}) => {
   return (
@@ -104,10 +103,8 @@ const HelpComponent = ({icon, description}) => {
 /**
  * Represents a list of help entries, paginated.
  *
- * @function
- * @param {object} props - Component props
- * @param {number} props.pageIndex - Index of the current displayed page
- * @return {React.ReactElement} Rendered component
+ * @property {number} pageIndex Index of the current displayed page
+ * @return {React.ReactElement}
  */
 const HelpList = ({pageIndex}) => {
   const helpContent = [
@@ -192,12 +189,14 @@ const HelpList = ({pageIndex}) => {
     },
   ]
 
+  /* eslint-disable no-magic-numbers */
   const pageContents = [
     helpContent.slice(0, 4),
     helpContent.slice(4, 9),
     helpContent.slice(9, 12),
     helpContent.slice(12),
   ]
+  /* eslint-enable no-magic-numbers */
 
   return (
     <Box sx={{marginLeft: '10px', height: '240px'}}>
@@ -213,13 +212,11 @@ const HelpList = ({pageIndex}) => {
  * The main dialog displaying the help contents.
  * Provides controls for navigating between pages of help entries.
  *
- * @function
- * @param {object} props - Component props
- * @param {boolean} props.isDialogDisplayed - Determines if the dialog is displayed
- * @param {Function} props.setIsDialogDisplayed - Callback to set the dialog display state
- * @return {React.ReactElement} Rendered component
+ * @property {boolean} isDialogDisplayed Determines if the dialog is displayed
+ * @property {Function} setIsDialogDisplayed Callback to set the dialog display state
+ * @return {React.ReactElement}
  */
-function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [pageIndex, setPageIndex] = useState(0)
   const totalPages = 4
   const theme = useTheme()
@@ -242,7 +239,13 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     <Dialog
       icon={<HelpOutlineIcon/>}
       headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px'}}>
+        <Box
+          sx={{
+            display: 'inline-flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+            height: '80px'}}
+        >
           <LogoB/>
           <Typography variant={'overline'}>bldrs.ai</Typography>
         </Box>
@@ -302,7 +305,9 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
                     sx={{
                       width: '6px',
                       height: '6px',
-                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
+                      backgroundColor: idx === pageIndex ?
+                        theme.palette.primary.main :
+                        theme.palette.secondary.background,
                       borderRadius: '50%',
                       marginX: '2px',
                     }}
@@ -327,6 +332,3 @@ function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     />
   )
 }
-
-
-export {HelpDialog}

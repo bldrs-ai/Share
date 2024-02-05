@@ -1,17 +1,17 @@
 import React, {useState} from 'react'
+import {Helmet} from 'react-helmet-async'
 import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
 import Link from '@mui/material/Link'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton, TooltipIconButton} from '../Buttons'
+import {LogoB, LogoBWithDomain} from '../Logo/Logo'
+import PkgJson from '../../../package.json'
 // TODO(pablo): re-enable after prod freeze bug fixed
 // import PrivacyControl from './PrivacyControl'
-import LogoB from '../../assets/LogoB.svg'
-import {Helmet} from 'react-helmet-async'
-import PkgJson from '../../../package.json'
 import LinkedInIcon from '@mui/icons-material/LinkedIn'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import TwitterIcon from '@mui/icons-material/Twitter'
@@ -19,9 +19,9 @@ import DiscordIcon from '../../assets/icons/Discord.svg'
 
 
 /**
- * Button to toggle About panel on and off
+ * Button to toggle About panel on and off.
  *
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export default function AboutControl() {
   const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
@@ -75,14 +75,15 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   return (
     <Dialog
       headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '90px'}}>
-          <LogoB/>
-          <Link
-            href='/'
-            color='inherit'
-            sx={{textDecoration: 'none'}}
-          >
-            <Typography variant={'overline'}>bldrs.ai</Typography>
+        <Box
+          sx={{
+            display: 'inline-flex',
+            flexDirection: 'column',
+            textAlign: 'center',
+          }}
+        >
+          <Link href='/'>
+            <LogoBWithDomain/>
           </Link>
         </Box>
       }
@@ -97,9 +98,8 @@ export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
 
 /**
- * The content portion of the AboutDialog
- *
- * @return {React.ReactElement} React component
+ * @property {Function} setIsDialogDisplayed Dialog has button to close itself.
+ * @return {React.ReactElement}
  */
 function AboutContent({setIsDialogDisplayed}) {
   return (
@@ -167,9 +167,10 @@ function AboutContent({setIsDialogDisplayed}) {
         </Stack>
         <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
           <Typography variant={'body1'}>
-          Upload your IFC model, position the camera, select elements, crop the model using section planes and add notes;
-          then share the exact view using the generated link.
-          Everyone has access to the same context in model space.
+            Upload your IFC model, position the camera, select elements,
+            crop the model using section planes and add notes; then share
+            the exact view using the generated link. Everyone has access
+            to the same context in model space.
           </Typography>
           <Typography variant={'body1'}>
             &nbsp;<br/>
