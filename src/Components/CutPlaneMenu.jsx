@@ -10,8 +10,8 @@ import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CloseIcon from '@mui/icons-material/Close'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import ElevationIcon from '../assets/icons/Elevation.svg'
 import PlanIcon from '../assets/icons/Plan.svg'
 import SectionIcon from '../assets/icons/Section.svg'
@@ -107,7 +107,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         placement='top'
         variant='solid'
-        icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
+        icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={handleClick}
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
       />

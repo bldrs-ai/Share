@@ -938,37 +938,14 @@ export default function CadView({
         </Box>
       )}
       {alert}
-      {viewer &&
-        <Box
-          sx={{
-            position: 'fixed',
-            bottom: '1.0em',
-            width: '100%',
-          }}
-        >
-          <ElementGroup deselectItems={deselectItems}/>
-        </Box>
-      }
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: '1.0em',
-          left: '1.0em',
-        }}
-      >
-        <AboutControl/>
-      </Box>
-      <Box
-        sx={{
-          position: 'fixed',
-          bottom: '1.0em',
-          right: '1.0em',
-        }}
-      >
-        <HelpControl/>
-      </Box>
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-      }
+
+      {viewer && <ElementGroup deselectItems={deselectItems}/>}
+
+      <AboutControl/>
+
+      <HelpControl/>
+
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
 
       {isModelLoading &&
         <Box

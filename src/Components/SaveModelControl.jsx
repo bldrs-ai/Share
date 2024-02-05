@@ -1,6 +1,7 @@
 import React, {useState, useContext, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
+import IconButton from '@mui/material/IconButton'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
@@ -20,15 +21,11 @@ import Dialog from './Dialog'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
-import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import IconButton from '@mui/material/IconButton'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
-import SaveHeaderIcon from '../assets/icons/SaveGraphic.svg'
-import UploadIcon from '../assets/icons/Upload.svg'
 
 
 /**
- * Displays model open dialog.
+ * Displays model open dialog
  *
  * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
@@ -40,11 +37,7 @@ export default function SaveModelControl({navigate}) {
   const accessToken = useStore((state) => state.accessToken)
 
   useEffect(() => {
-    /**
-     * Asynchronously fetch organizations
-     *
-     * @return {Array} organizations
-     */
+    /** @return {Array<string>} organizations */
     async function fetchOrganizations() {
       const orgs = await getOrganizations(accessToken)
       const orgNamesFetched = Object.keys(orgs).map((key) => orgs[key].login)
@@ -64,7 +57,7 @@ export default function SaveModelControl({navigate}) {
       <TooltipIconButton
         title={'Save IFC'}
         onClick={() => setIsDialogDisplayed(true)}
-        icon={<SaveOutlinedIcon className='icon-share' color='secondary'/>}
+        icon={<SaveOutlinedIcon className='icon-share'/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
         dataTestId='save-ifc'
@@ -229,93 +222,94 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
   return (
     <Dialog
-      icon={<CreateNewFolderIcon className='icon-share'/>}
+      headerIcon={<SaveOutlinedIcon className='icon-share'/>}
       headerText={'Save'}
-      headerIcon={<SaveHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle={'Save File'}
-      actionIcon={<UploadIcon className='icon-share'/>}
       actionCb={saveFile}
       hideActionButton={!isAuthenticated}
-      content={
-        <Stack
-          spacing={1}
-          direction="column"
-          justifyContent="center"
-          alignItems="center"
-          sx={{paddingTop: '6px', width: '280px'}}
-        >
-          {isAuthenticated ?
-           <Stack>
-             <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
-             <Selector
-               label={'Repository'}
-               list={repoNamesArr}
-               selected={selectedRepoName}
-               setSelected={selectRepo}
-               testId={'Repository'}
-             />
-             <SelectorSeparator
-               label={(currentPath === '') ? 'Folder' :
-                      `Folder: ${currentPath}`}
-               list={foldersArr}
-               selected={selectedFolderName}
-               setSelected={selectFolder} testId={'Folder'}
-             />
-             {requestCreateFolder && (
-               <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
-                 <TextField
-                   label="Enter folder name"
-                   variant='outlined'
-                   size='small'
-                   onChange={(e) => setCreateFolderName(e.target.value)}
-                   data-testid="CreateFolderId"
-                   sx={{flexGrow: 1}}
-                   onKeyDown={(e) => {
-                     // Stops the event from propagating up to parent elements
-                     e.stopPropagation()
-                   }}
-                 />
-                 <IconButton
-                   onClick={() => setRequestCreateFolder(false)}
-                   size="small"
-                 >
-                   <ClearIcon/>
-                 </IconButton>
-               </div>
-             )}
-             <TextField
-               sx={{
-                 marginBottom: '.5em',
-               }}
-               label="Enter file name"
-               variant='outlined'
-               size='small'
-               onChange={(e) => setSelectedFileName(e.target.value)}
-               data-testid="CreateFileId"
-               onKeyDown={(e) => {
-                 // Stops the event from propagating up to parent elements
-                 e.stopPropagation()
-               }}
-             />
-           </Stack> :
-           <Box sx={{padding: '0px 10px'}} elevation={0}>
-             <Stack sx={{textAlign: 'left'}}>
-               <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-                 Please login to GitHub to get access to your projects.
-                 Visit our {' '}
-                 <Link href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting' color='inherit' variant='body1'>
-                   wiki
-                 </Link> to learn more about GitHub hosting.
-               </Typography>
-             </Stack>
-           </Box>
-          }
-        </Stack>
-      }
-    />
+    >
+      <Stack
+        spacing={1}
+        direction="column"
+        justifyContent="center"
+        alignItems="center"
+        sx={{paddingTop: '6px', width: '280px'}}
+      >
+        {isAuthenticated ?
+         <Stack>
+           <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
+           <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+           <Selector
+             label={'Repository'}
+             list={repoNamesArr}
+             selected={selectedRepoName}
+             setSelected={selectRepo}
+             testId={'Repository'}
+           />
+           <SelectorSeparator
+             label={(currentPath === '') ? 'Folder' :
+                    `Folder: ${currentPath}`}
+             list={foldersArr}
+             selected={selectedFolderName}
+             setSelected={selectFolder} testId={'Folder'}
+           />
+           {requestCreateFolder && (
+             <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
+               <TextField
+                 label="Enter folder name"
+                 variant='outlined'
+                 size='small'
+                 onChange={(e) => setCreateFolderName(e.target.value)}
+                 data-testid="CreateFolderId"
+                 sx={{flexGrow: 1}}
+                 onKeyDown={(e) => {
+                   // Stops the event from propagating up to parent elements
+                   e.stopPropagation()
+                 }}
+               />
+               <IconButton
+                 onClick={() => setRequestCreateFolder(false)}
+                 size="small"
+               >
+                 <ClearIcon className='icon-share'/>
+               </IconButton>
+             </div>
+           )}
+           <TextField
+             label="Enter file name"
+             variant='outlined'
+             size='small'
+             onChange={(e) => setSelectedFileName(e.target.value)}
+             onKeyDown={(e) => {
+               // Stops the event from propagating up to parent elements
+               e.stopPropagation()
+             }}
+             sx={{
+               marginBottom: '.5em',
+             }}
+             data-testid="CreateFileId"
+           />
+         </Stack> :
+         <Box elevation={0} sx={{padding: '0px 10px'}} >
+           <Stack sx={{textAlign: 'left'}}>
+             <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+               Please login to GitHub to get access to your projects.
+               Visit our {' '}
+               <Link
+                 href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+                 color='inherit'
+                 variant='body1'
+               >
+                 wiki
+               </Link> to learn more about GitHub hosting.
+             </Typography>
+           </Stack>
+         </Box>
+        }
+      </Stack>
+    </Dialog>
   )
 }
 

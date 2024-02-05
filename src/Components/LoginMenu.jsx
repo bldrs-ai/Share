@@ -61,7 +61,7 @@ export default function LoginMenu() {
             src={user.picture}
             sx={{width: 22, height: 22}}
           /> :
-        <AccountBoxOutlinedIcon color='secondary'/>}
+        <AccountBoxOutlinedIcon className='icon-share'/>}
         onClick={handleClick}
       />
       <Menu
@@ -104,7 +104,7 @@ export default function LoginMenu() {
         }}
         >
           {theme.palette.mode === 'light' ?
-          <WbSunnyOutlinedIcon className='icon-share' color='secondary'/> :
+          <WbSunnyOutlinedIcon className='icon-share'/> :
           <NightlightOutlinedIcon className='icon-share'/> }
           <Typography
             sx={{marginLeft: '10px'}}

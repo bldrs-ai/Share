@@ -5,7 +5,6 @@ import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import * as FirstTime from '../../privacy/firstTime'
-import useStore from '../../store/useStore'
 import Dialog from '../Dialog'
 import {ControlButton, TooltipIconButton} from '../Buttons'
 import {LogoB, LogoBWithDomain} from '../Logo/Logo'
@@ -19,47 +18,35 @@ import DiscordIcon from '../../assets/icons/Discord.svg'
 
 
 /**
- * Button to toggle About panel on and off.
+ * Button to toggle About panel on and off
  *
  * @return {React.ReactElement}
  */
 export default function AboutControl() {
-  const isAboutDialogSuppressed = useStore((state) => state.isAboutDialogSuppressed)
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(FirstTime.isFirst())
-  const setIsDialogDisplayedLocal = (value) => {
-    setIsDialogDisplayed(value)
-  }
-
-  const setIsDialogDisplayedForDialog = () => {
-    setIsDialogDisplayed(false)
-    FirstTime.setVisited()
-  }
 
   return (
     <ControlButton
+      icon={<LogoB/>}
       title={`Bldrs: ${PkgJson.version}`}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayedLocal}
+      setIsDialogDisplayed={setIsDialogDisplayed}
       variant='noBackground'
-      icon={
-        <Box
-          sx={{
-            '& svg': {
-              marginTop: '6px',
-              width: '18px',
-            },
-          }}
-        >
-          <LogoB/>
-        </Box>
-      }
-      dialog={
-        <AboutDialog
-          isDialogDisplayed={isAboutDialogSuppressed ? false : isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayedForDialog}
-        />
-      }
-    />
+      sx={{
+        position: 'fixed',
+        bottom: '1m',
+        left: '1em',
+      }}
+    >
+      <AboutDialog
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+        onClose={() => {
+          setIsDialogDisplayed(false)
+          FirstTime.setVisited()
+        }}
+      />
+    </ControlButton>
   )
 }
 
@@ -67,41 +54,33 @@ export default function AboutControl() {
 /**
  * The AboutDialog component
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
+ * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
+ * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
+ * @property {boolean} onClose Callback when closed
  * @return {React.ReactElement} React component
  */
-export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   return (
     <Dialog
-      headerText={
-        <Box
-          sx={{
-            display: 'inline-flex',
-            flexDirection: 'column',
-            textAlign: 'center',
-          }}
-        >
-          <Link href='/'>
-            <LogoBWithDomain/>
-          </Link>
-        </Box>
+      headerIcon={
+        <Link href='/'>
+          <LogoBWithDomain/>
+        </Link>
       }
+      headerText='Build every thing together'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={<AboutContent setIsDialogDisplayed={setIsDialogDisplayed}/>}
       actionTitle='OK'
-      actionCb={() => setIsDialogDisplayed(false)}
-    />
+      actionCb={onClose}
+    >
+      <AboutContent/>
+    </Dialog>
   )
 }
 
 
-/**
- * @property {Function} setIsDialogDisplayed Dialog has button to close itself.
- * @return {React.ReactElement}
- */
-function AboutContent({setIsDialogDisplayed}) {
+/** @return {React.ReactElement} */
+function AboutContent() {
   return (
     <Box sx={{paddingBottom: '10px'}}>
       <Helmet>
@@ -113,11 +92,6 @@ function AboutContent({setIsDialogDisplayed}) {
         justifyContent="center"
         alignItems="center"
       >
-        <Stack spacing={0}>
-          <Typography variant='body1'>
-              Build every thing together
-          </Typography>
-        </Stack>
         <Stack spacing={2} direction={'row'}>
           <TooltipIconButton
             title={'Discord'}
@@ -128,7 +102,7 @@ function AboutContent({setIsDialogDisplayed}) {
             }
             icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
             placement={'bottom'}
-            dataTestId=''
+            variant='noBackground'
           />
           <TooltipIconButton
             title={'Twitter'}
@@ -137,9 +111,9 @@ function AboutContent({setIsDialogDisplayed}) {
                 window.open(`https://twitter.com/bldrs_ai`, '_blank')
               }
             }
-            icon={<TwitterIcon className='icon-share' color='secondary'/>}
+            icon={<TwitterIcon className='icon-share'/>}
             placement={'bottom'}
-            dataTestId='twitter'
+            variant='noBackground'
           />
           <TooltipIconButton
             title={'LinkedIn'}
@@ -148,9 +122,9 @@ function AboutContent({setIsDialogDisplayed}) {
                 window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
               }
             }
-            icon={<LinkedInIcon className='icon-share' color='secondary'/>}
+            icon={<LinkedInIcon className='icon-share'/>}
             placement={'bottom'}
-            dataTestId=''
+            variant='noBackground'
           />
           <TooltipIconButton
             title={'GitHub'}
@@ -159,9 +133,9 @@ function AboutContent({setIsDialogDisplayed}) {
                 window.open(`https://github.com/bldrs-ai/Share`, '_blank')
               }
             }
-            icon={<GitHubIcon className='icon-share' color='secondary'/>}
+            icon={<GitHubIcon className='icon-share'/>}
             placement={'bottom'}
-            dataTestId='github'
+            variant='noBackground'
           />
 
         </Stack>

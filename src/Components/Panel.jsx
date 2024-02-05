@@ -56,8 +56,8 @@ export default function Panel({title, onClose, content, testId = '', action = nu
           <Box>
             {action}
           </Box>
-          <IconButton aria-label="close" size="small" onClick={onClose} sx={{borderRadius: '5px'}}>
-            <CloseIcon fontSize="small" color='secondary'/>
+          <IconButton aria-label='close' size='small' onClick={onClose} sx={{borderRadius: '5px'}}>
+            <CloseIcon className='icon-share icon-small'/>
           </IconButton>
         </Stack>
       </Stack>

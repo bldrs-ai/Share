@@ -15,13 +15,12 @@ export function getColors() {
       darkest: '#171717',
     },
     green: {
-      lightest: '#CEE6CA',
+      lightest: '#00ff00', // main logo day; aka web 'lime'
       light: green[300],
       medium: green[500],
       dark: green[800],
-      darkest: '#459A47',
+      darkest: '#80ff80', // main logo night
     },
-    lime: green[400],
     orange: orange[400],
     black: '#101010',
   }

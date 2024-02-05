@@ -15,11 +15,11 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
 /**
  * VersionsContainer displays a series of versions in a timeline format.
  * Each version corresponds to a commit, and this component fetches
- * commit data for the provided filepath and displays it.
+ * commit data for the provided filepath and displays it
  *
- * @param {string} filePath The file for which commits are fetched.
- * @param {string} current The current branch or sha, to indicate is active in UI.
- * @return {object} A timeline panel of versions.
+ * @property {string} filePath The file for which commits are fetched
+ * @property {string} current The current branch or sha, to indicate is active in UI
+ * @return {React.ReactElement} A timeline panel of versions
  */
 export default function VersionsContainer({filePath, currentRef}) {
   assertDefined(filePath, currentRef)
@@ -29,7 +29,6 @@ export default function VersionsContainer({filePath, currentRef}) {
   const modelPath = useStore((state) => state.modelPath)
   const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
   const navigate = useNavigate()
-
 
   useEffect(() => {
     const fetchCommits = async () => {
@@ -62,32 +61,26 @@ export default function VersionsContainer({filePath, currentRef}) {
   const commitNavigate = (index) => {
     const sha = commitData[index].sha
     if (modelPath) {
-      const commitPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
+      const commitPath =
+            navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
       navigate({
         pathname: commitPath,
       })
     }
   }
+
   const navigateToMain = () => {
     if (modelPath) {
-      const mainPath = navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
+      const mainPath =
+            navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
       navigate({
         pathname: mainPath,
       })
     }
   }
 
-
   return (
     <Panel
-      content={
-        <VersionsTimeline
-          commitData={commitData}
-          currentRef={currentRef}
-          commitNavigateCb={commitNavigate}
-        />
-      }
-      testId='Version Panel'
       title='Versions'
       action={
         <Tooltip title="Navigate to the tip of version history">
@@ -97,6 +90,13 @@ export default function VersionsContainer({filePath, currentRef}) {
         </Tooltip>
       }
       onClose={toggleIsVersionHistoryVisible}
-    />
+      data-testid='Version Panel'
+    >
+      <VersionsTimeline
+        commitData={commitData}
+        currentRef={currentRef}
+        commitNavigateCb={commitNavigate}
+      />
+    </Panel>
   )
 }

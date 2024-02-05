@@ -17,8 +17,7 @@ import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ClearIcon from '@mui/icons-material/Clear'
-import BotIcon4 from '../assets/icons/Bot2.svg'
-import CopyIcon from '../assets/icons/Copy.svg'
+import BotIcon from '../assets/icons/Bot2.svg'
 
 
 /**
@@ -35,27 +34,25 @@ export default function ImagineControl() {
   return (
     <ControlButton
       title='AI Renderings'
-      icon={<AutoFixHighOutlinedIcon className='icon-share' color='secondary'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      dialog={
-        <ImagineDialog
-          isDialogDisplayed={openedDialog}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-      }
-    />
+      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
+    >
+      <ImagineDialog
+        isDialogDisplayed={openedDialog}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+      />
+    </ControlButton>
   )
 }
 
 
 /**
- * The ImagineDialog component contain instructions on how to access the bot.
+ * The ImagineDialog component contain instructions on how to access the bot
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {number} botIconIndex The current index of the bot icon which is kept track of in the wrapper component
- * @return {React.Component} The react component
+ * @property {boolean} isDialogDisplayed Passed to dialog to be controlled
+ * @property {Function} setIsDialogDisplayed Passed to dialog to be controlled
+ * @return {React.Component}
  */
 function ImagineDialog({
   isDialogDisplayed,
@@ -94,99 +91,95 @@ function ImagineDialog({
 
   return (
     <Dialog
-      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
-      headerText={<BotIcon4 style={{height: '60px'}}/>}
+      headerIcon={<BotIcon style={{height: '60px'}}/>}
+      headerText={'Imagine'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={closeDialog}
       actionTitle='Close'
-      actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={closeDialog}
       hideActionButton={true}
-      content={
-        <>
-          <Helmet>
-            <title>Bot the Bldr</title>
-          </Helmet>
-          <Stack
-            spacing={2}
-            justifyContent={'center'}
-            alignContent={'center'}
-            sx={{minHeight: '390px'}}
-          >
+    >
+      <Helmet>
+        <title>Bot the Bldr</title>
+      </Helmet>
+      <Stack
+        spacing={2}
+        justifyContent={'center'}
+        alignContent={'center'}
+        sx={{minHeight: '390px'}}
+      >
+        <Box
+          sx={{
+            minHeight: '390px',
+            borderRadius: '10px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center'}}
+        >
+          {isImagineLoading &&
+           <Loader type='circular'/>
+          }
+          {!isImagineLoading && image &&
+           <img
+             src={image}
+             alt='Imagine'
+             height={'390px'}
+           />}
+        </Box>
 
-            <Box
-              sx={{
-                minHeight: '390px',
-                borderRadius: '10px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'}}
-            >
-              {isImagineLoading &&
-                <Loader type='circular'/>
-              }
-              {!isImagineLoading && image &&
-               <img
-                 src={image}
-                 alt='Imagine'
-                 height={'390px'}
-               />}
-            </Box>
-
-            <TextField
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              fullWidth
-              multiline
-              size='small'
-              placeholder={'Imagine prompt'}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    {prompt && (
-                      <IconButton
-                        aria-label="clear text"
-                        onClick={handleClear}
-                        edge="end"
-                        size="small"
-                      >
-                        <ClearIcon size='inherit'/>
-                      </IconButton>
-                    )}
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Stack
-              spacing={2}
-              direction={'row'}
-              justifyContent={'center'}
-              alignContent={'center'}
-            >
-              <RectangularButton
-                title={'Create'}
-                disabled={prompt.length === 0}
-                onClick={() => {
-                  setIsImagineLoading(true)
-                  sendToWarhol(screenshot, prompt, (renderDataUrl) => {
-                    setIsImagineLoading(false)
-                    setImagine(renderDataUrl)
-                    setImage(renderDataUrl)
-                  })
-                }}
-              />
-              <RectangularButton
-                title={'Download'}
-                disabled={imagine === null}
-                onClick={() => {
-                  downloadImaginePng(imagine)
-                }}
-              />
-            </Stack>
-          </Stack>
-        </>
-      }
-    />)
+        <TextField
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          fullWidth
+          multiline
+          size='small'
+          placeholder={'Imagine prompt'}
+          InputProps={{
+            endAdornment: (
+              <InputAdornment position="end">
+                {prompt && (
+                  <IconButton
+                    aria-label="clear text"
+                    onClick={handleClear}
+                    edge="end"
+                    size="small"
+                  >
+                    <ClearIcon size='inherit'/>
+                  </IconButton>
+                )}
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Stack
+          spacing={2}
+          direction={'row'}
+          justifyContent={'center'}
+          alignContent={'center'}
+        >
+          <RectangularButton
+            title={'Create'}
+            disabled={prompt.length === 0}
+            onClick={() => {
+              setIsImagineLoading(true)
+              sendToWarhol(screenshot, prompt, (renderDataUrl) => {
+                setIsImagineLoading(false)
+                setImagine(renderDataUrl)
+                setImage(renderDataUrl)
+              })
+            }}
+          />
+          <RectangularButton
+            title={'Download'}
+            disabled={imagine === null}
+            onClick={() => {
+              downloadImaginePng(imagine)
+            }}
+          />
+        </Stack>
+      </Stack>
+    </Dialog>
+  )
 }
 
 

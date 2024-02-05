@@ -43,13 +43,16 @@ export default function Styles({theme}) {
           marginRight: 'auto',
         },
         '.icon-share': {
+          width: '20px',
+          height: '20px',
           fill: theme.palette.primary.contrastText,
-          width: '19px',
-          height: '19px',
         },
         '.icon-small': {
           width: '15px',
           height: '15px',
+        },
+        'hr.MuiDivider-root': {
+          padding: '0.5em 0',
         },
         /* icon-nav-* are the sub-icons in NavTree */
         '.icon-nav-caret': {

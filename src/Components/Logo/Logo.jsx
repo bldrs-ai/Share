@@ -17,9 +17,20 @@ export function LogoB() {
 
 /** @return {React.ReactElement} */
 export function LogoBWithDomain() {
+  const theme = useTheme()
   return (
     <ThemeBox>
-      <LogoBWithDomainIcon/>
+      <LogoBWithDomainIcon
+        sx={{
+          '& svg': {
+            '& text': {
+              // We're currently only showing Logo in dialogs, etc. so
+              // use secondary contrastText
+              fill: theme.palette.secondary.contrastText,
+            },
+          },
+        }}
+      />
     </ThemeBox>
   )
 }
@@ -37,11 +48,11 @@ function ThemeBox({children}) {
         'width': '70px',
         'margin': '0 auto',
         '& svg': {
-          '& text': {
-            fill: theme.palette.primary.contrastText,
+          '& .face-left': {
+            fill: theme.palette.logo.leftFace,
           },
-          '& .face': {
-            stroke: theme.palette.primary.contrastText,
+          '& .face-front': {
+            fill: theme.palette.logo.frontFace,
           },
         },
       }}

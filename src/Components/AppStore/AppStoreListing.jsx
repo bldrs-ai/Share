@@ -59,7 +59,7 @@ export function AppStoreEntry({
             <Typography variant="body1" component="div">
               {item.name}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2">
               {item.description}
             </Typography>
           </CardContent>

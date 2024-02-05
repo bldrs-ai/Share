@@ -4,9 +4,8 @@ import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
-import {TooltipIconButton} from './Buttons'
+import {ControlButton, TooltipIconButton} from './Buttons'
 import Dialog from './Dialog'
-import {LogoB} from './Logo/Logo'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -40,24 +39,134 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
 
   return (
-    <Box>
-      <TooltipIconButton
-        title={'Help'}
-        onClick={() => setIsDialogDisplayed(true)}
-        icon={<HelpOutlineIcon color='secondary'/>}
-        placement={'left'}
-        selected={isDialogDisplayed}
-        dataTestId='open-ifc'
-        showTitle={true}
-        variant='noBackground'
+    <ControlButton
+      icon={<HelpOutlineIcon className='icon-share'/>}
+      title={'Help'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      sx={{
+        position: 'fixed',
+        bottom: '1em',
+        right: '1em',
+      }}
+    >
+      <HelpDialog
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
       />
-      {isDialogDisplayed && (
-        <HelpDialog
-          isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-      )}
-    </Box>
+    </ControlButton>
+  )
+}
+
+
+/**
+ * The main dialog displaying the help contents.
+ * Provides controls for navigating between pages of help entries.
+ *
+ * @property {boolean} isDialogDisplayed Determines if the dialog is displayed
+ * @property {Function} setIsDialogDisplayed Callback to set the dialog display state
+ * @return {React.ReactElement}
+ */
+export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+  const [pageIndex, setPageIndex] = useState(0)
+  const totalPages = 4
+  const theme = useTheme()
+
+
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => {
+      if (pageIndex < totalPages - 1) {
+        setPageIndex(pageIndex + 1)
+      }
+    },
+    onSwipedRight: () => {
+      if (pageIndex > 0) {
+        setPageIndex(pageIndex - 1)
+      }
+    },
+  })
+
+  return (
+    <Dialog
+      headerIcon={<HelpOutlineIcon/>}
+      headerText={'Help'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle={'OK'}
+      actionIcon={<HelpOutlineIcon/>}
+      actionCb={() => setIsDialogDisplayed(false)}
+    >
+      <Box
+        sx={{
+          width: '250px',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginTop: '10px',
+        }}
+        {...swipeHandlers}
+      >
+        <HelpList pageIndex={pageIndex}/>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'row',
+            justifyContent: 'space-between',
+            width: '68%',
+            marginTop: '6px',
+            alignItems: 'center',
+          }}
+        >
+          <TooltipIconButton
+            title='Previous'
+            placement='right'
+            variant='noBackground'
+            icon={
+              <ArrowBackIcon
+                sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+              />}
+            onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
+          />
+
+          <Stack
+            sx={{width: '100%'}}
+            direction="row"
+            justifyContent="center"
+            alignItems="center"
+          >
+            <Stack
+              direction='row' sx={{width: '38px'}}
+            >
+              {[...Array(totalPages)].map((_, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    width: '6px',
+                    height: '6px',
+                    backgroundColor: idx === pageIndex ?
+                      theme.palette.primary.main :
+                      theme.palette.secondary.background,
+                    borderRadius: '50%',
+                    marginX: '2px',
+                  }}
+                />
+              ))}
+            </Stack>
+          </Stack>
+          <TooltipIconButton
+            title='Next'
+            placement='right'
+            variant='noBackground'
+            icon={
+              <ArrowForwardIcon
+                sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+              />}
+            onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
+          />
+        </Box>
+      </Box>
+    </Dialog>
   )
 }
 
@@ -109,82 +218,67 @@ const HelpComponent = ({icon, description}) => {
 const HelpList = ({pageIndex}) => {
   const helpContent = [
     {
-      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Open IFC models from GITHUB  <br/> or local drive
-      </Typography>,
+      icon: <CreateNewFolderOutlinedIcon className='icon-share'/>,
+      description: 'Open IFC models from GITHUB or local drive',
     },
     {
-      icon: <CropOutlinedIcon color='secondary'/>,
+      icon: <CropOutlinedIcon className='icon-share'/>,
       description: 'Study the model using standard sections',
     },
     {
-      icon: <TouchAppOutlinedIcon className='icon-share' color='primary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Double click the model to select <br/> a model element
-      </Typography>,
+      icon: <TouchAppOutlinedIcon className='icon-share'/>,
+      description: 'Double click the model to select a model element',
     },
     {
       icon: <ShiftIcon className='icon-share'/>,
       description: 'Hold shift to select multiple elements',
     },
     {
-      icon: <FormatListBulletedIcon className='icon-share' color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Study properties attached to  <br/> selected element
-      </Typography>,
+      icon: <FormatListBulletedIcon className='icon-share'/>,
+      description: 'Study properties attached to selected element',
     },
     {
-      icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
+      icon: <FilterCenterFocusIcon className='icon-share'/>,
       description: 'Isolate selected element',
     },
     {
-      icon: <HideSourceOutlinedIcon color='secondarygit p'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Hide selected  <br/> element
-      </Typography>,
+      icon: <HideSourceOutlinedIcon className='icon-share'/>,
+      description: 'Hide selected element',
     },
     {
-      icon: <VisibilityOutlinedIcon color='secondary'/>,
+      icon: <VisibilityOutlinedIcon className='icon-share'/>,
       description: `Show all hidden elements`,
     },
     {
-      icon: <CloseIcon className='icon-share' color='secondary'/>,
+      icon: <CloseIcon className='icon-share'/>,
       description: 'Clear selected elements',
     },
     {
-      icon: <TreeIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Navigate <br/> the model using element hierarchy
-      </Typography>,
+      icon: <TreeIcon className='icon-share'/>,
+      description: 'Navigate the model using element hierarchy',
     },
     {
-      icon: <HistoryIcon color='secondary'/>,
+      icon: <HistoryIcon className='icon-share'/>,
       description: 'Access project versions',
     },
     {
-      icon: <SearchIcon color='secondary'/>,
+      icon: <SearchIcon className='icon-share'/>,
       description: 'Search the model',
     },
     {
-      icon: <PortraitIcon className='icon-share' color='secondary'/>,
+      icon: <PortraitIcon className='icon-share'/>,
       description: 'Log in to get access to projects hosted on Github',
     },
     {
-      icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 1px'}}/>,
+      icon: <ShareIcon className='icon-share'/>,
       description: 'Share sectioned portions of the model',
     },
     {
-      icon: <ChatOutlinedIcon color='secondary'/>,
+      icon: <ChatOutlinedIcon className='icon-share'/>,
       description: 'Attach notes to 3D elements',
     },
     {
-      icon: <AutoFixHighOutlinedIcon color='secondary'/>,
+      icon: <AutoFixHighOutlinedIcon className='icon-share'/>,
       description: 'Create renderings using Bot the BLDR',
     },
   ]
@@ -204,131 +298,5 @@ const HelpList = ({pageIndex}) => {
         <HelpComponent key={index} icon={item.icon} description={item.description}/>
       ))}
     </Box>
-  )
-}
-
-
-/**
- * The main dialog displaying the help contents.
- * Provides controls for navigating between pages of help entries.
- *
- * @property {boolean} isDialogDisplayed Determines if the dialog is displayed
- * @property {Function} setIsDialogDisplayed Callback to set the dialog display state
- * @return {React.ReactElement}
- */
-export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const [pageIndex, setPageIndex] = useState(0)
-  const totalPages = 4
-  const theme = useTheme()
-
-
-  const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (pageIndex < totalPages - 1) {
-        setPageIndex(pageIndex + 1)
-      }
-    },
-    onSwipedRight: () => {
-      if (pageIndex > 0) {
-        setPageIndex(pageIndex - 1)
-      }
-    },
-  })
-
-  return (
-    <Dialog
-      icon={<HelpOutlineIcon/>}
-      headerText={
-        <Box
-          sx={{
-            display: 'inline-flex',
-            flexDirection: 'column',
-            textAlign: 'center',
-            height: '80px'}}
-        >
-          <LogoB/>
-          <Typography variant={'overline'}>bldrs.ai</Typography>
-        </Box>
-      }
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'OK'}
-      actionIcon={<HelpOutlineIcon/>}
-      actionCb={() => setIsDialogDisplayed(false)}
-      content={
-        <Box
-          sx={{
-            width: '250px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: '10px',
-          }}
-          {...swipeHandlers}
-        >
-          <HelpList pageIndex={pageIndex}/>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              width: '68%',
-              marginTop: '6px',
-              alignItems: 'center',
-            }}
-          >
-            <TooltipIconButton
-              title='Previous'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowBackIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
-            />
-
-            <Stack
-              sx={{width: '100%'}}
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
-            >
-              <Stack
-                direction='row' sx={{width: '38px'}}
-              >
-                {[...Array(totalPages)].map((_, idx) => (
-                  <Box
-                    key={idx}
-                    sx={{
-                      width: '6px',
-                      height: '6px',
-                      backgroundColor: idx === pageIndex ?
-                        theme.palette.primary.main :
-                        theme.palette.secondary.background,
-                      borderRadius: '50%',
-                      marginX: '2px',
-                    }}
-                  />
-                ))}
-              </Stack>
-            </Stack>
-            <TooltipIconButton
-              title='Next'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowForwardIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
-            />
-          </Box>
-        </Box>
-      }
-    />
   )
 }

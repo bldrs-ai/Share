@@ -15,13 +15,16 @@
       fill: green;
     }
     .face {
-      stroke: green;
+      stroke: black;
     }
     .face-left {
-      fill: #6D8752;
+      fill: lime;
     }
     .face-front {
-      fill: #E9E8E2;
+      fill: white;
+    }
+    .contrast-text {
+      fill: black;
     }
   </style>
   <g transform="translate(15, 15) scale(0.6)">

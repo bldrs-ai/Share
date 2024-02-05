@@ -11,6 +11,8 @@ import TreeIcon from '../assets/icons/Tree.svg'
 
 
 /**
+ * Contains OpenModelControl, Search, Navigate, Versions and Save.
+ *
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Function} isRepoActive deselects currently selected element
  * @return {React.Component}
@@ -34,7 +36,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       <OpenModelControl navigate={navigate}/>
       <TooltipIconButton
         title='Search'
-        icon={<SearchIcon className='icon-share' color='secondary'/>}
+        icon={<SearchIcon className='icon-share'/>}
         placement='bottom'
         aboutInfo={false}
         selected={isSearchVisible}
@@ -42,7 +44,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       />
       <TooltipIconButton
         title='Navigation'
-        icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
+        icon={<TreeIcon className='icon-share' style={{width: '17px', height: '17px'}}/>}
         placement='bottom'
         dataTestId='Navigation'
         aboutInfo={false}
@@ -61,7 +63,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       {isRepoActive &&
         <TooltipIconButton
           title='Versions'
-          icon={<HistoryIcon className='icon-share' color='secondary'/>}
+          icon={<HistoryIcon className='icon-share'/>}
           placement='bottom'
           selected={isVersionHistoryVisible}
           onClick={() => {

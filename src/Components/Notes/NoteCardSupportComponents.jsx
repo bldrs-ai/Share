@@ -37,7 +37,7 @@ export const CardMenu = ({
       <TooltipIconButton
         title={'Note Actions'}
         placement='left'
-        icon={<MoreVertIcon className='icon-share' color='secondary'/>}
+        icon={<MoreVertIcon className='icon-share'/>}
         onClick={handleMenuClick}
       />
       <Menu

@@ -1,26 +1,25 @@
 import React, {createRef, useEffect, useState} from 'react'
+import {Helmet} from 'react-helmet-async'
+import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import IconButton from '@mui/material/IconButton'
 import InputAdornment from '@mui/material/InputAdornment'
+import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import Stack from '@mui/material/Stack'
-import QRCode from 'react-qr-code'
-import useStore from '../store/useStore'
-import {addPlaneLocationToUrl} from './CutPlaneMenu'
 import {removeHashParams} from '../utils/location'
-import Dialog from './Dialog'
+import useStore from '../store/useStore'
+import {ControlButton} from './Buttons'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
 } from './CameraControl'
-import {ControlButton} from './Buttons'
+import {addPlaneLocationToUrl} from './CutPlaneMenu'
+import Dialog from './Dialog'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
-import {Helmet} from 'react-helmet-async'
-import ShareHeaderIcon from '../assets/icons/ShareGraphic.svg'
 import ShareIcon from '../assets/icons/Share.svg'
-import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 
 
 /**
@@ -38,16 +37,15 @@ export default function ShareControl() {
   return (
     <ControlButton
       title='Share'
-      icon={<ShareIcon className='icon-share'/>}
       isDialogDisplayed={openedDialog}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      dialog={
-        <ShareDialog
-          isDialogDisplayed={openedDialog}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-      }
-    />
+      icon={<ShareIcon className='icon-share'/>}
+    >
+      <ShareDialog
+        isDialogDisplayed={openedDialog}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+      />
+    </ControlButton>
   )
 }
 
@@ -57,9 +55,9 @@ export default function ShareControl() {
  * included in the shared URL and assists in copying the URL to
  * clipboard.
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @return {React.Component} The react component
+ * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
+ * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
+ * @return {React.Component}
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
@@ -70,7 +68,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
   const isPlanesOn = viewer.clipper.planes.length > 0
-
 
   useEffect(() => {
     if (viewer) {
@@ -87,20 +84,11 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
 
-
-  const closeDialog = () => {
-    setIsDialogDisplayed(false)
-    setIsLinkCopied(false)
-  }
-
-
   const onCopy = (event) => {
     setIsLinkCopied(true)
     navigator.clipboard.writeText(location)
     urlTextFieldRef.current.select()
-    closeDialog()
   }
-
 
   const toggleCameraIncluded = () => {
     if (isCameraInUrl) {
@@ -115,7 +103,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     }
   }
 
-
   const togglePlaneIncluded = () => {
     if (isPlaneInUrl) {
       removeHashParams(window.location, 'p')
@@ -128,81 +115,80 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   return (
     <Dialog
-      icon={<ShareIcon className='icon-share'/>}
+      headerIcon={<ShareIcon className='icon-share'/>}
       headerText='Share'
-      headerIcon={<ShareHeaderIcon/>}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={closeDialog}
+      setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='Copy Link'
       actionIcon={<CopyIcon className='icon-share'/>}
       actionCb={onCopy}
-      content={
-        <Stack spacing={1}>
-          <Helmet>
-            <title>Share IFC Model</title>
-          </Helmet>
-          <Box>
-            <QRCode
-              data-testid="qrcode"
-              style={{
-                height: 'auto',
-                maxWidth: '82%',
-                marginBottom: '18px',
-                borderRadius: '6px',
-              }}
-              value={String(window.location)}
-              viewBox={`0 0 100 100`}
-            />
-          </Box>
-          <TextField
-            value={String(window.location)}
-            inputRef={urlTextFieldRef}
-            variant='outlined'
-            multiline
-            size='small'
-            rows={1}
-            InputProps={{
-              readOnly: true,
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton
-                    onClick={onCopy}
-                    edge="end"
-                    size='small'
-                  >
-                    <ContentCopyIcon size='inherit' sx={{width: '16px', height: '16px'}}/>
-                  </IconButton>
-                </InputAdornment>
-              ),
+    >
+      <Stack spacing={1}>
+        <Helmet>
+          <title>Share IFC Model</title>
+        </Helmet>
+        <Box>
+          <QRCode
+            data-testid="qrcode"
+            style={{
+              height: 'auto',
+              maxWidth: '82%',
+              marginBottom: '18px',
+              borderRadius: '6px',
             }}
+            value={String(window.location)}
+            viewBox={`0 0 100 100`}
           />
-          <Stack spacing={0}>
-            {isPlanesOn &&
-              <Stack
-                direction="row"
-                justifyContent="space-around"
-                alignItems="center"
-              >
-                <Typography>Cutplane position</Typography>
-                <Toggle
-                  onChange={togglePlaneIncluded}
-                  checked={isPlaneInUrl}
-                />
-              </Stack>
-            }
-            <Stack
-              direction="row"
-              justifyContent="space-around"
-              alignItems="center"
-            >
-              <Typography>Camera position</Typography>
-              <Toggle
-                onChange={toggleCameraIncluded}
-                checked={isCameraInUrl}
-              />
-            </Stack>
+        </Box>
+        <TextField
+          value={String(window.location)}
+          inputRef={urlTextFieldRef}
+          variant='outlined'
+          multiline
+          size='small'
+          rows={1}
+          InputProps={{
+            readOnly: true,
+            endAdornment: (
+              <InputAdornment position="end">
+                <IconButton
+                  onClick={onCopy}
+                  edge="end"
+                  size='small'
+                >
+                  <ContentCopyIcon size='inherit' sx={{width: '16px', height: '16px'}}/>
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+        <Stack spacing={0}>
+          {isPlanesOn &&
+           <Stack
+             direction="row"
+             justifyContent="space-around"
+             alignItems="center"
+           >
+             <Typography>Cutplane position</Typography>
+             <Toggle
+               onChange={togglePlaneIncluded}
+               checked={isPlaneInUrl}
+             />
+           </Stack>
+          }
+          <Stack
+            direction="row"
+            justifyContent="space-around"
+            alignItems="center"
+          >
+            <Typography>Camera position</Typography>
+            <Toggle
+              onChange={toggleCameraIncluded}
+              checked={isCameraInUrl}
+            />
           </Stack>
         </Stack>
-      }
-    />)
+      </Stack>
+    </Dialog>
+  )
 }

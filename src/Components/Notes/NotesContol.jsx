@@ -76,7 +76,7 @@ export default function NotesControl() {
   return (
     <TooltipIconButton
       title='Notes'
-      icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
+      icon={<ChatOutlinedIcon className='icon-share'/>}
       selected={isNotesOn}
       onClick={() => {
         turnOffTooltips()

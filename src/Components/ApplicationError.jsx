@@ -20,15 +20,15 @@ export default function ApplicationError() {
         padding: '20px',
       }}
     >
-      <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}} color='primary'>
+      <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}}>
         Oh no!
       </Typography>
 
-      <Typography variant={'body1'} color='primary'>
+      <Typography variant={'body1'}>
         We&apos;re not quite sure what went wrong.
       </Typography>
 
-      <Typography sx={{pb: 2}} color='primary'>
+      <Typography sx={{pb: 2}}>
         Not to worry.<br/>
         You can <a href="/">click here to start a new session</a>.
       </Typography>

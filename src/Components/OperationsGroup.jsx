@@ -1,6 +1,6 @@
 import React from 'react'
-import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
 import LoginMenu from './LoginMenu'
@@ -15,10 +15,10 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 
 /**
  * OperationsGroup contains tools for sharing, notes, properties, cut
- * plane, deselect, theme change and about.
+ * plane, deselect, theme change and about
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export default function OperationsGroup({deselectItems}) {
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
@@ -45,21 +45,11 @@ export default function OperationsGroup({deselectItems}) {
     <ButtonGroup
       orientation='vertical'
       variant='contained'
-      sx={{'margin': '1em', '& > *:not(:last-child)': {mb: .6}}} // Add space between buttons
+      sx={{'margin': '1em', '& > *:not(:last-child)': {margin: '0.2em 0'}}}
     >
-      {isLoginVisible &&
-        <LoginMenu/>
-      }
-      {isCollaborationGroupVisible &&
-        <Box sx={{marginTop: '.5em'}}>
-          <ShareControl/>
-        </Box>
-      }
-
-      {isModelInteractionGroupVisible &&
-      <NotesControl/>
-      }
-
+      {isLoginVisible && (<><LoginMenu/><Divider/></>)}
+      {isCollaborationGroupVisible && <ShareControl/>}
+      {isModelInteractionGroupVisible && <NotesControl/>}
       {isSelected() && selectedElement !== null &&
        <TooltipIconButton
          title='Properties'
@@ -69,7 +59,7 @@ export default function OperationsGroup({deselectItems}) {
            openDrawer()
          }}
          selected={isPropertiesOn}
-         icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
+         icon={<FormatListBulletedIcon className='icon-share'/>}
        />
       }
 

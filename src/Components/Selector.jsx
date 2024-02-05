@@ -10,11 +10,18 @@ import {handleBeforeUnload} from '../utils/event'
  * @property {string} label component title
  * @property {boolean} selected selected componet control the selected value of the component
  * @property {Function} setSelected callback to select the element
- * @property {Array} list list of eleemnt to populate select options
- * @property {string} testId id for testing
+ * @property {Array} list list of element to populate select options
+ * @property {string} [testId] id for testing
  * @return {React.ReactElement}
  */
-export default function Selector({setIsDialogDisplayed, label, selected, setSelected, list, testId = 'Selector'}) {
+export default function Selector({
+  setIsDialogDisplayed,
+  label,
+  selected,
+  setSelected,
+  list,
+  testId = 'Selector',
+}) {
   const handleSelect = (e) => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
     setSelected(e.target.value)
@@ -23,13 +30,13 @@ export default function Selector({setIsDialogDisplayed, label, selected, setSele
 
   return (
     <TextField
-      sx={{width: '260px', marginBottom: '.5em'}}
       value={selected}
       onChange={(e) => handleSelect(e)}
       variant='outlined'
       label={label}
       select
       size='small'
+      sx={{width: '260px', marginBottom: '.5em'}}
       data-testid={testId}
     >
       {list.map((listMember, i) => {

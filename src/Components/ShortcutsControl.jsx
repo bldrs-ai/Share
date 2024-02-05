@@ -21,23 +21,14 @@ export default function ShortcutsControl() {
       title='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      icon={
-        <Box sx={{
-          width: '20px',
-          height: '20px',
-          marginBottom: '4px',
-        }}
-        >
-          <KnowledgeIcon/>
-        </Box>
-      }
-      dialog={
-        <ShortcutsDialog
-          isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-      }
-    />)
+      icon={<KnowledgeIcon className='icon-share'/>}
+    >
+      <ShortcutsDialog
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+      />
+    </ControlButton>
+  )
 }
 
 
@@ -56,40 +47,36 @@ function ShortcutsDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       headerText='Guides'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      content={
-        isMobile ?
-          (
-            <>
-              <Typography variant='body1'>Guide</Typography>
-              <Box component='p'>To select an element:</Box>
-              <Box component='ul'>
-                <Box component='li'>Double tap an element</Box>
-                <Box component='li'>X is used to clear the selection</Box>
-              </Box>
-              <Box component='p'>To attach a cut plane:</Box>
-              <Box component='ul'>
-                <Box component='li'>Tap a model element</Box>
-                <Box component='li'>Tap a section plane button</Box>
-                <Box component='li'>Attach multiple planes</Box>
-                <Box component='li'>X is used to clear the planes</Box>
-              </Box>
-            </>
-          ) :
-          (
-            <Box sx={{
-              textAlign: 'left',
-            }}
-            >
-              <Box component='p'>To attach a section plane:</Box>
-              <Box component='li'>Hover over an element</Box>
-              <Box component='li'>Press <strong>Q to attach a section plane</strong></Box>
-              <Box component='li'>Hover over a plane press <strong>W to delete the plane</strong></Box>
-              <Box component='li'>Multiple planes can be attached to a model</Box>
-              <Box component='p'>To clear selection:</Box>
-              <Box component='li'>Press <strong>A to clear selected element</strong></Box>
-            </Box>
-          )
-      }
-    />
+    >
+      {isMobile ? (
+        <>
+          <Typography variant='body1'>Guide</Typography>
+          <Box component='p'>To select an element:</Box>
+          <Box component='ul'>
+            <Box component='li'>Double tap an element</Box>
+            <Box component='li'>X is used to clear the selection</Box>
+          </Box>
+          <Box component='p'>To attach a cut plane:</Box>
+          <Box component='ul'>
+            <Box component='li'>Tap a model element</Box>
+            <Box component='li'>Tap a section plane button</Box>
+            <Box component='li'>Attach multiple planes</Box>
+            <Box component='li'>X is used to clear the planes</Box>
+          </Box>
+        </>
+      ) : (
+        <>
+          <Box sx={{textAlign: 'left'}}>
+            <Box component='p'>To attach a section plane:</Box>
+            <Box component='li'>Hover over an element</Box>
+            <Box component='li'>Press <strong>Q to attach a section plane</strong></Box>
+            <Box component='li'>Hover over a plane press <strong>W to delete the plane</strong></Box>
+            <Box component='li'>Multiple planes can be attached to a model</Box>
+            <Box component='p'>To clear selection:</Box>
+            <Box component='li'>Press <strong>A to clear selected element</strong></Box>
+          </Box>
+        </>
+      )}
+    </Dialog>
   )
 }
