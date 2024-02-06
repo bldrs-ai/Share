@@ -33,7 +33,7 @@ export function getComponentOverrides(palette, typography) {
             borderRadius: '10px',
             border: 'none',
             // backgroundColor: palette.primary.main,
-            color: 'white',
+            // color: 'white',
           },
         },
       ],
@@ -41,7 +41,7 @@ export function getComponentOverrides(palette, typography) {
     MuiSnackbarContent: {
       styleOverrides: {
         root: {
-          color: 'white',
+          // color: 'white',
           // backgroundColor: palette.primary.main,
           maxWidth: '20em',
           borderRadius: '10px',
@@ -200,7 +200,7 @@ export function getComponentOverrides(palette, typography) {
         'padding': 1,
         '&$checked, &$colorPrimary$checked, &$colorSecondary$checked': {
           'transform': 'translateX(16px)',
-          'color': '#fff',
+          // 'color': '#fff',
           '& + $track': {
             opacity: 1,
             border: 'none',
@@ -214,7 +214,7 @@ export function getComponentOverrides(palette, typography) {
       track: {
         borderRadius: 13,
         border: '1px solid #bdbdbd',
-        backgroundColor: '#fafafa',
+        // backgroundColor: '#fafafa',
         opacity: 1,
         transition: 'background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,border 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
       },
