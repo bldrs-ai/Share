@@ -103,7 +103,6 @@ export function ControlButton({
         onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
         selected={isDialogDisplayed}
-        className='icon-share'
         variant={variant}
       />
       {isDialogDisplayed && children}
@@ -152,8 +151,8 @@ export function RectangularButton({
   assertDefined(title, onClick)
   return (
     icon ?
-      <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button> :
-      <Button onClick={onClick} variant='rectangular' disabled={disabled}>{title}</Button>
+      <Button onClick={onClick} startIcon={icon} variant='rectangular' color='secondary'>{title}</Button> :
+      <Button onClick={onClick} variant='rectangular' color='secondary' disabled={disabled}>{title}</Button>
   )
 }
 

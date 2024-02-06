@@ -9,11 +9,6 @@
   height="100"
   viewBox="0 0 68 90">
   <style>
-    text {
-      text-anchor: middle;
-      font: normal 10pt sans-serif;
-      fill: green;
-    }
     .face {
       stroke: black;
     }

@@ -104,13 +104,13 @@ export default function LoginMenu() {
         }}
         >
           {theme.palette.mode === 'light' ?
-          <WbSunnyOutlinedIcon className='icon-share'/> :
-          <NightlightOutlinedIcon className='icon-share'/> }
+          <NightlightOutlinedIcon className='icon-share'/> :
+          <WbSunnyOutlinedIcon className='icon-share'/> }
           <Typography
             sx={{marginLeft: '10px'}}
             variant='overline'
           >
-            {`${theme.palette.mode === 'light' ? 'Day' : 'Night'} theme`}
+            {`${theme.palette.mode === 'light' ? 'Night' : 'Day'} theme`}
           </Typography>
         </MenuItem>
       </Menu>

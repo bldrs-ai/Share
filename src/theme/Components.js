@@ -8,8 +8,8 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            color: palette.primary.contrastText,
-            backgroundColor: palette.primary.main,
+            // color: palette.primary.contrastText,
+            // backgroundColor: palette.primary.main,
             borderRadius: '5px',
           },
           '& > div.MuiTreeItem-content': {
@@ -32,7 +32,7 @@ export function getComponentOverrides(palette, typography) {
             height: '40px',
             borderRadius: '10px',
             border: 'none',
-            backgroundColor: palette.primary.main,
+            // backgroundColor: palette.primary.main,
             color: 'white',
           },
         },
@@ -42,7 +42,7 @@ export function getComponentOverrides(palette, typography) {
       styleOverrides: {
         root: {
           color: 'white',
-          backgroundColor: palette.primary.main,
+          // backgroundColor: palette.primary.main,
           maxWidth: '20em',
           borderRadius: '10px',
         },
@@ -60,7 +60,7 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'outlined'},
           style: ({theme}) => ({
-            backgroundColor: theme.palette.primary.background,
+            // backgroundColor: theme.palette.primary.main,
             boxShadow: theme.shadows[0],
             opacity: .9,
           }),
@@ -74,7 +74,7 @@ export function getComponentOverrides(palette, typography) {
           'height': '40px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: palette.primary.background,
+            // backgroundColor: palette.primary.main,
             opacity: .9,
           },
         },
@@ -94,7 +94,7 @@ export function getComponentOverrides(palette, typography) {
             'border': 'none',
             'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
-              backgroundColor: palette.primary.background,
+              // backgroundColor: palette.primary.main,
               opacity: .9,
             },
           },
@@ -104,7 +104,7 @@ export function getComponentOverrides(palette, typography) {
           style: {
             'borderRadius': '0px',
             '&.Mui-selected, &.Mui-selected:hover': {
-              backgroundColor: palette.scene.background,
+              // backgroundColor: palette.scene.background,
               opacity: .9,
             },
           },
@@ -119,7 +119,7 @@ export function getComponentOverrides(palette, typography) {
             'margin': '0px 4px 2px 0px',
             // 'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
-              backgroundColor: palette.primary.background,
+              // backgroundColor: palette.primary.main,
               opacity: .9,
             },
           },
@@ -146,7 +146,6 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'control'},
           style: ({ownerState, theme}) => ({
-            backgroundColor: palette.primary.background,
             boxShadow: theme.shadows[ownerState.elevation],
           }),
         },
@@ -160,7 +159,6 @@ export function getComponentOverrides(palette, typography) {
         {
           props: {variant: 'note'},
           style: {
-            backgroundColor: palette.scene.background,
             marginBottom: '10px',
           },
         },
@@ -185,7 +183,7 @@ export function getComponentOverrides(palette, typography) {
     MuiTextField: {
       styleOverrides: {
         root: {
-          backgroundColor: palette.primary.background,
+          // backgroundColor: palette.primary.main,
           borderRadius: '10px',
           opacity: .9,
         },
@@ -224,7 +222,7 @@ export function getComponentOverrides(palette, typography) {
     MuiSelect: {
       styleOverrides: {
         root: {
-          background: palette.primary.background,
+          // background: palette.primary.main,
         },
       },
     },

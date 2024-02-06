@@ -77,10 +77,6 @@ function ImagineDialog({
     }
   }, [viewer, model, cameraControls])
 
-  const closeDialog = () => {
-    setIsDialogDisplayed(false)
-  }
-
   const handleClear = () => {
     setPrompt('')
     setIsImagineLoading(false)
@@ -91,13 +87,15 @@ function ImagineDialog({
 
   return (
     <Dialog
-      headerIcon={<BotIcon style={{height: '60px'}}/>}
-      headerText={'Imagine'}
+      headerIcon={null}
+      headerText={
+        <>
+          <BotIcon style={{height: '60px'}}/><br/>
+          Imagine
+        </>
+      }
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={closeDialog}
-      actionTitle='Close'
-      actionCb={closeDialog}
-      hideActionButton={true}
+      setIsDialogDisplayed={setIsDialogDisplayed}
     >
       <Helmet>
         <title>Bot the Bldr</title>

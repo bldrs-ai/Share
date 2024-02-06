@@ -18,17 +18,13 @@ export function LogoB() {
 /** @return {React.ReactElement} */
 export function LogoBWithDomain() {
   const theme = useTheme()
+  // We're currently only showing Logo in dialogs, etc. so
+  // use secondary contrastText
   return (
     <ThemeBox>
       <LogoBWithDomainIcon
-        sx={{
-          '& svg': {
-            '& text': {
-              // We're currently only showing Logo in dialogs, etc. so
-              // use secondary contrastText
-              fill: theme.palette.secondary.contrastText,
-            },
-          },
+        style={{
+          fill: theme.palette.secondary.contrastText,
         }}
       />
     </ThemeBox>

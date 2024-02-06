@@ -8,6 +8,7 @@ import DialogTitle from '@mui/material/DialogTitle'
 import IconButton from '@mui/material/IconButton'
 import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
+import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
 import CloseIcon from '@mui/icons-material/Close'
 
@@ -19,8 +20,8 @@ import CloseIcon from '@mui/icons-material/Close'
  * @property {string} headerText Short message describing the operation
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
- * @property {string} actionTitle Title for the action button
- * @property {Function} actionCb Callback for action button
+ * @property {string} [actionTitle] Title for the action button
+ * @property {Function} [actionCb] Callback for action button
  * @property {React.ReactElement} children Content of the dialog
  * @return {React.ReactElement}
  */
@@ -31,15 +32,14 @@ export default function Dialog({
   setIsDialogDisplayed,
   actionTitle,
   actionCb,
-  hideActionButton = false,
   children,
 }) {
   assertDefined(
-      headerIcon, headerText,
+      headerText,
       isDialogDisplayed, setIsDialogDisplayed,
-      actionTitle, actionCb,
       children)
   const close = () => setIsDialogDisplayed(false)
+  const theme = useTheme()
   return (
     <MuiDialog
       open={isDialogDisplayed}
@@ -56,15 +56,15 @@ export default function Dialog({
            }}
          >
            <Paper
-             color='secondary'
              sx={{
-               width: '2em',
-               height: '2em',
-               borderRadius: '50%',
                display: 'flex',
                flexDirection: 'column',
                alignItems: 'center',
                justifyContent: 'center',
+               width: '2em',
+               height: '2em',
+               borderRadius: '50%',
+               background: theme.palette.secondary.main,
              }}
            >
              {headerIcon}
@@ -78,7 +78,7 @@ export default function Dialog({
         <CloseIcon fontSize='inherit'/>
       </IconButton>
       <DialogContent>{children}</DialogContent>
-      {hideActionButton ? null :
+      {(actionTitle === undefined || actionTitle === undefined) ? null :
        <DialogActions>
          <Button variant='contained' onClick={actionCb} >
            {actionTitle}

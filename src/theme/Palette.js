@@ -9,8 +9,8 @@ export const day = {
 
   // The 3d canvas and ControlButtons on it.
   primary: {
-    main: colors.grey.lightest,
-    light: colors.grey.white,
+    main: colors.grey.light,
+    light: colors.grey.lightest,
     dark: colors.grey.medium,
     contrastText: colors.grey.darkest,
     highlight: 'red',
@@ -18,12 +18,12 @@ export const day = {
 
   // Side drawer, dialogs
   secondary: {
-    main: '#00CCFF', //  flour blue:       tron-row4-col1
-    light: '#00EEFF', // flour blue light: tron-row4-col2
-    dark: '#00CCEE', //  flour blue dark:  tron-row4-col3
+    main: colors.grey.medium,
+    light: colors.grey.light,
+    dark: colors.grey.dark,
     contrastText: colors.grey.darkest,
     background: 'white', // , 'white', // colors.grey.light,
-    highlight: 'orange', // '#ffc700', // orange: tron row5 col2
+    highlight: '#ffc700', // orange: tron row5 col2
   },
 
   background: {
@@ -50,17 +50,15 @@ export const night = {
     light: colors.grey.medium,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
-    highlight: 'red',
   },
 
   // Side drawer, dialogs
   secondary: {
-    main: '#00CCFF', //  flour blue:       tron-row4-col1
-    light: '#00EEFF', // flour blue light: tron-row4-col2
-    dark: '#00CCEE', //  flour blue dark:  tron-row4-col3
-    contrastText: colors.grey.darkest,
+    main: colors.grey.dark,
+    light: colors.grey.medium,
+    dark: colors.grey.darkest,
+    contrastText: colors.grey.lightest,
     background: 'white', // , 'white', // colors.grey.light,
-    highlight: 'orange', // '#ffc700', // orange: tron row5 col2
   },
 
   background: {

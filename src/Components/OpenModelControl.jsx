@@ -1,12 +1,11 @@
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
-import Link from '@mui/material/Link'
+import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {RectangularButton} from '../Components/Buttons'
 import {checkOPFSAvailability} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
@@ -17,9 +16,9 @@ import {
 } from '../utils/loader'
 import {ControlButton} from './Buttons'
 import Dialog from './Dialog'
+import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import UploadIcon from '../assets/icons/Upload.svg'
 
 
 /**
@@ -135,8 +134,7 @@ function OpenModelDialog({
       headerText={'Open'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Open local file'}
-      actionIcon={<UploadIcon className='icon-share'/>}
+      actionTitle={'Open model'}
       actionCb={openFile}
     >
       <Stack
@@ -146,17 +144,28 @@ function OpenModelDialog({
         alignItems="center"
         sx={{width: '280px'}}
       >
-        <SampleModelFileSelector
-          navigate={navigate}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-        {isAuthenticated ?
+        <>
+          <Typography
+            variant='overline'
+            sx={{marginBottom: '6px'}}
+          >
+            Browse sample models
+          </Typography>
+          <SampleModelFileSelector
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        </>
+        {!isAuthenticated ?
+
+         <PleaseLogin/> :
+
          <Stack>
            <Typography
              variant='overline'
              sx={{marginBottom: '6px'}}
            >
-             Projects
+             Browse your GitHub projects
            </Typography>
            <Selector
              label='Organization'
@@ -180,29 +189,21 @@ function OpenModelDialog({
            />
            {selectedFileName !== '' &&
             <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-              <RectangularButton
-                title={'Load file'}
+              <Button
                 onClick={navigateToFile}
-              />
+              >
+                Load file
+              </Button>
             </Box>
            }
-         </Stack> :
-         <Box sx={{padding: '0px 10px'}} elevation={0}>
-           <Stack sx={{textAlign: 'left'}}>
-             <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-               Please login to GitHub to get access to your projects.
-               Visit our {' '}
-               <Link
-                 href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
-                 color='inherit'
-                 variant='body1'
-               >
-                 wiki
-               </Link> to learn more about GitHub hosting.
-             </Typography>
-           </Stack>
-         </Box>
+         </Stack>
         }
+        <Typography
+          variant='overline'
+          sx={{marginBottom: '6px'}}
+        >
+          Open local model
+        </Typography>
       </Stack>
     </Dialog>
   )

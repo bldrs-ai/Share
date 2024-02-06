@@ -254,13 +254,11 @@ export const CardFooter = ({
               height: '20px',
               borderRadius: '50%',
               margin: '0px 8px',
-              backgroundColor: theme.palette.primary.main,
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
               fontSize: '.84em',
-              color: theme.palette.primary.contrastText,
             }}
             role='button'
             tabIndex={0}

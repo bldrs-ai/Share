@@ -32,7 +32,7 @@ describe('LoginMenu', () => {
     const usersMenu = await findByTitle('Users menu')
     fireEvent.click(usersMenu)
 
-    const dayThemeButton = await findByText('Day theme')
+    const dayThemeButton = await findByText('Night theme')
     expect(dayThemeButton).toBeInTheDocument()
   })
 
@@ -41,10 +41,10 @@ describe('LoginMenu', () => {
     const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
     const usersMenu = await findByTitle('Users menu')
     fireEvent.click(usersMenu)
-    const dayThemeButton = await findByText('Day theme')
+    const dayThemeButton = await findByText('Night theme')
     fireEvent.click(dayThemeButton)
 
-    const nighThemeButton = await findByText('Night theme')
+    const nighThemeButton = await findByText('Day theme')
     expect(nighThemeButton).toBeInTheDocument()
   })
 

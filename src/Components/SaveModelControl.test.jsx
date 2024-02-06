@@ -12,7 +12,7 @@ describe('Save Model Dialog', () => {
   it('Renders a login message if the user is not logged in', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
     const {getByTitle, getByText} = render(<SaveModelControlFixture/>)
-    const button = getByTitle('Save IFC')
+    const button = getByTitle('Save')
     fireEvent.click(button)
     const loginTextMatcher = (content, node) => {
       const hasText = (_node) => _node.textContent.includes('Please login to GitHub')
@@ -29,7 +29,7 @@ describe('Save Model Dialog', () => {
   it('Renders file selector if the user is logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {getByTitle, getByTestId} = render(<SaveModelControlFixture/>)
-    const button = getByTitle('Save IFC')
+    const button = getByTitle('Save')
     fireEvent.click(button)
     const File = getByTestId('CreateFileId')
     const Repository = await getByTestId('Repository')

@@ -34,7 +34,7 @@ export default function AboutControl() {
       variant='noBackground'
       sx={{
         position: 'fixed',
-        bottom: '1m',
+        bottom: '1em',
         left: '1em',
       }}
     >
@@ -62,12 +62,17 @@ export default function AboutControl() {
 export function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   return (
     <Dialog
-      headerIcon={
-        <Link href='/'>
-          <LogoBWithDomain/>
-        </Link>
+      headerIcon={null}
+      headerText={
+        (
+          <>
+            <Link href='/'>
+              <LogoBWithDomain/>
+            </Link>
+            Build every thing together
+          </>
+        )
       }
-      headerText='Build every thing together'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='OK'

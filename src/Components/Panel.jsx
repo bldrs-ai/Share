@@ -28,7 +28,7 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
-        'backgroundColor': theme.palette.scene.background,
+        'backgroundColor': theme.palette.scene.main,
         '@media (max-width: 800px)': {
           maxHeight: '400px',
         },
@@ -42,7 +42,6 @@ export default function Panel({title, onClose, content, testId = '', action = nu
           position: 'sticky',
           height: '40px',
           top: 0,
-          backgroundColor: theme.palette.primary.background,
           zIndex: 1,
         }}
       >

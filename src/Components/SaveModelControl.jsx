@@ -1,8 +1,6 @@
 import React, {useState, useContext, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
-import Box from '@mui/material/Box'
 import IconButton from '@mui/material/IconButton'
-import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -16,8 +14,9 @@ import {
   getFilesAndFolders,
 } from '../utils/GitHub'
 import debug from '../utils/debug'
-import {TooltipIconButton} from './Buttons'
+import {ControlButton} from './Buttons'
 import Dialog from './Dialog'
+import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
@@ -53,24 +52,19 @@ export default function SaveModelControl({navigate}) {
 
 
   return (
-    <Box sx={{marginRight: '6px'}}>
-      <TooltipIconButton
-        title={'Save IFC'}
-        onClick={() => setIsDialogDisplayed(true)}
-        icon={<SaveOutlinedIcon className='icon-share'/>}
-        placement={'bottom'}
-        selected={isDialogDisplayed}
-        dataTestId='save-ifc'
+    <ControlButton
+      title={'Save'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      icon={<SaveOutlinedIcon className='icon-share'/>}
+    >
+      <SaveModelDialog
+        isDialogDisplayed={isDialogDisplayed}
+        setIsDialogDisplayed={setIsDialogDisplayed}
+        navigate={navigate}
+        orgNamesArr={orgNamesArr}
       />
-      {isDialogDisplayed &&
-        <SaveModelDialog
-          isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-          navigate={navigate}
-          orgNamesArr={orgNamesArr}
-        />
-      }
-    </Box>
+    </ControlButton>
   )
 }
 
@@ -226,9 +220,8 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       headerText={'Save'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Save File'}
+      actionTitle={'Save model'}
       actionCb={saveFile}
-      hideActionButton={!isAuthenticated}
     >
       <Stack
         spacing={1}
@@ -237,7 +230,10 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         alignItems="center"
         sx={{paddingTop: '6px', width: '280px'}}
       >
-        {isAuthenticated ?
+        {!isAuthenticated ?
+
+         <PleaseLogin/> :
+
          <Stack>
            <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
            <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
@@ -291,22 +287,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              }}
              data-testid="CreateFileId"
            />
-         </Stack> :
-         <Box elevation={0} sx={{padding: '0px 10px'}} >
-           <Stack sx={{textAlign: 'left'}}>
-             <Typography variant={'body1'} sx={{marginTop: '10px'}}>
-               Please login to GitHub to get access to your projects.
-               Visit our {' '}
-               <Link
-                 href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
-                 color='inherit'
-                 variant='body1'
-               >
-                 wiki
-               </Link> to learn more about GitHub hosting.
-             </Typography>
-           </Stack>
-         </Box>
+         </Stack>
         }
       </Stack>
     </Dialog>

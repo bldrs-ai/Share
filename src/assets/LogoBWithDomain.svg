@@ -12,7 +12,6 @@
     text {
       text-anchor: middle;
       font: normal 10pt sans-serif;
-      fill: green;
     }
     .face {
       stroke: black;
@@ -23,9 +22,6 @@
     .face-front {
       fill: white;
     }
-    .contrast-text {
-      fill: black;
-    }
   </style>
   <g transform="translate(15, 15) scale(0.6)">
     <path class="face face-left" d="M17.9675 2L4.93939 8.07977V87.9853H17.9675V2Z"/>
@@ -33,6 +29,6 @@
     <path class="face face-front" d="M17.9675 2L45.7607 4.9999V40.2734L36.2068 39.3472L19.5707 43.6636V87.9853H17.9675V2Z"/>
     <path class="face face-front" d="M36.1648 39.292L36.2068 87.9852H64V42.0577L36.1648 39.292Z"/>
   </g>
-  <text x="34" y="90" class="contrast-text">BLDRS.AI</text>
+  <text x="34" y="90" class="title">BLDRS.AI</text>
 </svg>
 <!-- Keep this in sync with ./LogoB.svg -->
