@@ -10,7 +10,7 @@ import InputBase from '@mui/material/InputBase'
 import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
-import {createIssue} from '../../utils/GitHub'
+import {createIssue, createComment, getIssueComments} from '../../utils/GitHub'
 import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
 
@@ -25,14 +25,16 @@ import CheckIcon from '@mui/icons-material/Check'
 export default function NoteCardCreate({
   username = '',
   avatarUrl = '',
+  noteNumber = null,
+  isNote = true,
 }) {
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
+  const setComments = useStore((state) => state.setComments)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState(null)
-
 
   /**
    * create issue takes in the title and body of the note from the state
@@ -45,17 +47,55 @@ export default function NoteCardCreate({
       title,
       body: body || '',
     }
-
     await createIssue(repository, issuePayload, accessToken)
     toggleIsCreateNoteActive()
   }
 
-  const submitEnabled = title !== null && title !== ''
+
+  /**
+   * create a comment based on noteNumber
+   *
+   * @param {string} commentBody
+   * @param {number} noteNumber
+   * @return {void}
+   */
+  async function createNewComment() {
+    assertStringNotEmpty(body)
+    const commentPayload = {
+      body: body || '',
+    }
+    setBody('')
+    await createComment(repository, noteNumber, commentPayload, accessToken)
+    fetchComments()
+  }
+
+  const fetchComments = async () => {
+    const newComments = []
+    const commentArr = await getIssueComments(repository, noteNumber, accessToken)
+
+    if (commentArr) {
+      commentArr.map((comment) => {
+        newComments.push({
+          id: comment.id,
+          body: comment.body,
+          date: comment.created_at,
+          username: comment.user.login,
+          avatarUrl: comment.user.avatar_url,
+          synched: true,
+        })
+      })
+    }
+    setComments(newComments)
+  }
+
+  const noteSubmitEnabled = title !== null && title !== ''
+  const commentSubmitEnabled = body !== null && body !== ''
   return (
     <Card
       elevation={1}
       variant='note'
     >
+      {isNote &&
       <CardHeader
         title={
           <InputBase
@@ -74,7 +114,7 @@ export default function NoteCardCreate({
             /> :
             <Avatar alt={username} src={avatarUrl}/>
         }
-      />
+      />}
       <CardContent>
         <Box
           sx={{
@@ -86,7 +126,7 @@ export default function NoteCardCreate({
             onChange={(event) => setBody(event.target.value)}
             fullWidth
             multiline
-            placeholder={'Note Body'}
+            placeholder={isNote ? 'Note Body' : 'Comment body'}
             inputProps={{maxLength: 256}}
           />
         </Box>
@@ -98,16 +138,29 @@ export default function NoteCardCreate({
           direction='row'
           sx={{width: '100%'}}
         >
+          {isNote &&
           <TooltipIconButton
             title='Submit'
             onClick={async () => {
               await createNote()
             }}
             icon={<CheckIcon/>}
-            enabled={submitEnabled}
+            enabled={noteSubmitEnabled}
             size='small'
             placement='bottom'
-          />
+          />}
+          {!isNote &&
+            <TooltipIconButton
+              title='Submit'
+              onClick={async () => {
+                await createNewComment()
+              }}
+              icon={<CheckIcon/>}
+              enabled={commentSubmitEnabled}
+              size='small'
+              placement='bottom'
+            />
+          }
         </Stack>
       </CardActions>
     </Card>

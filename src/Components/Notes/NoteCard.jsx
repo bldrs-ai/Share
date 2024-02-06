@@ -187,18 +187,17 @@ export default function NoteCard({
       variant='note'
       sx={{fontSize: '1em'}}
     >
-      {isComment &&
+      {/* {isComment &&
         <CardHeader
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
-        /> }
-      {!isComment &&
-        <CardHeader
-          title={title}
-          avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
-          action={
-            synched && user && user.nickname === username &&
+        /> } */}
+      <CardHeader
+        title={title}
+        avatar={<Avatar alt={username} src={avatarUrl}/>}
+        subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+        action={
+          synched && user && user.nickname === username &&
           <CardMenu
             handleMenuClick={handleMenuClick}
             handleMenuClose={handleMenuClose}
@@ -208,8 +207,8 @@ export default function NoteCard({
             noteNumber={noteNumber}
             open={open}
           />
-          }
-        /> }
+        }
+      />
       {!editMode && !isComment && !selected &&
        <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
       {selected && !editMode && <SelectedCardBody editBody={editBody}/>}

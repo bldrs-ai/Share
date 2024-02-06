@@ -22,6 +22,7 @@ export const NOTE_PREFIX = 'i'
  */
 export default function Notes() {
   const [hasError, setHasError] = useState(false)
+  const addComment = useStore((state) => state.addComment)
   const {user} = useAuth0()
   const isMobile = useIsMobile()
   const accessToken = useStore((state) => state.accessToken)
@@ -131,6 +132,7 @@ export default function Notes() {
         synched={selectedNote.synched}
       />
     }
+    {addComment && selectedNote && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
     {comments && selectedNote &&
       comments.map((comment, index) => {
         return (

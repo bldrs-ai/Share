@@ -122,10 +122,12 @@ export const CardFooter = ({
   synched,
 }) => {
   const [shareIssue, setShareIssue] = useState(false)
+  const addComment = useStore((state) => state.addComment)
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const toggleAddComment = useStore((state) => state.toggleAddComment)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
@@ -248,16 +250,16 @@ export const CardFooter = ({
               icon={<ForumOutlinedIcon className='icon-share'/>}
             />
           }
-          {selected &&
+          {user && selected &&
             <TooltipIconButton
               title='Discussion'
               size='small'
               placement='bottom'
-              onClick={selectCard}
+              onClick={toggleAddComment}
+              selected={addComment}
               icon={<AddIcon className='icon-share'/>}
             />
           }
-
           <Box
             sx={{
               width: '20px',

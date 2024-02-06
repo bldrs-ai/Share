@@ -8,6 +8,7 @@
 export default function createNotesSlice(set, get) {
   return {
     notes: null,
+    addComment: true,
     isLoadingNotes: false,
     isCreateNoteActive: false,
     createdNotes: null,
@@ -23,6 +24,7 @@ export default function createNotesSlice(set, get) {
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),
+    toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
     setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
     setComments: (comments) => set(() => ({comments: comments})),
