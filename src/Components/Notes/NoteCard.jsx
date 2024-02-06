@@ -4,7 +4,7 @@ import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import {
-  CardFooter,
+  NoteCardFooter,
   CardMenu,
   RegularCardBody,
   SelectedCardBody,
@@ -53,6 +53,7 @@ export default function NoteCard({
   numberOfComments = null,
   isComment = false,
   synched = true,
+  isNote = true,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -187,11 +188,6 @@ export default function NoteCard({
       variant='note'
       sx={{fontSize: '1em'}}
     >
-      {/* {isComment &&
-        <CardHeader
-          avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
-        /> } */}
       <CardHeader
         title={title}
         avatar={<Avatar alt={username} src={avatarUrl}/>}
@@ -204,8 +200,10 @@ export default function NoteCard({
             anchorEl={anchorEl}
             actviateEditMode={actviateEditMode}
             deleteNote={deleteNote}
+            deleteComment={deleteComment}
             noteNumber={noteNumber}
             open={open}
+            isNote={isNote}
           />
         }
       />
@@ -219,7 +217,7 @@ export default function NoteCard({
          value={editBody}
        />
       }
-      <CardFooter
+      <NoteCardFooter
         editMode={editMode}
         id={id}
         noteNumber={noteNumber}

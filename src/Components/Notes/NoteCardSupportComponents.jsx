@@ -19,6 +19,7 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import CheckIcon from '@mui/icons-material/Check'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
@@ -30,8 +31,10 @@ export const CardMenu = ({
   anchorEl,
   actviateEditMode,
   deleteNote,
+  deleteComment,
   noteNumber,
   open,
+  isNote,
 }) => {
   return (
     <>
@@ -41,30 +44,66 @@ export const CardMenu = ({
         icon={<MoreVertIcon className='icon-share' color='secondary'/>}
         onClick={handleMenuClick}
       />
-      <Menu
-        elevation={1}
-        id='basic-menu'
-        anchorEl={anchorEl}
-        open={open}
-        onClose={handleMenuClose}
-        anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-        transformOrigin={{vertical: 'top', horizontal: 'center'}}
-        PaperProps={{
-          style: {
-            left: '200px',
-            transform: 'translateX(-70px) translateY(0px)',
-          },
-        }}
-      >
-        <MenuItem onClick={actviateEditMode}>
-          <EditOutlinedIcon/>
-          <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
-        </MenuItem>
-        <MenuItem onClick={() => deleteNote(noteNumber)}>
-          <DeleteOutlineOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
-        </MenuItem>
-      </Menu>
+      {isNote &&
+        <Menu
+          elevation={1}
+          id='basic-menu'
+          anchorEl={anchorEl}
+          open={open}
+          onClose={handleMenuClose}
+          anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+          transformOrigin={{vertical: 'top', horizontal: 'center'}}
+          PaperProps={{
+            style: {
+              left: '200px',
+              transform: 'translateX(-70px) translateY(0px)',
+            },
+          }}
+        >
+          <MenuItem onClick={() => {
+            actviateEditMode()
+            handleMenuClose()
+          }}
+          >
+            <EditOutlinedIcon/>
+            <Typography variant='overline' sx={{marginLeft: '10px'}}>Edit</Typography>
+          </MenuItem>
+          <MenuItem onClick={() => {
+            deleteNote()
+            handleMenuClose()
+          }}
+          >
+            <DeleteOutlineOutlinedIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
+          </MenuItem>
+        </Menu>
+      }
+      {!isNote &&
+        <Menu
+          elevation={1}
+          id='basic-menu'
+          anchorEl={anchorEl}
+          open={open}
+          onClose={handleMenuClose}
+          anchorOrigin={{vertical: 'top', horizontal: 'center'}}
+          transformOrigin={{vertical: 'top', horizontal: 'center'}}
+          PaperProps={{
+            style: {
+              left: '200px',
+              transform: 'translateX(-70px) translateY(0px)',
+            },
+          }}
+        >
+          <MenuItem onClick={() => {
+            deleteComment()
+            handleMenuClose()
+          }}
+          >
+            <DeleteOutlineOutlinedIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete Comment</Typography>
+          </MenuItem>
+        </Menu>
+      }
     </>
 
   )
@@ -107,7 +146,7 @@ export const CommentCardBody = ({editBody}) => {
   )
 }
 
-export const CardFooter = ({
+export const NoteCardFooter = ({
   id,
   noteNumber,
   editMode,
@@ -120,7 +159,9 @@ export const CardFooter = ({
   selected,
   isComment,
   synched,
+  submitUpdate,
 }) => {
+  const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
   const addComment = useStore((state) => state.addComment)
   const viewer = useStore((state) => state.viewer)
@@ -239,6 +280,24 @@ export const CardFooter = ({
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
+        {user && selected &&
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='bottom'
+              onClick={toggleAddComment}
+              selected={addComment}
+              icon={<AddIcon className='icon-share'/>}
+            />
+        }
+        {editMode &&
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
         {numberOfComments > 0 && !editMode &&
         <>
           {!selected &&
@@ -248,16 +307,6 @@ export const CardFooter = ({
               placement='bottom'
               onClick={selectCard}
               icon={<ForumOutlinedIcon className='icon-share'/>}
-            />
-          }
-          {user && selected &&
-            <TooltipIconButton
-              title='Discussion'
-              size='small'
-              placement='bottom'
-              onClick={toggleAddComment}
-              selected={addComment}
-              icon={<AddIcon className='icon-share'/>}
             />
           }
           <Box

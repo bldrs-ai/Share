@@ -2,15 +2,17 @@ import React, {useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import List from '@mui/material/List'
 import * as Sentry from '@sentry/react'
+import CommentCardCreate from './CommentCardCreate'
+import CommentCard from './CommentCard'
+import NoteCard from './NoteCard'
+import NoteCardCreate from './NoteCardCreate'
+import ApplicationError from '../ApplicationError'
 import debug from '../../utils/debug'
 import useStore from '../../store/useStore'
 import {useIsMobile} from '../Hooks'
 import {getIssueComments} from '../../utils/GitHub'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
-import NoteCard from './NoteCard'
-import NoteCardCreate from './NoteCardCreate'
-import ApplicationError from '../ApplicationError'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
@@ -114,6 +116,7 @@ export default function Notes() {
               numberOfComments={note.numberOfComments}
               avatarUrl={note.avatarUrl}
               synched={note.synched}
+              isNote={true}
             />
           )
         })
@@ -130,13 +133,14 @@ export default function Notes() {
         numberOfComments={selectedNote.numberOfComments}
         avatarUrl={selectedNote.avatarUrl}
         synched={selectedNote.synched}
+        isNote={true}
       />
     }
-    {addComment && selectedNote && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
+    {addComment && selectedNote && <CommentCardCreate isNote={false} noteNumber={selectedNote.number}/>}
     {comments && selectedNote &&
       comments.map((comment, index) => {
         return (
-          <NoteCard
+          <CommentCard
             key={index}
             isComment={true}
             id={comment.id}
@@ -146,6 +150,7 @@ export default function Notes() {
             username={comment.username}
             avatarUrl={comment.avatarUrl}
             synched={comment.synched}
+            commentId={comment.id}
           />
         )
       })
