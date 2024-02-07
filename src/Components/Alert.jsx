@@ -9,21 +9,16 @@ import CheckIcon from '@mui/icons-material/Check'
 
 
 /**
- * @param {Function} onCloseCb
- * @param {string} title
- * @param {string} message
- * @return {object} React component
+ * @property {Function} onCloseCb Called on close
+ * @property {string} [title] Optional title. Default: 'Oops'
+ * @return {React.ReactElement}
  */
-export default function Alert({onCloseCb, title = 'Oops', message}) {
+export default function Alert({onCloseCb, title = 'Oops', children}) {
   const [isOpen, setIsOpen] = useState(true)
-
-
   const handleClose = () => {
     setIsOpen(false)
     onCloseCb()
   }
-
-
   return (
     <Dialog
       open={isOpen}
@@ -33,7 +28,7 @@ export default function Alert({onCloseCb, title = 'Oops', message}) {
     >
       <DialogTitle id="alert-dialog-title">{title}</DialogTitle>
       <DialogContent>
-        <DialogContentText id="alert-dialog-description">{message}</DialogContentText>
+        <DialogContentText id="alert-dialog-description">{children}</DialogContentText>
       </DialogContent>
       <DialogActions>
         <IconButton onClick={handleClose}><CheckIcon/></IconButton>

@@ -1,7 +1,6 @@
 import React, {useEffect, useRef} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
-import Drawer from '@mui/material/Drawer'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
@@ -22,23 +21,22 @@ import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 export default function SideDrawer() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
-  const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
   const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
-  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
+
   const location = useLocation()
   const isMobile = useIsMobile()
-  const sidebarRef = useRef(null)
   const theme = useTheme()
+
+  const sidebarRef = useRef(null)
+
   const thickness = 10
   const isDrawerOpen = isNotesVisible === true || isPropertiesVisible === true
-  const isDividerOn = isNotesVisible && isPropertiesVisible
+  const isDividerVisible = isNotesVisible && isPropertiesVisible
   const borderOpacity = 0.5
   const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
-
 
   useEffect(() => {
     const noteHash = getHashParams(location, 'i')
@@ -50,44 +48,22 @@ export default function SideDrawer() {
     setSelectedNoteId(null)
   }, [location, setIsNotesVisible, setSelectedNoteId])
 
-
-  const drawerWidth = '400px'
   return (
-    <Drawer
-      open={isDrawerOpen}
-      onClose={() => {
-        setIsPropertiesVisible(false)
-        setIsNotesVisible(false)
-      }}
-      anchor='right'
-      variant='temporary'
-      elevation={0}
-      hideBackdrop
-      disableScrollLock
-      ModalProps={{
-        slots: {backdrop: 'div'},
-        slotprops: {
-          root: { // override the fixed position + the size of backdrop
-            style: {
-              position: 'absolute',
-              top: 'unset',
-              bottom: 'unset',
-              left: 'unset',
-              right: 'unset',
-            },
-          },
-        },
-      }}
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        [`& .MuiDrawer-paper`]: {
-          width: drawerWidth,
-          // backgroundColor: (theme) => theme.palette.primary.main,
-          boxSizing: 'border-box',
-          overflow: 'hidden',
-        },
-      }}
+    <Box
+      sx={Object.assign({
+        display: isDrawerOpen ? 'flex' : 'none',
+        flexDirection: 'row',
+      }, isMobile ? {
+        width: '100%',
+        height: sidebarHeight,
+      } : {
+        top: 0,
+        right: 0,
+        width: sidebarWidth,
+        height: '100vh',
+        minWidth: '8px',
+        maxWidth: '100vw',
+      })}
     >
       <Paper
         sx={{
@@ -96,7 +72,7 @@ export default function SideDrawer() {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
-          background: theme.palette.secondary.dark,
+          background: theme.palette.primary.background,
         }}
         ref={sidebarRef}
       >
@@ -105,8 +81,6 @@ export default function SideDrawer() {
             sidebarRef={sidebarRef}
             thickness={thickness}
             isOnLeft={true}
-            sidebarWidth={sidebarWidth}
-            setSidebarWidth={setSidebarWidth}
           />
         }
         {isMobile &&
@@ -114,14 +88,13 @@ export default function SideDrawer() {
             sidebarRef={sidebarRef}
             thickness={thickness}
             isOnTop={true}
-            sidebarHeight={sidebarHeight}
-            setSidebarHeight={setSidebarHeight}
           />
         }
         {/* Content */}
         <Box
           sx={{
             width: '100%',
+            margin: '1em',
             overflow: 'hidden',
           }}
         >
@@ -135,18 +108,18 @@ export default function SideDrawer() {
           >
             {isNotesVisible && <NotesPanel/>}
           </Box>
-          {isDividerOn && <Divider sx={{borderColor: borderColor}}/>}
+          {isDividerVisible && <Divider sx={{borderColor: borderColor}}/>}
           <Box
             sx={{
               display: isPropertiesVisible ? 'block' : 'none',
               height: isNotesVisible ? `50%` : '100%',
-              marginTop: isDividerOn ? '1em' : '0',
+              marginTop: isDividerVisible ? '1em' : '0',
             }}
           >
-            {isPropertiesVisible && <PropertiesPanel includeGutter={!isDividerOn}/>}
+            {isPropertiesVisible && <PropertiesPanel includeGutter={!isDividerVisible}/>}
           </Box>
         </Box>
       </Paper>
-    </Drawer>
+    </Box>
   )
 }

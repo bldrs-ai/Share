@@ -5,6 +5,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import Backdrop from '@mui/material/Backdrop'
 import Box from '@mui/material/Box'
 import CircularProgress from '@mui/material/CircularProgress'
+import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
 import Alert from '../Components/Alert'
@@ -175,10 +176,14 @@ export default function CadView({
 
 
   const setAlertMessage = (msg) => setAlert(
-    <Alert onCloseCb={() => {
-      navToDefault(navigate, appPrefix)
-    }} message={msg}
-    />,
+    <Alert
+      onCloseCb={() => {
+        setSnackMessage('')
+        navToDefault(navigate, appPrefix)
+      }}
+    >
+      {msg}
+    </Alert>,
   )
 
 
@@ -236,6 +241,19 @@ export default function CadView({
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad)
+    setIsModelLoading(false)
+
+    if (tmpModelRef === undefined || tmpModelRef === null) {
+      setAlertMessage(
+        <>
+          <Typography variant=''>Could not load model</Typography>
+          <Typography>{pathToLoad}</Typography>
+        </>)
+      return
+    }
+    // Leave snack message until here so alert box handler can clear
+    // it after user says OK.
+    setSnackMessage('')
 
     if (tmpModelRef === 'redirect') {
       return
@@ -300,10 +318,6 @@ export default function CadView({
           },
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
@@ -314,15 +328,11 @@ export default function CadView({
         debug().error('Retrieved object is not of type File.')
       }
 
-
       loadedModel = await viewer.loadIfcFile(
           file,
           !urlHasCameraParams(),
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
       // TODO(nickcastel50): need a more permanent way to
       // prevent redirect here for bundled ifc files
@@ -358,9 +368,6 @@ export default function CadView({
           !urlHasCameraParams(),
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else if (ifcURL === '/haus.ifc') {
       loadedModel = await viewer.loadIfcUrl(
@@ -377,10 +384,6 @@ export default function CadView({
           },
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     } else {
       // TODO(pablo): probably already available in this scope, or use
@@ -426,20 +429,8 @@ export default function CadView({
           !urlHasCameraParams(),
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
           }, customViewSettings)
     }
-
-    await viewer.isolator.setModel(loadedModel)
-
-    Analytics.recordEvent('select_content', {
-      content_type: 'ifc_model',
-      item_id: filepath,
-    })
-    setIsModelLoading(false)
-    setSnackMessage('')
 
     if (loadedModel) {
       // Fix for https://github.com/bldrs-ai/Share/issues/91
@@ -453,11 +444,18 @@ export default function CadView({
       setModel(loadedModel)
       setModelStore(loadedModel)
       updateLoadedFileInfo(uploadedFile, ifcURL)
+
+      await viewer.isolator.setModel(loadedModel)
+
+      Analytics.recordEvent('select_content', {
+        content_type: 'ifc_model',
+        item_id: filepath,
+      })
       return loadedModel
     }
 
     debug().error('CadView#loadIfc: Model load failed!')
-    return loadedModel
+    return null
   }
 
 

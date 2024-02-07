@@ -3,7 +3,7 @@ import {useDoubleTap} from 'use-double-tap'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
-import {MOBILE_HEIGHT} from '../../utils/constants'
+import useStore from '../../store/useStore'
 import {isNumber} from '../../utils/strings'
 
 
@@ -11,23 +11,26 @@ import {isNumber} from '../../utils/strings'
  * Grab button to for resizing SideDrawer vertically.
  *
  * @property {useRef} sidebarRef sidebar ref object.
- * @property {Function} setSidebarHeight sidebar width changing button.
  * @property {number} thickness resizer thickness in pixels.
  * @property {boolean} isOnTop resizer is on the top.
- * @property {string} sidebarHeight sidebar width (...px, ...vw).
  * @return {React.Component}
  */
 export default function VerticalResizerButton({
   sidebarRef,
-  setSidebarHeight,
   thickness = 10,
   isOnTop = true,
-  sidebarHeight = MOBILE_HEIGHT,
 }) {
+  const sidebarHeight = useStore((state) => state.sidebarHeight)
+  const sidebarHeightInitial = useStore((state) => state.sidebarHeightInitial)
+  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
+
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
   const resizerRef = useRef(null)
+
   const theme = useTheme()
+
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
 
@@ -46,15 +49,20 @@ export default function VerticalResizerButton({
   })
 
 
+  const half = 0.5
   const resize = useCallback(
       (mouseMoveEvent) => {
         if (isResizing) {
           if (isOnTop) {
-          // eslint-disable-next-line no-magic-numbers
-            expansionSidebarHeight = sidebarRef.current.getBoundingClientRect().bottom - mouseMoveEvent.clientY + (thickness / 2)
+            expansionSidebarHeight =
+              sidebarRef.current.getBoundingClientRect().bottom -
+              mouseMoveEvent.clientY +
+              (thickness * half)
           } else {
-          // eslint-disable-next-line no-magic-numbers
-            expansionSidebarHeight = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().top - (thickness / 2)
+            expansionSidebarHeight =
+              mouseMoveEvent.clientX -
+              sidebarRef.current.getBoundingClientRect().top -
+              (thickness * half)
           }
           if (expansionSidebarHeight < 0) {
             expansionSidebarHeight = 0
@@ -143,10 +151,13 @@ export default function VerticalResizerButton({
     if (isExpanded) {
       setSidebarHeight(expansionSidebarHeight)
     } else {
-      const defaultHeight = isNumber(MOBILE_HEIGHT) ? Math.min(window.innerHeight, MOBILE_HEIGHT) : MOBILE_HEIGHT
+      const defaultHeight =
+        isNumber(sidebarHeightInitial) ?
+        Math.min(window.innerHeight, sidebarHeightInitial) :
+        sidebarHeightInitial
       setSidebarHeight(defaultHeight)
     }
-  }, [isExpanded, setSidebarHeight])
+  }, [isExpanded, setSidebarHeight, sidebarHeightInitial])
 
 
   return (

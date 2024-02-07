@@ -1,8 +1,8 @@
 import React, {useEffect, useState, useCallback, useRef} from 'react'
 import {useDoubleTap} from 'use-double-tap'
+import useStore from '../../store/useStore'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {MOBILE_WIDTH} from '../../utils/constants'
 import {isNumber} from '../../utils/strings'
 
 
@@ -18,15 +18,20 @@ import {isNumber} from '../../utils/strings'
  */
 export default function HorizonResizerButton({
   sidebarRef,
-  setSidebarWidth,
   thickness = 100,
   isOnLeft = true,
-  sidebarWidth = MOBILE_WIDTH,
 }) {
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
+  const sidebarWidthInitial = useStore((state) => state.sidebarWidthInitial)
+  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
+
   const [isResizing, setIsResizing] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
+
   const resizerRef = useRef(null)
+
   const theme = useTheme()
+
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
   // eslint-disable-next-line no-magic-numbers
@@ -47,15 +52,20 @@ export default function HorizonResizerButton({
   })
 
 
+  const half = 0.5
   const resize = useCallback(
       (mouseMoveEvent) => {
         if (isResizing) {
           if (isOnLeft) {
-          // eslint-disable-next-line no-magic-numbers
-            expansionSidebarWidth = sidebarRef.current.getBoundingClientRect().right - mouseMoveEvent.clientX + (thickness / 2)
+            expansionSidebarWidth =
+              sidebarRef.current.getBoundingClientRect().right -
+              mouseMoveEvent.clientX +
+              (thickness * half)
           } else {
-          // eslint-disable-next-line no-magic-numbers
-            expansionSidebarWidth = mouseMoveEvent.clientX - sidebarRef.current.getBoundingClientRect().left - (thickness / 2)
+            expansionSidebarWidth =
+              mouseMoveEvent.clientX -
+              sidebarRef.current.getBoundingClientRect().left -
+              (thickness * half)
           }
           if (expansionSidebarWidth < 0) {
             expansionSidebarWidth = 0
@@ -144,10 +154,13 @@ export default function HorizonResizerButton({
     if (isExpanded) {
       setSidebarWidth(expansionSidebarWidth)
     } else {
-      const defaultWidth = isNumber(MOBILE_WIDTH) ? Math.min(window.innerWidth, MOBILE_WIDTH) : MOBILE_WIDTH
+      const defaultWidth =
+        isNumber(sidebarWidthInitial) ?
+        Math.min(window.innerWidth, sidebarWidthInitial) :
+        sidebarWidthInitial
       setSidebarWidth(defaultWidth)
     }
-  }, [isExpanded, setSidebarWidth])
+  }, [isExpanded, sidebarWidthInitial, setSidebarWidth])
 
 
   return (

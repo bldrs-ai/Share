@@ -2,7 +2,6 @@ import React from 'react'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
-import {MOBILE_WIDTH} from '../../utils/constants'
 import {useIsMobile} from '../Hooks'
 import SideDrawer from './SideDrawer'
 
@@ -49,12 +48,13 @@ describe('SideDrawer', () => {
     })
     expect(await sideDrawerRender.findByText('NOTES')).toBeVisible()
     expect(mobileHook.result.current).toBe(false)
+    const sidebarWidthInitial = storeHook.result.current.sidebarWidthInitial
     const xResizerEl = sideDrawerRender.getByTestId('x_resizer')
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
     expect(storeHook.result.current.sidebarWidth).toBe(window.innerWidth)
     fireEvent.click(xResizerEl)
     fireEvent.click(xResizerEl)
-    expect(storeHook.result.current.sidebarWidth).toBe(MOBILE_WIDTH)
+    expect(storeHook.result.current.sidebarWidth).toBe(sidebarWidthInitial)
   })
 })

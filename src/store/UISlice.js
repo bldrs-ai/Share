@@ -20,8 +20,6 @@ export default function createUISlice(set, get) {
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
-    sidebarWidth: MOBILE_WIDTH,
-    sidebarHeight: MOBILE_HEIGHT,
     appStoreSidebarWidth: MOBILE_WIDTH,
     appStoreSidebarHeight: MOBILE_HEIGHT,
     selectedStoreApp: null,
@@ -35,16 +33,12 @@ export default function createUISlice(set, get) {
       const filterPlanes = state.cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
       return {cutPlanes: filterPlanes}
     }),
-    setAppStoreSidebarHeight: (newSidebarHeight) =>
-      set(() => ({appStoreSidebarHeight: newSidebarHeight})),
-    setAppStoreSidebarWidth: (newSidebarWidth) =>
-      set(() => ({appStoreSidebarWidth: newSidebarWidth})),
+    setAppStoreSidebarHeight: (height) => set(() => ({appStoreSidebarHeight: height})),
+    setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setIsLoading: (isLoading) => set(() => ({isLoading: isLoading})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),
-    setSidebarHeight: (newSidebarHeight) => set(() => ({sidebarHeight: newSidebarHeight})),
-    setSidebarWidth: (newSidebarWidth) => set(() => ({sidebarWidth: newSidebarWidth})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),
