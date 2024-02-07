@@ -36,7 +36,7 @@ export default function SideDrawer() {
   const isDrawerOpen = isNotesVisible === true || isPropertiesVisible === true
   const isDividerVisible = isNotesVisible && isPropertiesVisible
   const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
+  const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
 
   useEffect(() => {
     const noteHash = getHashParams(location, 'i')
@@ -72,7 +72,7 @@ export default function SideDrawer() {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
-          background: theme.palette.primary.background,
+          background: theme.palette.secondary.main,
         }}
         ref={sidebarRef}
       >

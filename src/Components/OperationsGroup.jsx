@@ -45,7 +45,7 @@ export default function OperationsGroup({deselectItems}) {
       variant='contained'
       sx={{'margin': '1em', '& > *:not(:last-child)': {margin: '0.2em 0'}}}
     >
-      {isLoginEnabled && (<><LoginMenu/><Divider/></>)}
+      {isLoginEnabled && (<><LoginMenu/><Divider sx={{pt: '5px'}}/></>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}
       {isSelected() && selectedElement !== null &&

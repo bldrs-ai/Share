@@ -4,20 +4,6 @@
  */
 export function getComponentOverrides(palette, typography) {
   return {
-    MuiTreeItem: {
-      styleOverrides: {
-        root: {
-          '& > div.Mui-selected, & > div.Mui-selected:hover': {
-            // color: palette.primary.contrastText,
-            // backgroundColor: palette.primary.main,
-            borderRadius: '5px',
-          },
-          '& > div.MuiTreeItem-content': {
-            borderRadius: '5px',
-          },
-        },
-      },
-    },
     MuiButton: {
       styleOverrides: {
         root: {
@@ -38,16 +24,6 @@ export function getComponentOverrides(palette, typography) {
         },
       ],
     },
-    MuiSnackbarContent: {
-      styleOverrides: {
-        root: {
-          // color: 'white',
-          // backgroundColor: palette.primary.main,
-          maxWidth: '20em',
-          borderRadius: '10px',
-        },
-      },
-    },
     MuiButtonGroup: {
       variants: [
         {
@@ -67,6 +43,141 @@ export function getComponentOverrides(palette, typography) {
         },
       ],
     },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          // ?? Mui cards don't seem to have theme support for color grading
+          // the different elts.
+          // background: palette.secondary.main,
+        },
+      },
+    },
+    MuiCardContent: {
+      styleOverrides: {
+        root: {
+          // 'padding': '0px 20px',
+          '& img': {
+            width: '100%',
+          },
+          // TODO(pablo): react-markdown has leading margin on first elt
+          '& p': {
+            marginTop: 0,
+          },
+          // TODO(pablo): react-markdown sets smaller?
+          'fontSize': '1rem',
+          'lineHeight': 1.5,
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          borderRadius: '10px',
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          justifyContent: 'center',
+          padding: '1em 0px',
+        },
+      },
+    },
+    MuiDialogContent: {
+      styleOverrides: {
+        root: {
+          padding: '0px 10px',
+          overflowX: 'hidden',
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          fontWeight: 400,
+          textAlign: 'center',
+        },
+      },
+    },
+    MuiListItem: {
+      styleOverrides: {
+        root: {
+          padding: '0.5em 0',
+        },
+      },
+    },
+    MuiPaper: {
+      variants: [
+        {
+          props: {variant: 'control'},
+          style: ({ownerState, theme}) => ({
+            boxShadow: theme.shadows[ownerState.elevation],
+          }),
+        },
+        {
+          props: {variant: 'background'},
+          style: ({ownerState, theme}) => ({
+            boxShadow: theme.shadows[ownerState.elevation],
+            padding: '10px',
+          }),
+        },
+        /* {
+          props: {variant: 'note'},
+          style: {
+            marginBottom: '10px',
+            backgroundColor: 'yellow',
+          },
+        }, */
+      ],
+    },
+    MuiSelect: {
+      styleOverrides: {
+        root: {
+          // background: palette.primary.main,
+        },
+      },
+    },
+    MuiSnackbarContent: {
+      styleOverrides: {
+        root: {
+          // color: 'white',
+          // backgroundColor: palette.primary.main,
+          maxWidth: '20em',
+          borderRadius: '10px',
+        },
+      },
+    },
+    MuiSwitch: {
+      styleOverrides: {
+        track: {
+          border: `solid 1px ${palette.secondary.contrastText}`,
+        },
+      },
+    },
+    MuiTextField: {
+      styleOverrides: {
+        root: {
+          // backgroundColor: palette.primary.main,
+          borderRadius: '10px',
+          opacity: .9,
+        },
+      },
+    },
+    MuiTreeItem: {
+      styleOverrides: {
+        root: {
+          '& > div.Mui-selected, & > div.Mui-selected:hover': {
+            // color: palette.primary.contrastText,
+            // backgroundColor: palette.primary.main,
+            borderRadius: '5px',
+          },
+          '& > div.MuiTreeItem-content': {
+            borderRadius: '5px',
+          },
+        },
+      },
+    },
     MuiToggleButton: {
       styleOverrides: {
         sizeMedium: {
@@ -74,7 +185,7 @@ export function getComponentOverrides(palette, typography) {
           'height': '40px',
           'border': 'none',
           '&.Mui-selected, &.Mui-selected:hover': {
-            // backgroundColor: palette.primary.main,
+            backgroundColor: palette.secondary.dark,
             opacity: .9,
           },
         },
@@ -125,133 +236,6 @@ export function getComponentOverrides(palette, typography) {
           },
         },
       ],
-    },
-    MuiDialog: {
-      styleOverrides: {
-        paper: {
-          borderRadius: '10px',
-        },
-      },
-    },
-    MuiDialogContent: {
-      styleOverrides: {
-        root: {
-          padding: '0px 10px',
-          overflowX: 'hidden',
-        },
-      },
-    },
-    MuiPaper: {
-      variants: [
-        {
-          props: {variant: 'control'},
-          style: ({ownerState, theme}) => ({
-            boxShadow: theme.shadows[ownerState.elevation],
-          }),
-        },
-        {
-          props: {variant: 'background'},
-          style: ({ownerState, theme}) => ({
-            boxShadow: theme.shadows[ownerState.elevation],
-            padding: '10px',
-          }),
-        },
-        /* {
-          props: {variant: 'note'},
-          style: {
-            marginBottom: '10px',
-            backgroundColor: 'yellow',
-          },
-        }, */
-      ],
-    },
-    MuiDialogTitle: {
-      styleOverrides: {
-        root: {
-          fontWeight: 400,
-          textAlign: 'center',
-        },
-      },
-    },
-    MuiDialogActions: {
-      styleOverrides: {
-        root: {
-          justifyContent: 'center',
-          padding: '1em 0px',
-        },
-      },
-    },
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          // backgroundColor: palette.primary.main,
-          borderRadius: '10px',
-          opacity: .9,
-        },
-      },
-    },
-    MuiSwitch: {
-      root: {
-        width: 42,
-        height: 26,
-        padding: 0,
-        margin: 8,
-      },
-      switchBase: {
-        'padding': 1,
-        '&$checked, &$colorPrimary$checked, &$colorSecondary$checked': {
-          'transform': 'translateX(16px)',
-          // 'color': '#fff',
-          '& + $track': {
-            opacity: 1,
-            border: 'none',
-          },
-        },
-      },
-      thumb: {
-        width: 24,
-        height: 24,
-      },
-      track: {
-        borderRadius: 13,
-        border: '1px solid #bdbdbd',
-        // backgroundColor: '#fafafa',
-        opacity: 1,
-        transition: 'background-color 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms,border 300ms cubic-bezier(0.4, 0, 0.2, 1) 0ms',
-      },
-    },
-    MuiSelect: {
-      styleOverrides: {
-        root: {
-          // background: palette.primary.main,
-        },
-      },
-    },
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          // ?? Mui cards don't seem to have theme support for color grading
-          // the different elts.
-          // background: palette.secondary.main,
-        },
-      },
-    },
-    MuiCardContent: {
-      styleOverrides: {
-        root: {
-          // 'padding': '0px 20px',
-          '& img': {
-            width: '100%',
-          },
-          // TODO(pablo): react-markdown has leading margin on first elt
-          '& p': {
-            marginTop: 0,
-          },
-          // TODO(pablo): react-markdown sets smaller?
-          'fontSize': '1rem',
-          'lineHeight': 1.5,
-        },
-      },
     },
   }
 }

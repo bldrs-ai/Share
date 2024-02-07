@@ -51,9 +51,6 @@ export default function Styles({theme}) {
           width: '15px',
           height: '15px',
         },
-        'hr.MuiDivider-root': {
-          padding: '0.5em 0',
-        },
         /* icon-nav-* are the sub-icons in NavTree */
         '.icon-nav-caret': {
           width: '12px',

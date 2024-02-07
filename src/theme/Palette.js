@@ -19,9 +19,9 @@ export const day = {
 
   // Side drawer, dialogs
   secondary: {
-    main: colors.grey.white,
+    main: colors.grey.light,
     light: colors.grey.lightest,
-    dark: colors.grey.light, // colors.grey.mediumlight,
+    dark: colors.grey.mediumlight,
     contrastText: colors.grey.darkest,
   },
 
@@ -48,7 +48,7 @@ export const night = {
   // Side drawer, dialogs
   secondary: {
     main: colors.grey.dark,
-    light: 'green', // colors.grey.mediumdark,
+    light: colors.grey.mediumdark,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
   },

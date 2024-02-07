@@ -9,8 +9,8 @@ import CaretIcon from '../../assets/icons/Caret.svg'
 /**
  * Expansion panels are used to package property sets
  *
- * @property {string} summary content of the panel
- * @property {string} detail title of the panel
+ * @property {string} summary Title of the panel
+ * @property {string} detail Content of the panel
  * @property {boolean} expandState global control of the panel
  * @return {React.ReactElement}
  */
