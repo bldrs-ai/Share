@@ -7,6 +7,7 @@
  */
 export default function createNotesSlice(set, get) {
   return {
+    addComment: true,
     notes: null,
     isLoadingNotes: false,
     isCreateNoteActive: false,
@@ -20,6 +21,7 @@ export default function createNotesSlice(set, get) {
     placeMarkId: null,
     placeMarkActivated: false,
     setNotes: (notes) => set(() => ({notes: notes})),
+    toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),

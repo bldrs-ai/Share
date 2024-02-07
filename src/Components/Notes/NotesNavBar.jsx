@@ -8,7 +8,7 @@ import {NOTE_PREFIX} from './Notes'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined'
 
 
 /** @return {React.Component} */
@@ -122,7 +122,7 @@ export default function NotesNavBar() {
               title='Add a note'
               placement='bottom'
               onClick={toggleIsCreateNoteActive}
-              icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
+              icon={<NoteAddOutlinedIcon className='icon-share' color='secondary'/>}
               size='medium'
               variant='noBackground'
             />

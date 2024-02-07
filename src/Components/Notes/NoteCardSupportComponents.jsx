@@ -12,6 +12,7 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
@@ -118,23 +119,26 @@ export const CardFooter = ({
   selectCard,
   embeddedCameras,
   selected,
-  isComment,
+  isNote = true,
   synched,
   submitUpdate,
+  setShowCreateComment,
+  showCreateComment,
 }) => {
+  const [screenshotUri, setScreenshotUri] = useState(null)
   const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
-  const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const viewer = useStore((state) => state.viewer)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
-  const [screenshotUri, setScreenshotUri] = useState(null)
+
 
   /**
    * Navigate to github issue
@@ -164,7 +168,7 @@ export const CardFooter = ({
         alignItems: 'center',
       }}
       >
-        {!isComment &&
+        {isNote &&
         <TooltipIconButton
           title='Open in Github'
           size='small'
@@ -196,7 +200,7 @@ export const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && existPlaceMarkInFeature &&
+          isNote && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
@@ -245,6 +249,16 @@ export const CardFooter = ({
             placement='left'
             icon={<CheckIcon className='icon-share'/>}
             onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
+        {isNote &&
+          <TooltipIconButton
+            title='Add Comment'
+            size='small'
+            placement='bottom'
+            selected={showCreateComment}
+            onClick={() => setShowCreateComment(!showCreateComment)}
+            icon={<AddCommentOutlinedIcon className='icon-share'/>}
           />
         }
         {numberOfComments > 0 && !editMode &&

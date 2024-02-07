@@ -1,8 +1,12 @@
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
+import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
+import InputAdornment from '@mui/material/InputAdornment'
+import IconButton from '@mui/material/IconButton'
+import TextField from '@mui/material/TextField'
 import {
   CardFooter,
   CardMenu,
@@ -24,6 +28,7 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {NOTE_PREFIX} from './Notes'
+import CheckIcon from '@mui/icons-material/Check'
 
 
 /**
@@ -51,13 +56,15 @@ export default function NoteCard({
   avatarUrl = '',
   date = '',
   numberOfComments = null,
-  isComment = false,
+  isNote = true,
   synched = true,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
+  const [commentBody, setCommentBody] = useState('')
+  const [showCreateComment, setShowCreateComment] = useState(false)
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const cameraControls = useStore((state) => state.cameraControls)
@@ -187,12 +194,12 @@ export default function NoteCard({
       variant='note'
       sx={{fontSize: '1em'}}
     >
-      {isComment &&
+      {!isNote &&
         <CardHeader
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
         /> }
-      {!isComment &&
+      {isNote &&
         <CardHeader
           title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
@@ -210,15 +217,37 @@ export default function NoteCard({
           />
           }
         /> }
-      {!editMode && !isComment && !selected &&
+      {!editMode && isNote && !selected &&
        <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
       {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
-      {isComment && <CommentCardBody editBody={editBody}/>}
+      {!isNote && <CommentCardBody editBody={editBody}/>}
       {editMode &&
        <EditCardBody
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
        />
+      }
+      {showCreateComment &&
+          <Box sx={{padding: '20px'}}>
+            <TextField
+              label="Enter your comment"
+              variant="outlined"
+              value={commentBody}
+              size='small'
+              multiline
+              fullWidth
+              onChange={(event) => setCommentBody(event.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <IconButton onClick={() => setCommentBody('')}>
+                      <CheckIcon/>
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              }}
+            />
+          </Box>
       }
       <CardFooter
         editMode={editMode}
@@ -232,9 +261,11 @@ export default function NoteCard({
         onClickCamera={showCameraView}
         onClickShare={shareIssue}
         removeComment={removeComment}
-        isComment={isComment}
+        isNote={isNote}
         synched={synched}
         submitUpdate={submitUpdate}
+        setShowCreateComment={setShowCreateComment}
+        showCreateComment={showCreateComment}
       />
     </Card>
   )

@@ -136,7 +136,7 @@ export default function Notes() {
         return (
           <NoteCard
             key={index}
-            isComment={true}
+            isNote={false}
             id={comment.id}
             index=''
             body={comment.body}

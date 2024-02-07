@@ -25,6 +25,7 @@ import CheckIcon from '@mui/icons-material/Check'
 export default function NoteCardCreate({
   username = '',
   avatarUrl = '',
+  isNote = true,
 }) {
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
@@ -56,25 +57,27 @@ export default function NoteCardCreate({
       elevation={1}
       variant='note'
     >
-      <CardHeader
-        title={
-          <InputBase
-            value={title || ''}
-            onChange={(event) => setTitle(event.target.value)}
-            fullWidth
-            multiline
-            placeholder={'Note Title'}
-            inputProps={{maxLength: 256}}
-          />}
-        avatar={
+      {isNote &&
+        <CardHeader
+          title={
+            <InputBase
+              value={title || ''}
+              onChange={(event) => setTitle(event.target.value)}
+              fullWidth
+              multiline
+              placeholder={'Note Title'}
+              inputProps={{maxLength: 256}}
+            />}
+          avatar={
           isAuthenticated ?
             <Avatar
               alt={user.name}
               src={user.picture}
             /> :
             <Avatar alt={username} src={avatarUrl}/>
-        }
-      />
+          }
+        />
+      }
       <CardContent>
         <Box
           sx={{
