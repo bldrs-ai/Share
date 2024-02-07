@@ -3,7 +3,7 @@ import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
 import {CAMERA_PREFIX} from './Components/CameraControl'
-import CadView, {searchIndex} from './Containers/CadView'
+import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
@@ -26,14 +26,16 @@ import FileContext from './OPFS/FileContext'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
   const urlParams = useParams()
-  const setRepository = useStore((state) => state.setRepository)
   const modelPath = useStore((state) => state.modelPath)
+  const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const setRepository = useStore((state) => state.setRepository)
   const [file, setFile] = useState(null)
 
   useMemo(() => {
     new WidgetApi(navigation.current, searchIndex)
-  }, [navigation])
+  }, [navigation, searchIndex])
+
 
   /**
    * On a change to urlParams, setting a new model path will clear the

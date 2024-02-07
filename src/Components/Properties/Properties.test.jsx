@@ -3,10 +3,10 @@ import {act, render, screen, waitFor, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import {MockModel} from '../../utils/IfcMock.test'
 import useStore from '../../store/useStore'
-import ItemProperties from './ItemProperties'
+import Properties from './Properties'
 
 
-test('ItemProperties for single element', async () => {
+test('Properties for single element', async () => {
   const testLabel = 10
   const {result} = renderHook(() => useStore((state) => state))
   await act(() => {
@@ -16,7 +16,7 @@ test('ItemProperties for single element', async () => {
 
   const {getByText} = render(
       <ShareMock>
-        <ItemProperties/>
+        <Properties/>
       </ShareMock>)
   await waitFor(() => screen.getByText(testLabel))
   expect(getByText(testLabel)).toBeInTheDocument()
@@ -25,10 +25,10 @@ test('ItemProperties for single element', async () => {
 
 // TODO(pablo):
 /*
-test('ItemProperties for testObj', async () => {
+test('Properties for testObj', async () => {
   const testLabel = 'Test node label'
   const {getByText} = render(mockRoutes(
-      <ItemProperties
+      <Properties
         model={new MockModel}
         element={testObj} />,
   ))

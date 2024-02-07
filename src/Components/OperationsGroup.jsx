@@ -21,19 +21,17 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
  * @return {React.ReactElement}
  */
 export default function OperationsGroup({deselectItems}) {
-  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
-  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  const isLoginVisible = useStore((state) => state.isLoginVisible)
-  const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
-  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
-  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
-  // Properties
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const openDrawer = useStore((state) => state.openDrawer)
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
+  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
+  const isImagineEnabled = useStore((state) => state.isImagineEnabled)
+  const isLoginEnabled = useStore((state) => state.isLoginEnabled)
+  const isNotesEnabled = useStore((state) => state.isNotesEnabled)
+  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
+  const isShareEnabled = useStore((state) => state.isShareEnabled)
   const selectedElement = useStore((state) => state.selectedElement)
+  const setIsSideDrawerVisible = useStore((state) => state.setIsSideDrawerVisible)
+  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
+  const toggleIsPropertiesVisible = useStore((state) => state.toggleIsPropertiesVisible)
   const isSelected = () => {
     const ifSelected = (
       selectedElement !== null
@@ -47,23 +45,22 @@ export default function OperationsGroup({deselectItems}) {
       variant='contained'
       sx={{'margin': '1em', '& > *:not(:last-child)': {margin: '0.2em 0'}}}
     >
-      {isLoginVisible && (<><LoginMenu/><Divider/></>)}
-      {isCollaborationGroupVisible && <ShareControl/>}
-      {isModelInteractionGroupVisible && <NotesControl/>}
+      {isLoginEnabled && (<><LoginMenu/><Divider/></>)}
+      {isShareEnabled && <ShareControl/>}
+      {isNotesEnabled && <NotesControl/>}
       {isSelected() && selectedElement !== null &&
        <TooltipIconButton
          title='Properties'
          onClick={() => {
-           turnOffIsHelpTooltips()
-           toggleIsPropertiesOn()
-           openDrawer()
+           toggleIsPropertiesVisible()
+           setIsSideDrawerVisible(true)
          }}
-         selected={isPropertiesOn}
+         selected={isPropertiesVisible}
          icon={<FormatListBulletedIcon className='icon-share'/>}
        />
       }
 
-      {isSettingsVisible && isAppStoreEnabled &&
+      {isAppStoreEnabled &&
           <TooltipIconButton
             title='Open App Store'
             icon={<AppStoreIcon/>}
@@ -71,9 +68,7 @@ export default function OperationsGroup({deselectItems}) {
             onClick={() => toggleAppStoreDrawer()}
           />
       }
-      {isCollaborationGroupVisible &&
-        <ImagineControl/>
-      }
+      {isImagineEnabled && <ImagineControl/>}
       {/* Invisible */}
       <CameraControl/>
     </ButtonGroup>

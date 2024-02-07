@@ -1,4 +1,5 @@
 import React, {useState, useEffect} from 'react'
+import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
@@ -24,14 +25,16 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 /**
  * Displays Open Model dialog
  *
- * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
  */
-export default function OpenModelControl({navigate}) {
+export default function OpenModelControl() {
+  const {user} = useAuth0()
+  const navigate = useNavigate()
+  const accessToken = useStore((state) => state.accessToken)
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
-  const {user} = useAuth0()
-  const accessToken = useStore((state) => state.accessToken)
+
+
   useEffect(() => {
     /** Asynchronously fetch organizations */
     async function fetchOrganizations() {

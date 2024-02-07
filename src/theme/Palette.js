@@ -11,27 +11,18 @@ export const day = {
   primary: {
     main: colors.grey.light,
     light: colors.grey.lightest,
-    dark: colors.grey.medium,
+    dark: colors.grey.mediumlight,
     contrastText: colors.grey.darkest,
-    highlight: 'red',
+    sceneBackground: '#FFFFFF',
+    sceneHighlight: '#00F0FF',
   },
 
   // Side drawer, dialogs
   secondary: {
-    main: colors.grey.medium,
-    light: colors.grey.light,
-    dark: colors.grey.dark,
+    main: colors.grey.white,
+    light: colors.grey.lightest,
+    dark: colors.grey.light, // colors.grey.mediumlight,
     contrastText: colors.grey.darkest,
-    background: 'white', // , 'white', // colors.grey.light,
-    highlight: '#ffc700', // orange: tron row5 col2
-  },
-
-  background: {
-    paper: colors.grey.light,
-  },
-
-  scene: {
-    background: colors.grey.lightest,
   },
 
   logo: {
@@ -47,26 +38,19 @@ export const night = {
   // The 3d canvas and ControlButtons on it.
   primary: {
     main: colors.grey.dark,
-    light: colors.grey.medium,
+    light: colors.grey.mediumdark,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
+    sceneBackground: '#000000',
+    sceneHighlight: '#00F0FF',
   },
 
   // Side drawer, dialogs
   secondary: {
     main: colors.grey.dark,
-    light: colors.grey.medium,
+    light: 'green', // colors.grey.mediumdark,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
-    background: 'white', // , 'white', // colors.grey.light,
-  },
-
-  background: {
-    paper: colors.grey.darkest,
-  },
-
-  scene: {
-    background: colors.black,
   },
 
   logo: {

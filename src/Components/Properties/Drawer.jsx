@@ -1,33 +1,36 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import Drawer from '@mui/material/Drawer'
+import MuiDrawer from '@mui/material/Drawer'
 import Typography from '@mui/material/Typography'
-import {TooltipIconButton} from '../Buttons'
 import {preprocessMediaQuery} from '../../utils/mediaQuery'
 import {MOBILE_WIDTH} from '../../utils/constants'
+import {TooltipIconButton} from '../Buttons'
 import CloseIcon from '../../assets/icons/Close.svg'
+import {assertDefined} from '../../utils/assert'
 
 
 /**
- * ItemPropertiesDrawer contains the ItemPanel and allows for
+ * PropertiesDrawer contains the ItemPanel and allows for
  * show/hide from the right of the screen.
  *
- * @param {string} title Title for the drawer
- * @param {object} content The contained ItemPanel
- * @param {Function} onClose Callback
- * @return {object} ItemPropertiesDrawer react component
+ * @property {string} title Title for the drawer
+ * @property {object} content The contained ItemPanel
+ * @property {Function} onClose Callback
+ * @return {object} PropertiesDrawer react component
  */
-export default function ItemPropertiesDrawer({
+export default function Drawer({
   title,
   content,
   onClose,
 }) {
+  assertDefined(title, content, onClose)
   return (
-    <Drawer
+    <MuiDrawer
       sx={preprocessMediaQuery(MOBILE_WIDTH, {
         '& > .MuiPaper-root': {
           'width': '20em',
-          // This lets the h1 in ItemProperties use 1em padding but have its mid-line align with the text in SearchBar
+          // This lets the h1 in Properties use 1em padding but have
+          // its mid-line align with the text in SearchBar
           'padding': '4px 1em',
           '@media (max-width: MOBILE_WIDTH)': {
             width: 'auto',
@@ -72,6 +75,6 @@ export default function ItemPropertiesDrawer({
       >
         {content}
       </Box>
-    </Drawer>
+    </MuiDrawer>
   )
 }

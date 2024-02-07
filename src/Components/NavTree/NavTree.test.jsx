@@ -1,11 +1,11 @@
 import React from 'react'
 import {act, render, renderHook, fireEvent} from '@testing-library/react'
-import useStore from '../store/useStore'
-import ShareMock from '../ShareMock'
-import {newMockStringValueElt} from '../utils/IfcMock.test'
+import {IfcViewerAPIExtended} from '../../Infrastructure/IfcViewerAPIExtended'
+import ShareMock from '../../ShareMock'
+import useStore from '../../store/useStore'
+import {newMockStringValueElt} from '../../utils/IfcMock.test'
+import {actAsyncFlush} from '../../utils/tests'
 import NavTree from './NavTree'
-import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
-import {actAsyncFlush} from '../utils/tests'
 
 
 jest.mock('@mui/lab/TreeItem', () => {

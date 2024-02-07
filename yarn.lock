@@ -3753,7 +3753,7 @@
 
 "@types/three@^0.146.0":
   version "0.146.0"
-  resolved "https://registry.npmjs.org/@types/three/-/three-0.146.0.tgz"
+  resolved "https://registry.yarnpkg.com/@types/three/-/three-0.146.0.tgz#83813ba0d2fff6bdc6d7fda3a77993a932bba45f"
   integrity sha512-75AgysUrIvTCB054eQa2pDVFurfeFW8CrMQjpzjt3yHBfuuknoSvvsESd/3EhQxPrz9si3+P0wiDUVsWUlljfA==
   dependencies:
     "@types/webxr" "*"
@@ -4725,9 +4725,9 @@ camelcase@^6.2.0:
   integrity sha512-Gmy6FhYlCY7uOElZUSbxo2UCDH8owEk996gkbrpsgGtrJLM3J7jGxl9Ic7Qwwj4ivOE5AWZWRMecDdF7hqGjFA==
 
 camera-controls@^1.33.1:
-  version "1.36.1"
-  resolved "https://registry.npmjs.org/camera-controls/-/camera-controls-1.36.1.tgz"
-  integrity sha512-muYZT4bgA9iR/lfZwM1TLM/GPttAlRM+fDCjg9qsmH4omDMefGF8/Q5QFkadRGCeCOTFESGYXcOhqV/tt4z6fQ==
+  version "1.38.2"
+  resolved "https://registry.yarnpkg.com/camera-controls/-/camera-controls-1.38.2.tgz#3289013e6de05cee51dc98af87d3fc7c1a7df585"
+  integrity sha512-EfzbovxLssyWpJVG9uKcazSDDIEcd1hUsPhPF/OWWnICsKY9WbLY/2S4UPW73HHbvnVeR/Z9wsWaQKtANy/2Yg==
 
 caniuse-lite@^1.0.30001400:
   version "1.0.30001441"
@@ -5301,7 +5301,7 @@ dashdash@^1.12.0:
 
 dat.gui@^0.7.7:
   version "0.7.9"
-  resolved "https://registry.npmjs.org/dat.gui/-/dat.gui-0.7.9.tgz"
+  resolved "https://registry.yarnpkg.com/dat.gui/-/dat.gui-0.7.9.tgz#860cab06053b028e327820eabdf25a13cf07b17e"
   integrity sha512-sCNc1OHobc+Erc1HqiswYgHdVNpSJUlk/Hz8vzOCsER7rl+oF/4+v8GXFUyCgtXpoCX6+bnmg07DedLvBLwYKQ==
 
 data-urls@^3.0.2:
@@ -6734,9 +6734,9 @@ grapheme-splitter@^1.0.4:
   integrity sha512-KPIBPDlW7NxrbT/eh4qPXz5FiFdL5UbaA0XUNz2Rp3Z3hqBSkbj0GVjwFDztsWVauZUWsbKHgMg++sk8UX0bkw==
 
 gsap@^3.7.1:
-  version "3.11.0"
-  resolved "https://registry.npmjs.org/gsap/-/gsap-3.11.0.tgz"
-  integrity sha512-TV5aFGqXht+0o/CelnhCikSe3QGeG+q1XA/fyFFsMzesILHgWgFWIz0NuXIgcMaL5h7MG2l+j0BTupS5YyYkrw==
+  version "3.12.5"
+  resolved "https://registry.yarnpkg.com/gsap/-/gsap-3.12.5.tgz#136c02dad4c673b441bdb1ca00104bfcb4eae7f4"
+  integrity sha512-srBfnk4n+Oe/ZnMIOXt3gT605BX9x5+rh/prT2F1SsNJsU1XuMiP0E2aptW481OnonOGACZWBqseH5Z7csHxhQ==
 
 harmony-reflect@^1.4.6:
   version "1.6.2"
@@ -10841,13 +10841,13 @@ text-table@^0.2.0:
   integrity sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==
 
 three-mesh-bvh@^0.5.11:
-  version "0.5.15"
-  resolved "https://registry.npmjs.org/three-mesh-bvh/-/three-mesh-bvh-0.5.15.tgz"
-  integrity sha512-jxE5iGjcoEMiyxUs7hMeZL6jBXBz9973ilqhXPhKlA1f7eitjIxRTtu7UWVQy+PhxXTsknmPzWmN5c+uAa/anA==
+  version "0.5.24"
+  resolved "https://registry.yarnpkg.com/three-mesh-bvh/-/three-mesh-bvh-0.5.24.tgz#56dd27ad35bfbafacedaba4a4d567723bbdd686c"
+  integrity sha512-VTIgfjz8aFoPKTQoMIQQv9jJD4ybFRZuKKE1/kqy78FQcuHQ0+iIWv7C5cSb2inlvs7bNMVY3yRx3RXGZfrvzQ==
 
 three@^0.135:
   version "0.135.0"
-  resolved "https://registry.npmjs.org/three/-/three-0.135.0.tgz"
+  resolved "https://registry.yarnpkg.com/three/-/three-0.135.0.tgz#cff4ec8edd3c51ce9bc7e88d13e8eafed4d0ddfc"
   integrity sha512-kuEpuuxRzLv0MDsXai9huCxOSQPZ4vje6y0gn80SRmQvgz6/+rI0NAvCRAw56zYaWKMGMfqKWsxF9Qa2Z9xymQ==
 
 throttleit@^1.0.0:
@@ -11363,7 +11363,7 @@ web-encoding@^1.1.5:
 
 web-ifc-three@^0.0.118:
   version "0.0.118"
-  resolved "https://registry.npmjs.org/web-ifc-three/-/web-ifc-three-0.0.118.tgz"
+  resolved "https://registry.yarnpkg.com/web-ifc-three/-/web-ifc-three-0.0.118.tgz#25ca284c1911773e616882833c2fc616150aca5a"
   integrity sha512-xNNvP+wBGrNBtcC37W0lPdy69hNBjLPmyrYJNqeuyLM7vy12A+fB8TsMOMXVYRCLlOmRQR0uQS0m0KgYYbxlnA==
   dependencies:
     three-mesh-bvh "^0.5.11"

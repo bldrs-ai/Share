@@ -35,6 +35,7 @@
   <script type="application/javascript">
     const loader = document.createElement('script')
     const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+    loader.setAttribute('type', 'module')
     loader.setAttribute('src', pathPrefix + '/index.js')
     document.body.appendChild(loader)
   </script>

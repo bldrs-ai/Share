@@ -7,7 +7,8 @@ import useStore from '../store/useStore'
 import * as AllLoader from '../utils/loader'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
-import CadView, {getFinalURL} from './CadView'
+import CadView from './CadView'
+import {getFinalUrl} from './urls'
 import PkgJson from '../../package.json'
 
 
@@ -433,9 +434,9 @@ describe('With environment variables', () => {
 
 
   it('getFinalURL', async () => {
-    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
 
     process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
-    expect(await getFinalURL('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
+    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
   })
 })

@@ -27,7 +27,7 @@ export default function VersionsContainer({filePath, currentRef}) {
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const modelPath = useStore((state) => state.modelPath)
-  const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
+  const toggleIsVersionsVisible = useStore((state) => state.toggleIsVersionsVisible)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -89,7 +89,7 @@ export default function VersionsContainer({filePath, currentRef}) {
           </IconButton>
         </Tooltip>
       }
-      onClose={toggleIsVersionHistoryVisible}
+      onClose={toggleIsVersionsVisible}
       data-testid='Version Panel'
     >
       <VersionsTimeline

@@ -92,7 +92,7 @@ export function getComponentOverrides(palette, typography) {
             'height': '40px',
             'borderRadius': '10px',
             'border': 'none',
-            'backgroundColor': palette.scene.background,
+            // 'backgroundColor': palette.scene.background,
             '&.Mui-selected, &.Mui-selected:hover': {
               // backgroundColor: palette.primary.main,
               opacity: .9,
@@ -156,12 +156,13 @@ export function getComponentOverrides(palette, typography) {
             padding: '10px',
           }),
         },
-        {
+        /* {
           props: {variant: 'note'},
           style: {
             marginBottom: '10px',
+            backgroundColor: 'yellow',
           },
-        },
+        }, */
       ],
     },
     MuiDialogTitle: {
@@ -226,13 +227,27 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          // ?? Mui cards don't seem to have theme support for color grading
+          // the different elts.
+          // background: palette.secondary.main,
+        },
+      },
+    },
     MuiCardContent: {
       styleOverrides: {
         root: {
-          'padding': '0px 20px',
+          // 'padding': '0px 20px',
           '& img': {
             width: '100%',
           },
+          // TODO(pablo): react-markdown has leading margin on first elt
+          '& p': {
+            marginTop: 0,
+          },
+          // TODO(pablo): react-markdown sets smaller?
           'fontSize': '1rem',
           'lineHeight': 1.5,
         },

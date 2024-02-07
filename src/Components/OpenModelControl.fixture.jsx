@@ -1,10 +1,11 @@
 import React from 'react'
-import {ThemeCtx} from '../theme/Theme.fixture'
+import {RouteThemeCtx} from '../Share.fixture'
 import OpenModelControl from './OpenModelControl'
 
 
 // For unit test
-export const OpenModelControlFixture = () => <ThemeCtx><OpenModelControl/></ThemeCtx>
+export const OpenModelControlFixture =
+  () => <RouteThemeCtx><OpenModelControl/></RouteThemeCtx>
 
 
 // For cosmos

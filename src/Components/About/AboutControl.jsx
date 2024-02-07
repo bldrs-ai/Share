@@ -34,8 +34,8 @@ export default function AboutControl() {
       variant='noBackground'
       sx={{
         position: 'fixed',
-        bottom: '1em',
         left: '1em',
+        bottom: '1em',
       }}
     >
       <AboutDialog

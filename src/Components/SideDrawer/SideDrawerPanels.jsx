@@ -1,19 +1,20 @@
-import React, {useRef, useEffect} from 'react'
+import React from 'react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {useIsMobile} from '../Hooks'
-import {CloseButton} from '../Buttons'
+import Properties from '../Properties/Properties'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
-import ItemProperties from '../ItemProperties/ItemProperties'
 import Notes from '../Notes/Notes'
 import NotesNavBar from '../Notes/NotesNavBar'
+import {CloseButton} from '../Buttons'
+import {useIsMobile} from '../Hooks'
 import NoContent from '../NoContent'
 import PanelTitle from '../PanelTitle'
 
+
 /**
  * @param {object} props React props with children
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export function PanelWithTitle(props) {
   const titleHeight = '2.8em'
@@ -23,13 +24,6 @@ export function PanelWithTitle(props) {
   const headerBorderOpacity = 0
   const headerBorderColor = hexToRgba(theme.palette.primary.contrastText, headerBorderOpacity)
   const isMobile = useIsMobile()
-  const drawerRef = useRef()
-  const setDrawer = useStore((state) => state.setDrawer)
-
-
-  useEffect(() => {
-    setDrawer(drawerRef.current)
-  }, [setDrawer])
 
   return (
     <Box sx={{height: '100%', overflow: 'hidden'}}>
@@ -47,7 +41,6 @@ export function PanelWithTitle(props) {
           overflow: 'auto',
           padding: isMobile ? '0 0.5em 0 0' : '0em 0.5em 1em 0',
         }}
-        ref={drawerRef}
       >
         {props.children}
       </Box>
@@ -56,7 +49,7 @@ export function PanelWithTitle(props) {
 }
 
 
-/** @return {React.Component} */
+/** @return {React.ReactElement} */
 export function NotesPanel() {
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
@@ -75,27 +68,28 @@ export function NotesPanel() {
 
 
 /**
- * PropertiesPanel is a wrapper for the item properties component.
- * It contains the title with additional controls, and the item properties styled container.
+ * PropertiesPanel is a wrapper for the item properties component.  It
+ * contains the title with additional controls, and the item
+ * properties styled container
  *
- * @property {boolean} Include gutter.  Should be present only when
+ * @property {boolean} Include gutter Should be present only when
  *     Properties occupies full SideDrawer.
- * @return {React.Component} Properties Panel react component
+ * @return {React.ReactElement} Properties Panel react component
  */
 export function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const toggleIsPropertiesVisible = useStore((state) => state.toggleIsPropertiesVisible)
   return (
     <PanelWithTitle title={'PROPERTIES'}
       controlsGroup={
         <CloseButton
-          onClick={toggleIsPropertiesOn}
+          onClick={toggleIsPropertiesVisible}
         />
       }
       includeGutter={includeGutter}
     >
       {selectedElement ?
-        <ItemProperties/> :
+        <Properties/> :
         <NoContent message={'Please select an element to access properties.'}/>
       }
     </PanelWithTitle>

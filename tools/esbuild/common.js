@@ -8,7 +8,7 @@ import * as process from 'node:process'
 
 const __filename = fileURLToPath(import.meta.url)
 const __root = path.resolve(__filename, '../../../')
-const entryPoint = path.resolve(__root, 'src', 'index.jsx')
+const indexFile = path.resolve(__root, 'src', 'index.jsx')
 const assetsDir = path.resolve(__root, 'public')
 export const buildDir = path.resolve(__root, 'docs')
 
@@ -48,7 +48,7 @@ export const buildConfig = (useWebIfcShim) => {
 
   // Return the build config
   return {
-    entryPoints: [entryPoint],
+    entryPoints: [indexFile],
     outdir: buildDir,
     format: 'esm',
     platform: 'browser',

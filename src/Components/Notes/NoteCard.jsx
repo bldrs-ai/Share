@@ -4,12 +4,12 @@ import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import {
-  CardFooter,
   CardMenu,
-  RegularCardBody,
   SelectedCardBody,
   CommentCardBody,
 } from './NoteCardSupportComponents'
+import CardBody from './CardBody'
+import CardFooter from './CardFooter'
 import EditCardBody from './EditCardBody'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
@@ -182,21 +182,17 @@ export default function NoteCard({
   }
 
   return (
-    <Card
-      elevation={1}
-      variant='note'
-      sx={{fontSize: '1em'}}
-    >
+    <Card elevation={1}>
       {isComment &&
         <CardHeader
           avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
         /> }
       {!isComment &&
         <CardHeader
           title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
+          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
           action={
             synched && user && user.nickname === username &&
           <CardMenu
@@ -211,7 +207,7 @@ export default function NoteCard({
           }
         /> }
       {!editMode && !isComment && !selected &&
-       <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
+       <CardBody selectCard={selectCard} markdownContent={editBody}/>}
       {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
       {isComment && <CommentCardBody editBody={editBody}/>}
       {editMode &&

@@ -28,7 +28,7 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
-        'backgroundColor': theme.palette.scene.main,
+        'backgroundColor': theme.palette.primary.main,
         '@media (max-width: 800px)': {
           maxHeight: '400px',
         },

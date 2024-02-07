@@ -1,25 +1,24 @@
 import React from 'react'
-import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import TreeView from '@mui/lab/TreeView'
 import Box from '@mui/material/Box'
-import ListIcon from '@mui/icons-material/List'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
-import TreeView from '@mui/lab/TreeView'
 import {styled} from '@mui/material/styles'
+import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
+import Panel from '../Panel'
 import NavTree from './NavTree'
 import TypesNavTree from './TypesNavTree'
-import Panel from './Panel'
-import useStore from '../store/useStore'
-import {assertDefined} from '../utils/assert'
-import {useExistInFeature} from '../hooks/useExistInFeature'
-import NodeClosedIcon from '../assets/icons/NodeClosed.svg'
-import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
+import AccountTreeIcon from '@mui/icons-material/AccountTree'
+import ListIcon from '@mui/icons-material/List'
+import NodeClosedIcon from '../../assets/icons/NodeClosed.svg'
+import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
 
 
 /**
  * @param {object} model
- * @param {object} element
  * @param {Array} selectedElements
  * @param {Array} defaultExpandedElements
  * @param {Array} expandedElements
@@ -29,7 +28,6 @@ import NodeOpenIcon from '../assets/icons/NodeOpened.svg'
  */
 export default function NavPanel({
   model,
-  element,
   defaultExpandedElements,
   defaultExpandedTypes,
   expandedElements,
@@ -42,9 +40,10 @@ export default function NavPanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
+  const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
+  const toggleIsNavTreeVisible = useStore((state) => state.toggleIsNavTreeVisible)
   const existNavTypesInFeature = useExistInFeature('navtypes')
 
   const onTreeViewChanged = (event, value) => {
@@ -150,7 +149,7 @@ export default function NavPanel({
               <NavTree
                 model={model}s
                 selectWithShiftClickEvents={selectWithShiftClickEvents}
-                element={element}
+                element={rootElement}
                 pathPrefix={pathPrefix}
               />
             ) : (
@@ -165,7 +164,7 @@ export default function NavPanel({
           </Box>
         }
         title='Navigation'
-        onClose={toggleIsNavigationVisible}
+        onClose={toggleIsNavTreeVisible}
       />
     </div>
   )

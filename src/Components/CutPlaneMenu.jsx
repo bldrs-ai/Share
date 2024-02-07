@@ -21,11 +21,9 @@ const PLANE_PREFIX = 'p'
 
 
 /**
- * BasicMenu used when there are several option behind UI button
- * show/hide from the right of the screen.
+ * Menu of three cut planes for the model
  *
- * @param {Array} listOfOptions Title for the drawer
- * @return {object} ItemPropertiesDrawer react component
+ * @return {React.ReactElement}
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
@@ -48,11 +46,9 @@ export default function CutPlaneMenu() {
     setAnchorEl(event.currentTarget)
   }
 
-
   const handleClose = () => {
     setAnchorEl(null)
   }
-
 
   useEffect(() => {
     const planeHash = getHashParams(location, 'p')
@@ -69,7 +65,6 @@ export default function CutPlaneMenu() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
-
 
   const togglePlane = ({direction, offset = 0}) => {
     setLevelInstance(null)
@@ -99,7 +94,6 @@ export default function CutPlaneMenu() {
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
     }
   }
-
 
   return (
     <>
@@ -170,7 +164,7 @@ export default function CutPlaneMenu() {
 
 
 /**
- * removePlanes delete all section planes from the viewer
+ * Deletes all section planes from the viewer
  *
  * @param {object} viewer bounding box
  */
@@ -184,7 +178,7 @@ export function removePlanes(viewer) {
 
 
 /**
- * Helper method to get the location of cut plane from the center of the model.
+ * Get the location of cut plane from the center of the model
  *
  * @param {object} viewer
  * @param {object} ifcModel
@@ -217,7 +211,7 @@ export function getPlanesOffset(viewer, ifcModel) {
 
 
 /**
- * helper method to add plane normal and the offset to the url as a hash parameter
+ * Add plane normal and the offset to the url as a hash parameter
  *
  * @param {object} viewer
  * @param {object} ifcModel
@@ -232,7 +226,7 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
 
 
 /**
- * get offset info of x, y, z from plane hash string
+ * Get offset info of x, y, z from plane hash string
  *
  * @param {string} planeHash
  * @return {Array}
@@ -269,7 +263,7 @@ export function getPlanes(planeHash) {
 
 
 /**
- * get plane information (normal, model center offset)
+ * Get plane information (normal, model center offset)
  *
  * @param {Vector3} modelCenter
  * @param {string} direction

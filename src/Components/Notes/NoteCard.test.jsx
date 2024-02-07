@@ -47,7 +47,7 @@ describe('NoteCard', () => {
         <ShareMock>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>)
-    const selectIssueButton = rendered.getByTestId('selectionContainer')
+    const selectIssueButton = rendered.getByTestId('card-body')
     fireEvent.click(selectIssueButton)
     expect(screen.getByText('Select the note card - title')).toBeInTheDocument()
   })

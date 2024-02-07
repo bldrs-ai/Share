@@ -1,4 +1,5 @@
 import React, {useState, useContext, useEffect} from 'react'
+import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
@@ -26,14 +27,15 @@ import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 /**
  * Displays model open dialog
  *
- * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
  */
-export default function SaveModelControl({navigate}) {
+export default function SaveModelControl() {
+  const {user} = useAuth0()
+  const navigate = useNavigate()
+  const accessToken = useStore((state) => state.accessToken)
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
-  const {user} = useAuth0()
-  const accessToken = useStore((state) => state.accessToken)
+
 
   useEffect(() => {
     /** @return {Array<string>} organizations */

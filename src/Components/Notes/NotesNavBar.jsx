@@ -13,7 +13,7 @@ import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 
 /** @return {React.Component} */
 export default function NotesNavBar() {
-  const closeNotes = useStore((state) => state.closeNotes)
+  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const notes = useStore((state) => state.notes)
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
@@ -128,7 +128,7 @@ export default function NotesNavBar() {
             />
 
         )}
-        <CloseButton onClick={closeNotes}/>
+        <CloseButton onClick={() => setIsNotesVisible(false)}/>
       </Box>
     </Box>
   )
