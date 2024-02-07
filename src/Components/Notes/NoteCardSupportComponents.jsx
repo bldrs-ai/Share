@@ -12,6 +12,7 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
+import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
@@ -119,7 +120,9 @@ export const CardFooter = ({
   selected,
   isComment,
   synched,
+  submitUpdate,
 }) => {
+  const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
@@ -236,6 +239,14 @@ export const CardFooter = ({
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
+        {editMode &&
+          <TooltipIconButton
+            title='Save'
+            placement='left'
+            icon={<CheckIcon className='icon-share'/>}
+            onClick={() => submitUpdate(repository, accessToken, id)}
+          />
+        }
         {numberOfComments > 0 && !editMode &&
         <>
           {!selected &&
@@ -247,7 +258,6 @@ export const CardFooter = ({
               icon={<ForumOutlinedIcon className='icon-share'/>}
             />
           }
-
           <Box
             sx={{
               width: '20px',
