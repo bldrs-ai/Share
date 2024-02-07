@@ -7,6 +7,8 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import CheckIcon from '@mui/icons-material/Check'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
@@ -30,21 +32,27 @@ export default function CardFooter({
   selectCard,
   embeddedCameras,
   selected,
-  isComment,
+  isNote = true,
   synched,
+  setShowCreateComment,
+  showCreateComment,
+  submitUpdate,
+  accessToken,
 }) {
-  const [shareIssue, setShareIssue] = useState(false)
+  const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const isScreenshotEnabled = useExistInFeature('screenshot')
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
-  const hasCameras = embeddedCameras.length > 0
-  const theme = useTheme()
-  const {user} = useAuth0()
-  const {togglePlaceMarkActive} = usePlaceMark()
-  const existPlaceMarkInFeature = useExistInFeature('placemark')
-  const isScreenshotEnabled = useExistInFeature('screenshot')
+  const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
+
+  const {user} = useAuth0()
+  const theme = useTheme()
+  const {togglePlaceMarkActive} = usePlaceMark()
+
+  const hasCameras = embeddedCameras.length > 0
 
   /** Navigate to github issue */
   function openGithubIssue() {
@@ -53,7 +61,7 @@ export default function CardFooter({
 
   return (
     <CardActions>
-      {!isComment &&
+      {isNote &&
        <TooltipIconButton
          title='Open in Github'
          size='small'
@@ -87,7 +95,7 @@ export default function CardFooter({
        />
       }
 
-      {!isComment && selected && synched && existPlaceMarkInFeature &&
+      {isNote && selected && synched && existPlaceMarkInFeature &&
        user && user.nickname === username &&
        <Box
          sx={{
@@ -123,6 +131,26 @@ export default function CardFooter({
            setScreenshotUri(viewer.takeScreenshot())
          }}
          icon={<PhotoCameraIcon className='icon-share'/>}
+       />
+      }
+
+      {editMode &&
+       <TooltipIconButton
+         title='Save'
+         placement='left'
+         icon={<CheckIcon className='icon-share'/>}
+         onClick={() => submitUpdate(repository, accessToken, id)}
+       />
+      }
+
+      {isNote &&
+       <TooltipIconButton
+         title='Add Comment'
+         size='small'
+         placement='bottom'
+         selected={showCreateComment}
+         onClick={() => setShowCreateComment(!showCreateComment)}
+         icon={<AddCommentOutlinedIcon className='icon-share'/>}
        />
       }
 

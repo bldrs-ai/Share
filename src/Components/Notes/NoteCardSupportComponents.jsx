@@ -77,4 +77,3 @@ export const CommentCardBody = ({editBody}) => {
     </CardContent>
   )
 }
-

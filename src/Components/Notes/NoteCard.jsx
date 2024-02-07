@@ -231,6 +231,7 @@ export default function NoteCard({
         isComment={isComment}
         synched={synched}
         submitUpdate={submitUpdate}
+        accessToken={accessToken}
       />
     </Card>
   )
