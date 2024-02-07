@@ -2,7 +2,9 @@ import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
+import Backdrop from '@mui/material/Backdrop'
 import Box from '@mui/material/Box'
+import CircularProgress from '@mui/material/CircularProgress'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
 import Alert from '../Components/Alert'
@@ -925,53 +927,12 @@ export default function CadView({
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
 
       {isModelLoading &&
-       <Box
-         sx={{
-           position: 'relative',
-           width: '100%',
-           height: '100vh',
-           backgroundColor: theme.palette.primary.sceneBackground,
-         }}
+       <Backdrop
+         open={isModelLoading}
+         sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
        >
-         <Box
-           sx={{
-             position: 'absolute',
-             width: '40px',
-             height: '40px',
-             top: '30%',
-             left: '50%',
-             transform: 'translate(-50%, -50%)',
-           }}
-         >
-           <Box
-             sx={{
-               'display': 'flex',
-               'justifyContent': 'center',
-               'alignItems': 'center',
-               '.circleLoader': {
-                 width: '1em',
-                 height: '1em',
-                 borderRadius: '50%',
-                 backgroundColor: 'primary.main',
-                 animation: 'diameterChange 1s infinite alternate',
-               },
-               '@keyframes diameterChange': {
-                 '0%': {
-                   transform: 'scale(2)',
-                 },
-                 '100%': {
-                   transform: 'scale(2.5)',
-                 },
-               },
-             }}
-           >
-             <Box
-               data-testid="loader"
-               className="circleLoader"
-             />
-           </Box>
-         </Box>
-       </Box>
+         <CircularProgress color='inherit'/>
+       </Backdrop>
       }
     </Box>
   )
