@@ -144,7 +144,7 @@ describe('NoteCard', () => {
 })
 
 
-it.only('Edit card: Show checkmark when in idit mode', async () => {
+it.only('Edit card: Show checkmark when in edit mode', async () => {
   const id = 123
   const index = 123
   const username = 'testing'
