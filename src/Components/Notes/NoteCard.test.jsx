@@ -142,3 +142,38 @@ describe('NoteCard', () => {
     expect(res).toBe(true)
   })
 })
+
+
+it.only('Edit card: Show checkmark when in idit mode', async () => {
+  const id = 123
+  const index = 123
+  const username = 'testing'
+  const title = 'Title'
+  const noteNumber = 1
+  const date = ''
+  const synchedNote = true
+  const {result} = renderHook(() => useStore((state) => state))
+
+  mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+
+  await act(() => {
+    result.current.toggleEditNoteMode()
+  })
+  await act(() => {
+    result.current.setNotes(MOCK_NOTES)
+  })
+  const {getByTitle} = render(
+      <ShareMock>
+        <NoteCard
+          id={id}
+          index={index}
+          username={username}
+          synched={true}
+          noteNumber={noteNumber}
+          title={title}
+          date={date}
+          synchedNote={synchedNote}
+        />
+      </ShareMock>)
+  expect(getByTitle('Save')).toBeInTheDocument()
+})

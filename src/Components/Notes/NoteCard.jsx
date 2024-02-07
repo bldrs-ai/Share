@@ -56,11 +56,11 @@ export default function NoteCard({
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
-  const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const cameraControls = useStore((state) => state.cameraControls)
+  const editNoteMode = useStore((state) => state.editNoteMode)
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
   const setComments = useStore((state) => state.setComments)
@@ -69,6 +69,7 @@ export default function NoteCard({
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
+  const toggleEditNoteMode = useStore((state) => state.toggleEditNoteMode)
   const {user} = useAuth0()
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -169,7 +170,7 @@ export default function NoteCard({
   /** Activate note edit mode*/
   function actviateEditMode() {
     handleMenuClose()
-    setEditMode(true)
+    toggleEditNoteMode()
   }
 
   /** Submit update*/
@@ -178,7 +179,7 @@ export default function NoteCard({
     const editedNote = notes.find((note) => note.id === id)
     editedNote.body = res.data.body
     setNotes(notes)
-    setEditMode(false)
+    toggleEditNoteMode()
   }
 
   return (
@@ -210,18 +211,18 @@ export default function NoteCard({
           />
           }
         /> }
-      {!editMode && !isComment && !selected &&
+      {!editNoteMode && !isComment && !selected &&
        <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
-      {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
+      {selected && !editNoteMode && <SelectedCardBody editBody={editBody}/>}
       {isComment && <CommentCardBody editBody={editBody}/>}
-      {editMode &&
+      {editNoteMode &&
        <EditCardBody
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
        />
       }
       <CardFooter
-        editMode={editMode}
+        editNoteMode={editNoteMode}
         id={id}
         noteNumber={noteNumber}
         username={username}
