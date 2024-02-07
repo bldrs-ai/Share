@@ -16,10 +16,10 @@ import {
 } from './NoteCardSupportComponents'
 import EditCardBody from './EditCardBody'
 import useStore from '../../store/useStore'
-import {assertDefined} from '../../utils/assert'
+import {assertDefined, assertStringNotEmpty} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
-import {closeIssue, updateIssue, deleteComment} from '../../utils/GitHub'
+import {closeIssue, updateIssue, deleteComment, createComment, getIssueComments} from '../../utils/GitHub'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
@@ -129,6 +129,7 @@ export default function NoteCard({
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
+
   /**
    * deletes the note
    *
@@ -144,6 +145,44 @@ export default function NoteCard({
     handleMenuClose()
     setSelectedNoteId(null)
     return closeResponse
+  }
+
+  const fetchComments = async () => {
+    const newComments = []
+    const commentArr = await getIssueComments(repository, noteNumber, accessToken)
+
+    if (commentArr) {
+      commentArr.map((comment) => {
+        newComments.push({
+          id: comment.id,
+          body: comment.body,
+          date: comment.created_at,
+          username: comment.user.login,
+          avatarUrl: comment.user.avatar_url,
+          synched: true,
+        })
+      })
+    }
+    setComments(newComments)
+  }
+
+
+  /**
+   * create new comment
+   *
+   * @param {string} repository
+   * @param {string} accessToken
+   * @param {number} commentId
+   * @return {object} return github return object
+   */
+  async function createNewComment() {
+    assertStringNotEmpty(body)
+    const commentPayload = {
+      body: commentBody || '',
+    }
+    await createComment(repository, noteNumber, commentPayload, accessToken)
+    setCommentBody('')
+    fetchComments()
   }
 
   /**
@@ -240,7 +279,7 @@ export default function NoteCard({
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={() => setCommentBody('')}>
+                    <IconButton onClick={createNewComment}>
                       <CheckIcon/>
                     </IconButton>
                   </InputAdornment>
