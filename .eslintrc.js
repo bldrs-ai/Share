@@ -72,8 +72,12 @@ module.exports = {
     'no-lone-blocks': 'error',
     'no-lonely-if': 'error',
     'no-loop-func': 'error',
-    'no-magic-numbers': ['error', {ignore: [-1, 0, 1], ignoreArrayIndexes: true, ignoreDefaultValues: true}],
     'no-mixed-operators': 'error',
+    'no-magic-numbers': ['error', {
+      ignore: [-1, 0, 1],
+      ignoreArrayIndexes: true,
+      ignoreDefaultValues: true,
+    }],
     'no-multi-assign': ['error', {ignoreNonDeclaration: true}],
     'no-multiple-empty-lines': ['error', {max: 2, maxEOF: 1}],
     'no-return-assign': 'error',

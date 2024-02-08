@@ -21,6 +21,7 @@
     "build-share-webifc:linux:darwin": "USE_WEBIFC_SHIM=false yarn build-share && yarn build-share-copy-wasm-webifc",
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "build-share-copy-wasm-conway": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
+    "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
     "cypress:open": "cypress run",
     "cypress-spec": "cypress run --spec",
@@ -30,7 +31,7 @@
     "husky-init": "husky install",
     "lint": "yarn lint-src && yarn lint-tools",
     "lint-src": "yarn eslint src && tsc -p tools/tsconfig.json",
-    "lint-tools": "yarn eslint --rule no-console:off cypress tools",
+    "lint-tools": "yarn eslint cypress tools",
     "precommit": "yarn lint && yarn test",
     "serve": "yarn serve-share-conway",
     "serve-cosmos": "cosmos --config .cosmos.config.json",
@@ -40,7 +41,9 @@
     "serve-share-webifc": "run-script-os",
     "serve-share-webifc:win32": "yarn build-share-webifc && set USE_WEBIFC_SHIM=false&& node tools/esbuild/serve.js",
     "serve-share-webifc:linux:darwin": "yarn build-share-webifc && USE_WEBIFC_SHIM=false node tools/esbuild/serve.js",
-    "test": "jest --config tools/jest/jest.config.js",
+    "test": "yarn test-src && yarn test-tools",
+    "test-src": "jest --config tools/jest/jest.config.js",
+    "test-tools": "NO_LOG=true yarn node --experimental-vm-modules $(yarn bin jest) --config tools/jest/jest-tools.config.js",
     "update-version": "./scripts/updateVersion.mjs"
   },
   "dependencies": {
