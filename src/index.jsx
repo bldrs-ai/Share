@@ -39,9 +39,7 @@ Sentry.init({
   ],
 })
 
-console.log('DISABLE_MOCK_SERVICE_WORKER', process.env.DISABLE_MOCK_SERVICE_WORKER)
-if (process.env.DISABLE_MOCK_SERVICE_WORKER !== 'true') {
-  console.log('MSW ENABLED')
+if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {

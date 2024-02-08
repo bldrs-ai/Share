@@ -45,8 +45,6 @@ export const buildConfig = (useWebIfcShim) => {
     console.log('Using original Web-Ifc backend')
   }
 
-  console.log('NODE_ENV', process.env.NODE_ENV)
-
   const str = JSON.stringify
 
   // Return the build config
