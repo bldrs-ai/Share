@@ -28,7 +28,6 @@ export default function ExpansionPanel({summary, detail, expandState}) {
         'marginBottom': '10px',
         'borderRadius': '10px',
         'border': 'none',
-        // 'backgroundColor': theme.palette.scene.background,
         '& .MuiAccordionSummary-root': {
           width: '100%',
         },

@@ -18,8 +18,6 @@ export function getComponentOverrides(palette, typography) {
             height: '40px',
             borderRadius: '10px',
             border: 'none',
-            // backgroundColor: palette.primary.main,
-            // color: 'white',
           },
         },
       ],
