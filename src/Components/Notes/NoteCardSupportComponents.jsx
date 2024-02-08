@@ -19,8 +19,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
-import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
@@ -184,7 +184,7 @@ export const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={<CameraIcon className='icon-share'/>}
+            icon={<VideocamOutlinedIcon className='icon-share'/>}
             aboutInfo={false}
           />}
         {selected &&
@@ -251,7 +251,7 @@ export const CardFooter = ({
             onClick={() => submitUpdate(repository, accessToken, id)}
           />
         }
-        {isNote &&
+        {isNote && selected &&
           <TooltipIconButton
             title='Add Comment'
             size='small'

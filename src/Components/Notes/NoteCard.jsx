@@ -7,6 +7,7 @@ import CardHeader from '@mui/material/CardHeader'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
 import TextField from '@mui/material/TextField'
+import Typography from '@mui/material/Typography'
 import {
   CardFooter,
   CardMenu,
@@ -28,7 +29,7 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {NOTE_PREFIX} from './Notes'
-import CheckIcon from '@mui/icons-material/Check'
+import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined'
 
 
 /**
@@ -272,20 +273,25 @@ export default function NoteCard({
               label="Enter your comment"
               variant="outlined"
               value={commentBody}
+              color='primary'
               size='small'
               multiline
               fullWidth
               onChange={(event) => setCommentBody(event.target.value)}
               InputProps={{
+                style: {backgroundColor: 'white'},
                 endAdornment: (
                   <InputAdornment position="end">
-                    <IconButton onClick={createNewComment}>
-                      <CheckIcon/>
+                    <IconButton onClick={createNewComment} sx={{padding: '5px'}}>
+                      <CheckBoxOutlinedIcon/>
                     </IconButton>
                   </InputAdornment>
                 ),
               }}
             />
+            <Typography variant="body2" sx={{margin: '6px 0px 0px 6px'}}>
+              * Your comment will appear at the end of the list.
+            </Typography>
           </Box>
       }
       <CardFooter

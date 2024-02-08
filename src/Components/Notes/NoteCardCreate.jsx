@@ -12,7 +12,7 @@ import {TooltipIconButton} from '../Buttons'
 import useStore from '../../store/useStore'
 import {createIssue} from '../../utils/GitHub'
 import {assertStringNotEmpty} from '../../utils/assert'
-import CheckIcon from '@mui/icons-material/Check'
+import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined'
 
 
 /**
@@ -106,7 +106,7 @@ export default function NoteCardCreate({
             onClick={async () => {
               await createNote()
             }}
-            icon={<CheckIcon/>}
+            icon={<CheckBoxOutlinedIcon/>}
             enabled={submitEnabled}
             size='small'
             placement='bottom'
