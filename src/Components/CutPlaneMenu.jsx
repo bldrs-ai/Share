@@ -4,7 +4,6 @@ import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
@@ -36,7 +35,6 @@ export default function CutPlaneMenu() {
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const location = useLocation()
   const open = Boolean(anchorEl)
-  const theme = useTheme()
   const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
@@ -117,13 +115,6 @@ export default function CutPlaneMenu() {
           style: {
             left: '300px',
             transform: 'translateX(0px) translateY(-60px)',
-          },
-          sx: {
-            'color': theme.palette.primary.contrastText,
-            '& .Mui-selected': {
-              color: theme.palette.secondary.main,
-              fontWeight: 800,
-            },
           },
         }}
       >

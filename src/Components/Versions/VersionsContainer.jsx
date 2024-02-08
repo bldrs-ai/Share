@@ -1,12 +1,11 @@
 import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
-import IconButton from '@mui/material/IconButton'
-import Tooltip from '@mui/material/Tooltip'
 import useStore from '../../store/useStore'
 import {getCommitsForFile} from '../../utils/GitHub'
 import {assertDefined} from '../../utils/assert'
 import debug from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
+import {TooltipIconButton} from '../Buttons'
 import Panel from '../Panel'
 import VersionsTimeline from './VersionsTimeline'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
@@ -53,41 +52,46 @@ export default function VersionsContainer({filePath, currentRef}) {
     fetchCommits()
   }, [repository, filePath, accessToken])
 
+
   /**
-   * This callBack navigated to the selected commit
+   * Navigate to the indexed commit
    *
    * @param {string} index active commit index
    */
-  const commitNavigate = (index) => {
+  function navigateToCommit(index) {
     const sha = commitData[index].sha
     if (modelPath) {
       const commitPath =
             navigateBaseOnModelPath(modelPath.org, modelPath.repo, sha, modelPath.filepath)
-      navigate({
-        pathname: commitPath,
-      })
+      navigate({pathname: commitPath})
     }
   }
 
-  const navigateToMain = () => {
+
+  /**
+   * Navigate to head of main
+   *
+   * @param {string} index active commit index
+   */
+  function navigateToMain() {
     if (modelPath) {
+      // TODO(pablo): should not hardcode to 'main'
       const mainPath =
             navigateBaseOnModelPath(modelPath.org, modelPath.repo, 'main', modelPath.filepath)
-      navigate({
-        pathname: mainPath,
-      })
+      navigate({pathname: mainPath})
     }
   }
+
 
   return (
     <Panel
       title='Versions'
       action={
-        <Tooltip title="Navigate to the tip of version history">
-          <IconButton aria-label="navigate_to_tip" size="small" onClick={navigateToMain} >
-            <RestartAltIcon fontSize="inherit"/>
-          </IconButton>
-        </Tooltip>
+        <TooltipIconButton
+          title='Navigate to the head of version history'
+          icon={<RestartAltIcon/>}
+          onClick={navigateToMain}
+        />
       }
       onClose={toggleIsVersionsVisible}
       data-testid='Version Panel'
@@ -95,7 +99,7 @@ export default function VersionsContainer({filePath, currentRef}) {
       <VersionsTimeline
         commitData={commitData}
         currentRef={currentRef}
-        commitNavigateCb={commitNavigate}
+        commitNavigateCb={navigateToCommit}
       />
     </Panel>
   )

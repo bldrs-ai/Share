@@ -61,8 +61,8 @@ export default function Dialog({
                flexDirection: 'column',
                alignItems: 'center',
                justifyContent: 'center',
-               width: '2em',
-               height: '2em',
+               width: '2.5em',
+               height: '2.5em',
                borderRadius: '50%',
                background: theme.palette.secondary.main,
              }}

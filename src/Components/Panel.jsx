@@ -11,16 +11,15 @@ import CloseIcon from '@mui/icons-material/Close'
 /**
  * A panel component with a sticky header containing a title and close button.
  *
- * @param {string} title The title to display in the panel header.
- * @param {Function} onClose A callback to be executed when the close button is clicked.
- * @param {React.ReactNode} content The content to be displayed in the panel.
- * @return {React.ReactElement} A rendered Panel component.
+ * @param {string|React.ReactElement} title The title to display in the panel header
+ * @param {Function} onClose A callback to be executed when the close button is clicked
+ * @param {React.ReactElement} children Enclosed elements
+ * @return {React.ReactElement}
  */
-export default function Panel({title, onClose, content, testId = '', action = null}) {
+export default function Panel({title, onClose, children, testId = '', action = null}) {
   const theme = useTheme()
   return (
     <Paper
-      data-testid={testId}
       sx={{
         'overflowY': 'scroll',
         'maxHeight': '490px',
@@ -28,11 +27,12 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
-        'backgroundColor': theme.palette.primary.main,
+        'backgroundColor': theme.palette.secondary.dark,
         '@media (max-width: 800px)': {
           maxHeight: '400px',
         },
       }}
+      data-testid={testId}
     >
       <Stack
         direction='row'
@@ -45,7 +45,18 @@ export default function Panel({title, onClose, content, testId = '', action = nu
           zIndex: 1,
         }}
       >
-        <Typography variant='body1' sx={{marginLeft: '.9em', textTransform: 'uppercase'}}>{title}</Typography>
+        {typeof(title) === 'string' ?
+        <Typography
+          variant='body1'
+          sx={{
+            marginLeft: '.9em',
+            textTransform: 'uppercase',
+          }}
+        >
+          {title}
+        </Typography> :
+         <>{title}</>
+        }
         <Stack
           direction='row'
           justifyContent={'center'}
@@ -61,7 +72,7 @@ export default function Panel({title, onClose, content, testId = '', action = nu
         </Stack>
       </Stack>
       <Box sx={{padding: '1px 0px'}}>
-        {content}
+        {children}
       </Box>
     </Paper>
   )

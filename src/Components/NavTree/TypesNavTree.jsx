@@ -8,45 +8,10 @@ import HideToggleButton from '../HideToggleButton'
 import NavTree from './NavTree'
 
 
-const TypesNavTreePropTypes = {
-  /**
-   * Override or extend the styles applied to the component.
-   */
-  classes: PropTypes.object.isRequired,
-  /**
-   * className applied to the root element.
-   */
-  className: PropTypes.string,
-  /**
-   * The icon to display next to the tree node's label. Either a parent or end icon.
-   */
-  displayIcon: PropTypes.node,
-  /**
-   * The icon to display next to the tree node's label. Either an expansion or collapse icon.
-   */
-  expansionIcon: PropTypes.node,
-  /**
-   * The icon to display next to the tree node's label.
-   */
-  icon: PropTypes.node,
-  /**
-   * The tree node label.
-   */
-  label: PropTypes.node,
-  /**
-   * The id of the node.
-   */
-  nodeId: PropTypes.string.isRequired,
-  /**
-   * Determines if the tree node has a hide icon.
-   */
-  hasHideIcon: PropTypes.bool,
-}
-
 /**
- * @param {object} model IFC model
- * @param {object} collection of element types
- * @param {string} pathPrefix URL prefix for constructing links to
+ * @property {object} model IFC model
+ * @property {object} collection of element types
+ * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
  * @return {object} React component
  */
@@ -154,4 +119,40 @@ export default function TypesNavTree({
       )
     }) : null}
     </CustomTreeItem>)
+}
+
+
+const TypesNavTreePropTypes = {
+  /**
+   * Override or extend the styles applied to the component.
+   */
+  classes: PropTypes.object.isRequired,
+  /**
+   * className applied to the root element.
+   */
+  className: PropTypes.string,
+  /**
+   * The icon to display next to the tree node's label. Either a parent or end icon.
+   */
+  displayIcon: PropTypes.node,
+  /**
+   * The icon to display next to the tree node's label. Either an expansion or collapse icon.
+   */
+  expansionIcon: PropTypes.node,
+  /**
+   * The icon to display next to the tree node's label.
+   */
+  icon: PropTypes.node,
+  /**
+   * The tree node label.
+   */
+  label: PropTypes.node,
+  /**
+   * The id of the node.
+   */
+  nodeId: PropTypes.string.isRequired,
+  /**
+   * Determines if the tree node has a hide icon.
+   */
+  hasHideIcon: PropTypes.bool,
 }

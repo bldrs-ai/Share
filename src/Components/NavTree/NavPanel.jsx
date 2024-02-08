@@ -1,11 +1,10 @@
-import React from 'react'
+import React, {useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
-import Box from '@mui/material/Box'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
 import {styled} from '@mui/material/styles'
-import {useExistInFeature} from '../../hooks/useExistInFeature'
+import useTheme from '@mui/styles/useTheme'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../Panel'
@@ -34,8 +33,6 @@ export default function NavPanel({
   setExpandedElements,
   expandedTypes,
   setExpandedTypes,
-  navigationMode,
-  setNavigationMode,
   selectWithShiftClickEvents,
   pathPrefix,
 }) {
@@ -44,7 +41,8 @@ export default function NavPanel({
   const selectedElements = useStore((state) => state.selectedElements)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const toggleIsNavTreeVisible = useStore((state) => state.toggleIsNavTreeVisible)
-  const existNavTypesInFeature = useExistInFeature('navtypes')
+
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
   const onTreeViewChanged = (event, value) => {
     if (value !== null) {
@@ -54,118 +52,97 @@ export default function NavPanel({
 
   const StyledToggleButtonGroup = styled(ToggleButtonGroup)(({theme}) => ({
     '& .MuiToggleButtonGroup-grouped': {
-      // eslint-disable-next-line no-magic-numbers
-      'margin': theme.spacing(0.5),
+      'margin': '0 0.5em',
       'border': 0,
+      'borderRadius': 0,
       '&.Mui-disabled': {
         border: 0,
-      },
-      '&:not(:first-of-type)': {
-        borderRadius: theme.shape.borderRadius,
-      },
-      '&:first-of-type': {
-        borderRadius: theme.shape.borderRadius,
       },
     },
   }))
 
-  const isNavTree = existNavTypesInFeature ? navigationMode === 'spatial-tree' : true
+  const isNavTree = navigationMode === 'spatial-tree'
+
+  const theme = useTheme()
 
   return (
-    <div style={{width: '100%'}}>
-      <Panel
-        testId='Navigation_panel'
-        content={
-          <Box>
-            {existNavTypesInFeature && (
-              <StyledToggleButtonGroup
-                exclusive
-                id={'togglegrp'}
-                value={navigationMode}
-                size="small"
-                sx={{
-                  'marginLeft': '16px',
-                  'marginTop': '8px',
-                  '& button': {
-                    height: '30px',
-                    width: '30px',
-                  },
-                  '& svg': {
-                    height: '20px',
-                    width: '20px',
-                  },
-                }}
-                onChange={onTreeViewChanged}
-              >
-                <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
-                  <Tooltip
-                    title={'Spatial Structure'}
-                    describeChild
-                    placement={'bottom-end'}
-                    PopperProps={{style: {zIndex: 0}}}
-                  >
-                    <AccountTreeIcon/>
-                  </Tooltip>
-                </ToggleButton>
-                <ToggleButton value='element-types' aria-label='element-types'>
-                  <Tooltip
-                    title={'Element Types'}
-                    describeChild
-                    placement={'bottom-end'}
-                    PopperProps={{style: {zIndex: 0}}}
-                  >
-                    <ListIcon/>
-                  </Tooltip>
-                </ToggleButton>
-              </StyledToggleButtonGroup>
-            )}
-            <TreeView
-              aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
-              defaultCollapseIcon={<NodeOpenIcon className='icon-share icon-nav-caret'/>}
-              defaultExpandIcon={<NodeClosedIcon className='icon-share icon-nav-caret'/>}
-              defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
-              expanded={isNavTree ? expandedElements : expandedTypes}
-              selected={selectedElements}
-              onNodeToggle={(event, nodeIds) => {
-                if (isNavTree) {
-                  setExpandedElements(nodeIds)
-                } else {
-                  setExpandedTypes(nodeIds)
-                }
-              }}
-              key='tree'
-              sx={{
-                'padding': existNavTypesInFeature ? '7px 0 14px 0' : '4px 0px 10px 0px',
-                'maxWidth': '400px',
-                'overflowY': 'auto',
-                'overflowX': 'hidden',
-                'flexGrow': 1,
-                '&:focus svg': {
-                  visibility: 'visible !important',
-                },
-              }}
+    <Panel
+      onClose={toggleIsNavTreeVisible}
+      title='Navigation'
+      action={
+        <StyledToggleButtonGroup
+          exclusive
+          id={'togglegrp'}
+          value={navigationMode}
+          size='small'
+          onChange={onTreeViewChanged}
+        >
+          <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
+            <Tooltip
+              title={'Spatial Structure'}
+              describeChild
+              placement={'bottom-end'}
+              PopperProps={{style: {zIndex: 0}}}
             >
-              {isNavTree ? (
-              <NavTree
-                model={model}s
-                selectWithShiftClickEvents={selectWithShiftClickEvents}
-                element={rootElement}
-                pathPrefix={pathPrefix}
-              />
-            ) : (
-              <TypesNavTree
-                model={model}
-                types={elementTypesMap}
-                selectWithShiftClickEvents={selectWithShiftClickEvents}
-                pathPrefix={pathPrefix}
-              />
-            )}
-            </TreeView>
-          </Box>
-        }
-        title='Navigation'
-        onClose={toggleIsNavTreeVisible}
-      />
-    </div>
+              <AccountTreeIcon/>
+            </Tooltip>
+          </ToggleButton>
+          <ToggleButton value='element-types' aria-label='element-types'>
+            <Tooltip
+              title={'Element Types'}
+              describeChild
+              placement={'bottom-end'}
+              PopperProps={{style: {zIndex: 0}}}
+            >
+              <ListIcon/>
+            </Tooltip>
+          </ToggleButton>
+        </StyledToggleButtonGroup>
+      }
+    >
+      <TreeView
+        aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
+        defaultCollapseIcon={<NodeOpenIcon className='icon-share icon-nav-caret'/>}
+        defaultExpandIcon={<NodeClosedIcon className='icon-share icon-nav-caret'/>}
+        defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
+        expanded={isNavTree ? expandedElements : expandedTypes}
+        selected={selectedElements}
+        onNodeToggle={(event, nodeIds) => {
+          if (isNavTree) {
+            setExpandedElements(nodeIds)
+          } else {
+            setExpandedTypes(nodeIds)
+          }
+        }}
+        key='tree'
+        sx={{
+          'padding': '7px 0 14px 0',
+          'maxWidth': '400px',
+          'overflowY': 'auto',
+          'overflowX': 'hidden',
+          'flexGrow': 1,
+          'backgroundColor': theme.palette.secondary.main,
+          '&:focus svg': {
+            visibility: 'visible !important',
+          },
+        }}
+      >
+        {isNavTree ? (
+          <NavTree
+            model={model}
+            element={rootElement}
+            pathPrefix={pathPrefix}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+        ) : (
+          <TypesNavTree
+            model={model}
+            types={elementTypesMap}
+            pathPrefix={pathPrefix}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+        )}
+      </TreeView>
+    </Panel>
   )
 }

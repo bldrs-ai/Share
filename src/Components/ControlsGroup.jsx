@@ -19,10 +19,10 @@ import HistoryIcon from '@mui/icons-material/History'
  */
 export default function ControlsGroup({isRepoActive}) {
   const {isAuthenticated} = useAuth0()
-  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
-  const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
-  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
-  const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
+  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
+  const toggleIsNavTreeVisible = useStore((state) => state.toggleIsNavTreeVisible)
+  const isVersionsVisible = useStore((state) => state.isVersionsVisible)
+  const toggleIsVersionsVisible = useStore((state) => state.toggleIsVersionsVisible)
 
   return (
     <ButtonGroup
@@ -42,13 +42,11 @@ export default function ControlsGroup({isRepoActive}) {
           title='Versions'
           icon={<HistoryIcon className='icon-share'/>}
           placement='bottom'
-          selected={isVersionHistoryVisible}
+          selected={isVersionsVisible}
           onClick={() => {
-            if (isNavigationVisible) {
-              toggleIsVersionHistoryVisible()
-              toggleIsNavigationVisible()
-            } else {
-              toggleIsVersionHistoryVisible()
+            toggleIsVersionsVisible()
+            if (isNavTreeVisible) {
+              toggleIsNavTreeVisible()
             }
           }}
         />

@@ -3,7 +3,6 @@ import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import {ControlButton, TooltipIconButton} from './Buttons'
 import Dialog from './Dialog'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
@@ -70,7 +69,6 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
 export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [pageIndex, setPageIndex] = useState(0)
   const totalPages = 4
-  const theme = useTheme()
 
 
   const swipeHandlers = useSwipeable({
@@ -135,18 +133,13 @@ export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             justifyContent="center"
             alignItems="center"
           >
-            <Stack
-              direction='row' sx={{width: '38px'}}
-            >
+            <Stack direction='row' sx={{width: '38px'}}>
               {[...Array(totalPages)].map((_, idx) => (
                 <Box
                   key={idx}
                   sx={{
                     width: '6px',
                     height: '6px',
-                    backgroundColor: idx === pageIndex ?
-                      theme.palette.primary.main :
-                      theme.palette.secondary.background,
                     borderRadius: '50%',
                     marginX: '2px',
                   }}
@@ -156,13 +149,13 @@ export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           </Stack>
           <TooltipIconButton
             title='Next'
-            placement='right'
-            variant='noBackground'
             icon={
               <ArrowForwardIcon
                 sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
               />}
             onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
+            placement='right'
+            variant='noBackground'
           />
         </Box>
       </Box>

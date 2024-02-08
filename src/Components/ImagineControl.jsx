@@ -87,13 +87,8 @@ function ImagineDialog({
 
   return (
     <Dialog
-      headerIcon={null}
-      headerText={
-        <>
-          <BotIcon style={{height: '60px'}}/><br/>
-          Imagine
-        </>
-      }
+      headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}
+      headerText={'Imagine'}
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
     >

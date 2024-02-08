@@ -79,7 +79,7 @@ export default function LoginMenu() {
             transform: `translateX(${(IsDrawerOpen && !isMobile) ? '-142px' : '-54px'}) translateY(0px)`,
           },
           sx: {
-            'color': theme.palette.primary.contrastText,
+            'color': theme.palette.secondary.contrastText,
             '& .Mui-selected': {
               color: theme.palette.secondary.main,
               fontWeight: 800,

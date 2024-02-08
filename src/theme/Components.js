@@ -49,6 +49,7 @@ export function getComponentOverrides(palette, typography) {
           // ?? Mui cards don't seem to have theme support for color grading
           // the different elts.
           // background: palette.secondary.main,
+          width: '100%',
         },
       },
     },
@@ -105,6 +106,22 @@ export function getComponentOverrides(palette, typography) {
         root: {
           padding: '0.5em 0',
         },
+      },
+    },
+    MuiMenuItem: {
+      styleOverrides: {
+        root: ({theme}) => ({
+          '&.Mui-selected': {
+            backgroundColor: theme.palette.secondary.dark,
+            fontWeight: 'bold',
+          },
+          '&.Mui-selected:hover': {
+            // TODO(pablo): merge with above. Can't figure out combined selector
+            backgroundColor: theme.palette.secondary.dark,
+            fontWeight: 'bold',
+            fontStyle: 'italic',
+          },
+        }),
       },
     },
     MuiPaper: {
