@@ -9,6 +9,7 @@ esbuild
     .then((result) => {
       // Remove development resources from non-development builds
       if (process.env.DISABLE_MOCK_SERVICE_WORKER === 'true') {
+        console.log('MSW TRUE UNLINKING')
         fs.unlink(join(common.buildDir, 'mockServiceWorker.js'), (err) => console.log(err))
       }
       const metaFilename = './tools/esbuild/bundle-analysis.json'
