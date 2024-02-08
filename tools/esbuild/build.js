@@ -1,7 +1,7 @@
 import esbuild from 'esbuild'
-import * as common from './common.js'
 import fs from 'node:fs'
 import {join} from 'node:path'
+import * as common from './common.js'
 
 
 esbuild

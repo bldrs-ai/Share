@@ -46,6 +46,12 @@ export const buildConfig = (useWebIfcShim) => {
   }
 
 
+  if (process.env.NODE_ENV === 'production') {
+    console.log('Building for production. (detected: NODE_ENV=production)')
+    process.env.DISABLE_MOCK_SERVICE_WORKER = 'true'
+  }
+
+
   // Return the build config
   return {
     entryPoints: [entryPoint],
