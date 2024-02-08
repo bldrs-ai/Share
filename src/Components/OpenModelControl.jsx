@@ -10,14 +10,14 @@ import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
-import {checkOPFSAvailability} from '../OPFS/utils'
+import {checkOPFSAvailability, doesFileExistInOPFS, deleteFileFromOPFS} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {
   loadLocalFile,
   loadLocalFileFallback,
 } from '../utils/loader'
-import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories, getLatestCommitHash, deleteFile} from '../utils/GitHub'
 import {RectangularButton} from '../Components/Buttons'
 import UploadIcon from '../assets/icons/Upload.svg'
 import OpenHeaderIcon from '../assets/icons/OpenGraphic.svg'
@@ -104,6 +104,7 @@ function OpenModelDialog({
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
   const isOPFSAvailable = checkOPFSAvailability()
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const openFile = () => {
     if (isOPFSAvailable) {
@@ -140,6 +141,38 @@ function OpenModelDialog({
     }
   }
 
+  const deleteFileFromRepo = async () => {
+
+    setSnackMessage(`Deleting ${filesArr[selectedFileName]} from OPFS if it exists...`)
+    const owner = orgNamesArr[selectedOrgName]
+    const repo = repoNamesArr[selectedRepoName]
+    const filePath = filesArr[selectedFileName]
+    const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
+    const fileExists = await doesFileExistInOPFS(filePath, commitHash, owner, repo, 'main')
+
+    if (fileExists) {
+      //delete file locally 
+      const deleted = await deleteFileFromOPFS(filePath, commitHash, owner, repo, 'main')
+      ;
+    }
+
+    setSnackMessage(`Deleting ${filesArr[selectedFileName]} from GitHub...`)
+
+    const newCommitHash = await deleteFile(
+      owner,
+      repo,
+      filePath,
+      `Deleted file ${filesArr[selectedFileName]}`,
+      'main',
+      accessToken)
+
+      if (newCommitHash !== null) {
+        setSnackMessage('')
+      } else {
+        setSnackMessage('Error deleting file ' + filePath + ' from Github.')
+      }
+  }
+
   return (
     <Dialog
       icon={<CreateNewFolderIcon className='icon-share'/>}
@@ -168,14 +201,22 @@ function OpenModelDialog({
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
-            {selectedFileName !== '' &&
+            {selectedFileName !== '' && (
+              <Stack>
               <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                 <RectangularButton
                   title={'LOAD FILE'}
                   onClick={navigateToFile}
                 />
               </Box>
-            }
+
+              <Box sx={{textAlign: 'center', marginTop: '4px'}}>
+              <RectangularButton
+                title={'DELETE FILE'}
+                onClick={deleteFileFromRepo}
+              />
+              </Box>
+              </Stack> )}
           </Stack> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>

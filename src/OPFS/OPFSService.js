@@ -40,6 +40,36 @@ export const opfsWriteModel = (objectUrl, originalFileName, commitHash) => {
   })
 }
 
+export const opfsDeleteModel = (originalFileName, commitHash, owner, repo, branch) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'deleteModel',
+    commitHash: commitHash,
+    originalFilePath: originalFileName,
+    owner:owner,
+    repo:repo,
+    branch: branch,
+  })
+}
+
+export const opfsDoesFileExist = (originalFileName, commitHash, owner, repo, branch) => {
+  if (!workerRef) {
+    debug().error('Worker not initialized')
+    return
+  }
+  workerRef.postMessage({
+    command: 'doesFileExist',
+    commitHash: commitHash,
+    originalFilePath: originalFileName,
+    owner:owner,
+    repo:repo,
+    branch: branch,
+  })
+}
+
 export const opfsWriteModelFileHandle = (file, originalFileName, commitHash, owner, repo, branch) => {
   if (!workerRef) {
     debug().error('Worker not initialized')

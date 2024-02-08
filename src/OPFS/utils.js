@@ -4,6 +4,8 @@ import {
   opfsReadModel,
   opfsWriteModel,
   opfsWriteModelFileHandle,
+  opfsDoesFileExist,
+  opfsDeleteModel,
 } from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
@@ -135,6 +137,100 @@ export function downloadToOPFS(
 
     opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
   })
+}
+
+/**
+ * 
+ * @param {*} originalFilePath 
+ * @param {*} commitHash 
+ * @param {*} owner 
+ * @param {*} repo 
+ * @param {*} branch 
+ * @return {boolean} 
+ */
+export function doesFileExistInOPFS(
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
+
+  assertDefined(originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (event) => {
+        if (event.data.error) {
+          debug().error('Error from worker:', event.data.error)
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          reject(new Error(event.data.error))
+        } else if (event.data.completed) {
+          if (event.data.event === 'notexist') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(false) // Resolve the promise with false
+          } else if (event.data.event === 'exist') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(true) // Resolve the promise with true
+          }
+        }
+      }
+      workerRef.addEventListener('message', listener)
+    } else {
+      reject(new Error('Worker initialization failed'))
+    }
+
+    opfsDoesFileExist(originalFilePath, commitHash, owner, repo, branch)
+  })
+
+}
+
+/**
+ * 
+ * @param {*} originalFilePath 
+ * @param {*} commitHash 
+ * @param {*} owner 
+ * @param {*} repo 
+ * @param {*} branch 
+ * @return {boolean} 
+ */
+export function deleteFileFromOPFS(
+  originalFilePath,
+  commitHash,
+  owner,
+  repo,
+  branch) {
+
+  assertDefined(originalFilePath, commitHash, owner, repo, branch)
+
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (event) => {
+        if (event.data.error) {
+          debug().error('Error from worker:', event.data.error)
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          reject(new Error(event.data.error))
+        } else if (event.data.completed) {
+          if (event.data.event === 'notexist') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(false) // Resolve the promise with false
+          } else if (event.data.event === 'deleted') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(true) // Resolve the promise with true
+          }
+        }
+      }
+      workerRef.addEventListener('message', listener)
+    } else {
+      reject(new Error('Worker initialization failed'))
+    }
+
+    opfsDeleteModel(originalFilePath, commitHash, owner, repo, branch)
+  })
+
 }
 
 
