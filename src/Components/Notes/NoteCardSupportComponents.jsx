@@ -12,7 +12,6 @@ import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {useExistInFeature} from '../../hooks/useExistInFeature'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
@@ -122,8 +121,6 @@ export const CardFooter = ({
   isNote = true,
   synched,
   submitUpdate,
-  setShowCreateComment,
-  showCreateComment,
 }) => {
   const [screenshotUri, setScreenshotUri] = useState(null)
   const {accessToken} = useAuth0()
@@ -251,16 +248,6 @@ export const CardFooter = ({
             onClick={() => submitUpdate(repository, accessToken, id)}
           />
         }
-        {isNote && selected &&
-          <TooltipIconButton
-            title='Add Comment'
-            size='small'
-            placement='bottom'
-            selected={showCreateComment}
-            onClick={() => setShowCreateComment(!showCreateComment)}
-            icon={<AddCommentOutlinedIcon className='icon-share'/>}
-          />
-        }
         {numberOfComments > 0 && !editMode &&
         <>
           {!selected &&
@@ -272,28 +259,25 @@ export const CardFooter = ({
               icon={<ForumOutlinedIcon className='icon-share'/>}
             />
           }
-          {!selected &&
-            <Box
-              sx={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                margin: '0px 8px',
-                backgroundColor: theme.palette.primary.main,
-                display: 'flex',
-                flexDirection: 'row',
-                justifyContent: 'center',
-                alignItems: 'center',
-                fontSize: '.84em',
-                color: theme.palette.primary.contrastText,
-              }}
-              role='button'
-              tabIndex={0}
-            >
-              {numberOfComments}
-            </Box>
-          }
-
+          <Box
+            sx={{
+              width: '20px',
+              height: '20px',
+              borderRadius: '50%',
+              margin: '0px 8px',
+              backgroundColor: theme.palette.primary.main,
+              display: 'flex',
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+              fontSize: '.84em',
+              color: theme.palette.primary.contrastText,
+            }}
+            role='button'
+            tabIndex={0}
+          >
+            {numberOfComments}
+          </Box>
         </>
         }
       </Box>

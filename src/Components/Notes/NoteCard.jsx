@@ -53,6 +53,7 @@ export default function NoteCard({
   numberOfComments = null,
   isNote = true,
   synched = true,
+  locked = false,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -68,6 +69,7 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
@@ -99,6 +101,8 @@ export default function NoteCard({
   function selectCard() {
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
+    const selectedNote = notes.filter((issue) => issue.id === id)
+    setSelectedNote(selectedNote)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
@@ -239,6 +243,7 @@ export default function NoteCard({
         submitUpdate={submitUpdate}
         setShowCreateComment={setShowCreateComment}
         showCreateComment={showCreateComment}
+        locked={locked}
       />
     </Card>
   )

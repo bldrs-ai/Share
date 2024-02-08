@@ -14,7 +14,7 @@ export default function createNotesSlice(set, get) {
     createdNotes: null,
     deletedNotes: null,
     synchSidebar: true, // To render again, not related to flag
-    comments: null,
+    comments: [],
     selectedNoteId: null,
     selectedNoteIndex: null,
     placeMark: null,
@@ -30,6 +30,7 @@ export default function createNotesSlice(set, get) {
     setComments: (comments) => set(() => ({comments: comments})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
+    setSelectedNote: (note) => set(() => ({selectedNote: note})),
     setPlaceMark: (newPlaceMark) => set(() => ({placeMark: newPlaceMark})),
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setPlaceMarkActivated: (newPlaceMarkActivated) => set(() => ({placeMarkActivated: newPlaceMarkActivated})),

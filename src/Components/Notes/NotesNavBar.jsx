@@ -5,10 +5,10 @@ import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '..
 import useStore from '../../store/useStore'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import {NOTE_PREFIX} from './Notes'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
-import NoteAddOutlinedIcon from '@mui/icons-material/NoteAddOutlined'
 
 
 /** @return {React.Component} */
@@ -122,7 +122,7 @@ export default function NotesNavBar() {
               title='Add a note'
               placement='bottom'
               onClick={toggleIsCreateNoteActive}
-              icon={<NoteAddOutlinedIcon className='icon-share' color='secondary'/>}
+              icon={<AddCommentOutlinedIcon className='icon-share' color='secondary'/>}
               size='medium'
               variant='noBackground'
             />

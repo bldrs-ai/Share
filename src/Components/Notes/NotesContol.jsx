@@ -40,7 +40,6 @@ export default function NotesControl() {
         let issueIndex = 0
         const issueArr = await getIssues(repository, accessToken)
         debug().log('Notes#useEffect: issueArr: ', issueArr)
-
         issueArr.reverse().map((issue, index) => {
           newNotes.push({
             index: issueIndex++,
@@ -53,6 +52,7 @@ export default function NotesControl() {
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
             synched: true,
+            locked: issue.locked,
           })
         })
         setNotes(newNotes)
