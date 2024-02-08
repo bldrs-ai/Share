@@ -17,7 +17,7 @@ import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavTree/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
-import SearchBar from '../Components/SearchBar'
+import SearchBar from '../Components/Search/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import VersionsContainer from '../Components/Versions/VersionsContainer'
@@ -883,8 +883,8 @@ export default function CadView({
            {isSearchBarVisible && <SearchBar/>}
          </Box>
         }
-        <Box sx={{marginTop: '.82em', width: '100%'}}>
 
+        <Box sx={{marginTop: '.82em', width: '100%'}}>
           {isNavTreeEnabled && isNavTreeVisible &&
            <NavPanel
              model={model}
@@ -902,7 +902,10 @@ export default function CadView({
            />
           }
 
-          {isVersionsEnabled && modelPath.repo !== undefined && isVersionsVisible &&
+          {isVersionsEnabled &&
+           !isNavTreeVisible &&
+           modelPath.repo !== undefined &&
+           isVersionsVisible &&
            <VersionsContainer
              filePath={modelPath.filepath}
              currentRef={branch}

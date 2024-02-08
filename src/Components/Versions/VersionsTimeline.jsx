@@ -1,15 +1,16 @@
 /* eslint-disable no-magic-numbers */
 import React, {useState, useEffect} from 'react'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
 import Timeline from '@mui/lab/Timeline'
+import TimelineDot from '@mui/lab/TimelineDot'
 import TimelineItem from '@mui/lab/TimelineItem'
-import TimelineSeparator from '@mui/lab/TimelineSeparator'
 import TimelineConnector from '@mui/lab/TimelineConnector'
 import TimelineContent from '@mui/lab/TimelineContent'
+import TimelineSeparator from '@mui/lab/TimelineSeparator'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
-import TimelineDot from '@mui/lab/TimelineDot'
+import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 import {styled} from '@mui/system'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
@@ -74,11 +75,19 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
  * @return {React.ReactElement}
  */
 function TimelineInfo({commit, active}) {
+  const theme = useTheme()
   return (
     <>
       <TimelineSeparator>
         <TimelineConnector/>
-        <TimelineDot color={active ? 'primary' : 'inherit'} data-testid='commit'>
+        <TimelineDot
+          sx={{
+            bgcolor: active ?
+              theme.palette.secondary.active :
+              theme.palette.secondary.main,
+          }}
+          data-testid='commit'
+        >
           {(commit.commitMessage.includes('Create') ||
             commit.commitMessage.includes('Add') ||
             commit.commitMessage.includes('Merge')) ?
@@ -90,7 +99,7 @@ function TimelineInfo({commit, active}) {
       </TimelineSeparator>
       <TimelineOppositeContent
         sx={{padding: '10px 0px 10px 10px'}}
-        color={active ? 'text.primary' : 'text.secondary'}
+        color={active ? 'text.secondary' : 'inherit'}
       >
         <Paper
           elevation={active ? 4 : 1}

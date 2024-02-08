@@ -1,7 +1,8 @@
 import React from 'react'
-import {render, fireEvent} from '@testing-library/react'
 import '@testing-library/jest-dom/extend-expect'
+import {render, fireEvent} from '@testing-library/react'
 import VersionsTimeline from './VersionsTimeline'
+import {ThemeCtx} from '../../theme/Theme.fixture'
 
 
 describe('CustomTimeline', () => {
@@ -21,11 +22,13 @@ describe('CustomTimeline', () => {
   it('displays the correct number of timeline items', () => {
     const commitNavigateCb = jest.fn()
     const {getByText} = render(
+      <ThemeCtx>
         <VersionsTimeline
           commitData={mockCommitData}
           currentRef={'main'}
           commitNavigateCb={commitNavigateCb}
-        />)
+        />
+      </ThemeCtx>)
     const firstItem = getByText('User1')
     const secondItem = getByText('User2')
     expect(firstItem).toBeInTheDocument()
@@ -35,11 +38,13 @@ describe('CustomTimeline', () => {
   it('updates the active timeline item on click', () => {
     const commitNavigateCb = jest.fn()
     const {getByText} = render(
+      <ThemeCtx>
         <VersionsTimeline
           commitData={mockCommitData}
           currentRef={'main'}
           commitNavigateCb={commitNavigateCb}
-        />)
+        />
+      </ThemeCtx>)
     const firstItem = getByText('User1')
     fireEvent.click(firstItem)
     expect(commitNavigateCb).toHaveBeenCalledTimes(1)

@@ -23,6 +23,8 @@ export const day = {
     light: colors.grey.lightest,
     dark: colors.grey.mediumlight,
     contrastText: colors.grey.darkest,
+    // e.g. for list of items with one active
+    active: '#00F0FF',
   },
 
   logo: {
