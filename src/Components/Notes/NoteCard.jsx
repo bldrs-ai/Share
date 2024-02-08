@@ -1,13 +1,8 @@
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
-import Box from '@mui/material/Box'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
-import InputAdornment from '@mui/material/InputAdornment'
-import IconButton from '@mui/material/IconButton'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
 import {
   CardFooter,
   CardMenu,
@@ -17,10 +12,10 @@ import {
 } from './NoteCardSupportComponents'
 import EditCardBody from './EditCardBody'
 import useStore from '../../store/useStore'
-import {assertDefined, assertStringNotEmpty} from '../../utils/assert'
+import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
-import {closeIssue, updateIssue, deleteComment, createComment, getIssueComments} from '../../utils/GitHub'
+import {closeIssue, updateIssue, deleteComment} from '../../utils/GitHub'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
@@ -29,7 +24,6 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import {NOTE_PREFIX} from './Notes'
-import CheckBoxOutlinedIcon from '@mui/icons-material/CheckBoxOutlined'
 
 
 /**
@@ -64,7 +58,6 @@ export default function NoteCard({
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
-  const [commentBody, setCommentBody] = useState('')
   const [showCreateComment, setShowCreateComment] = useState(false)
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
@@ -148,44 +141,6 @@ export default function NoteCard({
     return closeResponse
   }
 
-  const fetchComments = async () => {
-    const newComments = []
-    const commentArr = await getIssueComments(repository, noteNumber, accessToken)
-
-    if (commentArr) {
-      commentArr.map((comment) => {
-        newComments.push({
-          id: comment.id,
-          body: comment.body,
-          date: comment.created_at,
-          username: comment.user.login,
-          avatarUrl: comment.user.avatar_url,
-          synched: true,
-        })
-      })
-    }
-    setComments(newComments)
-  }
-
-
-  /**
-   * create new comment
-   *
-   * @param {string} repository
-   * @param {string} accessToken
-   * @param {number} commentId
-   * @return {object} return github return object
-   */
-  async function createNewComment() {
-    assertStringNotEmpty(body)
-    const commentPayload = {
-      body: commentBody || '',
-    }
-    await createComment(repository, noteNumber, commentPayload, accessToken)
-    setCommentBody('')
-    fetchComments()
-  }
-
   /**
    * Remove comment
    *
@@ -266,33 +221,6 @@ export default function NoteCard({
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
        />
-      }
-      {showCreateComment &&
-          <Box sx={{padding: '20px'}}>
-            <TextField
-              label="Enter your comment"
-              variant="outlined"
-              value={commentBody}
-              color='primary'
-              size='small'
-              multiline
-              fullWidth
-              onChange={(event) => setCommentBody(event.target.value)}
-              InputProps={{
-                style: {backgroundColor: 'white'},
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <IconButton onClick={createNewComment} sx={{padding: '5px'}}>
-                      <CheckBoxOutlinedIcon/>
-                    </IconButton>
-                  </InputAdornment>
-                ),
-              }}
-            />
-            <Typography variant="body2" sx={{margin: '6px 0px 0px 6px'}}>
-              * Your comment will appear at the end of the list.
-            </Typography>
-          </Box>
       }
       <CardFooter
         editMode={editMode}

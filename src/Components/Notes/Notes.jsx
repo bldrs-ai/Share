@@ -131,6 +131,7 @@ export default function Notes() {
         synched={selectedNote.synched}
       />
     }
+    {selectedNote && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
     {comments && selectedNote &&
       comments.map((comment, index) => {
         return (
