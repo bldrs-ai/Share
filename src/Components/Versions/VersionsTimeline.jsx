@@ -15,7 +15,6 @@ import {styled} from '@mui/system'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import CommitIcon from '@mui/icons-material/Commit'
-import ControlPointIcon from '@mui/icons-material/ControlPoint'
 
 
 /**
@@ -48,8 +47,7 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
     <Timeline>
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
-        <NoContent message='Please log in using your GitHub account to get access to the project timeline'/>
-      )}
+        <NoContent message='Please log into GitHub to use the project timeline'/>)}
       {commitData.map((commit, i) => (
         <CustomTimelineItem key={i} onClick={() => commitNavigateCb(i)}>
           <TimelineInfo
@@ -76,24 +74,15 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
  */
 function TimelineInfo({commit, active}) {
   const theme = useTheme()
+  const dotColor = active ?
+      theme.palette.secondary.active :
+      theme.palette.secondary.main
   return (
     <>
       <TimelineSeparator>
         <TimelineConnector/>
-        <TimelineDot
-          sx={{
-            bgcolor: active ?
-              theme.palette.secondary.active :
-              theme.palette.secondary.main,
-          }}
-          data-testid='commit'
-        >
-          {(commit.commitMessage.includes('Create') ||
-            commit.commitMessage.includes('Add') ||
-            commit.commitMessage.includes('Merge')) ?
-            <ControlPointIcon/> :
-            <CommitIcon sx={{transform: 'rotate(90deg)'}}/>
-          }
+        <TimelineDot sx={{bgcolor: dotColor}} data-testid='commit'>
+          <CommitIcon sx={{transform: active ? 'none' : 'rotate(90deg)'}}/>
         </TimelineDot>
         <TimelineConnector/>
       </TimelineSeparator>

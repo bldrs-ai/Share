@@ -53,6 +53,8 @@ export const night = {
     light: colors.grey.mediumdark,
     dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
+    // e.g. for list of items with one active
+    active: '#00F0FF',
   },
 
   logo: {
