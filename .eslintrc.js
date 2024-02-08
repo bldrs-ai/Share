@@ -63,7 +63,11 @@ module.exports = {
     'no-lonely-if': 'error',
     'no-loop-func': 'error',
     'no-mixed-operators': 'error',
-    'no-magic-numbers': ['error', {ignore: [-1, 0, 1], ignoreArrayIndexes: true, ignoreDefaultValues: true}],
+    'no-magic-numbers': ['error', {
+      ignore: [-1, 0, 1],
+      ignoreArrayIndexes: true,
+      ignoreDefaultValues: true,
+    }],
     'no-multi-assign': ['error', {ignoreNonDeclaration: true}],
     'no-return-assign': 'error',
     'no-shadow': 'error',

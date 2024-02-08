@@ -31,7 +31,7 @@
     "husky-init": "husky install",
     "lint": "yarn lint-src && yarn lint-tools",
     "lint-src": "yarn eslint src && tsc -p tools/tsconfig.json",
-    "lint-tools": "yarn eslint --rule no-console:off cypress tools",
+    "lint-tools": "yarn eslint cypress tools",
     "precommit": "yarn lint && yarn test",
     "serve": "yarn serve-share-conway",
     "serve-cosmos": "cosmos --config .cosmos.config.json",

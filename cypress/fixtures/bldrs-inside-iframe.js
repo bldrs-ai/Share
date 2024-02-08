@@ -104,7 +104,6 @@ document.addEventListener('DOMContentLoaded', (event) => {
 
   api.on('ready', () => {
     cbxIsReady.checked = true
-    console.log('message: ready')
   })
 
   // api.on('action:' + EVENT_CLIENT_SELECT_ELEMENTS, (event) => {
