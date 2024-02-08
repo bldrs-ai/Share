@@ -8,7 +8,9 @@ esbuild
     .build(config)
     .then((result) => {
       // Remove development resources from non-development builds
-      if (process.env.DISABLE_MOCK_SERVICE_WORKER === 'true') {
+      if (config.define['process.env.DISABLE_MOCK_SERVICE_WORKER'] === 'true') {
+        // eslint-disable-next-line no-console
+        console.log('Removing MSW from build')
         fs.unlink(join(config.outdir, 'mockServiceWorker.js'), (err) => {
           // eslint-disable-next-line no-console
           console.log(err)
