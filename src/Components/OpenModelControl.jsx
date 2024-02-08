@@ -140,38 +140,6 @@ function OpenModelDialog({
     }
   }
 
-  /* const deleteFileFromRepo = async () => {
-
-    setSnackMessage(`Deleting ${filesArr[selectedFileName]} from OPFS if it exists...`)
-    const owner = orgNamesArr[selectedOrgName]
-    const repo = repoNamesArr[selectedRepoName]
-    const filePath = filesArr[selectedFileName]
-    const commitHash = await getLatestCommitHash(owner, repo, filePath, accessToken)
-    const fileExists = await doesFileExistInOPFS(filePath, commitHash, owner, repo, 'main')
-
-    if (fileExists) {
-      //delete file locally
-      const deleted = await deleteFileFromOPFS(filePath, commitHash, owner, repo, 'main')
-      ;
-    }
-
-    setSnackMessage(`Deleting ${filesArr[selectedFileName]} from GitHub...`)
-
-    const newCommitHash = await deleteFile(
-      owner,
-      repo,
-      filePath,
-      `Deleted file ${filesArr[selectedFileName]}`,
-      'main',
-      accessToken)
-
-      if (newCommitHash !== null) {
-        setSnackMessage('')
-      } else {
-        setSnackMessage('Error deleting file ' + filePath + ' from Github.')
-      }
-  }*/
-
   return (
     <Dialog
       icon={<CreateNewFolderIcon className='icon-share'/>}
