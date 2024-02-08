@@ -1,9 +1,9 @@
-const path = require('path')
-const babel = require('@babel/core')
-const reactPreset = require('@babel/preset-react')
+import path from 'path'
+import babel from '@babel/core'
+import reactPreset from '@babel/preset-react'
 
 
-module.exports = {
+export default {
   process(src, filename, config, options) {
     return babel.transform(
         `import React from 'react'

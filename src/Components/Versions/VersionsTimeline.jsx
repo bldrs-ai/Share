@@ -1,5 +1,5 @@
 /* eslint-disable no-magic-numbers */
-import React, {useState} from 'react'
+import React, {useState, useEffect} from 'react'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Timeline from '@mui/lab/Timeline'
@@ -10,10 +10,11 @@ import TimelineContent from '@mui/lab/TimelineContent'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
 import TimelineDot from '@mui/lab/TimelineDot'
 import Typography from '@mui/material/Typography'
+import {styled} from '@mui/system'
+import Loader from '../Loader'
+import NoContent from '../NoContent'
 import CommitIcon from '@mui/icons-material/Commit'
 import ControlPointIcon from '@mui/icons-material/ControlPoint'
-import Loader from './Loader'
-import {styled} from '@mui/system'
 
 
 /**
@@ -46,7 +47,9 @@ function TimelineInfo({commit, active}) {
       <TimelineSeparator>
         <TimelineConnector/>
         <TimelineDot color={active ? 'primary' : 'inherit'} data-testid='commit'>
-          {(commit.commitMessage.includes('Create') || commit.commitMessage.includes('Add')) ?
+          {(commit.commitMessage.includes('Create') ||
+            commit.commitMessage.includes('Add') ||
+            commit.commitMessage.includes('Merge')) ?
             <ControlPointIcon/> :
             <CommitIcon sx={{transform: 'rotate(90deg)'}}/>
           }
@@ -63,6 +66,7 @@ function TimelineInfo({commit, active}) {
             overflow: 'hidden',
             width: '174px',
             borderRadius: '10px',
+            cursor: 'pointer',
           }}
         >
           <Stack
@@ -109,19 +113,43 @@ function TimelineInfo({commit, active}) {
  * Each version corresponds to a commit, and this component fetches
  * commit data for the provided branch and displays it.
  *
- * @param {Array} versionHistory - An array containing the version history data.
- * @param {string} branch - The git branch for which commits are fetched.
- * @return {object} A timeline of versions.
+ * @param {Array} commitData An array of commits
+ * @param {string} currentRef To indicate as active in the UI
+ * @param {Function} commitNavigateCb A callback function to navigate to a specific commit
+ * @return {object} A timeline of versions
  */
-export default function CustomTimeline({commitData}) {
-  const [active] = useState(0)
+export default function VersionsTimeline({commitData, currentRef, commitNavigateCb}) {
+  const [showLoginMessage, setShowLoginMessage] = useState(false)
 
+  useEffect(() => {
+    // Set a timeout to display the login message after 4 seconds if commitData is still empty
+    const timer = setTimeout(() => {
+      if (commitData.length === 0) {
+        setShowLoginMessage(true)
+      }
+    }, 4000)
+    // Clear the timeout if commitData is populated or the component unmounts
+    return () => clearTimeout(timer)
+  }, [commitData])
+
+  const shaLength = 40
+  const refIsSha = currentRef.length === shaLength
   return (
     <Timeline>
-      {commitData.length === 0 && <Loader/>}
+      {commitData.length === 0 && !showLoginMessage && <Loader/>}
+      {showLoginMessage && (
+        <NoContent message='Please log in using your GitHub account to get access to the project timeline'/>
+      )}
       {commitData.map((commit, i) => (
-        <CustomTimelineItem key={i} >
-          <TimelineInfo commit={commit} active={active === i}/>
+        <CustomTimelineItem key={i} onClick={() => commitNavigateCb(i)}>
+          <TimelineInfo
+            commit={commit}
+            active={
+              (refIsSha && commit.sha === currentRef) ?
+                true :
+                (!refIsSha && i === 0)
+            }
+          />
         </CustomTimelineItem>
       ))}
     </Timeline>

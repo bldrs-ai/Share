@@ -15,13 +15,13 @@ import {TooltipIconButton} from '../Buttons'
 import CheckIcon from '@mui/icons-material/Check'
 import DeleteOutlineOutlinedIcon from '@mui/icons-material/DeleteOutlineOutlined'
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
+import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
+import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import CameraIcon from '../../assets/icons/Camera.svg'
-import DeleteIcon from '../../assets/icons/Delete.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
-import SynchIcon from '../../assets/icons/Synch.svg'
 
 
 export const CardMenu = ({
@@ -70,7 +70,6 @@ export const CardMenu = ({
   )
 }
 
-
 export const RegularCardBody = ({selectCard, editBody}) => {
   return (
     <CardActionArea
@@ -88,7 +87,6 @@ export const RegularCardBody = ({selectCard, editBody}) => {
   )
 }
 
-
 export const SelectedCardBody = ({editBody}) => {
   return (
     <CardContent>
@@ -99,7 +97,6 @@ export const SelectedCardBody = ({editBody}) => {
   )
 }
 
-
 export const CommentCardBody = ({editBody}) => {
   return (
     <CardContent>
@@ -109,6 +106,7 @@ export const CommentCardBody = ({editBody}) => {
     </CardContent>
   )
 }
+
 export const CardFooter = ({
   id,
   noteNumber,
@@ -120,16 +118,14 @@ export const CardFooter = ({
   selectCard,
   embeddedCameras,
   selected,
-  removeComment,
   isComment,
   synched,
   submitUpdate,
 }) => {
+  const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
-  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
-  const accessToken = useStore((state) => state.accessToken)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const hasCameras = embeddedCameras.length > 0
@@ -139,6 +135,15 @@ export const CardFooter = ({
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
   const [screenshotUri, setScreenshotUri] = useState(null)
+
+  /**
+   * Navigate to github issue
+   *
+   * @param {Array} noteNumber Array of expressIDs
+   */
+  function openGithubIssue() {
+    window.open(`https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`, '_blank')
+  }
 
 
   return (
@@ -159,6 +164,16 @@ export const CardFooter = ({
         alignItems: 'center',
       }}
       >
+        {!isComment &&
+        <TooltipIconButton
+          title='Open in Github'
+          size='small'
+          placement='bottom'
+          onClick={openGithubIssue}
+          icon={<GitHubIcon className='icon-share'/>}
+          aboutInfo={false}
+        />
+        }
         {hasCameras &&
           <TooltipIconButton
             title='Show the camera view'
@@ -210,26 +225,6 @@ export const CardFooter = ({
           marginRight: '4px',
         }}
       >
-        {isComment && synched && user && user.nickname === username &&
-          <TooltipIconButton
-            title='Delete comment'
-            size='small'
-            placement='bottom'
-            onClick={async () => {
-              await removeComment(repository, accessToken, id)
-            }}
-            icon={<DeleteIcon className='icon-share'/>}
-          />
-        }
-        {!synched &&
-          <TooltipIconButton
-            title='Synch to GitHub'
-            size='small'
-            placement='bottom'
-            onClick={() => toggleSynchSidebar()}
-            icon={<SynchIcon className='icon-share'/>}
-          />
-        }
         {isScreenshotEnabled && screenshotUri &&
          <img src={screenshotUri} width="40" height="40" alt="screenshot"/>
         }
@@ -252,30 +247,37 @@ export const CardFooter = ({
             onClick={() => submitUpdate(repository, accessToken, id)}
           />
         }
-
         {numberOfComments > 0 && !editMode &&
+        <>
+          {!selected &&
+            <TooltipIconButton
+              title='Discussion'
+              size='small'
+              placement='bottom'
+              onClick={selectCard}
+              icon={<ForumOutlinedIcon className='icon-share'/>}
+            />
+          }
           <Box
             sx={{
               width: '20px',
               height: '20px',
-              marginLeft: '8px',
-              marginRight: '8px',
               borderRadius: '50%',
+              margin: '0px 8px',
               backgroundColor: theme.palette.primary.main,
               display: 'flex',
               flexDirection: 'row',
               justifyContent: 'center',
               alignItems: 'center',
-              fontSize: '12px',
+              fontSize: '.84em',
               color: theme.palette.primary.contrastText,
-              cursor: !selected && 'pointer',
             }}
             role='button'
             tabIndex={0}
-            onClick={selectCard}
           >
             {numberOfComments}
           </Box>
+        </>
         }
       </Box>
     </Box>

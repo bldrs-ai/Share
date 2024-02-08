@@ -13,21 +13,21 @@ const ApplicationError = () => {
         padding: '20px',
       }}
     >
-      <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}}>
+      <Typography variant={'body1'} sx={{fontWeight: 600, pb: 2}} color='primary'>
         Oh no!
       </Typography>
 
-      <Typography variant={'body1'}>
+      <Typography variant={'body1'} color='primary'>
         We&apos;re not quite sure what went wrong.
       </Typography>
 
-      <Typography sx={{pb: 2}}>
+      <Typography sx={{pb: 2}} color='primary'>
         Not to worry.<br/>
         You can <a href="/">click here to start a new session</a>.
       </Typography>
 
       <Box>
-        <a href="/"><Logo style={{width: '30px'}}/></a>
+        <a href="/"><Logo style={{width: '24px'}}/></a>
       </Box>
     </Paper>
   )
