@@ -345,15 +345,18 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
   return newCommitSha
 }
 
+/**
+ *
+ */
 export async function deleteFile(owner, repo, path, message, branch, accessToken = '') {
   if (accessToken === '') {
-    return 'Not authenticated';
+    return 'Not authenticated'
   }
 
   // Set the authorization headers for each octokit request
   const headers = {
     authorization: `Bearer ${accessToken}`,
-  };
+  }
 
   // 1. Get the SHA of the latest commit on the branch
   const {data: refData} = await octokit.rest.git.getRef({
@@ -361,8 +364,8 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
     repo,
     ref: `heads/${branch}`,
     headers,
-  });
-  const parentSha = refData.object.sha;
+  })
+  const parentSha = refData.object.sha
 
   // 2. Get the SHA of the tree associated with the latest commit
   const {data: commitData} = await octokit.rest.git.getCommit({
@@ -370,8 +373,8 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
     repo,
     commit_sha: parentSha,
     headers,
-  });
-  const baseTreeSha = commitData.tree.sha;
+  })
+  const baseTreeSha = commitData.tree.sha
 
   // 3. Create a new tree that omits the file (essentially, delete the file)
   const {data: newTreeData} = await octokit.rest.git.createTree({
@@ -382,11 +385,11 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
       path: path,
       mode: '100644', // file mode for a blob (file)
       type: 'blob',
-      sha: null // setting SHA to null will remove the file
+      sha: null, // setting SHA to null will remove the file
     }],
     headers,
-  });
-  const newTreeSha = newTreeData.sha;
+  })
+  const newTreeSha = newTreeData.sha
 
   // 4. Create a new commit pointing to the new tree
   const {data: newCommitData} = await octokit.rest.git.createCommit({
@@ -396,8 +399,8 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
     tree: newTreeSha,
     parents: [parentSha], // parent commit to keep the history
     headers,
-  });
-  const newCommitSha = newCommitData.sha;
+  })
+  const newCommitSha = newCommitData.sha
 
   // 5. Update the reference of your branch to point to the new commit
   await octokit.rest.git.updateRef({
@@ -407,9 +410,9 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
     sha: newCommitSha,
     force: true, // Optional: to force update the reference, be cautious with this
     headers,
-  });
+  })
 
-  return newCommitSha;
+  return newCommitSha
 }
 
 

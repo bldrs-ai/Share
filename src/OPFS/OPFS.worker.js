@@ -30,16 +30,15 @@ self.addEventListener('message', async (event) => {
               ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
       await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
     } else if (event.data.command === 'doesFileExist') {
-
       const {commitHash, originalFilePath, owner, repo, branch} =
-          assertValues(event.data, 
-            ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+          assertValues(event.data,
+              ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
       await doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'deleteModel') {
       const {commitHash, originalFilePath, owner, repo, branch} =
-          assertValues(event.data, 
-            ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
+          assertValues(event.data,
+              ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
       await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch)
     }
@@ -321,6 +320,9 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, 
   }
 }
 
+/**
+ *
+ */
 async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
@@ -336,7 +338,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (ownerFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // See if repo folder handle exists
@@ -349,7 +351,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (repoFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // See if branch folder handle exists
@@ -362,7 +364,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (branchFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // Get a file handle in the folder for the model
@@ -373,6 +375,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   // lets see if our commit hash matches
   // Get file handle for file blob
   try {
+    // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await
     retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
   } catch (error) {
@@ -396,6 +399,9 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
 }
 
+/**
+ *
+ */
 async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
@@ -411,7 +417,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (ownerFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // See if repo folder handle exists
@@ -424,7 +430,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (repoFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // See if branch folder handle exists
@@ -437,7 +443,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 
   if (branchFolderHandle === null) {
     self.postMessage({completed: true, event: 'notexist', commitHash: commitHash})
-    return 
+    return
   }
 
   // Get a file handle in the folder for the model
@@ -448,6 +454,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   // lets see if our commit hash matches
   // Get file handle for file blob
   try {
+    // eslint-disable-next-line no-unused-vars
     [modelDirectoryHandle, modelBlobFileHandle] = await
     retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
   } catch (error) {

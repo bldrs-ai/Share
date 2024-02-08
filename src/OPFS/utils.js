@@ -140,21 +140,20 @@ export function downloadToOPFS(
 }
 
 /**
- * 
- * @param {*} originalFilePath 
- * @param {*} commitHash 
- * @param {*} owner 
- * @param {*} repo 
- * @param {*} branch 
- * @return {boolean} 
+ *
+ * @param {*} originalFilePath
+ * @param {*} commitHash
+ * @param {*} owner
+ * @param {*} repo
+ * @param {*} branch
+ * @return {boolean}
  */
 export function doesFileExistInOPFS(
-  originalFilePath,
-  commitHash,
-  owner,
-  repo,
-  branch) {
-
+    originalFilePath,
+    commitHash,
+    owner,
+    repo,
+    branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return new Promise((resolve, reject) => {
@@ -183,25 +182,23 @@ export function doesFileExistInOPFS(
 
     opfsDoesFileExist(originalFilePath, commitHash, owner, repo, branch)
   })
-
 }
 
 /**
- * 
- * @param {*} originalFilePath 
- * @param {*} commitHash 
- * @param {*} owner 
- * @param {*} repo 
- * @param {*} branch 
- * @return {boolean} 
+ *
+ * @param {*} originalFilePath
+ * @param {*} commitHash
+ * @param {*} owner
+ * @param {*} repo
+ * @param {*} branch
+ * @return {boolean}
  */
 export function deleteFileFromOPFS(
-  originalFilePath,
-  commitHash,
-  owner,
-  repo,
-  branch) {
-
+    originalFilePath,
+    commitHash,
+    owner,
+    repo,
+    branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
   return new Promise((resolve, reject) => {
@@ -230,7 +227,6 @@ export function deleteFileFromOPFS(
 
     opfsDeleteModel(originalFilePath, commitHash, owner, repo, branch)
   })
-
 }
 
 
