@@ -14,6 +14,7 @@ export default function SideDrawerSlice(set, get) {
     sidebarHeightInitial: '70vh', // Leave constant. Don't change dynamically
     sidebarHeight: '70vh',
     setSideDrawerEnabled: (isEnabled) => set(() => ({isSideDrawerEnabled: isEnabled})),
+    setSidebarHeight: (height) => set(() => ({sidebarHeight: height})),
     setSidebarWidth: (width) => set(() => ({sidebarWidth: width})),
     setIsSideDrawerVisible: (isVisible) => set(() => ({isSideDrawerVisible: isVisible})),
     toggleIsSideDrawerVisible: () =>
