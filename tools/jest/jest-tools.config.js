@@ -7,12 +7,11 @@ global.TextDecoder = global.TextDecoder || require('util').TextDecoder
 
 export default {
   verbose: false,
-  testEnvironment: 'jsdom',
+  testEnvironment: 'jest-environment-node',
   testPathIgnorePatterns: [],
   rootDir: '../../',
-  roots: ['<rootDir>/src', '<rootDir>/__mocks__'],
+  roots: ['<rootDir>/tools'],
   transform: {
-    '\\.[jt]sx?$': 'babel-jest',
     '^.+\\.svg$': '<rootDir>/tools/jest/svgTransform.js',
   },
   transformIgnorePatterns: [
@@ -21,8 +20,8 @@ export default {
   moduleNameMapper: {
     '^.+\\.css$': 'identity-obj-proxy',
   },
+  moduleFileExtensions: ['js', 'jsx', 'ts', 'tsx', 'json', 'node', 'mjs'],
   setupFilesAfterEnv: [
-    '<rootDir>/tools/jest/setupTests.js',
     '@alex_neo/jest-expect-message',
   ],
 }

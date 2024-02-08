@@ -1,10 +1,9 @@
 import esbuild from 'esbuild'
-import * as common from './common.js'
+import config from './common.js'
 import {createProxyServer} from './proxy.js'
 
 
-const useWebIfcShim = process.env.USE_WEBIFC_SHIM === 'true'
-const ctx = await esbuild.context(common.buildConfig(useWebIfcShim))
+const ctx = await esbuild.context(config)
 
 /**
  * "It's not possible to hook into esbuild's local server to customize
@@ -20,8 +19,9 @@ const ctx = await esbuild.context(common.buildConfig(useWebIfcShim))
 const SERVE_PORT = 8080
 const {host, port} = await ctx.serve({
   port: SERVE_PORT - 1,
-  servedir: common.build.outdir,
+  servedir: config.outdir,
 })
 createProxyServer(host, port).listen(SERVE_PORT)
 
+// eslint-disable-next-line no-console
 console.log(`serving on http://localhost:${SERVE_PORT} and watching...`)
