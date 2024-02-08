@@ -45,6 +45,7 @@ export const buildConfig = (useWebIfcShim) => {
     console.log('Using original Web-Ifc backend')
   }
 
+  const str = JSON.stringify
 
   // Return the build config
   return {
@@ -61,16 +62,28 @@ export const buildConfig = (useWebIfcShim) => {
     sourcemap: true,
     logLevel: 'info',
     define: {
-      'process.env.OAUTH2_CLIENT_ID': JSON.stringify(process.env.OAUTH2_CLIENT_ID || null),
-      'process.env.OAUTH2_REDIRECT_URI': JSON.stringify(process.env.OAUTH2_REDIRECT_URI || null),
-      'process.env.AUTH0_DOMAIN': JSON.stringify(process.env.AUTH0_DOMAIN || null),
-      'process.env.GITHUB_API_TOKEN': JSON.stringify(process.env.GITHUB_API_TOKEN || null),
-      'process.env.GITHUB_BASE_URL': JSON.stringify(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
-      'process.env.SENTRY_DSN': JSON.stringify(process.env.SENTRY_DSN || null),
-      'process.env.SENTRY_ENVIRONMENT': JSON.stringify(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || null),
-      'process.env.DISABLE_MOCK_SERVICE_WORKER': JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER || null),
-      'process.env.RAW_GIT_PROXY_URL': JSON.stringify(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com'),
-      'process.env.USE_WEBIFC_SHIM': JSON.stringify(useWebIfcShim),
+      'process.env.USE_WEBIFC_SHIM': str(useWebIfcShim),
+
+      'process.env.DISABLE_MOCK_SERVICE_WORKER':
+          str((process.env.NODE_ENV || 'development') === 'production'),
+
+      // Auth
+      'process.env.OAUTH2_CLIENT_ID': str(process.env.OAUTH2_CLIENT_ID || null),
+      'process.env.OAUTH2_REDIRECT_URI': str(process.env.OAUTH2_REDIRECT_URI || null),
+      'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || null),
+
+      // GitHub
+      'process.env.RAW_GIT_PROXY_URL':
+          str(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com'),
+      'process.env.GITHUB_API_TOKEN': str(process.env.GITHUB_API_TOKEN || null),
+      'process.env.GITHUB_BASE_URL':
+          str(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
+
+      // Sentry
+      'process.env.SENTRY_DSN': str(process.env.SENTRY_DSN || null),
+      'process.env.SENTRY_ENVIRONMENT':
+          str(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || null),
+
     },
     plugins: plugins,
   }
