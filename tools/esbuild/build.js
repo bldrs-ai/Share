@@ -1,19 +1,30 @@
 import esbuild from 'esbuild'
 import fs from 'node:fs'
 import {join} from 'node:path'
-import * as common from './common.js'
+import config from './common.js'
 
 
 esbuild
-    .build(common.build)
+    .build(config)
     .then((result) => {
       // Remove development resources from non-development builds
       if (process.env.DISABLE_MOCK_SERVICE_WORKER === 'true') {
-        console.log('MSW TRUE UNLINKING')
-        fs.unlink(join(common.buildDir, 'mockServiceWorker.js'), (err) => console.log(err))
+        fs.unlink(join(config.buildDir, 'mockServiceWorker.js'), (err) => {
+          // eslint-disable-next-line no-console
+          console.log(err)
+        })
       }
-      const metaFilename = './tools/esbuild/bundle-analysis.json'
-      fs.writeFileSync(metaFilename, JSON.stringify(result.metafile))
-      console.log(`Build succeeded.  Bundle analysis at: ${metaFilename}`)
+      if (process.env.ANALYZE === 'true') {
+        const metaFilename = './tools/esbuild/bundle-analysis.json'
+        fs.writeFileSync(metaFilename, JSON.stringify(result.metafile))
+        // eslint-disable-next-line no-console
+        console.log(`Bundle analysis at: ${metaFilename}`)
+      }
+      // eslint-disable-next-line no-console
+      console.log(`Build succeeded.`)
     })
-    .catch(() => process.exit(1))
+    .catch((err) => {
+      // eslint-disable-next-line no-console
+      console.error(`Build failed:`, err)
+      process.exit(1)
+    })
