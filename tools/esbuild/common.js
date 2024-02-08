@@ -10,7 +10,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __root = path.resolve(__filename, '../../../')
 const indexFile = path.resolve(__root, 'src', 'index.jsx')
 const assetsDir = path.resolve(__root, 'public')
-export const buildDir = path.resolve(__root, 'docs')
+const buildDir = path.resolve(__root, 'docs')
 
 
 const webIfcShimAliasPlugin = {
