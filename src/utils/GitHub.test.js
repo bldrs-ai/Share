@@ -100,7 +100,7 @@ describe('GitHub', () => {
     })
 
     it('successfully get files', async () => {
-      const res = await getFiles('Share', 'pablo-mayrgundter')
+      const res = await getFiles('pablo-mayrgundter', 'Share')
       expect(res).toEqual(MOCK_FILES)
     })
 
@@ -121,7 +121,7 @@ describe('GitHub', () => {
   describe('getOrganizations', () => {
     it('encounters an exception if no access token is provided', () => {
       expect(() => getOrganizations()).rejects
-          .toThrowError('GitHub access token is required for this call')
+          .toThrowError('Arg 0 is not defined')
     })
 
     it('receives a list of organizations', async () => {
