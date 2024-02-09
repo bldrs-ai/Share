@@ -140,6 +140,57 @@ export function downloadToOPFS(
 }
 
 /**
+ * Executes an asynchronous task using a Web Worker and returns a promise that resolves based on the task's outcome.
+ * This function initializes a worker, sets up a message listener for the worker's response, and performs cleanup
+ * after receiving a response. It abstracts the worker communication logic, making it easier to perform file-related
+ * operations asynchronously.
+ *
+ * @param {Function} callback - The function to call that initiates the worker task. This function should
+ *                              trigger an operation in the worker by sending it a message. The parameters
+ *                              for this callback include the file path, commit hash, owner, repository, and branch.
+ * @param {string} originalFilePath - The path of the file on which the operation is performed.
+ * @param {string} commitHash - The commit hash associated with the operation, used for version control.
+ * @param {string} owner - The identifier for the owner of the repository.
+ * @param {string} repo - The name of the repository where the file operation is related.
+ * @param {string} branch - The branch within the repository on which the operation is performed.
+ * @param {string} eventStatus - The specific event status the function waits for to resolve the promise.
+ *                                This parameter allows the function to be used for various operations
+ *                                by specifying the expected success event type from the worker (e.g., 'deleted', 'written').
+ * @return {Promise<boolean>} A promise that resolves to true if the worker completes the operation successfully
+ *                             and matches the `eventStatus`. If the worker encounters an error or if the event
+ *                             indicates that the file does not exist, the promise will reject with an error or
+ *                             resolve to false, respectively.
+ */
+function makePromise(callback, originalFilePath, commitHash, owner, repo, branch, eventStatus) {
+  return new Promise((resolve, reject) => {
+    const workerRef = initializeWorker()
+    if (workerRef !== null) {
+      // Listener for messages from the worker
+      const listener = (event) => {
+        if (event.data.error) {
+          debug().error('Error from worker:', event.data.error)
+          workerRef.removeEventListener('message', listener) // Remove the event listener
+          reject(new Error(event.data.error))
+        } else if (event.data.completed) {
+          if (event.data.event === 'notexist') {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(false) // Resolve the promise with false
+          } else if (event.data.event === eventStatus) {
+            workerRef.removeEventListener('message', listener) // Remove the event listener
+            resolve(true) // Resolve the promise with true
+          }
+        }
+      }
+      workerRef.addEventListener('message', listener)
+    } else {
+      reject(new Error('Worker initialization failed'))
+    }
+
+    callback(originalFilePath, commitHash, owner, repo, branch)
+  })
+}
+
+/**
  * Checks to see if a file exists in OPFS.
  * Returns true if so, false if not.
  *
@@ -158,32 +209,7 @@ export function doesFileExistInOPFS(
     branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          if (event.data.event === 'notexist') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(false) // Resolve the promise with false
-          } else if (event.data.event === 'exist') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(true) // Resolve the promise with true
-          }
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-
-    opfsDoesFileExist(originalFilePath, commitHash, owner, repo, branch)
-  })
+  return makePromise(opfsDoesFileExist, originalFilePath, commitHash, owner, repo, branch, 'exist')
 }
 
 /**
@@ -205,32 +231,7 @@ export function deleteFileFromOPFS(
     branch) {
   assertDefined(originalFilePath, commitHash, owner, repo, branch)
 
-  return new Promise((resolve, reject) => {
-    const workerRef = initializeWorker()
-    if (workerRef !== null) {
-      // Listener for messages from the worker
-      const listener = (event) => {
-        if (event.data.error) {
-          debug().error('Error from worker:', event.data.error)
-          workerRef.removeEventListener('message', listener) // Remove the event listener
-          reject(new Error(event.data.error))
-        } else if (event.data.completed) {
-          if (event.data.event === 'notexist') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(false) // Resolve the promise with false
-          } else if (event.data.event === 'deleted') {
-            workerRef.removeEventListener('message', listener) // Remove the event listener
-            resolve(true) // Resolve the promise with true
-          }
-        }
-      }
-      workerRef.addEventListener('message', listener)
-    } else {
-      reject(new Error('Worker initialization failed'))
-    }
-
-    opfsDeleteModel(originalFilePath, commitHash, owner, repo, branch)
-  })
+  return makePromise(opfsDeleteModel, originalFilePath, commitHash, owner, repo, branch, 'deleted')
 }
 
 

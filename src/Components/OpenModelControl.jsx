@@ -168,15 +168,14 @@ function OpenModelDialog({
             <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
-            {selectedFileName !== '' && (
-              <Stack>
+            {selectedFileName !== '' &&
                 <Box sx={{textAlign: 'center', marginTop: '4px'}}>
                   <RectangularButton
                     title={'LOAD FILE'}
                     onClick={navigateToFile}
                   />
                 </Box>
-              </Stack> )}
+            }
           </Stack> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
             <Stack sx={{textAlign: 'left'}}>
