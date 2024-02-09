@@ -68,9 +68,9 @@ export function opfsWriteFile(objectUrl, fileName) {
  * The function is designed to save model data from a given URL under a specific commit hash
  * and original file name, facilitating version control and organization of model files.
  *
- * @param {string} objectUrl - The URL from which the model data is to be written.
- * @param {string} originalFileName - The original file name for the model in the repository.
- * @param {string} commitHash - The commit hash associated with the model data.
+ * @param {string} objectUrl The URL from which the model data is to be written
+ * @param {string} originalFileName The original file name for the model in the repository
+ * @param {string} commitHash The commit hash associated with the model data
  */
 export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
   if (!workerRef) {
@@ -92,11 +92,11 @@ export function opfsWriteModel(objectUrl, originalFileName, commitHash) {
  * based on its commit hash and original file path within a specific
  * owner's repository and branch.
  *
- * @param {string} originalFileName - The original name of the file to delete.
- * @param {string} commitHash - The commit hash associated with the model to delete.
- * @param {string} owner - The owner of the repository.
- * @param {string} repo - The name of the repository.
- * @param {string} branch - The branch name where the file resides.
+ * @param {string} originalFileName The original name of the file to delete
+ * @param {string} commitHash The commit hash associated with the model to delete
+ * @param {string} owner The owner of the repository
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file resides
  */
 export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branch) {
   if (!workerRef) {
@@ -120,11 +120,11 @@ export function opfsDeleteModel(originalFileName, commitHash, owner, repo, branc
  * based on its commit hash and original file path within a specific
  * owner's repository and branch.
  *
- * @param {string} originalFileName - The name of the file to check for existence.
- * @param {string} commitHash - The commit hash associated with the file.
- * @param {string} owner - The owner of the repository.
- * @param {string} repo - The name of the repository.
- * @param {string} branch - The branch name where the file might reside.
+ * @param {string} originalFileName The name of the file to check for existence
+ * @param {string} commitHash The commit hash associated with the file
+ * @param {string} owner The owner of the repository
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file might reside
  */
 export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, branch) {
   if (!workerRef) {
@@ -149,12 +149,12 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
  * details. It is used to handle the process of writing or updating
  * model files within a specific owner's repository and branch.
  *
- * @param {File} file - The file to be written to the repository.
- * @param {string} originalFileName - The original name of the file being written.
- * @param {string} commitHash - The commit hash associated with the file write operation.
- * @param {string} owner - The owner of the repository where the file is to be written.
- * @param {string} repo - The name of the repository.
- * @param {string} branch - The branch name where the file will be written.
+ * @param {File} file The file to be written to the repository
+ * @param {string} originalFileName The original name of the file being written
+ * @param {string} commitHash The commit hash associated with the file write operation
+ * @param {string} owner The owner of the repository where the file is to be written
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file will be written
  */
 export function opfsWriteModelFileHandle(file, originalFileName, commitHash, owner, repo, branch) {
   if (!workerRef) {
@@ -181,13 +181,13 @@ export function opfsWriteModelFileHandle(file, originalFileName, commitHash, own
  * original file path, and within the specified owner's repository and branch.
  * The function also supports progress tracking through a callback function.
  *
- * @param {string} objectUrl - The URL from which the file is to be downloaded.
- * @param {string} commitHash - The commit hash associated with the download operation.
- * @param {string} originalFilePath - The path where the file will be stored in the repository.
- * @param {string} owner - The owner of the repository.
- * @param {string} repo - The name of the repository.
- * @param {string} branch - The branch name where the file will be stored.
- * @param {Function} onProgress - A callback function to track the progress of the download.
+ * @param {string} objectUrl The URL from which the file is to be downloaded
+ * @param {string} commitHash The commit hash associated with the download operation
+ * @param {string} originalFilePath The path where the file will be stored in the repository
+ * @param {string} owner The owner of the repository
+ * @param {string} repo The name of the repository
+ * @param {string} branch The branch name where the file will be stored
+ * @param {Function} onProgress A callback function to track the progress of the download
  */
 export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   if (!workerRef) {
@@ -214,7 +214,7 @@ export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owne
  * being properly initialized beforehand. If the worker is not initialized,
  * an error message is logged indicating the initialization issue.
  *
- * @param {string} fileName - The name of the file to be read from the storage.
+ * @param {string} fileName The name of the file to be read from the storage
  */
 export function opfsReadFile(fileName) {
   if (!workerRef) {
@@ -237,7 +237,7 @@ export function opfsReadFile(fileName) {
  * worker is initialized before sending the postMessage command.
  * If the worker is not initialized, it logs an error message.
  *
- * @param {string} modelKey - The key associated with the model to be read from storage.
+ * @param {string} modelKey - The key associated with the model to be read from storage
  */
 export function opfsReadModel(modelKey) {
   if (!workerRef) {
@@ -259,7 +259,7 @@ export function opfsReadModel(modelKey) {
  * upon the worker reference being initialized; if no worker reference
  * exists, the function does nothing.
  *
- * @param {Function} callback - The callback function to handle messages from the worker.
+ * @param {Function} callback - The callback function to handle messages from the worker
  */
 export function onWorkerMessage(callback) {
   if (workerRef) {
