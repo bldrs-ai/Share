@@ -43,12 +43,11 @@ describe('NoteCard', () => {
     const id = 123
     const index = 123
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {debug, getByTestId} = render(
+    const {getByTestId} = render(
         <ShareMock>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>)
     const selectIssueButton = getByTestId('selectionContainer')
-    debug()
     expect(selectIssueButton).toBeInTheDocument()
   })
 
