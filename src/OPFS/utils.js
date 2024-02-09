@@ -145,21 +145,21 @@ export function downloadToOPFS(
  * after receiving a response. It abstracts the worker communication logic, making it easier to perform file-related
  * operations asynchronously.
  *
- * @param {Function} callback - The function to call that initiates the worker task. This function should
- *                              trigger an operation in the worker by sending it a message. The parameters
- *                              for this callback include the file path, commit hash, owner, repository, and branch.
- * @param {string} originalFilePath - The path of the file on which the operation is performed.
- * @param {string} commitHash - The commit hash associated with the operation, used for version control.
- * @param {string} owner - The identifier for the owner of the repository.
- * @param {string} repo - The name of the repository where the file operation is related.
- * @param {string} branch - The branch within the repository on which the operation is performed.
- * @param {string} eventStatus - The specific event status the function waits for to resolve the promise.
- *                                This parameter allows the function to be used for various operations
- *                                by specifying the expected success event type from the worker (e.g., 'deleted', 'written').
+ * @param {Function} callback The function to call that initiates the worker task. This function should
+ *     trigger an operation in the worker by sending it a message. The parameters
+ *     for this callback include the file path, commit hash, owner, repository, and branch.
+ * @param {string} originalFilePath The path of the file on which the operation is performed
+ * @param {string} commitHash The commit hash associated with the operation, used for version control
+ * @param {string} owner The identifier for the owner of the repository
+ * @param {string} repo The name of the repository where the file operation is related
+ * @param {string} branch The branch within the repository on which the operation is performed
+ * @param {string} eventStatus The specific event status the function waits for to resolve the promise
+ *     This parameter allows the function to be used for various operations
+ *     by specifying the expected success event type from the worker (e.g., 'deleted', 'written')
  * @return {Promise<boolean>} A promise that resolves to true if the worker completes the operation successfully
- *                             and matches the `eventStatus`. If the worker encounters an error or if the event
- *                             indicates that the file does not exist, the promise will reject with an error or
- *                             resolve to false, respectively.
+ *     and matches the `eventStatus`. If the worker encounters an error or if the event
+ *     indicates that the file does not exist, the promise will reject with an error or
+ *     resolve to false, respectively.
  */
 function makePromise(callback, originalFilePath, commitHash, owner, repo, branch, eventStatus) {
   return new Promise((resolve, reject) => {
@@ -192,7 +192,6 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
 
 /**
  * Checks to see if a file exists in OPFS.
- * Returns true if so, false if not.
  *
  * @param {string} originalFilePath
  * @param {string} commitHash
