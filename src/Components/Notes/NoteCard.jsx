@@ -48,16 +48,18 @@ export default function NoteCard({
   title = '',
   body = '',
   noteNumber = '',
+  locked = false,
   avatarUrl = '',
   date = '',
   numberOfComments = null,
-  isComment = false,
+  isNote = true,
   synched = true,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
+  const [showCreateComment, setShowCreateComment] = useState(false)
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
   const cameraControls = useStore((state) => state.cameraControls)
@@ -67,6 +69,7 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const {user} = useAuth0()
@@ -98,6 +101,8 @@ export default function NoteCard({
   function selectCard() {
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
+    const selectedNote = notes.filter((issue) => issue.id === id)
+    setSelectedNote(selectedNote)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
@@ -121,6 +126,7 @@ export default function NoteCard({
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
+
 
   /**
    * deletes the note
@@ -187,12 +193,12 @@ export default function NoteCard({
       variant='note'
       sx={{fontSize: '1em'}}
     >
-      {isComment &&
+      {!isNote &&
         <CardHeader
           avatar={<Avatar alt={username} src={avatarUrl}/>}
           subheader={<div>{username} at {dateParts[0]} {dateParts[1]}</div>}
         /> }
-      {!isComment &&
+      {isNote &&
         <CardHeader
           title={title}
           avatar={<Avatar alt={username} src={avatarUrl}/>}
@@ -210,10 +216,10 @@ export default function NoteCard({
           />
           }
         /> }
-      {!editMode && !isComment && !selected &&
+      {!editMode && isNote && !selected &&
        <RegularCardBody selectCard={selectCard} editBody={editBody}/>}
       {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
-      {isComment && <CommentCardBody editBody={editBody}/>}
+      {!isNote && <CommentCardBody editBody={editBody}/>}
       {editMode &&
        <EditCardBody
          handleTextUpdate={(event) => setEditBody(event.target.value)}
@@ -232,9 +238,12 @@ export default function NoteCard({
         onClickCamera={showCameraView}
         onClickShare={shareIssue}
         removeComment={removeComment}
-        isComment={isComment}
+        isNote={isNote}
         synched={synched}
         submitUpdate={submitUpdate}
+        setShowCreateComment={setShowCreateComment}
+        showCreateComment={showCreateComment}
+        locked={locked}
       />
     </Card>
   )

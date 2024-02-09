@@ -87,7 +87,6 @@ export default function Notes() {
     }
   }, [drawer, selectedNoteId])
 
-
   return hasError ?
   <ApplicationError/> : (
   <List
@@ -113,6 +112,7 @@ export default function Notes() {
               numberOfComments={note.numberOfComments}
               avatarUrl={note.avatarUrl}
               synched={note.synched}
+              locked={note.locked}
             />
           )
         })
@@ -121,6 +121,7 @@ export default function Notes() {
       <NoteCard
         index={selectedNote.index}
         id={selectedNote.id}
+        locked={selectedNote.locked}
         noteNumber={selectedNote.number}
         title={selectedNote.title}
         date={selectedNote.date}
@@ -131,12 +132,13 @@ export default function Notes() {
         synched={selectedNote.synched}
       />
     }
+    {selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
     {comments && selectedNote &&
       comments.map((comment, index) => {
         return (
           <NoteCard
             key={index}
-            isComment={true}
+            isNote={false}
             id={comment.id}
             index=''
             body={comment.body}

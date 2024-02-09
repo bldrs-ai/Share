@@ -4,6 +4,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
@@ -18,8 +19,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined'
 import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
+import VideocamOutlinedIcon from '@mui/icons-material/VideocamOutlined'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
-import CameraIcon from '../../assets/icons/Camera.svg'
 import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
@@ -118,23 +119,25 @@ export const CardFooter = ({
   selectCard,
   embeddedCameras,
   selected,
-  isComment,
+  isNote = true,
   synched,
+  locked,
   submitUpdate,
 }) => {
+  const [screenshotUri, setScreenshotUri] = useState(null)
   const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
-  const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const viewer = useStore((state) => state.viewer)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
   const {user} = useAuth0()
   const {togglePlaceMarkActive} = usePlaceMark()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
-  const [screenshotUri, setScreenshotUri] = useState(null)
+
 
   /**
    * Navigate to github issue
@@ -164,7 +167,7 @@ export const CardFooter = ({
         alignItems: 'center',
       }}
       >
-        {!isComment &&
+        {isNote &&
         <TooltipIconButton
           title='Open in Github'
           size='small'
@@ -180,7 +183,7 @@ export const CardFooter = ({
             size='small'
             placement='bottom'
             onClick={onClickCamera}
-            icon={<CameraIcon className='icon-share'/>}
+            icon={<VideocamOutlinedIcon className='icon-share'/>}
             aboutInfo={false}
           />}
         {selected &&
@@ -196,7 +199,7 @@ export const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && existPlaceMarkInFeature &&
+          isNote && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
           <Box sx={{
             '& svg': {
@@ -238,6 +241,9 @@ export const CardFooter = ({
             }}
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
+        }
+        {selected && locked &&
+          <Chip label='Note is locked' size='small'/>
         }
         {editMode &&
           <TooltipIconButton

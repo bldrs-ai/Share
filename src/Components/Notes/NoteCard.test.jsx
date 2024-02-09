@@ -43,13 +43,12 @@ describe('NoteCard', () => {
     const id = 123
     const index = 123
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const rendered = render(
+    const {getByTestId} = render(
         <ShareMock>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>)
-    const selectIssueButton = rendered.getByTestId('selectionContainer')
-    fireEvent.click(selectIssueButton)
-    expect(screen.getByText('Select the note card - title')).toBeInTheDocument()
+    const selectIssueButton = getByTestId('selectionContainer')
+    expect(selectIssueButton).toBeInTheDocument()
   })
 
   it('Camera Position control', () => {

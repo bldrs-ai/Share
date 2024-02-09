@@ -5,10 +5,10 @@ import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '..
 import useStore from '../../store/useStore'
 import {addHashParams, removeHashParams} from '../../utils/location'
 import {NOTE_PREFIX} from './Notes'
+import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
-import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 
 
 /** @return {React.Component} */
