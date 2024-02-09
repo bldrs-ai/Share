@@ -511,7 +511,7 @@ export async function getUserRepositories(accessToken = '', org = '') {
  * @param {string} owner
  * @param {string} repo
  * @param {string} [accessToken]
- * @return {Promise} the list of files in the repo
+ * @return {object} the list of files in the repo
  */
 export async function getFiles(owner, repo, accessToken = '') {
   assertDefined(...arguments)
@@ -530,7 +530,7 @@ export async function getFiles(owner, repo, accessToken = '') {
  * Retrieves files and folders associated with a repository
  *
  * @param {string} [accessToken]
- * @return {Promise} the list files and folders in the repo
+ * @return {object} the list files and folders in the repo
  */
 export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {
   assertDefined(...arguments)
@@ -560,46 +560,41 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
 /**
  * Gets the latest commit hash for a github filepath
  *
- * @param {*} owner
- * @param {*} repo
- * @param {*} filePath
- * @param {*} accessToken
- * @param {*} branch
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} filePath
+ * @param {string} accessToken
+ * @param {string} [branch]
  * @return {string} latestCommitHash
  */
 export async function getLatestCommitHash(owner, repo, filePath, accessToken, branch = 'main') {
-  try {
-    assertDefined(...arguments)
-    let commits = null
-    const requestOptions = {
-      path: filePath,
-      headers: {},
-    }
+  assertDefined(...arguments)
+  let commits = null
+  const requestOptions = {
+    path: filePath,
+    headers: {},
+  }
 
-    // Add the authorization header if accessToken is provided
-    if (accessToken !== '') {
-      requestOptions.headers.authorization = `Bearer ${accessToken}`
-    }
+  // Add the authorization header if accessToken is provided
+  if (accessToken !== '') {
+    requestOptions.headers.authorization = `Bearer ${accessToken}`
+  }
 
-    // Add the branch (sha) to the request if provided
-    if (branch && branch !== '') {
-      requestOptions.sha = branch
-    }
+  // Add the branch (sha) to the request if provided
+  if (branch && branch !== '') {
+    requestOptions.sha = branch
+  }
 
-    commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
+  commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
 
-    if (commits.data.length === 0) {
-      debug().warn('No commits found for the specified file.')
-      return null
-    }
-
-    const latestCommitHash = commits.data[0].sha
-    debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
-    return latestCommitHash
-  } catch (error) {
-    debug().error('Error fetching the latest commit hash: ', error)
+  if (commits.data.length === 0) {
+    debug().warn('No commits found for the specified file.')
     return null
   }
+
+  const latestCommitHash = commits.data[0].sha
+  debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
+  return latestCommitHash
 }
 
 
@@ -649,6 +644,7 @@ export const parseGitHubRepositoryURL = (githubUrl) => {
  * @param {object} repository
  * @param {object} path The resource path with arg substitution markers
  * @param {object} args The args to substitute
+ * @param {string} [accessToken]
  * @return {object} The object at the resource
  */
 async function getGitHub(repository, path, args = {}, accessToken = '') {
@@ -674,6 +670,7 @@ async function getGitHub(repository, path, args = {}, accessToken = '') {
  * @param {object} repository
  * @param {object} path The resource path with arg substitution markers
  * @param {object} args The args for posting
+ * @param {string} [accessToken]
  * @return {object} The object at the resource
  */
 async function postGitHub(repository, path, args = {}, accessToken = '') {
@@ -704,6 +701,7 @@ async function postGitHub(repository, path, args = {}, accessToken = '') {
  * @param {object} repository
  * @param {object} path The resource path with arg substitution markers
  * @param {object} args The args for posting
+ * @param {string} [accessToken]
  * @return {object} Result
  */
 async function deleteGitHub(repository, path, args = {}, accessToken = '') {
@@ -733,6 +731,7 @@ async function deleteGitHub(repository, path, args = {}, accessToken = '') {
  * @param {object} repository
  * @param {object} path The resource path with arg substitution markers
  * @param {object} args The args for patching
+ * @param {string} [accessToken]
  * @return {object} The object at the resource
  */
 async function patchGitHub(repository, path, args = {}, accessToken = '') {
