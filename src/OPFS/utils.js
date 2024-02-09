@@ -140,12 +140,14 @@ export function downloadToOPFS(
 }
 
 /**
+ * Checks to see if a file exists in OPFS.
+ * Returns true if so, false if not.
  *
- * @param {*} originalFilePath
- * @param {*} commitHash
- * @param {*} owner
- * @param {*} repo
- * @param {*} branch
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
  * @return {boolean}
  */
 export function doesFileExistInOPFS(
@@ -185,12 +187,14 @@ export function doesFileExistInOPFS(
 }
 
 /**
+ * Deletes a file from opfs if it exists.
+ * Returns true if file was found and deleted, false otherwise.
  *
- * @param {*} originalFilePath
- * @param {*} commitHash
- * @param {*} owner
- * @param {*} repo
- * @param {*} branch
+ * @param {string} originalFilePath
+ * @param {string} commitHash
+ * @param {string} owner
+ * @param {string} repo
+ * @param {string} branch
  * @return {boolean}
  */
 export function deleteFileFromOPFS(

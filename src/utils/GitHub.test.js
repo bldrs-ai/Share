@@ -138,9 +138,9 @@ describe('GitHub', () => {
       // Mock file data that should parse properly
       const file = new Blob(['test content'], {type: 'text/plain'})
 
-      // if no token passed, should return that it is not authenticated
+      // if no token passed, should return null
       expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', ''))
-          .toEqual('Not authenticated')
+          .toEqual(null)
 
       // if token passed but isn't valid, should throw 'Bad Credentials'
       expect(await commitFile('owner', 'repo', 'path', file, 'message', 'branch', 'dummyToken'))

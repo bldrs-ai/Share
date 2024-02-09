@@ -12,6 +12,7 @@ import debug from './debug'
  * @return {Array}
  */
 export async function getCommitsForFile(repository, filepath, accessToken = '') {
+  assertDefined(repository, filepath, accessToken)
   const res = await getGitHub(repository, `commits`, {
     path: filepath,
   }, accessToken)
@@ -26,6 +27,7 @@ export async function getCommitsForFile(repository, filepath, accessToken = '') 
  * @return {Array} Array of issues response from GH
  */
 export async function getIssues(repository, accessToken) {
+  assertDefined(repository, accessToken)
   const res = await getGitHub(repository, 'issues', {}, accessToken)
   const issueArr = res.data
   debug().log('GitHub#getIssues: issueArr: ', issueArr)
@@ -39,7 +41,8 @@ export async function getIssues(repository, accessToken) {
  * @param {string} accessToken Github API OAuth access token
  * @return {object} response from GH
  */
-export async function createIssue(repository, payload, accessToken) {
+export async function createIssue(repository, payload, accessToken = '') {
+  assertDefined(repository, payload, accessToken)
   const res = await postGitHub(repository, 'issues', payload, accessToken)
   debug().log('GitHub#createIssue: res: ', res)
   return res
@@ -52,7 +55,8 @@ export async function createIssue(repository, payload, accessToken) {
  * @param {string} accessToken
  * @return {object} response from GH sinle issue
  */
-export async function getIssue(repository, issueNumber, accessToken) {
+export async function getIssue(repository, issueNumber, accessToken = '') {
+  assertDefined(repository, issueNumber, accessToken)
   const issue = await getGitHub(repository, 'issues/{issueNumber}', {issueNumber}, accessToken)
   debug().log('GitHub#getIssue: issue: ', issue)
   return issue
@@ -68,6 +72,7 @@ export async function getIssue(repository, issueNumber, accessToken) {
  * @return {object} response from GH
  */
 export async function updateIssue(repository, issueNumber, title, body, accessToken) {
+  assertDefined(repository, issueNumber, title, body, accessToken)
   const args = {
     issue_number: issueNumber,
     body,
@@ -85,7 +90,8 @@ export async function updateIssue(repository, issueNumber, title, body, accessTo
  * @param {string} accessToken Github API OAuth access token
  * @return {object} responce from GH with the closed issue object
  */
-export async function closeIssue(repository, issueNumber, accessToken) {
+export async function closeIssue(repository, issueNumber, accessToken = '') {
+  assertDefined(repository, issueNumber, accessToken)
   const args = {
     issueNumber,
     state: 'closed',
@@ -101,7 +107,8 @@ export async function closeIssue(repository, issueNumber, accessToken) {
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getBranches(repository, accessToken) {
+export async function getBranches(repository, accessToken = '') {
+  assertDefined(repository, accessToken)
   const res = await getGitHub(repository, 'branches', {}, accessToken)
   const branches = res.data
   debug().log('GitHub#getBranches: branches: ', branches)
@@ -114,7 +121,8 @@ export async function getBranches(repository, accessToken) {
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getComments(repository, accessToken) {
+export async function getComments(repository, accessToken = '') {
+  assertDefined(repository, accessToken)
   const res = await getGitHub(repository, 'issues/comments', {}, accessToken)
   const comments = res.data
   debug().log('GitHub#getComments: comments: ', comments)
@@ -128,7 +136,8 @@ export async function getComments(repository, accessToken) {
  * @param {string} accessToken
  * @return {object}
  */
-export async function getComment(repository, commentId, accessToken) {
+export async function getComment(repository, commentId, accessToken = '') {
+  assertDefined(repository, commentId, accessToken)
   const comment = await getGitHub(repository, 'issues/comments/{commentId}', {commentId}, accessToken)
   debug().log('GitHub#getComment: comment: ', comment)
   return comment
@@ -141,7 +150,8 @@ export async function getComment(repository, commentId, accessToken) {
  * @param {string} accessToken Github API OAuth access token
  * @return {object} result
  */
-export async function deleteComment(repository, commentId, accessToken) {
+export async function deleteComment(repository, commentId, accessToken = '') {
+  assertDefined(repository, commentId, accessToken)
   const res = await deleteGitHub(repository, `issues/comments/{commentId}`, {commentId}, accessToken)
   return res
 }
@@ -155,7 +165,8 @@ export async function deleteComment(repository, commentId, accessToken) {
  * @param {string} accessToken
  * @return {Array}
  */
-export async function getIssueComments(repository, issueNumber, accessToken) {
+export async function getIssueComments(repository, issueNumber, accessToken = '') {
+  assertDefined(repository, issueNumber, accessToken)
   const res = await getGitHub(repository, 'issues/{issueNumber}/comments', {issueNumber}, accessToken)
   const comments = res.data
   debug().log('GitHub#getIssueComments: comments: ', comments)
@@ -173,7 +184,8 @@ export async function getIssueComments(repository, issueNumber, accessToken) {
  * @param {string} accessToken Github API OAuth access token
  * @return {object} result
  */
-export async function createComment(repository, issueNumber, payload, accessToken) {
+export async function createComment(repository, issueNumber, payload, accessToken = '') {
+  assertDefined(repository, issueNumber, payload, accessToken)
   const args = {
     ...payload,
     issueNumber,
@@ -193,6 +205,7 @@ export async function createComment(repository, issueNumber, payload, accessToke
  * @return {string}
  */
 export async function getDownloadURL(repository, path, ref = '', accessToken = '') {
+  assertDefined(repository, path, ref, accessToken)
   const args = {
     path: path,
     ref: ref,
@@ -219,8 +232,9 @@ export async function getDownloadURL(repository, path, ref = '', accessToken = '
  * @param {string} [accessToken]
  * @return {Promise} the list of organization
  */
-export async function getOrganizations(accessToken) {
-  if (!accessToken) {
+export async function getOrganizations(accessToken = '') {
+  assertDefined(accessToken)
+  if (!accessToken || accessToken === '') {
     throw new Error('GitHub access token is required for this call')
   }
 
@@ -242,6 +256,7 @@ export async function getOrganizations(accessToken) {
  * @return {Promise} the list of organization
  */
 export async function getRepositories(org, accessToken = '') {
+  assertDefined(org, accessToken)
   const res = await octokit.request('GET /orgs/{org}/repos', {
     org,
     headers: {
@@ -252,11 +267,26 @@ export async function getRepositories(org, accessToken = '') {
 }
 
 /**
+ * Commits a file to a specified repository, path, and branch.
  *
+ * This asynchronous function uploads and commits a file to a repository
+ * owned by the specified owner, within the given path and branch. It optionally
+ * uses an access token for authentication to perform the operation. The function
+ * is designed to work with a backend service or worker capable of handling HTTP
+ * requests to the repository's API (e.g., GitHub's API) for file commits.
+ *
+ * @param {string} owner - The owner of the repository to which the file will be committed.
+ * @param {string} repo - The name of the repository.
+ * @param {string} path - The path within the repository where the file will be placed.
+ * @param {Blob|File} file - The file object to commit.
+ * @param {string} message - The commit message.
+ * @param {string} branch - The branch to which the commit will be made.
+ * @param {string} [accessToken=''] - The access token for authentication (optional).
  */
 export async function commitFile(owner, repo, path, file, message, branch, accessToken = '') {
+  assertDefined(owner, repo, path, file, message, branch, accessToken)
   if (accessToken === '') {
-    return 'Not authenticated'
+    return null
   }
 
   // Create a new FileReader object
@@ -349,11 +379,25 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
 }
 
 /**
+ * Deletes a file from a specified repository and branch.
  *
+ * This asynchronous function sends a request to delete a file located at a specified
+ * path within a repository owned by a specified owner and branch. It uses an access token
+ * for authentication. The function assumes the existence of a worker or an API endpoint
+ * capable of handling the deletion process. It is essential to ensure that the access
+ * token has appropriate permissions for this operation.
+ *
+ * @param {string} owner - The owner of the repository from which the file will be deleted.
+ * @param {string} repo - The name of the repository.
+ * @param {string} path - The path to the file within the repository.
+ * @param {string} message - The commit message associated with the file deletion.
+ * @param {string} branch - The branch from which the file will be deleted.
+ * @param {string} [accessToken=''] - The access token used for authentication (optional).
  */
 export async function deleteFile(owner, repo, path, message, branch, accessToken = '') {
+  assertDefined(owner, repo, path, message, branch, accessToken)
   if (accessToken === '') {
-    return 'Not authenticated'
+    return null
   }
 
   // Set the authorization headers for each octokit request
@@ -426,6 +470,7 @@ export async function deleteFile(owner, repo, path, message, branch, accessToken
  * @return {Promise} the list of organization
  */
 export async function getUserRepositories(accessToken = '', owner = '') {
+  assertDefined(accessToken, owner)
   let allRepos = []
   let page = 1
   let isDone = false
@@ -470,6 +515,7 @@ export async function getUserRepositories(accessToken = '', owner = '') {
  * @return {Promise} the list of organization
  */
 export async function getFiles(repo, owner, accessToken = '') {
+  assertDefined(repo, owner, accessToken)
   const res = await octokit.request('/repos/{owner}/{repo}/contents', {
     owner,
     repo,
@@ -488,6 +534,7 @@ export async function getFiles(repo, owner, accessToken = '') {
  * @return {Promise} the list of organization
  */
 export async function getFilesAndFolders(repo, owner, subfolder = '', accessToken = '') {
+  assertDefined(repo, owner, subfolder, accessToken)
   const res = await octokit.request('/repos/{owner}/{repo}/contents/{path}', {
     owner,
     repo,
@@ -516,7 +563,7 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
  */
 export async function getLatestCommitHash(owner, repo, filePath, accessToken, branch = 'main') {
   try {
-    assertDefined(owner, repo, filePath)
+    assertDefined(owner, repo, filePath, accessToken, branch)
     let commits = null
     const requestOptions = {
       path: filePath,
@@ -557,6 +604,7 @@ export async function getLatestCommitHash(owner, repo, filePath, accessToken, br
  * @return {object} A repository path object
  */
 export const parseGitHubRepositoryURL = (githubUrl) => {
+  assertDefined(githubUrl)
   if (githubUrl.indexOf('://') === -1) {
     throw new Error('URL must be fully qualified and contain scheme')
   }

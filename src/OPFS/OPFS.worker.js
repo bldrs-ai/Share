@@ -59,8 +59,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
   try {
     ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (ownerFolderHandle === null) {
@@ -77,8 +76,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
   try {
     repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (repoFolderHandle === null) {
@@ -95,8 +93,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
   try {
     branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (branchFolderHandle === null) {
@@ -321,7 +318,16 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, 
 }
 
 /**
+ * This function navigates to a filepath in OPFS to see if it exists.
+ * If any parent folders or the file do not exist, it will return 'notexist'.
+ * If it exists, it will return 'exist'
  *
+ * @param {*} commitHash
+ * @param {*} originalFilePath
+ * @param {*} owner
+ * @param {*} repo
+ * @param {*} branch
+ * @return {string} postmessage specifying operation status
  */
 async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -332,8 +338,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (ownerFolderHandle === null) {
@@ -345,8 +350,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (repoFolderHandle === null) {
@@ -358,8 +362,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (branchFolderHandle === null) {
@@ -400,7 +403,16 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
 }
 
 /**
+ * This function navigates to the model location in OPFS and deletes it.
+ * If any parent folders or the file do not exist, it will return 'notexist'.
+ * If it successfully deletes the file, it will return 'deleted'.
  *
+ * @param {*} commitHash
+ * @param {*} originalFilePath
+ * @param {*} owner
+ * @param {*} repo
+ * @param {*} branch
+ * @return {string} postmessage specifying operation status
  */
 async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
@@ -411,8 +423,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (ownerFolderHandle === null) {
@@ -424,8 +435,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (repoFolderHandle === null) {
@@ -437,8 +447,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
   try {
     branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
   } catch (error) {
-    // Ignore errors here, as it is a valid operation if the folder does
-    // not exist yet.
+    // Expected: folder does not exist
   }
 
   if (branchFolderHandle === null) {

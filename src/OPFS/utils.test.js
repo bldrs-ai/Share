@@ -11,7 +11,7 @@ import {
 
 jest.mock('../OPFS/OPFSService.js')
 
-describe('Your Test Suite', () => {
+describe('OPFS Test Suite', () => {
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks()
