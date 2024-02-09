@@ -129,7 +129,7 @@ function OpenModelDialog({
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo)
     const owner = orgNamesArr[selectedOrgName]
-    const files = await getFiles(repoNamesArr[repo], owner, accessToken)
+    const files = await getFiles(owner, repoNamesArr[repo], accessToken)
     const fileNames = Object.keys(files).map((key) => files[key].name)
     setFilesArr(fileNames)
   }
@@ -169,12 +169,12 @@ function OpenModelDialog({
             <Selector label={'Repository'} list={repoNamesArr} selected={selectedRepoName} setSelected={selectRepo} testId={'Repository'}/>
             <Selector label={'File'} list={filesArr} selected={selectedFileName} setSelected={setSelectedFileName} testId={'File'}/>
             {selectedFileName !== '' &&
-              <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-                <RectangularButton
-                  title={'LOAD FILE'}
-                  onClick={navigateToFile}
-                />
-              </Box>
+                <Box sx={{textAlign: 'center', marginTop: '4px'}}>
+                  <RectangularButton
+                    title={'LOAD FILE'}
+                    onClick={navigateToFile}
+                  />
+                </Box>
             }
           </Stack> :
           <Box sx={{padding: '0px 10px'}} elevation={0}>
