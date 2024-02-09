@@ -149,6 +149,7 @@ export default function NoteCardCreate({
             multiline
             placeholder={isNote ? 'Note Body' : 'Leave a comment ...' }
             inputProps={{maxLength: 256}}
+            data-testid={isNote ? 'CreateNote' : 'CreateComment' }
           />
         </Box>
       </CardContent>

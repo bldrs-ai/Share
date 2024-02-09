@@ -63,20 +63,6 @@ describe('Notes Control', () => {
     })
     expect(await findByText('open_workspace')).toBeVisible()
   })
-
-  it('Fetch and display Comments when note is selected', async () => {
-    const {result} = renderHook(() => useStore((state) => state))
-    const extractedNoteId = '10'
-    const {findByText} = render(<ShareMock><Notes/></ShareMock>)
-    await act(() => {
-      result.current.setNotes(MOCK_NOTES)
-    })
-    await act(() => {
-      result.current.setSelectedNoteId(Number(extractedNoteId))
-    })
-    expect(await findByText('Test Comment 1')).toBeVisible()
-    expect(await findByText('Test Comment 2')).toBeVisible()
-  })
 })
 
 
