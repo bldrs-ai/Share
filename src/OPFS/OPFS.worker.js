@@ -457,14 +457,12 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 
   // Get a file handle in the folder for the model
   let modelBlobFileHandle = null
-  let modelDirectoryHandle = null
   const pathSegments = originalFilePath.split('/')
   const strippedFileName = pathSegments[pathSegments.length - 1]
   // lets see if our commit hash matches
   // Get file handle for file blob
   try {
-    // eslint-disable-next-line no-unused-vars
-    [modelDirectoryHandle, modelBlobFileHandle] = await
+    [, modelBlobFileHandle] = await
     retrieveFileWithPath(branchFolderHandle, originalFilePath, commitHash, false)
   } catch (error) {
     // expected if file not found
