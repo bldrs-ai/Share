@@ -13,7 +13,7 @@ export default function createNotesSlice(set, get) {
     comments: null,
     createdNotes: null,
     deletedNotes: null,
-    isCreateNoteActive: false,
+    isCreateNoteVisible: false,
     isLoadingNotes: false,
     isNotesVisible: false,
     notes: null,
@@ -34,8 +34,8 @@ export default function createNotesSlice(set, get) {
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
-    toggleIsCreateNoteActive: () =>
-      set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),
+    toggleIsCreateNoteVisible: () =>
+      set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),

@@ -1,21 +1,21 @@
 import React, {useState, useEffect} from 'react'
+import {useLocation} from 'react-router'
+import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
-import {
-  CardMenu,
-  SelectedCardBody,
-  CommentCardBody,
-} from './NoteCardSupportComponents'
-import CardBody from './CardBody'
-import CardFooter from './CardFooter'
-import EditCardBody from './EditCardBody'
+import CardContent from '@mui/material/CardContent'
+import NoteBodyEdit from './NoteBodyEdit'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
+import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
-import {closeIssue, updateIssue, deleteComment} from '../../utils/GitHub'
+import {
+  closeIssue,
+  updateIssue,
+  // TODO(pablo): deleteComment as deleteCommentGitHub,
+} from '../../utils/GitHub'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
@@ -23,53 +23,59 @@ import {
   parseHashParams,
   removeCameraUrlParams,
 } from '../CameraControl'
-import {NOTE_PREFIX} from './Notes'
+import NoteBody from './NoteBody'
+import {NOTES_PREFIX} from './NotesControl'
+import NoteFooter from './NoteFooter'
+import NoteMenu from './NoteMenu'
 
 
 /**
  * Note card
  *
- * @param {number} id note id
- * @param {number} index note index
- * @param {string} username username of the note author
- * @param {string} title note title
- * @param {string} avatarUrl user avatarUrl
- * @param {string} body note body
- * @param {string} date note date
- * @param {number} numberOfComments number of replies to the note - referred to as comments in GH
- * @param {boolean} expandedImage governs the size of the image, small proportions on mobile to start
- * @param {boolean} isComment Comments/replies are formatted differently
- * @return {object} React component
+ * @property {number} id note Issue id on GH
+ * @property {number} index Within GH response
+ * @property {string} date Date, in GH time
+ * @property {string} [avatarUrl] User avatar/icon
+ * @property {string} [body] Body in markdown
+ * @property {number} numberOfComments Notes only
+ * @property {string} [title] Notes only
+ * @property {string} [username] Author
+ * @property {boolean} [isNote] Is note, or if not is comment. Default: true
+ * @return {React.ReactElement}
  */
 export default function NoteCard({
   id = null,
   index = null,
-  username = '',
-  title = '',
-  body = '',
-  noteNumber = '',
   avatarUrl = '',
+  body = '',
   date = '',
+  noteNumber = '',
   numberOfComments = null,
-  isComment = false,
   synched = true,
+  title = '',
+  username = '',
+  isNote = true,
 }) {
-  assertDefined(id, index)
-  const [anchorEl, setAnchorEl] = useState(null)
-  const [editMode, setEditMode] = useState(false)
-  const [editBody, setEditBody] = useState(body)
+  assertDefined(...arguments)
   const accessToken = useStore((state) => state.accessToken)
-  const comments = useStore((state) => state.comments)
   const cameraControls = useStore((state) => state.cameraControls)
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
-  const setComments = useStore((state) => state.setComments)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
+  // TODO(pablo)
+  // const comments = useStore((state) => state.comments)
+  // const setComments = useStore((state) => state.setComments)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-  const selectedNoteId = useStore((state) => state.selectedNoteId)
+
+  const [editMode, setEditMode] = useState(false)
+  const [editBody, setEditBody] = useState(body)
+
   const {user} = useAuth0()
+  const location = useLocation()
+
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
         if (url.indexOf('#') === -1) {
@@ -80,19 +86,22 @@ export default function NoteCard({
             CAMERA_PREFIX)
         return encoded && parseHashParams(encoded)
       })
+
   const firstCamera = embeddedCameraParams[0] // Intentionally undefined if empty
   const dateParts = date.split('T')
-  const open = Boolean(anchorEl)
   const selected = selectedNoteId === id
 
   useEffect(() => {
     setEditBody(body)
   }, [selectedNoteId, body])
+
+
   useEffect(() => {
     if (selected && firstCamera) {
       setCameraFromParams(firstCamera, cameraControls)
     }
   }, [selected, firstCamera, cameraControls])
+
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
@@ -101,11 +110,11 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
-    removeHashParams(window.location, NOTE_PREFIX)
-    addHashParams(window.location, NOTE_PREFIX, {id: id})
+    setHashParams(window.location, NOTES_PREFIX, {id: id})
   }
 
-  /** Moves the camera to the position specified in the url attached to the issue/comment.*/
+
+  /** Moves the camera to the position specified in the url attached to the issue/comment */
   function showCameraView() {
     setCameraFromParams(firstCamera, cameraControls)
     addCameraUrlParams(cameraControls)
@@ -114,65 +123,50 @@ export default function NoteCard({
     }
   }
 
-  /** Copies the issue url which contains the issue id, camera position and selected element path.*/
+  /** Copies location which contains the issue id, camera position and selected element path */
   function shareIssue() {
-    navigator.clipboard.writeText(window.location)
+    navigator.clipboard.writeText(location)
     setSnackMessage('The url path is copied to the clipboard')
     const pauseTimeMs = 5000
     setTimeout(() => setSnackMessage(null), pauseTimeMs)
   }
 
-  /**
-   * deletes the note
-   *
-   * @param {string} repository
-   * @param {string} accessToken
-   * @param {number} noteNumber obtained from github issue
-   * @return {object} return github return object
-   */
-  async function deleteNote(noteNumberToDelete) {
-    const closeResponse = await closeIssue(repository, noteNumberToDelete, accessToken)
-    const updatedNotes = notes.filter((note) => note.number !== noteNumberToDelete)
-    setNotes(updatedNotes)
-    handleMenuClose()
-    setSelectedNoteId(null)
-    return closeResponse
-  }
 
   /**
-   * Remove comment
+   * Closes the issue.  TODO(pablo): this isn't a delete
+   *
+   * @param {number} noteNumber obtained from github issue
+   */
+  async function onDeleteClick(noteNumberToDelete) {
+    // TODO(pablo): handle response
+    const res = await closeIssue(repository, noteNumberToDelete, accessToken)
+    const updatedNotes = notes.filter((note) => note.number !== noteNumberToDelete)
+    setNotes(updatedNotes)
+    setSelectedNoteId(null)
+    return res
+  }
+
+
+  /**
+   * Delete comment from repo and remove from UI
    *
    * @param {string} repository
    * @param {string} accessToken
    * @param {number} commentId
-   * @return {object} return github return object
    */
-  async function removeComment(commentId) {
+  // TODO(pablo)
+  /* async function deleteComment(commentId) {
+    // TODO(pablo): handle response
+    await deleteCommentGitHub(repository, commentId, accessToken)
     const newComments = comments.map((comment) => ({
       ...comment,
       synched: (comment.id !== commentId) && comment.synched,
     }))
     setComments(newComments)
-    await deleteComment(repository, commentId, accessToken)
-  }
+  } */
 
-  /** Triggerred when menu is closed*/
-  function handleMenuClose() {
-    setAnchorEl(null)
-  }
 
-  /** Triggerred when menu icon is activated*/
-  function handleMenuClick(event) {
-    setAnchorEl(event.currentTarget)
-  }
-
-  /** Activate note edit mode*/
-  function actviateEditMode() {
-    handleMenuClose()
-    setEditMode(true)
-  }
-
-  /** Submit update*/
+  /** Update issue on GH, set read-only */
   async function submitUpdate() {
     const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
     const editedNote = notes.find((note) => note.id === id)
@@ -181,58 +175,75 @@ export default function NoteCard({
     setEditMode(false)
   }
 
+
   return (
     <Card elevation={1}>
-      {isComment &&
-        <CardHeader
-          avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
-        /> }
-      {!isComment &&
-        <CardHeader
-          title={title}
-          avatar={<Avatar alt={username} src={avatarUrl}/>}
-          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
-          action={
-            synched && user && user.nickname === username &&
-          <CardMenu
-            handleMenuClick={handleMenuClick}
-            handleMenuClose={handleMenuClose}
-            anchorEl={anchorEl}
-            actviateEditMode={actviateEditMode}
-            deleteNote={deleteNote}
-            noteNumber={noteNumber}
-            open={open}
-          />
-          }
-        /> }
-      {!editMode && !isComment && !selected &&
-       <CardBody selectCard={selectCard} markdownContent={editBody}/>}
-      {selected && !editMode && <SelectedCardBody editBody={editBody}/>}
-      {isComment && <CommentCardBody editBody={editBody}/>}
+      {isNote ?
+       <CardHeader
+         title={title}
+         avatar={<Avatar alt={username} src={avatarUrl}/>}
+         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+         action={
+           synched && user && user.nickname === username &&
+             <NoteMenu
+               onEditClick={() => setEditMode(true)}
+               onDeleteClick={() => onDeleteClick(noteNumber)}
+               noteNumber={noteNumber}
+             />
+         }
+       /> :
+       <CardHeader
+         avatar={<Avatar alt={username} src={avatarUrl}/>}
+         subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
+       />}
+      {isNote && !editMode && !selected &&
+       <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
+      {selected && !editMode && <SelectedNoteBody editBody={editBody}/>}
+      {!isNote && <CommentNoteBody editBody={editBody}/>}
       {editMode &&
-       <EditCardBody
+       <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
        />
       }
-      <CardFooter
+      <NoteFooter
+        accessToken={accessToken}
         editMode={editMode}
-        id={id}
-        noteNumber={noteNumber}
-        username={username}
-        selectCard={selectCard}
-        numberOfComments={numberOfComments}
         embeddedCameras={embeddedCameraParams}
-        selected={selected}
+        id={id}
+        isNote={isNote}
+        noteNumber={noteNumber}
+        numberOfComments={numberOfComments}
         onClickCamera={showCameraView}
         onClickShare={shareIssue}
-        removeComment={removeComment}
-        isComment={isComment}
-        synched={synched}
+        selectCard={selectCard}
+        selected={selected}
         submitUpdate={submitUpdate}
-        accessToken={accessToken}
+        synched={synched}
+        username={username}
       />
     </Card>
+  )
+}
+
+
+const SelectedNoteBody = ({editBody}) => {
+  return (
+    <CardContent>
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
+  )
+}
+
+
+const CommentNoteBody = ({editBody}) => {
+  return (
+    <CardContent>
+      <ReactMarkdown>
+        {editBody}
+      </ReactMarkdown>
+    </CardContent>
   )
 }

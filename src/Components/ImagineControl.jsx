@@ -58,14 +58,38 @@ function ImagineDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
 }) {
+  const cameraControls = useStore((state) => state.cameraControls)
+  const model = useStore((state) => state.model)
+  const viewer = useStore((state) => state.viewer)
+
   const [prompt, setPrompt] = useState('')
   const [screenshot, setScreenshot] = useState(null)
   const [isImagineLoading, setIsImagineLoading] = useState(false)
   const [imagine, setImagine] = useState(null)
   const [image, setImage] = useState(null)
-  const cameraControls = useStore((state) => state.cameraControls)
-  const viewer = useStore((state) => state.viewer)
-  const model = useStore((state) => state.model)
+
+  const [finalPrompt, setFinalPrompt] = useState(null)
+
+  const onCreateClick = () => {
+    setFinalPrompt(prompt)
+    setIsImagineLoading(true)
+    sendToWarhol(screenshot, prompt, (renderDataUrl) => {
+      setIsImagineLoading(false)
+      setImagine(renderDataUrl)
+      setImage(renderDataUrl)
+    })
+  }
+
+  const onDownloadClick = () => downloadImaginePng(imagine)
+
+  const onClearClick = () => {
+    setPrompt('')
+    setFinalPrompt(null)
+    setIsImagineLoading(false)
+    const ss = takeScreenshot(viewer)
+    setScreenshot(ss)
+    setImage(ss)
+  }
 
   useEffect(() => {
     if (viewer) {
@@ -77,14 +101,6 @@ function ImagineDialog({
     }
   }, [viewer, model, cameraControls])
 
-  const handleClear = () => {
-    setPrompt('')
-    setIsImagineLoading(false)
-    const ss = takeScreenshot(viewer)
-    setScreenshot(ss)
-    setImage(ss)
-  }
-
   return (
     <Dialog
       headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}
@@ -92,13 +108,8 @@ function ImagineDialog({
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
     >
-      <Helmet>
-        <title>Bot the Bldr</title>
-      </Helmet>
+      <Helmet><title>{finalPrompt ? `Imagine: ${finalPrompt}` : 'Imagine'}</title></Helmet>
       <Stack
-        spacing={2}
-        justifyContent={'center'}
-        alignContent={'center'}
         sx={{minHeight: '390px'}}
       >
         <Box
@@ -107,11 +118,10 @@ function ImagineDialog({
             borderRadius: '10px',
             display: 'flex',
             justifyContent: 'center',
-            alignItems: 'center'}}
+            alignItems: 'center',
+          }}
         >
-          {isImagineLoading &&
-           <Loader type='circular'/>
-          }
+          {isImagineLoading && <Loader type='circular'/>}
           {!isImagineLoading && image &&
            <img
              src={image}
@@ -120,55 +130,43 @@ function ImagineDialog({
            />}
         </Box>
 
-        <TextField
-          value={prompt}
-          onChange={(event) => setPrompt(event.target.value)}
-          fullWidth
-          multiline
-          size='small'
-          placeholder={'Imagine prompt'}
-          InputProps={{
-            endAdornment: (
-              <InputAdornment position="end">
-                {prompt && (
-                  <IconButton
-                    aria-label="clear text"
-                    onClick={handleClear}
-                    edge="end"
-                    size="small"
-                  >
-                    <ClearIcon size='inherit'/>
-                  </IconButton>
-                )}
-              </InputAdornment>
-            ),
-          }}
-        />
-        <Stack
-          spacing={2}
-          direction={'row'}
-          justifyContent={'center'}
-          alignContent={'center'}
-        >
-          <RectangularButton
-            title={'Create'}
-            disabled={prompt.length === 0}
-            onClick={() => {
-              setIsImagineLoading(true)
-              sendToWarhol(screenshot, prompt, (renderDataUrl) => {
-                setIsImagineLoading(false)
-                setImagine(renderDataUrl)
-                setImage(renderDataUrl)
-              })
+        <Stack>
+          <TextField
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            fullWidth
+            multiline
+            size='small'
+            placeholder={'Imagine prompt'}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {prompt && (
+                    <IconButton
+                      aria-label="clear text"
+                      onClick={onClearClick}
+                      edge="end"
+                      size="small"
+                    >
+                      <ClearIcon size='inherit'/>
+                    </IconButton>
+                  )}
+                </InputAdornment>
+              ),
             }}
           />
-          <RectangularButton
-            title={'Download'}
-            disabled={imagine === null}
-            onClick={() => {
-              downloadImaginePng(imagine)
-            }}
-          />
+          <Stack direction={'row'} spacing={1} justifyContent='center'>
+            <RectangularButton
+              title={'Create'}
+              onClick={onCreateClick}
+              disabled={prompt.length === 0}
+            />
+            <RectangularButton
+              title={'Download'}
+              onClick={onDownloadClick}
+              disabled={imagine === null}
+            />
+          </Stack>
         </Stack>
       </Stack>
     </Dialog>

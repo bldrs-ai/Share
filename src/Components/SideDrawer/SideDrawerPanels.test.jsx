@@ -2,7 +2,8 @@ import React from 'react'
 import {act, render, renderHook} from '@testing-library/react'
 import ShareMock from '../../ShareMock'
 import useStore from '../../store/useStore'
-import {NotesPanel, PropertiesPanel} from './SideDrawerPanels'
+import PropertiesPanel from '../Properties/PropertiesPanel'
+import NotesPanel from '../Notes/NotesPanel'
 
 
 describe('SideDrawerPanels', () => {

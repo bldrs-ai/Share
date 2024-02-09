@@ -6,7 +6,7 @@ import {assertDefined} from '../../utils/assert'
 import debug from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {TooltipIconButton} from '../Buttons'
-import Panel from '../Panel'
+import Panel from '../SideDrawer/Panel'
 import VersionsTimeline from './VersionsTimeline'
 import RestartAltIcon from '@mui/icons-material/RestartAlt'
 

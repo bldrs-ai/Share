@@ -1,6 +1,8 @@
 import React, {useState} from 'react'
 import * as reactRouting from 'react-router-dom'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
+import {VIEW_PLANE_PREFIX} from '../Components/CutPlaneMenu'
+import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
 import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
@@ -223,7 +225,10 @@ describe('CadView', () => {
   })
 
   it('sets up camera and cutting plan from URL,', async () => {
-    const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
+    const mockCurrLocation = {
+      ...defaultLocationValue,
+      hash: `#${CAMERA_PREFIX}:1,2,3,4,5,6;${VIEW_PLANE_PREFIX}:x=0`,
+    }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
       filepath: `index.ifc`,

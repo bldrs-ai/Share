@@ -10,6 +10,16 @@ import {MOCK_NOTES} from '../../utils/GitHub'
 
 
 describe('NoteCard', () => {
+  beforeAll(async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setRepository('testOrg', 'testRepo')
+    })
+    /*
+    await act(() => {
+      console.error('REPO!', result.current.repository)
+    })*/
+  })
   it('NoteCard', () => {
     const id = 123
     const index = 123
@@ -68,7 +78,7 @@ describe('NoteCard', () => {
     expect(showCamera).toBeInTheDocument()
   })
 
-  it('Delete is working', async () => {
+  it.only('Delete is working', async () => {
     const id = 123
     const index = 123
     const username = 'testing'
@@ -83,7 +93,7 @@ describe('NoteCard', () => {
     await act(() => {
       result.current.setNotes(MOCK_NOTES)
     })
-    const {getByTitle, getByText} = render(
+    const {getByTestId, getByText} = render(
         <ShareMock>
           <NoteCard
             id={id}
@@ -96,8 +106,8 @@ describe('NoteCard', () => {
             synchedNote={synchedNote}
           />
         </ShareMock>)
-    expect(getByTitle('Note Actions')).toBeInTheDocument()
-    const noteActionsMenu = getByTitle('Note Actions')
+    const noteActionsMenu = getByTestId('note-menu')
+    expect(noteActionsMenu).toBeInTheDocument()
     fireEvent.click(noteActionsMenu)
     const deleteButton = getByText('Delete')
     expect(deleteButton).toBeInTheDocument()

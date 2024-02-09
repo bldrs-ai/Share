@@ -1,5 +1,7 @@
-import React from 'react'
+import React, {useEffect} from 'react'
+import {useLocation} from 'react-router'
 import useStore from '../../store/useStore'
+import {addHashParams, getHashParams, removeHashParams} from '../../utils/location'
 import {TooltipIconButton} from '../Buttons'
 import TreeIcon from '../../assets/icons/Tree.svg'
 
@@ -10,12 +12,35 @@ import TreeIcon from '../../assets/icons/Tree.svg'
  * @return {React.ReactElement}
  */
 export default function NavTreeControl() {
-  const toggleIsNavTreeVisible = useStore((state) => state.toggleIsNavTreeVisible)
+  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
+  const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
+
+  const location = useLocation()
+  useEffect(() => {
+    setIsNavTreeVisible(getHashParams(location, NAVTREE_PREFIX) !== undefined)
+  }, [location, setIsNavTreeVisible])
+
+
+  /** Toggle NavTree visibility and set its state token */
+  function onNavigationClick() {
+    // TODO(pablo): useNavigate
+    if (isNavTreeVisible) {
+      removeHashParams(window.location, NAVTREE_PREFIX)
+    } else {
+      addHashParams(window.location, NAVTREE_PREFIX)
+    }
+  }
+
+
   return (
     <TooltipIconButton
       title='Navigation'
       icon={<TreeIcon className='icon-share'/>}
-      onClick={toggleIsNavTreeVisible}
+      onClick={onNavigationClick}
     />
   )
 }
+
+
+/** The prefix to use for the NavTree state tokens */
+export const NAVTREE_PREFIX = 'n'

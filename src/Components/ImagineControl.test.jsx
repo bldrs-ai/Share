@@ -22,6 +22,6 @@ describe('ImagineControl', () => {
     const button = getByTitle('AI Renderings')
     fireEvent.click(button)
 
-    await(waitFor(() => expect(document.title).toBe('Bot the Bldr')))
+    await(waitFor(() => expect(document.title).toBe('Imagine')))
   })
 })

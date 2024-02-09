@@ -4,12 +4,10 @@ import Typography from '@mui/material/Typography'
 
 
 /**
- * Panel Title
- *
- * @param {string} title Panel title
- * @param {object} [controlsGroup] Controls Group is placed on the right of the title
- * @param {string} iconSrc url to an image to be used to prepend and icon to the title
- * @return {React.Component} Properties Panel react component
+ * @property {string} title Panel title
+ * @property {object} [controlsGroup] Controls Group is placed on the right of the title
+ * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
+ * @return {React.ReactElement}
  */
 export default function PanelTitle({title, controlsGroup, iconSrc}) {
   return (

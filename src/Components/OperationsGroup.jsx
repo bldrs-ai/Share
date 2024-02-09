@@ -4,13 +4,13 @@ import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
 import LoginMenu from './LoginMenu'
-import NotesControl from './Notes/NotesContol'
+import NotesControl from './Notes/NotesControl'
+import PropertiesControl from './Properties/PropertiesControl'
 import ShareControl from './ShareControl'
 import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 
 
 /**
@@ -26,18 +26,11 @@ export default function OperationsGroup({deselectItems}) {
   const isImagineEnabled = useStore((state) => state.isImagineEnabled)
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
-  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
+  const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
   const isShareEnabled = useStore((state) => state.isShareEnabled)
   const selectedElement = useStore((state) => state.selectedElement)
-  const setIsSideDrawerVisible = useStore((state) => state.setIsSideDrawerVisible)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  const toggleIsPropertiesVisible = useStore((state) => state.toggleIsPropertiesVisible)
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null
-    )
-    return ifSelected
-  }
+  const isAnElementSelected = selectedElement !== null
 
   return (
     <ButtonGroup
@@ -48,18 +41,7 @@ export default function OperationsGroup({deselectItems}) {
       {isLoginEnabled && (<><LoginMenu/><Divider sx={{pt: '5px'}}/></>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}
-      {isSelected() && selectedElement !== null &&
-       <TooltipIconButton
-         title='Properties'
-         onClick={() => {
-           toggleIsPropertiesVisible()
-           setIsSideDrawerVisible(true)
-         }}
-         selected={isPropertiesVisible}
-         icon={<FormatListBulletedIcon className='icon-share'/>}
-       />
-      }
-
+      {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
       {isAppStoreEnabled &&
           <TooltipIconButton
             title='Open App Store'

@@ -9,7 +9,7 @@ import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
- * A panel component with a sticky header containing a title and close button.
+ * A panel component with a sticky header containing a title and close button
  *
  * @param {string|React.ReactElement} title The title to display in the panel header
  * @param {Function} onClose A callback to be executed when the close button is clicked

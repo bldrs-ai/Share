@@ -575,7 +575,15 @@ export default function CadView({
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
-        navWith(navigate, `${pathPrefix}${repoFilePath}/${path}`, {search: '', hash: ''})
+        navWith(
+          navigate,
+          `${pathPrefix}${repoFilePath}/${path}`,
+          {
+            // TODO(pablo): unclear if search should be carried
+            search: '',
+            // TODO(pablo): necessary to preserve UI state
+            hash: window.location.hash,
+          })
       }
     } catch (e) {
       // IFCjs will throw a big stack trace if there is not a visual
@@ -885,7 +893,7 @@ export default function CadView({
         }
 
         <Box sx={{marginTop: '.82em', width: '100%'}}>
-          {isNavTreeEnabled && isNavTreeVisible &&
+          {isNavTreeEnabled && isNavTreeVisible && rootElement &&
            <NavPanel
              model={model}
              element={rootElement}

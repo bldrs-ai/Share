@@ -8,8 +8,9 @@
 export default function PropertiesSlice(set, get) {
   return {
     isPropertiesEnabled: true,
-    isPropertiesVisible: false,
     setIsPropertiesEnabled: (is) => set(() => ({isPropertiesEnabled: is})),
+
+    isPropertiesVisible: false,
     setIsPropertiesVisible: (is) => set(() => ({isPropertiesVisible: is})),
     toggleIsPropertiesVisible: () =>
       set((state) => ({isPropertiesVisible: !state.isPropertiesVisible})),

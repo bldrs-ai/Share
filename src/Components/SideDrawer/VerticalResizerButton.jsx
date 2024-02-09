@@ -179,6 +179,10 @@ export default function VerticalResizerButton({
       }}
     >
       <Paper
+        elevation={0}
+        ref={resizerRef}
+        onMouseDown={startResizing}
+        {...onResizerDblTap}
         sx={{
           width: '150px',
           paddingTop: `10px`,
@@ -187,13 +191,9 @@ export default function VerticalResizerButton({
           alignItems: 'center',
           justifyContent: 'center',
           gap: `${gripSize}px`,
-          background: theme.palette.primary.background,
+          background: theme.palette.secondary.main,
         }}
-        elevation={0}
-        ref={resizerRef}
-        data-testid="y_resizer"
-        onMouseDown={startResizing}
-        {...onResizerDblTap}
+        data-testid='y_resizer'
       >
         {Array.from({length: 3}).map((v, i) =>
           <Box

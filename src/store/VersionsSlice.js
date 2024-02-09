@@ -14,6 +14,7 @@ export default function VersionsSlice(set, get) {
     isVersionsVisible: false,
     versions: {},
     setActiveVersion: (activeVersion) => set(() => ({activeVersion: activeVersion})),
+    setIsVersionsVisible: (isVisible) => set(() => ({isVersionsVisible: isVisible})),
     setVersions: (versions) => set(() => ({versions: versions})),
     toggleIsVersionsVisible: () =>
       set((state) => ({isVersionsVisible: !state.isVersionsVisible})),

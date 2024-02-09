@@ -13,21 +13,16 @@ import NoteCard from './NoteCard'
 import NoteCardCreate from './NoteCardCreate'
 import ApplicationError from '../ApplicationError'
 
-/** The prefix to use for the note ID within the URL hash. */
-export const NOTE_PREFIX = 'i'
 
 /**
  * List of Notes
  *
- * @return {object} List of notes and comments as react component.
+ * @return {React.ReactElement}
  */
 export default function Notes() {
-  const {user} = useAuth0()
-  const isMobile = useIsMobile()
-
   const accessToken = useStore((state) => state.accessToken)
   const comments = useStore((state) => state.comments)
-  const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
+  const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
   const isLoadingNotes = useStore((state) => state.isLoadingNotes)
   const notes = useStore((state) => state.notes)
   const repository = useStore((state) => state.repository)
@@ -36,8 +31,13 @@ export default function Notes() {
 
   const [hasError, setHasError] = useState(false)
 
-  const selectedNote = (notes && selectedNoteId) ? notes.filter((issue) => issue.id === selectedNoteId)[0] : null
+  const {user} = useAuth0()
+  const isMobile = useIsMobile()
 
+  const selectedNote =
+        (notes && selectedNoteId) ?
+        notes.filter((issue) => issue.id === selectedNoteId)[0] :
+        null
 
   const handleError = (err) => {
     if (!err) {
@@ -83,17 +83,18 @@ export default function Notes() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNote])
 
+
   return hasError ?
     <ApplicationError/> : (
     <List
       spacing={1}
       sx={isMobile ? {paddingBottom: '100px'} : {}}
     >
-      {isLoadingNotes && !isCreateNoteActive && <Loader type={'linear'}/>}
-      {notes && notes.length === 0 && !isCreateNoteActive && !isLoadingNotes && <NoContent/>}
-      {!user && isCreateNoteActive && <NoContent message={'Please login to create notes.'}/>}
-      {user && isCreateNoteActive && <NoteCardCreate/>}
-      {!selectedNoteId && !isCreateNoteActive && notes && !isLoadingNotes &&
+      {isLoadingNotes && !isCreateNoteVisible && <Loader type={'linear'}/>}
+      {notes && notes.length === 0 && !isCreateNoteVisible && !isLoadingNotes && <NoContent/>}
+      {!user && isCreateNoteVisible && <NoContent message={'Please login to create notes.'}/>}
+      {user && isCreateNoteVisible && <NoteCardCreate/>}
+      {!selectedNoteId && !isCreateNoteVisible && notes && !isLoadingNotes &&
        notes.map((note, index) => {
          return (
            <ListItem key={index}>
@@ -115,16 +116,16 @@ export default function Notes() {
       }
       {selectedNote &&
        <NoteCard
-         index={selectedNote.index}
-         id={selectedNote.id}
-         noteNumber={selectedNote.number}
-         title={selectedNote.title}
-         date={selectedNote.date}
-         body={selectedNote.body}
-         username={selectedNote.username}
-         numberOfComments={selectedNote.numberOfComments}
          avatarUrl={selectedNote.avatarUrl}
+         body={selectedNote.body}
+         date={selectedNote.date}
+         id={selectedNote.id}
+         index={selectedNote.index}
+         noteNumber={selectedNote.number}
+         numberOfComments={selectedNote.numberOfComments}
          synched={selectedNote.synched}
+         title={selectedNote.title}
+         username={selectedNote.username}
        />
       }
       {comments && selectedNote &&
@@ -132,7 +133,7 @@ export default function Notes() {
          return (
            <ListItem key={index}>
              <NoteCard
-               isComment={true}
+               isNote={false}
                id={comment.id}
                index=''
                body={comment.body}

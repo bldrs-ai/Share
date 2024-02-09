@@ -34,9 +34,9 @@ export default function BaseRoutes({testElt = null}) {
   const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
-  setAppPrefix(appPrefix)
 
   useEffect(() => {
+    setAppPrefix(appPrefix)
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
       const fwdPath = `${appPrefix}`
@@ -60,8 +60,8 @@ export default function BaseRoutes({testElt = null}) {
         }
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basePath, installPrefix, location, navigate, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
+  }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
+      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
 
   return (
     <SentryRoutes>

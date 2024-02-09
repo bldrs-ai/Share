@@ -16,9 +16,6 @@ import PlanIcon from '../assets/icons/Plan.svg'
 import SectionIcon from '../assets/icons/Section.svg'
 
 
-const PLANE_PREFIX = 'p'
-
-
 /**
  * Menu of three cut planes for the model
  *
@@ -49,7 +46,7 @@ export default function CutPlaneMenu() {
   }
 
   useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
+    const planeHash = getHashParams(location, VIEW_PLANE_PREFIX)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
     if (planeHash && model && viewer) {
       const planes = getPlanes(planeHash)
@@ -76,7 +73,7 @@ export default function CutPlaneMenu() {
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
       debug().log('CutPlaneMenu#togglePlane: found: ', true)
-      removeHashParams(window.location, PLANE_PREFIX, [direction])
+      removeHashParams(window.location, VIEW_PLANE_PREFIX, [direction])
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
@@ -87,7 +84,7 @@ export default function CutPlaneMenu() {
       })
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
+      addHashParams(window.location, VIEW_PLANE_PREFIX, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
     }
@@ -142,7 +139,7 @@ export default function CutPlaneMenu() {
             removePlanes(viewer)
             setAnchorEl(null)
             setIsCutPlane(false)
-            removeHashParams(window.location, PLANE_PREFIX, ['x', 'y', 'z'])
+            removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
           } }
         >
           <CloseIcon className='icon-share'/>
@@ -211,7 +208,7 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
-    addHashParams(window.location, PLANE_PREFIX, planeInfo, true)
+    addHashParams(window.location, VIEW_PLANE_PREFIX, planeInfo, true)
   }
 }
 
@@ -227,7 +224,7 @@ export function getPlanes(planeHash) {
     return []
   }
   const parts = planeHash.split(':')
-  if (parts[0] !== 'p' || !parts[1]) {
+  if (parts[0] !== VIEW_PLANE_PREFIX || !parts[1]) {
     return []
   }
   const planeObjectParams = getObjectParams(planeHash)
@@ -245,7 +242,7 @@ export function getPlanes(planeHash) {
       })
     }
     if (removableParamKeys.length) {
-      removeHashParams(window.location, PLANE_PREFIX, removableParamKeys)
+      removeHashParams(window.location, VIEW_PLANE_PREFIX, removableParamKeys)
     }
   })
   debug().log('CutPlaneMenu#getPlanes: planes: ', planes)
@@ -286,6 +283,13 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
       break
   }
 
-  const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
+  const modelCenterOffset =
+        new Vector3(
+          modelCenter.x + planeOffsetX,
+          modelCenter.y + planeOffsetY,
+          modelCenter.z + planeOffsetZ)
   return {normal, modelCenterOffset}
 }
+
+
+export const VIEW_PLANE_PREFIX = 'vp'

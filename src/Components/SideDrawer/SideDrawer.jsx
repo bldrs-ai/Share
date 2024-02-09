@@ -5,12 +5,13 @@ import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
+import NotesPanel from '../Notes/NotesPanel'
+import PropertiesPanel from '../Properties/PropertiesPanel'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
 import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
-import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 
 
 /**

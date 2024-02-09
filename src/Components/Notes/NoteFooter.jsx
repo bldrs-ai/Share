@@ -21,30 +21,32 @@ import ShareIcon from '../../assets/icons/Share.svg'
  * @property {Array<number>} noteNumber Array of expressIDs
  * @return {React.ReactElement}
  */
-export default function CardFooter({
-  id,
-  noteNumber,
+export default function NoteFooter({
+  accessToken,
   editMode,
-  username,
+  embeddedCameras,
+  id,
+  isNote = true,
+  noteNumber,
+  numberOfComments,
   onClickCamera,
   onClickShare,
-  numberOfComments,
   selectCard,
-  embeddedCameras,
   selected,
-  isNote = true,
-  synched,
   setShowCreateComment,
   showCreateComment,
   submitUpdate,
-  accessToken,
+  synched,
+  username,
 }) {
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const isScreenshotEnabled = useExistInFeature('screenshot')
+
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+
   const [shareIssue, setShareIssue] = useState(false)
   const [screenshotUri, setScreenshotUri] = useState(null)
 
@@ -56,7 +58,9 @@ export default function CardFooter({
 
   /** Navigate to github issue */
   function openGithubIssue() {
-    window.open(`https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`, '_blank')
+    window.open(
+      `https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`,
+      '_blank')
   }
 
   return (

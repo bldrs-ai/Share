@@ -24,6 +24,10 @@ import {
  */
 
 
+// Keep equal to location.js#FEATURE_SEP. Don't export or import
+const FEATURE_SEP_TEST = ';'
+
+
 /** @return {Location} */
 const newTestLocation = () => ({
   host: 'localhost',
@@ -74,31 +78,37 @@ test('addHashParams', () => {
 
 test('addHashParamsMultiple', () => {
   const loc = newTestLocation()
-  loc.hash = '#other:a=0::otter:b=3'
+  loc.hash = `#other:a=0${FEATURE_SEP_TEST}otter:b=3`
   addHashParams(loc, 'test', {a: 1}, true)
-  expect(loc.hash).toBe('other:a=0::otter:b=3::test:a=1')
+  expect(loc.hash).toBe(`other:a=0${FEATURE_SEP_TEST}otter:b=3${FEATURE_SEP_TEST}test:a=1`)
 
-  loc.hash = '#other:a=0::test:a=0::otter:b=3'
+  loc.hash = `#other:a=0${FEATURE_SEP_TEST}test:a=0${FEATURE_SEP_TEST}otter:b=3`
   addHashParams(loc, 'test', {a: 1}, true)
-  expect(loc.hash).toBe('other:a=0::test:a=1::otter:b=3')
+  expect(loc.hash).toBe(`other:a=0${FEATURE_SEP_TEST}test:a=1${FEATURE_SEP_TEST}otter:b=3`)
 })
 
 
 test('addHashParams with tilde', () => {
   const loc = newTestLocation()
-  loc.hash = '#other:a=0::otter:b=3'
+  loc.hash = `#other:a=0${FEATURE_SEP_TEST}otter:b=3`
   addHashParams(loc, 'test', {a: 1}, true)
-  expect(loc.hash).toBe('other:a=0::otter:b=3::test:a=1')
+  expect(loc.hash).toBe(`other:a=0${FEATURE_SEP_TEST}otter:b=3${FEATURE_SEP_TEST}test:a=1`)
 })
 
 
 test('getHashParams', () => {
   const loc = newTestLocation()
 
+  expect(getHashParams(loc, 'a')).toBeUndefined()
+
+  loc.hash = '#a:'
+
+  expect(getHashParams(loc, 'a')).toBe('a:')
+
   loc.hash = '#a:1'
   expect(getHashParams(loc, 'a')).toBe('a:1')
 
-  loc.hash = '#a:1::b:2'
+  loc.hash = `#a:1${FEATURE_SEP_TEST}b:2`
   expect(getHashParams(loc, 'a')).toBe('a:1')
   expect(getHashParams(loc, 'b')).toBe('b:2')
   expect(getHashParams(loc, 'c')).toBe(undefined)
@@ -116,17 +126,17 @@ test('removeHashParams', () => {
   removeHashParams(loc, 'a')
   expect(loc.hash).toBe('')
 
-  loc.hash = '#a:1::b:2'
+  loc.hash = `#a:1${FEATURE_SEP_TEST}b:2`
   removeHashParams(loc, 'a')
   expect(loc.hash).toBe('b:2')
 
-  loc.hash = '#a:1::b:2'
+  loc.hash = `#a:1${FEATURE_SEP_TEST}b:2`
   removeHashParams(loc, 'b')
   expect(loc.hash).toBe('a:1')
 
-  loc.hash = '#a:1::b:2::c:3'
+  loc.hash = `#a:1${FEATURE_SEP_TEST}b:2${FEATURE_SEP_TEST}c:3`
   removeHashParams(loc, 'b')
-  expect(loc.hash).toBe('a:1::c:3')
+  expect(loc.hash).toBe(`a:1${FEATURE_SEP_TEST}c:3`)
 
   loc.hash = '#p:x=1,y=1,z=1'
   removeHashParams(loc, 'p', ['y', 'z'])
