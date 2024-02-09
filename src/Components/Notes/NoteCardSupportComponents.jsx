@@ -4,6 +4,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import CardActionArea from '@mui/material/CardActionArea'
 import CardContent from '@mui/material/CardContent'
+import Chip from '@mui/material/Chip'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
@@ -120,6 +121,7 @@ export const CardFooter = ({
   selected,
   isNote = true,
   synched,
+  locked,
   submitUpdate,
 }) => {
   const [screenshotUri, setScreenshotUri] = useState(null)
@@ -239,6 +241,9 @@ export const CardFooter = ({
             }}
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
+        }
+        {selected && locked &&
+          <Chip label='Note is locked' size='small'/>
         }
         {editMode &&
           <TooltipIconButton

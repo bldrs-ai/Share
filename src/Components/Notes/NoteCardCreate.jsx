@@ -88,7 +88,11 @@ export default function NoteCardCreate({
     const commentPayload = {
       body: body || '',
     }
-    await createComment(repository, noteNumber, commentPayload, accessToken)
+    // eslint-disable-next-line no-console
+    console.log('commentPayload', commentPayload)
+    const res = await createComment(repository, noteNumber, commentPayload, accessToken)
+    // eslint-disable-next-line no-console
+    console.log('res', res)
     setBody('')
     incrementCommentNumber()
     fetchComments()

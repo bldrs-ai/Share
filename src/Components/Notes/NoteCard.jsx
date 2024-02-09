@@ -48,12 +48,12 @@ export default function NoteCard({
   title = '',
   body = '',
   noteNumber = '',
+  locked = false,
   avatarUrl = '',
   date = '',
   numberOfComments = null,
   isNote = true,
   synched = true,
-  locked = false,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)

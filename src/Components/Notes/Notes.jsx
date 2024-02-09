@@ -121,6 +121,7 @@ export default function Notes() {
       <NoteCard
         index={selectedNote.index}
         id={selectedNote.id}
+        locked={selectedNote.locked}
         noteNumber={selectedNote.number}
         title={selectedNote.title}
         date={selectedNote.date}
