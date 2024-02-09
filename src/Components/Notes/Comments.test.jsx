@@ -12,7 +12,6 @@ describe('Notes Control', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
       result.current.setNotes(MOCK_NOTES)
-      // eslint-disable-next-line no-magic-numbers
       result.current.setSelectedNoteId(10)
     })
   })

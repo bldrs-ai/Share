@@ -75,30 +75,19 @@ export default function NoteCardCreate({
     setComments(newComments)
   }
 
-  /**
-   * create new comment
-   *
-   * @param {string} repository
-   * @param {string} accessToken
-   * @param {number} commentId
-   * @return {object} return github return object
-   */
+  /** create new comment based on the selected note Id*/
   async function createNewComment() {
     assertStringNotEmpty(body)
     const commentPayload = {
       body: body || '',
     }
-    // eslint-disable-next-line no-console
-    console.log('commentPayload', commentPayload)
-    const res = await createComment(repository, noteNumber, commentPayload, accessToken)
-    // eslint-disable-next-line no-console
-    console.log('res', res)
+    await createComment(repository, noteNumber, commentPayload, accessToken)
     setBody('')
     incrementCommentNumber()
     fetchComments()
   }
 
-  /** refetlect new number of comments in the store */
+  /** change comment number in store */
   const incrementCommentNumber = () => {
     const updatedNotes = notes.map((note) => {
       if (note.id === selectedNoteId) {
