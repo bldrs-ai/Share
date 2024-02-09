@@ -81,10 +81,11 @@ export default function NoteCardCreate({
     const commentPayload = {
       body: body || '',
     }
-    await createComment(repository, noteNumber, commentPayload, accessToken)
+    const res = await createComment(repository, noteNumber, commentPayload, accessToken)
     setBody('')
     incrementCommentNumber()
     fetchComments()
+    return res
   }
 
   /** change comment number in store */
