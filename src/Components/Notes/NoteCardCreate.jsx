@@ -147,7 +147,7 @@ export default function NoteCardCreate({
             onChange={(event) => setBody(event.target.value)}
             fullWidth
             multiline
-            placeholder={isNote ? 'Note Body' : 'Comment Body' }
+            placeholder={isNote ? 'Note Body' : 'Leave a comment ...' }
             inputProps={{maxLength: 256}}
           />
         </Box>
