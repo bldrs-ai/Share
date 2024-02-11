@@ -25,7 +25,7 @@ export default function NoteMenu({onDeleteClick, onEditClick}) {
           onClick={(event) => setAnchorEl(event.currentTarget)}
           aria-controls='simple-menu'
           aria-haspopup='true'
-          data-testid='note-menu'
+          data-testid='note-menu-button'
         >
           <MoreVertIcon className='icon-share'/>
         </IconButton>
@@ -44,6 +44,7 @@ export default function NoteMenu({onDeleteClick, onEditClick}) {
             transform: 'translateX(-70px) translateY(0px)',
           },
         }}
+        data-testid='note-menu'
       >
         <MenuItem
           onClick={() => {
@@ -61,7 +62,7 @@ export default function NoteMenu({onDeleteClick, onEditClick}) {
           }}
         >
           <DeleteOutlineOutlinedIcon/>
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Delete</Typography>
+          <Typography variant='overline' sx={{marginLeft: '10px'}}>Delete</Typography>
         </MenuItem>
       </Menu>
     </>
