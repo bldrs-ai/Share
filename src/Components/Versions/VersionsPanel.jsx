@@ -12,7 +12,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
 
 
 /**
- * VersionsContainer displays a series of versions in a timeline format.
+ * VersionsPanel displays a series of versions in a timeline format.
  * Each version corresponds to a commit, and this component fetches
  * commit data for the provided filepath and displays it
  *
@@ -20,7 +20,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
  * @property {string} current The current branch or sha, to indicate is active in UI
  * @return {React.ReactElement} A timeline panel of versions
  */
-export default function VersionsContainer({filePath, currentRef}) {
+export default function VersionsPanel({filePath, currentRef}) {
   assertDefined(filePath, currentRef)
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)

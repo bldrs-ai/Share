@@ -26,7 +26,7 @@ import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
  * @param {string} pathPrefix
  * @return {object}
  */
-export default function NavPanel({
+export default function NavTreePanel({
   model,
   defaultExpandedElements,
   defaultExpandedTypes,

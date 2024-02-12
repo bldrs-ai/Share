@@ -15,12 +15,12 @@ import ControlsGroup from '../Components/ControlsGroup'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
-import NavTreePanel from '../Components/NavTree/NavPanel'
+import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/Search/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import VersionsContainer from '../Components/Versions/VersionsContainer'
+import VersionsPanel from '../Components/Versions/VersionsPanel'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
@@ -696,7 +696,7 @@ export default function CadView({
   }
 
 
-  // TODO(pablo): again, just need branch here for VersionsContainer
+  // TODO(pablo): again, just need branch here for VersionsPanel
   // below.  It's probably already available in this scope.
   let ghPath = location.pathname
   if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
@@ -910,7 +910,7 @@ export default function CadView({
            !isNavTreeVisible &&
            modelPath.repo !== undefined &&
            isVersionsVisible &&
-           <VersionsContainer
+           <VersionsPanel
              filePath={modelPath.filepath}
              currentRef={branch}
            />}

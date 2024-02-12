@@ -75,9 +75,9 @@ export default function SearchBar() {
 
 
   // The container and paper are set to 100% width to fill the
-  // container SearchBar shares with NavPanel.  This is an easier way
-  // to have them share the same width, which is now set in the parent
-  // container (CadView).
+  // container SearchBar shares with NavTreePanel.  This is an easier
+  // way to have them share the same width, which is now set in the
+  // parent container (CadView).
   return (
     <form onSubmit={onSubmit} style={{width: '250px', margin: '0 auto'}}>
       <Autocomplete

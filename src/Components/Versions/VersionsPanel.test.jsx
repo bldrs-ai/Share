@@ -6,10 +6,10 @@ import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
 } from '../../utils/GitHub'
-import VersionsContainer from './VersionsContainer'
+import VersionsPanel from './VersionsPanel'
 
 
-describe('VersionsContainer', () => {
+describe('VersionsPanel', () => {
   it('renders the panel', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
@@ -18,7 +18,7 @@ describe('VersionsContainer', () => {
     })
     const {getByText} = render(
         <ShareMock>
-          <VersionsContainer filePath="/ZGRAGGEN.ifc" currentRef={'main'}/>
+          <VersionsPanel filePath="/ZGRAGGEN.ifc" currentRef={'main'}/>
         </ShareMock>,
     )
     const dialogTitle = getByText('Versions')
