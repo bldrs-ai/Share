@@ -23,11 +23,17 @@ export default function PanelWithTitle(props) {
     <Box sx={{height: '100%', overflow: 'hidden'}}>
       <Box
         sx={{
-          height: props.includeGutter ? `calc(${titleHeight} + ${paddingBottom})` : '${titleHeight}',
+          height: props.includeGutter ?
+            `calc(${titleHeight} + ${paddingBottom})` :
+            '${titleHeight}',
           borderBottom: `solid 1px ${headerBorderColor}`,
         }}
       >
-        <PanelTitle title={props.title} iconSrc={props.iconSrc} controlsGroup={props.controlsGroup}/>
+        <PanelTitle
+          title={props.title}
+          iconSrc={props.iconSrc}
+          controlsGroup={props.controlsGroup}
+        />
       </Box>
       <Box
         sx={{

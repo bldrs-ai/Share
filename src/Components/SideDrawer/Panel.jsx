@@ -12,11 +12,11 @@ import CloseIcon from '@mui/icons-material/Close'
  * A panel component with a sticky header containing a title and close button
  *
  * @param {string|React.ReactElement} title The title to display in the panel header
- * @param {Function} onClose A callback to be executed when the close button is clicked
+ * @param {Function} onCloseClick A callback to be executed when the close button is clicked
  * @param {React.ReactElement} children Enclosed elements
  * @return {React.ReactElement}
  */
-export default function Panel({title, onClose, children, testId = '', action = null}) {
+export default function Panel({title, onCloseClick, children, testId = '', action = null}) {
   const theme = useTheme()
   return (
     <Paper
@@ -66,7 +66,12 @@ export default function Panel({title, onClose, children, testId = '', action = n
           <Box>
             {action}
           </Box>
-          <IconButton aria-label='close' size='small' onClick={onClose} sx={{borderRadius: '5px'}}>
+          <IconButton
+            onClick={onCloseClick}
+            aria-label='close'
+            size='small'
+            sx={{borderRadius: '5px'}}
+          >
             <CloseIcon className='icon-share icon-small'/>
           </IconButton>
         </Stack>

@@ -15,7 +15,7 @@ import ControlsGroup from '../Components/ControlsGroup'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
-import NavPanel from '../Components/NavTree/NavPanel'
+import NavTreePanel from '../Components/NavTree/NavPanel'
 import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/Search/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
@@ -79,12 +79,10 @@ export default function CadView({
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
-  const rootElement = useStore((state) => state.rootElemeent)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
-  const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
@@ -191,7 +189,6 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    setIsNavTreeVisible(false)
     setIsSearchBarVisible(false)
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
@@ -764,7 +761,7 @@ export default function CadView({
         const lastId = selectedElements.slice(-1)
         const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
-        // Update the expanded elements in NavPanel
+        // Update the expanded elements in NavTreePanel
         const pathIds = getPathIdsForElements(lastId)
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
@@ -893,10 +890,9 @@ export default function CadView({
         }
 
         <Box sx={{marginTop: '.82em', width: '100%'}}>
-          {isNavTreeEnabled && isNavTreeVisible && rootElement &&
-           <NavPanel
+          {isNavTreeEnabled && isNavTreeVisible && model &&
+           <NavTreePanel
              model={model}
-             element={rootElement}
              defaultExpandedElements={defaultExpandedElements}
              defaultExpandedTypes={defaultExpandedTypes}
              expandedElements={expandedElements}

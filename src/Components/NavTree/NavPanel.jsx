@@ -9,6 +9,7 @@ import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
 import NavTree from './NavTree'
+import {handleNavigation} from './NavTreeControl'
 import TypesNavTree from './TypesNavTree'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ListIcon from '@mui/icons-material/List'
@@ -40,7 +41,7 @@ export default function NavPanel({
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const toggleIsNavTreeVisible = useStore((state) => state.toggleIsNavTreeVisible)
+  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
 
@@ -64,10 +65,9 @@ export default function NavPanel({
   const isNavTree = navigationMode === 'spatial-tree'
 
   const theme = useTheme()
-
   return (
     <Panel
-      onClose={toggleIsNavTreeVisible}
+      onCloseClick={() => handleNavigation(isNavTreeVisible)}
       title='Navigation'
       action={
         <StyledToggleButtonGroup

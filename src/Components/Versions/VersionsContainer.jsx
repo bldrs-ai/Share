@@ -22,11 +22,13 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
  */
 export default function VersionsContainer({filePath, currentRef}) {
   assertDefined(filePath, currentRef)
-  const [commitData, setCommitData] = useState([])
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const modelPath = useStore((state) => state.modelPath)
-  const toggleIsVersionsVisible = useStore((state) => state.toggleIsVersionsVisible)
+  const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
+
+  const [commitData, setCommitData] = useState([])
+
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -93,7 +95,7 @@ export default function VersionsContainer({filePath, currentRef}) {
           onClick={navigateToMain}
         />
       }
-      onClose={toggleIsVersionsVisible}
+      onCloseClose={() => setIsVersionsVisible(false)}
       data-testid='Version Panel'
     >
       <VersionsTimeline

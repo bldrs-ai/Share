@@ -21,24 +21,23 @@ export default function NavTreeControl() {
   }, [location, setIsNavTreeVisible])
 
 
-  /** Toggle NavTree visibility and set its state token */
-  function onNavigationClick() {
-    // TODO(pablo): useNavigate
-    if (isNavTreeVisible) {
-      removeHashParams(window.location, NAVTREE_PREFIX)
-    } else {
-      addHashParams(window.location, NAVTREE_PREFIX)
-    }
-  }
-
-
   return (
     <TooltipIconButton
       title='Navigation'
       icon={<TreeIcon className='icon-share'/>}
-      onClick={onNavigationClick}
+      onClick={() => handleNavigation(isNavTreeVisible)}
     />
   )
+}
+
+
+/** Toggle NavTree visibility and set its state token */
+export function handleNavigation(isNavTreeVisible) {
+  if (isNavTreeVisible) {
+    removeHashParams(window.location, NAVTREE_PREFIX)
+  } else {
+    addHashParams(window.location, NAVTREE_PREFIX)
+  }
 }
 
 
