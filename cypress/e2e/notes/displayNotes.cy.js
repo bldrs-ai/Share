@@ -4,6 +4,7 @@ describe('notes', () => {
       cy.clearCookies()
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
+      cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
       cy.get('[data-testid="Notes"]').click()
     })
     it('should display Notes navbar title', () => {
@@ -25,6 +26,7 @@ describe('notes', () => {
       cy.clearCookies()
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
+      cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
       cy.get('[data-testid="Notes"]').click()
     })
     it('should display notes list', () => {
@@ -48,6 +50,7 @@ describe('notes', () => {
       cy.clearCookies()
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
+      cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
       cy.get('[data-testid="Notes"]').click()
       cy.get(':nth-child(2) > [data-testid="selectionContainer"] > .MuiCardContent-root > p').click()
     })
