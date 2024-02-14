@@ -110,7 +110,7 @@ export const CommentCardBody = ({editBody}) => {
 export const CardFooter = ({
   id,
   noteNumber,
-  editMode,
+  editNoteMode,
   username,
   onClickCamera,
   onClickShare,
@@ -239,7 +239,7 @@ export const CardFooter = ({
             icon={<PhotoCameraIcon className='icon-share'/>}
           />
         }
-        {editMode &&
+        {editNoteMode &&
           <TooltipIconButton
             title='Save'
             placement='left'
@@ -247,7 +247,7 @@ export const CardFooter = ({
             onClick={() => submitUpdate(repository, accessToken, id)}
           />
         }
-        {numberOfComments > 0 && !editMode &&
+        {numberOfComments > 0 && !editNoteMode &&
         <>
           {!selected &&
             <TooltipIconButton
