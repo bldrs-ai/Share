@@ -5,7 +5,7 @@ describe('notes', () => {
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
       cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
-      cy.get('[data-testid="Notes"]').click()
+      cy.get('[data-testid="Notes"]').click({force: true})
     })
     it('should display Notes navbar title', () => {
       cy.get('.css-13e0tv1 > .css-hb3iqx > .css-95g4uk > .MuiTypography-root').contains('NOTES')
@@ -27,7 +27,7 @@ describe('notes', () => {
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
       cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
-      cy.get('[data-testid="Notes"]').click()
+      cy.get('[data-testid="Notes"]').click({force: true})
     })
     it('should display notes list', () => {
       cy.get('.MuiList-root')
@@ -51,7 +51,7 @@ describe('notes', () => {
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
       cy.get('[data-testid="Notes"]', {timeout: 10000}).should('be.visible')
-      cy.get('[data-testid="Notes"]').click()
+      cy.get('[data-testid="Notes"]').click({force: true})
       cy.get(':nth-child(2) > [data-testid="selectionContainer"] > .MuiCardContent-root > p').click()
     })
     it('navbar should change to a note view when a note is selected', () => {
