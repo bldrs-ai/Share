@@ -3,7 +3,7 @@ describe('notes', () => {
     beforeEach(() => {
       cy.clearCookies()
       cy.visit('/')
-      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click().click({force: true})
+      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click({force: true})
       cy.get('[data-testid="Notes"]').click()
     })
     it('should display Notes navbar title', () => {
@@ -24,7 +24,7 @@ describe('notes', () => {
     beforeEach(() => {
       cy.clearCookies()
       cy.visit('/')
-      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click().click({force: true})
+      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click({force: true})
       cy.get('[data-testid="Notes"]').click()
     })
     it('should display notes list', () => {
@@ -47,7 +47,7 @@ describe('notes', () => {
     beforeEach(() => {
       cy.clearCookies()
       cy.visit('/')
-      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click().click({force: true})
+      cy.get('.MuiDialogActions-root > .MuiButtonBase-root').click({force: true})
       cy.get('[data-testid="Notes"]').click()
       cy.get(':nth-child(2) > [data-testid="selectionContainer"] > .MuiCardContent-root > p').click()
     })
