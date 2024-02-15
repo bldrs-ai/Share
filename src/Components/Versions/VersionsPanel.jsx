@@ -58,7 +58,7 @@ export default function VersionsPanel({filePath, currentRef}) {
   /**
    * Navigate to the indexed commit
    *
-   * @param {string} index active commit index
+   * @param {number} index active commit index
    */
   function navigateToCommit(index) {
     const sha = commitData[index].sha
@@ -70,11 +70,7 @@ export default function VersionsPanel({filePath, currentRef}) {
   }
 
 
-  /**
-   * Navigate to head of main
-   *
-   * @param {string} index active commit index
-   */
+  /** Navigate to head of main */
   function navigateToMain() {
     if (modelPath) {
       // TODO(pablo): should not hardcode to 'main'
@@ -95,7 +91,7 @@ export default function VersionsPanel({filePath, currentRef}) {
           onClick={navigateToMain}
         />
       }
-      onCloseClose={() => setIsVersionsVisible(false)}
+      onCloseClick={() => setIsVersionsVisible(false)}
       data-testid='Version Panel'
     >
       <VersionsTimeline

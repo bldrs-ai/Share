@@ -7,7 +7,8 @@ import TreeIcon from '../../assets/icons/Tree.svg'
 
 
 /**
- * The TooltipIconButton in the ControlsGroup to control display of NavTree.
+ * The TooltipIconButton in the ControlsGroup to control display of
+ * NavTree
  *
  * @return {React.ReactElement}
  */
@@ -16,10 +17,10 @@ export default function NavTreeControl() {
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
 
   const location = useLocation()
+
   useEffect(() => {
     setIsNavTreeVisible(getHashParams(location, NAVTREE_PREFIX) !== undefined)
   }, [location, setIsNavTreeVisible])
-
 
   return (
     <TooltipIconButton

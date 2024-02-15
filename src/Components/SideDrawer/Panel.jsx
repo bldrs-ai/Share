@@ -5,6 +5,7 @@ import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
+import {assertDefined} from '../../utils/assert'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -14,9 +15,12 @@ import CloseIcon from '@mui/icons-material/Close'
  * @param {string|React.ReactElement} title The title to display in the panel header
  * @param {Function} onCloseClick A callback to be executed when the close button is clicked
  * @param {React.ReactElement} children Enclosed elements
+ * @param {React.ReactElement} [action] Action component, for the top bar
+ * @param {string} testId Set on the root Paper element
  * @return {React.ReactElement}
  */
-export default function Panel({title, onCloseClick, children, testId = '', action = null}) {
+export default function Panel({title, onCloseClick, children, action = null, testId = ''}) {
+  assertDefined(title, onCloseClick, children, testId)
   const theme = useTheme()
   return (
     <Paper

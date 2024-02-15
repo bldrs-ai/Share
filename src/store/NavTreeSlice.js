@@ -8,9 +8,11 @@
 export default function SearchSlice(set, get) {
   return {
     isNavTreeEnabled: true,
-    isNavTreeVisible: false,
     setNavTreeEnabled: (isEnabled) => set(() => ({isNavTreeEnabled: isEnabled})),
+
+    isNavTreeVisible: false,
     setIsNavTreeVisible: (isVisible) => set(() => ({isNavTreeVisible: isVisible})),
-    toggleIsNavTreeVisible: () => set((state) => ({isNavTreeVisible: !state.isNavTreeVisible})),
+    toggleIsNavTreeVisible: () =>
+      set((state) => ({isNavTreeVisible: !state.isNavTreeVisible})),
   }
 }

@@ -16,10 +16,10 @@ export default function VersionsControl() {
   const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
 
   const location = useLocation()
+
   useEffect(() => {
     setIsVersionsVisible(getHashParams(location, VERSIONS_PREFIX) !== undefined)
   }, [location, setIsVersionsVisible])
-
 
   /** Toggle Versions visibility and set its state token */
   function onVersionsClick() {
@@ -29,7 +29,6 @@ export default function VersionsControl() {
       addHashParams(window.location, VERSIONS_PREFIX)
     }
   }
-
 
   return (
     <TooltipIconButton

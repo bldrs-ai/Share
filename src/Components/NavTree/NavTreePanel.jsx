@@ -38,12 +38,13 @@ export default function NavTreePanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const rootElement = useStore((state) => state.rootElement)
-  const selectedElements = useStore((state) => state.selectedElements)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
+  const rootElement = useStore((state) => state.rootElement)
+  const selectedElements = useStore((state) => state.selectedElements)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
+  const theme = useTheme()
 
   const onTreeViewChanged = (event, value) => {
     if (value !== null) {
@@ -51,7 +52,7 @@ export default function NavTreePanel({
     }
   }
 
-  const StyledToggleButtonGroup = styled(ToggleButtonGroup)(({theme}) => ({
+  const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
     '& .MuiToggleButtonGroup-grouped': {
       'margin': '0 0.5em',
       'border': 0,
@@ -64,7 +65,6 @@ export default function NavTreePanel({
 
   const isNavTree = navigationMode === 'spatial-tree'
 
-  const theme = useTheme()
   return (
     <Panel
       onCloseClick={() => handleNavigation(isNavTreeVisible)}
