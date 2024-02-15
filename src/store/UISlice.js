@@ -10,13 +10,18 @@ import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
  */
 export default function createUISlice(set, get) {
   return {
+    alertMessage: null,
+    setAlertMessage: (msg) => set(() => ({snackMessage: msg})),
+
+    snackMessage: null,
+    setSnackMessage: (msg) => set(() => ({snackMessage: msg})),
+
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
     isOpenControlHighlighted: true,
     isLoading: false,
     isHelpTooltips: false,
     isAppStoreOpen: false,
-    snackMessage: null,
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
@@ -39,7 +44,6 @@ export default function createUISlice(set, get) {
     setIsLoading: (isLoading) => set(() => ({isLoading: isLoading})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),
-    setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),

@@ -8,19 +8,16 @@ import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
-import Alert from '../Components/Alert'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
-import SnackBarMessage from '../Components/SnackbarMessage'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
 } from '../OPFS/utils'
-import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
@@ -38,6 +35,7 @@ import {
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
+import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import {getFinalUrl} from './urls'
@@ -80,7 +78,6 @@ export default function CadView({
   const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
-  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const setViewer = useStore((state) => state.setViewer)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
@@ -92,13 +89,17 @@ export default function CadView({
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
+  // UISlice
+  const setAlertMessage = useStore((state) => state.setAlertMessage)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
+
+
   // Begin useState //
   // IFC
   const [elementsById] = useState({})
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
-  const [alert, setAlert] = useState(null)
   const [isModelLoading, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
   const [modelReady, setModelReady] = useState(false)
@@ -161,18 +162,6 @@ export default function CadView({
       }
     }
   }
-
-
-  const setAlertMessage = (msg) => setAlert(
-    <Alert
-      onCloseCb={() => {
-        setSnackMessage('')
-        navToDefault(navigate, appPrefix)
-      }}
-    >
-      {msg}
-    </Alert>,
-  )
 
 
   /**
@@ -240,7 +229,7 @@ export default function CadView({
     }
     // Leave snack message until here so alert box handler can clear
     // it after user says OK.
-    setSnackMessage('')
+    setSnackMessage(null)
 
     if (tmpModelRef === 'redirect') {
       return
@@ -846,27 +835,21 @@ export default function CadView({
         }}
         {...onSceneDoubleTap}
       />
-      <SnackBarMessage/>
 
-      {alert}
+      {viewer && (
+        <>
+          <ControlsGroupAndDrawer
+            deselectItems={deselectItems}
+            model={model}
+            modelPath={modelPath}
+            pathPrefix={pathPrefix}
+            branch={branch}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+          <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+          <ElementGroup deselectItems={deselectItems}/>
+        </>)}
 
-      {viewer &&
-       <ControlsGroupAndDrawer
-         deselectItems={deselectItems}
-         model={model}
-         modelPath={modelPath}
-         pathPrefix={pathPrefix}
-         branch={branch}
-         selectWithShiftClickEvents={selectWithShiftClickEvents}
-       />}
-
-      {viewer && <ElementGroup deselectItems={deselectItems}/>}
-
-      <AboutControl/>
-
-      <HelpControl/>
-
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
 
       {isModelLoading &&
        <Backdrop
@@ -876,6 +859,10 @@ export default function CadView({
          <CircularProgress color='inherit'/>
        </Backdrop>
       }
+
+      <AboutControl/>
+      <HelpControl/>
+      <AlertDialogAndSnackbar/>
     </Box>
   )
 }
