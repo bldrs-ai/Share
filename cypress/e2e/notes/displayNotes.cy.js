@@ -4,6 +4,7 @@ describe('notes', () => {
       cy.clearCookies()
       cy.visit('/')
       cy.get('.MuiIconButton-root').click()
+      cy.get('.css-kg11f7').should('not.exist')
       cy.get('.css-1n6r2ak').should('not.exist')
       cy.get('[data-testid="Notes"]').click()
     })
