@@ -2,9 +2,7 @@ import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
-import Backdrop from '@mui/material/Backdrop'
 import Box from '@mui/material/Box'
-import CircularProgress from '@mui/material/CircularProgress'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
@@ -12,6 +10,7 @@ import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraContr
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
+import LoadingBackdrop from '../Components/LoadingBackdrop'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
@@ -82,6 +81,9 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
+  // IFCSlice
+  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
+
   // NavTreeSlice
   const expandedTypes = useStore((state) => state.expandedTypes)
   const setDefaultExpandedElements = useStore((state) => state.setDefaultExpandedElements)
@@ -100,7 +102,6 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
-  const [isModelLoading, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
   const [modelReady, setModelReady] = useState(false)
   // Drag and Drop
@@ -850,18 +851,11 @@ export default function CadView({
           <ElementGroup deselectItems={deselectItems}/>
         </>)}
 
-
-      {isModelLoading &&
-       <Backdrop
-         open={isModelLoading}
-         sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
-       >
-         <CircularProgress color='inherit'/>
-       </Backdrop>
-      }
-
       <AboutControl/>
       <HelpControl/>
+
+      <LoadingBackdrop/>
+
       <AlertDialogAndSnackbar/>
     </Box>
   )

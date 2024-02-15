@@ -13,6 +13,9 @@ export default function createIFCSlice(set, get) {
     customViewSettings: null,
     setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
 
+    isModelLoading: false,
+    setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
+
     elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
 

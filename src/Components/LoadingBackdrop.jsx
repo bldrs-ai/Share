@@ -1,0 +1,19 @@
+import React from 'react'
+import Backdrop from '@mui/material/Backdrop'
+import useTheme from '@mui/styles/useTheme'
+import CircularProgress from '@mui/material/CircularProgress'
+import useStore from '../store/useStore'
+
+
+/** @return {React.ReactElement}*/
+export default function LoadingBackdrop() {
+  const isModelLoading = useStore((state) => state.isModelLoading)
+  const theme = useTheme()
+  return (
+    <Backdrop
+      open={isModelLoading}
+      sx={{color: theme.palette.primary.sceneHighlight, zIndex: 1000}}
+    >
+      <CircularProgress color='inherit'/>
+    </Backdrop>)
+}
