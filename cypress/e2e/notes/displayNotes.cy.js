@@ -7,18 +7,18 @@ describe('notes', () => {
       cy.get('[data-testid="Notes"]').click()
     })
     it('should display Notes navbar title', () => {
-      cy.get('.css-13e0tv1 > .css-hb3iqx > .css-95g4uk > .MuiTypography-root').contains('NOTES')
+      cy.get('[data-testid="panelTitle"]').contains('NOTES')
     })
-    // it('should navigate to create notes when add a note button is clicked', () => {
-    //   cy.get('[data-testid="Add a note"]').click()
-    //   cy.get('.css-13e0tv1 > .css-hb3iqx > .css-95g4uk > .MuiTypography-root').contains('ADD A NOTE')
-    // })
-    // it('should navigate back to the notes list', () => {
-    //   cy.get('[data-testid="Add a note"]').click()
-    //   cy.get('.css-13e0tv1 > .css-hb3iqx > .css-95g4uk > .MuiTypography-root').contains('ADD A NOTE')
-    //   cy.get('[data-testid="Back to the list"]').click()
-    //   cy.get('.MuiList-root')
-    // })
+    it('should navigate to create notes when add a note button is clicked', () => {
+      cy.get('[data-testid="Add a note"]').click()
+      cy.get('[data-testid="panelTitle"]').contains('ADD A NOTE')
+    })
+    it('should navigate back to the notes list', () => {
+      cy.get('[data-testid="Add a note"]').click()
+      cy.get('[data-testid="panelTitle"]').contains('ADD A NOTE')
+      cy.get('[data-testid="Back to the list"]').click()
+      cy.get('.MuiList-root')
+    })
   })
   // context('note card elements', () => {
   //   beforeEach(() => {
