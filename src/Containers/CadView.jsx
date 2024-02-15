@@ -2,7 +2,6 @@ import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
-import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
@@ -14,10 +13,9 @@ import LoadingBackdrop from '../Components/LoadingBackdrop'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
-  loadLocalFileDragAndDrop,
   downloadToOPFS,
 } from '../OPFS/utils'
-import {usePlaceMark} from '../hooks/usePlaceMark'
+import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
 import {getLatestCommitHash} from '../utils/GitHub'
@@ -28,15 +26,14 @@ import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
-import {
-  loadLocalFileDragAndDropFallback,
-  getUploadedBlobPath,
-} from '../utils/loader'
+import {getUploadedBlobPath} from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
+import ViewRoot from './ViewRoot'
+import ViewerContainer from './ViewerContainer'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
@@ -47,13 +44,12 @@ let count = 0
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
  *
- * @return {object}
+ * @return {React.ReactElement}
  */
 export default function CadView({
   installPrefix,
   appPrefix,
   pathPrefix,
-  modelPath,
 }) {
   assertDefined(...arguments)
   debug().log('CadView#init: count: ', count++)
@@ -72,8 +68,6 @@ export default function CadView({
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
-  // setModelStore instead of setModel since there's already a state var with this name
-  const setModelStore = useStore((state) => state.setModelStore)
   const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
@@ -81,8 +75,12 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
+
   // IFCSlice
   const setIsModelLoading = useStore((state) => state.setIsModelLoading)
+  const model = useStore((state) => state.model)
+  const setModel = useStore((state) => state.setModel)
+  const setIsModelReady = useStore((state) => state.setIsModelReady)
 
   // NavTreeSlice
   const expandedTypes = useStore((state) => state.expandedTypes)
@@ -90,6 +88,9 @@ export default function CadView({
   const setDefaultExpandedTypes = useStore((state) => state.setDefaultExpandedTypes)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
+
+  // RepositorySlice
+  const modelPath = useStore((state) => state.modelPath)
 
   // UISlice
   const setAlertMessage = useStore((state) => state.setAlertMessage)
@@ -102,17 +103,15 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
-  const [model, setModel] = useState(null)
-  const [modelReady, setModelReady] = useState(false)
+
   // Drag and Drop
   // Add a new state for drag over effect
-  const [dragOver, setDragOver] = useState(false)
 
   // Begin Hooks //
   const isMobile = useIsMobile()
   const location = useLocation()
   // Place Mark
-  const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
+  const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const {setFile} = useContext(FileContext) // Consume the context
@@ -121,50 +120,6 @@ export default function CadView({
   const [searchParams] = useSearchParams()
 
   // Begin helpers //
-  // Drag event handlers
-  const handleDragOver = (event) => {
-    event.preventDefault()
-    setDragOver(true)
-  }
-
-
-  const handleDragEnter = (event) => {
-    event.preventDefault()
-    setDragOver(true)
-  }
-
-
-  const handleDragLeave = (event) => {
-    event.preventDefault()
-    setDragOver(false)
-  }
-
-
-  const handleDrop = (event) => {
-    event.preventDefault()
-    setDragOver(false)
-    const files =
-      event.dataTransfer.files
-    // Here you can handle the files as needed
-    if (files.length === 1) {
-      if (isOpfsAvailable) {
-        loadLocalFileDragAndDrop(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0])
-      } else {
-        loadLocalFileDragAndDropFallback(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          files[0],
-        )
-      }
-    }
-  }
-
-
   /**
    * Begin setup for new model. Turn off nav, search and item and init
    * new viewer.
@@ -196,7 +151,7 @@ export default function CadView({
       return
     }
 
-    setModelReady(false)
+    setIsModelReady(false)
 
     // define mesh colors for selected and preselected element
     const preselectMat = new MeshLambertMaterial({
@@ -243,7 +198,7 @@ export default function CadView({
       postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
-    setModelReady(true)
+    setIsModelReady(true)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
         .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
@@ -419,7 +374,6 @@ export default function CadView({
       // always be 0.
       loadedModel.modelID = 0
       setModel(loadedModel)
-      setModelStore(loadedModel)
       updateLoadedFileInfo(uploadedFile, ifcURL)
 
       await viewer.isolator.setModel(loadedModel)
@@ -798,51 +752,12 @@ export default function CadView({
 
 
   return (
-    <Box
-      sx={{
-        position: 'absolute',
-        top: '0px',
-        left: '0px',
-        flex: 1,
-        width: '100vw',
-        height: '100vh',
-        zIndex: 10, // Adjust if needed
-        boxSizing: 'border-box', // Adjust if needed
-      }}
-      onDragOver={handleDragOver}
-      onDragEnter={handleDragEnter}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      style={{
-        border: dragOver ? `2px dashed ${theme.palette.primary.main}` : 'none',
-        // ... other styling as needed
-      }}
-      data-testid={'cadview-dropzone'}
-      data-model-ready={modelReady}
-    >
-      <Box
-        sx={{
-          position: 'absolute',
-          top: '0px',
-          left: '0px',
-          textAlign: 'center',
-          width: '100vw',
-          height: '100vh',
-          margin: 'auto',
-        }}
-        id='viewer-container'
-        onMouseDown={async (event) => {
-          await onSceneSingleTap(event)
-        }}
-        {...onSceneDoubleTap}
-      />
-
+    <ViewRoot>
+      <ViewerContainer/>
       {viewer && (
         <>
           <ControlsGroupAndDrawer
             deselectItems={deselectItems}
-            model={model}
-            modelPath={modelPath}
             pathPrefix={pathPrefix}
             branch={branch}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
@@ -850,13 +765,10 @@ export default function CadView({
           <OperationsGroupAndDrawer deselectItems={deselectItems}/>
           <ElementGroup deselectItems={deselectItems}/>
         </>)}
-
       <AboutControl/>
       <HelpControl/>
-
-      <LoadingBackdrop/>
-
       <AlertDialogAndSnackbar/>
-    </Box>
+      <LoadingBackdrop/>
+    </ViewRoot>
   )
 }

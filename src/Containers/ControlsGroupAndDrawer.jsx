@@ -5,7 +5,8 @@ import ControlsGroup from '../Components/ControlsGroup'
 import {useWindowDimensions} from '../Components/Hooks'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import SearchBar from '../Components/Search/SearchBar'
-import SideDrawer from '../Components/SideDrawer/SideDrawer'
+// TODO(pablo): make left side drawer
+// import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
 
@@ -16,12 +17,17 @@ import useStore from '../store/useStore'
  */
 export default function ControlsGroupAndDrawer({
   deselectItems,
-  model,
-  modelPath,
   pathPrefix,
   branch,
   selectWithShiftClickEvents,
 }) {
+  // IFCSlice
+  const model = useStore((state) => state.model)
+
+  // RepositorySlice
+  const modelPath = useStore((state) => state.modelPath)
+
+  // Slices from Controls
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)

@@ -8,18 +8,21 @@
  */
 export default function createRepositorySlice(set, get) {
   return {
-    branches: [],
-    repository: null,
     accessToken: '',
+    setAccessToken: (token) => set(() => ({accessToken: token})),
+
+    branches: [],
+    setBranches: (branches) => set(() => ({issues: branches})),
+
     modelPath: null,
-    setRepository: (orgName, repoName) => set(() => ({
+    setModelPath: (path) => set(() => ({modelPath: path})),
+
+    repository: null,
+    setRepository: (org, repo) => set(() => ({
       repository: {
-        orgName: orgName,
-        name: repoName,
+        orgName: org,
+        name: repo,
       },
     })),
-    setAccessToken: (token) => set(() => ({accessToken: token})),
-    setBranches: (branches) => set(() => ({issues: branches})),
-    setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
   }
 }

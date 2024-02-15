@@ -16,6 +16,10 @@ export default function createIFCSlice(set, get) {
     isModelLoading: false,
     setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
 
+    // TODO(pablo): really needed?
+    isModelReady: false,
+    setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),
+
     elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
 
@@ -23,10 +27,7 @@ export default function createIFCSlice(set, get) {
     setLoadedFileInfo: (loadedFileInfo) => set(() => ({loadedFileInfo: loadedFileInfo})),
 
     model: null,
-    setModelStore: (m) => set(() => ({model: m})),
-
-    modelPath: null,
-    setModelPath: (path) => set(() => ({modelPath: path})),
+    setModel: (m) => set(() => ({model: m})),
 
     preselectedElementIds: null,
     setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),

@@ -87,7 +87,6 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
             installPrefix={installPrefix}
             appPrefix={appPrefix}
             pathPrefix={pathPrefix}
-            modelPath={modelPath}
           />
         </ThemeProvider>
       </CssBaseline>

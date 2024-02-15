@@ -22,7 +22,7 @@ import debug from '../utils/debug'
  *
  * @return {Function}
  */
-export function usePlaceMark() {
+export default function usePlaceMark() {
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const placeMarkId = useStore((state) => state.placeMarkId)

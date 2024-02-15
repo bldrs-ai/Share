@@ -86,7 +86,7 @@ describe('CutPlaneMenu', () => {
     const viewer = __getIfcViewerAPIExtendedMockSingleton()
     await act(() => {
       result.current.setViewer(viewer)
-      result.current.setModelStore(model)
+      result.current.setModel(model)
     })
     render(
         <ShareMock

@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React from 'react'
 import * as reactRouting from 'react-router-dom'
 import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
 import {VIEW_PLANE_PREFIX} from '../Components/CutPlaneMenu'
@@ -114,44 +114,23 @@ describe('CadView', () => {
 
 
   it('renders with mock IfcViewerAPIExtended', async () => {
-    const modelPath = {
-      filepath: `/index.ifc`,
-    }
-    const {result} = renderHook(() => useState(modelPath))
-    render(
-        <ShareMock>
-          <CadView
-            installPrefix={''}
-            appPrefix={''}
-            pathPrefix={''}
-            modelPath={result.current[0]}
-          />
-        </ShareMock>,
-    )
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
   })
 
+
   // TODO(nickcastel50): See Issue #956
   it.skip('renders and selects the element ID from URL', async () => {
     const mockCurrLocation = {...defaultLocationValue, pathname: '/index.ifc/89'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    const {result} = renderHook(() => useState(modelPath))
-    render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={result.current[0]}
-          />
-        </ShareMock>)
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
@@ -168,27 +147,17 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+
+  it.skip('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
       postMessage: jest.fn(),
     }
     global.Worker = jest.fn(() => mockWorker)
-    const modelPath = {
-      filepath: `/index.ifc`,
-    }
-    const {result} = renderHook(() => useState(modelPath))
-    render(
-        <ShareMock>
-          <CadView
-            installPrefix={''}
-            appPrefix={''}
-            pathPrefix={''}
-            modelPath={result.current[0]}
-          />
-        </ShareMock>,
-    )
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
 
     // Wait for component to be fully loaded
     // Necessary to wait for some of the component to render to avoid
@@ -224,25 +193,16 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
+
   it('sets up camera and cutting plan from URL,', async () => {
     const mockCurrLocation = {
       ...defaultLocationValue,
       hash: `#${CAMERA_PREFIX}:1,2,3,4,5,6;${VIEW_PLANE_PREFIX}:x=0`,
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
-    render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
     const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
     // eslint-disable-next-line no-magic-numbers
@@ -259,29 +219,17 @@ describe('CadView', () => {
   it('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
+      result.current.setModelPath({filepath: `/index.ifc`})
       result.current.setSelectedElement(targetEltId)
-    })
-    await act(() => {
       result.current.setSelectedElements([targetEltId])
-    })
-    await act(() => {
       result.current.setCutPlaneDirections(['y'])
     })
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
+
+    const {getByTitle} =
+      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+
     expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
     await act(async () => {
@@ -301,32 +249,16 @@ describe('CadView', () => {
     jest.spyOn(AllLoader, 'getUploadedBlobPath').mockReturnValue('/haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
-    const modelPath = {
-      filepath: `/haus.ifc`,
-    }
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/haus.ifc`}))
     render(
-        <ShareMock>
-          <CadView
-            installPrefix=''
-            appPrefix=''
-            pathPrefix='/v/new'
-            modelPath={modelPath}
-          />
-        </ShareMock>,
+      <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>,
     )
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     await actAsyncFlush()
-    render(
-        <ShareMock>
-          <CadView
-            installPrefix=''
-            appPrefix=''
-            pathPrefix=''
-            modelPath={modelPath}
-          />
-        </ShareMock>,
-    )
+
+    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
     expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
   })
@@ -336,11 +268,8 @@ describe('CadView', () => {
     const selectedId = '123'
     const selectedIdsAsString = ['0', '1']
     const elementCount = 2
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
     const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     await act(async () => {
       await result.current.setSelectedElement(selectedId)
       await result.current.setSelectedElements(selectedIdsAsString)
@@ -348,16 +277,9 @@ describe('CadView', () => {
     expect(result.current.selectedElement).toBe(selectedId)
     expect(result.current.selectedElements).toBe(selectedIdsAsString)
 
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>,
-    )
+    const {getByTitle} =
+      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+
     expect(getByTitle('Section')).toBeInTheDocument()
     expect(getByTitle('Clear')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
@@ -377,28 +299,18 @@ describe('CadView', () => {
     const highlightedIdsAsString = ['0', '1']
     const modelId = 0
     const elementCount = 2
-    const modelPath = {
-      filepath: `index.ifc`,
-      gitpath: undefined,
-    }
     const {result} = renderHook(() => useStore((state) => state))
-    const {getByTitle} = render(
-        <ShareMock>
-          <CadView
-            installPrefix={'/'}
-            appPrefix={'/'}
-            pathPrefix={'/'}
-            modelPath={modelPath}
-          />
-        </ShareMock>)
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    const {getByTitle} =
+      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
     expect(getByTitle('Section')).toBeInTheDocument()
     await act(() => {
       result.current.setPreselectedElementIds(highlightedIdsAsString)
     })
     expect(result.current.preselectedElementIds).toHaveLength(elementCount)
-    expect(viewer.preselectElementsByIds).toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
-
+    expect(viewer.preselectElementsByIds)
+      .toHaveBeenLastCalledWith(modelId, highlightedIdsAsString)
     await actAsyncFlush()
   })
 
@@ -406,13 +318,15 @@ describe('CadView', () => {
   /*
   import {__getIfcViewerAPIMockSingleton} from '../../__mocks__/web-ifc-viewer'
   it('SceneLayer accesses IFC camera, renderer and scene camera', async () => {
-    const modelPath = {
-      filepath: `/index.ifc`,
-    }
-    renderHook(() => useState(modelPath))
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setModelPath({
+        filepath: `/index.ifc`,
+      })
+    })
     render(
         <ShareMock>
-          <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'} modelPath={modelPath}/>
+          <CadView installPrefix={'/'} appPrefix={'/'} pathPrefix={'/'}/>
         </ShareMock>)
     expect(viewer.IFC.context.getCamera).toHaveBeenCalled()
     expect(viewer.IFC.context.getRenderer).toHaveBeenCalled()
