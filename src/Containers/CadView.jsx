@@ -9,16 +9,13 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
 import Alert from '../Components/Alert'
-import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ControlsGroup from '../Components/ControlsGroup'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
-import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/Search/SearchBar'
-import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import FileContext from '../OPFS/FileContext'
@@ -45,6 +42,7 @@ import {
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
+import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
@@ -96,11 +94,11 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
-  // IfcSlice
+  // NavTreeSlice
+  const expandedTypes = useStore((state) => state.expandedTypes)
   const setDefaultExpandedElements = useStore((state) => state.setDefaultExpandedElements)
   const setDefaultExpandedTypes = useStore((state) => state.setDefaultExpandedTypes)
   const setExpandedElements = useStore((state) => state.setExpandedElements)
-  const expandedTypes = useStore((state) => state.expandedTypes)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   // Begin useState //
@@ -514,7 +512,9 @@ export default function CadView({
       const resultIDs = searchIndex.search(query)
       selectItemsInScene(resultIDs, false)
       setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
-      const types = elementTypesMap.filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0).map((t) => t.name)
+      const types = elementTypesMap
+            .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
+            .map((t) => t.name)
       if (types.length > 0) {
         setDefaultExpandedTypes(types)
       }
@@ -893,7 +893,9 @@ export default function CadView({
         }
 
         <Box sx={{marginTop: '.82em', width: '100%'}}>
-          {isNavTreeEnabled && isNavTreeVisible && model &&
+          {isNavTreeEnabled &&
+           isNavTreeVisible &&
+           model &&
            <NavTreePanel
              model={model}
              selectWithShiftClickEvents={selectWithShiftClickEvents}
@@ -904,9 +906,9 @@ export default function CadView({
           }
 
           {isVersionsEnabled &&
-           !isNavTreeVisible &&
            modelPath.repo !== undefined &&
            isVersionsVisible &&
+           !isNavTreeVisible &&
            <VersionsPanel
              filePath={modelPath.filepath}
              currentRef={branch}
@@ -934,60 +936,5 @@ export default function CadView({
        </Backdrop>
       }
     </Box>
-  )
-}
-
-
-/**
- * @property {Function} deselectItems deselects currently selected element
- * @return {React.Component}
- */
-function OperationsGroupAndDrawer({deselectItems}) {
-  const isMobile = useIsMobile()
-
-  return (
-    isMobile ? (
-      <>
-        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
-        and their first elements should be same height and offset so they line up naturally..
-        this is a shim for the misalignment you see with tooltips without it */}
-        <Box
-          sx={{
-            position: 'absolute',
-            top: 0,
-            right: 0,
-          }}
-        >
-          <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
-        <Box
-          sx={{
-            position: 'absolute',
-            bottom: 0,
-            width: '100%',
-          }}
-        >
-          <SideDrawer/>
-          <AppStoreSideDrawer/>
-        </Box>
-      </>
-    ) : (
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          display: 'flex',
-          flex: 1,
-          flexDirection: 'row',
-        }}
-      >
-        <Box>
-          <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
-        <SideDrawer/>
-        <AppStoreSideDrawer/>
-      </Box>
-    )
   )
 }
