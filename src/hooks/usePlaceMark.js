@@ -17,6 +17,7 @@ import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
 import {useExistInFeature} from './useExistInFeature'
 import debug from '../utils/debug'
+import {updateIssue} from '../utils/GitHub'
 
 
 /**
@@ -33,30 +34,21 @@ export function usePlaceMark() {
   const repository = useStore((state) => state.repository)
   const notes = useStore((state) => state.notes)
   const accessToken = useStore((state) => state.accessToken)
-  const synchSidebar = useStore((state) => state.synchSidebar)
-  const toggleSynchSidebar = useStore((state) => state.toggleSynchSidebar)
   const location = useLocation()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const setNotes = useStore((state) => state.setNotes)
 
 
   useEffect(() => {
     (async () => {
-      console.log('in the place mark useeffect')
-      debug().log('usePlaceMark#useEffect[synchSidebar]: repository: ', repository)
-      debug().log('usePlaceMark#useEffect[synchSidebar]: placeMark: ', placeMark)
-      debug().log('usePlaceMark#useEffect[synchSidebar]: prevSynchSidebar: ', prevSynchSidebar)
-      debug().log('usePlaceMark#useEffect[synchSidebar]: synchSidebar: ', synchSidebar)
-      debug().log('usePlaceMark#useEffect[synchSidebar]: existPlaceMarkInFeature: ', existPlaceMarkInFeature)
-      if (!repository || !placeMark || prevSynchSidebar === synchSidebar || !existPlaceMarkInFeature) {
+      if (!repository || !placeMark || !existPlaceMarkInFeature) {
         return
       }
-      prevSynchSidebar = synchSidebar
       const issueArr = await getIssues(repository, accessToken)
 
       const promises1 = issueArr.map(async (issue) => {
         const issueComments = await getIssueComments(repository, issue.number, accessToken)
         let placeMarkUrls = []
-
         issueComments.forEach((comment) => {
           if (comment.body) {
             const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
@@ -124,12 +116,10 @@ export function usePlaceMark() {
       resetPlaceMarkColors()
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [synchSidebar, placeMark])
+  }, [placeMark])
 
 
   const createPlaceMark = ({context, oppositeObjects, postProcessor}) => {
-    debug().log('usePlaceMark#createPlaceMark')
-    console.log('in the createPlaceMark')
     const newPlaceMark = new PlaceMark({context, postProcessor})
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
@@ -142,22 +132,7 @@ export function usePlaceMark() {
       return
     }
     const res = placeMark.onSceneDoubleClick(event)
-
-    switch (event.button) {
-      case 0: // Main button (left button)
-        await savePlaceMark(res)
-        break
-      case 1: // Wheel button (middle button if present)
-        break
-      case 2: // Secondary button (right button)
-        break
-      case 3: // Fourth button (back button)
-        break
-      case 4: // Fifth button (forward button)
-        break
-      default:
-        break
-    }
+    await savePlaceMark(res)
   })
 
 
@@ -167,27 +142,11 @@ export function usePlaceMark() {
       return
     }
     const res = placeMark.onSceneClick(event)
-
-    switch (event.button) {
-      case 0: // Main button (left button)
-        if (event.shiftKey) {
-          await savePlaceMark(res)
-        } else if (res.url) {
-          selectPlaceMark(res.url)
-        }
-        break
-      case 1: // Wheel button (middle button if present)
-        break
-      case 2: // Secondary button (right button)
-        break
-      case 3: // Fourth button (back button)
-        break
-      case 4: // Fifth button (forward button)
-        break
-      default:
-        break
+    if (event.shiftKey) {
+      await savePlaceMark(res)
+    } else if (res.url) {
+      selectPlaceMark(res.url)
     }
-
     if (callback) {
       callback(res)
     }
@@ -198,6 +157,7 @@ export function usePlaceMark() {
     if (!existPlaceMarkInFeature) {
       return
     }
+    console.log('in the save placemark method')
 
     if (point && promiseGroup) {
       const svgGroup = await promiseGroup
@@ -221,14 +181,24 @@ export function usePlaceMark() {
     if (!placeMarkNote) {
       return
     }
+    const editedBody = `${placeMarkNote.body} [placemark](${window.location.href})`
+    console.log('edited body', editedBody)
+
+    submitUpdate(placeMarkNote.number, placeMarkNote.title, editedBody, accessToken )
     const issueNumber = placeMarkNote.number
     const newComment = {
       body: `[placemark](${window.location.href})`,
     }
     await createComment(repository, issueNumber, newComment, accessToken)
-    toggleSynchSidebar()
   }
 
+  /** Submit update*/
+  async function submitUpdate(noteNumber, title, editBody, id) {
+    const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
+    const editedNote = notes.find((note) => note.id === id)
+    editedNote.body = res.data.body
+    setNotes(notes)
+  }
 
   const selectPlaceMark = (url) => {
     if (!existPlaceMarkInFeature) {
@@ -315,4 +285,3 @@ const resetPlaceMarkColors = () => {
 
 const PLACE_MARK_PREFIX = 'm'
 const placeMarkGroupMap = new Map()
-let prevSynchSidebar

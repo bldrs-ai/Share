@@ -19,8 +19,8 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
 import CameraIcon from '../../assets/icons/Camera.svg'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
 
@@ -211,7 +211,7 @@ export const CardFooter = ({
               onClick={() => {
                 togglePlaceMarkActive(id)
               }}
-              icon={<PlaceMarkIcon className='icon-share'/>}
+              icon={<PlaceOutlinedIcon className='icon-share'/>}
             />
           </Box>
         }
