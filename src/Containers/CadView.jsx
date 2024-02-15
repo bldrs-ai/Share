@@ -10,14 +10,10 @@ import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
 import Alert from '../Components/Alert'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ControlsGroup from '../Components/ControlsGroup'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
-import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
-import NavTreePanel from '../Components/NavTree/NavTreePanel'
-import SearchBar from '../Components/Search/SearchBar'
+import {useIsMobile} from '../Components/Hooks'
 import SnackBarMessage from '../Components/SnackbarMessage'
-import VersionsPanel from '../Components/Versions/VersionsPanel'
 import FileContext from '../OPFS/FileContext'
 import {
   getModelFromOPFS,
@@ -42,6 +38,7 @@ import {
 } from '../utils/loader'
 import {navWith} from '../utils/navigate'
 import {setKeydownListeners} from '../utils/shortcutKeys'
+import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
@@ -69,13 +66,7 @@ export default function CadView({
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
-  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
-  const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
-  const isVersionsVisible = useStore((state) => state.isVersionsVisible)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -123,7 +114,6 @@ export default function CadView({
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const {setFile} = useContext(FileContext) // Consume the context
-  // React router
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -817,12 +807,6 @@ export default function CadView({
   }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
-  const windowDimensions = useWindowDimensions()
-  const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 100
-  const searchAndNavWidthPx =
-    windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
-  const searchAndNavMaxWidthPx = 300
   return (
     <Box
       sx={{
@@ -864,60 +848,17 @@ export default function CadView({
       />
       <SnackBarMessage/>
 
-      <Box
-        sx={{
-          'position': 'absolute',
-          'top': `1em`,
-          'left': '1em',
-          'display': 'flex',
-          'flexDirection': 'column',
-          'justifyContent': 'flex-start',
-          'alignItems': 'flex-start',
-          'maxHeight': '95%',
-          'width': '275px',
-          '@media (max-width: 900px)': {
-            width: `${searchAndNavWidthPx}px`,
-            maxWidth: `${searchAndNavMaxWidthPx}px`,
-          },
-        }}
-      >
-        <ControlsGroup
-          navigate={navigate}
-          isRepoActive={modelPath.repo !== undefined}
-        />
-
-        {isSearchEnabled &&
-         <Box sx={{marginTop: '0.82em', width: '100%'}}>
-           {isSearchBarVisible && <SearchBar/>}
-         </Box>
-        }
-
-        <Box sx={{marginTop: '.82em', width: '100%'}}>
-          {isNavTreeEnabled &&
-           isNavTreeVisible &&
-           model &&
-           <NavTreePanel
-             model={model}
-             selectWithShiftClickEvents={selectWithShiftClickEvents}
-             pathPrefix={
-               pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
-             }
-           />
-          }
-
-          {isVersionsEnabled &&
-           modelPath.repo !== undefined &&
-           isVersionsVisible &&
-           !isNavTreeVisible &&
-           <VersionsPanel
-             filePath={modelPath.filepath}
-             currentRef={branch}
-           />}
-
-        </Box>
-      </Box>
-
       {alert}
+
+      {viewer &&
+       <ControlsGroupAndDrawer
+         deselectItems={deselectItems}
+         model={model}
+         modelPath={modelPath}
+         pathPrefix={pathPrefix}
+         branch={branch}
+         selectWithShiftClickEvents={selectWithShiftClickEvents}
+       />}
 
       {viewer && <ElementGroup deselectItems={deselectItems}/>}
 
