@@ -8,26 +8,30 @@
 export default function createIFCSlice(set, get) {
   return {
     cameraControls: null,
+    setCameraControls: (controls) => set(() => ({cameraControls: controls})),
+
     customViewSettings: null,
+    setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
+
     elementTypesMap: [],
-    loadedFileInfo: null,
-    model: null,
-    modelPath: null,
-    preselectedElementIds: null,
-    rootElement: null,
-    selectedElement: null,
-    selectedElements: [],
-    viewer: {},
-    setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
-    setCustomViewSettings: (customViewSettings) => set(() => ({customViewSettings: customViewSettings})),
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
+
+    loadedFileInfo: null,
     setLoadedFileInfo: (loadedFileInfo) => set(() => ({loadedFileInfo: loadedFileInfo})),
-    setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
-    setModelStore: (model) => set(() => ({model: model})),
-    setPreselectedElementIds: (elementIds) => set(() => ({preselectedElementIds: elementIds})),
-    setRootElement: (element) => set(() => ({rootElement: element})),
-    setSelectedElement: (element) => set(() => ({selectedElement: element})),
-    setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
+
+    model: null,
+    setModelStore: (m) => set(() => ({model: m})),
+
+    modelPath: null,
+    setModelPath: (path) => set(() => ({modelPath: path})),
+
+    preselectedElementIds: null,
+    setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),
+
+    rootElement: null,
+    setRootElement: (elt) => set(() => ({rootElement: elt})),
+
+    viewer: {},
     setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
   }
 }

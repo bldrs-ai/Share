@@ -5,7 +5,7 @@
  * @param {Function} get
  * @return {object} Zustand slice.
  */
-export default function PropertiesSlice(set, get) {
+export default function createPropertiesSlice(set, get) {
   return {
     isPropertiesEnabled: true,
     setIsPropertiesEnabled: (is) => set(() => ({isPropertiesEnabled: is})),

@@ -28,12 +28,6 @@ import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
  */
 export default function NavTreePanel({
   model,
-  defaultExpandedElements,
-  defaultExpandedTypes,
-  expandedElements,
-  setExpandedElements,
-  expandedTypes,
-  setExpandedTypes,
   selectWithShiftClickEvents,
   pathPrefix,
 }) {
@@ -42,6 +36,12 @@ export default function NavTreePanel({
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const rootElement = useStore((state) => state.rootElement)
   const selectedElements = useStore((state) => state.selectedElements)
+  const defaultExpandedElements = useStore((state) => state.defaultExpandedElements)
+  const defaultExpandedTypes = useStore((state) => state.defaultExpandedTypes)
+  const expandedElements = useStore((state) => state.expandedElements)
+  const setExpandedElements = useStore((state) => state.setExpandedElements)
+  const expandedTypes = useStore((state) => state.expandedTypes)
+  const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
   const theme = useTheme()

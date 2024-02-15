@@ -96,13 +96,16 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
+  // IfcSlice
+  const setDefaultExpandedElements = useStore((state) => state.setDefaultExpandedElements)
+  const setDefaultExpandedTypes = useStore((state) => state.setDefaultExpandedTypes)
+  const setExpandedElements = useStore((state) => state.setExpandedElements)
+  const expandedTypes = useStore((state) => state.expandedTypes)
+  const setExpandedTypes = useStore((state) => state.setExpandedTypes)
+
   // Begin useState //
   // IFC
   const [elementsById] = useState({})
-  const [defaultExpandedElements, setDefaultExpandedElements] = useState([])
-  const [expandedElements, setExpandedElements] = useState([])
-  const [defaultExpandedTypes, setDefaultExpandedTypes] = useState([])
-  const [expandedTypes, setExpandedTypes] = useState([])
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
@@ -893,12 +896,6 @@ export default function CadView({
           {isNavTreeEnabled && isNavTreeVisible && model &&
            <NavTreePanel
              model={model}
-             defaultExpandedElements={defaultExpandedElements}
-             defaultExpandedTypes={defaultExpandedTypes}
-             expandedElements={expandedElements}
-             setExpandedElements={setExpandedElements}
-             expandedTypes={expandedTypes}
-             setExpandedTypes={setExpandedTypes}
              selectWithShiftClickEvents={selectWithShiftClickEvents}
              pathPrefix={
                pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)

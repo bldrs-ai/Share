@@ -5,7 +5,7 @@
  * @param {Function} get
  * @return {object} Zustand slice.
  */
-export default function VersionsSlice(set, get) {
+export default function createVersionsSlice(set, get) {
   return {
     isVersionsEnabled: true,
     setIsVersionsEnabled: (isEnabled) => set(() => ({isVersionsEnabled: isEnabled})),
@@ -13,12 +13,12 @@ export default function VersionsSlice(set, get) {
     activeVersion: 0,
     setActiveVersion: (version) => set(() => ({activeVersion: version})),
 
-    versions: {},
-    setVersions: (versions) => set(() => ({versions: versions})),
-
     isVersionsVisible: false,
     setIsVersionsVisible: (isVisible) => set(() => ({isVersionsVisible: isVisible})),
     toggleIsVersionsVisible: () =>
       set((state) => ({isVersionsVisible: !state.isVersionsVisible})),
+
+    versions: {},
+    setVersions: (versions) => set(() => ({versions: versions})),
   }
 }

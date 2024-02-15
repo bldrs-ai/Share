@@ -8,14 +8,18 @@ import SearchIndex from '../search/SearchIndex'
  * @param {Function} get
  * @return {object} Zustand slice.
  */
-export default function SearchSlice(set, get) {
+export default function createSearchSlice(set, get) {
   return {
     isSearchEnabled: true,
-    isSearchBarVisible: false,
-    searchIndex: new SearchIndex(),
     setIsSearchEnabled: (isEnabled) => set(() => ({isSearchEnabled: isEnabled})),
+
+    isSearchBarVisible: false,
     setIsSearchBarVisible: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
+    toggleIsSearchBarVisible: () => set((state) =>
+      ({isSearchBarVisible: !state.isSearchBarVisible})),
+
+    searchIndex: new SearchIndex(),
     setSearchIndex: (index) => set(() => ({searchIndex: index})),
-    toggleIsSearchBarVisible: () => set((state) => ({isSearchBarVisible: !state.isSearchBarVisible})),
+
   }
 }
