@@ -45,30 +45,30 @@ describe('notes', () => {
       cy.get('[data-testid="Discussion"]')
     })
   })
-  // context('note card interactions', () => {
-  //   beforeEach(() => {
-  //     cy.clearCookies()
-  //     cy.visit('/')
-  //     cy.get('.MuiIconButton-root').click()
-  //     cy.get('[data-testid="Notes"]').click()
-  //     cy.get(':nth-child(2) > [data-testid="selectionContainer"] > .MuiCardContent-root > p').click()
-  //   })
-  //   it('navbar should change to a note view when a note is selected', () => {
-  //     cy.get('[data-testid="panelTitle"]').contains('NOTE')
-  //   })
-  //   it('url should be copied to a clipboard when the note is shared', () => {
-  //     cy.get('.css-1yae3jf > [data-testid="Share"]').click()
-  //     cy.get('.MuiSnackbarContent-message > div')
-  //   })
-  //   it('comment should be displayed when a note is selected', () => {
-  //     cy.get(':nth-child(2) > .MuiCardContent-root > p').contains('Test Comment 1')
-  //   })
-  //   it('notes should change when previous and next nav buttons are clicked', () => {
-  //     cy.get('[data-testid="Previous Note"]').click()
-  //     cy.get('.MuiList-root > :nth-child(1) > .MuiCardContent-root > p').contains('Test Issue body')
-  //     cy.get('[data-testid="Next Note"]').click()
-  //     cy.get('.MuiCardHeader-title').contains('Local issue - some text is here to test')
-  //   })
-  // })
+  context('note card interactions', () => {
+    beforeEach(() => {
+      cy.clearCookies()
+      cy.visit('/')
+      cy.get('.MuiIconButton-root').click()
+      cy.get('[data-testid="Notes"]').click()
+      cy.get(':nth-child(2) > [data-testid="selectionContainer"] > .MuiCardContent-root > p').click()
+    })
+    it('navbar should change to a note view when a note is selected', () => {
+      cy.get('[data-testid="panelTitle"]').contains('NOTE')
+    })
+    it('url should be copied to a clipboard when the note is shared', () => {
+      cy.get('.css-1yae3jf > [data-testid="Share"]').click()
+      cy.get('.MuiSnackbarContent-message > div')
+    })
+    it('comment should be displayed when a note is selected', () => {
+      cy.get(':nth-child(2) > .MuiCardContent-root > p').contains('Test Comment 1')
+    })
+    it('notes should change when previous and next nav buttons are clicked', () => {
+      cy.get('[data-testid="Previous Note"]').click()
+      cy.get('.MuiList-root > :nth-child(1) > .MuiCardContent-root > p').contains('Test Issue body')
+      cy.get('[data-testid="Next Note"]').click()
+      cy.get('.MuiCardHeader-title').contains('Local issue - some text is here to test')
+    })
+  })
 })
 
