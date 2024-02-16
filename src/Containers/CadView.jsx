@@ -155,6 +155,7 @@ export default function CadView({
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
@@ -864,7 +865,7 @@ export default function CadView({
         }}
         {...onSceneDoubleTap}
       />
-      <SnackBarMessage/>
+      {snackMessage && <SnackBarMessage/> }
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',

@@ -127,6 +127,7 @@ export const CardFooter = ({
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
@@ -198,22 +199,19 @@ export const CardFooter = ({
         {
           !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
-          <Box sx={{
-            '& svg': {
-              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
-            },
-          }}
-          >
             <TooltipIconButton
               title='Place Mark'
               size='small'
               placement='bottom'
+              selected={placeMarkId === id && placeMarkActivated}
               onClick={() => {
                 togglePlaceMarkActive(id)
+                setSnackMessage('Double click on the Canvas to drop a placemark')
+                const pauseTimeMs = 4000
+                setTimeout(() => setSnackMessage(null), pauseTimeMs)
               }}
               icon={<PlaceOutlinedIcon className='icon-share'/>}
             />
-          </Box>
         }
       </Box>
       <Box

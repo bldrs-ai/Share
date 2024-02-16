@@ -1,4 +1,4 @@
-/* eslint-disable no-magic-numbers */
+
 /* eslint-disable no-console */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
@@ -11,7 +11,8 @@ import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
-import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
+// import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
+import {getIssues} from '../utils/GitHub'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
@@ -46,15 +47,12 @@ export function usePlaceMark() {
       }
       const issueArr = await getIssues(repository, accessToken)
 
-      const promises1 = issueArr.map(async (issue) => {
-        const issueComments = await getIssueComments(repository, issue.number, accessToken)
+      const promises1 = issueArr.map( (issue) => {
         let placeMarkUrls = []
-        issueComments.forEach((comment) => {
-          if (comment.body) {
-            const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
-            placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
-          }
-        })
+        if (issue.body) {
+          const newPlaceMarkUrls = findMarkdownUrls(issue.body, PLACE_MARK_PREFIX)
+          placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
+        }
 
         return placeMarkUrls
       })
@@ -157,7 +155,6 @@ export function usePlaceMark() {
     if (!existPlaceMarkInFeature) {
       return
     }
-    console.log('in the save placemark method')
 
     if (point && promiseGroup) {
       const svgGroup = await promiseGroup
@@ -176,20 +173,23 @@ export function usePlaceMark() {
     if (!repository || !Array.isArray(notes)) {
       return
     }
-    const newNotes = [...notes]
-    const placeMarkNote = newNotes.find((note) => note.id === placeMarkId)
+
+    const placeMarkNote = notes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
-    const editedBody = `${placeMarkNote.body} [placemark](${window.location.href})`
-    console.log('edited body', editedBody)
 
-    submitUpdate(placeMarkNote.number, placeMarkNote.title, editedBody, accessToken )
-    const issueNumber = placeMarkNote.number
-    const newComment = {
-      body: `[placemark](${window.location.href})`,
+    const newPlaceMarkUrls = findMarkdownUrls(placeMarkNote.body, PLACE_MARK_PREFIX)
+    let editedBody
+    if (newPlaceMarkUrls.length !== 0) {
+      const placemarkPattern = /\n\[placemark\]\(.*?\)/
+      if (placemarkPattern.test(placeMarkNote.body)) {
+        editedBody = placeMarkNote.body.replace(placemarkPattern, `\n[placemark](${window.location.href})`)
+      } else {
+        editedBody = `${placeMarkNote.body}\n\n---\n[placemark](${window.location.href})`
+      }
     }
-    await createComment(repository, issueNumber, newComment, accessToken)
+    submitUpdate(placeMarkNote.number, placeMarkNote.title, editedBody, accessToken )
   }
 
   /** Submit update*/
@@ -274,9 +274,9 @@ const resetPlaceMarksActive = (isActive) => {
 
 const resetPlaceMarkColors = () => {
   placeMarkGroupMap.forEach((svgGroup) => {
-    let color = 'grey'
+    let color = '#00F0FF'
     if (svgGroup.userData.isActive) {
-      color = 'red'
+      color = '#69F566'
     }
     setGroupColor(svgGroup, color)
   })
