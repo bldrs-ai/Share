@@ -7,7 +7,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {checkOPFSAvailability} from '../OPFS/utils'
+import {isOpfsAvailable} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
 import {handleBeforeUnload} from '../utils/event'
@@ -28,11 +28,13 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
  * @return {React.ReactElement}
  */
 export default function OpenModelControl() {
-  const {user} = useAuth0()
-  const navigate = useNavigate()
   const accessToken = useStore((state) => state.accessToken)
+
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
+
+  const {user} = useAuth0()
+  const navigate = useNavigate()
 
 
   useEffect(() => {
@@ -82,22 +84,24 @@ function OpenModelDialog({
   navigate,
   orgNamesArr,
 }) {
-  const {isAuthenticated, user} = useAuth0()
+  const appPrefix = useStore((state) => state.appPrefix)
+  const accessToken = useStore((state) => state.accessToken)
+
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
-  const accessToken = useStore((state) => state.accessToken)
+
+  const {isAuthenticated, user} = useAuth0()
+
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
-  const appPrefix = useStore((state) => state.appPrefix)
-  const isOPFSAvailable = checkOPFSAvailability()
 
   const openFile = () => {
-    if (isOPFSAvailable) {
+    if (isOpfsAvailable) {
       loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
     } else {
       loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, false)

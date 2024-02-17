@@ -190,6 +190,7 @@ export function loadLocalFileDragAndDrop(
   opfsWriteModel(tmpUrl, file.name, fileNametmpUrl)
 }
 
+
 /**
  * Checks if OPFS is available on the browser
  * // TODO: [https://bugs.webkit.org/show_bug.cgi?id=251460].
@@ -198,11 +199,6 @@ export function loadLocalFileDragAndDrop(
  *
  * @return {boolean}
  */
-export function checkOPFSAvailability() {
-  // Check for FileSystemDirectoryHandle availability
-  if ('FileSystemDirectoryHandle' in window) {
-    return true
-  } else {
-    return false
-  }
+export function isOpfsAvailable() {
+  return 'FileSystemDirectoryHandle' in window
 }

@@ -2,7 +2,7 @@ import React, {useState} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import {loadLocalFileDragAndDrop} from '../OPFS/utils'
+import {isOpfsAvailable, loadLocalFileDragAndDrop} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {loadLocalFileDragAndDropFallback} from '../utils/loader'
 import {handleBeforeUnload} from '../utils/event'
@@ -12,7 +12,6 @@ import {handleBeforeUnload} from '../utils/event'
 export default function ViewRoot({children}) {
   const appPrefix = useStore((state) => state.appPrefix)
   const isModelReady = useStore((state) => state.isModelReady)
-  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
 
   const [dragOver, setDragOver] = useState(false)
 
@@ -42,7 +41,7 @@ export default function ViewRoot({children}) {
       event.dataTransfer.files
     // Here you can handle the files as needed
     if (files.length === 1) {
-      if (isOpfsAvailable) {
+      if (isOpfsAvailable()) {
         loadLocalFileDragAndDrop(
           navigate,
           appPrefix,

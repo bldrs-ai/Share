@@ -16,9 +16,8 @@ import useStore from '../store/useStore'
  * @return {React.ReactElement}
  */
 export default function ControlsGroupAndDrawer({
-  deselectItems,
   pathPrefix,
-  branch,
+  deselectItems,
   selectWithShiftClickEvents,
 }) {
   // IFCSlice
@@ -90,10 +89,7 @@ export default function ControlsGroupAndDrawer({
          modelPath.repo !== undefined &&
          isVersionsVisible &&
          !isNavTreeVisible &&
-         <VersionsPanel
-           filePath={modelPath.filepath}
-           currentRef={branch}
-         />}
+         <VersionsPanel/>}
       </Box>
     </Box>
   )

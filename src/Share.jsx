@@ -24,13 +24,17 @@ import FileContext from './OPFS/FileContext'
  * @return {React.Component} The Share react component.
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
-  const navigation = useRef(useNavigate())
-  const urlParams = useParams()
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
   const setRepository = useStore((state) => state.setRepository)
+  const setPathPrefix = useStore((state) => state.setPathPrefix)
+
   const [file, setFile] = useState(null)
+
+  const navigation = useRef(useNavigate())
+  const urlParams = useParams()
+
 
   useMemo(() => {
     new WidgetApi(navigation.current, searchIndex)
@@ -46,6 +50,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
    * path, so no other useEffect is triggered.
    */
   useEffect(() => {
+    // Used throughout the app
+    setPathPrefix(pathPrefix)
+
     /** A demux to help forward to the index file, load a new model or do nothing. */
     const onChangeUrlParams = (() => {
       const mp = getModelPath(installPrefix, pathPrefix, urlParams)
@@ -72,7 +79,9 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
     } else {
       debug().warn('No repository set for project!, ', pathPrefix)
     }
-  }, [appPrefix, installPrefix, modelPath, pathPrefix, setRepository, urlParams, setModelPath])
+  }, [appPrefix, installPrefix,
+      pathPrefix, setPathPrefix,
+      modelPath, setRepository, urlParams, setModelPath])
 
 
   const theme = useShareTheme()
@@ -83,11 +92,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
       <CssBaseline enableColorScheme>
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
-          <CadView
-            installPrefix={installPrefix}
-            appPrefix={appPrefix}
-            pathPrefix={pathPrefix}
-          />
+          <CadView/>
         </ThemeProvider>
       </CssBaseline>
     </FileContext.Provider>)

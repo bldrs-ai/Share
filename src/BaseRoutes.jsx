@@ -26,17 +26,24 @@ const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
  * @return {object}
  */
 export default function BaseRoutes({testElt = null}) {
+  const setAccessToken = useStore((state) => state.setAccessToken)
+  const setAppPrefix = useStore((state) => state.setAppPrefix)
+  const setInstallPrefix = useStore((state) => state.setInstallPrefix)
+
+  const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
   const location = useLocation()
   const navigate = useNavigate()
+
   const installPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
   const basePath = `${installPrefix }/`
-  const {isLoading, isAuthenticated, getAccessTokenSilently} = useAuth0()
-  const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
-  const setAppPrefix = useStore((state) => state.setAppPrefix)
+
 
   useEffect(() => {
+    // Used throughout the app
     setAppPrefix(appPrefix)
+    setInstallPrefix(installPrefix)
+
     if (location.pathname === installPrefix ||
         location.pathname === basePath) {
       const fwdPath = `${appPrefix}`
@@ -60,8 +67,13 @@ export default function BaseRoutes({testElt = null}) {
         }
       })
     }
-  }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
-      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
+  }, [basePath,
+      appPrefix, setAppPrefix,
+      installPrefix, setInstallPrefix,
+      location, navigate,
+      isLoading,
+      isAuthenticated, getAccessTokenSilently, setAccessToken])
+
 
   return (
     <SentryRoutes>

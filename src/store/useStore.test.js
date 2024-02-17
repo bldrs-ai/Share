@@ -44,9 +44,7 @@ describe('IFC slice', () => {
   it('set IFC model', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const model = {castShadow: false}
-    act(() => {
-      result.current.setModel(model)
-    })
+    act(() => result.current.setModel(model))
     expect(result.current.model).toEqual(model)
   })
 
@@ -58,5 +56,12 @@ describe('IFC slice', () => {
       result.current.setViewer(viewer)
     })
     expect(result.current.viewer).toEqual(viewer)
+  })
+
+
+  it('setIsModelReady', () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    act(() => result.current.setIsModelReady(true))
+    expect(result.current.isModelReady).toEqual(true)
   })
 })

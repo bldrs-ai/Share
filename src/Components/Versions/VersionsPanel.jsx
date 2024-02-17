@@ -2,7 +2,6 @@ import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
 import {getCommitsForFile} from '../../utils/GitHub'
-import {assertDefined} from '../../utils/assert'
 import debug from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'
 import {TooltipIconButton} from '../Buttons'
@@ -14,14 +13,12 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
 /**
  * VersionsPanel displays a series of versions in a timeline format.
  * Each version corresponds to a commit, and this component fetches
- * commit data for the provided filepath and displays it
+ * commit data for the RepositorySlice's modelPath.filepath and
+ * displays it
  *
- * @property {string} filePath The file for which commits are fetched
- * @property {string} current The current branch or sha, to indicate is active in UI
- * @return {React.ReactElement} A timeline panel of versions
+ * @return {React.ReactElement}
  */
-export default function VersionsPanel({filePath, currentRef}) {
-  assertDefined(filePath, currentRef)
+export default function VersionsPanel() {
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
   const modelPath = useStore((state) => state.modelPath)
@@ -30,29 +27,6 @@ export default function VersionsPanel({filePath, currentRef}) {
   const [commitData, setCommitData] = useState([])
 
   const navigate = useNavigate()
-
-  useEffect(() => {
-    const fetchCommits = async () => {
-      try {
-        const commits = await getCommitsForFile(repository, filePath, accessToken)
-        if (commits) {
-          const versionsInfo = commits.map((entry) => {
-            const extractedData = {
-              authorName: entry.commit.author.name,
-              commitMessage: entry.commit.message,
-              commitDate: entry.commit.author.date,
-              sha: entry.sha,
-            }
-            return extractedData
-          })
-          setCommitData(versionsInfo)
-        }
-      } catch (error) {
-        debug().log(error)
-      }
-    }
-    fetchCommits()
-  }, [repository, filePath, accessToken])
 
 
   /**
@@ -81,6 +55,30 @@ export default function VersionsPanel({filePath, currentRef}) {
   }
 
 
+  useEffect(() => {
+    const fetchCommits = async () => {
+      try {
+        const commits = await getCommitsForFile(repository, modelPath.filepath, accessToken)
+        if (commits) {
+          const versionsInfo = commits.map((entry) => {
+            const extractedData = {
+              authorName: entry.commit.author.name,
+              commitMessage: entry.commit.message,
+              commitDate: entry.commit.author.date,
+              sha: entry.sha,
+            }
+            return extractedData
+          })
+          setCommitData(versionsInfo)
+        }
+      } catch (error) {
+        debug().log(error)
+      }
+    }
+    fetchCommits()
+  }, [repository, modelPath, accessToken])
+
+
   return (
     <Panel
       title='Versions'
@@ -96,7 +94,7 @@ export default function VersionsPanel({filePath, currentRef}) {
     >
       <VersionsTimeline
         commitData={commitData}
-        currentRef={currentRef}
+        currentRef={modelPath.branch}
         commitNavigateCb={navigateToCommit}
       />
     </Panel>

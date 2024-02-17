@@ -116,7 +116,7 @@ describe('CadView', () => {
   it('renders with mock IfcViewerAPIExtended', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView/></ShareMock>)
     // Necessary to wait for some of the component to render to avoid
     // act() warnings from testing-library.
     await actAsyncFlush()
@@ -130,7 +130,7 @@ describe('CadView', () => {
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     const getPropsCalls = viewer.getProperties.mock.calls
@@ -157,7 +157,7 @@ describe('CadView', () => {
     global.Worker = jest.fn(() => mockWorker)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView/></ShareMock>)
 
     // Wait for component to be fully loaded
     // Necessary to wait for some of the component to render to avoid
@@ -202,7 +202,7 @@ describe('CadView', () => {
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView/></ShareMock>)
     await actAsyncFlush()
     const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
     // eslint-disable-next-line no-magic-numbers
@@ -228,7 +228,7 @@ describe('CadView', () => {
     })
 
     const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView/></ShareMock>)
 
     expect(getByTitle('Section')).toBeInTheDocument()
     const clearSelection = getByTitle('Clear')
@@ -251,14 +251,13 @@ describe('CadView', () => {
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/haus.ifc`}))
-    render(
-      <ShareMock><CadView installPrefix='' appPrefix='' pathPrefix='/v/new'/></ShareMock>,
-    )
+    await act(() => result.current.setPathPrefix('/v/new'))
+    render(<ShareMock><CadView/></ShareMock>)
     await actAsyncFlush()
     await waitFor(() => screen.getByTitle(bldrsVersionString))
     await actAsyncFlush()
 
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(<ShareMock><CadView/></ShareMock>)
     await actAsyncFlush()
     expect(window.addEventListener).toHaveBeenCalledWith('beforeunload', expect.anything())
   })
@@ -278,7 +277,7 @@ describe('CadView', () => {
     expect(result.current.selectedElements).toBe(selectedIdsAsString)
 
     const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView/></ShareMock>)
 
     expect(getByTitle('Section')).toBeInTheDocument()
     expect(getByTitle('Clear')).toBeInTheDocument()
@@ -302,7 +301,7 @@ describe('CadView', () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+      render(<ShareMock><CadView/></ShareMock>)
     await actAsyncFlush()
     expect(getByTitle('Section')).toBeInTheDocument()
     await act(() => {

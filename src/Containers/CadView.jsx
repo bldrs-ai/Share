@@ -1,41 +1,26 @@
 import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
-import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
-import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
-import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import FileContext from '../OPFS/FileContext'
-import {
-  getModelFromOPFS,
-  downloadToOPFS,
-} from '../OPFS/utils'
-import usePlaceMark from '../hooks/usePlaceMark'
-import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {getLatestCommitHash} from '../utils/GitHub'
-// TODO(pablo): use ^^ instead of this
-import {parseGitHubPath} from '../utils/location'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
-import {handleBeforeUnload} from '../utils/event'
-import {groupElementsByTypes} from '../utils/ifc'
-import {getUploadedBlobPath} from '../utils/loader'
 import {navWith} from '../utils/navigate'
-import {setKeydownListeners} from '../utils/shortcutKeys'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
-import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
-import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
+import ModelGroup from './ModelGroup'
 import ViewRoot from './ViewRoot'
-import ViewerContainer from './ViewerContainer'
-import {getFinalUrl} from './urls'
-import {initViewer} from './viewer'
+import {
+  getPathIdsForElements,
+  onModelPath,
+  onViewer,
+  onSearchParams,
+  selectElementBasedOnFilepath,
+} from './model'
+import useNavTree from './useNavTree'
 
 
 let count = 0
@@ -46,51 +31,48 @@ let count = 0
  *
  * @return {React.ReactElement}
  */
-export default function CadView({
-  installPrefix,
-  appPrefix,
-  pathPrefix,
-}) {
-  assertDefined(...arguments)
-  debug().log('CadView#init: count: ', count++)
+export default function CadView() {
+  debug(5).log('CadView#init: count: ', count++)
 
   // Begin useStore //
-  const accessToken = useStore((state) => state.accessToken)
-  const customViewSettings = useStore((state) => state.customViewSettings)
-  const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
-  const preselectedElementIds = useStore((state) => state.preselectedElementIds)
-  const searchIndex = useStore((state) => state.searchIndex)
-  const selectedElements = useStore((state) => state.selectedElements)
-  const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
-  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
-  const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
-  const setLevelInstance = useStore((state) => state.setLevelInstance)
-  const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
-  const setRootElement = useStore((state) => state.setRootElement)
-  const setSelectedElement = useStore((state) => state.setSelectedElement)
-  const setSelectedElements = useStore((state) => state.setSelectedElements)
-  const setViewer = useStore((state) => state.setViewer)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
-  const viewer = useStore((state) => state.viewer)
-
+  // AppSlice
+  const appPrefix = useStore((state) => state.appPrefix)
+  const installPrefix = useStore((state) => state.installPrefix)
+  const pathPrefix = useStore((state) => state.pathPrefix)
 
   // IFCSlice
-  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
+  const customViewSettings = useStore((state) => state.customViewSettings)
+  const elementTypesMap = useStore((state) => state.elementTypesMap)
   const model = useStore((state) => state.model)
-  const setModel = useStore((state) => state.setModel)
+  const preselectedElementIds = useStore((state) => state.preselectedElementIds)
+  const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
+  const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
+  const setModel = useStore((state) => state.setModel)
+  const setRootElement = useStore((state) => state.setRootElement)
+  const viewer = useStore((state) => state.viewer)
+  const setViewer = useStore((state) => state.setViewer)
+
+  // IfcIsolatorSlice
+  const hiddenElements = useStore((state) => state.hiddenElements)
 
   // NavTreeSlice
-  const expandedTypes = useStore((state) => state.expandedTypes)
   const setDefaultExpandedElements = useStore((state) => state.setDefaultExpandedElements)
   const setDefaultExpandedTypes = useStore((state) => state.setDefaultExpandedTypes)
-  const setExpandedElements = useStore((state) => state.setExpandedElements)
-  const setExpandedTypes = useStore((state) => state.setExpandedTypes)
+  const setSelectedElements = useStore((state) => state.setSelectedElements)
 
   // RepositorySlice
+  const accessToken = useStore((state) => state.accessToken)
   const modelPath = useStore((state) => state.modelPath)
+
+  // SearchSlice
+  const searchIndex = useStore((state) => state.searchIndex)
+  const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
+
+  // SideDrawerSlice
+  const isSideDrawerVisible = useStore((state) => state.isSideDrawerVisible)
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
 
   // UISlice
   const setAlertMessage = useStore((state) => state.setAlertMessage)
@@ -101,6 +83,7 @@ export default function CadView({
   // IFC
   const [elementsById] = useState({})
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
+
   // UI elts
   const theme = useTheme()
 
@@ -110,402 +93,80 @@ export default function CadView({
   // Begin Hooks //
   const isMobile = useIsMobile()
   const location = useLocation()
-  // Place Mark
-  const {createPlaceMark} = usePlaceMark()
+
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const {setFile} = useContext(FileContext) // Consume the context
   const navigate = useNavigate()
-  // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
 
+
   // Begin helpers //
-  /**
-   * Begin setup for new model. Turn off nav, search and item and init
-   * new viewer.
-   */
-  function onModelPath() {
-    setIsSearchBarVisible(false)
-    // TODO(pablo): First arg isn't used for first time, and then it's
-    // newMode for the themeChangeListeners, which is also unused.
-    const initViewerCb = (any, themeArg) => {
-      const initializedViewer = initViewer(
-        pathPrefix,
-        assertDefined(themeArg.palette.primary.sceneBackground))
-      setViewer(initializedViewer)
-    }
-    initViewerCb(undefined, theme)
-    theme.addThemeChangeListener(initViewerCb)
+
+  /** Select items in model when they are double-clicked */
+  function setDblClickListener(viewerArg) {
+    window.ondblclick = (event) => canvasDoubleClickHandler(event, viewerArg)
   }
 
 
-  /** When viewer is ready, load IFC model. */
-  async function onViewer() {
-    if (viewer === null) {
-      debug().warn('CadView#onViewer, viewer is null')
+  /** Handle double click event on canvas. */
+  async function canvasDoubleClickHandler(event, viewerArg) {
+    if (!event.target || event.target.tagName !== 'CANVAS') {
       return
     }
-
-    if (isAuthLoading || (!isAuthLoading && isAuthenticated && accessToken === '')) {
-      debug().warn('Do not have auth token yet, waiting.')
+    const item = await viewer.castRayToIfcScene()
+    if (!item) {
       return
     }
-
-    setIsModelReady(false)
-
-    // define mesh colors for selected and preselected element
-    const preselectMat = new MeshLambertMaterial({
-      transparent: true,
-      opacity: 0.5,
-      color: theme.palette.primary.sceneHighlight,
-      depthTest: true,
-    })
-    const selectMat = new MeshLambertMaterial({
-      transparent: true,
-      color: theme.palette.primary.sceneHighlight,
-      depthTest: true,
-    })
-
-    if (viewer.IFC.selector) {
-      viewer.IFC.selector.preselection.material = preselectMat
-      viewer.IFC.selector.selection.material = selectMat
-    }
-
-    const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    const tmpModelRef = await loadIfc(pathToLoad)
-    setIsModelLoading(false)
-
-    if (tmpModelRef === undefined || tmpModelRef === null) {
-      setAlertMessage(
-        <>
-          <Typography variant=''>Could not load model</Typography>
-          <Typography>{pathToLoad}</Typography>
-        </>)
-      return
-    }
-    // Leave snack message until here so alert box handler can clear
-    // it after user says OK.
-    setSnackMessage(null)
-
-    if (tmpModelRef === 'redirect') {
-      return
-    }
-    debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
-    await onModel(tmpModelRef)
-    createPlaceMark({
-      context: viewer.context,
-      oppositeObjects: [tmpModelRef],
-      postProcessor: viewer.postProcessor,
-    })
-    selectElementBasedOnFilepath(pathToLoad)
-    setIsModelReady(true)
-    // maintain hidden elements if any
-    const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
-        .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
-    if (previouslyHiddenELements.length > 0) {
-      viewer.isolator.unHideAllElements()
-      viewer.isolator.hideElementsById(previouslyHiddenELements)
-    }
-
-    setIsViewerLoaded(true)
+    selectWithShiftClickEvents(event.shiftKey, item.id, viewerArg)
   }
 
 
   /**
-   * Load IFC helper used by 1) useEffect on path change and 2) upload button
+   * Select/Deselect items in the scene using shift+click
    *
-   * @param {string} filepath
+   * @param {boolean} shiftKey the click event
+   * @param {number} expressId the express id of the element
    */
-  async function loadIfc(filepath) {
-    debug().log(`CadView#loadIfc: `, filepath)
-    const uploadedFile = pathPrefix.endsWith('new')
-
-    if (uploadedFile) {
-      filepath = getUploadedBlobPath(filepath)
-      debug().log('CadView#loadIfc: parsed blob: ', filepath)
-      window.addEventListener('beforeunload', handleBeforeUnload)
+  function selectWithShiftClickEvents(shiftKey, expressId, viewerArg) {
+    if (!viewerArg.isolator.canBePickedInScene(expressId)) {
+      return
     }
-
-    const loadingMessageBase = `Loading ${filepath}`
-    setIsModelLoading(true)
-    setSnackMessage(`${loadingMessageBase}`)
-
-    const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ?
-                   filepath : await getFinalUrl(filepath, accessToken)
-
-    let loadedModel
-    if (!isOpfsAvailable) {
-      // fallback to loadIfcUrl
-      loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !urlHasCameraParams(), // fit to frame
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-    } else if (uploadedFile) {
-      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
-
-      if (file instanceof File) {
-        setFile(file)
+    let selectedIds
+    if (shiftKey) {
+      const selectedInViewer = viewerArg.getSelectedIds()
+      const indexOfItem = selectedInViewer.indexOf(expressId)
+      const alreadySelected = indexOfItem !== -1
+      if (alreadySelected) {
+        selectedInViewer.splice(indexOfItem, 1)
       } else {
-        debug().error('Retrieved object is not of type File.')
+        selectedInViewer.push(expressId)
       }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-      // TODO(nickcastel50): need a more permanent way to
-      // prevent redirect here for bundled ifc files
-    } else if (ifcURL === '/index.ifc') {
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          'index.ifc',
-          'bldrs-ai',
-          'BldrsLocalStorage',
-          'V1',
-          'Projects',
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-    } else if (ifcURL === '/haus.ifc') {
-      loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !urlHasCameraParams(), // fit to frame
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
+      selectedIds = selectedInViewer
     } else {
-      // TODO(pablo): probably already available in this scope, or use
-      // parseGitHubRepositoryURL instead.
-      const url = new URL(ifcURL)
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(url.pathname)
-      const commitHash = isPublic ?
-            await getLatestCommitHash(owner, repo, filePath, '', branch) :
-            await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
-
-      if (commitHash === null) {
-        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
-      }
-
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          filePath,
-          commitHash,
-          owner,
-          repo,
-          branch,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
+      selectedIds = [expressId]
     }
-
-    if (loadedModel) {
-      // Fix for https://github.com/bldrs-ai/Share/issues/91
-      //
-      // TODO(pablo): huge hack. Somehow this is getting incremented to
-      // 1 even though we have a new IfcViewer instance for each file
-      // load.  That modelID is used in the IFCjs code as [modelID] and
-      // leads to undefined refs e.g. in prePickIfcItem.  The id should
-      // always be 0.
-      loadedModel.modelID = 0
-      setModel(loadedModel)
-      updateLoadedFileInfo(uploadedFile, ifcURL)
-
-      await viewer.isolator.setModel(loadedModel)
-
-      Analytics.recordEvent('select_content', {
-        content_type: 'ifc_model',
-        item_id: filepath,
-      })
-      return loadedModel
-    }
-
-    debug().error('CadView#loadIfc: Model load failed!')
-    return null
+    selectItemsInScene(viewerArg, selectedIds)
   }
 
 
   /**
-   * Analyze loaded IFC model to configure UI elements.
+   * Pick the given items in the scene
    *
-   * @param {object} m IFCjs loaded model.
+   * @param {Array} elementIds Array of expressIDs
    */
-  async function onModel(m) {
-    assertDefined(m)
-    debug().log('CadView#onModel', m)
-    const rootElt = await m.ifcManager.getSpatialStructure(0, true)
-    debug().log('CadView#onModel: rootElt: ', rootElt)
-    if (rootElt.expressID === undefined) {
-      throw new Error('Model has undefined root express ID')
-    }
-    setupLookupAndParentLinks(rootElt, elementsById)
-    setDblClickListener()
-    setKeydownListeners(viewer, selectItemsInScene)
-    initSearch(m, rootElt)
-    const rootProps = await viewer.getProperties(0, rootElt.expressID)
-    rootElt.Name = rootProps.Name
-    rootElt.LongName = rootProps.LongName
-    setRootElement(rootElt)
-    setElementTypesMap(groupElementsByTypes(rootElt))
-  }
-
-
-  /**
-   * Index the model starting at the given rootElt, clearing any
-   * previous index data and parses any incoming search params in the
-   * URL.  Enables search bar when done.
-   *
-   * @param {object} m The IfcViewerAPIExtended instance.
-   * @param {object} rootElt Root ifc element for recursive indexing.
-   */
-  function initSearch(m, rootElt) {
-    searchIndex.clearIndex()
-    debug().log('CadView#initSearch: ', m, rootElt)
-    debug().time('build searchIndex')
-    searchIndex.indexElement({properties: m}, rootElt)
-    debug().timeEnd('build searchIndex')
-    onSearchParams()
-  }
-
-  /**
-   * Search for the query in the index and select matching items in UI elts.
-   */
-  function onSearchParams() {
-    const sp = new URLSearchParams(window.location.search)
-    let query = sp.get('q')
-    if (query) {
-      query = query.trim()
-      if (query === '') {
-        throw new Error('IllegalState: empty search query')
-      }
-      const resultIDs = searchIndex.search(query)
-      selectItemsInScene(resultIDs, false)
-      setDefaultExpandedElements(resultIDs.map((id) => `${id}`))
-      const types = elementTypesMap
-            .filter((t) => t.elements.filter((e) => resultIDs.includes(e.expressID)).length > 0)
-            .map((t) => t.name)
-      if (types.length > 0) {
-        setDefaultExpandedTypes(types)
-      }
-      Analytics.recordEvent('search', {
-        search_term: query,
-      })
-    } else {
-      resetSelection()
-    }
-  }
-
-
-  /** Clear current selection. */
-  function resetSelection() {
-    if (selectedElements?.length !== 0) {
-      selectItemsInScene([])
-    }
-  }
-
-
-  /** Reset global state */
-  function resetState() {
-    resetSelection()
-    setCutPlaneDirections([])
-    setLevelInstance(null)
-  }
-
-
-  /** Deselect active scene elts and remove clip planes. */
-  function deselectItems() {
-    if (viewer) {
-      viewer.clipper.deleteAllPlanes()
-    }
-    resetState()
-    const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
-    window.removeEventListener('beforeunload', handleBeforeUnload)
-    navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})
-  }
-
-
-  /**
-   * Pick the given items in the scene.
-   *
-   * @param {Array} resultIDs Array of expressIDs
-   */
-  function selectItemsInScene(resultIDs, updateNavigation = true) {
+  function selectItemsInScene(v, elementIds, updateNavigation = true) {
     // NOTE: we might want to compare with previous selection to avoid unnecessary updates
-    if (!viewer) {
+    if (!v) {
       return
     }
     try {
       // Update The Component state
-      setSelectedElements(resultIDs.map((id) => `${id}`))
+      setSelectedElements(elementIds.map((id) => `${id}`))
 
       // Sets the url to the last selected element path.
-      if (resultIDs.length > 0 && updateNavigation) {
-        const lastId = resultIDs.slice(-1)
+      if (elementIds.length > 0 && updateNavigation) {
+        const lastId = elementIds.slice(-1)
         const pathIds = getPathIdsForElements(lastId)
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
@@ -523,93 +184,11 @@ export default function CadView({
       // IFCjs will throw a big stack trace if there is not a visual
       // element, e.g. for IfcSite, but we still want to proceed to
       // setup its properties.
-      debug().log('TODO: no visual element for item ids: ', resultIDs)
+      debug().log('TODO: no visual element for item ids: ', elementIds)
     }
   }
 
-
-  /**
-   * Returns the ids of path parts from root to this elt in spatial
-   * structure.
-   *
-   * @param {number} expressId
-   * @return {Array} pathIds
-   */
-  function getPathIdsForElements(expressId) {
-    const lookupElt = elementsById[parseInt(expressId)]
-    if (!lookupElt) {
-      debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
-      return undefined
-    }
-    const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
-    return pathIds
-  }
-
-
-  /**
-   * Extracts the path to the element from the url and selects the element
-   *
-   * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
-   */
-  function selectElementBasedOnFilepath(filepath) {
-    const parts = filepath.split(/\//)
-    if (parts.length > 0) {
-      debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
-      const targetId = parseInt(parts[parts.length - 1])
-      const selectedInViewer = viewer.getSelectedIds()
-      if (isFinite(targetId) && !selectedInViewer.includes(targetId)) {
-        selectItemsInScene([targetId], false)
-      }
-    }
-  }
-
-
-  /** Select items in model when they are double-clicked */
-  function setDblClickListener() {
-    window.ondblclick = canvasDoubleClickHandler
-  }
-
-
-  /** Handle double click event on canvas. */
-  async function canvasDoubleClickHandler(event) {
-    if (!event.target || event.target.tagName !== 'CANVAS') {
-      return
-    }
-    const item = await viewer.castRayToIfcScene()
-    if (!item) {
-      return
-    }
-    selectWithShiftClickEvents(event.shiftKey, item.id)
-  }
-
-
-  /**
-   * Select/Deselect items in the scene using shift+click
-   *
-   * @param {boolean} shiftKey the click event
-   * @param {number} expressId the express id of the element
-   */
-  function selectWithShiftClickEvents(shiftKey, expressId) {
-    let newSelection = []
-    if (!viewer.isolator.canBePickedInScene(expressId)) {
-      return
-    }
-    if (shiftKey) {
-      const selectedInViewer = viewer.getSelectedIds()
-      const indexOfItem = selectedInViewer.indexOf(expressId)
-      const alreadySelected = indexOfItem !== -1
-      if (alreadySelected) {
-        selectedInViewer.splice(indexOfItem, 1)
-      } else {
-        selectedInViewer.push(expressId)
-      }
-      newSelection = selectedInViewer
-    } else {
-      newSelection = [expressId]
-    }
-    selectItemsInScene(newSelection)
-  }
-
+  // Other helpers
 
   /**
    * handles updating the stored file meta data for all cases except local files.
@@ -633,27 +212,29 @@ export default function CadView({
   }
 
 
-  // TODO(pablo): again, just need branch here for VersionsPanel
-  // below.  It's probably already available in this scope.
-  let ghPath = location.pathname
-  if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
-    ghPath = ghPath.substring(`${appPrefix}/v/gh`.length)
-  }
-  const {branch} = parseGitHubPath(ghPath)
-
-
   // Begin useEffect //
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
-      // This function gets called whenever there's a change in authentication state
-      debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
+      // This function gets called whenever there's a change in
+      // authentication state
+      debug().log('Auth state changed. isAuthLoading:', isAuthLoading,
+                  'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
           (!isAuthLoading && !isAuthenticated)) {
         (async () => {
-          await onViewer()
+          await onViewer(
+            {viewer, setIsViewerLoaded,
+            installPrefix, appPrefix, pathPrefix,
+            modelPath, setIsModelLoading, setModel, setIsModelReady, updateLoadedFileInfo,
+            isAuthLoading, isAuthenticated, accessToken,
+            theme, setAlertMessage, setSnackMessage,
+            elementsById, hiddenElements, customViewSettings,
+            navigate, setFile,
+            setRootElement, setElementTypesMap,
+             searchIndex})
         })()
       }
       /* eslint-enable no-mixed-operators */
@@ -665,14 +246,23 @@ export default function CadView({
   // programmatic navigation (e.g. clicking element links).
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
-    onModelPath()
-  }, [modelPath, customViewSettings])
+    onModelPath(pathPrefix, setViewer, theme, setIsSearchBarVisible)
+  }, [modelPath, pathPrefix, setViewer, theme, setIsSearchBarVisible])
 
 
   // Viewer changes in onModelPath (above)
   useEffect(() => {
     (async () => {
-      await onViewer()
+      await onViewer(
+        {viewer, setIsViewerLoaded,
+        installPrefix, appPrefix, pathPrefix,
+        modelPath, setIsModelLoading, setModel, setIsModelReady, updateLoadedFileInfo,
+        isAuthLoading, isAuthenticated, accessToken,
+        theme, setAlertMessage, setSnackMessage,
+        elementsById, hiddenElements, customViewSettings,
+        navigate, setFile,
+        setRootElement, setElementTypesMap,
+         searchIndex})
     })()
   }, [viewer])
 
@@ -680,38 +270,17 @@ export default function CadView({
   // searchParams changes in parent (ShareRoutes) from user and
   // programmatic navigation, and in SearchBar.
   useEffect(() => {
-    onSearchParams()
+    onSearchParams(
+      viewer,
+      searchIndex,
+      setDefaultExpandedElements,
+      setDefaultExpandedTypes,
+      elementTypesMap,
+    )
   }, [searchParams])
 
 
-  useEffect(() => {
-    (async () => {
-      if (!Array.isArray(selectedElements) || !viewer) {
-        return
-      }
-      // Update The selection on the scene pick/unpick
-      const ids = selectedElements.map((id) => parseInt(id))
-      await viewer.setSelection(0, ids)
-      // If current selection is not empty
-      if (selectedElements.length > 0) {
-        // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)
-        const props = await viewer.getProperties(0, Number(lastId))
-        setSelectedElement(props)
-        // Update the expanded elements in NavTreePanel
-        const pathIds = getPathIdsForElements(lastId)
-        if (pathIds) {
-          setExpandedElements(pathIds.map((n) => `${n}`))
-        }
-        const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
-        if (types.length > 0) {
-          setExpandedTypes([...new Set(types.concat(expandedTypes))])
-        }
-      } else {
-        setSelectedElement(null)
-      }
-    })()
-  }, [selectedElements])
+  useNavTree(elementsById, elementTypesMap)
 
 
   useEffect(() => {
@@ -721,6 +290,7 @@ export default function CadView({
       }
     })()
   }, [preselectedElementIds])
+  /* eslint-enable */
 
 
   // Watch for path changes within the model.
@@ -731,12 +301,11 @@ export default function CadView({
         const parts = location.pathname.split(/\.ifc/i)
         const expectedPartCount = 2
         if (parts.length === expectedPartCount) {
-          selectElementBasedOnFilepath(parts[1])
+          selectElementBasedOnFilepath(viewer, parts[1], selectItemsInScene)
         }
       })()
     }
-  }, [location, model])
-  /* eslint-enable */
+  }, [location, model, selectItemsInScene, viewer])
 
 
   // Shrink the scene viewer when drawer is open.  This recenters the
@@ -745,26 +314,15 @@ export default function CadView({
   // TODO(pablo): add render testing
   useEffect(() => {
     if (viewer && !isMobile) {
-      viewer.container.style.width = isDrawerOpen ? `calc(100% - ${sidebarWidth})` : '100%'
+      viewer.container.style.width = isSideDrawerVisible ? `calc(100% - ${sidebarWidth})` : '100%'
       viewer.context.resize()
     }
-  }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
+  }, [isSideDrawerVisible, isMobile, viewer, sidebarWidth])
 
 
   return (
     <ViewRoot>
-      <ViewerContainer/>
-      {viewer && (
-        <>
-          <ControlsGroupAndDrawer
-            deselectItems={deselectItems}
-            pathPrefix={pathPrefix}
-            branch={branch}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-          />
-          <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-          <ElementGroup deselectItems={deselectItems}/>
-        </>)}
+      <ModelGroup/>
       <AboutControl/>
       <HelpControl/>
       <AlertDialogAndSnackbar/>

@@ -35,7 +35,7 @@ export default function createIFCSlice(set, get) {
     rootElement: null,
     setRootElement: (elt) => set(() => ({rootElement: elt})),
 
-    viewer: {},
-    setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
+    viewer: null,
+    setViewer: (v) => set(() => ({viewer: v})),
   }
 }

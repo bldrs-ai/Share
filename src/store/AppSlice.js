@@ -1,4 +1,3 @@
-import {checkOPFSAvailability} from '../OPFS/utils'
 import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 
 
@@ -20,10 +19,14 @@ export default function createAppSlice(set, get) {
     appStoreSidebarHeight: MOBILE_HEIGHT,
     setAppStoreSidebarHeight: (height) => set(() => ({appStoreSidebarHeight: height})),
 
+    installPrefix: null,
+    setInstallPrefix: (prefix) => set(() => ({installPrefix: prefix})),
+
     isAppStoreOpen: false,
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),
 
-    isOpfsAvailable: checkOPFSAvailability(),
+    pathPrefix: null,
+    setPathPrefix: (prefix) => set(() => ({pathPrefix: prefix})),
 
     selectedStoreApp: null,
     setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),

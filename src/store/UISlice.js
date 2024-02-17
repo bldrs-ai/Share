@@ -19,7 +19,6 @@ export default function createUISlice(set, get) {
     isHelpTooltips: false,
     cutPlanes: [],
     levelInstance: null,
-    viewer: null,
     addCutPlaneDirection: ({direction, offset}) => set((state) => {
       if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
         state.cutPlanes.push({direction, offset})
@@ -32,7 +31,6 @@ export default function createUISlice(set, get) {
     }),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
-    setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
     turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
     unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),

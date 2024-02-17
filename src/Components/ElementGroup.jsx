@@ -91,9 +91,7 @@ export default function ElementGroup({deselectItems}) {
         {isSelected() && !isIsolate &&
          <TooltipIconButton
            title='Clear'
-           onClick={() => {
-             deselectItems()
-           }}
+           onClick={deselectItems}
            icon={<CloseIcon className='icon-share'/>}
            placement='top'
            variant='solid'
