@@ -120,7 +120,7 @@ function OpenModelDialog({
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo)
     const owner = orgNamesArr[selectedOrgName]
-    const files = await getFiles(repoNamesArr[repo], owner, accessToken)
+    const files = await getFiles(owner, repoNamesArr[repo], accessToken)
     const fileNames = Object.keys(files).map((key) => files[key].name)
     setFilesArr(fileNames)
   }
