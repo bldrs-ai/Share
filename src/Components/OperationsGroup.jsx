@@ -1,9 +1,7 @@
 import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import Divider from '@mui/material/Divider'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
-import LoginMenu from './LoginMenu'
 import NotesControl from './Notes/NotesControl'
 import PropertiesControl from './Properties/PropertiesControl'
 import ShareControl from './ShareControl'
@@ -24,7 +22,6 @@ export default function OperationsGroup({deselectItems}) {
   const isAppStoreEnabled = useExistInFeature('apps')
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const isImagineEnabled = useStore((state) => state.isImagineEnabled)
-  const isLoginEnabled = useStore((state) => state.isLoginEnabled)
   const isNotesEnabled = useStore((state) => state.isNotesEnabled)
   const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
   const isShareEnabled = useStore((state) => state.isShareEnabled)
@@ -38,7 +35,6 @@ export default function OperationsGroup({deselectItems}) {
       variant='contained'
       sx={{'margin': '1em', '& > *:not(:last-child)': {margin: '0.2em 0'}}}
     >
-      {isLoginEnabled && (<><LoginMenu/><Divider sx={{pt: '5px'}}/></>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}
       {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
