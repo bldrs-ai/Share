@@ -754,21 +754,19 @@ export default function CadView({
   return (
     <ViewRoot>
       <ViewerContainer/>
-      {viewer && (
-        <>
-          <ControlsGroupAndDrawer
-            deselectItems={deselectItems}
-            pathPrefix={pathPrefix}
-            branch={branch}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-          />
-          <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-          <ElementGroup deselectItems={deselectItems}/>
-        </>)}
+      {viewer &&
+       <ControlsGroupAndDrawer
+         deselectItems={deselectItems}
+         pathPrefix={pathPrefix}
+         branch={branch}
+         selectWithShiftClickEvents={selectWithShiftClickEvents}
+       />}
+      {viewer && <ElementGroup deselectItems={deselectItems}/>}
       <AboutControl/>
       <HelpControl/>
       <AlertDialogAndSnackbar/>
       <LoadingBackdrop/>
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
     </ViewRoot>
   )
 }

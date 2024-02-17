@@ -23,6 +23,7 @@ export default function ControlsGroupAndDrawer({
 }) {
   // IFCSlice
   const model = useStore((state) => state.model)
+  const rootElement = useStore((state) => state.rootElement)
 
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
@@ -77,6 +78,7 @@ export default function ControlsGroupAndDrawer({
         {isNavTreeEnabled &&
          isNavTreeVisible &&
          model &&
+         rootElement &&
          <NavTreePanel
            model={model}
            selectWithShiftClickEvents={selectWithShiftClickEvents}
