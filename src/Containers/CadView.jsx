@@ -1,4 +1,5 @@
 import React, {useEffect} from 'react'
+import Box from '@mui/material/Box'
 import AboutControl from '../Components/About/AboutControl'
 import HelpControl from '../Components/HelpControl'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
@@ -27,7 +28,9 @@ export default function CadView() {
   return (
     <ViewRoot>
       <ModelGroup/>
-      {isLoginEnabled && <LoginMenu/>}
+      <Box sx={{position: 'fixed', top: '1em', right: '1em', width: '3em', height: '3em'}}>
+        {isLoginEnabled && <LoginMenu/>}
+      </Box>
       <AboutControl/>
       <HelpControl/>
       <AlertDialogAndSnackbar/>

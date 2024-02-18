@@ -1,8 +1,9 @@
 /* eslint-disable react/no-unknown-property */
 /* eslint-disable no-magic-numbers */
-import {createRoot} from 'react-dom/client'
 import React, {useRef, useState} from 'react'
-import {Canvas, useFrame} from '@react-three/fiber'
+import {createRoot} from 'react-dom/client'
+import {Stats, OrbitControls} from '@react-three/drei'
+import {Canvas} from '@react-three/fiber'
 
 
 /**
@@ -16,8 +17,9 @@ function Box(props) {
   const [hovered, setHover] = useState(false)
   const [active, setActive] = useState(false)
   // Subscribe this component to the render-loop, rotate the mesh every frame
-  useFrame((state, delta) => (meshRef.current.rotation.x += delta))
-  // Return view, these are regular three.js elements expressed in JSX
+  // useFrame((state, delta) => (meshRef.current.rotation.x += delta))
+
+    // Return view, these are regular three.js elements expressed in JSX
   return (
     <mesh
       {...props}
@@ -34,15 +36,31 @@ function Box(props) {
 }
 
 
+/** @return {React.ReactElement} */
+function SceneRoot() {
+  const ref = useRef(null)
+  return (
+    <>
+      <div
+        ref={ref}
+        style={{position: 'fixed', bottom: '1em', right: '8em', width: '80px', height: '48px'}}
+      />
+      <style>{`.stats{position:absolute !important}`}</style>
+      <Canvas frameloop='demand'>
+        <ambientLight intensity={Math.PI / 2}/>
+        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI}/>
+        <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI}/>
+        <Box position={[-1.2, 0, 0]}/>
+        <Box position={[1.2, 0, 0]}/>
+        <OrbitControls/>
+        <Stats parent={ref} className='stats'/>
+      </Canvas>
+    </>
+  )
+}
+
+
 /** */
 export function doCreateRoot() {
-  createRoot(document.getElementById('viewer-container')).render(
-    <Canvas>
-      <ambientLight intensity={Math.PI / 2}/>
-      <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} decay={0} intensity={Math.PI}/>
-      <pointLight position={[-10, -10, -10]} decay={0} intensity={Math.PI}/>
-      <Box position={[-1.2, 0, 0]}/>
-      <Box position={[1.2, 0, 0]}/>
-    </Canvas>,
-  )
+  createRoot(document.getElementById('viewer-container')).render(<SceneRoot/>)
 }
