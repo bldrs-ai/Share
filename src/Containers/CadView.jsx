@@ -1,8 +1,9 @@
-import React from 'react'
+import React, {useEffect} from 'react'
 import AboutControl from '../Components/About/AboutControl'
 import HelpControl from '../Components/HelpControl'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
 import LoginMenu from '../Components/LoginMenu'
+import {doCreateRoot} from '../scene/Scene'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
@@ -16,6 +17,13 @@ let count = 0
 export default function CadView() {
   debug(5).log('CadView: loadCount:', count++)
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
+
+
+  useEffect(() => {
+    doCreateRoot()
+  }, [])
+
+
   return (
     <ViewRoot>
       <ModelGroup/>
