@@ -2278,10 +2278,10 @@
   resolved "https://registry.yarnpkg.com/@emotion/weak-memoize/-/weak-memoize-0.3.1.tgz#d0fce5d07b0620caa282b5131c297bb60f9d87e6"
   integrity sha512-EsBwpc7hBUJWAsNPBmJy4hxWx12v6bshQsldrVmjxJoc3isbxhOrF2IcCpaXxfvq03NwkI7sbsOLXbYuqF/8Ww==
 
-"@es-joy/jsdoccomment@~0.42.0":
-  version "0.42.0"
-  resolved "https://registry.yarnpkg.com/@es-joy/jsdoccomment/-/jsdoccomment-0.42.0.tgz#59e878708336aaee88c2b34c894f73dbf77ae2b0"
-  integrity sha512-R1w57YlVA6+YE01wch3GPYn6bCsrOV3YW/5oGGE2tmX6JcL9Nr+b5IikrjMPF+v9CV3ay+obImEdsDhovhJrzw==
+"@es-joy/jsdoccomment@~0.41.0":
+  version "0.41.0"
+  resolved "https://registry.yarnpkg.com/@es-joy/jsdoccomment/-/jsdoccomment-0.41.0.tgz#4a2f7db42209c0425c71a1476ef1bdb6dcd836f6"
+  integrity sha512-aKUhyn1QI5Ksbqcr3fFJj16p99QdjUxXAEuFst1Z47DRyoiMwivIH9MV/ARcJOCXVjPfjITciej8ZD2O/6qUmw==
   dependencies:
     comment-parser "1.4.1"
     esquery "^1.5.0"
@@ -6283,19 +6283,19 @@ eslint-plugin-jest-dom@^5.1.0:
     "@babel/runtime" "^7.16.3"
     requireindex "^1.2.0"
 
-eslint-plugin-jsdoc@^48.1.0:
-  version "48.1.0"
-  resolved "https://registry.yarnpkg.com/eslint-plugin-jsdoc/-/eslint-plugin-jsdoc-48.1.0.tgz#565363770b433485bfc70dc862b50b7f780529ec"
-  integrity sha512-g9S8ukmTd1DVcV/xeBYPPXOZ6rc8WJ4yi0+MVxJ1jBOrz5kmxV9gJJQ64ltCqIWFnBChLIhLVx3tbTSarqVyFA==
+eslint-plugin-jsdoc@^47.0.2:
+  version "47.0.2"
+  resolved "https://registry.yarnpkg.com/eslint-plugin-jsdoc/-/eslint-plugin-jsdoc-47.0.2.tgz#113a6370e623535e5c6e0a59a094ffdc253371ff"
+  integrity sha512-sIq81Pv+yrhhwY0m1JH79rdZRgDNunehv3S0Yv0UfewpoeJyPkODFn2o4o20nofVoI2tjku9/QBcCYUmmeWFXA==
   dependencies:
-    "@es-joy/jsdoccomment" "~0.42.0"
+    "@es-joy/jsdoccomment" "~0.41.0"
     are-docs-informative "^0.0.2"
     comment-parser "1.4.1"
     debug "^4.3.4"
     escape-string-regexp "^4.0.0"
     esquery "^1.5.0"
     is-builtin-module "^3.2.1"
-    semver "^7.6.0"
+    semver "^7.5.4"
     spdx-expression-parse "^4.0.0"
 
 eslint-plugin-jsx-a11y@^6.8.0:
@@ -10728,7 +10728,7 @@ semver@^7.5.3:
   dependencies:
     lru-cache "^6.0.0"
 
-semver@^7.5.4, semver@^7.6.0:
+semver@^7.5.4:
   version "7.6.0"
   resolved "https://registry.yarnpkg.com/semver/-/semver-7.6.0.tgz#1a46a4db4bffcccd97b743b5005c8325f23d4e2d"
   integrity sha512-EnwXhrlwXMk9gKu5/flx5sv/an57AkRplG3hTK68W7FRDN+k+OWBj65M7719OkA82XLBxrcX0KSHj+X5COhOVg==
