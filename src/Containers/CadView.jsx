@@ -5,7 +5,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
-import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
+import {hasValidUrlParams as urlHasCameraParams, removeCameraUrlParams} from '../Components/CameraControl'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -605,6 +605,9 @@ export default function CadView({
       }
       newSelection = selectedInViewer
     } else {
+      // New selection will try to recenter camera, which fights with existing
+      // camera
+      removeCameraUrlParams()
       newSelection = [expressId]
     }
     selectItemsInScene(newSelection)
