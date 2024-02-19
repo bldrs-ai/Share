@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable react-hooks/exhaustive-deps */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
@@ -22,6 +23,7 @@ import {updateIssue} from '../utils/GitHub'
 const PLACE_MARK_PREFIX = 'm'
 const placeMarkGroupMap = new Map()
 
+// console.log('placeMarkGroupMap', placeMarkGroupMap)
 
 /**
  * Place Mark Hook
@@ -40,6 +42,7 @@ export function usePlaceMark() {
   const location = useLocation()
   const existPlaceMarkInFeature = useExistInFeature('placemark')
   const setNotes = useStore((state) => state.setNotes)
+  // console.log('placeMark', placeMark)
 
   useEffect(() => {
     let totalPlaceMarkHashUrlMap = new Map()
@@ -96,7 +99,9 @@ export function usePlaceMark() {
       placeMarkGroupMap.set(hash, svgGroup)
       return svgGroup
     }
+
     const removeDeletedPlaceMarksIfNeeded = () => {
+      // console.log('in the remove placemark')
       if (!isDevMode()) {
         const currentHashes = Array.from(placeMarkGroupMap.keys())
         // Use totalPlaceMarkHashUrlMap here directly
@@ -105,26 +110,26 @@ export function usePlaceMark() {
       }
     }
     processPlaceMarks()
+    // console.log('in the placemark use effect')
   }, [placeMark])
 
   // ------------------------------------------------------------------------------------
   const onSceneDoubleTap = useDoubleTap(async (event) => {
-    debug().log('usePlaceMark#onSceneDoubleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
-    const res = placeMark.onSceneDoubleClick(event)
-    await savePlaceMark(res)
+    const placeMarkObj = placeMark.onSceneDoubleClick(event)
+    // console.log('placemark object', placeMarkObj )
+    await savePlaceMark(placeMarkObj.point, placeMarkObj.promiseGroup )
   })
-  const onSceneSingleTap = async (event, callback) => {
+
+  const onSceneSingleTap = (event, callback) => {
     debug().log('usePlaceMark#onSceneSingleTap')
     if (!placeMark || !existPlaceMarkInFeature) {
       return
     }
     const res = placeMark.onSceneClick(event)
-    if (event.shiftKey) {
-      await savePlaceMark(res)
-    } else if (res.url) {
+    if (res.url) {
       selectPlaceMark(res.url)
     }
     if (callback) {
@@ -140,34 +145,47 @@ export function usePlaceMark() {
     newPlaceMark.setObjects(oppositeObjects)
     setPlaceMark(newPlaceMark)
   }
-  const savePlaceMark = async ({point, promiseGroup}) => {
+
+  const savePlaceMark = async (placemarkCoordinate, placeMarkObjGroup) => {
     if (!existPlaceMarkInFeature || !repository || !Array.isArray(notes)) {
       return
     }
+    const placeMarkInfoGroup = placemarkCoordinate && placeMarkObjGroup ? await placeMarkObjGroup : null
 
-    const svgGroup = point && promiseGroup ? await promiseGroup : null
-    if (svgGroup) {
-      updateLocationAndGroup(point, svgGroup)
+    // what does this method do?
+    if (placeMarkInfoGroup) {
+      updateLocationAndGroup(placemarkCoordinate, placeMarkInfoGroup)
     }
-
+    // console.log('placeMarkObjGroup', placeMarkObjGroup)
     deactivatePlaceMark()
     updatePlaceMarkNote()
   }
+
   const updatePlaceMarkNote = () => {
     const placeMarkNote = notes.find((note) => note.id === placeMarkId)
     if (!placeMarkNote) {
       return
     }
-
+    // deletedHashes.forEach((hash) => placeMark.disposePlaceMark(placeMarkGroupMap.get(hash)))
+    // console.log('placeMarkGroupMap', placeMarkGroupMap)
     const newPlaceMarkUrls = findMarkdownUrls(placeMarkNote.body, PLACE_MARK_PREFIX)
-    const editedBody = createEditedBody(placeMarkNote.body, newPlaceMarkUrls)
+    const editedBody = createEditedNoteBody(placeMarkNote.body, newPlaceMarkUrls)
     submitUpdate(placeMarkNote.number, placeMarkNote.title, editedBody, placeMarkNote.id)
   }
-  const createEditedBody = (body, newPlaceMarkUrls) => {
+
+  const createEditedNoteBody = (body, newPlaceMarkUrls) => {
     const placemarkPattern = /\n\[placemark\]\(.*?\)/
     if (newPlaceMarkUrls.length === 0 || !placemarkPattern.test(body)) {
       return `${body}\n\n---\n[placemark](${window.location.href})`
     }
+    const urlBetweenPrent = /\((.*?)\)/
+    const extractedPlacemark = body.match(placemarkPattern)[0]
+    const placemarkUrl = extractedPlacemark.match(urlBetweenPrent)[1]
+    const placemarkHash = getHashParamsFromUrl(placemarkUrl, PLACE_MARK_PREFIX)
+    // console.log('placeMark --- ', placeMark)
+    console.log('placemarkHash', placemarkHash)
+    placeMark.disposePlaceMark(placeMarkGroupMap.get(placemarkHash))
+
     return body.replace(placemarkPattern, `\n[placemark](${window.location.href})`)
   }
   /** Submit update*/
@@ -181,17 +199,19 @@ export function usePlaceMark() {
 
 
   // ------------------------------------------------------------------------------------
-  const updateLocationAndGroup = (point, svgGroup) => {
-    const markArr = roundCoord(...point)
-    updateUrlWithPlaceMark(markArr, svgGroup) // Pass svgGroup as a parameter
+  const updateLocationAndGroup = (point, placeMarkInfoGroup) => {
+    const placeMarkCoordinates = roundCoord(...point)
+    updateUrlWithPlaceMark(placeMarkCoordinates, placeMarkInfoGroup)
+
     const hash = getHashParamsFromUrl(window.location.href, PLACE_MARK_PREFIX)
-    placeMarkGroupMap.set(hash, svgGroup)
-    setPlaceMarkStatus(svgGroup, true)
+    placeMarkGroupMap.set(hash, placeMarkInfoGroup)
+    setPlaceMarkStatus(placeMarkInfoGroup, true)
   }
-  const updateUrlWithPlaceMark = (markArr, svgGroup) => { // Receive svgGroup as a parameter
-    addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
+
+  const updateUrlWithPlaceMark = (placeMarkCoordinates, placeMarkInfoGroup) => {
+    addHashParams(window.location, PLACE_MARK_PREFIX, placeMarkCoordinates)
     removeHashParams(window.location, CAMERA_PREFIX)
-    addUserDataInGroup(svgGroup, {url: window.location.href}) // Now svgGroup is defined in this scope
+    addUserDataInGroup(placeMarkInfoGroup, {url: window.location.href}) // Now svgGroup is defined in this scope
   }
   // ------------------------------------------------------------------------------------
 

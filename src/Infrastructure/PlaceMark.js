@@ -46,85 +46,28 @@ export default class PlaceMark extends EventDispatcher {
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
 
-
     this.activate = () => {
       this.activated = true
       _domElement.style.cursor = 'copy'
     }
-
 
     this.deactivate = () => {
       this.activated = false
       _domElement.style.cursor = 'default'
     }
 
-
     this.setObjects = (objects) => {
       _objects = objects
     }
 
-
-    this.onSceneDoubleClick = (event) => {
-      let res = {}
-      switch (event.button) {
-        case 0: // Main button (left button)
-          res = dropPlaceMark(event)
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 2: // Secondary button (right button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 3: // Fourth button (back button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-
-      return res
-    }
-
-
-    this.onSceneClick = (event) => {
-      let res = {}
-
-      switch (event.button) {
-        case 0: // Main button (left button)
-          if (event.shiftKey) {
-            res = dropPlaceMark(event)
-          } else {
-            res = getIntersectionPlaceMarkInfo()
-          }
-          break
-        case 1: // Wheel button (middle button if present)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 2: // Secondary button (right button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 3: // Fourth button (back button)
-          break
-        // eslint-disable-next-line no-magic-numbers
-        case 4: // Fifth button (forward button)
-          break
-        default:
-          break
-      }
-
-      return res
-    }
-
+    this.onSceneDoubleClick = (event) => dropPlaceMark(event)
+    this.onSceneClick = (event) => getIntersectionPlaceMarkInfo()
 
     const dropPlaceMark = (event) => {
       let res = {}
       if (isDevMode()) {
         this.activated = true
       }
-
       if (_objects && this.activated) {
         updatePointer(event)
         const _intersections = []
@@ -144,7 +87,6 @@ export default class PlaceMark extends EventDispatcher {
           res = {point, lookAt, promiseGroup}
         }
       }
-
       return res
     }
 
@@ -166,7 +108,6 @@ export default class PlaceMark extends EventDispatcher {
 
     this.disposePlaceMark = (_placeMark) => {
       const index = _placeMarks.indexOf(_placeMark)
-
       if (index > -1) {
         _placeMarks.splice(index, 1)
         disposeGroup(_placeMark)
