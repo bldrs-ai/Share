@@ -22,6 +22,7 @@ const httpNotFound = 404
  */
 export function initHandlers() {
   const handlers = []
+  handlers.push(...auth0Handlers())
   handlers.push(...githubHandlers())
   handlers.push(...gaHandlers())
   return handlers
@@ -41,6 +42,133 @@ function gaHandlers() {
           ctx.json({}),
       )
     }),
+  ]
+}
+
+/**
+ *
+ * @return {Array} list of auth0 handlers
+ */
+function auth0Handlers() {
+  return [
+    // Mock for Auth0 Logout URL with a redirect response
+    rest.get(
+        'https://bldrs.us.auth0.com/v2/logout',
+        (req, res, ctx) => {
+          const clientId = req.url.searchParams.get('client_id')
+          const auth0Client = req.url.searchParams.get('auth0Client')
+          const HTTP_BAD_REQUEST = 400
+          // Check for required query parameters
+          if (!clientId || !auth0Client) {
+            return res(
+                ctx.status(HTTP_BAD_REQUEST),
+                ctx.json({error: 'Missing parameters'}),
+            )
+          }
+
+          const HTTP_REDIRECT = 302
+          // Return a 302 Found response with a Location header for the redirect
+          return res(
+              ctx.status(HTTP_REDIRECT), // Use 302 Found status code for redirection
+              ctx.set('Location', 'https://bldrs.ai/share'), // Set the Location header to the URL where the client should be redirected
+              ctx.set('CF-Ray', '8581a053c8ce3b77-IAD'),
+              ctx.set('CF-Cache-Status', 'DYNAMIC'),
+              ctx.set('Cache-Control', 'no-store, max-age=0, no-transform'),
+              ctx.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'),
+              ctx.set('Vary', 'Accept, Accept-Encoding'),
+              ctx.set('Pragma', 'no-cache'),
+              ctx.set('X-Auth0-RequestId', 'e623ebb9c257099ed80f'),
+              ctx.set('X-Content-Type-Options', 'nosniff'),
+              ctx.set('X-RateLimit-Limit', '100'),
+              ctx.set('X-RateLimit-Remaining', '99'),
+              ctx.set('X-RateLimit-Reset', '1708378387'),
+              ctx.set('Server', 'cloudflare'),
+              ctx.set('alt-svc', 'h3=":443"; ma=86400'),
+              // The body can be a simple message or HTML content for browsers to display before redirecting
+              ctx.text('<p>Found. Redirecting to <a href="https://bldrs.ai/share">https://bldrs.ai/share</a></p>'),
+          )
+        },
+    ),
+
+    rest.get('*', (req, res, ctx) => {
+      // eslint-disable-next-line no-console
+      console.log(`url: ${ req.url}`)
+      // Notice no `return res()` statement
+    }),
+
+    rest.post('https://bldrs.us.auth0.com/oauth/token', (req, res, ctx) => {
+      const STATUS_OK = 200
+      return res(
+          /* eslint-disable max-len */
+          ctx.status(STATUS_OK),
+          ctx.set({
+            'Date': 'Tue, 20 Feb 2024 03:06:31 GMT',
+            'Content-Type': 'application/json',
+            'Transfer-Encoding': 'chunked',
+            'Connection': 'keep-alive',
+            'CF-Ray': '858388bb09b63879-IAD',
+            'CF-Cache-Status': 'DYNAMIC',
+            'Access-Control-Allow-Origin': 'http://localhost:8080',
+            'Cache-Control': 'no-store',
+            'Set-Cookie': 'did=s%3Av0%3A0c2c9ed0-cf9d-11ee-89ae-19acbf87a5ee.9EG3gLQUnF4f5e%2Fi8sXhmGBJhrowZV%2B8iiGpNpyhPEc; Max-Age=31557600; Path=/; Expires=Wed, 19 Feb 2025 09:06:31 GMT; HttpOnly; Secure; SameSite=None',
+            'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+            'Vary': 'Accept-Encoding, Origin',
+            'Access-Control-Expose-Headers': 'X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset',
+            'Pragma': 'no-cache',
+            'X-Auth0-RequestId': '8a11370999d65d2b871c',
+            'X-Content-Type-Options': 'nosniff',
+            'X-RateLimit-Limit': '100',
+            'X-RateLimit-Remaining': '99',
+            'X-RateLimit-Reset': '1708398392',
+            'Server': 'cloudflare',
+            'Content-Encoding': 'br',
+            'alt-svc': 'h3=":443"; ma=86400',
+          }),
+          ctx.json({
+            access_token: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.eyJpc3MiOiJodHRwczovL2JsZHJzLnVzLmF1dGgwLmNvbS8iLCJzdWIiOiJnaXRodWJ8MTc0NDc2OTAiLCJhdWQiOlsiaHR0cHM6Ly9hcGkuZ2l0aHViLmNvbS8iLCJodHRwczovL2JsZHJzLnVzLmF1dGgwLmNvbS91c2VyaW5mbyJdLCJpYXQiOjE3MDgzOTc4NjAsImV4cCI6MTcwODQ4NDI2MCwiYXpwIjoieG9qYmJTeUo5bjZIVWRad0U3TFVYN1Z2ZmY2ZWp4anYiLCJzY29wZSI6Im9wZW5pZCBwcm9maWxlIGVtYWlsIG9mZmxpbmVfYWNjZXNz',
+            id_token: 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.eyJuaWNrbmFtZSI6Im5pY2tjYXN0ZWw1MCIsIm5hbWUiOiJuaWNrY2FzdGVsNTBAZ21haWwuY29tIiwicGljdHVyZSI6Imh0dHBzOi8vYXZhdGFycy5naXRodWJ1c2VyY29udGVudC5jb20vdS8xNzQ0NzY5MD92PTQiLCJ1cGRhdGVkX2F0IjoiMjAyNC0wMi0yMFQwMjo1Nzo0MC4zMjRaIiwiZW1haWwiOiJuaWNrY2FzdGVsNTBAZ21haWwuY29tIiwiZW1haWxfdmVyaWZpZWQiOnRydWUsImlzcyI6Imh0dHBzOi8vYmxkcnMudXMuYXV0aDAuY29tLyIsImF1ZCI6InhvamJiU3lKOW42SFVkWndFN0xVWDdadmZmNmVqeGp2IiwiaWF0IjoxNzA4Mzk3ODYwLCJleHAiOjE3MDg0MzM4NjAsInN1YiI6ImdpdGh1YnwxNzQ0NzY5MCIsInNpZCI6ImxTY01QY01yUXh3UjZCN0hlZHg0cGVTVDQtZlVjMkZhIiwibm9uY2UiOiJVMVpQWDJsSlRHZFdZV3hGZG1sV1VISk9Na2hHU1RaYVkydFFjSEZDTjJSNlIxVXlWREZuUVVkWGJ3PT0ifQ.otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1_RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDadDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9LH8d9ifiq2mOWYvglpltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A',
+            scope: 'openid profile email offline_access',
+            expires_in: 86400,
+            token_type: 'Bearer',
+          }),
+          /* eslint-enable max-len */
+      )
+    }),
+
+    // Mock for Auth0 Authorize URL with a redirect response
+    /* rest.get(/https:\/\/bldrs\.us\.auth0\.com\/authorize(\?.+)?$/,
+        (req, res, ctx) => {
+        // Extract query parameters from the request
+          const clientId = req.url.searchParams.get('client_id')
+          const scope = req.url.searchParams.get('scope')
+          const audience = req.url.searchParams.get('audience')
+          // Add other required parameters as needed
+          const HTTP_BAD_REQUEST = 400
+
+          // You could add validation or logic based on query parameters here
+          if (!clientId || !scope || !audience) {
+            return res(
+                ctx.status(HTTP_BAD_REQUEST),
+                ctx.json({error: 'Missing required query parameters'}),
+            )
+          }
+
+          // Simulate the redirect to the login page
+          const redirectUrl = `/u/login?state=teststate`
+          const HTTP_REDIRECT = 302
+          return res(
+              ctx.status(HTTP_REDIRECT),
+              ctx.set('Location', redirectUrl),
+              // Include other headers as per the provided response example
+              ctx.set('CF-Ray', '8581bad27db5422f-EWR'),
+              ctx.set('Cache-Control', 'no-store, max-age=0, no-transform'),
+              ctx.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'),
+              ctx.set('X-Auth0-RequestId', '60888b053237756f7f1d'),
+              // etc...
+              ctx.text(`<p>Found. TEST Redirecting to <a href="${redirectUrl}">${redirectUrl}</a></p>`),
+          )
+        },
+    ),*/
   ]
 }
 

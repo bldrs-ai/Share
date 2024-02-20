@@ -67,7 +67,7 @@ export default function SaveModelControl({navigate}) {
         icon={<SaveOutlinedIcon className='icon-share' color='secondary'/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
-        dataTestId='save-ifc'
+        data-testid='save-ifc'
       />
       {isDialogDisplayed &&
         <SaveModelDialog

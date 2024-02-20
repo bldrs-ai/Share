@@ -43,10 +43,10 @@ if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
-      if (req.url.host === 'api.github.com') {
-        // eslint-disable-next-line no-console
-        console.error(`Found an unhandled ${req.method} request to ${req.url}`)
-      }
+      // if (req.url.host === 'api.github.com') {
+      // eslint-disable-next-line no-console
+      console.error(`Found an unhandled ${req.method} request to ${req.url}`)
+      // }
     },
   })
 }

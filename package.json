@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.895",
+  "version": "1.0.898",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,6 +8,7 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
+    "cypresssingletest": "OAUTH2_CLIENT_ID=xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv AUTH0_DOMAIN=bldrs.us.auth0.com GITHUB_BASE_URL=https://git.bldrs.dev/p/gh RAW_GIT_PROXY_URL=https://rawgit.bldrs.dev/r yarn cypress open --spec cypress/e2e/saveModelControl/save-model.cy.js",
     "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
