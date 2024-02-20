@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /* eslint-disable react-hooks/exhaustive-deps */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'

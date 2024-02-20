@@ -42,7 +42,6 @@ export default class PlaceMark extends EventDispatcher {
     })
     const composer = postProcessor.getComposer
 
-
     this.activated = false
     _domElement.style.touchAction = 'none' // disable touch scroll
 
@@ -74,7 +73,7 @@ export default class PlaceMark extends EventDispatcher {
         _intersections.length = 0
         _raycaster.setFromCamera(_pointer, _camera)
         _raycaster.intersectObjects(_objects, true, _intersections)
-
+        // examine the way floats are treated may contribute to the offsets
         if (_intersections.length > 0) {
           const intersectPoint = _intersections[0].point
           intersectPoint.x = floatStrTrim(intersectPoint.x)
