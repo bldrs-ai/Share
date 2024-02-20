@@ -14,6 +14,7 @@ import Typography from '@mui/material/Typography'
 export default function PanelTitle({title, controlsGroup, iconSrc}) {
   return (
     <Box
+      data-testid={'panelTitle'}
       sx={{
         display: 'flex',
         flexDirection: 'row',
