@@ -3,7 +3,8 @@ import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
-import {ControlButton, TooltipIconButton} from './Buttons'
+import useStore from '../store/useStore'
+import {ControlButtonWithHashState, TooltipIconButton} from './Buttons'
 import Dialog from './Dialog'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
@@ -35,27 +36,36 @@ import ShareIcon from '../assets/icons/Share.svg'
  * @return {React.ReactElement}
  */
 export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+  const isHelpVisible = useStore((state) => state.isHelpVisible)
+  const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
 
   return (
-    <ControlButton
-      icon={<HelpOutlineIcon className='icon-share'/>}
-      title={'Help'}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
+    <Box
       sx={{
         position: 'fixed',
         bottom: '1em',
         right: '1em',
       }}
     >
-      <HelpDialog
-        isDialogDisplayed={isDialogDisplayed}
-        setIsDialogDisplayed={setIsDialogDisplayed}
-      />
-    </ControlButton>
+      <ControlButtonWithHashState
+        icon={<HelpOutlineIcon className='icon-share'/>}
+        title={'Help'}
+        isDialogDisplayed={isHelpVisible}
+        setIsDialogDisplayed={setIsHelpVisible}
+        hashPrefix={HELP_PREFIX}
+      >
+        <HelpDialog
+          isDialogDisplayed={isHelpVisible}
+          setIsDialogDisplayed={setIsHelpVisible}
+        />
+      </ControlButtonWithHashState>
+    </Box>
   )
 }
+
+
+/** The prefix to use for the help state token */
+export const HELP_PREFIX = 'help'
 
 
 /**

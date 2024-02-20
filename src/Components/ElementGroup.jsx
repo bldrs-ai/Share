@@ -43,11 +43,7 @@ export default function ElementGroup({deselectItems}) {
         width: '100%',
       }}
     >
-      <ButtonGroup
-        orientation='horizontal'
-        variant='outlined'
-        sx={{borderRadius: '10px', padding: '0px 10px'}}
-      >
+      <ButtonGroup orientation='horizontal' variant='outlined'>
         {!isIsolate && <CutPlaneMenu/>}
 
         {isSelected() && selectedElement !== null &&

@@ -1,10 +1,11 @@
-import React, {useState} from 'react'
+import React, {useCallback, useEffect, useState} from 'react'
+import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
-import Box from '@mui/material/Box'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
+import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
@@ -28,28 +29,25 @@ export function TooltipIconButton({
   onClick,
   icon,
   enabled = true,
-  placement = 'right',
   selected = false,
   size = 'medium',
-  dataTestId = '',
+  variant = 'rounded',
+  placement = 'right',
   aboutInfo = true,
-  variant = 'rectangular',
+  dataTestId = '',
 }) {
   assertDefined(title, onClick, icon)
-  const [openLocal, setOpenLocal] = useState(false)
   const isHelpTooltips = useStore((state) => state.isHelpTooltips)
+
+  const [openLocal, setOpenLocal] = useState(false)
+
   const open = aboutInfo ? isHelpTooltips : false
-  const handleClose = () => {
-    setOpenLocal(false)
-  }
-  const handleOpen = () => {
-    setOpenLocal(true)
-  }
+
   return (
     <Tooltip
       open={openLocal || open}
-      onClose={handleClose}
-      onOpen={handleOpen}
+      onClose={() => setOpenLocal(false)}
+      onOpen={() => setOpenLocal(true)}
       title={title}
       describeChild
       placement={placement}
@@ -76,44 +74,90 @@ export function TooltipIconButton({
 
 
 /**
- * @property {object} icon The header icon
  * @property {string} title The text for tooltip
+ * @property {object} icon The header icon
  * @property {boolean} isDialogDisplayed Initial state
  * @property {Function} setIsDialogDisplayed Handler
  * @property {object} children The controlled dialog
- * @property {string} placement Default: left
- * @property {string} variant Default: rectangular
- * @return {React.Component} React component
+ * @property {string} [placement] See default in TooltipIconButton
+ * @property {string} [variant] See default in TooltipIconButton
+ * @return {React.ReactElement}
  */
 export function ControlButton({
-  icon,
   title,
+  icon,
   isDialogDisplayed,
   setIsDialogDisplayed,
   children,
-  placement = 'left',
-  variant = 'rectangular',
-  sx,
+  placement,
+  variant,
 }) {
-  assertDefined(icon, title, isDialogDisplayed, setIsDialogDisplayed, children)
+  assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
   return (
-    <Box sx={sx}>
+    <>
       <TooltipIconButton
         title={title}
-        onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
+        onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
         selected={isDialogDisplayed}
         variant={variant}
+        placement={placement}
       />
-      {isDialogDisplayed && children}
-    </Box>
+      {children}
+    </>
+  )
+}
+
+
+/**
+ * ControlButtonWithHashState component that accepts a hashPrefix parameter
+ * and forwards the rest of the props to the ControlButton component
+ *
+ * @property {string} hashPrefix The hash prefix for storing state
+ * @property {string} props See ControlButton
+ * @return {React.ReactElement}
+ */
+export function ControlButtonWithHashState({
+  hashPrefix,
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+  ...props
+}) {
+  assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
+
+  const location = useLocation()
+
+  // On first load, show dialog if state token present
+  useEffect(() => {
+    setIsDialogDisplayed(getHashParams(location, hashPrefix) !== undefined)
+  }, [hashPrefix, location, setIsDialogDisplayed])
+
+  // Enforce invariant
+  useEffect(() => {
+    // TODO(pablo): useNavigate
+    if (isDialogDisplayed) {
+      addHashParams(window.location, hashPrefix)
+    } else {
+      const currentHash = window.location.hash
+      const prefixRegex = new RegExp(`${hashPrefix}:`, 'g')
+      const newHash = currentHash.replace(prefixRegex, '')
+      window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
+    }
+  }, [isDialogDisplayed, hashPrefix])
+
+  return (
+    <ControlButton
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
+      {...props}
+    />
   )
 }
 
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export function CloseButton({onClick}) {
   return (
@@ -159,7 +203,7 @@ export function RectangularButton({
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export function FullScreenButton({onClick}) {
   return (
@@ -175,7 +219,7 @@ export function FullScreenButton({onClick}) {
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * @return {React.ReactElement}
  */
 export function BackButton({onClick}) {
   return (

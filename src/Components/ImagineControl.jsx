@@ -6,10 +6,9 @@ import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import {RectangularButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import {ControlButton} from './Buttons'
+import {ControlButtonWithHashState, RectangularButton} from './Buttons'
 import {
   addCameraUrlParams,
 } from './CameraControl'
@@ -28,23 +27,28 @@ import BotIcon from '../assets/icons/Bot2.svg'
  *   ShareDialog component
  */
 export default function ImagineControl() {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const openedDialog = !!isDialogDisplayed
-
+  const isImagineVisible = useStore((state) => state.isImagineVisible)
+  const setIsImagineVisible = useStore((state) => state.setIsImagineVisible)
   return (
-    <ControlButton
+    <ControlButtonWithHashState
       title='AI Renderings'
-      isDialogDisplayed={openedDialog}
-      setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
+      isDialogDisplayed={isImagineVisible}
+      setIsDialogDisplayed={setIsImagineVisible}
+      hashPrefix={IMAGINE_PREFIX}
     >
       <ImagineDialog
-        isDialogDisplayed={openedDialog}
-        setIsDialogDisplayed={setIsDialogDisplayed}
+        isDialogDisplayed={isImagineVisible}
+        setIsDialogDisplayed={setIsImagineVisible}
       />
-    </ControlButton>
+    </ControlButtonWithHashState>
   )
 }
+
+
+/** The prefix to use for the imagine state token */
+export const IMAGINE_PREFIX = 'imagine'
+
 
 
 /**

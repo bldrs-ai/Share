@@ -10,7 +10,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import {removeHashParams} from '../utils/location'
 import useStore from '../store/useStore'
-import {ControlButton} from './Buttons'
+import {ControlButtonWithHashState} from './Buttons'
 import {
   addCameraUrlParams,
   removeCameraUrlParams,
@@ -30,25 +30,25 @@ import ShareIcon from '../assets/icons/Share.svg'
  *   ShareDialog component
  */
 export default function ShareControl() {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const openedDialog = !!isDialogDisplayed
-
-
+  const isShareVisible = useStore((state) => state.isShareVisible)
+  const setIsShareVisible = useStore((state) => state.setIsShareVisible)
   return (
-    <ControlButton
+    <ControlButtonWithHashState
       title='Share'
-      isDialogDisplayed={openedDialog}
-      setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<ShareIcon className='icon-share'/>}
+      isDialogDisplayed={isShareVisible}
+      setIsDialogDisplayed={setIsShareVisible}
+      hashPrefix={SHARE_PREFIX}
     >
       <ShareDialog
-        isDialogDisplayed={openedDialog}
-        setIsDialogDisplayed={setIsDialogDisplayed}
+        isDialogDisplayed={isShareVisible}
+        setIsDialogDisplayed={setIsShareVisible}
       />
-    </ControlButton>
+    </ControlButtonWithHashState>
   )
 }
 
+export const SHARE_PREFIX = 'share'
 
 /**
  * The ShareDialog component lets the user control what state is

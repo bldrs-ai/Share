@@ -1,10 +1,8 @@
 import React, {useEffect} from 'react'
-import {useLocation} from 'react-router'
 import useStore from '../../store/useStore'
 import {getIssues} from '../../utils/GitHub'
 import debug from '../../utils/debug'
-import {addHashParams, getHashParams, removeHashParams} from '../../utils/location'
-import {TooltipIconButton} from '../Buttons'
+import {ControlButtonWithHashState} from '../Buttons'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 
 
@@ -15,20 +13,17 @@ import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
  */
 export default function NotesControl() {
   const accessToken = useStore((state) => state.accessToken)
-  const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
+
   const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
+
+  const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
+
   const model = useStore((state) => state.model)
   const repository = useStore((state) => state.repository)
-  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
-
-  const location = useLocation()
-  useEffect(() => {
-    setIsNotesVisible(getHashParams(location, NOTES_PREFIX) !== undefined)
-  }, [location, setIsNotesVisible])
-
 
   // Fetch issues/notes
   useEffect(() => {
@@ -66,23 +61,13 @@ export default function NotesControl() {
   }, [model, isCreateNoteVisible])
 
 
-  /** Toggle Notes visibility and set url state token */
-  function onNotesClick() {
-    // TODO(pablo): useNavigate
-    if (isNotesVisible) {
-      removeHashParams(window.location, NOTES_PREFIX)
-    } else {
-      addHashParams(window.location, NOTES_PREFIX)
-    }
-  }
-
-
   return (
-    <TooltipIconButton
+    <ControlButtonWithHashState
       title='Notes'
       icon={<ChatOutlinedIcon className='icon-share'/>}
-      onClick={onNotesClick}
-      selected={isNotesVisible}
+      isDialogDisplayed={isNotesVisible}
+      setIsDialogDisplayed={setIsNotesVisible}
+      hashPrefix={NOTES_PREFIX}
     />
   )
 }

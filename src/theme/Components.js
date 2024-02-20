@@ -23,23 +23,34 @@ export function getComponentOverrides(palette, typography) {
       ],
     },
     MuiButtonGroup: {
-      variants: [
-        {
-          props: {variant: 'contained'},
-          style: ({theme}) => ({
-            boxShadow: theme.shadows[0],
-            opacity: .9,
-          }),
+      styleOverrides: {
+        root: {
+          'padding': '10px',
+          'margin': '1em',
+          '& > *': { // *:not(:last-child)
+            margin: '0.2em',
+            borderColor: 'blue',
+            borderStyle: 'solid',
+            borderWidth: '2px',
+            borderRadius: '10px',
+          },
+          border: 'solid 2px red',
         },
-        {
-          props: {variant: 'outlined'},
-          style: ({theme}) => ({
-            // backgroundColor: theme.palette.primary.main,
-            boxShadow: theme.shadows[0],
-            opacity: .9,
-          }),
-        },
-      ],
+      },
+      variants: [{
+        props: {variant: 'contained'},
+        style: ({theme}) => ({
+          boxShadow: theme.shadows[0],
+          opacity: .9,
+        }),
+      }, {
+        props: {variant: 'outlined'},
+        style: ({theme}) => ({
+          // backgroundColor: theme.palette.primary.main,
+          boxShadow: theme.shadows[0],
+          opacity: .9,
+        }),
+      }],
     },
     MuiCard: {
       styleOverrides: {

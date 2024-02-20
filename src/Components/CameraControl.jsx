@@ -12,16 +12,13 @@ import {roundCoord} from '../utils/math'
 import {floatStrTrim} from '../utils/strings'
 
 
-// TODO(pablo): CameraControl has to be loaded into DOM for any of the
-// handlers below to function, but we also decided not to display it
-// as its own button.  So for now it's hidden.
 /**
  * The CameraControl is a button that adds the current camera position
  * to the URL hash.  On load, this component also reads the current
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @return {object} React component
+ * @return {React.ReactElement}
  */
 export default function CameraControl() {
   const viewer = useStore((state) => state.viewer)
@@ -38,9 +35,7 @@ export default function CameraControl() {
 
 
   // NOTE: NOT DISPLAYED
-  return (
-    <div style={{display: 'none'}}>Camera</div>
-  )
+  return <div style={{display: 'none'}}>Camera</div>
 }
 
 

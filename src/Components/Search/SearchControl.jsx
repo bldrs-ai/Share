@@ -1,23 +1,28 @@
 import React from 'react'
 import useStore from '../../store/useStore'
-import {TooltipIconButton} from '../Buttons'
+import {ControlButtonWithHashState} from '../Buttons'
 import SearchIcon from '@mui/icons-material/Search'
 
 
 /**
- * Initializes search and hosts the SearchBar
+ * Button and url hash state to control the SearchBar
  *
- * @property {object} model The model to search
- * @property {object} rootElt The model root elt
  * @return {React.ReactElement}
  */
 export default function SearchControl() {
-  const toggleIsSearchBarVisible = useStore((state) => state.toggleIsSearchBarVisible)
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+  const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   return (
-    <TooltipIconButton
+    <ControlButtonWithHashState
       title='Search'
       icon={<SearchIcon className='icon-share'/>}
-      onClick={toggleIsSearchBarVisible}
+      hashPrefix={SEARCH_PREFIX}
+      isDialogDisplayed={isSearchBarVisible}
+      setIsDialogDisplayed={setIsSearchBarVisible}
     />
   )
 }
+
+
+/** The prefix to use for the search state token */
+export const SEARCH_PREFIX = 's'

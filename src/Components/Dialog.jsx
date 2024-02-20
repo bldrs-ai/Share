@@ -34,16 +34,16 @@ export default function Dialog({
   actionCb,
   children,
 }) {
-  assertDefined(
-      headerText,
-      isDialogDisplayed, setIsDialogDisplayed,
-      children)
-  const close = () => setIsDialogDisplayed(false)
+  assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
+
   const theme = useTheme()
+
+  const onCloseClick = () => setIsDialogDisplayed(false)
+
   return (
     <MuiDialog
       open={isDialogDisplayed}
-      onClose={close}
+      onClose={onCloseClick}
     >
       <DialogTitle>
         {headerIcon ?
@@ -74,7 +74,7 @@ export default function Dialog({
         }
 
       </DialogTitle>
-      <IconButton onClick={close} size='small'>
+      <IconButton onClick={onCloseClick} size='small'>
         <CloseIcon fontSize='inherit'/>
       </IconButton>
       <DialogContent>{children}</DialogContent>

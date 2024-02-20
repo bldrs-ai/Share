@@ -15,7 +15,7 @@ import {
   loadLocalFile,
   loadLocalFileFallback,
 } from '../utils/loader'
-import {ControlButton} from './Buttons'
+import {ControlButtonWithHashState} from './Buttons'
 import Dialog from './Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
@@ -28,11 +28,15 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
  * @return {React.ReactElement}
  */
 export default function OpenModelControl() {
+  const accessToken = useStore((state) => state.accessToken)
+
+  const isOpenModelVisible = useStore((state) => state.isOpenModelVisible)
+  const setIsOpenModelVisible = useStore((state) => state.setIsOpenModelVisible)
+
+  const [orgNamesArr, setOrgNamesArray] = useState([''])
+
   const {user} = useAuth0()
   const navigate = useNavigate()
-  const accessToken = useStore((state) => state.accessToken)
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const [orgNamesArr, setOrgNamesArray] = useState([''])
 
 
   useEffect(() => {
@@ -51,22 +55,26 @@ export default function OpenModelControl() {
 
 
   return (
-    <ControlButton
+    <ControlButtonWithHashState
       title={'Open'}
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<CreateNewFolderIcon className='icon-share'/>}
-      placement={'bottom'}
+      isDialogDisplayed={isOpenModelVisible}
+      setIsDialogDisplayed={setIsOpenModelVisible}
+      hashPrefix={OPEN_MODEL_PREFIX}
     >
       <OpenModelDialog
-        isDialogDisplayed={isDialogDisplayed}
-        setIsDialogDisplayed={setIsDialogDisplayed}
+        isDialogDisplayed={isOpenModelVisible}
+        setIsDialogDisplayed={setIsOpenModelVisible}
         navigate={navigate}
         orgNamesArr={orgNamesArr}
       />
-    </ControlButton>
+    </ControlButtonWithHashState>
   )
 }
+
+
+/** The prefix to use for the OpenModel state tokens, 'f' for files */
+export const OPEN_MODEL_PREFIX = 'om'
 
 
 /**

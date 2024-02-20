@@ -9,7 +9,6 @@ import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import Panel from '../SideDrawer/Panel'
 import NavTree from './NavTree'
-import {handleNavigation} from './NavTreeControl'
 import TypesNavTree from './TypesNavTree'
 import AccountTreeIcon from '@mui/icons-material/AccountTree'
 import ListIcon from '@mui/icons-material/List'
@@ -32,15 +31,18 @@ export default function NavTreePanel({
   pathPrefix,
 }) {
   assertDefined(...arguments)
-  const elementTypesMap = useStore((state) => state.elementTypesMap)
-  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
-  const rootElement = useStore((state) => state.rootElement)
-  const selectedElements = useStore((state) => state.selectedElements)
   const defaultExpandedElements = useStore((state) => state.defaultExpandedElements)
   const defaultExpandedTypes = useStore((state) => state.defaultExpandedTypes)
+  const elementTypesMap = useStore((state) => state.elementTypesMap)
   const expandedElements = useStore((state) => state.expandedElements)
-  const setExpandedElements = useStore((state) => state.setExpandedElements)
   const expandedTypes = useStore((state) => state.expandedTypes)
+
+  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
+  const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
+
+  const rootElement = useStore((state) => state.rootElement)
+  const selectedElements = useStore((state) => state.selectedElements)
+  const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
@@ -67,7 +69,7 @@ export default function NavTreePanel({
 
   return (
     <Panel
-      onCloseClick={() => handleNavigation(isNavTreeVisible)}
+      onCloseClick={() => setIsNavTreeVisible(false)}
       title='Navigation'
       action={
         <StyledToggleButtonGroup

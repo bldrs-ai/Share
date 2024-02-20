@@ -33,11 +33,7 @@ export default function OperationsGroup({deselectItems}) {
   const isAnElementSelected = selectedElement !== null
 
   return (
-    <ButtonGroup
-      orientation='vertical'
-      variant='contained'
-      sx={{'margin': '1em', '& > *:not(:last-child)': {margin: '0.2em 0'}}}
-    >
+    <ButtonGroup orientation='vertical' variant='contained'>
       {isLoginEnabled && (<><LoginMenu/><Divider sx={{pt: '5px'}}/></>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}

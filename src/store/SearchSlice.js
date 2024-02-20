@@ -15,11 +15,8 @@ export default function createSearchSlice(set, get) {
 
     isSearchBarVisible: false,
     setIsSearchBarVisible: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
-    toggleIsSearchBarVisible: () => set((state) =>
-      ({isSearchBarVisible: !state.isSearchBarVisible})),
 
     searchIndex: new SearchIndex(),
     setSearchIndex: (index) => set(() => ({searchIndex: index})),
-
   }
 }

@@ -15,7 +15,18 @@ export default function createUISlice(set, get) {
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
-    isOpenControlHighlighted: true,
+    isHelpVisible: false,
+    setIsHelpVisible: (isVisible) => set(() => ({isHelpVisible: isVisible})),
+
+    isImagineVisible: false,
+    setIsImagineVisible: (isVisible) => set(() => ({isImagineVisible: isVisible})),
+
+    isOpenModelVisible: false,
+    setIsOpenModelVisible: (isVisible) => set(() => ({isOpenModelVisible: isVisible})),
+
+    isShareVisible: false,
+    setIsShareVisible: (isVisible) => set(() => ({isShareVisible: isVisible})),
+
     isHelpTooltips: false,
     cutPlanes: [],
     levelInstance: null,
@@ -35,6 +46,5 @@ export default function createUISlice(set, get) {
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
     toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
     turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
-    unHighlightOpenControl: () => set(() => ({isOpenControlHighlighted: false})),
   }
 }
