@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {useEffect} from 'react'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
@@ -36,6 +37,13 @@ export default function NotesControl() {
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 
         issueArr.reverse().map((issue, index) => {
+          let placemarkUrl = null
+          const placemarkPattern = /\n\[placemark\]\(.*?\)/
+          const urlBetweenPrent = /\((.*?)\)/
+          if (placemarkPattern.test(issue.body)) {
+            const extractedPlacemark = issue.body.match(placemarkPattern)[0]
+            placemarkUrl = extractedPlacemark.match(urlBetweenPrent)[1]
+          }
           newNotes.push({
             index: issueIndex++,
             id: issue.id,
@@ -47,6 +55,7 @@ export default function NotesControl() {
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
             synched: true,
+            placemarkUrl: placemarkUrl,
           })
         })
         setNotes(newNotes)
