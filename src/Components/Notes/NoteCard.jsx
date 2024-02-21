@@ -110,7 +110,6 @@ export default function NoteCard({
     removeHashParams(window.location, NOTE_PREFIX)
     removeHashParams(window.location, PLACE_MARK_PREFIX)
     if (placemarkHash) {
-      console.log('placemarkHash', placemarkHash)
       addHashParams(window.location, placemarkHash)
     }
     addHashParams(window.location, NOTE_PREFIX, {id: id})

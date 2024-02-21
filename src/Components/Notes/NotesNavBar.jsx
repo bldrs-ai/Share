@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React from 'react'
 import Box from '@mui/material/Box'
 import {CloseButton, TooltipIconButton} from '../Buttons'
@@ -22,7 +23,7 @@ export default function NotesNavBar() {
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
-  const {selectPlaceMark} = usePlaceMark()
+  const {selectPlaceMark, deselectPlaceMark} = usePlaceMark()
 
 
   const selectNote = async (direction) => {
@@ -73,10 +74,12 @@ export default function NotesNavBar() {
            title='Back to the list'
            variant='noBackground'
            placement='bottom'
-           onClick={() => {
+           onClick={async () => {
              removeHashParams(window.location, NOTE_PREFIX)
              removeHashParams(window.location, PLACE_MARK_PREFIX)
              setSelectedNoteId(null)
+             const selectedNote = notes.filter((n) => n.id === selectedNoteId)[0]
+             await deselectPlaceMark(selectedNote.attachedUrl)
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
          />

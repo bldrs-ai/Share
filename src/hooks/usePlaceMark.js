@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /* eslint-disable react-hooks/exhaustive-deps */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
@@ -23,6 +24,7 @@ import {updateIssue} from '../utils/GitHub'
 
 const PLACE_MARK_PREFIX = 'm'
 const placeMarkGroupMap = new Map()
+
 const setPlaceMarkStatus = (svgGroup, isActive ) => {
   assertDefined(svgGroup, isActive)
   resetPlaceMarksActive(false)
@@ -178,7 +180,7 @@ export function usePlaceMark() {
 
     const hash = getHashParamsFromUrl(window.location.href, PLACE_MARK_PREFIX)
     placeMarkGroupMap.set(hash, placeMarkInfoGroup)
-    setPlaceMarkStatus(placeMarkInfoGroup, true, placeMarkGroupMap)
+    setPlaceMarkStatus(placeMarkInfoGroup, true)
   }
 
   const updateUrlWithPlaceMark = (placeMarkCoordinates, placeMarkInfoGroup) => {
@@ -196,7 +198,21 @@ export function usePlaceMark() {
     const svgGroup = placeMarkGroupMap.get(hash)
 
     if (svgGroup) {
-      setPlaceMarkStatus(svgGroup, true, placeMarkGroupMap)
+      setPlaceMarkStatus(svgGroup, true)
+      if (!isDevMode()) {
+        window.location.hash = `#${getAllHashParams(url)}`
+      }
+    }
+  }
+  const deselectPlaceMark = (url) => {
+    if (!existPlaceMarkInFeature) {
+      return
+    }
+    assertDefined(url)
+    const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
+    const svgGroup = placeMarkGroupMap.get(hash)
+    if (svgGroup) {
+      setPlaceMarkStatus(svgGroup, false)
       if (!isDevMode()) {
         window.location.hash = `#${getAllHashParams(url)}`
       }
@@ -229,5 +245,13 @@ export function usePlaceMark() {
     placeMark.activate()
     setPlaceMarkActivated(true)
   }
-  return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive, selectPlaceMark}
+
+  return {
+    createPlaceMark,
+    onSceneDoubleTap,
+    onSceneSingleTap,
+    togglePlaceMarkActive,
+    selectPlaceMark,
+    deactivatePlaceMark,
+    deselectPlaceMark}
 }
