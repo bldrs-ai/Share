@@ -1,10 +1,10 @@
 import React from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import ControlsGroup from '../Components/ControlsGroup'
 import {useWindowDimensions} from '../Components/Hooks'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
-import SearchBar from '../Components/Search/SearchBar'
 // TODO(pablo): make left side drawer
 // import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
@@ -31,8 +31,6 @@ export default function ControlsGroupAndDrawer({
   // Slices from Controls
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
-  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
-  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
 
@@ -46,17 +44,13 @@ export default function ControlsGroupAndDrawer({
   const searchAndNavMaxWidthPx = 300
 
   return (
-    <Box
+    <Stack
+      justifyContent='flex-start'
+      alignItems='flex-start'
       sx={{
-        'position': 'absolute',
-        'top': `1em`,
-        'left': '1em',
-        'display': 'flex',
-        'flexDirection': 'column',
-        'justifyContent': 'flex-start',
-        'alignItems': 'flex-start',
-        'maxHeight': '95%',
-        'width': '275px',
+        'height': '100vh',
+        // Same as src/store/SideDrawerSlice.jsx#sidebarWidth
+        'width': '350px',
         '@media (max-width: 900px)': {
           width: `${searchAndNavWidthPx}px`,
           maxWidth: `${searchAndNavMaxWidthPx}px`,
@@ -68,13 +62,7 @@ export default function ControlsGroupAndDrawer({
         isRepoActive={modelPath.repo !== undefined}
       />
 
-      {isSearchEnabled &&
-       <Box sx={{marginTop: '0.82em', width: '100%'}}>
-         {isSearchBarVisible && <SearchBar/>}
-       </Box>
-      }
-
-      <Box sx={{marginTop: '.82em', width: '100%'}}>
+      <Box sx={{width: '100%', margin: '1em'}}>
         {isNavTreeEnabled &&
          isNavTreeVisible &&
          model &&
@@ -97,6 +85,6 @@ export default function ControlsGroupAndDrawer({
            currentRef={branch}
          />}
       </Box>
-    </Box>
+    </Stack>
   )
 }

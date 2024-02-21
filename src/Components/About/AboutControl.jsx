@@ -26,30 +26,23 @@ export default function AboutControl() {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(FirstTime.isFirst())
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        left: '1em',
-        bottom: '1em',
-      }}
+    <ControlButton
+      title={`Bldrs: ${PkgJson.version}`}
+      icon={<LogoB/>}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      placement='right'
+      variant='noBackground'
     >
-      <ControlButton
-        title={`Bldrs: ${PkgJson.version}`}
-        icon={<LogoB/>}
+      <AboutDialog
         isDialogDisplayed={isDialogDisplayed}
         setIsDialogDisplayed={setIsDialogDisplayed}
-        variant='noBackground'
-      >
-        <AboutDialog
-          isDialogDisplayed={isDialogDisplayed}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-          onClose={() => {
-            setIsDialogDisplayed(false)
-            FirstTime.setVisited()
-          }}
-        />
-      </ControlButton>
-    </Box>
+        onClose={() => {
+          setIsDialogDisplayed(false)
+          FirstTime.setVisited()
+        }}
+      />
+    </ControlButton>
   )
 }
 

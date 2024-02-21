@@ -148,7 +148,7 @@ describe('CadView', () => {
   })
 
 
-  it.skip('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),

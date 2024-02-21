@@ -10,45 +10,45 @@ export function getComponentOverrides(palette, typography) {
           fontWeight: 400,
         },
       },
-      variants: [
-        {
-          props: {variant: 'rectangular'},
-          style: {
-            width: '180px',
-            height: '40px',
-            borderRadius: '10px',
-            border: 'none',
-          },
+      variants: [{
+        props: {variant: 'rectangular'},
+        style: {
+          width: '180px',
+          height: '40px',
+          borderRadius: '10px',
+          border: 'none',
         },
-      ],
+      }],
     },
     MuiButtonGroup: {
-      styleOverrides: {
-        root: {
-          'padding': '10px',
-          'margin': '1em',
-          '& > *': { // *:not(:last-child)
-            margin: '0.2em',
-            borderColor: 'blue',
-            borderStyle: 'solid',
-            borderWidth: '2px',
-            borderRadius: '10px',
-          },
-          border: 'solid 2px red',
-        },
-      },
       variants: [{
+        props: {orientation: 'horizontal'},
+        style: {
+          '& .MuiButtonBase-root + .MuiButtonBase-root': {
+            marginLeft: '1em', // same as vertical
+          },
+        },
+      }, {
+        props: {orientation: 'vertical'},
+        style: {
+          '& .MuiButtonBase-root + .MuiButtonBase-root': {
+            marginTop: '1em', // same as horizontal
+          },
+        },
+      }, {
+        props: {variant: 'controls'},
+        style: {
+          margin: '1em',
+        },
+      }, {
         props: {variant: 'contained'},
         style: ({theme}) => ({
           boxShadow: theme.shadows[0],
-          opacity: .9,
         }),
       }, {
         props: {variant: 'outlined'},
         style: ({theme}) => ({
-          // backgroundColor: theme.palette.primary.main,
           boxShadow: theme.shadows[0],
-          opacity: .9,
         }),
       }],
     },
@@ -174,6 +174,15 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiSvgIcon: {
+      variants: [{
+        // Use 'success' to indicate active icons, e.g. in HelpControl
+        props: {variant: 'success'},
+        style: {
+          color: palette.success.main,
+        },
+      }],
+    },
     MuiSwitch: {
       styleOverrides: {
         track: {
@@ -186,7 +195,7 @@ export function getComponentOverrides(palette, typography) {
         root: {
           // backgroundColor: palette.primary.main,
           borderRadius: '10px',
-          opacity: .9,
+          // opacity: .9,
         },
       },
     },
@@ -206,62 +215,18 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiToggleButton: {
       styleOverrides: {
-        sizeMedium: {
-          'width': '40px',
-          'height': '40px',
-          'border': 'none',
-          '&.Mui-selected, &.Mui-selected:hover': {
-            backgroundColor: palette.secondary.dark,
-            opacity: .9,
-          },
-        },
-        sizeSmall: {
+        root: {
+          width: '3.5em',
+          height: '3.5em',
           border: 'none',
-          width: '30px',
-          height: '30px',
+          borderRadius: '10px',
         },
       },
-      variants: [
-        {
-          props: {variant: 'rounded'},
-          style: {
-            'width': '40px',
-            'height': '40px',
-            'borderRadius': '10px',
-            'border': 'none',
-            // 'backgroundColor': palette.scene.background,
-            '&.Mui-selected, &.Mui-selected:hover': {
-              // backgroundColor: palette.primary.main,
-              opacity: .9,
-            },
-          },
+      variants: [{
+        props: {variant: 'control'},
+        style: {
         },
-        {
-          props: {variant: 'solid'},
-          style: {
-            'borderRadius': '0px',
-            '&.Mui-selected, &.Mui-selected:hover': {
-              // backgroundColor: palette.scene.background,
-              opacity: .9,
-            },
-          },
-        },
-        {
-          props: {variant: 'noBackground'},
-          style: {
-            'width': '40px',
-            'height': '40px',
-            'borderRadius': '10px',
-            'border': 'none',
-            'margin': '0px 4px 2px 0px',
-            // 'backgroundColor': palette.scene.background,
-            '&.Mui-selected, &.Mui-selected:hover': {
-              // backgroundColor: palette.primary.main,
-              opacity: .9,
-            },
-          },
-        },
-      ],
+      }],
     },
   }
 }

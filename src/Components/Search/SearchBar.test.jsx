@@ -1,6 +1,7 @@
 import React from 'react'
 import {render, screen} from '@testing-library/react'
-import ShareMock from '../../ShareMock'
+// import ShareMock from '../../ShareMock'
+import {RouteThemeCtx} from '../../Share.fixture'
 import SearchBar, {
   containsIfcPath,
   stripIfcPathFromLocation,
@@ -62,7 +63,7 @@ describe( 'SearchBar', () => {
 
   it('SeachBar', () => {
     // eslint-disable-next-line no-empty-function
-    render(<ShareMock><SearchBar onClickMenuCb={() => {}} isOpen={true}/></ShareMock>)
+    render(<SearchBar onClickMenuCb={() => {}} isOpen={true}/>, {wrapper: RouteThemeCtx})
     expect(screen.getByPlaceholderText('Search')).toBeInTheDocument()
   })
 })

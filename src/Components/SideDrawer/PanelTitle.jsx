@@ -1,15 +1,18 @@
 import React from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
+import {assertDefined} from '../../utils/assert'
 
 
 /**
  * @property {string} title Panel title
  * @property {object} [controlsGroup] Controls Group is placed on the right of the title
  * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
+ * @property {boolean} [includeGutter] Below title.  Default: false
  * @return {React.ReactElement}
  */
-export default function PanelTitle({title, controlsGroup, iconSrc}) {
+export default function PanelTitle({title, controlsGroup, iconSrc, includeGutter}) {
+  assertDefined(title)
   return (
     <Box
       sx={{
@@ -17,8 +20,6 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderRadius: '5px',
-        height: '40px',
       }}
     >
       <Box sx={{
@@ -36,7 +37,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
           }} src={iconSrc} alt={title}
           /> : <></>
         }
-        <Typography variant='body1'>
+        <Typography variant='body1' gutterBottom={includeGutter}>
           {title}
         </Typography>
       </Box>

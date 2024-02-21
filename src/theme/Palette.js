@@ -27,6 +27,19 @@ export const day = {
     active: '#00F0FF',
   },
 
+  success: {
+    main: '#0f0',
+    light: '#0f0',
+    dark: '#0f0',
+    contrastText: '#000',
+  },
+
+  action: {
+    // Found this searching around
+    // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
+    selectedOpacity: 0.3,
+  },
+
   logo: {
     frontFace: 'white',
     leftFace: 'lime', // lime: tron row4 col2
@@ -55,6 +68,19 @@ export const night = {
     contrastText: colors.grey.lightest,
     // e.g. for list of items with one active
     active: '#00F0FF',
+  },
+
+  success: {
+    main: '#0f0',
+    light: '#0f0',
+    dark: '#0f0',
+    contrastText: '#000',
+  },
+
+  action: {
+    // Found this searching around
+    // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
+    selectedOpacity: 0.3,
   },
 
   logo: {

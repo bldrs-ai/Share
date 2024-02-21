@@ -16,11 +16,7 @@ describe('VersionsPanel', () => {
       result.current.setModelPath(MOCK_MODEL_PATH_GIT)
       result.current.setRepository(MOCK_REPOSITORY)
     })
-    const {getByText} = render(
-        <ShareMock>
-          <VersionsPanel filePath="/ZGRAGGEN.ifc" currentRef={'main'}/>
-        </ShareMock>,
-    )
+    const {getByText} = render(<VersionsPanel filePath="/ZGRAGGEN.ifc" currentRef={'main'}/>, {wrapper: ShareMock})
     const dialogTitle = getByText('Versions')
     expect(dialogTitle).toBeInTheDocument()
   })

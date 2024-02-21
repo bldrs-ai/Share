@@ -26,15 +26,12 @@ export default function CameraControl() {
   const setCameraControls = useStore((state) => state.setCameraControls)
   const location = useLocation()
 
-
   useEffect(() => {
     setCameraControls(cameraControls)
     onHash(location, cameraControls)
     onLoad(location, cameraControls)
   }, [location, cameraControls, setCameraControls])
 
-
-  // NOTE: NOT DISPLAYED
   return <div style={{display: 'none'}}>Camera</div>
 }
 

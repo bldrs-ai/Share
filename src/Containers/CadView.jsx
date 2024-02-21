@@ -2,6 +2,8 @@ import React, {useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
+import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
@@ -32,10 +34,13 @@ import {setKeydownListeners} from '../utils/shortcutKeys'
 import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
-import ViewRoot from './ViewRoot'
 import ViewerContainer from './ViewerContainer'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
+
+
+import SearchControl from '../Components/Search/SearchControl'
+import SearchBar from '../Components/Search/SearchBar'
 
 
 let count = 0
@@ -754,22 +759,40 @@ export default function CadView({
   }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
+  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+
+  // TODO(pablo): need to set the height on the row stack below to keep them
+  // from expanding
   return (
-    <ViewRoot>
+    <Box sx={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', margin: 0, padding: 0}}>
       <ViewerContainer/>
-      {viewer &&
-       <ControlsGroupAndDrawer
-         deselectItems={deselectItems}
-         pathPrefix={pathPrefix}
-         branch={branch}
-         selectWithShiftClickEvents={selectWithShiftClickEvents}
-       />}
-      {viewer && <ElementGroup deselectItems={deselectItems}/>}
-      <AboutControl/>
-      <HelpControl/>
+      <Box sx={{position: 'absolute', bottom: 0, left: 0, margin: '1em'}}><AboutControl/></Box>
+      <Box sx={{position: 'absolute', bottom: 0, right: 0, margin: '1em'}}><HelpControl/></Box>
+      {viewer && (
+        <>
+          <ControlsGroupAndDrawer
+            deselectItems={deselectItems}
+            pathPrefix={pathPrefix}
+            branch={branch}
+            selectWithShiftClickEvents={selectWithShiftClickEvents}
+          />
+
+          {isSearchEnabled &&
+           <Box sx={{position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%)', margin: '1em'}}>
+             <SearchBar/>
+           </Box>}
+
+          <Box sx={{position: 'absolute', bottom: 0, left: '50%', transform: 'translate(-50%)', margin: '1em'}}>
+            <ElementGroup deselectItems={deselectItems}/>
+          </Box>
+
+          <Box sx={{position: 'absolute', top: 0, right: 0}}>
+            <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+          </Box>
+        </>
+      )}
       <AlertDialogAndSnackbar/>
       <LoadingBackdrop/>
-      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>}
-    </ViewRoot>
+    </Box>
   )
 }

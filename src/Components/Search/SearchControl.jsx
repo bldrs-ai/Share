@@ -19,6 +19,7 @@ export default function SearchControl() {
       hashPrefix={SEARCH_PREFIX}
       isDialogDisplayed={isSearchBarVisible}
       setIsDialogDisplayed={setIsSearchBarVisible}
+      placement='bottom'
     />
   )
 }

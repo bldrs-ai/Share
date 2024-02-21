@@ -1,12 +1,12 @@
 import React from 'react'
+import {HelmetProvider} from 'react-helmet-async'
 import {ThemeProvider} from '@mui/material/styles'
 import useShareTheme from '../theme/Theme'
-import {HelmetProvider} from 'react-helmet-async'
 
 
 /**
- * @property {object} children React component(s)
- * @return {React.Component}
+ * @property {React.ReactElement} children React component(s)
+ * @return {React.ReactElement}
  */
 export const MockComponent = ({children}) => {
   return (

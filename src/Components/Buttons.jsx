@@ -1,11 +1,11 @@
-import React, {useCallback, useEffect, useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams, getHashParams, removeHashParams} from '../utils/location'
+import {addHashParams, getHashParams} from '../utils/location'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
@@ -15,10 +15,10 @@ import BackIcon from '../assets/icons/Back.svg'
  * An icon button with a tooltip.
  *
  * @property {string} title Tooltip text
- * @property {Function} onClick callback
- * @property {object} icon button icon
+ * @property {Function} onClick Callback
+ * @property {object} icon Button icon
+ * @property {string} placement Tooltip placement
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
- * @property {string} [placement] Tooltip location.  Default: right
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} dataTestId Internal attribute for component testing.  Default: ''
@@ -28,20 +28,21 @@ export function TooltipIconButton({
   title,
   onClick,
   icon,
+  placement,
   enabled = true,
   selected = false,
-  size = 'medium',
-  variant = 'rounded',
-  placement = 'right',
   aboutInfo = true,
+  color,
+  size,
+  variant,
   dataTestId = '',
 }) {
-  assertDefined(title, onClick, icon)
-  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
+  assertDefined(title, onClick, icon, placement)
+  const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible)
 
   const [openLocal, setOpenLocal] = useState(false)
 
-  const open = aboutInfo ? isHelpTooltips : false
+  const open = aboutInfo ? isHelpTooltipsVisible : false
 
   return (
     <Tooltip
@@ -57,14 +58,11 @@ export function TooltipIconButton({
       <ToggleButton
         selected={selected}
         onClick={onClick}
+        disabled={!enabled}
         value={''}
         size={size}
+        color={color}
         variant={variant}
-        disabled={!enabled}
-        sx={{
-          // TODO(pablo): couldn't figure how to set this in theme
-          opacity: enabled ? '1.0' : '0.35',
-        }}
       >
         {icon}
       </ToggleButton>
@@ -89,8 +87,7 @@ export function ControlButton({
   isDialogDisplayed,
   setIsDialogDisplayed,
   children,
-  placement,
-  variant,
+  ...props
 }) {
   assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
   return (
@@ -100,8 +97,9 @@ export function ControlButton({
         icon={icon}
         onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
         selected={isDialogDisplayed}
-        variant={variant}
-        placement={placement}
+        variant='control'
+        color='success'
+        {...props}
       />
       {children}
     </>

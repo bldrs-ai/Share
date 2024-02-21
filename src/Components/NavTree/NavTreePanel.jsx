@@ -37,7 +37,6 @@ export default function NavTreePanel({
   const expandedElements = useStore((state) => state.expandedElements)
   const expandedTypes = useStore((state) => state.expandedTypes)
 
-  const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
   const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
 
   const rootElement = useStore((state) => state.rootElement)
@@ -83,7 +82,7 @@ export default function NavTreePanel({
             <Tooltip
               title={'Spatial Structure'}
               describeChild
-              placement={'bottom-end'}
+              placement='bottom-end'
               PopperProps={{style: {zIndex: 0}}}
             >
               <AccountTreeIcon/>
@@ -93,7 +92,7 @@ export default function NavTreePanel({
             <Tooltip
               title={'Element Types'}
               describeChild
-              placement={'bottom-end'}
+              placement='bottom-end'
               PopperProps={{style: {zIndex: 0}}}
             >
               <ListIcon/>

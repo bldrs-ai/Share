@@ -77,20 +77,8 @@ export default function SideDrawer() {
         }}
         ref={sidebarRef}
       >
-        {!isMobile &&
-          <HorizonResizerButton
-            sidebarRef={sidebarRef}
-            thickness={thickness}
-            isOnLeft={true}
-          />
-        }
-        {isMobile &&
-          <VerticalResizerButton
-            sidebarRef={sidebarRef}
-            thickness={thickness}
-            isOnTop={true}
-          />
-        }
+        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnLeft={true}/>}
+        {isMobile && <VerticalResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnTop={true}/>}
         {/* Content */}
         <Box
           sx={{

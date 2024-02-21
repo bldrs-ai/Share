@@ -18,6 +18,9 @@ export default function createUISlice(set, get) {
     isHelpVisible: false,
     setIsHelpVisible: (isVisible) => set(() => ({isHelpVisible: isVisible})),
 
+    isHelpTooltipsVisible: false,
+    setIsHelpTooltipsVisible: (isVisible) => set(() => ({isHelpTooltipsVisible: isVisible})),
+
     isImagineVisible: false,
     setIsImagineVisible: (isVisible) => set(() => ({isImagineVisible: isVisible})),
 
@@ -27,7 +30,6 @@ export default function createUISlice(set, get) {
     isShareVisible: false,
     setIsShareVisible: (isVisible) => set(() => ({isShareVisible: isVisible})),
 
-    isHelpTooltips: false,
     cutPlanes: [],
     levelInstance: null,
     viewer: null,
@@ -44,7 +46,5 @@ export default function createUISlice(set, get) {
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
-    toggleIsHelpTooltips: () => set((state) => ({isHelpTooltips: !state.isHelpTooltips})),
-    turnOffIsHelpTooltips: () => set(() => ({isHelpTooltips: false})),
   }
 }

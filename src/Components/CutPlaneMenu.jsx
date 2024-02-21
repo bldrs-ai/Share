@@ -31,15 +31,11 @@ export default function CutPlaneMenu() {
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const location = useLocation()
-  const open = Boolean(anchorEl)
+  const isMenuVisible = Boolean(anchorEl)
   const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
-
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget)
-  }
 
   const handleClose = () => {
     setAnchorEl(null)
@@ -94,26 +90,20 @@ export default function CutPlaneMenu() {
     <>
       <TooltipIconButton
         title={'Section'}
-        placement='top'
-        variant='solid'
         icon={<CropOutlinedIcon className='icon-share'/>}
-        onClick={handleClick}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
+        placement='top'
+        variant='control'
       />
       <Menu
         elevation={1}
         id='basic-menu'
         anchorEl={anchorEl}
-        open={open}
+        open={isMenuVisible}
         onClose={handleClose}
         anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-        transformOrigin={{vertical: 'top', horizontal: 'center'}}
-        PaperProps={{
-          style: {
-            left: '300px',
-            transform: 'translateX(0px) translateY(-60px)',
-          },
-        }}
+        transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}

@@ -89,6 +89,7 @@ export default function VersionsPanel({filePath, currentRef}) {
           title='Navigate to the head of version history'
           icon={<RestartAltIcon/>}
           onClick={navigateToMain}
+          placement='bottom'
         />
       }
       onCloseClick={() => setIsVersionsVisible(false)}

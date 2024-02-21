@@ -1,15 +1,15 @@
 import React from 'react'
 import {fireEvent, render} from '@testing-library/react'
-import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../__mocks__/authentication'
-import LoginMenu from './LoginMenu'
-import ShareMock from '../ShareMock'
+import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
+import {ThemeCtx} from '../../theme/Theme.fixture'
+import LoginMenu from './PersonaControl'
 
 
 describe('LoginMenu', () => {
   it('renders the login button when not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
-    const usersMenu = await findByTitle('Users menu')
+    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTitle('Login and preferences')
     fireEvent.click(usersMenu)
 
     const LoginWithGithub = await findByText('Log in with Github')
@@ -18,8 +18,8 @@ describe('LoginMenu', () => {
 
   it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
-    const usersMenu = await findByTitle('Users menu')
+    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTitle('Login and preferences')
     fireEvent.click(usersMenu)
 
     const LoginWithGithub = await findByText('Log out')
@@ -28,8 +28,8 @@ describe('LoginMenu', () => {
 
   it('renders the theme selection', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
-    const usersMenu = await findByTitle('Users menu')
+    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTitle('Login and preferences')
     fireEvent.click(usersMenu)
 
     const dayThemeButton = await findByText('Night theme')
@@ -38,8 +38,8 @@ describe('LoginMenu', () => {
 
   it('renders the night theme when selected', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
-    const usersMenu = await findByTitle('Users menu')
+    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTitle('Login and preferences')
     fireEvent.click(usersMenu)
     const dayThemeButton = await findByText('Night theme')
     fireEvent.click(dayThemeButton)
@@ -50,8 +50,7 @@ describe('LoginMenu', () => {
 
   it('renders users avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByAltText} = render(<ShareMock><LoginMenu/></ShareMock>)
-
+    const {findByAltText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
     const avatarImage = await findByAltText('Unit Testing')
     expect(avatarImage).toBeInTheDocument()
   })

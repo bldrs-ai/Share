@@ -11,10 +11,7 @@ import Typography from '@mui/material/Typography'
 import {removeHashParams} from '../utils/location'
 import useStore from '../store/useStore'
 import {ControlButtonWithHashState} from './Buttons'
-import {
-  addCameraUrlParams,
-  removeCameraUrlParams,
-} from './CameraControl'
+import {addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
 import {addPlaneLocationToUrl} from './CutPlaneMenu'
 import Dialog from './Dialog'
 import Toggle from './Toggle'
@@ -39,6 +36,7 @@ export default function ShareControl() {
       isDialogDisplayed={isShareVisible}
       setIsDialogDisplayed={setIsShareVisible}
       hashPrefix={SHARE_PREFIX}
+      placement='left'
     >
       <ShareDialog
         isDialogDisplayed={isShareVisible}
@@ -67,7 +65,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
   const urlTextFieldRef = createRef()
-  const isPlanesOn = viewer.clipper.planes.length > 0
 
   useEffect(() => {
     if (viewer) {
@@ -76,10 +73,11 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       } else {
         removeCameraUrlParams()
       }
-    }
-    if (isPlanesOn) {
-      setIsPlaneInUrl(true)
-      addPlaneLocationToUrl(viewer, model)
+
+      if (viewer.clipper.planes.length > 0) {
+        setIsPlaneInUrl(true)
+        addPlaneLocationToUrl(viewer, model)
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewer, model])
@@ -125,7 +123,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
     >
       <Stack spacing={1}>
         <Helmet>
-          <title>Share IFC Model</title>
+          <title>Share Model</title>
         </Helmet>
         <Box>
           <QRCode
@@ -163,7 +161,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           }}
         />
         <Stack spacing={0}>
-          {isPlanesOn &&
+          {isPlaneInUrl &&
            <Stack
              direction="row"
              justifyContent="space-around"

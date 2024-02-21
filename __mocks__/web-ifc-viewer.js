@@ -94,6 +94,9 @@ const impl = {
     getClippingPlanes: jest.fn(() => {
       return []
     }),
+    renderer: {
+      newScreenshot: jest.fn(),
+    },
   },
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   loadIfcFile: jest.fn(jest.fn(() => loadedModel)),

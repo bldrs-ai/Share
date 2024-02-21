@@ -68,6 +68,7 @@ export default function NotesControl() {
       isDialogDisplayed={isNotesVisible}
       setIsDialogDisplayed={setIsNotesVisible}
       hashPrefix={NOTES_PREFIX}
+      placement='left'
     />
   )
 }

@@ -9,7 +9,7 @@ import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 export function LogoB() {
   return (
     <ThemeBox>
-      <LogoBIcon/>
+      <LogoBIcon className='icon-share'/>
     </ThemeBox>
   )
 }
@@ -23,6 +23,7 @@ export function LogoBWithDomain() {
   return (
     <ThemeBox>
       <LogoBWithDomainIcon
+        className='icon-share'
         style={{
           fill: theme.palette.secondary.contrastText,
         }}
@@ -41,7 +42,6 @@ function ThemeBox({children}) {
   return (
     <Box
       sx={{
-        'width': '70px',
         'margin': '0 auto',
         '& svg': {
           '& .face-left': {

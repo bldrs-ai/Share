@@ -44,12 +44,9 @@ export default function PropertiesPanel({includeGutter}) {
   }
 
   return (
-    <PanelWithTitle title={'PROPERTIES'}
-      controlsGroup={
-        <CloseButton
-          onClick={onCloseClick}
-        />
-      }
+    <PanelWithTitle
+      title={'PROPERTIES'}
+      controlsGroup={<CloseButton onClick={onCloseClick}/>}
       includeGutter={includeGutter}
     >
       {selectedElement ?

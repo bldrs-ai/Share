@@ -19,6 +19,7 @@ export default function NavTreeControl() {
       isDialogDisplayed={isNavTreeVisible}
       setIsDialogDisplayed={setIsNavTreeVisible}
       hashPrefix={NAVTREE_PREFIX}
+      placement='bottom'
     />
   )
 }

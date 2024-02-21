@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {useEffect, useState} from 'react'
 import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -20,46 +20,41 @@ import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import HistoryIcon from '@mui/icons-material/History'
 import PortraitIcon from '@mui/icons-material/Portrait'
 import SearchIcon from '@mui/icons-material/Search'
+import ShiftIcon from '@mui/icons-material/FileUpload'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import TreeIcon from '../assets/icons/Tree.svg'
-import ShiftIcon from '../assets/icons/Shift.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 
 
 /**
- * The main component to display a help control button and a help dialog.
+ * ControlButton that toggles HelpDialog, with nav state
  *
- * @property {Function} fileOpen Callback for file opening
- * @property {string} modelPath Path to the model
- * @property {boolean} isLocalModel Determines if the model is local
  * @return {React.ReactElement}
  */
 export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
   const isHelpVisible = useStore((state) => state.isHelpVisible)
   const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
+  const setIsHelpTooltipsVisible = useStore((state) => state.setIsHelpTooltipsVisible)
+
+  useEffect(() => {
+    setIsHelpTooltipsVisible(isHelpVisible)
+  }, [isHelpVisible, setIsHelpTooltipsVisible])
 
   return (
-    <Box
-      sx={{
-        position: 'fixed',
-        bottom: '1em',
-        right: '1em',
-      }}
+    <ControlButtonWithHashState
+      title={'Help'}
+      icon={<HelpOutlineIcon className='icon-share'/>}
+      isDialogDisplayed={isHelpVisible}
+      setIsDialogDisplayed={setIsHelpVisible}
+      hashPrefix={HELP_PREFIX}
+      placement='left'
     >
-      <ControlButtonWithHashState
-        icon={<HelpOutlineIcon className='icon-share'/>}
-        title={'Help'}
+      <HelpDialog
         isDialogDisplayed={isHelpVisible}
         setIsDialogDisplayed={setIsHelpVisible}
-        hashPrefix={HELP_PREFIX}
-      >
-        <HelpDialog
-          isDialogDisplayed={isHelpVisible}
-          setIsDialogDisplayed={setIsHelpVisible}
-        />
-      </ControlButtonWithHashState>
-    </Box>
+      />
+    </ControlButtonWithHashState>
   )
 }
 
@@ -221,20 +216,20 @@ const HelpComponent = ({icon, description}) => {
 const HelpList = ({pageIndex}) => {
   const helpContent = [
     {
+      icon: <TouchAppOutlinedIcon className='icon-share' variant='success'/>,
+      description: 'Double click the model to select a model element',
+    },
+    {
+      icon: <ShiftIcon className='icon-share' variant='success'/>,
+      description: 'Hold shift to select multiple elements',
+    },
+    {
       icon: <CreateNewFolderOutlinedIcon className='icon-share'/>,
       description: 'Open IFC models from GITHUB or local drive',
     },
     {
       icon: <CropOutlinedIcon className='icon-share'/>,
       description: 'Study the model using standard sections',
-    },
-    {
-      icon: <TouchAppOutlinedIcon className='icon-share'/>,
-      description: 'Double click the model to select a model element',
-    },
-    {
-      icon: <ShiftIcon className='icon-share'/>,
-      description: 'Hold shift to select multiple elements',
     },
     {
       icon: <FormatListBulletedIcon className='icon-share'/>,

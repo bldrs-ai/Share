@@ -1,24 +1,25 @@
 import React from 'react'
 import {fireEvent, render, renderHook, act} from '@testing-library/react'
-import {MockComponent} from '../__mocks__/MockComponent'
 import {TooltipIconButton} from './Buttons'
 import useStore from '../store/useStore'
+import {ThemeCtx} from '../theme/Theme.fixture'
 import QuestionIcon from '../assets/icons/Question.svg'
 
 
 describe('<TooltipIconButton />', () => {
-  test('should render successfully', async () => {
+  it('should render successfully', async () => {
     const testId = 'test-button'
     const rendered = render(
-        <MockComponent>
+        <ThemeCtx>
           <TooltipIconButton
-            dataTestId={testId}
-            title={'Hello. Is it me you\'re looking for?'}
+            title='Hello. Is it me ur looking for?'
             // eslint-disable-next-line no-empty-function
             onClick={() => {}}
             icon={<QuestionIcon/>}
+            placement='top'
+            dataTestId={testId}
           />
-        </MockComponent>)
+        </ThemeCtx>)
 
     const button = rendered.getByTestId(testId)
     fireEvent.mouseOver(button)
@@ -26,20 +27,23 @@ describe('<TooltipIconButton />', () => {
     const tooltip = await rendered.findByRole('tooltip')
     expect(tooltip).toBeInTheDocument()
   })
-  test('show tooltip when the help is activated', async () => {
+
+
+  it('show tooltip when the help is activated', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
-      result.current.toggleIsHelpTooltips()
+      result.current.setIsHelpTooltipsVisible(true)
     })
     const {getByText} = render(
-        <MockComponent>
+        <ThemeCtx>
           <TooltipIconButton
-            title={'TestTooltip'}
+            title='TestTooltip'
             // eslint-disable-next-line no-empty-function
             onClick={() => {}}
             icon={<QuestionIcon/>}
+            placement='top'
           />
-        </MockComponent>)
+        </ThemeCtx>)
     expect(await getByText('TestTooltip')).toBeVisible()
   })
 })

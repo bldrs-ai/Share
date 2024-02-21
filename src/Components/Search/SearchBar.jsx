@@ -2,7 +2,7 @@ import React, {useRef, useEffect, useState} from 'react'
 import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
-import {looksLikeLink, githubUrlOrPathToSharePath} from '../../ShareRoutes'
+import {looksLikeLink, githubUrlOrPathToSharePath} from '../../utils/GitHub'
 import debug from '../../utils/debug'
 import {handleBeforeUnload} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
@@ -79,7 +79,7 @@ export default function SearchBar() {
   // way to have them share the same width, which is now set in the
   // parent container (CadView).
   return (
-    <form onSubmit={onSubmit} style={{width: '250px', margin: '0 auto'}}>
+    <form onSubmit={onSubmit} style={{width: '100%'}}>
       <Autocomplete
         freeSolo
         options={['Dach', 'Decke', 'Fen', 'Wand', 'Leuchte', 'Pos', 'Te']}

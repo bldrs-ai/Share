@@ -1,7 +1,5 @@
-import React, {useEffect} from 'react'
-import {useLocation} from 'react-router'
+import React from 'react'
 import useStore from '../../store/useStore'
-import {getHashParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
 import PropertiesIcon from '@mui/icons-material/FormatListBulleted'
 
@@ -14,7 +12,6 @@ import PropertiesIcon from '@mui/icons-material/FormatListBulleted'
 export default function PropertiesControl() {
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
-
   return (
     <ControlButtonWithHashState
       title='Properties'
@@ -22,6 +19,7 @@ export default function PropertiesControl() {
       isDialogDisplayed={isPropertiesVisible}
       setIsDialogDisplayed={setIsPropertiesVisible}
       hashPrefix={PROPERTIES_PREFIX}
+      placement='left'
     />
   )
 }

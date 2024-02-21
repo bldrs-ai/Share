@@ -1,21 +1,21 @@
 import React from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
-import useStore from '../store/useStore'
-import CameraControl from './CameraControl'
-import LoginMenu from './LoginMenu'
-import NotesControl from './Notes/NotesControl'
-import PropertiesControl from './Properties/PropertiesControl'
-import ShareControl from './ShareControl'
-import ImagineControl from './ImagineControl'
-import {TooltipIconButton} from './Buttons'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
+import useStore from '../store/useStore'
+import {TooltipIconButton} from './Buttons'
+import CameraControl from './CameraControl'
+import ImagineControl from './ImagineControl'
+import NotesControl from './Notes/NotesControl'
+import PersonaControl from './Persona/PersonaControl'
+import PropertiesControl from './Properties/PropertiesControl'
+import ShareControl from './ShareControl'
 
 
 /**
- * OperationsGroup contains tools for sharing, notes, properties, cut
- * plane, deselect, theme change and about
+ * OperationsGroup contains tools for persona, sharing, notes, properties and
+ * imagine
  *
  * @property {Function} deselectItems deselects currently selected element
  * @return {React.ReactElement}
@@ -33,18 +33,23 @@ export default function OperationsGroup({deselectItems}) {
   const isAnElementSelected = selectedElement !== null
 
   return (
-    <ButtonGroup orientation='vertical' variant='contained'>
-      {isLoginEnabled && (<><LoginMenu/><Divider sx={{pt: '5px'}}/></>)}
+    <ButtonGroup orientation='vertical' variant='controls'>
+      {isLoginEnabled && (
+        <>
+          <PersonaControl/>
+          {/* This lines up divider with top of notes content panel */}
+          <Divider sx={{margin: '8px 0'}}/>
+        </>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}
       {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
       {isAppStoreEnabled &&
-          <TooltipIconButton
-            title='Open App Store'
-            icon={<AppStoreIcon/>}
-            selected={isAppStoreOpen}
-            onClick={() => toggleAppStoreDrawer()}
-          />
+       <TooltipIconButton
+         title='Open App Store'
+         icon={<AppStoreIcon/>}
+         selected={isAppStoreOpen}
+         onClick={() => toggleAppStoreDrawer()}
+       />
       }
       {isImagineEnabled && <ImagineControl/>}
       {/* Invisible */}

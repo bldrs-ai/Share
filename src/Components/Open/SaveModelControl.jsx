@@ -5,18 +5,18 @@ import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import FileContext from '../OPFS/FileContext'
-import useStore from '../store/useStore'
+import FileContext from '../../OPFS/FileContext'
+import useStore from '../../store/useStore'
 import {
   commitFile,
   getOrganizations,
   getRepositories,
   getUserRepositories,
   getFilesAndFolders,
-} from '../utils/GitHub'
-import debug from '../utils/debug'
-import {ControlButton} from './Buttons'
-import Dialog from './Dialog'
+} from '../../utils/GitHub'
+import debug from '../../utils/debug'
+import {ControlButton} from '../Buttons'
+import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
@@ -59,6 +59,7 @@ export default function SaveModelControl() {
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<SaveOutlinedIcon className='icon-share'/>}
+      placement='bottom'
     >
       <SaveModelDialog
         isDialogDisplayed={isDialogDisplayed}
@@ -219,17 +220,17 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   return (
     <Dialog
       headerIcon={<SaveOutlinedIcon className='icon-share'/>}
-      headerText={'Save'}
+      headerText='Save'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Save model'}
+      actionTitle='Save model'
       actionCb={saveFile}
     >
       <Stack
         spacing={1}
-        direction="column"
-        justifyContent="center"
-        alignItems="center"
+        direction='column'
+        justifyContent='center'
+        alignItems='center'
         sx={{paddingTop: '6px', width: '280px'}}
       >
         {!isAuthenticated ?
@@ -238,29 +239,30 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
          <Stack>
            <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-           <Selector label={'Organization'} list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+           <Selector label='Organization' list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
            <Selector
-             label={'Repository'}
+             label='Repository'
              list={repoNamesArr}
              selected={selectedRepoName}
              setSelected={selectRepo}
-             testId={'Repository'}
+             testId='Repository'
            />
            <SelectorSeparator
              label={(currentPath === '') ? 'Folder' :
                     `Folder: ${currentPath}`}
              list={foldersArr}
              selected={selectedFolderName}
-             setSelected={selectFolder} testId={'Folder'}
+             setSelected={selectFolder}
+             testId='Folder'
            />
            {requestCreateFolder && (
              <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
                <TextField
-                 label="Enter folder name"
+                 label='Enter folder name'
                  variant='outlined'
                  size='small'
                  onChange={(e) => setCreateFolderName(e.target.value)}
-                 data-testid="CreateFolderId"
+                 data-testid='CreateFolderId'
                  sx={{flexGrow: 1}}
                  onKeyDown={(e) => {
                    // Stops the event from propagating up to parent elements
@@ -269,25 +271,20 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
                />
                <IconButton
                  onClick={() => setRequestCreateFolder(false)}
-                 size="small"
+                 size='small'
                >
                  <ClearIcon className='icon-share'/>
                </IconButton>
              </div>
            )}
            <TextField
-             label="Enter file name"
+             label='Enter file name'
              variant='outlined'
              size='small'
              onChange={(e) => setSelectedFileName(e.target.value)}
-             onKeyDown={(e) => {
-               // Stops the event from propagating up to parent elements
-               e.stopPropagation()
-             }}
-             sx={{
-               marginBottom: '.5em',
-             }}
-             data-testid="CreateFileId"
+             onKeyDown={(e) => e.stopPropagation()}
+             sx={{marginBottom: '.5em'}}
+             data-testid='CreateFileId'
            />
          </Stack>
         }
@@ -301,15 +298,15 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
  *
  */
 async function fileSave(
-    file,
-    pathWithFileName,
-    selectedFileName,
-    orgName,
-    repoName,
-    branchName,
-    accessToken,
-    setSnackMessage,
-    onPathname,
+  file,
+  pathWithFileName,
+  selectedFileName,
+  orgName,
+  repoName,
+  branchName,
+  accessToken,
+  setSnackMessage,
+  onPathname,
 ) {
   if (file instanceof File) {
     setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)

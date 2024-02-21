@@ -7,16 +7,13 @@ import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {checkOPFSAvailability} from '../OPFS/utils'
-import useStore from '../store/useStore'
-import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../utils/GitHub'
-import {handleBeforeUnload} from '../utils/event'
-import {
-  loadLocalFile,
-  loadLocalFileFallback,
-} from '../utils/loader'
-import {ControlButtonWithHashState} from './Buttons'
-import Dialog from './Dialog'
+import {checkOPFSAvailability} from '../../OPFS/utils'
+import useStore from '../../store/useStore'
+import {getOrganizations, getRepositories, getFiles, getUserRepositories} from '../../utils/GitHub'
+import {handleBeforeUnload} from '../../utils/event'
+import {loadLocalFile, loadLocalFileFallback} from '../../utils/loader'
+import {ControlButtonWithHashState} from '../Buttons'
+import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
@@ -56,11 +53,12 @@ export default function OpenModelControl() {
 
   return (
     <ControlButtonWithHashState
-      title={'Open'}
+      title='Open'
       icon={<CreateNewFolderIcon className='icon-share'/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={OPEN_MODEL_PREFIX}
+      placement='bottom'
     >
       <OpenModelDialog
         isDialogDisplayed={isOpenModelVisible}
@@ -142,17 +140,17 @@ function OpenModelDialog({
   return (
     <Dialog
       headerIcon={<CreateNewFolderIcon className='icon-share'/>}
-      headerText={'Open'}
+      headerText='Open'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'Open model'}
+      actionTitle='Open model'
       actionCb={openFile}
     >
       <Stack
         spacing={1}
-        direction="column"
-        justifyContent="center"
-        alignItems="center"
+        direction='column'
+        justifyContent='center'
+        alignItems='center'
         sx={{width: '280px'}}
       >
         <>
@@ -200,9 +198,7 @@ function OpenModelDialog({
            />
            {selectedFileName !== '' &&
             <Box sx={{textAlign: 'center', marginTop: '4px'}}>
-              <Button
-                onClick={navigateToFile}
-              >
+              <Button onClick={navigateToFile}>
                 Load file
               </Button>
             </Box>

@@ -34,16 +34,11 @@ export default function ElementGroup({deselectItems}) {
   return (
     <Stack
       spacing={2}
-      direction="row"
-      justifyContent="center"
-      alignItems="center"
-      sx={{
-        position: 'fixed',
-        bottom: '1.0em',
-        width: '100%',
-      }}
+      direction='row'
+      justifyContent='center'
+      alignItems='center'
     >
-      <ButtonGroup orientation='horizontal' variant='outlined'>
+      <ButtonGroup orientation='horizontal' variant='controls'>
         {!isIsolate && <CutPlaneMenu/>}
 
         {isSelected() && selectedElement !== null &&

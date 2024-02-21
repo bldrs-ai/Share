@@ -1,5 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
+import Stack from '@mui/material/Stack'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import {useIsMobile} from '../Components/Hooks'
 import OperationsGroup from '../Components/OperationsGroup'
@@ -39,22 +40,11 @@ export default function OperationsGroupAndDrawer({deselectItems}) {
         </Box>
       </>
     ) : (
-      <Box
-        sx={{
-          position: 'absolute',
-          top: 0,
-          right: 0,
-          display: 'flex',
-          flex: 1,
-          flexDirection: 'row',
-        }}
-      >
-        <Box>
-          <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
+      <Stack direction='row'>
+        <OperationsGroup deselectItems={deselectItems}/>
         <SideDrawer/>
         <AppStoreSideDrawer/>
-      </Box>
+      </Stack>
     )
   )
 }
