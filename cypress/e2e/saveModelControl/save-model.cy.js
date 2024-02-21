@@ -42,8 +42,45 @@ describe('save model', () => {
 
 
           body:
-          // eslint-disable-next-line max-len
-          `<!DOCTYPE html><html><head><title>Authorization Response</title></head><body><script type="text/javascript">(function(window, document) {debugger;var targetOrigin = "http://localhost:${port}";var webMessageRequest = {};var authorizationResponse = {type: "authorization_response",response: {"code":"MMHHFcQ1bA-CrsFi6ctzt4wLc-aIljuJbdUyijNOdmtbE","state":"${state}"}};var mainWin = (window.opener) ? window.opener : window.parent;if (webMessageRequest["web_message_uri"] && webMessageRequest["web_message_target"]) {window.addEventListener("message", function(evt) {switch (evt.data.type) {case "relay_response":var messageTargetWindow = evt.source.frames[webMessageRequest["web_message_target"]];if (messageTargetWindow) {messageTargetWindow.postMessage(authorizationResponse, webMessageRequest["web_message_uri"]);window.close();}break;}});mainWin.postMessage({type: "relay_request"}, targetOrigin);} else {mainWin.postMessage(authorizationResponse, targetOrigin);}})(this, this.document);</script></body></html>`,
+          `
+    <!DOCTYPE html>
+    <html>
+      <head><title>Authorization Response</title></head>
+      <body>
+        <script type="text/javascript">
+          (function(window, document) {
+            debugger;
+            var targetOrigin = "http://localhost:${port}";
+            var webMessageRequest = {};
+            var authorizationResponse = {
+              type: "authorization_response",
+              response: {
+                "code":"MMHHFcQ1bA-CrsFi6ctzt4wLc-aIljuJbdUyijNOdmtbE",
+                "state":"${state}"
+              }
+            };
+            var mainWin = (window.opener) ? window.opener : window.parent;
+            if (webMessageRequest["web_message_uri"] && webMessageRequest["web_message_target"]) {
+              window.addEventListener("message", function(evt) {
+                switch (evt.data.type) {
+                  case "relay_response":
+                    var messageTargetWindow = evt.source.frames[webMessageRequest["web_message_target"]];
+                    if (messageTargetWindow) {
+                      messageTargetWindow.postMessage(authorizationResponse, webMessageRequest["web_message_uri"]);
+                      window.close();
+                    }
+                    break;
+                }
+              });
+              mainWin.postMessage({type: "relay_request"}, targetOrigin);
+            } else {
+              mainWin.postMessage(authorizationResponse, targetOrigin);
+            }
+          })(this, this.document);
+        </script>
+      </body>
+    </html>
+  `,
         })
       }).as('authorizeRequest')
 
@@ -82,8 +119,12 @@ describe('save model', () => {
           body:
            {
              access_token: 'testaccesstoken',
-             // eslint-disable-next-line max-len
-             id_token: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.${ encodedPayload }.otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1_RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDadDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9LH8d9ifiq2mOWYvglpltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A`,
+             id_token: `eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCIsImtpZCI6InF2dFhNWGZBRDQ5Mmd6OG5nWmQ3TCJ9.
+             ${ encodedPayload }.
+             otfuWiLuQlJz9d0uX2AOf4IFX4LxS-Vsq_Jt5YkDF98qCY3qQHBaiXnlyOoczjcZ3Zw9Ojq-NlUP27up-yqDJ1
+             _RJ7Kiw6LV9CeDAytNvVdSXEUYJRRwuBDadDMfgNEA42y0M29JYOL_ArPUVSGt9PWFKUmKdobxqwdqwMflFnw3
+             ypKAATVapagfOoAmgjCs3Z9pOgW-Vm1bb3RiundtgCAPNKg__brz0pyW1GjKVeUaoTN9LH8d9ifiq2mOWYvglp
+             ltt7sB596CCNe15i3YeFSQoUxKOpCb0kkd8oR_-dUtExJrWvK6kEL6ibYFCU659-qQkoI4r08h_L6cDFm62A`,
              scope: 'openid profile email offline_access',
              expires_in: 86400,
              token_type: 'Bearer',
@@ -92,12 +133,13 @@ describe('save model', () => {
       }).as('tokenRequest')
     })
 
-    it('should login and make sure save ifc button exists', () => {
+    it('should only find Save IFC button after login', () => {
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
         const STATUS_OK = 200
         const url = new URL(currentUrl)
         port = url.port
+        cy.findByTestId('Save IFC', {timeout: 10000}).should('not.exist')
         cy.log(`The current port is: ${port}`)
         cy.get('[title="Users menu"]').click()
         cy.log('simulating login')

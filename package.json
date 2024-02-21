@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.899",
+  "version": "1.0.900",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -8,7 +8,6 @@
     "url": "https://github.com/bldrs-ai/Share/issues"
   },
   "scripts": {
-    "cypresssingletest": "OAUTH2_CLIENT_ID=xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv AUTH0_DOMAIN=bldrs.us.auth0.com NODE_ENV=development yarn cypress-headed-spec cypress/e2e/saveModelControl/save-model.cy.js",
     "build": "yarn build-conway",
     "build-conway": "yarn clean && yarn build-share-conway && yarn build-cosmos",
     "build-webifc": "yarn clean && yarn build-share-webifc && yarn build-cosmos",
@@ -24,8 +23,8 @@
     "build-share-copy-wasm-conway": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
-    "cypress:open": "cypress run",
-    "cypress-spec": "cypress run --spec",
+    "cypress:open": "cypress run --browser chrome",
+    "cypress-spec": "cypress run --browser chrome --spec",
     "cypress-headed": "cypress run --headed --browser chrome --no-exit",
     "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
