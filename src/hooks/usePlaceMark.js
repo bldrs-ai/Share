@@ -100,7 +100,6 @@ export function usePlaceMark() {
         addUserDataInGroup(svgGroup, {url: hashUrlMap.get(hash), isActive: false})
       }))
     }
-
     processPlaceMarks()
   }, [placeMark])
 
@@ -173,7 +172,6 @@ export function usePlaceMark() {
     setNotes(notes)
   }
 
-
   const updateLocationAndGroup = (point, placeMarkInfoGroup) => {
     const placeMarkCoordinates = roundCoord(...point)
     updateUrlWithPlaceMark(placeMarkCoordinates, placeMarkInfoGroup)
@@ -231,5 +229,5 @@ export function usePlaceMark() {
     placeMark.activate()
     setPlaceMarkActivated(true)
   }
-  return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive}
+  return {createPlaceMark, onSceneDoubleTap, onSceneSingleTap, togglePlaceMarkActive, selectPlaceMark}
 }

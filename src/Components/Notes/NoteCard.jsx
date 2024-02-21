@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
@@ -17,6 +18,7 @@ import {assertDefined} from '../../utils/assert'
 import {addHashParams, getHashParamsFromHashStr, removeHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {closeIssue, updateIssue, deleteComment} from '../../utils/GitHub'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,
@@ -24,7 +26,7 @@ import {
   parseHashParams,
   removeCameraUrlParams,
 } from '../CameraControl'
-import {NOTE_PREFIX} from './Notes'
+import {NOTE_PREFIX, PLACE_MARK_PREFIX} from './Notes'
 
 
 /**
@@ -54,6 +56,8 @@ export default function NoteCard({
   numberOfComments = null,
   isComment = false,
   synched = true,
+  placemarkHash = null,
+  attachedUrl,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -85,6 +89,7 @@ export default function NoteCard({
   const dateParts = date.split('T')
   const open = Boolean(anchorEl)
   const selected = selectedNoteId === id
+  const {selectPlaceMark} = usePlaceMark()
 
   useEffect(() => {
     setEditBody(body)
@@ -96,14 +101,20 @@ export default function NoteCard({
   }, [selected, firstCamera, cameraControls])
 
   /** Selecting a card move the notes to the replies/comments thread. */
-  function selectCard() {
+  async function selectCard() {
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
     removeHashParams(window.location, NOTE_PREFIX)
+    removeHashParams(window.location, PLACE_MARK_PREFIX)
+    if (placemarkHash) {
+      console.log('placemarkHash', placemarkHash)
+      addHashParams(window.location, placemarkHash)
+    }
     addHashParams(window.location, NOTE_PREFIX, {id: id})
+    await selectPlaceMark(attachedUrl)
   }
 
   /** Moves the camera to the position specified in the url attached to the issue/comment.*/

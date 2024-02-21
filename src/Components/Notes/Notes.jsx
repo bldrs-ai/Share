@@ -14,6 +14,7 @@ import ApplicationError from '../ApplicationError'
 
 /** The prefix to use for the note ID within the URL hash. */
 export const NOTE_PREFIX = 'i'
+export const PLACE_MARK_PREFIX = 'm'
 
 /**
  * List of Notes
@@ -113,6 +114,8 @@ export default function Notes() {
               numberOfComments={note.numberOfComments}
               avatarUrl={note.avatarUrl}
               synched={note.synched}
+              attachedUrl={note.attachedUrl}
+              placemarkHash={note.placemarkHash}
             />
           )
         })

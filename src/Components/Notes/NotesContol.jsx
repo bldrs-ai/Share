@@ -1,10 +1,12 @@
 /* eslint-disable no-console */
 import React, {useEffect} from 'react'
+import {PLACE_MARK_PREFIX} from './Notes'
 import useStore from '../../store/useStore'
 import {TooltipIconButton} from '../Buttons'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {getIssues} from '../../utils/GitHub'
 import debug from '../../utils/debug'
+import {getHashParamsFromUrl} from '../../utils/location'
 
 
 /**
@@ -38,11 +40,13 @@ export default function NotesControl() {
 
         issueArr.reverse().map((issue, index) => {
           let placemarkUrl = null
+          let placemarkHash
           const placemarkPattern = /\n\[placemark\]\(.*?\)/
           const urlBetweenPrent = /\((.*?)\)/
           if (placemarkPattern.test(issue.body)) {
             const extractedPlacemark = issue.body.match(placemarkPattern)[0]
             placemarkUrl = extractedPlacemark.match(urlBetweenPrent)[1]
+            placemarkHash = getHashParamsFromUrl(placemarkUrl, PLACE_MARK_PREFIX)
           }
           newNotes.push({
             index: issueIndex++,
@@ -55,7 +59,8 @@ export default function NotesControl() {
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
             synched: true,
-            placemarkUrl: placemarkUrl,
+            attachedUrl: placemarkUrl,
+            placemarkHash: placemarkHash,
           })
         })
         setNotes(newNotes)
