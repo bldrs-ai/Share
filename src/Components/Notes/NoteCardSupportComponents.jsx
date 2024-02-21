@@ -19,8 +19,8 @@ import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
+import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
 import CameraIcon from '../../assets/icons/Camera.svg'
-import PlaceMarkIcon from '../../assets/icons/PlaceMark.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
 
@@ -127,6 +127,7 @@ export const CardFooter = ({
   const viewer = useStore((state) => state.viewer)
   const repository = useStore((state) => state.repository)
   const placeMarkId = useStore((state) => state.placeMarkId)
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
   const placeMarkActivated = useStore((state) => state.placeMarkActivated)
   const hasCameras = embeddedCameras.length > 0
   const theme = useTheme()
@@ -198,22 +199,19 @@ export const CardFooter = ({
         {
           !isComment && selected && synched && existPlaceMarkInFeature &&
           user && user.nickname === username &&
-          <Box sx={{
-            '& svg': {
-              fill: (placeMarkId === id && placeMarkActivated) ? 'red' : theme.palette.mode === 'light' ? 'black' : 'white',
-            },
-          }}
-          >
             <TooltipIconButton
               title='Place Mark'
               size='small'
               placement='bottom'
+              selected={placeMarkId === id && placeMarkActivated}
               onClick={() => {
                 togglePlaceMarkActive(id)
+                setSnackMessage('Double click on the Canvas to drop a placemark')
+                const pauseTimeMs = 4000
+                setTimeout(() => setSnackMessage(null), pauseTimeMs)
               }}
-              icon={<PlaceMarkIcon className='icon-share'/>}
+              icon={<PlaceOutlinedIcon className='icon-share'/>}
             />
-          </Box>
         }
       </Box>
       <Box

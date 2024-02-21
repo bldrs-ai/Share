@@ -155,6 +155,7 @@ export default function CadView({
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setIsNavPanelOpen = useStore((state) => state.setIsNavPanelOpen)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
+  const snackMessage = useStore((state) => state.snackMessage)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
@@ -174,6 +175,7 @@ export default function CadView({
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
+  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
 
   // Place Mark
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
@@ -238,6 +240,7 @@ export default function CadView({
         const lastId = selectedElements.slice(-1)
         const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
+
         // Update the expanded elements in NavPanel
         const pathIds = getPathIdsForElements(lastId)
         if (pathIds) {
@@ -768,6 +771,9 @@ export default function CadView({
     if (!viewer.isolator.canBePickedInScene(expressId)) {
       return
     }
+    if (placeMarkActivated) {
+      return
+    }
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
@@ -859,7 +865,7 @@ export default function CadView({
         }}
         {...onSceneDoubleTap}
       />
-      <SnackBarMessage/>
+      {snackMessage && <SnackBarMessage/> }
       {showSearchBar && (
         <Box sx={{
           'position': 'absolute',
@@ -1103,9 +1109,9 @@ function initViewer(pathPrefix, backgroundColorStr = '#abcdef') {
   viewer.clipper.orthogonalY = false
 
   // Highlight items when hovering over them
-  window.onmousemove = (event) => {
-    viewer.highlightIfcItem()
-  }
+  // window.onmousemove = (event) => {
+  //   viewer.highlightIfcItem()
+  // }
 
   viewer.container = container
 

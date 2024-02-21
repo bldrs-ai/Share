@@ -70,7 +70,7 @@ export function getSvgGroupFromObj({
       fillColor = path.userData.style.fill
     }
     if (!strokeColor) {
-      strokeColor = path.userData.style.stroke
+      strokeColor = '#606367'
     }
 
     if (drawFillShapes && fillColor !== undefined && fillColor !== 'none') {

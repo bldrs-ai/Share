@@ -1,14 +1,16 @@
+/* eslint-disable no-console */
 import React from 'react'
 import Box from '@mui/material/Box'
 import {CloseButton, TooltipIconButton} from '../Buttons'
 import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
 import useStore from '../../store/useStore'
 import {addHashParams, removeHashParams} from '../../utils/location'
-import {NOTE_PREFIX} from './Notes'
+import {NOTE_PREFIX, PLACE_MARK_PREFIX} from './Notes'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
+import {usePlaceMark} from '../../hooks/usePlaceMark'
 
 
 /** @return {React.Component} */
@@ -21,16 +23,22 @@ export default function NotesNavBar() {
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
+  const {selectPlaceMark, deselectPlaceMark} = usePlaceMark()
 
 
-  const selectNote = (direction) => {
+  const selectNote = async (direction) => {
     const index = direction === 'next' ? selectedNoteIndex + 1 : selectedNoteIndex - 1
     if (index >= 0 && index < notes.length) {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
       removeHashParams(window.location, NOTE_PREFIX)
+      removeHashParams(window.location, PLACE_MARK_PREFIX)
+      addHashParams(window.location, note.placemarkHash )
       addHashParams(window.location, NOTE_PREFIX, {id: note.id})
+      if (note.attachedUrl) {
+        await selectPlaceMark(note.attachedUrl)
+      }
       if (note.url) {
         setCameraFromParams(note.url)
         addCameraUrlParams()
@@ -66,9 +74,12 @@ export default function NotesNavBar() {
            title='Back to the list'
            variant='noBackground'
            placement='bottom'
-           onClick={() => {
+           onClick={async () => {
              removeHashParams(window.location, NOTE_PREFIX)
+             removeHashParams(window.location, PLACE_MARK_PREFIX)
              setSelectedNoteId(null)
+             const selectedNote = notes.filter((n) => n.id === selectedNoteId)[0]
+             await deselectPlaceMark(selectedNote.attachedUrl)
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
          />

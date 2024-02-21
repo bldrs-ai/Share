@@ -32,7 +32,6 @@ export default function OperationsGroup({deselectItems}) {
   const isPropertiesOn = useStore((state) => state.isPropertiesOn)
   const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
   const openDrawer = useStore((state) => state.openDrawer)
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
   const selectedElement = useStore((state) => state.selectedElement)
   const isSelected = () => {
     const ifSelected = (
@@ -64,7 +63,6 @@ export default function OperationsGroup({deselectItems}) {
        <TooltipIconButton
          title='Properties'
          onClick={() => {
-           turnOffIsHelpTooltips()
            toggleIsPropertiesOn()
            openDrawer()
          }}

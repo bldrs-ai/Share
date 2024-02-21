@@ -1,10 +1,12 @@
+/* eslint-disable no-console */
 import React, {useEffect} from 'react'
+import {PLACE_MARK_PREFIX} from './Notes'
 import useStore from '../../store/useStore'
-import {useIsMobile} from '../Hooks'
 import {TooltipIconButton} from '../Buttons'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 import {getIssues} from '../../utils/GitHub'
 import debug from '../../utils/debug'
+import {getHashParamsFromUrl} from '../../utils/location'
 
 
 /**
@@ -23,12 +25,7 @@ export default function NotesControl() {
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const accessToken = useStore((state) => state.accessToken)
   const model = useStore((state) => state.model)
-  const isMobile = useIsMobile()
-  const turnOffTooltips = () => {
-    return isMobile ? turnOffIsHelpTooltips() : null
-  }
   const openDrawer = useStore((state) => state.openDrawer)
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
 
   // Fetch issues/notes
   useEffect(() => {
@@ -42,6 +39,15 @@ export default function NotesControl() {
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 
         issueArr.reverse().map((issue, index) => {
+          let placemarkUrl = null
+          let placemarkHash
+          const placemarkPattern = /\n\[placemark\]\(.*?\)/
+          const urlBetweenPrent = /\((.*?)\)/
+          if (placemarkPattern.test(issue.body)) {
+            const extractedPlacemark = issue.body.match(placemarkPattern)[0]
+            placemarkUrl = extractedPlacemark.match(urlBetweenPrent)[1]
+            placemarkHash = getHashParamsFromUrl(placemarkUrl, PLACE_MARK_PREFIX)
+          }
           newNotes.push({
             index: issueIndex++,
             id: issue.id,
@@ -53,6 +59,8 @@ export default function NotesControl() {
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
             synched: true,
+            attachedUrl: placemarkUrl,
+            placemarkHash: placemarkHash,
           })
         })
         setNotes(newNotes)
@@ -79,7 +87,6 @@ export default function NotesControl() {
       icon={<ChatOutlinedIcon className='icon-share' color='secondary'/>}
       selected={isNotesOn}
       onClick={() => {
-        turnOffTooltips()
         toggle('Notes')
       }}
     />
