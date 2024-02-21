@@ -10,9 +10,8 @@ module.exports = defineConfig({
     screenshotOnRunFailure: false,
     video: false,
     env: {
-      OAUTH2_CLIENT_ID: 'xojbbSyJ9n6HUdZwE7LUX7Zvff6ejxjv',
-      AUTH0_DOMAIN: 'bldrs.us.auth0.com',
-      GITHUB_BASE_URL: 'bldrs.us.auth0.com',
+      OAUTH2_CLIENT_ID: 'cypresstestaudience',
+      AUTH0_DOMAIN: null,
       RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
       NODE_ENV: 'development'
     },
