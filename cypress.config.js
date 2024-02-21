@@ -14,7 +14,7 @@ module.exports = defineConfig({
       AUTH0_DOMAIN: 'bldrs.us.auth0.com',
       GITHUB_BASE_URL: 'bldrs.us.auth0.com',
       RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
-      NODE_ENV: 'PRODUCTION'
+      NODE_ENV: 'development'
     },
   },
 })
