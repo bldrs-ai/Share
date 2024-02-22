@@ -6,6 +6,7 @@ import {looksLikeLink, githubUrlOrPathToSharePath} from '../../utils/GitHub'
 import debug from '../../utils/debug'
 import {handleBeforeUnload} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
+import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
@@ -86,15 +87,16 @@ export default function SearchBar() {
         value={inputText}
         onChange={(_, newValue) => setInputText(newValue || '')}
         onInputChange={(_, newInputValue) => setInputText(newInputValue || '')}
+        clearIcon={<CloseIcon className='icon-share'/>}
         inputValue={inputText}
         renderInput={(params) => (
           <TextField
             {...params}
             inputRef={searchInputRef}
-            size="small"
+            size='small'
             error={!!error.length}
             placeholder='Search'
-            variant="outlined"
+            variant='outlined'
             sx={{
               width: '100%',
             }}

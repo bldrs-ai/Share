@@ -26,6 +26,8 @@ export function LogoBWithDomain() {
         className='icon-share'
         style={{
           fill: theme.palette.secondary.contrastText,
+          width: '4em',
+          height: '4em',
         }}
       />
     </ThemeBox>

@@ -1,6 +1,6 @@
 import React from 'react'
 import * as reactRouting from 'react-router-dom'
-import {render, renderHook, act, fireEvent, screen, waitFor} from '@testing-library/react'
+import {render, renderHook, act, fireEvent, screen, waitFor, within} from '@testing-library/react'
 import {VIEW_PLANE_PREFIX} from '../Components/CutPlaneMenu'
 import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
@@ -227,11 +227,11 @@ describe('CadView', () => {
       result.current.setCutPlaneDirections(['y'])
     })
 
-    const {getByTitle} =
-      render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    const {getByTestId} = render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
 
-    expect(getByTitle('Section')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear')
+    const eltGrp = getByTestId('element-group')
+    expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
+    const clearSelection = within(eltGrp).getByTitle('Clear')
     await act(async () => {
       await fireEvent.click(clearSelection)
     })
@@ -277,12 +277,13 @@ describe('CadView', () => {
     expect(result.current.selectedElement).toBe(selectedId)
     expect(result.current.selectedElements).toBe(selectedIdsAsString)
 
-    const {getByTitle} =
+    const {getByTestId} =
       render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
 
-    expect(getByTitle('Section')).toBeInTheDocument()
-    expect(getByTitle('Clear')).toBeInTheDocument()
-    const clearSelection = getByTitle('Clear')
+    const eltGrp = getByTestId('element-group')
+    expect(within(eltGrp).getByTitle('Section')).toBeInTheDocument()
+    const clearSelection = within(eltGrp).getByTitle('Clear')
+    expect(clearSelection).toBeInTheDocument()
     await act(async () => {
       await fireEvent.click(clearSelection)
     })

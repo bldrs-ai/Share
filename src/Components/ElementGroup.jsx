@@ -37,6 +37,7 @@ export default function ElementGroup({deselectItems}) {
       direction='row'
       justifyContent='center'
       alignItems='center'
+      data-testid='element-group'
     >
       <ButtonGroup orientation='horizontal' variant='controls'>
         {!isIsolate && <CutPlaneMenu/>}

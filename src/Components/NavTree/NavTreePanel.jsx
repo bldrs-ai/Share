@@ -55,7 +55,6 @@ export default function NavTreePanel({
 
   const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
     '& .MuiToggleButtonGroup-grouped': {
-      'margin': '0 0.5em',
       'border': 0,
       'borderRadius': 0,
       '&.Mui-disabled': {
@@ -73,31 +72,29 @@ export default function NavTreePanel({
       action={
         <StyledToggleButtonGroup
           exclusive
-          id={'togglegrp'}
+          id='togglegrp'
           value={navigationMode}
-          size='small'
           onChange={onTreeViewChanged}
+          size='small'
         >
-          <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
-            <Tooltip
-              title={'Spatial Structure'}
-              describeChild
-              placement='bottom-end'
-              PopperProps={{style: {zIndex: 0}}}
-            >
-              <AccountTreeIcon/>
-            </Tooltip>
-          </ToggleButton>
-          <ToggleButton value='element-types' aria-label='element-types'>
-            <Tooltip
-              title={'Element Types'}
-              describeChild
-              placement='bottom-end'
-              PopperProps={{style: {zIndex: 0}}}
-            >
-              <ListIcon/>
-            </Tooltip>
-          </ToggleButton>
+          <Tooltip
+            title={'Spatial Structure'}
+            describeChild
+            placement='top'
+          >
+            <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
+              <AccountTreeIcon className='icon-share'/>
+            </ToggleButton>
+          </Tooltip>
+          <Tooltip
+            title={'Element Types'}
+            describeChild
+            placement='top'
+          >
+            <ToggleButton value='element-types' aria-label='element-types'>
+              <ListIcon className='icon-share'/>
+            </ToggleButton>
+          </Tooltip>
         </StyledToggleButtonGroup>
       }
     >

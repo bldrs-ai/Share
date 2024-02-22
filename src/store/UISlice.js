@@ -15,6 +15,9 @@ export default function createUISlice(set, get) {
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
+    isAboutVisible: false,
+    setIsAboutVisible: (isVisible) => set(() => ({isAboutVisible: isVisible})),
+
     isHelpVisible: false,
     setIsHelpVisible: (isVisible) => set(() => ({isHelpVisible: isVisible})),
 

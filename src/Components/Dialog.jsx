@@ -10,7 +10,7 @@ import Typography from '@mui/material/Typography'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
-import CloseIcon from '@mui/icons-material/Close'
+import {CloseButton} from './Buttons'
 
 
 /**
@@ -74,9 +74,7 @@ export default function Dialog({
         }
 
       </DialogTitle>
-      <IconButton onClick={onCloseClick} size='small'>
-        <CloseIcon fontSize='inherit'/>
-      </IconButton>
+      <CloseButton onCloseClick={onCloseClick}/>
       <DialogContent>{children}</DialogContent>
       {(actionTitle === undefined || actionTitle === undefined) ? null :
        <DialogActions>

@@ -86,10 +86,11 @@ export default function VersionsPanel({filePath, currentRef}) {
       title='Versions'
       action={
         <TooltipIconButton
-          title='Navigate to the head of version history'
-          icon={<RestartAltIcon/>}
+          title='Refresh'
+          icon={<RestartAltIcon className='icon-share'/>}
           onClick={navigateToMain}
           placement='bottom'
+          size='small'
         />
       }
       onCloseClick={() => setIsVersionsVisible(false)}

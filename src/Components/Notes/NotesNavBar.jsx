@@ -45,12 +45,6 @@ export default function NotesNavBar() {
   }
 
 
-  /** Close note panel and remove url state token */
-  function onCloseClick() {
-    removeHashParams(location, NOTES_PREFIX)
-  }
-
-
   return (
     <Box
       sx={{
@@ -138,7 +132,7 @@ export default function NotesNavBar() {
             />
 
         )}
-        <CloseButton onClick={onCloseClick}/>
+        <CloseButton onCloseClick={() => removeHashParams(location, NOTES_PREFIX)}/>
       </Box>
     </Box>
   )

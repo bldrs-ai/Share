@@ -3,7 +3,6 @@ import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
-import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
@@ -12,11 +11,9 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
+import SearchBar from '../Components/Search/SearchBar'
 import FileContext from '../OPFS/FileContext'
-import {
-  getModelFromOPFS,
-  downloadToOPFS,
-} from '../OPFS/utils'
+import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
@@ -37,10 +34,6 @@ import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import ViewerContainer from './ViewerContainer'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
-
-
-import SearchControl from '../Components/Search/SearchControl'
-import SearchBar from '../Components/Search/SearchBar'
 
 
 let count = 0
@@ -761,13 +754,17 @@ export default function CadView({
 
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
 
+  const abs = {position: 'absolute'}
+  const absTop = {top: 0, ...abs}
+  const absBtm = {bottom: 0, ...abs}
+  const center = {left: '50%', transform: 'translate(-50%)'}
   // TODO(pablo): need to set the height on the row stack below to keep them
   // from expanding
   return (
-    <Box sx={{position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', margin: 0, padding: 0}}>
-      <ViewerContainer/>
-      <Box sx={{position: 'absolute', bottom: 0, left: 0, margin: '1em'}}><AboutControl/></Box>
-      <Box sx={{position: 'absolute', bottom: 0, right: 0, margin: '1em'}}><HelpControl/></Box>
+    <Box sx={{...absTop, left: 0, width: '100%', height: '100%', m: 0, p: 0}}>
+      {<ViewerContainer/>}
+      <Box sx={{...absBtm, left: 0, m: '1em'}}><AboutControl/></Box>
+      <Box sx={{...absBtm, right: 0, m: '1em'}}><HelpControl/></Box>
       {viewer && (
         <>
           <ControlsGroupAndDrawer
@@ -778,15 +775,15 @@ export default function CadView({
           />
 
           {isSearchEnabled &&
-           <Box sx={{position: 'absolute', top: 0, left: '50%', transform: 'translate(-50%)', margin: '1em'}}>
+           <Box sx={{...absTop, ...center, m: '1em', width: '300px'}}>
              <SearchBar/>
            </Box>}
 
-          <Box sx={{position: 'absolute', bottom: 0, left: '50%', transform: 'translate(-50%)', margin: '1em'}}>
+          <Box sx={{...absBtm, ...center}}>
             <ElementGroup deselectItems={deselectItems}/>
           </Box>
 
-          <Box sx={{position: 'absolute', top: 0, right: 0}}>
+          <Box sx={{...absTop, right: 0}}>
             <OperationsGroupAndDrawer deselectItems={deselectItems}/>
           </Box>
         </>

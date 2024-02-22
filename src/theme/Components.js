@@ -4,6 +4,24 @@
  */
 export function getComponentOverrides(palette, typography) {
   return {
+    MuiAutocomplete: {
+      styleOverrides: {
+        root: {
+          // To align 'Search' placeholder with top row buttons
+          margin: '5px',
+          padding: '5px',
+        },
+        // TODO(pablo): We set MuiIcon button styles below for convenience, but it
+        // means resetting other uses like these.
+        clearIndicator: {
+          width: '1em',
+          height: '1em',
+          margin: 0,
+          padding: 0,
+          // border: 'solid 3px blue',
+        },
+      },
+    },
     MuiButton: {
       styleOverrides: {
         root: {
@@ -51,6 +69,11 @@ export function getComponentOverrides(palette, typography) {
           boxShadow: theme.shadows[0],
         }),
       }],
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: StandardButton, // Same as MuiToggleButton
+      },
     },
     MuiCard: {
       styleOverrides: {
@@ -176,7 +199,7 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiSvgIcon: {
       variants: [{
-        // Use 'success' to indicate active icons, e.g. in HelpControl
+        // Used in HelpControl to indicate activity state
         props: {variant: 'success'},
         style: {
           color: palette.success.main,
@@ -215,12 +238,7 @@ export function getComponentOverrides(palette, typography) {
     },
     MuiToggleButton: {
       styleOverrides: {
-        root: {
-          width: '3.5em',
-          height: '3.5em',
-          border: 'none',
-          borderRadius: '10px',
-        },
+        root: StandardButton, // Same as MuiIconButton
       },
       variants: [{
         props: {variant: 'control'},
@@ -229,4 +247,15 @@ export function getComponentOverrides(palette, typography) {
       }],
     },
   }
+}
+
+
+const StandardButton = {
+  fontSize: '1rem',
+  width: '3em',
+  height: '3em',
+  borderRadius: '10px',
+  margin: '5px',
+  padding: '5px',
+  border: 'none',
 }

@@ -1,12 +1,11 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import IconButton from '@mui/material/IconButton'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../../utils/assert'
-import CloseIcon from '@mui/icons-material/Close'
+import {CloseButton} from '../Buttons'
 
 
 /**
@@ -44,7 +43,6 @@ export default function Panel({title, onCloseClick, children, action = null, tes
         alignItems='center'
         sx={{
           position: 'sticky',
-          height: '40px',
           top: 0,
           zIndex: 1,
         }}
@@ -61,28 +59,12 @@ export default function Panel({title, onCloseClick, children, action = null, tes
         </Typography> :
          <>{title}</>
         }
-        <Stack
-          direction='row'
-          justifyContent={'center'}
-          alignItems={'center'}
-          sx={{marginRight: '.3em'}}
-        >
-          <Box>
-            {action}
-          </Box>
-          <IconButton
-            onClick={onCloseClick}
-            aria-label='close'
-            size='small'
-            sx={{borderRadius: '5px'}}
-          >
-            <CloseIcon className='icon-share icon-small'/>
-          </IconButton>
+        <Stack direction='row' justifyContent='center' alignItems='center'>
+          <Box>{action}</Box>
+          <CloseButton onCloseClick={onCloseClick}/>
         </Stack>
       </Stack>
-      <Box sx={{padding: '1px 0px'}}>
-        {children}
-      </Box>
+      {children}
     </Paper>
   )
 }

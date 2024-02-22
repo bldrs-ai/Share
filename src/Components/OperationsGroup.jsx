@@ -38,7 +38,7 @@ export default function OperationsGroup({deselectItems}) {
         <>
           <PersonaControl/>
           {/* This lines up divider with top of notes content panel */}
-          <Divider sx={{margin: '8px 0'}}/>
+          <Divider/>
         </>)}
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}

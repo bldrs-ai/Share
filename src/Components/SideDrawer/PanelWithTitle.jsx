@@ -1,8 +1,6 @@
 import React from 'react'
 import Box from '@mui/material/Box'
-import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../../utils/assert'
-import {hexToRgba} from '../../utils/color'
 import {useIsMobile} from '../Hooks'
 import PanelTitle from './PanelTitle'
 
@@ -18,10 +16,7 @@ import PanelTitle from './PanelTitle'
 export default function PanelWithTitle({title, children, controlsGroup, iconSrc, includeGutter}) {
   assertDefined(title, children)
   const titleHeight = '2.8em'
-  const theme = useTheme()
   // This isn't visible, but the alignment is important for debugging, so leaving.
-  const headerBorderOpacity = 0
-  const headerBorderColor = hexToRgba(theme.palette.primary.contrastText, headerBorderOpacity)
   const isMobile = useIsMobile()
 
   return (

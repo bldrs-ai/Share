@@ -12,7 +12,6 @@ import {handleBeforeUnload} from '../utils/event'
 export default function ViewerContainer() {
   const {onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
-
   const appPrefix = useStore((state) => state.appPrefix)
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)

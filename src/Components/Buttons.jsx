@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
@@ -42,13 +43,11 @@ export function TooltipIconButton({
 
   const [openLocal, setOpenLocal] = useState(false)
 
-  const open = aboutInfo ? isHelpTooltipsVisible : false
-
   return (
     <Tooltip
-      open={openLocal || open}
+      open={isHelpTooltipsVisible || openLocal}
       onClose={() => setOpenLocal(false)}
-      onOpen={() => setOpenLocal(true)}
+      onOpen={() => setOpenLocal(aboutInfo)}
       title={title}
       describeChild
       placement={placement}
@@ -99,6 +98,7 @@ export function ControlButton({
         selected={isDialogDisplayed}
         variant='control'
         color='success'
+        size='small'
         {...props}
       />
       {children}
@@ -154,20 +154,20 @@ export function ControlButtonWithHashState({
 
 
 /**
- * @property {Function} onClick Handler for close event.
+ * @property {Function} onCloseClick Handler for close event.
  * @return {React.ReactElement}
  */
-export function CloseButton({onClick}) {
+export function CloseButton({onCloseClick}) {
   return (
-    <TooltipIconButton
+    <IconButton
       title='Close'
-      onClick={onClick}
-      placement='bottom'
-      icon={<CloseIcon className='icon-share icon-small'/>}
-      aboutInfo={false}
-      className='closeButton'
-      variant='noBackground'
-    />
+      onClick={onCloseClick}
+      size='small'
+      disableFocusRipple={true}
+      disableRipple={true}
+    >
+      <CloseIcon className='icon-share'/>
+    </IconButton>
   )
 }
 

@@ -35,16 +35,16 @@ export default function TabbedDialog({
 }) {
   assertDefined(tabLabels, headerLabels, contentComponents, actionCbs, isDialogDisplayed, setIsDialogDisplayed)
   assertArraysEqualLength(tabLabels, headerLabels, contentComponents, actionCbs)
-  const close = () => setIsDialogDisplayed(false)
+  const onClose = () => setIsDialogDisplayed(false)
   const [currentTab, setCurrentTab] = useState(0)
   return (
     <MuiDialog
       maxWidth={'xs'}
       open={isDialogDisplayed}
-      onClose={close}
+      onClose={onClose}
       PaperProps={{variant: 'control'}}
     >
-      <CloseButton onClick={close}/>
+      <CloseButton onCloseClick={onClose}/>
       <DialogTitle>
         {icon && <>{icon}<br/></>}
         {headerLabels[currentTab]}
