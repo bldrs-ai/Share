@@ -332,7 +332,7 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    const tmpModelRef = await loadIfc(pathToLoad)
+    const tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
 
     if (tmpModelRef === 'redirect') {
       return
@@ -383,8 +383,9 @@ export default function CadView({
    * Load IFC helper used by 1) useEffect on path change and 2) upload button.
    *
    * @param {string} filepath
+   * @param {string} gitpath to use for constructing API endpoints
    */
-  async function loadIfc(filepath) {
+  async function loadIfc(filepath, gitpath) {
     debug().log(`CadView#loadIfc: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
 
@@ -398,6 +399,8 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
+    // NB: for LFS targets, this will now be media.githubusercontent.com, so
+    // don't use for further API endpoint construction.
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ? filepath : await getFinalURL(filepath, accessToken)
 
     let loadedModel
@@ -502,8 +505,7 @@ export default function CadView({
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
-      const url = new URL(ifcURL)
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(url.pathname)
+      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
       const commitHash = isPublic ?
             await getLatestCommitHash(owner, repo, filePath, '', branch) :
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
@@ -806,15 +808,6 @@ export default function CadView({
     }
   }
 
-  // TODO(pablo): again, just need branch here for VersionsContainer
-  // below.  It's probably already available in this scope.
-  let ghPath = location.pathname
-  if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
-    ghPath = ghPath.substring(`${appPrefix}/v/gh`.length)
-  }
-  const {branch} = parseGitHubPath(ghPath)
-
-
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
   const operationsGroupWidthPx = 100
@@ -931,7 +924,7 @@ export default function CadView({
               modelPath.repo !== undefined && isVersionHistoryVisible &&
               <VersionsContainer
                 filePath={modelPath.filepath}
-                currentRef={branch}
+                currentRef={modelPath.branch}
               />
             }
           </Box>
