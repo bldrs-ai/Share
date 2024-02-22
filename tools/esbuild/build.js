@@ -12,8 +12,10 @@ esbuild
         // eslint-disable-next-line no-console
         console.log('Removing MSW from build')
         fs.unlink(join(config.outdir, 'mockServiceWorker.js'), (err) => {
-          // eslint-disable-next-line no-console
-          console.log(err)
+          if (err !== null) {
+            // eslint-disable-next-line no-console
+            console.warn('Unknown return from MSW unlink.  Expected null on success, got:', err)
+          }
         })
       }
       if (process.env.ANALYZE === 'true') {
