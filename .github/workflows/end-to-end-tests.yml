@@ -30,6 +30,7 @@ jobs:
         id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
+          node-version: 16
           name: build-webifc-${{ github.sha }}
           if-no-files-found: error
           path: docs/
@@ -46,6 +47,7 @@ jobs:
         id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
+          node-version: 16
           name: build-webifc-${{ github.sha }}
           path: docs/
 
@@ -53,6 +55,7 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v6
         with:
+          node-version: 16
           browser: chrome
           start: yarn serve-share-webifc
 
@@ -98,5 +101,6 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v6
         with:
+          node-version: 16
           browser: chrome
           start: yarn serve-share-conway
