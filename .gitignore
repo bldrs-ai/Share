@@ -13,3 +13,5 @@ cypress/downloads
 .vscode
 .idea
 *.log
+*~
+\#*
