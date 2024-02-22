@@ -61,6 +61,15 @@ jobs:
           name: build-webifc-${{ github.sha }}
           path: docs/
 
+      - name: Use Node.js 16
+        run: |
+          echo "Setting Node version to 16"
+          . $NVM_DIR/nvm.sh
+          nvm install 16
+          nvm use 16
+          node -v
+        id: use-node16
+
       - name: E2E Tests on Google Chrome
         id: e2e-on-google-chrome-webifc
         uses: cypress-io/github-action@v6
@@ -117,6 +126,15 @@ jobs:
         with:
           name: build-conway-${{ github.sha }}
           path: docs/
+
+      - name: Use Node.js 16
+        run: |
+          echo "Setting Node version to 16"
+          . $NVM_DIR/nvm.sh
+          nvm install 16
+          nvm use 16
+          node -v
+        id: use-node16
 
       - name: E2E Tests on Google Chrome
         id: e2e-on-google-chrome-conway
