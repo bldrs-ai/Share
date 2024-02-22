@@ -67,7 +67,12 @@ jobs:
           . $NVM_DIR/nvm.sh
           nvm install 16
           nvm use 16
+          echo "Node version:"
           node -v
+          echo "NPM version:"
+          npm -v
+          echo "Adjusting PATH to use Node 16"
+          echo "$(nvm which 16)" | sed "s/\/node$/\/bin/" | xargs echo "##[set-env name=PATH;]$(cat):$PATH"
         id: use-node16
 
       - name: E2E Tests on Google Chrome
@@ -133,7 +138,12 @@ jobs:
           . $NVM_DIR/nvm.sh
           nvm install 16
           nvm use 16
+          echo "Node version:"
           node -v
+          echo "NPM version:"
+          npm -v
+          echo "Adjusting PATH to use Node 16"
+          echo "$(nvm which 16)" | sed "s/\/node$/\/bin/" | xargs echo "##[set-env name=PATH;]$(cat):$PATH"
         id: use-node16
 
       - name: E2E Tests on Google Chrome
