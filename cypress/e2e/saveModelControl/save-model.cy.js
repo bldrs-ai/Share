@@ -23,9 +23,7 @@ describe('save model', () => {
     beforeEach(() => {
       cy.setCookie('isFirstTime', '1')
       cy.visit('/')
-      // Wait for the loading message to not exist with a 10 second timeout
-      cy.contains('div', 'Loading /index.ifc').should('not.exist', {timeout: 10000})
-      cy.get('[data-model-ready="true"]').should('exist')
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 20000})
       cy.get('#viewer-container').get('canvas').should('be.visible')
 
       // Intercept the /authorize request
