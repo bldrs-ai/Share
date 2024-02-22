@@ -15,5 +15,6 @@ module.exports = defineConfig({
       RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev/r',
       NODE_ENV: 'development'
     },
+    defaultCommandTimeout: 20000, // Set default command timeout to 20 seconds
   },
 })
