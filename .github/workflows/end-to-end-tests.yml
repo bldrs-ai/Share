@@ -15,25 +15,19 @@ jobs:
   install-cypress-webifc:
     runs-on: ubuntu-22.04-4vcpu-16gb
     steps:
-      - name: Set up Node.js 16
-        id: setup-node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
       - name: Install Cypress WebIfc
         id: install-cypress-webifc
-        uses: cypress-io/github-action@v6
+        uses: cypress-io/github-action@v5
         with:
           runTests: false
           build: yarn build-share-webifc
 
       - name: Save build artifacts
-        id: build-artifacts-webifc
+        id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build-webifc-${{ github.sha }}
@@ -44,40 +38,20 @@ jobs:
     runs-on: ubuntu-22.04-4vcpu-16gb
     needs: install-cypress-webifc
     steps:
-      - name: Set up Node.js 16
-        id: setup-node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
       - name: Restore build artifacts
-        id: restore-artifacts-webifc
+        id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
           name: build-webifc-${{ github.sha }}
           path: docs/
 
-      - name: Use Node.js 16
-        run: |
-          echo "Setting Node version to 16"
-          . $NVM_DIR/nvm.sh
-          nvm install 16
-          nvm use 16
-          echo "Node version:"
-          node -v
-          echo "NPM version:"
-          npm -v
-          echo "Adjusting PATH to use Node 16"
-          echo "$(nvm which 16)" | sed "s/\/node$/\/bin/" | xargs echo "##[set-env name=PATH;]$(cat):$PATH"
-        id: use-node16
-
       - name: E2E Tests on Google Chrome
-        id: e2e-on-google-chrome-webifc
-        uses: cypress-io/github-action@v6
+        id: e2e-on-google-chrome
+        uses: cypress-io/github-action@v5
         with:
           browser: chrome
           start: yarn serve-share-webifc
@@ -86,25 +60,19 @@ jobs:
     runs-on: ubuntu-22.04-4vcpu-16gb
     needs: run-cypress-on-linux-webifc
     steps:
-      - name: Set up Node.js 16
-        id: setup-node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
       - name: Install Cypress Conway
         id: install-cypress-conway
-        uses: cypress-io/github-action@v6
+        uses: cypress-io/github-action@v5
         with:
           runTests: false
           build: yarn build-share-conway
 
       - name: Save build artifacts
-        id: build-artifacts-conway
+        id: build-artifacts
         uses: actions/upload-artifact@v3
         with:
           name: build-conway-${{ github.sha }}
@@ -115,40 +83,20 @@ jobs:
     runs-on: ubuntu-22.04-4vcpu-16gb
     needs: install-cypress-conway
     steps:
-      - name: Set up Node.js 16
-        id: setup-node
-        uses: actions/setup-node@v3
-        with:
-          node-version: '16'
-
       - name: checkout
         id: checkout
         uses: actions/checkout@v3
 
       - name: Restore build artifacts
-        id: restore-artifacts-conway
+        id: restore-artifacts
         uses: actions/download-artifact@v3
         with:
           name: build-conway-${{ github.sha }}
           path: docs/
 
-      - name: Use Node.js 16
-        run: |
-          echo "Setting Node version to 16"
-          . $NVM_DIR/nvm.sh
-          nvm install 16
-          nvm use 16
-          echo "Node version:"
-          node -v
-          echo "NPM version:"
-          npm -v
-          echo "Adjusting PATH to use Node 16"
-          echo "$(nvm which 16)" | sed "s/\/node$/\/bin/" | xargs echo "##[set-env name=PATH;]$(cat):$PATH"
-        id: use-node16
-
       - name: E2E Tests on Google Chrome
-        id: e2e-on-google-chrome-conway
-        uses: cypress-io/github-action@v6
+        id: e2e-on-google-chrome
+        uses: cypress-io/github-action@v5
         with:
           browser: chrome
           start: yarn serve-share-conway
