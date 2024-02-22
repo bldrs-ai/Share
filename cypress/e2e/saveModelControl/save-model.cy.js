@@ -140,16 +140,17 @@ describe('save model', () => {
         port = url.port
         cy.findByTestId('Save IFC', {timeout: 10000}).should('not.exist')
         cy.log(`The current port is: ${port}`)
-        cy.get('[title="Users menu"]').click()
+        // Need to figure out why a force is required here on GHA
+        cy.get('[title="Users menu"]').click({force: true})
         cy.log('simulating login')
         cy.findByTestId('login-with-github').click()
 
         // Use the alias to ensure the intercept was called
         cy.wait('@authorizeRequest').its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
-      })
 
-      cy.findByTestId('Save IFC', {timeout: 10000}).should('exist')
+        cy.findByTestId('Save IFC', {timeout: 10000}).should('exist')
+      })
     })
   })
 })
