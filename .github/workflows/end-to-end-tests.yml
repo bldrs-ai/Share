@@ -57,6 +57,7 @@ jobs:
         with:
           browser: chrome
           start: yarn serve-share-webifc
+          record: true
 
   install-cypress-conway:
     environment: cypress
@@ -104,3 +105,4 @@ jobs:
         with:
           browser: chrome
           start: yarn serve-share-conway
+          record: true
