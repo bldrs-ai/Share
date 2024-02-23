@@ -58,6 +58,8 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   install-cypress-conway:
     environment: cypress
@@ -106,3 +108,5 @@ jobs:
           browser: chrome
           start: yarn serve-share-conway
           record: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
