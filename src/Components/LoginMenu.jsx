@@ -39,12 +39,14 @@ export default function LoginMenu() {
   const handleLogin = async () => {
     // eslint-disable-next-line no-constant-condition
     if (false) {
+      // console.log('loginWithRedirect')
       await loginWithRedirect({
         appState: {
           returnTo: window.location.pathname,
         },
       })
     } else {
+      // console.log('loginWithPopup')
       await loginWithPopup({
         appState: {
           returnTo: window.location.pathname,
@@ -96,10 +98,9 @@ export default function LoginMenu() {
           },
         }}
       >
-        <MenuItem onClick={
-          isAuthenticated ? () => handleLogout() :
-          () => handleLogin()}
-        data-testid="login-with-github"
+        <MenuItem
+          onClick={isAuthenticated ? handleLogout : handleLogin}
+          data-testid="login-with-github"
         >
           <GitHubIcon/>
           {isAuthenticated ?

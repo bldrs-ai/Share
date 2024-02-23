@@ -36,11 +36,12 @@ describe('save model', () => {
         nonce = queryParams.get('nonce')
         const state = queryParams.get('state')
 
+        // eslint-disable-next-line no-console
+        console.log('[CYPRESS] 200 **/authorize', req.url)
+
         // Send back modified response
         req.reply({
           statusCode: 200,
-
-
           body:
           `
     <!DOCTYPE html>
@@ -101,7 +102,7 @@ describe('save model', () => {
           updated_at: '2024-02-20T02:57:40.324Z',
           email: 'cypresstest@bldrs.ai',
           email_verified: true,
-          iss: 'https://null/',
+          iss: 'https://bldrs.us.auth0.com.cypress/',
           aud: 'cypresstestaudience',
           iat: iat,
           exp: exp,
@@ -112,6 +113,9 @@ describe('save model', () => {
 
         // Encode the updated payload
         const encodedPayload = base64EncodePayload(payload)
+
+        // eslint-disable-next-line no-console
+        console.log('[CYPRESS] 200 **/oauth/token*', req.url)
 
         // Send back modified response
         req.reply({
