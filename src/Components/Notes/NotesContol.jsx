@@ -32,6 +32,17 @@ export default function NotesControl() {
 
   // Fetch issues/notes
   useEffect(() => {
+    // TODO(pablo): NotesControl loads onViewer, bc viewer for non-logged in
+    // session is valid.  But!  When the model is private, there's a delayed
+    // load until after auth succeeds.  If we don't check model here, then Notes
+    // initially fails during an unauthenticated load via oauthproxy, which gets
+    // a 302 DIY, and somehow seems to keep that state in Octokit.
+    //
+    // We detect we're in a delayed load state here by checking model first,
+    // which then doesn't touch octokit until later when auth is available.
+    if (!model) {
+      return
+    }
     (async () => {
       toggleIsLoadingNotes()
       try {
