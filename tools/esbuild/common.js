@@ -54,6 +54,10 @@ if (isWebIfcShimEnabled) {
   log('Using original Web-Ifc backend')
 }
 
+if (process.env.GH_BASE_URL) {
+  process.env.GITHUB_BASE_URL = process.env.GH_BASE_URL
+}
+
 
 // esbuild defines require string values. JSON.stringify includes
 // quotes, e.g. '"true"', but esbuild seems ok with that.
