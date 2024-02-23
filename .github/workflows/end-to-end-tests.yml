@@ -58,6 +58,7 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: true
+          key: ${{ secrets.CYPRESS_RECORD_KEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -108,5 +109,6 @@ jobs:
           browser: chrome
           start: yarn serve-share-conway
           record: true
+          key: ${{ secrets.CYPRESS_RECORD_KEY }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
