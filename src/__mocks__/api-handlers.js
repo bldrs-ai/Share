@@ -99,19 +99,41 @@ function auth0Handlers() {
  * @return {Array<object>} handlers
  */
 function githubHandlers() {
-  return [
-    rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-      const {org, repo} = req.params
+  const issuesHandler = (req, res, ctx) => {
+    const {org, repo} = req.params
 
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
-        return res(ctx.status(httpNotFound))
-      }
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
+      return res(ctx.status(httpNotFound))
+    }
 
+    return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_ISSUES.data),
+    )
+  }
+
+  const orgsHandler = (req, res, ctx) => {
+    const authHeader = req.headers.get('authorization')
+
+    if (!authHeader) {
       return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_ISSUES.data),
+          ctx.status(httpAuthorizationRequired),
+          ctx.json({
+            message: 'Requires authentication',
+            documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
+          }),
       )
-    }),
+    }
+
+    return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_ORGANIZATIONS.data),
+    )
+  }
+
+  return [
+    rest.get('https://api.github.com/repos/:org/:repo/issues', issuesHandler),
+    rest.get('https://git.bldrs.dev.msw/p/gh/repos/:org/:repo/issues', issuesHandler),
 
     rest.get('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
@@ -261,24 +283,8 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
-      const authHeader = req.headers.get('authorization')
-
-      if (!authHeader) {
-        return res(
-            ctx.status(httpAuthorizationRequired),
-            ctx.json({
-              message: 'Requires authentication',
-              documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
-            }),
-        )
-      }
-
-      return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_ORGANIZATIONS.data),
-      )
-    }),
+    rest.get('https://api.github.com/user/orgs', orgsHandler),
+    rest.get('https://git.bldrs.dev.msw/p/gh/user/orgs', orgsHandler),
 
     rest.get('https://api.github.com/orgs/bldrs-ai/repos', (req, res, ctx) => {
       return res(

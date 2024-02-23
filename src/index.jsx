@@ -43,10 +43,13 @@ if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
-      // if (req.url.host === 'api.github.com') {
-      // eslint-disable-next-line no-console
-      console.error(`Found an unhandled ${req.method} request to ${req.url}`)
-      // }
+      if (req.url.host === 'bldrs.us.auth0.com.cypress') {
+        // eslint-disable-next-line no-console
+        // console.log(`Found an expected ${req.method} request to cypress fake ${req.url}`)
+      } else {
+        // eslint-disable-next-line no-console
+        console.error(`Found an unhandled ${req.method} request to ${req.url}`)
+      }
     },
   })
 }
