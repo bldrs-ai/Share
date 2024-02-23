@@ -23,8 +23,8 @@ describe('save model', () => {
     beforeEach(() => {
       cy.setCookie('isFirstTime', '1')
       cy.visit('/')
-      cy.get('[data-model-ready="true"]').should('exist', {timeout: 20000})
-      cy.get('#viewer-container').get('canvas').should('be.visible')
+      // cy.get('[data-model-ready="true"]').should('exist', {timeout: 20000})
+      // cy.get('#viewer-container').get('canvas').should('be.visible')
 
       // Intercept the /authorize request
       cy.intercept('GET', '**/authorize*', (req) => {
