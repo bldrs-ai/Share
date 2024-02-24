@@ -58,7 +58,7 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: false
-          headed: true
+          headed: false
           browser: firefox
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
