@@ -55,13 +55,25 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
-          browser: firefox
+          browser: chrome
           start: yarn serve-share-webifc
           record: false
-          headed: false
+          headed: true
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: actions/upload-artifact@v4
+        # add the line below to store screenshots only on failures
+        # if: failure()
+        with:
+          name: cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: warn # 'warn' or 'error' are also available, defaults to `warn`
+        uses: actions/upload-artifact@v4
+        with:
+          name: cypress-videos
+          path: cypress/videos
+          if-no-files-found: warn # 'warn' or 'error' are also available, defaults to `warn`
 
   install-cypress-conway:
     environment: cypress
@@ -107,7 +119,7 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
-          browser: firefox
+          browser: chrome
           start: yarn serve-share-conway
           record: false
           headed: true
