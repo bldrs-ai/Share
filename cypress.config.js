@@ -8,8 +8,8 @@ module.exports = defineConfig({
     setupNodeEvents(on, config) {
       // implement node event listeners here
     },
-    screenshotOnRunFailure: false,
-    video: false,
+    screenshotOnRunFailure: true,
+    video: true,
     defaultCommandTimeout: 60000, // Set default command timeout to 20 seconds
   },
 })
