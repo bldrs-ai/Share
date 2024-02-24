@@ -55,11 +55,10 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
-          browser: chrome
+          browser: firefox
           start: yarn serve-share-webifc
           record: false
           headed: false
-          browser: firefox
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,11 +107,10 @@ jobs:
         id: e2e-on-google-chrome
         uses: cypress-io/github-action@v5
         with:
-          browser: chrome
+          browser: firefox
           start: yarn serve-share-conway
           record: false
           headed: true
-          browser: firefox
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
