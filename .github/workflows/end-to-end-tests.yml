@@ -58,8 +58,8 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: true
-          key: ${{ secrets.CYPRESS_RECORD_KEY }}
         env:
+          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   install-cypress-conway:
