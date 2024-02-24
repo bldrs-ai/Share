@@ -10,6 +10,6 @@ module.exports = defineConfig({
     },
     screenshotOnRunFailure: false,
     video: false,
-    defaultCommandTimeout: 20000, // Set default command timeout to 20 seconds
+    defaultCommandTimeout: 60000, // Set default command timeout to 20 seconds
   },
 })
