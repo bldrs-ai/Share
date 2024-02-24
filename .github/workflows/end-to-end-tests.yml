@@ -52,7 +52,7 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: false
-          headed: false
+          headed: true
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -62,14 +62,14 @@ jobs:
         with:
           name: webifc-cypress-screenshots
           path: cypress/screenshots
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: Upload Cypress Videos
         uses: actions/upload-artifact@v3
         with:
           name: webifc-cypress-videos
           path: cypress/videos
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
   install-cypress-conway:
     environment: cypress
@@ -122,11 +122,11 @@ jobs:
         with:
           name: conway-cypress-screenshots
           path: cypress/screenshots
-          if-no-files-found: ignore
+          if-no-files-found: warn
 
       - name: Upload Cypress Videos
         uses: actions/upload-artifact@v3
         with:
           name: conway-cypress-videos
           path: cypress/videos
-          if-no-files-found: ignore
+          if-no-files-found: warn
