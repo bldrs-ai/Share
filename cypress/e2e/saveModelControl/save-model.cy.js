@@ -45,9 +45,6 @@ describe('save model', () => {
       overrideConsoleMethod('warn')
       overrideConsoleMethod('error')
       cy.setCookie('isFirstTime', '1')
-      cy.visit('/')
-      cy.get('#viewer-container').get('canvas').should('be.visible')
-      cy.get('[data-model-ready="true"]').should('exist', {timeout: 60000})
 
       // Intercept the /authorize request
       cy.intercept('GET', '**/authorize*', (req) => {
@@ -169,6 +166,9 @@ describe('save model', () => {
 
     it('should only find Save IFC button after login', () => {
       // Now trigger the login process, which will use the mocked loginWithPopup
+      cy.visit('/')
+      cy.get('#viewer-container').get('canvas').should('be.visible')
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 60000})
       cy.url().then((currentUrl) => {
         const STATUS_OK = 200
         const url = new URL(currentUrl)
