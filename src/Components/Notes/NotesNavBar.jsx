@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React from 'react'
 import Box from '@mui/material/Box'
 import {CloseButton, TooltipIconButton} from '../Buttons'

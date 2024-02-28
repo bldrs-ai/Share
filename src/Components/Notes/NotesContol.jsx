@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {useEffect} from 'react'
 import {PLACE_MARK_PREFIX} from './Notes'
 import useStore from '../../store/useStore'

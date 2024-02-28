@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 /* eslint-disable react-hooks/exhaustive-deps */
 import {useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
@@ -17,7 +16,7 @@ import {addUserDataInGroup, setGroupColor} from '../utils/svg'
 import {getIssues} from '../utils/GitHub'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
-import {useExistInFeature} from './useExistInFeature'
+// import {useExistInFeature} from './useExistInFeature'
 import debug from '../utils/debug'
 import {updateIssue} from '../utils/GitHub'
 
@@ -54,7 +53,8 @@ const resetPlaceMarkColors = () => {
  * @return {Function}
  */
 export function usePlaceMark() {
-  const existPlaceMarkInFeature = useExistInFeature('placemark')
+  // const existPlaceMarkInFeature = useExistInFeature('placemark')
+  const existPlaceMarkInFeature = true
   const location = useLocation()
   const accessToken = useStore((state) => state.accessToken)
   const notes = useStore((state) => state.notes)
@@ -63,7 +63,7 @@ export function usePlaceMark() {
   const repository = useStore((state) => state.repository)
   const setNotes = useStore((state) => state.setNotes)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
-  const setPlaceMarkActivated = useStore((state) => state.setPlaceMarkActivated)
+  const setPlaceMarkMode = useStore((state) => state.setPlaceMarkMode)
   const setPlaceMarkId = useStore((state) => state.setPlaceMarkId)
 
 
@@ -139,7 +139,7 @@ export function usePlaceMark() {
     if (placeMarkInfoGroup) {
       updateLocationAndGroup(placemarkCoordinate, placeMarkInfoGroup)
     }
-    deactivatePlaceMark()
+    // deactivatePlaceMark()
     updatePlaceMarkNote()
   }
 
@@ -223,7 +223,6 @@ export function usePlaceMark() {
     if (!existPlaceMarkInFeature) {
       return
     }
-
     if (placeMark) {
       if (placeMarkId === id && placeMark.activated) {
         deactivatePlaceMark()
@@ -239,11 +238,11 @@ export function usePlaceMark() {
       return
     }
     placeMark.deactivate()
-    setPlaceMarkActivated(false)
+    setPlaceMarkMode(false)
   }
   const activatePlaceMark = () => {
     placeMark.activate()
-    setPlaceMarkActivated(true)
+    setPlaceMarkMode(true)
   }
 
   return {

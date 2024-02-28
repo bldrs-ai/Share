@@ -1,4 +1,4 @@
-import React, {useEffect, useContext, useState} from 'react'
+import React, {useEffect, useContext, useState, useRef} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {Color, MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
@@ -175,7 +175,8 @@ export default function CadView({
   const isSearchVisible = useStore((state) => state.isSearchVisible)
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
-  const placeMarkActivated = useStore((state) => state.placeMarkActivated)
+  const placeMarkMode = useStore((state) => state.placeMarkMode)
+  const placeMarkModeRef = useRef(placeMarkMode)
 
   // Place Mark
   const {createPlaceMark, onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
@@ -281,6 +282,11 @@ export default function CadView({
   }, [location, model])
   /* eslint-enable */
 
+
+  // Update the ref whenever placeMarkMode changes
+  useEffect(() => {
+    placeMarkModeRef.current = placeMarkMode
+  }, [placeMarkMode])
 
   /**
    * Begin setup for new model. Turn off nav, search and item and init
@@ -757,7 +763,7 @@ export default function CadView({
     if (!item) {
       return
     }
-    selectWithShiftClickEvents(event.shiftKey, item.id)
+    selectWithShiftClickEvents(event.shiftKey, item.id, placeMarkModeRef.current)
   }
 
   /**
@@ -766,12 +772,12 @@ export default function CadView({
    * @param {boolean} shiftKey the click event
    * @param {number} expressId the express id of the element
    */
-  function selectWithShiftClickEvents(shiftKey, expressId) {
+  function selectWithShiftClickEvents(shiftKey, expressId, placeMarkModeLocal) {
     let newSelection = []
     if (!viewer.isolator.canBePickedInScene(expressId)) {
       return
     }
-    if (placeMarkActivated) {
+    if (placeMarkModeLocal) {
       return
     }
     if (shiftKey) {
@@ -1059,7 +1065,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
             width: '100%',
           }}
         >
-          <SideDrawer/>
+          <SideDrawer deselectItems={deselectItems}/>
           <AppStoreSideDrawer/>
         </Box>
       </>

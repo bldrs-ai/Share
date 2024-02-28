@@ -1,5 +1,3 @@
-/* eslint-disable no-console */
-
 import React, {useState, useEffect} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
@@ -57,7 +55,7 @@ export default function NoteCard({
   isComment = false,
   synched = true,
   placemarkHash = null,
-  attachedUrl,
+  attachedUrl = null,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -113,7 +111,9 @@ export default function NoteCard({
       addHashParams(window.location, placemarkHash)
     }
     addHashParams(window.location, NOTE_PREFIX, {id: id})
-    await selectPlaceMark(attachedUrl)
+    if (attachedUrl) {
+      await selectPlaceMark(attachedUrl)
+    }
   }
 
   /** Moves the camera to the position specified in the url attached to the issue/comment.*/
