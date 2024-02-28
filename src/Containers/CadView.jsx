@@ -423,7 +423,7 @@ export default function CadView({
             // TODO(pablo): error modal.
             setIsModelLoading(false)
             setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
@@ -480,7 +480,7 @@ export default function CadView({
             debug().log('CadView#loadIfc$onError: ', error)
             // TODO(pablo): error modal.
             setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else if (ifcURL === '/haus.ifc') {
       loadedModel = await viewer.loadIfcUrl(
@@ -500,7 +500,7 @@ export default function CadView({
             // TODO(pablo): error modal.
             setIsModelLoading(false)
             setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else {
       // TODO(pablo): probably already available in this scope, or use
@@ -547,7 +547,7 @@ export default function CadView({
             debug().log('CadView#loadIfc$onError: ', error)
             // TODO(pablo): error modal.
             setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     }
 

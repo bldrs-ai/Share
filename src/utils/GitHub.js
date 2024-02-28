@@ -558,6 +558,25 @@ export async function getFilesAndFolders(repo, owner, subfolder = '', accessToke
 }
 
 /**
+ * Executes an Octokit request with a specified timeout.
+ * If the request does not complete within the timeout period, it is aborted and a timeout error is thrown.
+ *
+ * @param {Promise} octokitRequest The Octokit request to be executed.
+ * @param {number} [timeout=3000] The timeout in milliseconds before abort.
+ * @return {Promise} Resolves with the result of the Octokit request if successful and within the timeout period.
+ *   Rejects with an error if the request is aborted due to a timeout or if the Octokit request fails for any other reason.
+ * @throws {Error} Throws a "Request timed out" error if the request does not complete within the specified timeout period.
+ */
+function requestWithTimeout(octokitRequest, timeout = 3000) { // Default timeout is 3000 ms
+  return Promise.race([
+    octokitRequest,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), timeout),
+    ),
+  ])
+}
+
+/**
  * Gets the latest commit hash for a github filepath
  *
  * @param {string} owner
@@ -585,16 +604,21 @@ export async function getLatestCommitHash(owner, repo, filePath, accessToken, br
     requestOptions.sha = branch
   }
 
-  commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
+  try {
+    commits = await requestWithTimeout(octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions))
 
-  if (commits.data.length === 0) {
-    debug().warn('No commits found for the specified file.')
+    if (commits.data.length === 0) {
+      debug().warn('No commits found for the specified file.')
+      return null
+    }
+
+    const latestCommitHash = commits.data[0].sha
+    debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
+    return latestCommitHash
+  } catch (error) {
+    debug().error(`Could not get latest commit hash`)
     return null
   }
-
-  const latestCommitHash = commits.data[0].sha
-  debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
-  return latestCommitHash
 }
 
 
