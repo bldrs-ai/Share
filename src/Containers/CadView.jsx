@@ -213,8 +213,9 @@ export default function CadView({
    * Load IFC helper used by 1) useEffect on path change and 2) upload button
    *
    * @param {string} filepath
+   * @param {string} gitpath to use for constructing API endpoints
    */
-  async function loadIfc(filepath) {
+  async function loadIfc(filepath, gitpath) {
     debug().log(`CadView#loadIfc: `, filepath)
     const uploadedFile = pathPrefix.endsWith('new')
 
@@ -228,6 +229,8 @@ export default function CadView({
     setIsModelLoading(true)
     setSnackMessage(`${loadingMessageBase}`)
 
+    // NB: for LFS targets, this will now be media.githubusercontent.com, so
+    // don't use for further API endpoint construction.
     const ifcURL = (uploadedFile || filepath.indexOf('/') === 0) ?
                    filepath : await getFinalUrl(filepath, accessToken)
 
@@ -318,8 +321,7 @@ export default function CadView({
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
-      const url = new URL(ifcURL)
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(url.pathname)
+      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
       const commitHash = isPublic ?
             await getLatestCommitHash(owner, repo, filePath, '', branch) :
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
@@ -632,7 +634,6 @@ export default function CadView({
       setLoadedFileInfo({source: 'github', info: {url: ifcUrl}})
     }
   }
-
 
   // TODO(pablo): again, just need branch here for VersionsPanel
   // below.  It's probably already available in this scope.
