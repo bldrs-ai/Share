@@ -8,8 +8,8 @@ import FormControlLabel from '@mui/material/FormControlLabel'
  *
  * @property {Function} onChange callback
  * @property {boolean} checked react state
- * @property {boolean} label
- * @property {boolean} labelPlacement
+ * @property {sting} label the name next to the toggle
+ * @property {string} labelPlacement the location of the label relative to the toggle
  * @return {React.ReactComponent}
  */
 export default function Toggle({onChange, checked, label = '', labelPlacement = 'start'}) {
