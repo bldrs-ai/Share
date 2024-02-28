@@ -112,6 +112,7 @@ export function usePlaceMark() {
     }
     const placeMarkObj = placeMark.onSceneDoubleClick(event)
     await savePlaceMark(placeMarkObj.point, placeMarkObj.promiseGroup )
+    deactivatePlaceMark()
   })
 
   const onSceneSingleTap = (event) => {

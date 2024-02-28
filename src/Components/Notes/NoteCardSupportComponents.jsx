@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {useState} from 'react'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -20,6 +21,8 @@ import GitHubIcon from '@mui/icons-material/GitHub'
 import MoreVertIcon from '@mui/icons-material/MoreVert'
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera'
 import PlaceOutlinedIcon from '@mui/icons-material/PlaceOutlined'
+import WrongLocationOutlinedIcon from '@mui/icons-material/WrongLocationOutlined'
+import EditLocationAltOutlinedIcon from '@mui/icons-material/EditLocationAltOutlined'
 import CameraIcon from '../../assets/icons/Camera.svg'
 import ShareIcon from '../../assets/icons/Share.svg'
 
@@ -119,9 +122,9 @@ export const CardFooter = ({
   embeddedCameras,
   selected,
   isComment,
-  synched,
   submitUpdate,
-  deselectItems,
+  selectedNote,
+  placemarkHash,
 }) => {
   const {accessToken} = useAuth0()
   const [shareIssue, setShareIssue] = useState(false)
@@ -139,6 +142,7 @@ export const CardFooter = ({
   const isScreenshotEnabled = useExistInFeature('screenshot')
   const [screenshotUri, setScreenshotUri] = useState(null)
 
+  console.log('selectedNote', selectedNote)
   /**
    * Navigate to github issue
    *
@@ -148,6 +152,17 @@ export const CardFooter = ({
     window.open(`https://github.com/${repository.orgName}/${repository.name}/issues/${noteNumber}`, '_blank')
   }
 
+  const deletePlacemark = () => {
+    const placemarkPattern = /---\s*\[placemark\]\(https?:\/\/[^\s]+?\)/
+    console.log('placemark pattern', placemarkPattern )
+    const placeMarkNote = selectedNote
+    console.log('placeMarkNote', placeMarkNote)
+    if (!placeMarkNote) {
+      return
+    }
+    const editedBody = selectedNote.body.replace(placemarkPattern, ``)
+    submitUpdate(editedBody)
+  }
 
   return (
     <Box
@@ -199,7 +214,7 @@ export const CardFooter = ({
           />
         }
         {
-          !isComment && selected && synched && existPlaceMarkInFeature &&
+          !isComment && selected && existPlaceMarkInFeature &&
           user && user.nickname === username &&
             <TooltipIconButton
               title='Place Mark'
@@ -208,15 +223,26 @@ export const CardFooter = ({
               selected={placeMarkId === id && placeMarkMode}
               onClick={() => {
                 togglePlaceMarkActive(id)
-
                 if (!placeMarkMode) {
                   setSnackMessage('Double click on the Canvas to drop a placemark')
                   const pauseTimeMs = 4000
                   setTimeout(() => setSnackMessage(null), pauseTimeMs)
                 }
               }}
-              icon={<PlaceOutlinedIcon className='icon-share'/>}
+              icon={placemarkHash ? <EditLocationAltOutlinedIcon className='icon-share'/> : <PlaceOutlinedIcon className='icon-share'/>}
             />
+        }
+        {!isComment && selected && existPlaceMarkInFeature && placemarkHash &&
+          user && user.nickname === username &&
+          <TooltipIconButton
+            title='Remove Place Mark'
+            size='small'
+            placement='bottom'
+            onClick={() => {
+              deletePlacemark()
+            }}
+            icon={<WrongLocationOutlinedIcon className='icon-share'/>}
+          />
         }
       </Box>
       <Box

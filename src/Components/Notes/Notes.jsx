@@ -132,6 +132,8 @@ export default function Notes() {
         numberOfComments={selectedNote.numberOfComments}
         avatarUrl={selectedNote.avatarUrl}
         synched={selectedNote.synched}
+        placemarkHash={selectedNote.placemarkHash}
+        selectedNote={selectedNote}
       />
     }
     {comments && selectedNote &&

@@ -56,6 +56,7 @@ export default function NoteCard({
   synched = true,
   placemarkHash = null,
   attachedUrl = null,
+  selectedNote = null,
 }) {
   assertDefined(id, index)
   const [anchorEl, setAnchorEl] = useState(null)
@@ -184,8 +185,8 @@ export default function NoteCard({
   }
 
   /** Submit update*/
-  async function submitUpdate() {
-    const res = await updateIssue(repository, noteNumber, title, editBody, accessToken)
+  async function submitUpdate(editBodyLocal) {
+    const res = await updateIssue(repository, noteNumber, title, editBodyLocal, accessToken)
     const editedNote = notes.find((note) => note.id === id)
     editedNote.body = res.data.body
     setNotes(notes)
@@ -246,6 +247,8 @@ export default function NoteCard({
         isComment={isComment}
         synched={synched}
         submitUpdate={submitUpdate}
+        placemarkHash={placemarkHash}
+        selectedNote={selectedNote}
       />
     </Card>
   )
