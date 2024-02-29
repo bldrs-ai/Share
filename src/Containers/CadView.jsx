@@ -172,7 +172,13 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    const tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
+    let tmpModelRef
+    try {
+      tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
+    } catch (e) {
+      tmpModelRef = undefined
+      setSnackMessage(null)
+    }
     setIsModelLoading(false)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
@@ -308,56 +314,50 @@ export default function CadView({
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
-      try {
-        const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-        const commitHash = isPublic ?
+      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
+      const commitHash = isPublic ?
             await getLatestCommitHash(owner, repo, filePath, '', branch) :
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
-        if (commitHash === null) {
-          debug().error(`Error obtaining commit hash for: ${ifcURL}`)
-        }
-
-        const file = await downloadToOPFS(
-            navigate,
-            appPrefix,
-            handleBeforeUnload,
-            ifcURL,
-            filePath,
-            commitHash,
-            owner,
-            repo,
-            branch,
-            (progressEvent) => {
-              if (Number.isFinite(progressEvent.receivedLength)) {
-                const loadedBytes = progressEvent.receivedLength
-                // eslint-disable-next-line no-magic-numbers
-                const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-                setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-                debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-              }
-            })
-
-        if (file instanceof File) {
-          setFile(file)
-        } else {
-          debug().error('Retrieved object is not of type File.')
-        }
-
-        loadedModel = await viewer.loadIfcFile(
-            file,
-            !urlHasCameraParams(),
-            (error) => {
-              debug().log('CadView#loadIfc$onError: ', error)
-              // TODO(pablo): error modal.
-              setIsModelLoading(false)
-              setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
-            }, customViewSettings)
-      } catch (error) {
-        setIsModelLoading(false)
-        setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
-        return
+      if (commitHash === null) {
+        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
       }
+
+      const file = await downloadToOPFS(
+        navigate,
+        appPrefix,
+        handleBeforeUnload,
+        ifcURL,
+        filePath,
+        commitHash,
+        owner,
+        repo,
+        branch,
+        (progressEvent) => {
+          if (Number.isFinite(progressEvent.receivedLength)) {
+            const loadedBytes = progressEvent.receivedLength
+            // eslint-disable-next-line no-magic-numbers
+            const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+            setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+            debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+          }
+        })
+
+      if (file instanceof File) {
+        setFile(file)
+      } else {
+        debug().error('Retrieved object is not of type File.')
+      }
+
+      loadedModel = await viewer.loadIfcFile(
+        file,
+        !urlHasCameraParams(),
+        (error) => {
+          debug().log('CadView#loadIfc$onError: ', error)
+          // TODO(pablo): error modal.
+          setIsModelLoading(false)
+          setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+        }, customViewSettings)
     }
 
     if (loadedModel) {

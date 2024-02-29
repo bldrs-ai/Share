@@ -8,7 +8,7 @@
 export default function createUISlice(set, get) {
   return {
     alertMessage: null,
-    setAlertMessage: (msg) => set(() => ({snackMessage: msg})),
+    setAlertMessage: (msg) => set(() => ({alertMessage: msg})),
 
     snackMessage: null,
     setSnackMessage: (msg) => set(() => ({snackMessage: msg})),
