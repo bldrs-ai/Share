@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
 import IconButton from '@mui/material/IconButton'
@@ -23,7 +23,7 @@ import BackIcon from '../assets/icons/Back.svg'
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
  * @property {string} dataTestId Internal attribute for component testing.  Default: ''
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function TooltipIconButton({
   title,
@@ -78,7 +78,7 @@ export function TooltipIconButton({
  * @property {object} children The controlled dialog
  * @property {string} [placement] See default in TooltipIconButton
  * @property {string} [variant] See default in TooltipIconButton
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function ControlButton({
   title,
@@ -113,7 +113,7 @@ export function ControlButton({
  *
  * @property {string} hashPrefix The hash prefix for storing state
  * @property {string} props See ControlButton
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function ControlButtonWithHashState({
   hashPrefix,
@@ -155,7 +155,7 @@ export function ControlButtonWithHashState({
 
 /**
  * @property {Function} onCloseClick Handler for close event.
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function CloseButton({onCloseClick}) {
   return (
@@ -201,7 +201,7 @@ export function RectangularButton({
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function FullScreenButton({onClick}) {
   return (
@@ -217,7 +217,7 @@ export function FullScreenButton({onClick}) {
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function BackButton({onClick}) {
   return (

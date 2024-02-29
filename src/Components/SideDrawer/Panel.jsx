@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
@@ -11,12 +11,12 @@ import {CloseButton} from '../Buttons'
 /**
  * A panel component with a sticky header containing a title and close button
  *
- * @param {string|React.ReactElement} title The title to display in the panel header
+ * @param {string|ReactElement} title The title to display in the panel header
  * @param {Function} onCloseClick A callback to be executed when the close button is clicked
- * @param {React.ReactElement} children Enclosed elements
- * @param {React.ReactElement} [action] Action component, for the top bar
+ * @param {ReactElement} children Enclosed elements
+ * @param {ReactElement} [action] Action component, for the top bar
  * @param {string} testId Set on the root Paper element
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function Panel({title, onCloseClick, children, action = null, testId = ''}) {
   assertDefined(title, onCloseClick, children, testId)

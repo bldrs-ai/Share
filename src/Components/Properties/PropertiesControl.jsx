@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import PropertiesIcon from '@mui/icons-material/FormatListBulleted'
@@ -7,7 +7,7 @@ import PropertiesIcon from '@mui/icons-material/FormatListBulleted'
 /**
  * Toggles the visibility of Properties and sets/removes its URL state token
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function PropertiesControl() {
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)

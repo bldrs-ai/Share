@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import MuiDialog from '@mui/material/Dialog'
@@ -21,8 +21,8 @@ import {CloseButton} from './Buttons'
  * @property {Function} setIsDialogDisplayed React setter
  * @property {string} [actionTitle] Title for the action button
  * @property {Function} [actionCb] Callback for action button
- * @property {React.ReactElement} children Content of the dialog
- * @return {React.ReactElement}
+ * @property {ReactElement} children Content of the dialog
+ * @return {ReactElement}
  */
 export default function Dialog({
   headerIcon,

@@ -205,10 +205,8 @@ describe('CadView', () => {
     render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
     await actAsyncFlush()
     const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
-    // eslint-disable-next-line no-magic-numbers
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)
     const setCameraTargetMock = viewer.IFC.context.ifcCamera.cameraControls.setTarget
-    // eslint-disable-next-line no-magic-numbers
     expect(setCameraTargetMock).toHaveBeenLastCalledWith(4, 5, 6, true)
     const createPlanMock = viewer.clipper.createFromNormalAndCoplanarPoint
     expect(createPlanMock).toHaveBeenCalled()

@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import CardActions from '@mui/material/CardActions'
@@ -19,7 +19,7 @@ import ShareIcon from '../../assets/icons/Share.svg'
 
 /**
  * @property {Array<number>} noteNumber Array of expressIDs
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function NoteFooter({
   accessToken,

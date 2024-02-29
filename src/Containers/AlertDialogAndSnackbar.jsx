@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Snackbar from '@mui/material/Snackbar'
 import AlertDialog from '../Components/AlertDialog'
@@ -6,7 +6,7 @@ import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export default function AlertAndSnackbar() {
   const appPrefix = useStore((state) => state.appPrefix)
 

@@ -1,10 +1,10 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Typography from '@mui/material/Typography'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export default function PleaseLogin() {
   return (
     <Box sx={{padding: '0px 10px'}} elevation={0}>

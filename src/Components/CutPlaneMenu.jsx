@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
@@ -19,7 +19,7 @@ import SectionIcon from '../assets/icons/Section.svg'
 /**
  * Menu of three cut planes for the model
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)

@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
@@ -9,7 +9,7 @@ import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 /**
  * Toggles the visibility of Notes and sets/removes its URL state token
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function NotesControl() {
   const accessToken = useStore((state) => state.accessToken)

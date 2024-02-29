@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import HistoryIcon from '@mui/icons-material/History'
@@ -7,7 +7,7 @@ import HistoryIcon from '@mui/icons-material/History'
 /**
  * ControlButton that toggles VersionsPanel, with nav state
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function VersionsControl() {
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)

@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import IconButton from '@mui/material/IconButton'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
@@ -14,7 +14,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert'
  *
  * @property {Function} onDeleteClick Callback for delete
  * @property {Function} onEditClick Callback for eddit
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function NoteMenu({onDeleteClick, onEditClick}) {
   const [anchorEl, setAnchorEl] = useState(null)

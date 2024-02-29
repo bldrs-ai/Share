@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import {assertDefined} from '../../utils/assert'
 import {useIsMobile} from '../Hooks'
@@ -7,11 +7,11 @@ import PanelTitle from './PanelTitle'
 
 /**
  * @property {string} title Panel title
- * @property {React.ReactElement} children Panel content
- * @property {React.ReactElement} [controlsGroup] Controls in title bar
+ * @property {ReactElement} children Panel content
+ * @property {ReactElement} [controlsGroup] Controls in title bar
  * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
  * @property {boolean} [includeGutter] Below title.  Default: false
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function PanelWithTitle({title, children, controlsGroup, iconSrc, includeGutter}) {
   assertDefined(title, children)

@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import {useLocation} from 'react-router'
 import useStore from '../../store/useStore'
 import {addHashParams, getHashParams, removeHashParams} from '../../utils/location'
@@ -16,7 +16,7 @@ import {PROPERTIES_PREFIX} from './PropertiesControl'
  *
  * @property {boolean} Include gutter Should be present only when
  *     Properties occupies full SideDrawer.
- * @return {React.ReactElement} Properties Panel react component
+ * @return {ReactElement} Properties Panel react component
  */
 export default function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)

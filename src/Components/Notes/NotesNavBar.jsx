@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
 import {setHashParams, removeHashParams} from '../../utils/location'
@@ -11,7 +11,7 @@ import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
 import NavigateNextIcon from '@mui/icons-material/NavigateNext'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export default function NotesNavBar() {
   const isCreateNoteVisible = useStore((state) => state.isCreateNoteVisible)
   const notes = useStore((state) => state.notes)

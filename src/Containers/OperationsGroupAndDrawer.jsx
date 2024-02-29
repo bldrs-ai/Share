@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
 import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
@@ -9,7 +9,7 @@ import SideDrawer from '../Components/SideDrawer/SideDrawer'
 
 /**
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function OperationsGroupAndDrawer({deselectItems}) {
   const isMobile = useIsMobile()

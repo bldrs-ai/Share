@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
@@ -18,7 +18,7 @@ import ShareControl from './ShareControl'
  * imagine
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function OperationsGroup({deselectItems}) {
   const isAppStoreEnabled = useExistInFeature('apps')

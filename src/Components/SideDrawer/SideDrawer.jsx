@@ -1,4 +1,4 @@
-import React, {useEffect, useRef} from 'react'
+import React, {ReactElement, useEffect, useRef} from 'react'
 import {useLocation} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
@@ -17,7 +17,7 @@ import VerticalResizerButton from './VerticalResizerButton'
 /**
  * Container for Notes and Properties
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function SideDrawer() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)

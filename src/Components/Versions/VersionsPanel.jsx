@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
 import {getCommitsForFile} from '../../net/github/Commits'
@@ -18,7 +18,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt'
  *
  * @property {string} filePath The file for which commits are fetched
  * @property {string} current The current branch or sha, to indicate is active in UI
- * @return {React.ReactElement} A timeline panel of versions
+ * @return {ReactElement} A timeline panel of versions
  */
 export default function VersionsPanel({filePath, currentRef}) {
   assertDefined(filePath, currentRef)

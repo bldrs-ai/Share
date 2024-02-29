@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
 import {BackButton, CloseButton, FullScreenButton} from '../Buttons'
@@ -6,7 +6,7 @@ import PanelWithTitle from '../SideDrawer/PanelWithTitle'
 import {AppStoreListing, AppStoreIFrame} from './AppStoreListing'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export function AppStorePanel() {
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
 
@@ -20,7 +20,7 @@ export function AppStorePanel() {
   )
 }
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export function AppPreviewPanel({item}) {
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
   const setSelectedStoreApp = useStore((state) => state.setSelectedStoreApp)

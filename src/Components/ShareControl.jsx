@@ -1,4 +1,4 @@
-import React, {createRef, useEffect, useState} from 'react'
+import React, {ReactElement, createRef, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
@@ -23,7 +23,7 @@ import ShareIcon from '../assets/icons/Share.svg'
  * This button hosts the ShareDialog component and toggles it open and
  * closed.
  *
- * @return {React.ReactElement} The button react component, with a hosted
+ * @return {ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
 export default function ShareControl() {

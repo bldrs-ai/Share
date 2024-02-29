@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import Accordion from '@mui/material/Accordion'
 import AccordionDetails from '@mui/material/AccordionDetails'
 import AccordionSummary from '@mui/material/AccordionSummary'
@@ -12,7 +12,7 @@ import CaretIcon from '../../assets/icons/Caret.svg'
  * @property {string} summary Title of the panel
  * @property {string} detail Content of the panel
  * @property {boolean} expandState global control of the panel
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function ExpansionPanel({summary, detail, expandState}) {
   const [expanded, setExpanded] = useState(expandState)

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Paper from '@mui/material/Paper'
 import Typography from '@mui/material/Typography'
@@ -10,7 +10,7 @@ import {LogoB} from './Logo/Logo'
  * Our fail whale.  It links the user back to the homepage to start
  * over.
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function ApplicationError() {
   return (

@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import NavTreeControl from './NavTree/NavTreeControl'
@@ -11,7 +11,7 @@ import VersionsControl from './Versions/VersionsControl'
  * Contains OpenModelControl, Navigate, Versions and Save
  *
  * @property {Function} isRepoActive deselects currently selected element
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function ControlsGroup({isRepoActive}) {
   const {isAuthenticated} = useAuth0()

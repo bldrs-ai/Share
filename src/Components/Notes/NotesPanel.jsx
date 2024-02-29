@@ -1,11 +1,11 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import PanelWithTitle from '../SideDrawer/PanelWithTitle'
 import Notes from './Notes'
 import NotesNavBar from './NotesNavBar'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export default function NotesPanel() {
   const isCreateNoteActive = useStore((state) => state.isCreateNoteActive)
   const selectedNoteId = useStore((state) => state.selectedNoteId)

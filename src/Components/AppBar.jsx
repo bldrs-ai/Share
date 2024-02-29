@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import MuiAppBar from '@mui/material/AppBar'
 import Stack from '@mui/material/Stack'
 import Toolbar from '@mui/material/Toolbar'
@@ -10,7 +10,7 @@ import SearchBar from './Search/SearchBar'
 
 /**
  * @property {boolean} isRepoActive TODO(pablo): maybe better in store
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function AppBar({isRepoActive}) {
   const theme = useTheme()

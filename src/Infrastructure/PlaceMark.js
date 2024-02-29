@@ -73,13 +73,10 @@ export default class PlaceMark extends EventDispatcher {
           break
         case 1: // Wheel button (middle button if present)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // Secondary button (right button)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // Fourth button (back button)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 4: // Fifth button (forward button)
           break
         default:
@@ -103,13 +100,10 @@ export default class PlaceMark extends EventDispatcher {
           break
         case 1: // Wheel button (middle button if present)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // Secondary button (right button)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // Fourth button (back button)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 4: // Fifth button (forward button)
           break
         default:
@@ -178,10 +172,8 @@ export default class PlaceMark extends EventDispatcher {
 
     const updatePointer = (event) => {
       const rect = _domElement.getBoundingClientRect()
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1
-      // eslint-disable-next-line no-magic-numbers, no-mixed-operators
-      _pointer.y = (-(event.clientY - rect.top) / rect.height) * 2 + 1
+      _pointer.x = (((event.clientX - rect.left) / rect.width) * 2) - 1
+      _pointer.y = ((-(event.clientY - rect.top) / rect.height) * 2) + 1
     }
 
 

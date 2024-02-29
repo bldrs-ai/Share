@@ -1,4 +1,4 @@
-import React, {useEffect, useContext, useState} from 'react'
+import React, {ReactElement, useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
@@ -42,7 +42,7 @@ let count = 0
  * Only container for the for the app.  Hosts the IfcViewer as well as
  * nav components.
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function CadView({
   installPrefix,

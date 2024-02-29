@@ -35,7 +35,6 @@ describe('IssueControl', () => {
     ]
     await act(() => {
       result.current.setNotes(notes)
-      // eslint-disable-next-line no-magic-numbers
       result.current.setSelectedNoteId(2)
     })
     expect(getByTitle('Back to the list')).toBeInTheDocument()

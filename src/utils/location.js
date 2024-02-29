@@ -130,7 +130,6 @@ export function getObjectParams(hashParams) {
       return
     }
     const paramParts = param.split('=')
-    // eslint-disable-next-line no-magic-numbers
     if (paramParts.length < 2) {
       if (isNumeric(paramParts[0])) {
         // @ts-ignore
@@ -300,7 +299,6 @@ export function parseGitHubPath(path) {
     repo = parts[2]
     branch = parts[3]
     // Join the remaining parts to form the filePath
-    // eslint-disable-next-line no-magic-numbers
     filePath = parts.slice(4).join('/')
     // get commit hash
     isPublic = true
@@ -310,7 +308,6 @@ export function parseGitHubPath(path) {
     repo = parts[1]
     branch = parts[2]
     // Join the remaining parts to form the filePath
-    // eslint-disable-next-line no-magic-numbers
     filePath = parts.slice(3).join('/')
     isPublic = false
   }

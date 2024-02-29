@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
@@ -41,7 +41,7 @@ import NoteMenu from './NoteMenu'
  * @property {string} [title] Notes only
  * @property {string} [username] Author
  * @property {boolean} [isNote] Is note, or if not is comment. Default: true
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function NoteCard({
   id = null,

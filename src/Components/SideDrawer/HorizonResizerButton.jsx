@@ -34,7 +34,6 @@ export default function HorizonResizerButton({
 
   const gripButtonRatio = 0.5
   const gripSize = thickness * gripButtonRatio
-  // eslint-disable-next-line no-magic-numbers
   const horizonPadding = (thickness - gripSize) / 2
 
   const startResizing = useCallback(() => {
@@ -111,10 +110,8 @@ export default function HorizonResizerButton({
         case 1: // one finger
           startResizing(true)
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // two finger
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // three finger
           break
         default:
@@ -129,10 +126,8 @@ export default function HorizonResizerButton({
         case 1: // one finger
           resize(e.touches[0])
           break
-        // eslint-disable-next-line no-magic-numbers
         case 2: // two finger
           break
-        // eslint-disable-next-line no-magic-numbers
         case 3: // three finger
           break
         default:

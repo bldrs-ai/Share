@@ -1,5 +1,4 @@
-/* eslint-disable no-magic-numbers */
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import Timeline from '@mui/lab/Timeline'
 import TimelineDot from '@mui/lab/TimelineDot'
 import TimelineItem from '@mui/lab/TimelineItem'
@@ -25,18 +24,19 @@ import CommitIcon from '@mui/icons-material/Commit'
  * @property {Array<object>} commitData An array of commits
  * @property {string} currentRef To indicate as active in the UI
  * @property {Function} commitNavigateCb A callback function to navigate to a specific commit
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function VersionsTimeline({commitData, currentRef, commitNavigateCb}) {
   const [showLoginMessage, setShowLoginMessage] = useState(false)
 
+  const timeoutMillis = 4000
   useEffect(() => {
     // Set a timeout to display the login message after 4 seconds if commitData is still empty
     const timer = setTimeout(() => {
       if (commitData.length === 0) {
         setShowLoginMessage(true)
       }
-    }, 4000)
+    }, timeoutMillis)
     // Clear the timeout if commitData is populated or the component unmounts
     return () => clearTimeout(timer)
   }, [commitData])
@@ -70,7 +70,7 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
  *
  * @property {object} version The version data to be displayed
  * @property {boolean} active Indicates if the current item is active
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 function TimelineInfo({commit, active}) {
   const theme = useTheme()

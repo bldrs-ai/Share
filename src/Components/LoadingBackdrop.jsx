@@ -1,11 +1,11 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Backdrop from '@mui/material/Backdrop'
 import useTheme from '@mui/styles/useTheme'
 import CircularProgress from '@mui/material/CircularProgress'
 import useStore from '../store/useStore'
 
 
-/** @return {React.ReactElement}*/
+/** @return {ReactElement}*/
 export default function LoadingBackdrop() {
   const isModelLoading = useStore((state) => state.isModelLoading)
   const theme = useTheme()

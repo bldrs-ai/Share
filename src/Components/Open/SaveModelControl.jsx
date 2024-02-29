@@ -1,4 +1,4 @@
-import React, {useState, useContext, useEffect} from 'react'
+import React, {ReactElement, useState, useContext, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import IconButton from '@mui/material/IconButton'
@@ -23,7 +23,7 @@ import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 /**
  * Displays model open dialog
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function SaveModelControl() {
   const {user} = useAuth0()

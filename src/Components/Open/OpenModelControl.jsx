@@ -1,4 +1,4 @@
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
@@ -24,7 +24,7 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 /**
  * Displays Open Model dialog
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function OpenModelControl() {
   const accessToken = useStore((state) => state.accessToken)
@@ -82,7 +82,7 @@ export const OPEN_MODEL_PREFIX = 'om'
  * @property {Function} setIsDialogDisplayed Passed to dialog to be controlled
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Array<string>} orgNamesArr List of org names for the current user.
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 function OpenModelDialog({
   isDialogDisplayed,
@@ -221,7 +221,7 @@ function OpenModelDialog({
 
 /**
  * @property {Function} setIsDialogDisplayed callback
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
   const [selected, setSelected] = useState('')

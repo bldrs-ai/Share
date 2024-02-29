@@ -1,5 +1,5 @@
 import axios from 'axios'
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
@@ -23,7 +23,7 @@ import BotIcon from '../assets/icons/Bot2.svg'
  * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
- * @return {React.ReactElement} The button react component, with a hosted
+ * @return {ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
 export default function ImagineControl() {

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useSwipeable} from 'react-swipeable'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -30,7 +30,7 @@ import ShareIcon from '../assets/icons/Share.svg'
 /**
  * ControlButton that toggles HelpDialog, with nav state
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
   const isHelpVisible = useStore((state) => state.isHelpVisible)
@@ -69,7 +69,7 @@ export const HELP_PREFIX = 'help'
  *
  * @property {boolean} isDialogDisplayed Determines if the dialog is displayed
  * @property {Function} setIsDialogDisplayed Callback to set the dialog display state
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [pageIndex, setPageIndex] = useState(0)
@@ -172,9 +172,9 @@ export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 /**
  * Represents a single help entry with an icon and a description.
  *
- * @property {React.ReactElement} icon Icon for the help entry
+ * @property {ReactElement} icon Icon for the help entry
  * @property {string} description Description text for the help entry
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 const HelpComponent = ({icon, description}) => {
   return (
@@ -211,7 +211,7 @@ const HelpComponent = ({icon, description}) => {
  * Represents a list of help entries, paginated.
  *
  * @property {number} pageIndex Index of the current displayed page
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 const HelpList = ({pageIndex}) => {
   const helpContent = [

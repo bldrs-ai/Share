@@ -1,11 +1,11 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
 import LogoBIcon from '../../assets/LogoB.svg'
 import LogoBWithDomainIcon from '../../assets/LogoBWithDomain.svg'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export function LogoB() {
   return (
     <ThemeBox>
@@ -15,7 +15,7 @@ export function LogoB() {
 }
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export function LogoBWithDomain() {
   const theme = useTheme()
   // We're currently only showing Logo in dialogs, etc. so
@@ -36,8 +36,8 @@ export function LogoBWithDomain() {
 
 
 /**
- * @property {Array.<React.ReactElement>} children The logo
- * @return {React.ReactElement}
+ * @property {Array.<ReactElement>} children The logo
+ * @return {ReactElement}
  */
 function ThemeBox({children}) {
   const theme = useTheme()

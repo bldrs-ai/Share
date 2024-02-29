@@ -146,13 +146,10 @@ export default function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:
@@ -178,13 +175,10 @@ export default function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:

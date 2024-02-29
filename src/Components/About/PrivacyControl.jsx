@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
 import Link from '@mui/material/Link'
@@ -9,7 +9,7 @@ import Toggle from '../Toggle'
 /**
  * The PrivacyControl component contains and "accept analytics" checkbox.
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function PrivacyControl() {
   const [isAnalyticsEnabled, setIsAnalyticsEnabled] = useState(true)

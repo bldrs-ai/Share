@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
@@ -21,7 +21,7 @@ import DiscordIcon from '../../assets/icons/Discord.svg'
  * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
  * @property {boolean} onClose Callback when closed
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {
   return (
@@ -48,7 +48,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
 }
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 function AboutContent() {
   return (
     <Box sx={{paddingBottom: '10px'}}>

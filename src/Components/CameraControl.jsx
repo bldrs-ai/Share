@@ -1,4 +1,4 @@
-import React, {useEffect} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
@@ -18,7 +18,7 @@ import {floatStrTrim} from '../utils/strings'
  * URL hash and sets the camera position, as well as adds a hash
  * listener to do the same whenever the hash changes.
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function CameraControl() {
   const viewer = useStore((state) => state.viewer)

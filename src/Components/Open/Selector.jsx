@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
 import TextField from '@mui/material/TextField'
@@ -12,7 +12,7 @@ import {handleBeforeUnload} from '../../utils/event'
  * @property {Function} setSelected callback to select the element
  * @property {Array} list list of element to populate select options
  * @property {string} [testId] id for testing
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function Selector({
   setIsDialogDisplayed,

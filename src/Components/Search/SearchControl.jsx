@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import SearchIcon from '@mui/icons-material/Search'
@@ -7,7 +7,7 @@ import SearchIcon from '@mui/icons-material/Search'
 /**
  * Button and url hash state to control the SearchBar
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function SearchControl() {
   const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)

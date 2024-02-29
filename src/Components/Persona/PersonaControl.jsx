@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Menu from '@mui/material/Menu'
@@ -15,7 +15,7 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 /**
  * PersonaControl contains the option to log in/log out and to theme control
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function PersonaControl() {
   const [anchorEl, setAnchorEl] = useState(null)

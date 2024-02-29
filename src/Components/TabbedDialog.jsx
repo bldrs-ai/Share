@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
@@ -18,9 +18,9 @@ import Tabs from './Tabs'
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
  * @property {boolean} [isTabsScrollable] Activate if the number of tabs is larger than 5
- * @property {React.ReactElement} [icon] Leading icon above header description
+ * @property {ReactElement} [icon] Leading icon above header description
  * @property {string} [actionButtonLabels] Labels for action ok buttons
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function TabbedDialog({
   tabLabels,

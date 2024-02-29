@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import {assertDefined} from '../../utils/assert'
@@ -9,7 +9,7 @@ import {assertDefined} from '../../utils/assert'
  * @property {object} [controlsGroup] Controls Group is placed on the right of the title
  * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
  * @property {boolean} [includeGutter] Below title.  Default: false
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function PanelTitle({title, controlsGroup, iconSrc, includeGutter}) {
   assertDefined(title)

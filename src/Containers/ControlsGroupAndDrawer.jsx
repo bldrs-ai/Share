@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -13,7 +13,7 @@ import useStore from '../store/useStore'
 
 /**
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function ControlsGroupAndDrawer({
   deselectItems,

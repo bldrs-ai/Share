@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
@@ -17,7 +17,7 @@ import ApplicationError from '../ApplicationError'
 /**
  * List of Notes
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function Notes() {
   const accessToken = useStore((state) => state.accessToken)
