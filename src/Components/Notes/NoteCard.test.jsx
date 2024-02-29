@@ -11,7 +11,7 @@ import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
 import NoteCard from './NoteCard'
-import {MOCK_NOTES} from '../../utils/GitHub'
+import {MOCK_NOTES} from './Notes.fixture'
 
 
 describe('NoteCard', () => {

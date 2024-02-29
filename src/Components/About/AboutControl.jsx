@@ -1,4 +1,4 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import * as FirstTime from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
@@ -10,7 +10,7 @@ import PkgJson from '../../../package.json'
 /**
  * Button to toggle About panel on and off
  *
- * @return {React.ReactElement}
+ * @return {ReactElement}
  */
 export default function AboutControl() {
   const isAboutVisible = useStore((state) => state.isAboutVisible)

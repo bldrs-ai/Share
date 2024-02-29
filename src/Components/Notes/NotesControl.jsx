@@ -1,6 +1,6 @@
 import React, {useEffect} from 'react'
+import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
-import {getIssues} from '../../utils/GitHub'
 import debug from '../../utils/debug'
 import {ControlButtonWithHashState} from '../Buttons'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
@@ -24,6 +24,8 @@ export default function NotesControl() {
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
+
+  const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   // Fetch issues/notes
   useEffect(() => {
@@ -64,7 +66,7 @@ export default function NotesControl() {
         setNotes(newNotes)
         toggleIsLoadingNotes()
       } catch (e) {
-        debug().warn('failed to fetch notes: ', e)
+        setSnackMessage('Notes: Cannot fetch from GitHub')
       }
     })()
     // TODO(pablo):

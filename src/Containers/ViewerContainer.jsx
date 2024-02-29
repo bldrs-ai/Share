@@ -16,7 +16,7 @@ export default function ViewerContainer() {
   const isModelReady = useStore((state) => state.isModelReady)
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
 
-  const [isDragActive, setIsDragActive] = useState(false)
+  const [, setIsDragActive] = useState(false)
 
   const navigate = useNavigate()
 

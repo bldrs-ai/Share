@@ -6,14 +6,10 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import FileContext from '../../OPFS/FileContext'
+import {commitFile, getFilesAndFolders} from '../../net/github/Files'
+import {getOrganizations} from '../../net/github/Organizations'
+import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import useStore from '../../store/useStore'
-import {
-  commitFile,
-  getOrganizations,
-  getRepositories,
-  getUserRepositories,
-  getFilesAndFolders,
-} from '../../utils/GitHub'
 import debug from '../../utils/debug'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'

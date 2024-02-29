@@ -1,7 +1,5 @@
-import {
-  getDownloadURL,
-  parseGitHubRepositoryURL,
-} from '../utils/GitHub'
+import {getDownloadUrl} from '../net/github/Files'
+import {parseGitHubRepositoryUrl} from '../net/github/utils'
 
 
 /**
@@ -14,28 +12,27 @@ export async function getFinalUrl(url, accessToken) {
   switch (u.host.toLowerCase()) {
     case 'github.com':
       if (!accessToken) {
-        const proxyURL =
-          new URL(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com')
+        const proxyUrl = new URL(process.env.RAW_GIT_PROXY_URL)
 
         // Replace the protocol, host, and hostname in the target
-        u.protocol = proxyURL.protocol
-        u.host = proxyURL.host
-        u.hostname = proxyURL.hostname
+        u.protocol = proxyUrl.protocol
+        u.host = proxyUrl.host
+        u.hostname = proxyUrl.hostname
 
         // If the port is specified, replace it in the target URL
-        if (proxyURL.port) {
-          u.port = proxyURL.port
+        if (proxyUrl.port) {
+          u.port = proxyUrl.port
         }
 
         // If there's a path, *and* it's not just the root, then prepend it to the target URL
-        if (proxyURL.pathname && proxyURL.pathname !== '/') {
-          u.pathname = proxyURL.pathname + u.pathname
+        if (proxyUrl.pathname && proxyUrl.pathname !== '/') {
+          u.pathname = proxyUrl.pathname + u.pathname
         }
 
         return u.toString()
       }
 
-      return await getGitHubDownloadURL(url, accessToken)
+      return await getGitHubDownloadUrl(url, accessToken)
 
     default:
       return url
@@ -48,9 +45,9 @@ export async function getFinalUrl(url, accessToken) {
  * @param {string} accessToken
  * @return {string} The url
  */
-async function getGitHubDownloadURL(url, accessToken) {
-  const repo = parseGitHubRepositoryURL(url)
-  const downloadURL = await getDownloadURL(
+async function getGitHubDownloadUrl(url, accessToken) {
+  const repo = parseGitHubRepositoryUrl(url)
+  const downloadUrl = await getDownloadUrl(
     {
       orgName: repo.owner,
       name: repo.repository,
@@ -59,5 +56,5 @@ async function getGitHubDownloadURL(url, accessToken) {
     repo.ref,
     accessToken,
   )
-  return downloadURL
+  return downloadUrl
 }

@@ -7,15 +7,15 @@ import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
 import CardContent from '@mui/material/CardContent'
 import NoteBodyEdit from './NoteBodyEdit'
-import useStore from '../../store/useStore'
-import {assertDefined} from '../../utils/assert'
-import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
-import {findUrls} from '../../utils/strings'
 import {
   closeIssue,
   updateIssue,
   // TODO(pablo): deleteComment as deleteCommentGitHub,
-} from '../../utils/GitHub'
+} from '../../net/github/Issues'
+import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
+import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
+import {findUrls} from '../../utils/strings'
 import {
   CAMERA_PREFIX,
   addCameraUrlParams,

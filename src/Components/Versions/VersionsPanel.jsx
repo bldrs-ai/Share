@@ -1,7 +1,7 @@
 import React, {useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import useStore from '../../store/useStore'
-import {getCommitsForFile} from '../../utils/GitHub'
+import {getCommitsForFile} from '../../net/github/Commits'
 import {assertDefined} from '../../utils/assert'
 import debug from '../../utils/debug'
 import {navigateBaseOnModelPath} from '../../utils/location'

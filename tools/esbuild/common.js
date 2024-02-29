@@ -69,7 +69,7 @@ export default {
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
   minify: (process.env.MINIFY_BUILD || 'true') === 'true',
-  keepNames: false, // TODOD(pablo): have had breakage without this
+  keepNames: true, // TODOD(pablo): have had breakage without this
   splitting: false,
   metafile: true,
   sourcemap: true,
@@ -86,11 +86,9 @@ export default {
     'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || null),
 
     // GitHub
-    'process.env.RAW_GIT_PROXY_URL':
-        str(process.env.RAW_GIT_PROXY_URL || 'https://raw.githubusercontent.com'),
+    'process.env.RAW_GIT_PROXY_URL': str(process.env.RAW_GIT_PROXY_URL || null),
     'process.env.GITHUB_API_TOKEN': str(process.env.GITHUB_API_TOKEN || null),
-    'process.env.GITHUB_BASE_URL':
-        str(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
+    'process.env.GITHUB_BASE_URL': str(process.env.GITHUB_BASE_URL || null),
 
     // Sentry
     'process.env.SENTRY_DSN': str(process.env.SENTRY_DSN || null),

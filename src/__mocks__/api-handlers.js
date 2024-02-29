@@ -1,19 +1,21 @@
 import {rest} from 'msw'
-import {
-  MOCK_COMMENTS,
-  MOCK_ISSUES,
-  MOCK_ORGANIZATIONS,
-  MOCK_REPOSITORY,
-  MOCK_FILES,
-  MOCK_COMMITS,
-  MOCK_BRANCHES,
-} from '../utils/GitHub'
+import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
+import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
+import {MOCK_COMMITS} from '../net/github/Commits.fixture'
+import {MOCK_FILES} from '../net/github/Files.fixture'
+import {MOCK_ISSUES} from '../net/github/Issues.fixture'
+import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
+import {MOCK_REPOSITORY} from '../net/github/Repositories.fixture'
+import testEnvVars from '../../tools/jest/testEnvVars'
 
+
+const GH_BASE = testEnvVars.GITHUB_BASE_URL
 
 const httpOk = 200
 const httpCreated = 201
 const httpAuthorizationRequired = 401
 const httpNotFound = 404
+
 
 /**
  * Initialize API handlers, including Google Analytics and GitHub.
@@ -22,8 +24,8 @@ const httpNotFound = 404
  */
 export function initHandlers() {
   const handlers = []
-  handlers.push(...githubHandlers())
   handlers.push(...gaHandlers())
+  handlers.push(...githubHandlers())
   return handlers
 }
 
@@ -52,7 +54,7 @@ function gaHandlers() {
  */
 function githubHandlers() {
   return [
-    rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
@@ -65,7 +67,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
@@ -78,7 +80,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/repos/:org/:repo/contents/:path', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/repos/:org/:repo/contents/:path`, (req, res, ctx) => {
       const {org, repo, path} = req.params
       const ref = req.url.searchParams.get('ref')
 
@@ -110,9 +112,9 @@ function githubHandlers() {
             path: 'README.md',
             sha: 'a5dd511780350dfbf2374196d8f069114a7d9205',
             size: 1359,
-            url: 'https://api.github.com/repos/bldrs-ai/Share/contents/README.md?ref=main',
+            url: `${GH_BASE}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
             html_url: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
-            git_url: 'https://api.github.com/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205',
+            git_url: `${GH_BASE}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
             download_url: downloadURL,
             type: 'file',
             content: 'U2hhcmUgaXMgYSB3ZWItYmFzZWQgQklNICYgQ0FEIGludGVncmF0aW9uIGVu\n' +
@@ -148,15 +150,15 @@ function githubHandlers() {
               'Oi1HdWlkZSkK\n',
             encoding: 'base64',
             links: {
-              self: 'https://api.github.com/repos/bldrs-ai/Share/contents/README.md?ref=main',
-              git: 'https://api.github.com/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205',
+              self: `${GH_BASE}/repos/bldrs-ai/Share/contents/README.md?ref=main`,
+              git: `${GH_BASE}/repos/bldrs-ai/Share/git/blobs/a5dd511780350dfbf2374196d8f069114a7d9205`,
               html: 'https://github.com/bldrs-ai/Share/blob/main/README.md',
             },
           }),
       )
     }),
 
-    rest.post('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
+    rest.post(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
       if (org !== 'bldrs-ai' || repo !== 'Share') {
@@ -173,7 +175,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.post('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
+    rest.post(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber/comments`, (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
 
       if (org !== 'bldrs-ai' || repo !== 'Share' || !issueNumber) {
@@ -185,7 +187,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.patch('https://api.github.com/repos/:org/:repo/issues/:issueNumber', (req, res, ctx) => {
+    rest.patch(`${GH_BASE}/repos/:org/:repo/issues/:issueNumber`, (req, res, ctx) => {
       const {org, repo} = req.params
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' ) {
         return res(
@@ -201,7 +203,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.delete('https://api.github.com/repos/:org/:repo/issues/comments/:commentId', (req, res, ctx) => {
+    rest.delete(`${GH_BASE}/repos/:org/:repo/issues/comments/:commentId`, (req, res, ctx) => {
       const {org, repo, commentId} = req.params
 
       if (org !== 'bldrs-ai' || repo !== 'Share' || !commentId) {
@@ -213,7 +215,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/user/orgs`, (req, res, ctx) => {
       const authHeader = req.headers.get('authorization')
 
       if (!authHeader) {
@@ -232,7 +234,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/orgs/bldrs-ai/repos', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json({
@@ -241,7 +243,7 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/repos/:owner/:repo/contents', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/repos/:owner/:repo/contents`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json(MOCK_FILES),
@@ -249,7 +251,7 @@ function githubHandlers() {
     }),
 
     rest.get(
-        'https://api.github.com/repos/:owner/:repo/commits',
+        `${GH_BASE}/repos/:owner/:repo/commits`,
         (req, res, ctx) => {
           return res(
               ctx.status(httpOk),
@@ -258,7 +260,7 @@ function githubHandlers() {
         }),
 
     rest.get(
-        'https://api.github.com/repos/:owner/:repo/branches',
+        `${GH_BASE}/repos/:owner/:repo/branches`,
         (req, res, ctx) => {
           return res(
               ctx.status(httpOk),
@@ -268,7 +270,7 @@ function githubHandlers() {
 
     // octokit.rest.git.getlatestCommitHash
     rest.get(
-        'https://api.github.com/repos/:owner/:repo/commits',
+        `${GH_BASE}/repos/:owner/:repo/commits`,
         (req, res, ctx) => {
           return res(
               ctx.status(httpOk),
@@ -281,7 +283,7 @@ function githubHandlers() {
      * GH returns for the various cases. */
 
     // octokit.rest.git.getRef
-    rest.get('https://api.github.com/repos/:owner/:repo/git/ref/:ref', (req, res, ctx) => {
+    rest.get(`${GH_BASE}/repos/:owner/:repo/git/ref/:ref`, (req, res, ctx) => {
       return res(
           ctx.status(httpOk),
           ctx.json({object: {sha: 'parentSha'}}),
@@ -290,7 +292,7 @@ function githubHandlers() {
 
     // octokit.rest.git.getCommit
     rest.get(
-        'https://api.github.com/repos/:owner/:repo/git/commits/:commit_sha',
+        `${GH_BASE}/repos/:owner/:repo/git/commits/:commit_sha`,
         (req, res, ctx) => {
           return res(
               ctx.status(httpOk),
@@ -300,7 +302,7 @@ function githubHandlers() {
 
     // octokit.rest.git.createBlob
     rest.post(
-        'https://api.github.com/repos/:owner/:repo/git/blobs',
+        `${GH_BASE}/repos/:owner/:repo/git/blobs`,
         async (req, res, ctx) => {
           const {content, encoding} = await req.body
           if (content === undefined || encoding === undefined) {
@@ -315,7 +317,7 @@ function githubHandlers() {
 
     // octokit.rest.git.createTree
     rest.post(
-        'https://api.github.com/repos/:owner/:repo/git/trees',
+        `${GH_BASE}/repos/:owner/:repo/git/trees`,
         async (req, res, ctx) => {
           // eslint-disable-next-line camelcase
           const {base_tree, tree} = await req.body
@@ -332,7 +334,7 @@ function githubHandlers() {
 
     // octokit.rest.git.createCommit
     rest.post(
-        'https://api.github.com/repos/:owner/:repo/git/commits',
+        `${GH_BASE}/repos/:owner/:repo/git/commits`,
         async (req, res, ctx) => {
           const {message, tree, parents} = await req.body
           if (message === undefined || tree === undefined || parents === undefined) {
@@ -347,7 +349,7 @@ function githubHandlers() {
 
     // octokit.rest.git.updateRef
     rest.patch(
-        'https://api.github.com/repos/:owner/:repo/git/refs/:ref',
+        `${GH_BASE}/repos/:owner/:repo/git/refs/:ref`,
         async (req, res, ctx) => {
           const {sha} = await req.body
           if (sha === undefined) {

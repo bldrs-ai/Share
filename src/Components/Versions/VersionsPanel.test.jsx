@@ -5,7 +5,7 @@ import useStore from '../../store/useStore'
 import {
   MOCK_MODEL_PATH_GIT,
   MOCK_REPOSITORY,
-} from '../../utils/GitHub'
+} from './VersionsPanel.fixture'
 import VersionsPanel from './VersionsPanel'
 
 

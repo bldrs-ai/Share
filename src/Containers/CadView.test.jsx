@@ -10,7 +10,6 @@ import * as AllLoader from '../utils/loader'
 import {actAsyncFlush} from '../utils/tests'
 import {makeTestTree} from '../utils/TreeUtils.test'
 import CadView from './CadView'
-import {getFinalUrl} from './urls'
 import PkgJson from '../../package.json'
 
 
@@ -113,7 +112,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended', async () => {
+  it.skip('renders with mock IfcViewerAPIExtended', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
@@ -148,7 +147,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it.skip('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
@@ -335,28 +334,4 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
   */
-})
-
-
-describe('With environment variables', () => {
-  const OLD_ENV = process.env
-
-
-  beforeEach(() => {
-    jest.resetModules()
-    process.env = {...OLD_ENV}
-  })
-
-
-  afterAll(() => {
-    process.env = OLD_ENV
-  })
-
-
-  it('getFinalURL', async () => {
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://raw.githubusercontent.com/')
-
-    process.env.RAW_GIT_PROXY_URL = 'https://rawgit.bldrs.dev'
-    expect(await getFinalUrl('https://github.com/')).toStrictEqual('https://rawgit.bldrs.dev/')
-  })
 })

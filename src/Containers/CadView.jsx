@@ -17,7 +17,7 @@ import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
-import {getLatestCommitHash} from '../utils/GitHub'
+import {getLatestCommitHash} from '../net/github/Commits'
 // TODO(pablo): use ^^ instead of this
 import {parseGitHubPath} from '../utils/location'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
@@ -170,7 +170,7 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    const tmpModelRef = await loadIfc(pathToLoad)
+    const tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
     setIsModelLoading(false)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
