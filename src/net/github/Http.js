@@ -1,6 +1,5 @@
 import {Octokit} from '@octokit/rest'
 import {assertDefined} from '../../utils/assert'
-import debug from '../../utils/debug'
 import PkgJson from '../../../package.json'
 
 
@@ -21,12 +20,11 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
       ...args.headers,
     }
   }
-  const res = await octokit.request(`GET /repos/{org}/{repo}/${path}`, {
+  return await requestWithTimeout(octokit.request(`GET /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  })
-  return res
+  }))
 }
 
 
@@ -40,7 +38,6 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
  * @return {object} The object at the resource
  */
 export async function postGitHub(repository, path, args = {}, accessToken = '') {
-  debug().log('GitHub#postGitHub: args: ', args)
   assertDefined(repository.orgName, repository.name)
   if (accessToken) {
     args.headers = {
@@ -48,16 +45,11 @@ export async function postGitHub(repository, path, args = {}, accessToken = '') 
       ...args.headers,
     }
   }
-  const requestStr = `POST /repos/{org}/{repo}/${path}`
-  debug().log('GitHub#postGitHub: requestStr: ', requestStr)
-  const requestObj = {
+  return await requestWithTimeout(octokit.request(`POST /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  }
-  debug().log('GitHub#postGitHub: requestObj: ', requestObj)
-  const res = await octokit.request(requestStr, requestObj)
-  return res
+  }))
 }
 
 
@@ -78,16 +70,11 @@ export async function deleteGitHub(repository, path, args = {}, accessToken = ''
       ...args.headers,
     }
   }
-  const requestStr = `DELETE /repos/{org}/{repo}/${path}`
-  debug().log('GitHub#deleteGitHub: requestStr: ', requestStr)
-  const requestObj = {
+  return await requestWithTimeout(octokit.request(`DELETE /repos/{org}/{repo}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  }
-  debug().log('GitHub#deleteGitHub: requestObj: ', requestObj)
-  const res = await octokit.request(requestStr, requestObj)
-  return res
+  }))
 }
 
 
@@ -108,13 +95,31 @@ export async function patchGitHub(repository, path, args = {}, accessToken = '')
       ...args.headers,
     }
   }
-  debug().log('Dispatching GitHub request for repo:', repository)
-  const res = await octokit.request(`PATCH /repos/${repository.orgName}/${repository.name}/${path}`, {
+  return await requestWithTimeout(octokit.request(`PATCH /repos/${repository.orgName}/${repository.name}/${path}`, {
     org: repository.orgName,
     repo: repository.name,
     ...args,
-  })
-  return res
+  }))
+}
+
+
+/**
+ * Executes an Octokit request with a specified timeout.
+ * If the request does not complete within the timeout period, it is aborted and a timeout error is thrown.
+ *
+ * @param {Promise} octokitRequest The Octokit request to be executed.
+ * @param {number} [timeout=5000] The timeout in milliseconds before abort.
+ * @return {Promise} Resolves with the result of the Octokit request if successful and within the timeout period.
+ *   Rejects with an error if the request is aborted due to a timeout or if the Octokit request fails for any other reason.
+ * @throws {Error} Throws a "Request timed out" error if the request does not complete within the specified timeout period.
+ */
+function requestWithTimeout(octokitRequest, timeout = 5000) { // Default timeout is 5000 ms
+  return Promise.race([
+    octokitRequest,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Request timed out')), timeout),
+    ),
+  ])
 }
 
 

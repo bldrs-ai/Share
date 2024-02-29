@@ -250,33 +250,28 @@ function githubHandlers() {
       )
     }),
 
-    rest.get(
-        `${GH_BASE}/repos/:owner/:repo/commits`,
-        (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json(MOCK_COMMITS),
-          )
-        }),
+    rest.get(`${GH_BASE}/repos/:owner/:repo/branches`, (req, res, ctx) => {
+      return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_BRANCHES),
+      )
+    }),
 
-    rest.get(
-        `${GH_BASE}/repos/:owner/:repo/branches`,
-        (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json(MOCK_BRANCHES),
-          )
-        }),
+    rest.get(`${GH_BASE}/repos/:owner/:repo/commits`, (req, res, ctx) => {
+      // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
+      if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
+        return res(
+          ctx.status(httpNotFound),
+          ctx.json({sha: 'error'}),
+        )
+      }
+      // For all other cases, return a success response
+      return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_COMMITS),
+      )
+    }),
 
-    // octokit.rest.git.getlatestCommitHash
-    rest.get(
-        `${GH_BASE}/repos/:owner/:repo/commits`,
-        (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json([{sha: 'testsha'}]),
-          )
-        }),
 
     /* Begin support for GitHub commitFile.  HTTP_BAD_REQUEST(400) is
      * used to indicate missing args, tho we're not sure what actual
@@ -291,75 +286,65 @@ function githubHandlers() {
     }),
 
     // octokit.rest.git.getCommit
-    rest.get(
-        `${GH_BASE}/repos/:owner/:repo/git/commits/:commit_sha`,
-        (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json({tree: {sha: 'treeSha'}}),
-          )
-        }),
+    rest.get(`${GH_BASE}/repos/:owner/:repo/git/commits/:commit_sha`, (req, res, ctx) => {
+      return res(
+        ctx.status(httpOk),
+        ctx.json({tree: {sha: 'treeSha'}}),
+      )
+    }),
 
     // octokit.rest.git.createBlob
-    rest.post(
-        `${GH_BASE}/repos/:owner/:repo/git/blobs`,
-        async (req, res, ctx) => {
-          const {content, encoding} = await req.body
-          if (content === undefined || encoding === undefined) {
-            const HTTP_BAD_REQUEST = 400
-            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
-          }
-          return res(
-              ctx.status(httpOk),
-              ctx.json({sha: 'blobSha'}),
-          )
-        }),
+    rest.post(`${GH_BASE}/repos/:owner/:repo/git/blobs`, async (req, res, ctx) => {
+      const {content, encoding} = await req.body
+      if (content === undefined || encoding === undefined) {
+        const HTTP_BAD_REQUEST = 400
+        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+      }
+      return res(
+        ctx.status(httpOk),
+        ctx.json({sha: 'blobSha'}),
+      )
+    }),
 
     // octokit.rest.git.createTree
-    rest.post(
-        `${GH_BASE}/repos/:owner/:repo/git/trees`,
-        async (req, res, ctx) => {
-          // eslint-disable-next-line camelcase
-          const {base_tree, tree} = await req.body
-          // eslint-disable-next-line camelcase
-          if (base_tree === undefined || tree === undefined) {
-            const HTTP_BAD_REQUEST = 400
-            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
-          }
-          return res(
-              ctx.status(httpOk),
-              ctx.json({sha: 'newTreeSha'}),
-          )
-        }),
+    rest.post(`${GH_BASE}/repos/:owner/:repo/git/trees`, async (req, res, ctx) => {
+      // eslint-disable-next-line camelcase
+      const {base_tree, tree} = await req.body
+      // eslint-disable-next-line camelcase
+      if (base_tree === undefined || tree === undefined) {
+        const HTTP_BAD_REQUEST = 400
+        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+      }
+      return res(
+        ctx.status(httpOk),
+        ctx.json({sha: 'newTreeSha'}),
+      )
+    }),
 
     // octokit.rest.git.createCommit
-    rest.post(
-        `${GH_BASE}/repos/:owner/:repo/git/commits`,
-        async (req, res, ctx) => {
-          const {message, tree, parents} = await req.body
-          if (message === undefined || tree === undefined || parents === undefined) {
-            const HTTP_BAD_REQUEST = 400
-            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
-          }
-          return res(
-              ctx.status(httpOk),
-              ctx.json({sha: 'newCommitSha'}),
-          )
-        }),
+    rest.post(`${GH_BASE}/repos/:owner/:repo/git/commits`, async (req, res, ctx) => {
+      const {message, tree, parents} = await req.body
+      if (message === undefined || tree === undefined || parents === undefined) {
+        const HTTP_BAD_REQUEST = 400
+        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+      }
+      return res(
+        ctx.status(httpOk),
+        ctx.json({sha: 'newCommitSha'}),
+      )
+    }),
 
     // octokit.rest.git.updateRef
-    rest.patch(
-        `${GH_BASE}/repos/:owner/:repo/git/refs/:ref`,
-        async (req, res, ctx) => {
-          const {sha} = await req.body
-          if (sha === undefined) {
-            const HTTP_BAD_REQUEST = 400
-            return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
-          }
-          return res(
-              ctx.status(httpOk),
-              ctx.json({sha: 'smth'}),
-          )
-        }),
+    rest.patch(`${GH_BASE}/repos/:owner/:repo/git/refs/:ref`, async (req, res, ctx) => {
+      const {sha} = await req.body
+      if (sha === undefined) {
+        const HTTP_BAD_REQUEST = 400
+        return res(ctx.status(HTTP_BAD_REQUEST), ctx.json({success: false}))
+      }
+      return res(
+        ctx.status(httpOk),
+        ctx.json({sha: 'smth'}),
+      )
+    }),
   ]
 }

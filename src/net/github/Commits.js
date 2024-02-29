@@ -1,6 +1,6 @@
 import debug from '../../utils/debug'
 import {assertDefined} from '../../utils/assert'
-import {getGitHub, octokit} from './Http' // TODO(pablo): don't use octokit directly
+import {getGitHub} from './Http'
 
 
 /**
@@ -30,30 +30,27 @@ export async function getCommitsForFile(repository, filepath, accessToken = '') 
  */
 export async function getLatestCommitHash(owner, repo, filePath, accessToken, branch = 'main') {
   assertDefined(...arguments)
-  let commits = null
-  const requestOptions = {
-    path: filePath,
-    headers: {},
+
+  // Prepare the repository object for getGitHub
+  const repository = {
+    orgName: owner,
+    name: repo,
   }
 
-  // Add the authorization header if accessToken is provided
-  if (accessToken !== '') {
-    requestOptions.headers.authorization = `Bearer ${accessToken}`
+  // Prepare the args object for getGitHub
+  const args = {
+    sha: branch,
+    path: `commits?path=${filePath}`,
   }
 
-  // Add the branch (sha) to the request if provided
-  if (branch && branch !== '') {
-    requestOptions.sha = branch
-  }
+  const res = await getGitHub(repository, `commits`, args, accessToken)
 
-  commits = await octokit.request(`GET /repos/${owner}/${repo}/commits`, requestOptions)
-
-  if (commits.data.length === 0) {
+  if (res.data.length === 0) {
     debug().warn('No commits found for the specified file.')
     return null
   }
 
-  const latestCommitHash = commits.data[0].sha
+  const latestCommitHash = res.data[0].sha
   debug().log(`The latest commit hash for the file is: ${latestCommitHash}`)
   return latestCommitHash
 }

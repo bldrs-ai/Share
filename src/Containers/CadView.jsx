@@ -185,9 +185,6 @@ export default function CadView({
     // it after user says OK.
     setSnackMessage(null)
 
-    if (tmpModelRef === 'redirect') {
-      return
-    }
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
     await onModel(tmpModelRef)
     createPlaceMark({
@@ -251,6 +248,8 @@ export default function CadView({
           },
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
+            setIsModelLoading(false)
+            setSnackMessage('')
           }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
@@ -301,67 +300,62 @@ export default function CadView({
           !urlHasCameraParams(),
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
-    } else if (ifcURL === '/haus.ifc') {
-      loadedModel = await viewer.loadIfcUrl(
-          ifcURL,
-          !urlHasCameraParams(), // fit to frame
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.loaded)) {
-              const loadedBytes = progressEvent.loaded
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          },
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
+            setIsModelLoading(false)
+            setSnackMessage('')
           }, customViewSettings)
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-      const commitHash = isPublic ?
+      try {
+        const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
+        const commitHash = isPublic ?
             await getLatestCommitHash(owner, repo, filePath, '', branch) :
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
-      if (commitHash === null) {
-        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+        if (commitHash === null) {
+          debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+        }
+
+        const file = await downloadToOPFS(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            ifcURL,
+            filePath,
+            commitHash,
+            owner,
+            repo,
+            branch,
+            (progressEvent) => {
+              if (Number.isFinite(progressEvent.receivedLength)) {
+                const loadedBytes = progressEvent.receivedLength
+                // eslint-disable-next-line no-magic-numbers
+                const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+                setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+                debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+              }
+            })
+
+        if (file instanceof File) {
+          setFile(file)
+        } else {
+          debug().error('Retrieved object is not of type File.')
+        }
+
+        loadedModel = await viewer.loadIfcFile(
+            file,
+            !urlHasCameraParams(),
+            (error) => {
+              debug().log('CadView#loadIfc$onError: ', error)
+              // TODO(pablo): error modal.
+              setIsModelLoading(false)
+              setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+            }, customViewSettings)
+      } catch (error) {
+        setIsModelLoading(false)
+        setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+        return
       }
-
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          filePath,
-          commitHash,
-          owner,
-          repo,
-          branch,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-          }, customViewSettings)
     }
 
     if (loadedModel) {
