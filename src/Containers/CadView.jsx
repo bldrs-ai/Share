@@ -334,7 +334,7 @@ export default function CadView({
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
 
-    if (tmpModelRef === 'redirect') {
+    if (tmpModelRef === undefined) {
       return
     }
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
