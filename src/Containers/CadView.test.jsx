@@ -112,7 +112,7 @@ describe('CadView', () => {
   })
 
 
-  it.skip('renders with mock IfcViewerAPIExtended', async () => {
+  it('renders with mock IfcViewerAPIExtended', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
@@ -147,7 +147,7 @@ describe('CadView', () => {
   })
 
 
-  it.skip('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
@@ -166,6 +166,7 @@ describe('CadView', () => {
 
     // Identify the drop zone element using the cadview-dropzone attribute
     const dropZone = screen.getByTestId('cadview-dropzone')
+    // console.error('dropzone', dropZone)
 
     // Create a mock file
     const file = new File(['content'], 'index.ifc', {type: 'application/ifc'})

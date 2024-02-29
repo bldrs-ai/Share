@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import Box from '@mui/material/Box'
 import usePlaceMark from '../hooks/usePlaceMark'
 import {useNavigate} from 'react-router-dom'
@@ -8,7 +8,7 @@ import {loadLocalFileDragAndDropFallback} from '../utils/loader'
 import {handleBeforeUnload} from '../utils/event'
 
 
-/** @return {React.ReactElement} */
+/** @return {ReactElement} */
 export default function ViewerContainer() {
   const {onSceneSingleTap, onSceneDoubleTap} = usePlaceMark()
 
@@ -73,9 +73,7 @@ export default function ViewerContainer() {
         padding: 0,
         textAlign: 'center',
       }}
-      onMouseDown={async (event) => {
-        await onSceneSingleTap(event)
-      }}
+      onMouseDown={async (event) => await onSceneSingleTap(event)}
       {...onSceneDoubleTap}
       onDragOver={handleDragOverOrEnter}
       onDragEnter={handleDragOverOrEnter}

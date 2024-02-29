@@ -53,11 +53,11 @@ export default function CadView({
   debug().log('CadView#init: count: ', count++)
 
   // Begin useStore //
+
   const accessToken = useStore((state) => state.accessToken)
   const customViewSettings = useStore((state) => state.customViewSettings)
   const elementTypesMap = useStore((state) => state.elementTypesMap)
   const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const preselectedElementIds = useStore((state) => state.preselectedElementIds)
   const searchIndex = useStore((state) => state.searchIndex)
   const selectedElements = useStore((state) => state.selectedElements)
@@ -73,12 +73,15 @@ export default function CadView({
   const sidebarWidth = useStore((state) => state.sidebarWidth)
   const viewer = useStore((state) => state.viewer)
 
+  // AppSlice
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const setAppPrefix = useStore((state) => state.setAppPrefix)
 
   // IFCSlice
-  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
   const model = useStore((state) => state.model)
-  const setModel = useStore((state) => state.setModel)
+  const setIsModelLoading = useStore((state) => state.setIsModelLoading)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
+  const setModel = useStore((state) => state.setModel)
 
   // NavTreeSlice
   const expandedTypes = useStore((state) => state.expandedTypes)
@@ -93,7 +96,6 @@ export default function CadView({
   // UISlice
   const setAlertMessage = useStore((state) => state.setAlertMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
-
 
   // Begin useState //
   // IFC
@@ -639,6 +641,11 @@ export default function CadView({
 
 
   // Begin useEffect //
+  useEffect(() => {
+    setAppPrefix(appPrefix)
+  }, [appPrefix, setAppPrefix])
+
+
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
