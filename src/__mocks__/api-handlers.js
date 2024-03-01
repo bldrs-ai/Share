@@ -267,6 +267,12 @@ function githubHandlers() {
                 ctx.status(httpNotFound),
                 ctx.json({sha: 'error'}),
             )
+            // Handle non existent file request
+          } else if (req.params.owner === 'nonexistentowner' && req.params.repo === 'nonexistentrepo') {
+            return res(
+                ctx.status(httpOk),
+                ctx.json([]),
+            )
           }
           // For all other cases, return a success response
           return res(

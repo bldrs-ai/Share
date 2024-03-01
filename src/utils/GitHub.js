@@ -604,8 +604,7 @@ export async function getLatestCommitHash(owner, repo, filePath, accessToken, br
   const res = await requestWithTimeout(getGitHub(repository, `commits`, args, accessToken))
 
   if (res.data.length === 0) {
-    debug().warn('No commits found for the specified file.')
-    return null
+    throw new Error('No sha data for the file')
   }
 
   const latestCommitHash = res.data[0].sha
