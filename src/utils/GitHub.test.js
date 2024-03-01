@@ -123,7 +123,7 @@ describe('GitHub', () => {
       // Simulate failure conditions by passing specific owner and repo that would trigger the error
       await expect(getLatestCommitHash('nonexistentowner', 'nonexistentrepo', '', '', ''))
           .rejects
-          .toThrow('No sha data for the file')
+          .toThrow('File not found')
     })
   })
 
