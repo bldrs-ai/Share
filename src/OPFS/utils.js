@@ -100,7 +100,16 @@ export function downloadToOPFS(
     repo,
     branch,
     onProgress) {
-  assertDefined(navigate, appPrefix, handleBeforeUnload)
+  assertDefined(
+      navigate,
+      appPrefix,
+      handleBeforeUnload,
+      objectUrl,
+      originalFilePath,
+      commitHash,
+      owner,
+      repo,
+      branch)
 
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
