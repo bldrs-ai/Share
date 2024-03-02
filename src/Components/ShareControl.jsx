@@ -55,7 +55,7 @@ export const SHARE_PREFIX = 'share'
  *
  * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
- * @return {React.Component}
+ * @return {ReactElement}
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const [isLinkCopied, setIsLinkCopied] = useState(false)
@@ -67,7 +67,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
   const urlTextFieldRef = createRef()
 
   useEffect(() => {
-    if (viewer) {
+    if (viewer && isDialogDisplayed) {
       if (isCameraInUrl) {
         addCameraUrlParams(cameraControls)
       } else {
@@ -80,7 +80,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewer, model])
+  }, [viewer, model, isDialogDisplayed])
 
   const onCopy = (event) => {
     setIsLinkCopied(true)

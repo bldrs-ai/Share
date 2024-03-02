@@ -1,17 +1,18 @@
 import {isNumeric} from './strings'
 import {assertObject, assertString} from './assert'
+import debug from './debug'
 
 
-// on't export
-const FEATURE_SEP = ';'
-
-
+// Init
 /** @type {Object<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
+  console.log('HASH CHANGE: ', window.location.hash)
+  // TODO(pablo)
+  /*
   Object.values(hashListeners).forEach((listener) => {
     listener()
-  })
+  })*/
 }
 
 
@@ -39,6 +40,7 @@ export function addHashListener(name, onHashCb) {
  *   parameter names in the encoding, default is false.
  */
 export function addHashParams(location, name, params, includeNames = false) {
+  debug().error('cur location hash:', window.location.hash, ', new params:', params)
   const hashGlobalParams = getHashParams(location, name)
   let objectGlobalParams = {}
   if (hashGlobalParams) {
@@ -81,6 +83,10 @@ export function addHashParams(location, name, params, includeNames = false) {
 
   location.hash = newHash
 }
+
+
+// don't export
+const FEATURE_SEP = ';'
 
 
 /**

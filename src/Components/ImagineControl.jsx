@@ -9,9 +9,7 @@ import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {ControlButtonWithHashState, RectangularButton} from './Buttons'
-import {
-  addCameraUrlParams,
-} from './CameraControl'
+import {addCameraUrlParams} from './CameraControl'
 import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
