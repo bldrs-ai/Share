@@ -141,7 +141,7 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isModelLoading, setIsModelLoading] = useState(false)
+  const [, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
 
   // Zustand store
@@ -963,7 +963,7 @@ export default function CadView({
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
 
-      {isModelLoading &&
+      {/* {isModelLoading &&
         <Box
           sx={{
             position: 'relative',
@@ -1011,7 +1011,7 @@ export default function CadView({
             </Box>
           </Box>
         </Box>
-      }
+      } */}
     </Box>
   )
 }
