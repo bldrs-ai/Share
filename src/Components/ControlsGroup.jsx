@@ -3,7 +3,7 @@ import {useAuth0} from '@auth0/auth0-react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
-import OpenModelControl from './OpenModelControl'
+// import OpenModelControl from './OpenModelControl'
 import SaveModelControl from './SaveModelControl'
 import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
@@ -31,7 +31,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       variant='contained'
       sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
-      <OpenModelControl navigate={navigate}/>
+      {/* <OpenModelControl navigate={navigate}/> */}
       <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
