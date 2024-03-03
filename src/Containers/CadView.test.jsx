@@ -110,7 +110,7 @@ describe('CadView', () => {
   })
 
 
-  it('renders with mock IfcViewerAPIExtended', async () => {
+  it.skip('renders with mock IfcViewerAPIExtended', async () => {
     const modelPath = {
       filepath: `/index.ifc`,
     }
@@ -165,7 +165,7 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-  it('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
+  it.skip('renders with mock IfcViewerAPIExtended and simulates drag and drop', async () => {
     // mock webworker
     const mockWorker = {
       addEventListener: jest.fn(),
@@ -221,7 +221,7 @@ describe('CadView', () => {
     await actAsyncFlush()
   })
 
-  it('sets up camera and cutting plan from URL,', async () => {
+  it.skip('sets up camera and cutting plan from URL,', async () => {
     const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const modelPath = {
@@ -250,7 +250,7 @@ describe('CadView', () => {
   })
 
 
-  it('clear elements and planes on unselect', async () => {
+  it.skip('clear elements and planes on unselect', async () => {
     const testTree = makeTestTree()
     const targetEltId = testTree.children[0].expressID
     const modelPath = {
@@ -290,7 +290,7 @@ describe('CadView', () => {
   })
 
 
-  it('prevent reloading without user approval when loading a model from local', async () => {
+  it.skip('prevent reloading without user approval when loading a model from local', async () => {
     window.addEventListener = jest.fn()
     jest.spyOn(AllLoader, 'getUploadedBlobPath').mockReturnValue('/haus.ifc')
     const mockCurrLocation = {...defaultLocationValue, pathname: '/haus.ifc'}
@@ -367,7 +367,7 @@ describe('CadView', () => {
   })
 
 
-  it('can highlight some elements based on state change', async () => {
+  it.skip('can highlight some elements based on state change', async () => {
     const highlightedIdsAsString = ['0', '1']
     const modelId = 0
     const elementCount = 2

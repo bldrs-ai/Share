@@ -13,9 +13,9 @@ import ElementGroup from '../Components/ElementGroup'
 // import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavPanel'
-// import OperationsGroup from '../Components/OperationsGroup'
+import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
-// import SideDrawer from '../Components/SideDrawer/SideDrawer'
+import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
 import VersionsContainer from '../Components/Versions/VersionsContainer'
 import {IfcViewerAPIExtended} from '../Infrastructure/IfcViewerAPIExtended'
@@ -960,8 +960,8 @@ export default function CadView({
       >
         <HelpControl/>
       </Box> */}
-      {/* {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
-      } */}
+      {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
+      }
 
       {isModelLoading &&
         <Box
@@ -1017,59 +1017,59 @@ export default function CadView({
 }
 
 
-// /**
-//  * @property {Function} deselectItems deselects currently selected element
-//  * @return {React.Component}
-//  */
-// function OperationsGroupAndDrawer({deselectItems}) {
-//   const isMobile = useIsMobile()
+/**
+ * @property {Function} deselectItems deselects currently selected element
+ * @return {React.Component}
+ */
+function OperationsGroupAndDrawer({deselectItems}) {
+  const isMobile = useIsMobile()
 
-//   return (
-//     isMobile ? (
-//       <>
-//         {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
-//         and their first elements should be same height and offset so they line up naturally..
-//         this is a shim for the misalignment you see with tooltips without it */}
-//         {/* <Box
-//           sx={{
-//             position: 'absolute',
-//             top: 0,
-//             right: 0,
-//           }}
-//         >
-//           <OperationsGroup deselectItems={deselectItems}/>
-//         </Box> */}
-//         <Box
-//           sx={{
-//             position: 'absolute',
-//             bottom: 0,
-//             width: '100%',
-//           }}
-//         >
-//           <SideDrawer/>
-//           <AppStoreSideDrawer/>
-//         </Box>
-//       </>
-//     ) : (
-//       <Box
-//         sx={{
-//           position: 'absolute',
-//           top: 0,
-//           right: 0,
-//           display: 'flex',
-//           flex: 1,
-//           flexDirection: 'row',
-//         }}
-//       >
-//         <Box>
-//           <OperationsGroup deselectItems={deselectItems}/>
-//         </Box>
-//         <SideDrawer/>
-//         <AppStoreSideDrawer/>
-//       </Box>
-//     )
-//   )
-// }
+  return (
+    isMobile ? (
+      <>
+        {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
+        and their first elements should be same height and offset so they line up naturally..
+        this is a shim for the misalignment you see with tooltips without it */}
+        {/* <Box
+          sx={{
+            position: 'absolute',
+            top: 0,
+            right: 0,
+          }}
+        >
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box> */}
+        <Box
+          sx={{
+            position: 'absolute',
+            bottom: 0,
+            width: '100%',
+          }}
+        >
+          <SideDrawer/>
+          {/* <AppStoreSideDrawer/> */}
+        </Box>
+      </>
+    ) : (
+      <Box
+        sx={{
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          display: 'flex',
+          flex: 1,
+          flexDirection: 'row',
+        }}
+      >
+        <Box>
+          <OperationsGroup deselectItems={deselectItems}/>
+        </Box>
+        <SideDrawer/>
+        {/* <AppStoreSideDrawer/> */}
+      </Box>
+    )
+  )
+}
 
 
 /**

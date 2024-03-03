@@ -3,8 +3,8 @@ import Box from '@mui/material/Box'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import useStore from '../store/useStore'
 import CameraControl from './CameraControl'
-import LoginMenu from './LoginMenu'
-import NotesControl from './Notes/NotesContol'
+// import LoginMenu from './LoginMenu'
+// import NotesControl from './Notes/NotesContol'
 import ShareControl from './ShareControl'
 import ImagineControl from './ImagineControl'
 import {TooltipIconButton} from './Buttons'
@@ -23,9 +23,9 @@ import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
 export default function OperationsGroup({deselectItems}) {
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  const isLoginVisible = useStore((state) => state.isLoginVisible)
+  // const isLoginVisible = useStore((state) => state.isLoginVisible)
   const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
-  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
+  // const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
   const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
   // Properties
@@ -47,18 +47,18 @@ export default function OperationsGroup({deselectItems}) {
       variant='contained'
       sx={{'margin': '1em', '& > *:not(:last-child)': {mb: .6}}} // Add space between buttons
     >
-      {isLoginVisible &&
+      {/* {isLoginVisible &&
         <LoginMenu/>
-      }
+      } */}
       {isCollaborationGroupVisible &&
         <Box sx={{marginTop: '.5em'}}>
           <ShareControl/>
         </Box>
       }
 
-      {isModelInteractionGroupVisible &&
+      {/* {isModelInteractionGroupVisible &&
       <NotesControl/>
-      }
+      } */}
 
       {isSelected() && selectedElement !== null &&
        <TooltipIconButton
