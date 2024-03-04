@@ -10,7 +10,6 @@ import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
-import {checkOPFSAvailability} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {
@@ -30,11 +29,12 @@ import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
  * @property {Function} navigate Callback from CadView to change page url
  * @return {React.ReactElement}
  */
-export default function OpenModelControl({navigate}) {
+export default function OpenModelControl({navigate, isOPFSAvailable}) {
   const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
+
   useEffect(() => {
     /**
      * Asynchronously fetch organizations
@@ -71,6 +71,7 @@ export default function OpenModelControl({navigate}) {
            setIsDialogDisplayed={setIsDialogDisplayed}
            navigate={navigate}
            orgNamesArr={orgNamesArr}
+           isOPFSAvailable={isOPFSAvailable}
          />
       }
     </Box>
@@ -90,6 +91,7 @@ function OpenModelDialog({
   setIsDialogDisplayed,
   navigate,
   orgNamesArr,
+  isOPFSAvailable,
 }) {
   const {isAuthenticated, user} = useAuth0()
   const [selectedOrgName, setSelectedOrgName] = useState('')
@@ -103,7 +105,6 @@ function OpenModelDialog({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
-  const isOPFSAvailable = checkOPFSAvailability()
 
   const openFile = () => {
     if (isOPFSAvailable) {

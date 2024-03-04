@@ -74,8 +74,6 @@ export default function CadView({
 }) {
   assertDefined(...arguments)
 
-  const isOPFSAvailable = checkOPFSAvailability()
-
   const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
   // React router
@@ -182,23 +180,36 @@ export default function CadView({
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
+  // opfs
+  const [isOPFSAvailable, setIsOPFSAvailable] = useState(null)
+
+  useEffect(() => {
+    const checkAvailability = async () => {
+      const available = await checkOPFSAvailability()
+      setIsOPFSAvailable(available)
+    }
+
+    checkAvailability()
+  }, []) // Empty dependency array means this effect runs once on mount
+
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
-      // This function gets called whenever there's a change in authentication state
+      // This function gets called whenever there's a change in authentication / opfs state
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
-      if (!isAuthLoading &&
+      if ((!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isAuthLoading && !isAuthenticated)) {
+          (!isAuthLoading && !isAuthenticated)) &&
+          isOPFSAvailable !== null) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken])
+  }, [isAuthLoading, isAuthenticated, accessToken, isOPFSAvailable])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -301,6 +312,9 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
+    if (isOPFSAvailable === null) {
+      debug().warn('Do not have opfs status yet, waiting.')
+    }
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -879,6 +893,7 @@ export default function CadView({
           <ControlsGroup
             navigate={navigate}
             isRepoActive={modelPath.repo !== undefined}
+            isOPFSAvailable={isOPFSAvailable}
           />
           {isSearchBarVisible && isSearchVisible &&
            <Box sx={{marginTop: '0.82em', width: '100%'}}>

@@ -303,10 +303,15 @@ export function loadLocalFileDragAndDrop(
  *
  * @return {boolean}
  */
-export function checkOPFSAvailability() {
-  // Check for FileSystemDirectoryHandle availability
+export async function checkOPFSAvailability() {
   if ('FileSystemDirectoryHandle' in window) {
-    return true
+    try {
+      await navigator.storage.getDirectory()
+      return true
+    } catch (error) {
+      debug().error(`OPFS error: ${ error}`)
+      return false
+    }
   } else {
     return false
   }
