@@ -13,7 +13,7 @@ import ElementGroup from '../Components/ElementGroup'
 // import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavPanel'
-import OperationsGroup from '../Components/OperationsGroup'
+// import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
@@ -1046,6 +1046,9 @@ function OperationsGroupAndDrawer({deselectItems}) {
             width: '100%',
           }}
         >
+          {/* <Box>
+            <OperationsGroup deselectItems={deselectItems}/>
+          </Box> */}
           <SideDrawer/>
           {/* <AppStoreSideDrawer/> */}
         </Box>
@@ -1061,9 +1064,9 @@ function OperationsGroupAndDrawer({deselectItems}) {
           flexDirection: 'row',
         }}
       >
-        <Box>
+        {/* <Box>
           <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
+        </Box> */}
         <SideDrawer/>
         {/* <AppStoreSideDrawer/> */}
       </Box>
