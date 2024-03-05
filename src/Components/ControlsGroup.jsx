@@ -5,7 +5,7 @@ import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 // import OpenModelControl from './OpenModelControl'
 // import SaveModelControl from './SaveModelControl'
-import HistoryIcon from '@mui/icons-material/History'
+// import HistoryIcon from '@mui/icons-material/History'
 import SearchIcon from '@mui/icons-material/Search'
 import TreeIcon from '../assets/icons/Tree.svg'
 
@@ -58,7 +58,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
       />
       {/* {isAuthenticated && <SaveModelControl navigate={navigate}/> } */}
 
-      {isRepoActive &&
+      {/* {isRepoActive &&
         <TooltipIconButton
           title='Versions'
           icon={<HistoryIcon className='icon-share' color='secondary'/>}
@@ -73,7 +73,7 @@ export default function ControlsGroup({navigate, isRepoActive}) {
             }
           }}
         />
-      }
+      } */}
 
     </ButtonGroup>
   )
