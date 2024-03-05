@@ -46,6 +46,7 @@ export default function BaseRoutes({testElt = null}) {
     }
 
     checkAvailability()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []) // Empty dependency array means this effect runs once on mount
 
   useEffect(() => {
