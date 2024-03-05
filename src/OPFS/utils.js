@@ -309,6 +309,7 @@ export async function checkOPFSAvailability() {
       await navigator.storage.getDirectory()
       return true
     } catch (error) {
+      // Expected for Non chromium browsers (Safari, FF, etc) in private browsing mode
       debug().error(`OPFS error: ${ error}`)
       return false
     }
