@@ -46,7 +46,7 @@ export default function BaseRoutes({testElt = null}) {
     }
 
     checkAvailability()
-  }, []) // Empty dependency array means this effect runs once on mount
+  }, [setIsOPFSAvailable]) // Empty dependency array means this effect runs once on mount
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
