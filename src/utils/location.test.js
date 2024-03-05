@@ -3,6 +3,7 @@ import {
   getHashParams,
   removeHashParams,
   getEncodedParam,
+  parseGitHubPath,
 } from './location'
 
 
@@ -139,4 +140,19 @@ test('getEncodedParam', () => {
   expect(withNames).toBe('x=1,y=2,z=3')
   const withoutNames = getEncodedParam(objectParams)
   expect(withoutNames).toBe('1,2,3')
+})
+
+test('parseGithubPath', () => {
+  const result = parseGitHubPath('/spaced owner/spaced repo/spaced ref/spaced ifc.ifc')
+
+  // @ts-ignore
+  expect(result.isPublic).toEqual(false)
+  // @ts-ignore
+  expect(result.owner).toEqual('spaced owner')
+  // @ts-ignore
+  expect(result.repo).toEqual('spaced repo')
+  // @ts-ignore
+  expect(result.branch).toEqual('spaced ref')
+  // @ts-ignore
+  expect(result.filePath).toEqual('spaced ifc.ifc')
 })

@@ -44,6 +44,14 @@ describe('GitHub', () => {
       expect(actual.ref).toEqual('main')
       expect(actual.path).toEqual('haus.ifc')
     })
+
+    it('returns a repository path structure with correct URL decoded values', () => {
+      const actual = parseGitHubRepositoryURL('https://github.com/spaced owner/spaced repo/blob/spaced ref/spaced ifc.ifc')
+      expect(actual.owner).toEqual('spaced owner')
+      expect(actual.repository).toEqual('spaced repo')
+      expect(actual.ref).toEqual('spaced ref')
+      expect(actual.path).toEqual('spaced ifc.ifc')
+    })
   })
 
   describe('getContentsURL', () => {
