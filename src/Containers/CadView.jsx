@@ -24,7 +24,6 @@ import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
-  checkOPFSAvailability,
 } from '../OPFS/utils'
 import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -181,16 +180,7 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
   // opfs
-  const [isOPFSAvailable, setIsOPFSAvailable] = useState(null)
-
-  useEffect(() => {
-    const checkAvailability = async () => {
-      const available = await checkOPFSAvailability()
-      setIsOPFSAvailable(available)
-    }
-
-    checkAvailability()
-  }, []) // Empty dependency array means this effect runs once on mount
+  const isOPFSAvailable = useStore((state) => state.isOPFSAvailable)
 
 
   /* eslint-disable react-hooks/exhaustive-deps */
@@ -315,6 +305,7 @@ export default function CadView({
     if (isOPFSAvailable === null) {
       debug().warn('Do not have opfs status yet, waiting.')
     }
+
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return

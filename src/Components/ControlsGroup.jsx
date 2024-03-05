@@ -15,7 +15,7 @@ import TreeIcon from '../assets/icons/Tree.svg'
  * @property {Function} isRepoActive deselects currently selected element
  * @return {React.Component}
  */
-export default function ControlsGroup({navigate, isRepoActive, isOPFSAvailable}) {
+export default function ControlsGroup({navigate, isRepoActive}) {
   const {isAuthenticated} = useAuth0()
   const isNavigationVisible = useStore((state) => state.isNavigationVisible)
   const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
@@ -31,7 +31,7 @@ export default function ControlsGroup({navigate, isRepoActive, isOPFSAvailable})
       variant='contained'
       sx={{'& > *:not(:last-of-type)': {mr: .6}}}
     >
-      <OpenModelControl navigate={navigate} isOPFSAvailable={isOPFSAvailable}/>
+      <OpenModelControl navigate={navigate}/>
       <TooltipIconButton
         title='Search'
         icon={<SearchIcon className='icon-share' color='secondary'/>}
