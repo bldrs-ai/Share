@@ -227,7 +227,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
         direction='column'
         justifyContent='center'
         alignItems='center'
-        sx={{paddingTop: '6px', width: '280px'}}
       >
         {!isAuthenticated ?
 

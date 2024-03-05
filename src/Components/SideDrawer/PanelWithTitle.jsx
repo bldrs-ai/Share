@@ -10,10 +10,9 @@ import PanelTitle from './PanelTitle'
  * @property {ReactElement} children Panel content
  * @property {ReactElement} [controlsGroup] Controls in title bar
  * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
- * @property {boolean} [includeGutter] Below title.  Default: false
  * @return {ReactElement}
  */
-export default function PanelWithTitle({title, children, controlsGroup, iconSrc, includeGutter}) {
+export default function PanelWithTitle({title, children, controlsGroup, iconSrc}) {
   assertDefined(title, children)
   const titleHeight = '2.8em'
   // This isn't visible, but the alignment is important for debugging, so leaving.
@@ -25,7 +24,6 @@ export default function PanelWithTitle({title, children, controlsGroup, iconSrc,
         title={title}
         iconSrc={iconSrc}
         controlsGroup={controlsGroup}
-        includeGutter={includeGutter}
       />
       <Box
         sx={{

@@ -11,7 +11,6 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import SearchBar from '../Components/Search/SearchBar'
 import FileContext from '../OPFS/FileContext'
 import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
@@ -754,8 +753,6 @@ export default function CadView({
   }, [isDrawerOpen, isMobile, viewer, sidebarWidth])
 
 
-  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
-
   const abs = {position: 'absolute'}
   const absTop = {top: 0, ...abs}
   const absBtm = {bottom: 0, ...abs}
@@ -765,8 +762,8 @@ export default function CadView({
   return (
     <Box sx={{...absTop, left: 0, width: '100%', height: '100%', m: 0, p: 0}}>
       {<ViewerContainer/>}
-      <Box sx={{...absBtm, left: 0, m: '1em'}}><AboutControl/></Box>
-      <Box sx={{...absBtm, right: 0, m: '1em'}}><HelpControl/></Box>
+      <Box sx={{...absBtm, left: 0}}><AboutControl/></Box>
+      <Box sx={{...absBtm, right: 0}}><HelpControl/></Box>
       {viewer && (
         <>
           <ControlsGroupAndDrawer
@@ -775,11 +772,6 @@ export default function CadView({
             branch={branch}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
           />
-
-          {isSearchEnabled &&
-           <Box sx={{...absTop, ...center, m: '1em', width: '300px'}}>
-             <SearchBar/>
-           </Box>}
 
           <Box sx={{...absBtm, ...center}}>
             <ElementGroup deselectItems={deselectItems}/>

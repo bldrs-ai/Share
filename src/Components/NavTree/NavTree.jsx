@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 import PropTypes from 'prop-types'
-import React from 'react'
+import React, {Fragment, ReactElement, forwardRef} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Box from '@mui/material/Box'
@@ -10,11 +10,12 @@ import HideToggleButton from '../HideToggleButton'
 
 
 /**
- * @param {object} model IFC model
- * @param {object} element IFC element of the model
- * @param {string} pathPrefix URL prefix for constructing links to
+ * @property {object} model IFC model
+ * @property {object} element Element in the model
+ * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @return {object} React component
+ * @property {Function} selectWithShiftClickEvents handler for shift-clicks
+ * @return {ReactElement}
  */
 export default function NavTree({
   model,
@@ -22,7 +23,7 @@ export default function NavTree({
   pathPrefix,
   selectWithShiftClickEvents,
 }) {
-  const CustomContent = React.forwardRef(function CustomContent(props, ref) {
+  const CustomContent = forwardRef(function CustomContent(props, ref) {
     const {
       classes,
       className,
@@ -69,7 +70,7 @@ export default function NavTree({
       >
         <Box
           onClick={handleExpansionClick}
-          sx={{margin: '0px 14px 0px 14px'}}
+          sx={{margin: '0px 14px'}}
         >
           {icon}
         </Box>
@@ -100,7 +101,7 @@ export default function NavTree({
   const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
   let i = 0
-  // TODO(pablo): Had to add this React.Fragment wrapper to get rid of
+  // TODO(pablo): Had to add this Fragment wrapper to get rid of
   // warning about missing a unique key foreach item.  Don't really understand it.
   return (
     <CustomTreeItem
@@ -114,14 +115,14 @@ export default function NavTree({
         element.children.map((child) => {
           const childKey = `${pathPrefix}-${i++}`
           return (
-            <React.Fragment key={childKey}>
+            <Fragment key={childKey}>
               <NavTree
                 model={model}
                 element={child}
                 pathPrefix={pathPrefix}
                 selectWithShiftClickEvents={selectWithShiftClickEvents}
               />
-            </React.Fragment>
+            </Fragment>
           )
         }) :
         null}

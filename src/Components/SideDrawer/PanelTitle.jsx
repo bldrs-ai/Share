@@ -8,10 +8,9 @@ import {assertDefined} from '../../utils/assert'
  * @property {string} title Panel title
  * @property {object} [controlsGroup] Controls Group is placed on the right of the title
  * @property {string} [iconSrc] url to an image to be used to prepend and icon to the title
- * @property {boolean} [includeGutter] Below title.  Default: false
  * @return {ReactElement}
  */
-export default function PanelTitle({title, controlsGroup, iconSrc, includeGutter}) {
+export default function PanelTitle({title, controlsGroup, iconSrc}) {
   assertDefined(title)
   return (
     <Box
@@ -37,7 +36,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc, includeGutter
           }} src={iconSrc} alt={title}
           /> : <></>
         }
-        <Typography variant='body1' gutterBottom={includeGutter}>
+        <Typography variant='body1'>
           {title}
         </Typography>
       </Box>

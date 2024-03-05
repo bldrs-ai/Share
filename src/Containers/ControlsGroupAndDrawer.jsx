@@ -5,6 +5,7 @@ import Stack from '@mui/material/Stack'
 import ControlsGroup from '../Components/ControlsGroup'
 import {useWindowDimensions} from '../Components/Hooks'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
+import SearchBar from '../Components/Search/SearchBar'
 // TODO(pablo): make left side drawer
 // import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
@@ -34,11 +35,15 @@ export default function ControlsGroupAndDrawer({
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
 
+  // SearchSlice
+  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
+  const isSearchBarVisible = useStore((state) => state.isSearchBarVisible)
+
   const navigate = useNavigate()
 
   const windowDimensions = useWindowDimensions()
   const spacingBetweenSearchAndOpsGroupPx = 20
-  const operationsGroupWidthPx = 100
+  const operationsGroupWidthPx = 70
   const searchAndNavWidthPx =
     windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
   const searchAndNavMaxWidthPx = 300
@@ -62,17 +67,19 @@ export default function ControlsGroupAndDrawer({
         isRepoActive={modelPath.repo !== undefined}
       />
 
-      <Box sx={{width: '100%', margin: '1em'}}>
+      <Box sx={{width: '100%'}}>
+        {isSearchEnabled && isSearchBarVisible && <SearchBar/>}
+
         {isNavTreeEnabled &&
          isNavTreeVisible &&
          model &&
          rootElement &&
          <NavTreePanel
            model={model}
-           selectWithShiftClickEvents={selectWithShiftClickEvents}
            pathPrefix={
              pathPrefix + (modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath)
            }
+           selectWithShiftClickEvents={selectWithShiftClickEvents}
          />
         }
 

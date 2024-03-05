@@ -7,7 +7,7 @@ import debug from './debug'
 /** @type {Object<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
-  console.log('HASH CHANGE: ', window.location.hash)
+  // console.log('HASH CHANGE: ', window.location.hash)
   // TODO(pablo)
   /*
   Object.values(hashListeners).forEach((listener) => {

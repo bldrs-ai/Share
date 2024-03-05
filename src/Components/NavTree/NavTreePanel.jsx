@@ -1,4 +1,4 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
@@ -17,18 +17,16 @@ import NodeOpenIcon from '../../assets/icons/NodeOpened.svg'
 
 
 /**
- * @param {object} model
- * @param {Array} selectedElements
- * @param {Array} defaultExpandedElements
- * @param {Array} expandedElements
- * @param {Function} setExpandedElements
- * @param {string} pathPrefix
- * @return {object}
+ * @property {object} model The model for navigation
+ * @property {string} pathPrefix URL prefix for constructing links to
+ *   elements, recursively grown as passed down the tree
+ * @property {Function} selectWithShiftClickEvents Handler for shift-click select
+ * @return {ReactElement}
  */
 export default function NavTreePanel({
   model,
-  selectWithShiftClickEvents,
   pathPrefix,
+  selectWithShiftClickEvents,
 }) {
   assertDefined(...arguments)
   const defaultExpandedElements = useStore((state) => state.defaultExpandedElements)
@@ -45,58 +43,16 @@ export default function NavTreePanel({
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
   const [navigationMode, setNavigationMode] = useState('spatial-tree')
-  const theme = useTheme()
-
-  const onTreeViewChanged = (event, value) => {
-    if (value !== null) {
-      setNavigationMode(value)
-    }
-  }
-
-  const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
-    '& .MuiToggleButtonGroup-grouped': {
-      'border': 0,
-      'borderRadius': 0,
-      '&.Mui-disabled': {
-        border: 0,
-      },
-    },
-  }))
-
   const isNavTree = navigationMode === 'spatial-tree'
+
+  const theme = useTheme()
 
   return (
     <Panel
-      onCloseClick={() => setIsNavTreeVisible(false)}
       title='Navigation'
-      action={
-        <StyledToggleButtonGroup
-          exclusive
-          id='togglegrp'
-          value={navigationMode}
-          onChange={onTreeViewChanged}
-          size='small'
-        >
-          <Tooltip
-            title={'Spatial Structure'}
-            describeChild
-            placement='top'
-          >
-            <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
-              <AccountTreeIcon className='icon-share'/>
-            </ToggleButton>
-          </Tooltip>
-          <Tooltip
-            title={'Element Types'}
-            describeChild
-            placement='top'
-          >
-            <ToggleButton value='element-types' aria-label='element-types'>
-              <ListIcon className='icon-share'/>
-            </ToggleButton>
-          </Tooltip>
-        </StyledToggleButtonGroup>
-      }
+      onCloseClick={() => setIsNavTreeVisible(false)}
+      action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
+      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
@@ -142,5 +98,46 @@ export default function NavTreePanel({
         )}
       </TreeView>
     </Panel>
+  )
+}
+
+
+/** @return {ReactElement} */
+function Actions({navigationMode, setNavigationMode}) {
+  const onTreeViewChanged = (event, value) => {
+    if (value !== null) {
+      setNavigationMode(value)
+    }
+  }
+
+  const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
+    '& .MuiToggleButtonGroup-grouped': {
+      'border': 0,
+      'borderRadius': 0,
+      '&.Mui-disabled': {
+        border: 0,
+      },
+    },
+  }))
+
+  return (
+    <StyledToggleButtonGroup
+      value={navigationMode}
+      onChange={onTreeViewChanged}
+      id='togglegrp'
+      size='small'
+      exclusive
+    >
+      <Tooltip title='Spatial Structure' placement='top' describeChild>
+        <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
+          <AccountTreeIcon className='icon-share'/>
+        </ToggleButton>
+      </Tooltip>
+      <Tooltip title='Element Types' placement='top' describeChild>
+        <ToggleButton value='element-types' aria-label='element-types'>
+          <ListIcon className='icon-share'/>
+        </ToggleButton>
+      </Tooltip>
+    </StyledToggleButtonGroup>
   )
 }

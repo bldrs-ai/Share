@@ -6,21 +6,24 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../../utils/assert'
 import {CloseButton} from '../Buttons'
+import {useIsMobile} from '../Hooks'
 
 
 /**
  * A panel component with a sticky header containing a title and close button
  *
- * @param {string|ReactElement} title The title to display in the panel header
- * @param {Function} onCloseClick A callback to be executed when the close button is clicked
- * @param {ReactElement} children Enclosed elements
- * @param {ReactElement} [action] Action component, for the top bar
- * @param {string} testId Set on the root Paper element
+ * @property {string|ReactElement} title The title to display in the panel header
+ * @property {Function} onCloseClick A callback to be executed when the close button is clicked
+ * @property {ReactElement} children Enclosed elements
+ * @property {ReactElement} [action] Action component, for the top bar
+ * @property {object} [sx] Passed to root Paper elt
+ * @property {string} [testId] Set on the root Paper element
  * @return {ReactElement}
  */
-export default function Panel({title, onCloseClick, children, action = null, testId = ''}) {
+export default function Panel({title, onCloseClick, children, action = null, sx = {}, testId = ''}) {
   assertDefined(title, onCloseClick, children, testId)
   const theme = useTheme()
+  const isMobile = useIsMobile()
   return (
     <Paper
       sx={{
@@ -34,6 +37,7 @@ export default function Panel({title, onCloseClick, children, action = null, tes
         '@media (max-width: 800px)': {
           maxHeight: '400px',
         },
+        ...sx,
       }}
       data-testid={testId}
     >
@@ -61,7 +65,8 @@ export default function Panel({title, onCloseClick, children, action = null, tes
         }
         <Stack direction='row' justifyContent='center' alignItems='center'>
           <Box>{action}</Box>
-          <CloseButton onCloseClick={onCloseClick}/>
+          {/* TODO(pablo): maybe a better place for this */}
+          {!isMobile && <CloseButton onCloseClick={onCloseClick}/>}
         </Stack>
       </Stack>
       {children}

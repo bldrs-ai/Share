@@ -43,21 +43,19 @@ export function getComponentOverrides(palette, typography) {
         props: {orientation: 'horizontal'},
         style: {
           '& .MuiButtonBase-root + .MuiButtonBase-root': {
-            marginLeft: '1em', // same as vertical
+            marginLeft: '0.25em', // same as vertical
           },
         },
       }, {
         props: {orientation: 'vertical'},
         style: {
           '& .MuiButtonBase-root + .MuiButtonBase-root': {
-            marginTop: '1em', // same as horizontal
+            marginTop: '0.25em', // same as horizontal
           },
         },
       }, {
         props: {variant: 'controls'},
-        style: {
-          margin: '1em',
-        },
+        style: {},
       }, {
         props: {variant: 'contained'},
         style: ({theme}) => ({

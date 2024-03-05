@@ -83,7 +83,7 @@ export default function SideDrawer() {
         <Box
           sx={{
             width: '100%',
-            margin: '1em',
+            margin: '0 1em',
             overflow: 'hidden',
           }}
         >
@@ -105,7 +105,7 @@ export default function SideDrawer() {
               marginTop: isDividerVisible ? '1em' : '0',
             }}
           >
-            {isPropertiesVisible && <PropertiesPanel includeGutter={!isDividerVisible}/>}
+            {isPropertiesVisible && <PropertiesPanel/>}
           </Box>
         </Box>
       </Paper>

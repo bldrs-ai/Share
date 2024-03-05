@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import React from 'react'
+import React, {ReactElement, forwardRef} from 'react'
 import PropTypes from 'prop-types'
 import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
 import Box from '@mui/material/Box'
@@ -10,10 +10,11 @@ import NavTree from './NavTree'
 
 /**
  * @property {object} model IFC model
- * @property {object} collection of element types
+ * @property {object} types Types to use in the model
  * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
- * @return {object} React component
+ * @property {Function} selectWithShiftClickEvents handler for shift-clicks
+ * @return {ReactElement}
  */
 export default function TypesNavTree({
   model,
@@ -21,7 +22,7 @@ export default function TypesNavTree({
   pathPrefix,
   selectWithShiftClickEvents,
 }) {
-  const CustomContent = React.forwardRef(function CustomContent(props, ref) {
+  const CustomContent = forwardRef(function CustomContent(props, ref) {
     const {
       classes,
       className,

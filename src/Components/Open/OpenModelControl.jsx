@@ -153,7 +153,6 @@ function OpenModelDialog({
         direction='column'
         justifyContent='center'
         alignItems='center'
-        sx={{width: '280px'}}
       >
         <>
           <Typography
