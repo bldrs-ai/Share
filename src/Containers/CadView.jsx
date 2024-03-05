@@ -304,6 +304,7 @@ export default function CadView({
   async function onViewer() {
     if (isOPFSAvailable === null) {
       debug().warn('Do not have opfs status yet, waiting.')
+      return
     }
 
     if (viewer === null) {
