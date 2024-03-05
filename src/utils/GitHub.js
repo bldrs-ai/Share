@@ -642,10 +642,10 @@ export const parseGitHubRepositoryURL = (githubUrl) => {
   const {groups: {owner, repository, ref, path}} = match
   return {
     url: url,
-    owner: owner,
-    repository: repository,
-    ref: ref,
-    path: path,
+    owner: decodeURIComponent(owner),
+    repository: decodeURIComponent(repository),
+    ref: decodeURIComponent(ref),
+    path: decodeURIComponent(path),
   }
 }
 
