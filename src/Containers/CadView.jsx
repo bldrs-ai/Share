@@ -317,12 +317,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: '#E9B352',
+      color: '#204F2B',
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: '#E9B352',
+      color: '#204F2B',
       depthTest: true,
     })
 

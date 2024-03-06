@@ -15,7 +15,7 @@ export default function SnackBarMessage() {
       open={message !== ''}
       style={{bottom: '1em'}}
       message={
-        <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px', color: '#0D0D0D', fontWeight: 'bold'}}>
+        <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px'}}>
           {message}
         </div>
       }
