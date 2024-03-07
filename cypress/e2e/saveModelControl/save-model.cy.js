@@ -185,7 +185,7 @@ describe('save model', () => {
         cy.wait('@authorizeRequest').its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
 
-        // cy.findByTestId('Save IFC', {timeout: 10000}).should('exist')
+        cy.findByTestId('Save IFC', {timeout: 10000}).should('exist')
       })
     })
   })
