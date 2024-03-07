@@ -100,7 +100,16 @@ export function downloadToOPFS(
     repo,
     branch,
     onProgress) {
-  assertDefined(navigate, appPrefix, handleBeforeUnload)
+  assertDefined(
+      navigate,
+      appPrefix,
+      handleBeforeUnload,
+      objectUrl,
+      originalFilePath,
+      commitHash,
+      owner,
+      repo,
+      branch)
 
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
@@ -294,10 +303,16 @@ export function loadLocalFileDragAndDrop(
  *
  * @return {boolean}
  */
-export function checkOPFSAvailability() {
-  // Check for FileSystemDirectoryHandle availability
+export async function checkOPFSAvailability() {
   if ('FileSystemDirectoryHandle' in window) {
-    return true
+    try {
+      await navigator.storage.getDirectory()
+      return true
+    } catch (error) {
+      // Expected for Non chromium browsers (Safari, FF, etc) in private browsing mode
+      debug().error(`OPFS error: ${ error}`)
+      return false
+    }
   } else {
     return false
   }

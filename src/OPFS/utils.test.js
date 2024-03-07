@@ -271,19 +271,27 @@ describe('OPFS Test Suite', () => {
       global.window = originalWindow
     })
 
-    it('should return true when FileSystemDirectoryHandle is available', () => {
-      // Simulate FileSystemDirectoryHandle being available
+    it('should return true when FileSystemDirectoryHandle is available', async () => {
+      // Ensure FileSystemDirectoryHandle is available
       global.window.FileSystemDirectoryHandle = {}
 
-      const result = checkOPFSAvailability()
+      // Mock navigator.storage.getDirectory to simulate a successful call
+      const mockGetDirectory = jest.fn()
+      global.navigator.storage = {
+        getDirectory: mockGetDirectory,
+      }
+      mockGetDirectory.mockResolvedValue({}) // Simulate successful directory access
+
+      const result = await checkOPFSAvailability()
       expect(result).toBe(true)
     })
 
-    it('should return false when FileSystemDirectoryHandle is not available', () => {
+
+    it('should return false when FileSystemDirectoryHandle is not available', async () => {
       // Ensure FileSystemDirectoryHandle is not defined
       delete global.window.FileSystemDirectoryHandle
 
-      const result = checkOPFSAvailability()
+      const result = await checkOPFSAvailability()
       expect(result).toBe(false)
     })
   })

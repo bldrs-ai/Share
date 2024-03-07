@@ -224,6 +224,10 @@ describe('CadView', () => {
   it('sets up camera and cutting plan from URL,', async () => {
     const mockCurrLocation = {...defaultLocationValue, hash: '#c:1,2,3,4,5,6::p:x=0'}
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setIsOPFSAvailable(false)
+    })
     const modelPath = {
       filepath: `index.ifc`,
       gitpath: undefined,

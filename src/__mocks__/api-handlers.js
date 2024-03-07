@@ -303,15 +303,6 @@ function githubHandlers() {
     }),
 
     rest.get(
-        'https://api.github.com/repos/:owner/:repo/commits',
-        (req, res, ctx) => {
-          return res(
-              ctx.status(httpOk),
-              ctx.json(MOCK_COMMITS),
-          )
-        }),
-
-    rest.get(
         'https://api.github.com/repos/:owner/:repo/branches',
         (req, res, ctx) => {
           return res(
@@ -324,11 +315,26 @@ function githubHandlers() {
     rest.get(
         'https://api.github.com/repos/:owner/:repo/commits',
         (req, res, ctx) => {
+        // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
+          if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
+            return res(
+                ctx.status(httpNotFound),
+                ctx.json({sha: 'error'}),
+            )
+            // Handle non existent file request
+          } else if (req.params.owner === 'nonexistentowner' && req.params.repo === 'nonexistentrepo') {
+            return res(
+                ctx.status(httpOk),
+                ctx.json([]),
+            )
+          }
+          // For all other cases, return a success response
           return res(
               ctx.status(httpOk),
-              ctx.json([{sha: 'testsha'}]),
+              ctx.json(MOCK_COMMITS),
           )
         }),
+
 
     /* Begin support for GitHub commitFile.  HTTP_BAD_REQUEST(400) is
      * used to indicate missing args, tho we're not sure what actual
