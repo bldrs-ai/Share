@@ -453,41 +453,47 @@ export default function CadView({
       // TODO(nickcastel50): need a more permanent way to
       // prevent redirect here for bundled ifc files
     } else if (ifcURL === '/index.ifc') {
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          'index.ifc',
-          'bldrs-ai',
-          'BldrsLocalStorage',
-          'V1',
-          'Projects',
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
+      try {
+        const file = await downloadToOPFS(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            ifcURL,
+            'index.ifc',
+            'bldrs-ai',
+            'BldrsLocalStorage',
+            'V1',
+            'Projects',
+            (progressEvent) => {
+              if (Number.isFinite(progressEvent.receivedLength)) {
+                const loadedBytes = progressEvent.receivedLength
+                // eslint-disable-next-line no-magic-numbers
+                const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+                setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+                debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+              }
+            })
 
-      if (file instanceof File) {
-        setFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
+        if (file instanceof File) {
+          setFile(file)
+        } else {
+          debug().error('Retrieved object is not of type File.')
+        }
+
+        loadedModel = await viewer.loadIfcFile(
+            file,
+            !urlHasCameraParams(),
+            (error) => {
+              debug().log('CadView#loadIfc$onError: ', error)
+              // TODO(pablo): error modal.
+              setIsModelLoading(false)
+              setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+            }, customViewSettings)
+      } catch (error) {
+        setIsModelLoading(false)
+        setAlertMessage(`Could not load file: ${filepath}. ${error}`)
+        return
       }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
-          }, customViewSettings)
     } else if (ifcURL === '/haus.ifc') {
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,

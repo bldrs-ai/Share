@@ -44,7 +44,7 @@ if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
   worker.start({
     onUnhandledRequest(req) {
       if (req.url.host === 'bldrs.us.auth0.com.cypress') {
-        // eslint-disable-next-line no-console
+
         // console.log(`Found an expected ${req.method} request to cypress fake ${req.url}`)
       } else {
         // eslint-disable-next-line no-console
