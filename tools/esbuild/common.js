@@ -87,7 +87,7 @@ export default {
     // Auth
     'process.env.OAUTH2_CLIENT_ID': str(process.env.OAUTH2_CLIENT_ID || 'cypresstestaudience'),
     'process.env.OAUTH2_REDIRECT_URI': str(process.env.OAUTH2_REDIRECT_URI || null),
-    'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || null),
+    'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || 'https://bldrs.us.auth0.com.cypress'),
 
     // GitHub
     'process.env.RAW_GIT_PROXY_URL':
