@@ -2085,9 +2085,9 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway@./bldrs-ai-conway-0.1.445.tgz":
-  version "0.1.445"
-  resolved "./bldrs-ai-conway-0.1.445.tgz#035e3fe9f4b364e63b63b4d69c4e102dbf4b66fc"
+"@bldrs-ai/conway@./bldrs-ai-conway-0.1.446.tgz":
+  version "0.1.446"
+  resolved "./bldrs-ai-conway-0.1.446.tgz#bb7a41ebcdc519453ef75f22e54341135be04b92"
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
@@ -4692,9 +4692,9 @@ camelcase@^6.2.0:
   integrity sha512-Gmy6FhYlCY7uOElZUSbxo2UCDH8owEk996gkbrpsgGtrJLM3J7jGxl9Ic7Qwwj4ivOE5AWZWRMecDdF7hqGjFA==
 
 camera-controls@^1.33.1:
-  version "1.38.2"
-  resolved "https://registry.yarnpkg.com/camera-controls/-/camera-controls-1.38.2.tgz#3289013e6de05cee51dc98af87d3fc7c1a7df585"
-  integrity sha512-EfzbovxLssyWpJVG9uKcazSDDIEcd1hUsPhPF/OWWnICsKY9WbLY/2S4UPW73HHbvnVeR/Z9wsWaQKtANy/2Yg==
+  version "1.36.1"
+  resolved "https://registry.npmjs.org/camera-controls/-/camera-controls-1.36.1.tgz"
+  integrity sha512-muYZT4bgA9iR/lfZwM1TLM/GPttAlRM+fDCjg9qsmH4omDMefGF8/Q5QFkadRGCeCOTFESGYXcOhqV/tt4z6fQ==
 
 caniuse-lite@^1.0.30001400:
   version "1.0.30001441"

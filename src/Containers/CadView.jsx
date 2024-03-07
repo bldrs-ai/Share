@@ -24,7 +24,6 @@ import {
   getModelFromOPFS,
   loadLocalFileDragAndDrop,
   downloadToOPFS,
-  checkOPFSAvailability,
 } from '../OPFS/utils'
 import {navToDefault} from '../Share'
 import {usePlaceMark} from '../hooks/usePlaceMark'
@@ -73,8 +72,6 @@ export default function CadView({
   modelPath,
 }) {
   assertDefined(...arguments)
-
-  const isOPFSAvailable = checkOPFSAvailability()
 
   const {setFile} = useContext(FileContext) // Consume the context
   debug().log('CadView#init: count: ', count++)
@@ -182,23 +179,27 @@ export default function CadView({
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
 
+  // opfs
+  const isOPFSAvailable = useStore((state) => state.isOPFSAvailable)
+
 
   /* eslint-disable react-hooks/exhaustive-deps */
   useEffect(() => {
     if (!isViewerLoaded) {
-      // This function gets called whenever there's a change in authentication state
+      // This function gets called whenever there's a change in authentication / opfs state
       debug().log('Auth state changed. isAuthLoading:', isAuthLoading, 'isAuthenticated:', isAuthenticated)
       /* eslint-disable no-mixed-operators */
-      if (!isAuthLoading &&
+      if ((!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isAuthLoading && !isAuthenticated)) {
+          (!isAuthLoading && !isAuthenticated)) &&
+          isOPFSAvailable !== null) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken])
+  }, [isAuthLoading, isAuthenticated, accessToken, isOPFSAvailable])
 
   /* eslint-disable react-hooks/exhaustive-deps */
   // ModelPath changes in parent (ShareRoutes) from user and
@@ -301,6 +302,11 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
+    if (isOPFSAvailable === null) {
+      debug().warn('Do not have opfs status yet, waiting.')
+      return
+    }
+
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -334,7 +340,7 @@ export default function CadView({
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
     const tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
 
-    if (tmpModelRef === 'redirect') {
+    if (tmpModelRef === undefined) {
       return
     }
     debug().log('CadView#onViewer: tmpModelRef: ', tmpModelRef)
@@ -423,7 +429,7 @@ export default function CadView({
             // TODO(pablo): error modal.
             setIsModelLoading(false)
             setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
@@ -480,7 +486,7 @@ export default function CadView({
             debug().log('CadView#loadIfc$onError: ', error)
             // TODO(pablo): error modal.
             setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else if (ifcURL === '/haus.ifc') {
       loadedModel = await viewer.loadIfcUrl(
@@ -500,55 +506,61 @@ export default function CadView({
             // TODO(pablo): error modal.
             setIsModelLoading(false)
             setSnackMessage('')
-            setAlertMessage(`Could not load file: ${filepath}`)
+            setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
           }, customViewSettings)
     } else {
       // TODO(pablo): probably already available in this scope, or use
       // parseGitHubRepositoryURL instead.
-      const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
-      const commitHash = isPublic ?
+      try {
+        const {isPublic, owner, repo, branch, filePath} = parseGitHubPath(new URL(gitpath).pathname)
+        const commitHash = isPublic ?
             await getLatestCommitHash(owner, repo, filePath, '', branch) :
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
-      if (commitHash === null) {
-        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+        if (commitHash === null) {
+          debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+        }
+
+        const file = await downloadToOPFS(
+            navigate,
+            appPrefix,
+            handleBeforeUnload,
+            ifcURL,
+            filePath,
+            commitHash,
+            owner,
+            repo,
+            branch,
+            (progressEvent) => {
+              if (Number.isFinite(progressEvent.receivedLength)) {
+                const loadedBytes = progressEvent.receivedLength
+                // eslint-disable-next-line no-magic-numbers
+                const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
+                setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
+                debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
+              }
+            })
+
+        if (file instanceof File) {
+          setFile(file)
+        } else {
+          debug().error('Retrieved object is not of type File.')
+        }
+
+        loadedModel = await viewer.loadIfcFile(
+            file,
+            !urlHasCameraParams(),
+            (error) => {
+              debug().log('CadView#loadIfc$onError: ', error)
+              // TODO(pablo): error modal.
+              setIsModelLoading(false)
+              setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+            }, customViewSettings)
+      } catch (error) {
+        setIsModelLoading(false)
+        setAlertMessage(`Could not load file: ${filepath}. Please try logging in if the repository is private.`)
+        return
       }
-
-      const file = await downloadToOPFS(
-          navigate,
-          appPrefix,
-          handleBeforeUnload,
-          ifcURL,
-          filePath,
-          commitHash,
-          owner,
-          repo,
-          branch,
-          (progressEvent) => {
-            if (Number.isFinite(progressEvent.receivedLength)) {
-              const loadedBytes = progressEvent.receivedLength
-              // eslint-disable-next-line no-magic-numbers
-              const loadedMegs = (loadedBytes / (1024 * 1024)).toFixed(2)
-              setSnackMessage(`${loadingMessageBase}: ${loadedMegs} MB`)
-              debug().log(`CadView#loadIfc$onProgress, ${loadedBytes} bytes`)
-            }
-          })
-
-      if (file instanceof File) {
-        setFile(file)
-      } else {
-        debug().error('Retrieved object is not of type File.')
-      }
-
-      loadedModel = await viewer.loadIfcFile(
-          file,
-          !urlHasCameraParams(),
-          (error) => {
-            debug().log('CadView#loadIfc$onError: ', error)
-            // TODO(pablo): error modal.
-            setIsModelLoading(false)
-            setAlertMessage(`Could not load file: ${filepath}`)
-          }, customViewSettings)
     }
 
     await viewer.isolator.setModel(loadedModel)
@@ -873,6 +885,7 @@ export default function CadView({
           <ControlsGroup
             navigate={navigate}
             isRepoActive={modelPath.repo !== undefined}
+            isOPFSAvailable={isOPFSAvailable}
           />
           {isSearchBarVisible && isSearchVisible &&
            <Box sx={{marginTop: '0.82em', width: '100%'}}>

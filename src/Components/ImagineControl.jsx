@@ -73,10 +73,9 @@ function ImagineDialog({
   useEffect(() => {
     if (viewer) {
       addCameraUrlParams(cameraControls)
-      const ss = takeScreenshot(viewer)
+      const ss = viewer.takeScreenshot()
       setScreenshot(ss)
       setImage(ss)
-      // how to add to DOM?
     }
   }, [viewer, model, cameraControls])
 
@@ -87,7 +86,7 @@ function ImagineDialog({
   const handleClear = () => {
     setPrompt('')
     setIsImagineLoading(false)
-    const ss = takeScreenshot(viewer)
+    const ss = viewer.takeScreenshot()
     setScreenshot(ss)
     setImage(ss)
   }
@@ -187,46 +186,6 @@ function ImagineDialog({
         </>
       }
     />)
-}
-
-
-/**
- * @param {object} viewer
- * @return {string} pngUrl
- */
-function takeScreenshot(viewer) {
-  const glCtx = viewer.context.renderer.renderer.getContext()
-  const width = glCtx.drawingBufferWidth
-  const height = glCtx.drawingBufferHeight
-  const bytesPerPixel = 4
-  const pixels = new Uint8Array(width * height * bytesPerPixel)
-  glCtx.readPixels(0, 0, width, height, glCtx.RGBA, glCtx.UNSIGNED_BYTE, pixels)
-
-  // Create a 2D canvas to put the image
-  const canvas2d = document.createElement('canvas')
-  canvas2d.width = width
-  canvas2d.height = height
-  const context = canvas2d.getContext('2d')
-
-  const dataArr = []
-  for (let y = 0; y < height; ++y) {
-    for (let x = 0; x < width; ++x) {
-      const offset = ((y * width) + x) * bytesPerPixel
-      const srcOffset = (((height - y - 1) * width) + x) * bytesPerPixel
-      for (let i = 0; i < bytesPerPixel; ++i) {
-        dataArr[offset + i] = pixels[srcOffset + i]
-      }
-    }
-  }
-
-  const imageData = context.createImageData(width, height)
-  imageData.data.set(dataArr)
-  context.putImageData(imageData, 0, 0)
-
-  // Convert canvas to PNG Data URL
-  const pngUrl = canvas2d.toDataURL()
-
-  return pngUrl
 }
 
 

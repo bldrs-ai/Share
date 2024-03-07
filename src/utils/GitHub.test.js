@@ -44,6 +44,14 @@ describe('GitHub', () => {
       expect(actual.ref).toEqual('main')
       expect(actual.path).toEqual('haus.ifc')
     })
+
+    it('returns a repository path structure with correct URL decoded values', () => {
+      const actual = parseGitHubRepositoryURL('https://github.com/spaced owner/spaced repo/blob/spaced ref/spaced ifc.ifc')
+      expect(actual.owner).toEqual('spaced owner')
+      expect(actual.repository).toEqual('spaced repo')
+      expect(actual.ref).toEqual('spaced ref')
+      expect(actual.path).toEqual('spaced ifc.ifc')
+    })
   })
 
   describe('getContentsURL', () => {
@@ -117,6 +125,25 @@ describe('GitHub', () => {
       expect(result).toEqual('testsha')
     })
   })
+
+  describe('get latest commit hash nonexistent file', () => {
+    it('should throw an error when failing to get the latest commit hash', async () => {
+      // Simulate failure conditions by passing specific owner and repo that would trigger the error
+      await expect(getLatestCommitHash('nonexistentowner', 'nonexistentrepo', '', '', ''))
+          .rejects
+          .toThrow('File not found')
+    })
+  })
+
+  describe('get latest commit hash failure case', () => {
+    it('should throw an error when failing to get the latest commit hash', async () => {
+      // Simulate failure conditions by passing specific owner and repo that would trigger the error
+      await expect(getLatestCommitHash('failurecaseowner', 'failurecaserepo', '', '', ''))
+          .rejects
+          .toThrow('Unknown error: {"sha":"error"}')
+    })
+  })
+
 
   describe('getOrganizations', () => {
     it('encounters an exception if no access token is provided', () => {

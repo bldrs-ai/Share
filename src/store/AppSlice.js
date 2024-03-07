@@ -9,5 +9,7 @@ export default function createAppSlice(set, get) {
   return {
     appPrefix: null,
     setAppPrefix: (prefix) => set(() => ({appPrefix: prefix})),
+    isOPFSAvailable: null,
+    setIsOPFSAvailable: (opfsAvailable) => set(() => ({isOPFSAvailable: opfsAvailable})),
   }
 }

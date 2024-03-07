@@ -10,7 +10,6 @@ import {useAuth0} from '@auth0/auth0-react'
 import Dialog from './Dialog'
 import {TooltipIconButton} from './Buttons'
 import Selector from './Selector'
-import {checkOPFSAvailability} from '../OPFS/utils'
 import useStore from '../store/useStore'
 import {handleBeforeUnload} from '../utils/event'
 import {
@@ -35,6 +34,7 @@ export default function OpenModelControl({navigate}) {
   const [orgNamesArr, setOrgNamesArray] = useState([''])
   const {user} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
+
   useEffect(() => {
     /**
      * Asynchronously fetch organizations
@@ -103,7 +103,7 @@ function OpenModelDialog({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
-  const isOPFSAvailable = checkOPFSAvailability()
+  const isOPFSAvailable = useStore((state) => state.isOPFSAvailable)
 
   const openFile = () => {
     if (isOPFSAvailable) {
