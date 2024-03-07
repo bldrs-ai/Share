@@ -8,6 +8,7 @@ import CloseIcon from '@mui/icons-material/Close'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 
 
 /**
@@ -22,6 +23,12 @@ export default function ElementGroup({deselectItems}) {
   const selectedElement = useStore((state) => state.selectedElement)
   const [isIsolate, setIsIsolate] = useState(false)
   const [isHidden, setIsHidden] = useState(false)
+  // Properties
+  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
+  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
+  const openDrawer = useStore((state) => state.openDrawer)
+  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
+
 
   const isSelected = () => {
     const ifSelected = (
@@ -47,6 +54,19 @@ export default function ElementGroup({deselectItems}) {
           <>
             <CutPlaneMenu/>
           </>
+        }
+        {isSelected() &&
+            <TooltipIconButton
+              title='Properties'
+              variant='solid'
+              onClick={() => {
+                turnOffIsHelpTooltips()
+                toggleIsPropertiesOn()
+                openDrawer()
+              }}
+              selected={isPropertiesOn}
+              icon={<InfoOutlinedIcon className='icon-share' color='secondary'/>}
+            />
         }
         {isSelected() && selectedElement !== null &&
             <TooltipIconButton

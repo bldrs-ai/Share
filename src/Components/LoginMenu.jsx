@@ -9,7 +9,10 @@ import useStore from '../store/useStore'
 import {useIsMobile} from './Hooks'
 import {TooltipIconButton} from './Buttons'
 import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
+import LoginIcon from '@mui/icons-material/Login'
+import LogoutIcon from '@mui/icons-material/Logout'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
@@ -42,10 +45,22 @@ export default function LoginMenu() {
         returnTo: window.location.pathname,
       },
     })
+    handleClose()
   }
 
   const handleLogout = () => {
     logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
+    handleClose()
+  }
+
+  const redirectToGithubSignup = () => {
+    window.open(`https://github.com/signup`, '_blank')
+    handleClose()
+  }
+
+  const redirectToInfo = () => {
+    window.open(`https://github.com/bldrs-ai/Share/wiki/Hosting%3A-GitHub`, '_blank')
+    handleClose()
   }
 
 
@@ -91,12 +106,28 @@ export default function LoginMenu() {
           isAuthenticated ? () => handleLogout() :
           () => handleLogin()}
         >
-          <GitHubIcon/>
+
           {isAuthenticated ?
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography> :
-          <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>
+            <>
+              <LogoutIcon/>
+              <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography>
+            </> :
+            <>
+              <LoginIcon/>
+              <Typography sx={{marginLeft: '10px'}} variant='overline'>Log in with Github</Typography>
+            </>
           }
 
+        </MenuItem>
+        {!isAuthenticated &&
+          <MenuItem onClick={redirectToGithubSignup}>
+            <GitHubIcon/>
+            <Typography sx={{marginLeft: '10px'}} variant='overline'>Join Github</Typography>
+          </MenuItem>
+        }
+        <MenuItem onClick={redirectToInfo}>
+          <InfoOutlinedIcon/>
+          <Typography sx={{marginLeft: '10px'}} variant='overline'>Info</Typography>
         </MenuItem>
         <MenuItem onClick={() => {
           handleClose()

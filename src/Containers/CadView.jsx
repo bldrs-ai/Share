@@ -4,16 +4,16 @@ import {Color, MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
 import Box from '@mui/material/Box'
 import useTheme from '@mui/styles/useTheme'
-import AboutControl from '../Components/About/AboutControl'
+// import AboutControl from '../Components/About/AboutControl'
 import Alert from '../Components/Alert'
-import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
+// import AppStoreSideDrawer from '../Components/AppStore/AppStoreSideDrawerControl'
 import {hasValidUrlParams as urlHasCameraParams} from '../Components/CameraControl'
 import ControlsGroup from '../Components/ControlsGroup'
 import ElementGroup from '../Components/ElementGroup'
-import HelpControl from '../Components/HelpControl'
+// import HelpControl from '../Components/HelpControl'
 import {useWindowDimensions, useIsMobile} from '../Components/Hooks'
 import NavPanel from '../Components/NavPanel'
-import OperationsGroup from '../Components/OperationsGroup'
+// import OperationsGroup from '../Components/OperationsGroup'
 import SearchBar from '../Components/SearchBar'
 import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import SnackBarMessage from '../Components/SnackbarMessage'
@@ -138,7 +138,7 @@ export default function CadView({
   const theme = useTheme()
   const [showSearchBar, setShowSearchBar] = useState(false)
   const [alert, setAlert] = useState(null)
-  const [isModelLoading, setIsModelLoading] = useState(false)
+  const [, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
 
   // Zustand store
@@ -323,12 +323,12 @@ export default function CadView({
     const preselectMat = new MeshLambertMaterial({
       transparent: true,
       opacity: 0.5,
-      color: theme.palette.primary.main,
+      color: '#204F2B',
       depthTest: true,
     })
     const selectMat = new MeshLambertMaterial({
       transparent: true,
-      color: theme.palette.primary.main,
+      color: '#204F2B',
       depthTest: true,
     })
 
@@ -955,7 +955,7 @@ export default function CadView({
           <ElementGroup deselectItems={deselectItems}/>
         </Box>
       }
-      <Box
+      {/* <Box
         sx={{
           position: 'fixed',
           bottom: '1.0em',
@@ -963,8 +963,8 @@ export default function CadView({
         }}
       >
         <AboutControl/>
-      </Box>
-      <Box
+      </Box> */}
+      {/* <Box
         sx={{
           position: 'fixed',
           bottom: '1.0em',
@@ -972,11 +972,11 @@ export default function CadView({
         }}
       >
         <HelpControl/>
-      </Box>
+      </Box> */}
       {viewer && <OperationsGroupAndDrawer deselectItems={deselectItems}/>
       }
 
-      {isModelLoading &&
+      {/* {isModelLoading &&
         <Box
           sx={{
             position: 'relative',
@@ -1024,7 +1024,7 @@ export default function CadView({
             </Box>
           </Box>
         </Box>
-      }
+      } */}
     </Box>
   )
 }
@@ -1043,7 +1043,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
         {/* TODO(pablo): line 650 : CadView just has two sub-components the left and right group,
         and their first elements should be same height and offset so they line up naturally..
         this is a shim for the misalignment you see with tooltips without it */}
-        <Box
+        {/* <Box
           sx={{
             position: 'absolute',
             top: 0,
@@ -1051,7 +1051,7 @@ function OperationsGroupAndDrawer({deselectItems}) {
           }}
         >
           <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
+        </Box> */}
         <Box
           sx={{
             position: 'absolute',
@@ -1059,8 +1059,11 @@ function OperationsGroupAndDrawer({deselectItems}) {
             width: '100%',
           }}
         >
+          {/* <Box>
+            <OperationsGroup deselectItems={deselectItems}/>
+          </Box> */}
           <SideDrawer/>
-          <AppStoreSideDrawer/>
+          {/* <AppStoreSideDrawer/> */}
         </Box>
       </>
     ) : (
@@ -1074,11 +1077,11 @@ function OperationsGroupAndDrawer({deselectItems}) {
           flexDirection: 'row',
         }}
       >
-        <Box>
+        {/* <Box>
           <OperationsGroup deselectItems={deselectItems}/>
-        </Box>
+        </Box> */}
         <SideDrawer/>
-        <AppStoreSideDrawer/>
+        {/* <AppStoreSideDrawer/> */}
       </Box>
     )
   )

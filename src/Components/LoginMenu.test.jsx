@@ -16,6 +16,16 @@ describe('LoginMenu', () => {
     expect(LoginWithGithub).toBeInTheDocument()
   })
 
+  it('renders sign up option when not logged in', async () => {
+    mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
+    const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
+    const usersMenu = await findByTitle('Users menu')
+    fireEvent.click(usersMenu)
+
+    const LoginWithGithub = await findByText('Join Github')
+    expect(LoginWithGithub).toBeInTheDocument()
+  })
+
   it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {findByTitle, findByText} = render(<ShareMock><LoginMenu/></ShareMock>)
@@ -51,7 +61,6 @@ describe('LoginMenu', () => {
   it('renders users avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
     const {findByAltText} = render(<ShareMock><LoginMenu/></ShareMock>)
-
     const avatarImage = await findByAltText('Unit Testing')
     expect(avatarImage).toBeInTheDocument()
   })

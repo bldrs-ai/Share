@@ -19,7 +19,7 @@ export function getColors() {
       light: green[300],
       medium: green[500],
       dark: green[800],
-      darkest: '#459A47',
+      darkest: '#E9B352',
     },
     lime: green[400],
     orange: orange[400],
