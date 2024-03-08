@@ -121,6 +121,7 @@ jobs:
           
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
+        if: failure()
         with:
           name: conway-cypress-screenshots
           path: cypress/screenshots
@@ -128,6 +129,7 @@ jobs:
 
       - name: Upload Cypress Videos
         uses: actions/upload-artifact@v3
+        if: failure()
         with:
           name: conway-cypress-videos
           path: cypress/videos

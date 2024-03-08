@@ -18,5 +18,11 @@ import 'cypress-real-events/support'
 // Import commands.js using ES2015 syntax:
 import './commands'
 
+
+const optionsLogCollector = {
+  collectTypes: ['cons:log', 'cons:info', 'cons:warn', 'cons:error'],
+}
+require('cypress-terminal-report/src/installLogsCollector')(optionsLogCollector)
+
 // Alternatively you can use CommonJS syntax:
 // require('./commands')

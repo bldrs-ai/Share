@@ -7,6 +7,10 @@ module.exports = defineConfig({
     fileServerFolder: 'docs/',
     setupNodeEvents(on, config) {
       // implement node event listeners here
+      const options_log_printer = {
+        printLogsToConsole: "always"
+      };
+      require('cypress-terminal-report/src/installLogsPrinter')(on, options_log_printer);
     },
     screenshotOnRunFailure: true,
     video: true,
