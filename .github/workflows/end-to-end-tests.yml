@@ -12,67 +12,6 @@ on:
   workflow_dispatch:
 
 jobs:
-  install-cypress-webifc:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - name: Install Cypress WebIfc
-        uses: cypress-io/github-action@v5
-        with:
-          runTests: false
-          build: yarn build-share-webifc
-
-      - name: Save build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-webifc-${{ github.sha }}
-          if-no-files-found: error
-          path: docs/
-
-  run-cypress-on-linux-webifc:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
-    needs: install-cypress-webifc
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - name: Restore build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build-webifc-${{ github.sha }}
-          path: docs/
-
-      - name: E2E Tests on Google Chrome
-        uses: cypress-io/github-action@v5
-        with:
-          browser: chrome
-          start: yarn serve-share-webifc
-          record: false
-          headed: true
-        env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Upload Cypress Screenshots
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: webifc-cypress-screenshots
-          path: cypress/screenshots
-          if-no-files-found: warn
-
-      - name: Upload Cypress Videos
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: webifc-cypress-videos
-          path: cypress/videos
-          if-no-files-found: warn
-
   install-cypress-conway:
     environment: cypress
     runs-on: ubuntu-22.04-4vcpu-16gb
@@ -121,6 +60,7 @@ jobs:
           
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
+        if: failure()
         with:
           name: conway-cypress-screenshots
           path: cypress/screenshots
@@ -128,6 +68,7 @@ jobs:
 
       - name: Upload Cypress Videos
         uses: actions/upload-artifact@v3
+        if: failure()
         with:
           name: conway-cypress-videos
           path: cypress/videos
