@@ -15,7 +15,6 @@ jobs:
   install-cypress-conway:
     environment: cypress
     runs-on: ubuntu-22.04-4vcpu-16gb
-    needs: run-cypress-on-linux-webifc
     steps:
       - name: checkout
         uses: actions/checkout@v3
