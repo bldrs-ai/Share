@@ -11208,9 +11208,9 @@ web-ifc-three@^0.0.118:
     three-mesh-bvh "^0.5.11"
     web-ifc "^0.0.35"
 
-web-ifc-viewer@./web-ifc-viewer-1.0.209-bldrs-1.tgz:
-  version "1.0.209-bldrs-1"
-  resolved "./web-ifc-viewer-1.0.209-bldrs-1.tgz#42d9ef5897001f28cffecd5f526bd629030eaf10"
+"web-ifc-viewer@file:web-ifc-viewer-1.0.209-bldrs-2.tgz":
+  version "1.0.209-bldrs-2"
+  resolved "file:web-ifc-viewer-1.0.209-bldrs-2.tgz#45f149bfbfcab42556a80814dea6ad606147e145"
   dependencies:
     camera-controls "^1.33.1"
     dat.gui "^0.7.7"
