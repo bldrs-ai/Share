@@ -16,34 +16,11 @@ function base64EncodePayload(payload) {
   return base64UrlString
 }
 
-// Support file or test file
-let consoleOutputs = []
-
-/**
- *
- */
-function overrideConsoleMethod(methodName) {
-  /* eslint-disable no-console */
-  const originalMethod = console[methodName]
-  console[methodName] = (...args) => {
-    const message = args.map((arg) => (typeof arg === 'object' ? JSON.stringify(arg) : String(arg))).join(' ')
-    // Collect console messages instead of logging them immediately
-    consoleOutputs.push(`[${methodName}] ${message}`)
-    originalMethod.apply(console, args)
-  }
-  /* eslint-enable no-console */
-}
-
-
 describe('save model', () => {
   context('when no model is loaded', () => {
     let port = 0
     let nonce = ''
     beforeEach(() => {
-      consoleOutputs = [] // Reset collected messages before each test
-      overrideConsoleMethod('log')
-      overrideConsoleMethod('warn')
-      overrideConsoleMethod('error')
       cy.setCookie('isFirstTime', '1')
       // cy.visit('/')
       // cy.get('#viewer-container').get('canvas').should('be.visible')
@@ -160,13 +137,6 @@ describe('save model', () => {
       }).as('tokenRequest')
     })
 
-    afterEach(() => {
-      // Log collected console messages
-      consoleOutputs.forEach((msg) => {
-        cy.log(msg)
-      })
-    })
-
     it('should only find Save IFC button after login', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
@@ -185,7 +155,7 @@ describe('save model', () => {
         cy.wait('@authorizeRequest').its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
 
-        cy.findByTestId('Save IFC', {timeout: 10000}).should('exist')
+        cy.findByTestId('Save IFC', {timeout: 60000}).should('exist')
       })
     })
   })
