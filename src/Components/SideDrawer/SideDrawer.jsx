@@ -1,5 +1,4 @@
-import React, {ReactElement, useEffect, useRef} from 'react'
-import {useLocation} from 'react-router-dom'
+import React, {ReactElement, useRef} from 'react'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
@@ -9,7 +8,6 @@ import NotesPanel from '../Notes/NotesPanel'
 import PropertiesPanel from '../Properties/PropertiesPanel'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
-import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
 
@@ -22,12 +20,9 @@ import VerticalResizerButton from './VerticalResizerButton'
 export default function SideDrawer() {
   const isNotesVisible = useStore((state) => state.isNotesVisible)
   const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
-  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
   const sidebarWidth = useStore((state) => state.sidebarWidth)
 
-  const location = useLocation()
   const isMobile = useIsMobile()
   const theme = useTheme()
 
@@ -39,16 +34,7 @@ export default function SideDrawer() {
   const borderOpacity = 0.5
   const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
 
-  useEffect(() => {
-    const noteHash = getHashParams(location, 'i')
-    if (noteHash !== undefined) {
-      const extractedCommentId = noteHash.split(':')[1]
-      setSelectedNoteId(Number(extractedCommentId))
-      setIsNotesVisible(true)
-    }
-    setSelectedNoteId(null)
-  }, [location, setIsNotesVisible, setSelectedNoteId])
-
+  // TODO(pablo): removed what looked to be notes useEffect here.
   return (
     <Box
       sx={Object.assign({
