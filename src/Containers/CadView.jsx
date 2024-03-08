@@ -777,7 +777,7 @@ export default function CadView({
             <ElementGroup deselectItems={deselectItems}/>
           </Box>
 
-          <Box sx={{...absTop, right: 0}}>
+          <Box sx={isMobile ? {} : {...absTop, right: 0}}>
             <OperationsGroupAndDrawer deselectItems={deselectItems}/>
           </Box>
         </>
