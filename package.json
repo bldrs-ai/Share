@@ -1,10 +1,6 @@
 {
   "name": "bldrs",
-<<<<<<< HEAD
-  "version": "1.0.912",
-=======
-  "version": "1.0.929",
->>>>>>> 13c0d1d658546c040158748c22cedb7e6dbb0f68
+  "version": "1.0.938",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",

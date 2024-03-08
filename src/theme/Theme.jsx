@@ -9,8 +9,7 @@ import {day, night} from './Palette'
  * @return {object} theme
  */
 export default function useShareTheme() {
-  // const [mode, setMode] = useState(Preferences.getTheme() || getSystemCurrentLightDark())
-  const [mode, setMode] = useState('Day')
+  const [mode, setMode] = useState(Preferences.getTheme() || getSystemCurrentLightDark())
 
   const [themeChangeListeners] = useState({})
 
