@@ -52,7 +52,7 @@ jobs:
           browser: chrome
           start: yarn serve-share-webifc
           record: false
-          headed: true
+          headed: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -114,7 +114,7 @@ jobs:
           browser: chrome
           start: yarn serve-share-conway
           record: false
-          headed: true
+          headed: false
         env:
           CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
