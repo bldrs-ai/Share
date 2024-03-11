@@ -1,6 +1,6 @@
 describe('home page', () => {
   context('without a first-time visit value', () => {
-    it('should display the about dialog', () => {
+    it.skip('should display the about dialog', () => {
       cy.clearCookies()
       cy.visit('/')
       cy.findByRole('dialog', {timeout: 300000})

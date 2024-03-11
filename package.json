@@ -23,7 +23,7 @@
     "build-share-copy-wasm-conway": "shx cp node_modules/@bldrs-ai/conway/compiled/dependencies/conway-geom/Dist/*.wasm docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
-    "cypress:open": "cypress run",
+    "cypress": "cypress run",
     "cypress-spec": "cypress run --spec",
     "cypress-headed": "cypress run --headed --browser chrome --no-exit",
     "cypress-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
