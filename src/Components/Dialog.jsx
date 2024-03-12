@@ -44,6 +44,7 @@ export default function Dialog({
     <MuiDialog
       open={isDialogDisplayed}
       onClose={close}
+      data-testid='main-dialog'
     >
       <DialogTitle>
         {headerIcon ?
@@ -60,7 +61,7 @@ export default function Dialog({
       <DialogContent>{content}</DialogContent>
       {hideActionButton ? null :
        <DialogActions>
-         <Button variant="contained" onClick={actionCb} >
+         <Button variant="contained" onClick={actionCb} aria-label='action-button'>
            {actionTitle}
          </Button>
        </DialogActions>

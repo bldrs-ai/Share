@@ -92,11 +92,13 @@ export default {
     'process.env.GITHUB_BASE_URL':
         str(process.env.GITHUB_BASE_URL || 'https://api.github.com'),
 
+    // OPFS
+    'process.env.OPFS_IS_ENABLED': str(process.env.OPFS_IS_ENABLED || null),
+
     // Sentry
     'process.env.SENTRY_DSN': str(process.env.SENTRY_DSN || null),
     'process.env.SENTRY_ENVIRONMENT':
         str(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || null),
-
   },
   plugins: plugins,
 }
