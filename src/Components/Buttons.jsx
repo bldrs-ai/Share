@@ -50,7 +50,6 @@ export function TooltipIconButton({
       title={title}
       describeChild
       placement={placement}
-      data-testid={dataTestId || title}
       PopperProps={{style: {zIndex: 0}}}
     >
       <ToggleButton
@@ -60,6 +59,7 @@ export function TooltipIconButton({
         size={size}
         variant={variant}
         disabled={!enabled}
+        data-testid={dataTestId}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',

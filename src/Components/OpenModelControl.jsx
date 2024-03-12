@@ -63,7 +63,7 @@ export default function OpenModelControl({navigate}) {
         icon={<CreateNewFolderIcon className='icon-share' color='secondary'/>}
         placement={'bottom'}
         selected={isDialogDisplayed}
-        dataTestId='open-ifc'
+        dataTestId='open-model-button'
       />
       {isDialogDisplayed &&
          <OpenModelDialog
