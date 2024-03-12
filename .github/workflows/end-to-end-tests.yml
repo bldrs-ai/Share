@@ -17,8 +17,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      # Install npm dependencies, cache them correctly
-      # and run all Cypress tests
-      - name: Cypress run
-        uses: cypress-io/github-action@v6
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16' # Specify the Node.js version you need
+
+      - name: Install Dependencies
+        run: yarn install
+
+      - name: Build Project
+        run: yarn build
+        # Ensure your build script correctly outputs to the ./docs directory
+        env:
+          NODE_ENV: 'production'
+          AUTH0_DOMAIN: 'bldrs.us.auth0.com.msw'
+          GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh'
+          OAUTH2_CLIENT_ID: 'msw'
+          OPFS_IS_ENABLED: 'false'
+          RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
+
+      - name: Cypress run
+        uses: cypress-io/github-action@v5
+        with:
+          browser: 'chrome'
+        env:
+          # Set any environment variables your build or tests may require
+          CI: true
