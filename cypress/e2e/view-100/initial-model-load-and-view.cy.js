@@ -1,7 +1,7 @@
 describe('initial-model-load-and-view', () => {
-  // const REMOTE_IFC_URL = '**/Momentum.ifc'
-  // const REMOTE_IFC_FIXTURE = 'TestFixture.ifc'
-  // const REQUEST_SUCCESS_CODE = 200
+  const REMOTE_IFC_URL = '/index.ifc'
+  const REMOTE_IFC_FIXTURE = 'index.ifc'
+  const REQUEST_SUCCESS_CODE = 200
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
     beforeEach(() => {
       cy.clearLocalStorage()
@@ -9,19 +9,18 @@ describe('initial-model-load-and-view', () => {
     })
 
     it('See model centered in page (first-time)', () => {
-      // cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
-      // cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
+      cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
       cy.visit('/')
+      cy.get('#viewer-container').get('canvas').should('be.visible')
       cy.get('button[aria-label="action-button"]')
           .click()
       // cy.findByTestId('open-model-button')
       //    .click()
       // cy.findByTestId('main-dialog').should('exist')
       // get('button[aria-label="action-button"]').contains('Sample Projects')
-      cy.get('#viewer-container').get('canvas').should('be.visible')
-      cy.get('[data-model-ready="true"]').should('exist')
-      // cy.get('[data-model-ready="true"]').should('exist')
-      // cy.percySnapshot()
+      cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
+      cy.percySnapshot()
     })
 
     it.skip('Title should contain function followed by location path', () => {
