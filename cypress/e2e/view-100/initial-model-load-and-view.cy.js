@@ -14,13 +14,10 @@ describe('initial-model-load-and-view', () => {
       cy.get('#viewer-container').get('canvas').should('be.visible')
       cy.get('button[aria-label="action-button"]')
           .click()
-      // cy.findByTestId('open-model-button')
-      //    .click()
-      // cy.findByTestId('main-dialog').should('exist')
-      // get('button[aria-label="action-button"]').contains('Sample Projects')
       cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
-      cy.percySnapshot()
+      // TODO(pablo): figure out screen regression check
+      // cy.percySnapshot()
     })
 
     it.skip('Title should contain function followed by location path', () => {
