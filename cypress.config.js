@@ -9,7 +9,7 @@ module.exports = defineConfig({
     video: false,
     // TODO(pablo): for testing on GHA.  Remove if no effect.
     // https://github.com/cypress-io/cypress/issues/1194
-/*    setupNodeEvents(on, config) {
+    setupNodeEvents(on, config) {
       console.log('SETTING UP BROWSER LAUNCH CB')
       // Implement the 'before:browser:launch' event here
       on('before:browser:launch', (browser = {}, launchOptions) => {
@@ -28,6 +28,6 @@ module.exports = defineConfig({
         return launchOptions
       })
       return config // Return the config object is important for the setupNodeEvents function
-    },*/
+    },
   },
 })
