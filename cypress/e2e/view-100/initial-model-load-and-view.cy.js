@@ -18,6 +18,9 @@ describe('initial-model-load-and-view', () => {
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
       // TODO(pablo): figure out screen regression check
       // cy.wait(5000)
+      /* cy.get('button[data-testid="help-control-button"]')
+          .click()
+      cy.get('button[aria-label="action-button"]').should('be.visible') */
       cy.screenshot()
       cy.percySnapshot()
       // cy.wait(5000)

@@ -49,7 +49,7 @@ export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
         icon={<HelpOutlineIcon color='secondary'/>}
         placement={'left'}
         selected={isDialogDisplayed}
-        dataTestId='open-ifc'
+        dataTestId='help-control-button'
         showTitle={true}
         variant='noBackground'
       />
