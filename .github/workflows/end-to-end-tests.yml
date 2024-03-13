@@ -12,113 +12,40 @@ on:
   workflow_dispatch:
 
 jobs:
-  install-cypress-webifc:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
+  cypress-run:
+    runs-on: ubuntu-22.04
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Install Cypress WebIfc
-        uses: cypress-io/github-action@v5
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          runTests: false
-          build: yarn build-share-webifc
+          node-version: '16' # Specify the Node.js version you need
 
-      - name: Save build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-webifc-${{ github.sha }}
-          if-no-files-found: error
-          path: docs/
+      - name: Install Dependencies
+        run: yarn install
 
-  run-cypress-on-linux-webifc:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
-    needs: install-cypress-webifc
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - name: Restore build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build-webifc-${{ github.sha }}
-          path: docs/
-
-      - name: E2E Tests on Google Chrome
-        uses: cypress-io/github-action@v5
-        with:
-          browser: chrome
-          start: yarn serve-share-webifc
-          record: false
-          headed: false
+      - name: Build Project
+        run: yarn build
+        # Ensure your build script correctly outputs to the ./docs directory
         env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Upload Cypress Screenshots
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: webifc-cypress-screenshots
-          path: cypress/screenshots
-          if-no-files-found: warn
+          NODE_ENV: 'production'
+          AUTH0_DOMAIN: 'bldrs.us.auth0.com.msw'
+          GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh'
+          OAUTH2_CLIENT_ID: 'msw'
+          OPFS_IS_ENABLED: 'false'
+          RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
 
-      - name: Upload Cypress Videos
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: webifc-cypress-videos
-          path: cypress/videos
-          if-no-files-found: warn
-
-  install-cypress-conway:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
-    needs: run-cypress-on-linux-webifc
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - name: Install Cypress Conway
+      - name: Cypress run
         uses: cypress-io/github-action@v5
         with:
-          runTests: false
-          build: yarn build-share-conway
-
-      - name: Save build artifacts
-        uses: actions/upload-artifact@v3
-        with:
-          name: build-conway-${{ github.sha }}
-          if-no-files-found: error
-          path: docs/
-
-  run-cypress-on-linux-conway:
-    environment: cypress
-    runs-on: ubuntu-22.04-4vcpu-16gb
-    needs: install-cypress-conway
-    steps:
-      - name: checkout
-        uses: actions/checkout@v3
-
-      - name: Restore build artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: build-conway-${{ github.sha }}
-          path: docs/
-
-      - name: E2E Tests on Google Chrome
-        uses: cypress-io/github-action@v5
-        with:
-          browser: chrome
-          start: yarn serve-share-conway
-          record: false
-          headed: false
+          browser: 'chrome'
+          headed: true
         env:
-          CYPRESS_RECORD_KEY: ${{ secrets.CYPRESS_RECORD_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+          # Set any environment variables your build or tests may require
+          CI: true
+       
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
         if: failure()

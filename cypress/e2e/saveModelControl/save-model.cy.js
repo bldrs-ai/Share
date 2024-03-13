@@ -137,6 +137,14 @@ describe('save model', () => {
       }).as('tokenRequest')
     })
 
+    it('should not find Save IFC button before login', () => {
+      cy.visit('/')
+      // Now trigger the login process, which will use the mocked loginWithPopup
+      cy.url().then((currentUrl) => {
+        cy.findByTestId('Save IFC', {timeout: 10000}).should('not.exist')
+      })
+    })
+
     it('should only find Save IFC button after login', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
@@ -155,7 +163,7 @@ describe('save model', () => {
         cy.wait('@authorizeRequest').its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
         // Commented out for now
-        // cy.findByTestId('Save IFC', {timeout: 60000}).should('exist')
+        cy.findByTestId('Save IFC', {timeout: 60000}).should('exist')
       })
     })
   })
