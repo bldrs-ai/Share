@@ -17,7 +17,10 @@ describe('initial-model-load-and-view', () => {
       cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
       // TODO(pablo): figure out screen regression check
-      // cy.percySnapshot()
+      // cy.wait(5000)
+      cy.screenshot()
+      cy.percySnapshot()
+      // cy.wait(5000)
     })
 
     it.skip('Title should contain function followed by location path', () => {
