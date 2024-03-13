@@ -1,4 +1,5 @@
 describe('initial-model-load-and-view', () => {
+  const WAIT_TIME_MS = 1000
   const REMOTE_IFC_URL = '/index.ifc'
   const REMOTE_IFC_FIXTURE = 'index.ifc'
   const REQUEST_SUCCESS_CODE = 200
@@ -8,7 +9,9 @@ describe('initial-model-load-and-view', () => {
       cy.clearCookies()
     })
 
-    it('See model centered in page (first-time)', () => {
+    it('See model centered in page (cookie isFirstTime: undefined)', () => {
+      cy.clearLocalStorage()
+      cy.clearCookies()
       cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
       cy.visit('/')
       cy.get('#viewer-container').get('canvas').should('be.visible')
@@ -16,15 +19,25 @@ describe('initial-model-load-and-view', () => {
           .click()
       cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
-      // TODO(pablo): figure out screen regression check
-      // cy.wait(5000)
-      /* cy.get('button[data-testid="help-control-button"]')
-          .click()
-      cy.get('button[aria-label="action-button"]').should('be.visible') */
-      cy.wait(1000)
+      // TODO(pablo): model animation takes time to settle
+      // eslint-disable-next-line cypress/no-unnecessary-waiting
+      cy.wait(WAIT_TIME_MS)
       cy.screenshot()
-      cy.percySnapshot()
-      // cy.wait(5000)
+      // cy.percySnapshot()
+    })
+
+    it('See model centered in page (cookie isFirstTime: 1)', () => {
+      cy.setCookie('isFirstTime', '1')
+      cy.intercept('GET', REMOTE_IFC_URL, {fixture: REMOTE_IFC_FIXTURE}).as('loadModel')
+      cy.visit('/')
+      cy.get('#viewer-container').get('canvas').should('be.visible')
+      cy.wait('@loadModel').its('response.statusCode').should('eq', REQUEST_SUCCESS_CODE)
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
+      // TODO(pablo): model animation takes time to settle
+      // eslint-disable-next-line cypress/no-unnecessary-waiting
+      cy.wait(WAIT_TIME_MS)
+      cy.screenshot()
+      // cy.percySnapshot()
     })
 
     it.skip('Title should contain function followed by location path', () => {
