@@ -21,6 +21,7 @@ describe('initial-model-load-and-view', () => {
       /* cy.get('button[data-testid="help-control-button"]')
           .click()
       cy.get('button[aria-label="action-button"]').should('be.visible') */
+      cy.wait(1000)
       cy.screenshot()
       cy.percySnapshot()
       // cy.wait(5000)
