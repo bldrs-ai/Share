@@ -16,10 +16,10 @@ describe('<HelpDialog />', () => {
   })
 
   it('navigates to the next page when the next button is clicked', () => {
-    const {getByTitle, getByText, getByTestId} = render(<ShareMock><HelpControl/></ShareMock>)
+    const {getByTitle, getByText} = render(<ShareMock><HelpControl/></ShareMock>)
     const button = getByTitle('Help')
     fireEvent.click(button)
-    const nextPageButton = getByTestId('Next')
+    const nextPageButton = getByTitle('Next')
     fireEvent.click(nextPageButton)
     const text = getByText('Isolate selected element')
     expect(text).toBeInTheDocument()

@@ -1,4 +1,4 @@
-const isOpfsEnabled = process.env.OPFS_IS_ENABLED.toLowerCase() === 'true'
+const isOpfsEnabled = (process.env.OPFS_IS_ENABLED || 'false').toLowerCase() === 'true'
 
 
 /**
