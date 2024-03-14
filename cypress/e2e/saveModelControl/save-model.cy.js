@@ -105,7 +105,7 @@ describe('save model', () => {
           updated_at: '2024-02-20T02:57:40.324Z',
           email: 'cypresstest@bldrs.ai',
           email_verified: true,
-          iss: 'https://bldrs.us.auth0.com.cypress/',
+          iss: 'https://bldrs.us.auth0.com.msw/',
           aud: 'cypresstestaudience',
           iat: iat,
           exp: exp,

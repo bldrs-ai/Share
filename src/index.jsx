@@ -43,7 +43,7 @@ if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {
-      if (req.url.host === 'bldrs.us.auth0.com.cypress') {
+      if (req.url.host === 'bldrs.us.auth0.com.msw') {
 
         // console.log(`Found an expected ${req.method} request to cypress fake ${req.url}`)
       } else {
