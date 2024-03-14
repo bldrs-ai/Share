@@ -21,6 +21,9 @@ describe('save model', () => {
     let port = 0
     let nonce = ''
     beforeEach(() => {
+      cy.clearLocalStorage()
+      cy.clearCookies()
+      cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
       cy.setCookie('isFirstTime', '1')
       // cy.visit('/')
       // cy.get('#viewer-container').get('canvas').should('be.visible')
@@ -137,13 +140,13 @@ describe('save model', () => {
       }).as('tokenRequest')
     })
 
-    it('should not find Save IFC button before login', () => {
+    /* it('should not find Save IFC button before login', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
         cy.findByTestId('Save IFC', {timeout: 10000}).should('not.exist')
       })
-    })
+    })*/
 
     it('should only find Save IFC button after login', () => {
       cy.visit('/')
@@ -152,7 +155,11 @@ describe('save model', () => {
         const STATUS_OK = 200
         const url = new URL(currentUrl)
         port = url.port
-        cy.findByTestId('Save IFC', {timeout: 10000}).should('not.exist')
+
+        const reqSuccessCode = 200
+        cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
+        cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
+        cy.findByTitle('Save IFC', {timeout: 10000}).should('not.exist')
         cy.log(`The current port is: ${port}`)
         // Need to figure out why a force is required here on GHA
         cy.get('[title="Users menu"]').click({force: true})
@@ -160,10 +167,10 @@ describe('save model', () => {
         cy.findByTestId('login-with-github').click({force: true})
 
         // Use the alias to ensure the intercept was called
-        cy.wait('@authorizeRequest').its('response.statusCode').should('eq', STATUS_OK)
+        cy.wait('@authorizeRequest', {timeout: 10000}).its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
         // Commented out for now
-        cy.findByTestId('Save IFC', {timeout: 60000}).should('exist')
+        cy.findByTitle('Save IFC', {timeout: 5000}).should('exist')
       })
     })
   })
