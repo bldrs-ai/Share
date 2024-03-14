@@ -18,4 +18,3 @@ cypress/downloads
 
 #do not check in cypress videos or screenshots
 cypress/videos/*
-cypress/screenshots/*
