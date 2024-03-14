@@ -5,7 +5,8 @@ describe('initial-model-load-and-view', () => {
       cy.get('#viewer-container').get('canvas').should('be.visible')
       const reqSuccessCode = 200
       cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
-      cy.get('[data-model-ready="true"]').should('exist', {timeout: 10000})
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 5000})
+      cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 5000})
     }
 
     beforeEach(() => {
