@@ -2,6 +2,9 @@ import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
 import debug from '../utils/debug'
 
 
+const isThemeEnabled = (process.env.THEME_IS_ENABLED || 'true').toLowerCase() === 'true'
+
+
 /**
  * Data stored in Zustand for UI state.
  *
@@ -22,6 +25,7 @@ export default function createUISlice(set, get) {
     isLoading: false,
     isHelpTooltips: false,
     isAppStoreOpen: false,
+    isThemeEnabled: isThemeEnabled,
     snackMessage: null,
     cutPlanes: [],
     levelInstance: null,
@@ -58,6 +62,7 @@ export default function createUISlice(set, get) {
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setIsNavPanelOpen: (isOpen) => set(() => ({isNavPanelOpen: isOpen})),
     setIsLoading: (isLoading) => set(() => ({isLoading: isLoading})),
+    setIsThemeEnabled: (is) => set(() => ({isThemeEnabled: is})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
     setSnackMessage: (message) => set(() => ({snackMessage: message})),
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),

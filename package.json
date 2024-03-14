@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.953",
+  "version": "1.0.955",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -22,7 +22,7 @@
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
-    "cypress-build": "OPFS_IS_ENABLED=false yarn build",
+    "cypress-build": "OPFS_IS_ENABLED=false THEME_IS_ENABLED=false yarn build",
     "cypress": "cypress run",
     "cypress-spec": "cypress run --spec",
     "cypress-headed": "cypress run --headed --browser chrome --no-exit",
