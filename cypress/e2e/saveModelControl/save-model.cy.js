@@ -159,7 +159,7 @@ describe('save model', () => {
         const reqSuccessCode = 200
         cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
         cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
-        cy.findByTitle('Save IFC', {timeout: 10000}).should('not.exist')
+        cy.findByTitle('Save IFC', {timeout: 5000}).should('not.exist')
         cy.log(`The current port is: ${port}`)
         // Need to figure out why a force is required here on GHA
         cy.get('[title="Users menu"]').click({force: true})
@@ -167,7 +167,7 @@ describe('save model', () => {
         cy.findByTestId('login-with-github').click({force: true})
 
         // Use the alias to ensure the intercept was called
-        cy.wait('@authorizeRequest', {timeout: 10000}).its('response.statusCode').should('eq', STATUS_OK)
+        cy.wait('@authorizeRequest', {timeout: 5000}).its('response.statusCode').should('eq', STATUS_OK)
         cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
         // Commented out for now
         cy.findByTitle('Save IFC', {timeout: 5000}).should('exist')

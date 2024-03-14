@@ -16,5 +16,5 @@ cypress/downloads
 *~
 \#*
 
-#do not check in cypress videos or screenshots
+#do not check in cypress videos
 cypress/videos/*
