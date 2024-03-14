@@ -27,11 +27,7 @@ jobs:
         run: yarn install
 
       - name: Build Project
-<<<<<<< HEAD
-        run: yarn build
-=======
         run: yarn cypress-build
->>>>>>> main
         # Ensure your build script correctly outputs to the ./docs directory
         env:
           NODE_ENV: 'production'
@@ -48,7 +44,3 @@ jobs:
         env:
           # Set any environment variables your build or tests may require
           CI: true
-<<<<<<< HEAD
-          
-=======
->>>>>>> main
