@@ -366,7 +366,7 @@ export default function CadView({
 
     // Our visual testing waits until animations are finished to take screenshot
     // Would like to use zero but doesn't work
-    viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.001
+    // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
     viewer.IFC.context.ifcCamera.cameraControls.addEventListener('rest', () => {
       setIsCameraAtRest(true)
     })
