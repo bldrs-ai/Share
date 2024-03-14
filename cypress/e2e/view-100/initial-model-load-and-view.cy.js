@@ -1,9 +1,7 @@
 describe('initial-model-load-and-view', () => {
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
-    const ANIM_WAIT_TIME_MS = 1000
-
     /** Helper to close About. */
-    function onFirstLoadCloseAbout() {
+    function waitForModel() {
       cy.get('#viewer-container').get('canvas').should('be.visible')
       const reqSuccessCode = 200
       cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
@@ -14,24 +12,22 @@ describe('initial-model-load-and-view', () => {
       cy.clearLocalStorage()
       cy.clearCookies()
       cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
+      // Must call waitForModel after this
     })
 
     it('See model centered in page (cookie isFirstTime: undefined)', () => {
       cy.visit('/')
-      onFirstLoadCloseAbout()
-      // TODO(pablo): model animation takes time to settle
-      // eslint-disable-next-line cypress/no-unnecessary-waiting
-      cy.wait(ANIM_WAIT_TIME_MS)
+      waitForModel()
+      // Close About
+      cy.get('button[aria-label="action-button"]')
+          .click()
       cy.screenshot()
     })
 
     it('See model centered in page (cookie isFirstTime: 1)', () => {
       cy.setCookie('isFirstTime', '1')
       cy.visit('/')
-      onFirstLoadCloseAbout()
-      // TODO(pablo): model animation takes time to settle
-      // eslint-disable-next-line cypress/no-unnecessary-waiting
-      cy.wait(ANIM_WAIT_TIME_MS)
+      waitForModel()
       cy.screenshot()
     })
 

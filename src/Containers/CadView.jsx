@@ -351,7 +351,7 @@ export default function CadView({
       postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
-    setModelReady(true)
+
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
         .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
@@ -360,7 +360,12 @@ export default function CadView({
       viewer.isolator.hideElementsById(previouslyHiddenELements)
     }
 
-    setIsViewerLoaded(true)
+    // Our visual testing waits until animations are finished to take screenshots.
+    viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0
+    viewer.IFC.context.ifcCamera.cameraControls.addEventListener('rest', () => {
+      setIsViewerLoaded(true)
+      setModelReady(true)
+    })
   }
 
 

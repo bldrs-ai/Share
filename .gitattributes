@@ -1,1 +1,2 @@
 *.png diff=imagediff
+# *.png diff=bindiff

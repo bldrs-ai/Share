@@ -34,6 +34,7 @@ const impl = {
       getScene: jest.fn(),
       ifcCamera: {
         cameraControls: {
+          addEventListener: jest.fn(),
           setPosition: jest.fn((x, y, z) => {
             return {}
           }),
