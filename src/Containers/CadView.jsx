@@ -140,6 +140,7 @@ export default function CadView({
   const [alert, setAlert] = useState(null)
   const [isModelLoading, setIsModelLoading] = useState(false)
   const [model, setModel] = useState(null)
+  const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
 
   // Zustand store
   const viewer = useStore((state) => state.viewer)
@@ -351,7 +352,7 @@ export default function CadView({
       postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
-    setModelReady(true)
+
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
         .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
@@ -361,6 +362,14 @@ export default function CadView({
     }
 
     setIsViewerLoaded(true)
+    setModelReady(true)
+
+    // Our visual testing waits until animations are finished to take screenshot
+    // Would like to use zero but doesn't work
+    // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
+    viewer.IFC.context.ifcCamera.cameraControls.addEventListener('rest', () => {
+      setIsCameraAtRest(true)
+    })
   }
 
 
@@ -853,6 +862,7 @@ export default function CadView({
       }}
       data-testid={'cadview-dropzone'}
       data-model-ready={modelReady}
+      data-is-camera-at-rest={isCameraAtRest}
     >
       <Box
         sx={{

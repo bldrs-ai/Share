@@ -1,4 +1,4 @@
-const isOpfsEnabled = (process.env.OPFS_IS_ENABLED || 'false').toLowerCase() === 'true'
+const isOpfsEnabled = (process.env.OPFS_IS_ENABLED || 'true').toLowerCase() === 'true'
 
 
 /**
@@ -12,6 +12,7 @@ export default function createAppSlice(set, get) {
   return {
     appPrefix: null,
     setAppPrefix: (prefix) => set(() => ({appPrefix: prefix})),
+    // Depended on by CadView.  When enabled, null lets detection code set first time.
     isOPFSAvailable: isOpfsEnabled ? null : false,
     setIsOPFSAvailable: (is) => set(() => ({isOPFSAvailable: isOpfsEnabled ? is : false})),
   }

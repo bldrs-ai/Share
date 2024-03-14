@@ -1,6 +1,7 @@
 import {useEffect, useMemo, useState} from 'react'
 import {createTheme} from '@mui/material/styles'
 import * as Preferences from '../privacy/preferences'
+import useStore from '../store/useStore'
 import {getComponentOverrides} from './Components'
 import {day, night} from './Palette'
 
@@ -9,7 +10,8 @@ import {day, night} from './Palette'
  * @return {object} theme
  */
 export default function useShareTheme() {
-  const [mode, setMode] = useState(Preferences.getTheme() || getSystemCurrentLightDark())
+  const isThemeEnabled = useStore((state) => state.isThemeEnabled)
+  const [mode, setMode] = useState(isThemeEnabled ? (Preferences.getTheme() || getSystemCurrentLightDark()) : Themes.Day)
 
   const [themeChangeListeners] = useState({})
 

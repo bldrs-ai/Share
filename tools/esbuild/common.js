@@ -99,12 +99,13 @@ export default {
     // OPFS
     'process.env.OPFS_IS_ENABLED': str(process.env.OPFS_IS_ENABLED || null),
 
-
     // Sentry
     'process.env.SENTRY_DSN': str(process.env.SENTRY_DSN || null),
     'process.env.SENTRY_ENVIRONMENT':
         str(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || null),
 
+    // Theme
+    'process.env.THEME_IS_ENABLED': str(process.env.THEME_IS_ENABLED || null),
   },
   plugins: plugins,
 }
