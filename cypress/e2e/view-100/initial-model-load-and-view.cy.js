@@ -6,12 +6,12 @@ describe('initial-model-load-and-view', () => {
       const reqSuccessCode = 200
       cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
-      cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 1000})
-      // TODO(pablo): ideally we just wait on the above check, but while it
-      // works locally, it doesn't on GHA.
       const animWaitTimeMs = 1000
       // eslint-disable-next-line cypress/no-unnecessary-waiting
       cy.wait(animWaitTimeMs)
+      // TODO(pablo): ideally we just wait on anim rest event from
+      // camera-controls lib, but only seems to work locally.
+      // cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 1000})
     }
 
     beforeEach(() => {
