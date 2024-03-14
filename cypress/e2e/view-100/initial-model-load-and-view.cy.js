@@ -5,8 +5,13 @@ describe('initial-model-load-and-view', () => {
       cy.get('#viewer-container').get('canvas').should('be.visible')
       const reqSuccessCode = 200
       cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
-      cy.get('[data-model-ready="true"]').should('exist', {timeout: 5000})
-      cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 5000})
+      cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
+      cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 1000})
+      // TODO(pablo): ideally we just wait on the above check, but while it
+      // works locally, it doesn't on GHA.
+      const animWaitTimeMs = 1000
+      // eslint-disable-next-line cypress/no-unnecessary-waiting
+      cy.wait(animWaitTimeMs)
     }
 
     beforeEach(() => {
