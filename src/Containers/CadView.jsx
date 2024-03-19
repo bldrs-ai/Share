@@ -401,7 +401,7 @@ export default function CadView({
    * @param {string} gitpath to use for constructing API endpoints
    */
   async function loadIfc(filepath, gitpath) {
-    debug().log(`CadView#loadIfc: `, filepath)
+    debug().log(`CadView#loadIfc filepath(${filepath}): gitpath(${gitpath})`)
     const uploadedFile = pathPrefix.endsWith('new')
 
     if (uploadedFile) {
