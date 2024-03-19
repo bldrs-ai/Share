@@ -30,7 +30,7 @@ jobs:
         run: yarn cypress-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
-          NODE_ENV: 'production'
+          NODE_ENV: 'development'
           AUTH0_DOMAIN: 'https://bldrs.us.auth0.com.msw'
           GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh'
           OAUTH2_CLIENT_ID: 'cypresstestaudience'
