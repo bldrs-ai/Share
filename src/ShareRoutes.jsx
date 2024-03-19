@@ -166,7 +166,7 @@ export function trimToPath(urlStr) {
 const pathParts = [
   '(?<org>[^/]+)',
   '(?<repo>[^/]+)',
-  '(?:(?<isBlob>blob)/)?(?<branch>[^/]+)',
+  '(?:(?<isBlobOrRaw>blob|raw)/)?(?<branch>[^/]+)',
   '(?<file>.+)',
 ]
 
