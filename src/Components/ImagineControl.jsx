@@ -86,7 +86,7 @@ function ImagineDialog({
     setPrompt('')
     setFinalPrompt(null)
     setIsImagineLoading(false)
-    const ss = viewer.context.renderer.newScreenshot()
+    const ss = viewer.takeScreenshot()
     setScreenshot(ss)
     setImage(ss)
   }
@@ -94,7 +94,7 @@ function ImagineDialog({
   useEffect(() => {
     if (viewer) {
       addCameraUrlParams(cameraControls)
-      const ss = viewer.context.renderer.newScreenshot()
+      const ss = viewer.takeScreenshot()
       setScreenshot(ss)
       setImage(ss)
     }

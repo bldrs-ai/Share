@@ -128,7 +128,13 @@ describe('net/github/utils', () => {
         if (pair.out !== undefined) {
           const out = pair.out.replace(/blob\//, '')
           expect(githubUrlOrPathToSharePath(pair.s), `With input ${pair.s}`)
-            .toBe(`/share/v/gh${ out}`)
+            .toBe(`/share/v/gh${out}`)
+
+          // Also swap in 'raw' instead of 'blob'
+          const rawIn = pair.s.replace(/blob/, 'raw')
+          const rawOut = pair.out.replace(/blob\//, '')
+          expect(githubUrlOrPathToSharePath(rawIn), `With input ${rawIn}`)
+            .toBe(`/share/v/gh${rawOut}`)
         } else {
           try {
             githubUrlOrPathToSharePath(pair.s)

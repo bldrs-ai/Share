@@ -1,3 +1,9 @@
+import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
+
+
+const isThemeEnabled = (process.env.THEME_IS_ENABLED || 'true').toLowerCase() === 'true'
+
+
 /**
  * Data stored in Zustand for UI state.
  *
@@ -10,8 +16,24 @@ export default function createUISlice(set, get) {
     alertMessage: null,
     setAlertMessage: (msg) => set(() => ({alertMessage: msg})),
 
-    snackMessage: null,
-    setSnackMessage: (msg) => set(() => ({snackMessage: msg})),
+    appStoreSidebarWidth: MOBILE_WIDTH,
+    setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),
+
+    appStoreSidebarHeight: MOBILE_HEIGHT,
+    setAppStoreSidebarHeight: (height) => set(() => ({appStoreSidebarHeight: height})),
+
+    cutPlanes: [],
+    addCutPlaneDirection: ({direction, offset}) => set((state) => {
+      if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
+        state.cutPlanes.push({direction, offset})
+      }
+      return state.cutPlanes
+    }),
+    removeCutPlaneDirection: (direction) => set((state) => {
+      const filterPlanes = state.cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
+      return {cutPlanes: filterPlanes}
+    }),
+    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
@@ -33,21 +55,16 @@ export default function createUISlice(set, get) {
     isShareVisible: false,
     setIsShareVisible: (isVisible) => set(() => ({isShareVisible: isVisible})),
 
-    cutPlanes: [],
+    isThemeEnabled: isThemeEnabled,
+    setIsThemeEnabled: (is) => set(() => ({isThemeEnabled: is})),
+
     levelInstance: null,
-    viewer: null,
-    addCutPlaneDirection: ({direction, offset}) => set((state) => {
-      if (state.cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) === -1) {
-        state.cutPlanes.push({direction, offset})
-      }
-      return state.cutPlanes
-    }),
-    removeCutPlaneDirection: (direction) => set((state) => {
-      const filterPlanes = state.cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      return {cutPlanes: filterPlanes}
-    }),
-    setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
     setLevelInstance: (planeHeightBottom) => set(() => ({levelInstance: planeHeightBottom})),
+
+    snackMessage: null,
+    setSnackMessage: (msg) => set(() => ({snackMessage: msg})),
+
+    viewer: null,
     setViewer: (newViewer) => set(() => ({viewer: newViewer})),
   }
 }

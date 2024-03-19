@@ -11,5 +11,6 @@ describe('esbuild', () => {
     expect(config.sourcemap).toBe(true)
     expect(config.metafile).toBe(true)
     expect(config.logLevel).toBe('info')
+    expect(config.define['process.env.OPFS_IS_ENABLED']).toBe('null')
   })
 })

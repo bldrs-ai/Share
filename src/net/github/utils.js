@@ -6,7 +6,7 @@ import {pathSuffixSupported} from '../../Filetype'
 const pathParts = [
   '(?<org>[^/]+)',
   '(?<repo>[^/]+)',
-  '(?:(?<isBlob>blob)/)?(?<branch>[^/]+)',
+  '(?:(?<isBlob>blob|raw)/)?(?<branch>[^/]+)',
   '(?<file>.+)',
 ]
 

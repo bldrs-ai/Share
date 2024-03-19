@@ -257,12 +257,19 @@ function githubHandlers() {
       )
     }),
 
+
     rest.get(`${GH_BASE}/repos/:owner/:repo/commits`, (req, res, ctx) => {
       // Directly check req.params for 'failurecaseowner' and 'failurecaserepo'
       if (req.params.owner === 'failurecaseowner' && req.params.repo === 'failurecaserepo') {
         return res(
           ctx.status(httpNotFound),
           ctx.json({sha: 'error'}),
+        )
+        // Handle non existent file request
+      } else if (req.params.owner === 'nonexistentowner' && req.params.repo === 'nonexistentrepo') {
+        return res(
+          ctx.status(httpOk),
+          ctx.json([]),
         )
       }
       // For all other cases, return a success response

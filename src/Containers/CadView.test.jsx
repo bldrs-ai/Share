@@ -201,8 +201,13 @@ describe('CadView', () => {
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setIsOPFSAvailable(false))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
-    render(<ShareMock><CadView installPrefix={''} appPrefix={''} pathPrefix={''}/></ShareMock>)
+    render(
+      <ShareMock>
+        <CadView installPrefix={'/'} appPrefix={''} pathPrefix={''} modelPath={{filepath: '/index.ifc'}}/>
+      </ShareMock>,
+    )
     await actAsyncFlush()
     const setCameraPosMock = viewer.IFC.context.ifcCamera.cameraControls.setPosition
     expect(setCameraPosMock).toHaveBeenLastCalledWith(1, 2, 3, true)

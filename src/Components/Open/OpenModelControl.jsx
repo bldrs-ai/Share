@@ -170,7 +170,7 @@ function OpenModelDialog({
 
          <PleaseLogin/> :
 
-         <Stack>
+         <Stack alignItems='center'>
            <Typography
              variant='overline'
              sx={{marginBottom: '6px'}}

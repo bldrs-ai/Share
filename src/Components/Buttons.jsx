@@ -36,7 +36,7 @@ export function TooltipIconButton({
   color,
   size,
   variant,
-  dataTestId = '',
+  dataTestId,
 }) {
   assertDefined(title, onClick, icon, placement)
   const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible)
@@ -51,17 +51,21 @@ export function TooltipIconButton({
       title={title}
       describeChild
       placement={placement}
-      data-testid={dataTestId || title}
       PopperProps={{style: {zIndex: 0}}}
     >
       <ToggleButton
         selected={selected}
         onClick={onClick}
-        disabled={!enabled}
         value={''}
         size={size}
         color={color}
         variant={variant}
+        disabled={!enabled}
+        data-testid={dataTestId || title}
+        sx={{
+          // TODO(pablo): couldn't figure how to set this in theme
+          opacity: enabled ? '1.0' : '0.35',
+        }}
       >
         {icon}
       </ToggleButton>

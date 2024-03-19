@@ -1,5 +1,4 @@
-import {checkOPFSAvailability} from '../OPFS/utils'
-import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
+const isOpfsEnabled = (process.env.OPFS_IS_ENABLED || 'true').toLowerCase() === 'true'
 
 
 /**
@@ -14,18 +13,13 @@ export default function createAppSlice(set, get) {
     appPrefix: null,
     setAppPrefix: (prefix) => set(() => ({appPrefix: prefix})),
 
-    appStoreSidebarWidth: MOBILE_WIDTH,
-    setAppStoreSidebarWidth: (width) => set(() => ({appStoreSidebarWidth: width})),
-
-    appStoreSidebarHeight: MOBILE_HEIGHT,
-    setAppStoreSidebarHeight: (height) => set(() => ({appStoreSidebarHeight: height})),
-
     isAppStoreOpen: false,
     toggleAppStoreDrawer: () => set((state) => ({isAppStoreOpen: !state.isAppStoreOpen})),
 
-    isOpfsAvailable: checkOPFSAvailability(),
-
     selectedStoreApp: null,
     setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),
+    // Depended on by CadView.  When enabled, null lets detection code set first time.
+    isOPFSAvailable: isOpfsEnabled ? null : false,
+    setIsOPFSAvailable: (is) => set(() => ({isOPFSAvailable: isOpfsEnabled ? is : false})),
   }
 }

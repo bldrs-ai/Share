@@ -34,6 +34,7 @@ const impl = {
       getScene: jest.fn(),
       ifcCamera: {
         cameraControls: {
+          addEventListener: jest.fn(),
           setPosition: jest.fn((x, y, z) => {
             return {}
           }),
@@ -103,9 +104,10 @@ const impl = {
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
-  setSelection: jest.fn(),
   pickIfcItemsByID: jest.fn(),
   preselectElementsByIds: jest.fn(),
+  setSelection: jest.fn(),
+  takeScreenshot: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

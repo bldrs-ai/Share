@@ -79,6 +79,7 @@ export default function CadView({
   // IFCSlice
   const model = useStore((state) => state.model)
   const setIsModelLoading = useStore((state) => state.setIsModelLoading)
+  const isModelReady = useStore((state) => state.isModelReady)
   const setIsModelReady = useStore((state) => state.setIsModelReady)
   const setModel = useStore((state) => state.setModel)
 
@@ -102,6 +103,7 @@ export default function CadView({
   const [isViewerLoaded, setIsViewerLoaded] = useState(false)
   // UI elts
   const theme = useTheme()
+  const [isCameraAtRest, setIsCameraAtRest] = useState(false) // since first callback is when at rest
 
   // Drag and Drop
   // Add a new state for drag over effect
@@ -140,6 +142,11 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
+    if (isOpfsAvailable === null) {
+      debug().warn('Do not have opfs status yet, waiting.')
+      return
+    }
+
     if (viewer === null) {
       debug().warn('CadView#onViewer, viewer is null')
       return
@@ -200,7 +207,6 @@ export default function CadView({
       postProcessor: viewer.postProcessor,
     })
     selectElementBasedOnFilepath(pathToLoad)
-    setIsModelReady(true)
     // maintain hidden elements if any
     const previouslyHiddenELements = Object.entries(useStore.getState().hiddenElements)
         .filter(([key, value]) => value === true).map(([key, value]) => Number(key))
@@ -210,6 +216,14 @@ export default function CadView({
     }
 
     setIsViewerLoaded(true)
+    setIsModelReady(true)
+
+    // Our visual testing waits until animations are finished to take screenshot
+    // Would like to use zero but doesn't work
+    // viewer.IFC.context.ifcCamera.cameraControls.restThreshold = 0.1
+    viewer.IFC.context.ifcCamera.cameraControls.addEventListener('rest', () => {
+      setIsCameraAtRest(true)
+    })
   }
 
 
@@ -630,14 +644,6 @@ export default function CadView({
     }
   }
 
-  // TODO(pablo): again, just need branch here for VersionsPanel
-  // below.  It's probably already available in this scope.
-  let ghPath = location.pathname
-  if (ghPath.startsWith(`${appPrefix}/v/gh`)) {
-    ghPath = ghPath.substring(`${appPrefix}/v/gh`.length)
-  }
-  const {branch} = parseGitHubPath(ghPath)
-
 
   // Begin useEffect //
   useEffect(() => {
@@ -761,7 +767,11 @@ export default function CadView({
   // from expanding
   return (
     <Box sx={{...absTop, left: 0, width: '100%', height: '100%', m: 0, p: 0}}>
-      {<ViewerContainer/>}
+      {<ViewerContainer
+         data-testid={'cadview-dropzone'}
+         data-model-ready={isModelReady}
+         data-is-camera-at-rest={isCameraAtRest}
+       />}
       <Box sx={{...absBtm, left: 0}}><AboutControl/></Box>
       <Box sx={{...absBtm, right: 0}}><HelpControl/></Box>
       {viewer && (
@@ -769,7 +779,7 @@ export default function CadView({
           <ControlsGroupAndDrawer
             deselectItems={deselectItems}
             pathPrefix={pathPrefix}
-            branch={branch}
+            branch={modelPath.branch}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
           />
 

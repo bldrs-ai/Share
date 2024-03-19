@@ -293,7 +293,8 @@ export function getAllHashParams(url) {
  * @return {object} owner, repo, branch, filePath, commitHash
  */
 export function parseGitHubPath(path) {
-  const parts = path.split('/').filter((component) => component.length > 0)
+  const decodedPath = decodeURIComponent(path)
+  const parts = decodedPath.split('/').filter((component) => component.length > 0)
   let owner = null
   let repo = null
   let branch = null
