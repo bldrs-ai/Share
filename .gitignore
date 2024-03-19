@@ -15,3 +15,6 @@ cypress/downloads
 *.log
 *~
 \#*
+
+#do not check in cypress videos
+cypress/videos/*

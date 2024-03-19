@@ -54,6 +54,10 @@ if (isWebIfcShimEnabled) {
   log('Using original Web-Ifc backend')
 }
 
+if (process.env.GH_BASE_URL) {
+  process.env.GITHUB_BASE_URL = process.env.GH_BASE_URL
+}
+
 
 // esbuild defines require string values. JSON.stringify includes
 // quotes, e.g. '"true"', but esbuild seems ok with that.
@@ -81,9 +85,9 @@ export default {
         str((process.env.NODE_ENV || 'development') === 'production'),
 
     // Auth
-    'process.env.OAUTH2_CLIENT_ID': str(process.env.OAUTH2_CLIENT_ID || null),
+    'process.env.OAUTH2_CLIENT_ID': str(process.env.OAUTH2_CLIENT_ID || 'cypresstestaudience'),
     'process.env.OAUTH2_REDIRECT_URI': str(process.env.OAUTH2_REDIRECT_URI || null),
-    'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || null),
+    'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || 'https://bldrs.us.auth0.com.msw'),
 
     // GitHub
     'process.env.RAW_GIT_PROXY_URL':

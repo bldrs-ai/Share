@@ -56,7 +56,11 @@ export default function ControlsGroup({navigate, isRepoActive}) {
           }
         }}
       />
-      {isAuthenticated && <SaveModelControl navigate={navigate}/> }
+      {isAuthenticated &&
+      <SaveModelControl navigate={navigate}
+        data-testid='savemodelcontrol'
+      />
+      }
 
       {isRepoActive &&
         <TooltipIconButton

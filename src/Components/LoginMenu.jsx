@@ -24,7 +24,7 @@ export default function LoginMenu() {
   const open = Boolean(anchorEl)
   const theme = useTheme()
   const {isAuthenticated, user, logout} = useAuth0()
-  const {loginWithPopup} = useAuth0()
+  const {loginWithPopup, loginWithRedirect} = useAuth0()
   const IsDrawerOpen = useStore((state) => state.isDrawerOpen)
   const isMobile = useIsMobile()
 
@@ -37,11 +37,22 @@ export default function LoginMenu() {
   }
 
   const handleLogin = async () => {
-    await loginWithPopup({
-      appState: {
-        returnTo: window.location.pathname,
-      },
-    })
+    // eslint-disable-next-line no-constant-condition
+    if (false) {
+      // console.log('loginWithRedirect')
+      await loginWithRedirect({
+        appState: {
+          returnTo: window.location.pathname,
+        },
+      })
+    } else {
+      // console.log('loginWithPopup')
+      await loginWithPopup({
+        appState: {
+          returnTo: window.location.pathname,
+        },
+      })
+    }
   }
 
   const handleLogout = () => {
@@ -87,9 +98,9 @@ export default function LoginMenu() {
           },
         }}
       >
-        <MenuItem onClick={
-          isAuthenticated ? () => handleLogout() :
-          () => handleLogin()}
+        <MenuItem
+          onClick={isAuthenticated ? handleLogout : handleLogin}
+          data-testid="login-with-github"
         >
           <GitHubIcon/>
           {isAuthenticated ?

@@ -22,6 +22,7 @@ const httpNotFound = 404
  */
 export function initHandlers() {
   const handlers = []
+  handlers.push(...auth0Handlers())
   handlers.push(...githubHandlers())
   handlers.push(...gaHandlers())
   return handlers
@@ -44,6 +45,53 @@ function gaHandlers() {
   ]
 }
 
+/**
+ *
+ * @return {Array} list of auth0 handlers
+ */
+function auth0Handlers() {
+  return [
+    // Mock for Auth0 Logout URL with a redirect response
+    rest.get(
+        'https://bldrs.us.auth0.com/v2/logout',
+        (req, res, ctx) => {
+          const clientId = req.url.searchParams.get('client_id')
+          const auth0Client = req.url.searchParams.get('auth0Client')
+          const HTTP_BAD_REQUEST = 400
+          // Check for required query parameters
+          if (!clientId || !auth0Client) {
+            return res(
+                ctx.status(HTTP_BAD_REQUEST),
+                ctx.json({error: 'Missing parameters'}),
+            )
+          }
+
+          const HTTP_REDIRECT = 302
+          // Return a 302 Found response with a Location header for the redirect
+          return res(
+              ctx.status(HTTP_REDIRECT), // Use 302 Found status code for redirection
+              ctx.set('Location', 'https://bldrs.ai/share'), // Set the Location header to the URL where the client should be redirected
+              ctx.set('CF-Ray', '8581a053c8ce3b77-IAD'),
+              ctx.set('CF-Cache-Status', 'DYNAMIC'),
+              ctx.set('Cache-Control', 'no-store, max-age=0, no-transform'),
+              ctx.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains'),
+              ctx.set('Vary', 'Accept, Accept-Encoding'),
+              ctx.set('Pragma', 'no-cache'),
+              ctx.set('X-Auth0-RequestId', 'e623ebb9c257099ed80f'),
+              ctx.set('X-Content-Type-Options', 'nosniff'),
+              ctx.set('X-RateLimit-Limit', '100'),
+              ctx.set('X-RateLimit-Remaining', '99'),
+              ctx.set('X-RateLimit-Reset', '1708378387'),
+              ctx.set('Server', 'cloudflare'),
+              ctx.set('alt-svc', 'h3=":443"; ma=86400'),
+              // The body can be a simple message or HTML content for browsers to display before redirecting
+              ctx.text('<p>Found. Redirecting to <a href="https://bldrs.ai/share">https://bldrs.ai/share</a></p>'),
+          )
+        },
+    ),
+  ]
+}
+
 
 /**
  * Static stubs GitHub orgs, repos, issues.
@@ -51,19 +99,41 @@ function gaHandlers() {
  * @return {Array<object>} handlers
  */
 function githubHandlers() {
-  return [
-    rest.get('https://api.github.com/repos/:org/:repo/issues', (req, res, ctx) => {
-      const {org, repo} = req.params
+  const issuesHandler = (req, res, ctx) => {
+    const {org, repo} = req.params
 
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
-        return res(ctx.status(httpNotFound))
-      }
+    if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
+      return res(ctx.status(httpNotFound))
+    }
 
+    return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_ISSUES.data),
+    )
+  }
+
+  const orgsHandler = (req, res, ctx) => {
+    const authHeader = req.headers.get('authorization')
+
+    if (!authHeader) {
       return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_ISSUES.data),
+          ctx.status(httpAuthorizationRequired),
+          ctx.json({
+            message: 'Requires authentication',
+            documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
+          }),
       )
-    }),
+    }
+
+    return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_ORGANIZATIONS.data),
+    )
+  }
+
+  return [
+    rest.get('https://api.github.com/repos/:org/:repo/issues', issuesHandler),
+    rest.get('https://git.bldrs.dev.msw/p/gh/repos/:org/:repo/issues', issuesHandler),
 
     rest.get('https://api.github.com/repos/:org/:repo/issues/:issueNumber/comments', (req, res, ctx) => {
       const {org, repo, issueNumber} = req.params
@@ -213,24 +283,8 @@ function githubHandlers() {
       )
     }),
 
-    rest.get('https://api.github.com/user/orgs', (req, res, ctx) => {
-      const authHeader = req.headers.get('authorization')
-
-      if (!authHeader) {
-        return res(
-            ctx.status(httpAuthorizationRequired),
-            ctx.json({
-              message: 'Requires authentication',
-              documentation_url: 'https://docs.github.com/rest/reference/orgs#list-organizations-for-the-authenticated-user',
-            }),
-        )
-      }
-
-      return res(
-          ctx.status(httpOk),
-          ctx.json(MOCK_ORGANIZATIONS.data),
-      )
-    }),
+    rest.get('https://api.github.com/user/orgs', orgsHandler),
+    rest.get('https://git.bldrs.dev.msw/p/gh/user/orgs', orgsHandler),
 
     rest.get('https://api.github.com/orgs/bldrs-ai/repos', (req, res, ctx) => {
       return res(

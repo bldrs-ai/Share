@@ -30,10 +30,10 @@ jobs:
         run: yarn cypress-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
-          NODE_ENV: 'production'
-          AUTH0_DOMAIN: 'bldrs.us.auth0.com.msw'
+          NODE_ENV: 'development'
+          AUTH0_DOMAIN: 'https://bldrs.us.auth0.com.msw'
           GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh'
-          OAUTH2_CLIENT_ID: 'msw'
+          OAUTH2_CLIENT_ID: 'cypresstestaudience'
           OPFS_IS_ENABLED: 'false'
           RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
 
@@ -44,3 +44,19 @@ jobs:
         env:
           # Set any environment variables your build or tests may require
           CI: true
+
+      - name: Upload Cypress Screenshots
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: warn
+
+      - name: Upload Cypress Videos
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-videos
+          path: cypress/videos
+          if-no-files-found: warn
