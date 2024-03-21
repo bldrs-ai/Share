@@ -1,6 +1,5 @@
 import React, {ReactElement} from 'react'
 import {Helmet} from 'react-helmet-async'
-import Box from '@mui/material/Box'
 import Link from '@mui/material/Link'
 import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
@@ -51,75 +50,58 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
 /** @return {ReactElement} */
 function AboutContent() {
   return (
-    <Box sx={{paddingBottom: '10px'}}>
+    <>
       <Helmet>
         <title>About — Bldrs.ai</title>
       </Helmet>
       <Stack
         spacing={3}
-        direction="column"
-        justifyContent="center"
-        alignItems="center"
+        direction='column'
+        justifyContent='center'
+        alignItems='center'
       >
-        <Stack spacing={2} direction={'row'}>
+        <Stack spacing={2} direction='row'>
           <TooltipIconButton
-            title={'Discord'}
-            onClick={
-              () => {
-                window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')
-              }
-            }
+            title='Discord'
+            onClick={() => window.open(`https://discord.gg/9SxguBkFfQ`, '_blank')}
             icon={<DiscordIcon className='icon-share' style={{width: '50px'}}/>}
-            placement={'bottom'}
+            placement='bottom'
             variant='noBackground'
           />
           <TooltipIconButton
-            title={'Twitter'}
-            onClick={
-              () => {
-                window.open(`https://twitter.com/bldrs_ai`, '_blank')
-              }
-            }
+            title='Twitter'
+            onClick={() => window.open(`https://twitter.com/bldrs_ai`, '_blank')}
             icon={<TwitterIcon className='icon-share'/>}
-            placement={'bottom'}
+            placement='bottom'
             variant='noBackground'
           />
           <TooltipIconButton
-            title={'LinkedIn'}
-            onClick={
-              () => {
-                window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')
-              }
-            }
+            title='LinkedIn'
+            onClick={() => window.open(`https://www.linkedin.com/company/bldrs-ai/`, '_blank')}
             icon={<LinkedInIcon className='icon-share'/>}
-            placement={'bottom'}
+            placement='bottom'
             variant='noBackground'
           />
           <TooltipIconButton
-            title={'GitHub'}
-            onClick={
-              () => {
-                window.open(`https://github.com/bldrs-ai/Share`, '_blank')
-              }
-            }
+            title='GitHub'
+            onClick={() => window.open(`https://github.com/bldrs-ai/Share`, '_blank')}
             icon={<GitHubIcon className='icon-share'/>}
-            placement={'bottom'}
+            placement='bottom'
             variant='noBackground'
           />
-
         </Stack>
-        <Box sx={{padding: '0px 10px', textAlign: 'left'}} elevation={0}>
-          <Typography variant={'body1'}>
+        <Stack align='left'>
+          <Typography variant='body1'>
             Upload your IFC model, position the camera, select elements,
             crop the model using section planes and add notes; then share
             the exact view using the generated link. Everyone has access
             to the same context in model space.
           </Typography>
-          <Typography variant={'body1'}>
+          <Typography variant='body1'>
             &nbsp;<br/>
             And try the magic wand!
           </Typography>
-        </Box>
+        </Stack>
       </Stack>
-    </Box>)
+    </>)
 }

@@ -3,8 +3,11 @@ describe('initial-model-load-and-view', () => {
     /** Helper to close About. */
     function waitForModel() {
       cy.get('#viewer-container').get('canvas').should('be.visible')
-      const reqSuccessCode = 200
-      cy.wait('@loadModel').its('response.statusCode').should('eq', reqSuccessCode)
+      const HTTP_OK = 200
+      const HTTP_NOT_MODIFIED = 304 // ie it's cached
+      cy.wait('@loadModel').its('response.statusCode').should((statusCode) => {
+        expect([HTTP_OK, HTTP_NOT_MODIFIED]).to.include(statusCode)
+      })
       cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
       const animWaitTimeMs = 1000
       // eslint-disable-next-line cypress/no-unnecessary-waiting
@@ -17,17 +20,9 @@ describe('initial-model-load-and-view', () => {
     beforeEach(() => {
       cy.clearLocalStorage()
       cy.clearCookies()
-      cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
       // Must call waitForModel after this
-    })
-
-    it('See model centered in page (cookie isFirstTime: undefined)', () => {
-      cy.visit('/')
-      waitForModel()
-      // Close About
-      cy.get('button[aria-label="action-button"]')
-          .click()
-      cy.screenshot()
+      cy.intercept('GET', '/index.ifc').as('loadModel')
+      cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
     })
 
     it('See model centered in page (cookie isFirstTime: 1)', () => {
@@ -37,8 +32,25 @@ describe('initial-model-load-and-view', () => {
       cy.screenshot()
     })
 
-    it.skip('Title should contain function followed by location path', () => {
-      cy.title().should('eq', '<Function> - <Model>/<Repo>/<Org>')
+    it.only('See model centered in page (cookie isFirstTime: undefined)', () => {
+      cy.visit('/')
+      waitForModel()
+      // Close About
+      cy.get('button[aria-label="action-button"]')
+          .click()
+      cy.screenshot()
+    })
+
+    it('Visit about permalink', () => {
+      cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:')
+      waitForModel()
+      cy.screenshot()
+    })
+
+    it('Title should contain model followed by repo and org', () => {
+      cy.visit('/')
+      waitForModel()
+      cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
     })
   })
 })

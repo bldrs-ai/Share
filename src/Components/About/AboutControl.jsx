@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import * as FirstTime from '../../privacy/firstTime'
+import {isFirst, setVisited} from '../../privacy/firstTime'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import {LogoB} from '../Logo/Logo'
@@ -8,29 +8,29 @@ import PkgJson from '../../../package.json'
 
 
 /**
- * Button to toggle About panel on and off
+ * Button to toggle About panel on and off.  Default state is open until
+ * firstTime cookie is set, then closed.
  *
  * @return {ReactElement}
  */
 export default function AboutControl() {
   const isAboutVisible = useStore((state) => state.isAboutVisible)
   const setIsAboutVisible = useStore((state) => state.setIsAboutVisible)
-
   return (
     <ControlButtonWithHashState
       title={`Bldrs: ${PkgJson.version}`}
       icon={<LogoB/>}
-      isDialogDisplayed={isAboutVisible}
+      isDialogDisplayed={isFirst() || isAboutVisible}
       setIsDialogDisplayed={setIsAboutVisible}
       hashPrefix={ABOUT_PREFIX}
       placement='right'
     >
       <AboutDialog
-        isDialogDisplayed={isAboutVisible}
+        isDialogDisplayed={isFirst() || isAboutVisible}
         setIsDialogDisplayed={setIsAboutVisible}
         onClose={() => {
           setIsAboutVisible(false)
-          FirstTime.setVisited()
+          setVisited()
         }}
       />
     </ControlButtonWithHashState>

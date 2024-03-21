@@ -1,64 +1,17 @@
-import copyStaticFiles from 'esbuild-copy-static-files'
-import progress from 'esbuild-plugin-progress'
-import svgrPlugin from 'esbuild-plugin-svgr'
-import {fileURLToPath} from 'url'
 import * as path from 'node:path'
 import * as process from 'node:process'
+import {fileURLToPath} from 'url'
+import defines from './defines.js'
+import makePlugins from './plugins.js'
+import {log} from './utils.js'
 
 
-const __filename = fileURLToPath(import.meta.url)
-const __root = path.resolve(__filename, '../../../')
-const indexFile = path.resolve(__root, 'src', 'index.jsx')
-const assetsDir = path.resolve(__root, 'public')
-const buildDir = path.resolve(__root, 'docs')
+const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../../../')
+const indexFile = path.resolve(repoRoot, 'src', 'index.jsx')
+const buildDir = path.resolve(repoRoot, 'docs')
+const plugins = makePlugins(repoRoot, buildDir)
 
-
-const webIfcShimAliasPlugin = {
-  name: 'webIfcShimAlias',
-  setup(build) {
-    build.onResolve({filter: /^web-ifc$/}, (args) => {
-      return {
-        path: path.resolve(__root, 'node_modules/@bldrs-ai/conway/compiled/src/shim/ifc_api.js'),
-      }
-    })
-  },
-}
-
-// Initialize plugins array
-const plugins = [
-  progress(),
-  svgrPlugin({plugins: ['@svgr/plugin-jsx'], dimensions: false}),
-  copyStaticFiles({
-    src: assetsDir,
-    dest: buildDir,
-  }),
-]
-
-
-/** Wrapper for logging to allow disable from `jest test-tools`. */
-function log(msg) {
-  if (process.env.NO_LOG === 'true') {
-    return
-  }
-  // eslint-disable-next-line no-console
-  console.log(msg)
-}
-
-
-const isWebIfcShimEnabled = process.env.USE_WEBIFC_SHIM === 'true'
-// Conditionally include webIfcShimAliasPlugin
-if (isWebIfcShimEnabled) {
-  plugins.push(webIfcShimAliasPlugin)
-  log('Using Conway shim backend')
-} else {
-  log('Using original Web-Ifc backend')
-}
-
-
-// esbuild defines require string values. JSON.stringify includes
-// quotes, e.g. '"true"', but esbuild seems ok with that.
-const str = JSON.stringify
-
+log('using config\n', defines)
 
 // The build config
 export default {
@@ -74,32 +27,6 @@ export default {
   metafile: true,
   sourcemap: true,
   logLevel: 'info',
-  define: {
-    'process.env.USE_WEBIFC_SHIM': str(isWebIfcShimEnabled),
-
-    'process.env.DISABLE_MOCK_SERVICE_WORKER':
-        str((process.env.NODE_ENV || 'development') === 'production'),
-
-    // Auth
-    'process.env.OAUTH2_CLIENT_ID': str(process.env.OAUTH2_CLIENT_ID || null),
-    'process.env.OAUTH2_REDIRECT_URI': str(process.env.OAUTH2_REDIRECT_URI || null),
-    'process.env.AUTH0_DOMAIN': str(process.env.AUTH0_DOMAIN || null),
-
-    // GitHub
-    'process.env.RAW_GIT_PROXY_URL': str(process.env.RAW_GIT_PROXY_URL || null),
-    'process.env.GITHUB_API_TOKEN': str(process.env.GITHUB_API_TOKEN || null),
-    'process.env.GITHUB_BASE_URL': str(process.env.GITHUB_BASE_URL || null),
-
-    // OPFS
-    'process.env.OPFS_IS_ENABLED': str(process.env.OPFS_IS_ENABLED || null),
-
-    // Sentry
-    'process.env.SENTRY_DSN': str(process.env.SENTRY_DSN || null),
-    'process.env.SENTRY_ENVIRONMENT':
-        str(process.env.SENTRY_ENVIRONMENT || process.env.NODE_ENV || null),
-
-    // Theme
-    'process.env.THEME_IS_ENABLED': str(process.env.THEME_IS_ENABLED || null),
-  },
+  define: defines,
   plugins: plugins,
 }

@@ -36,13 +36,13 @@ export function createProxyServer(host, port) {
 }
 
 
+const HTTP_FOUND = 200
 const HTTP_NOT_FOUND = 404
 
-/**
- * We interpret any 404 as a potential react-router bounce
- */
+
+/** Serve a 200 bounce page for missing resources. */
 const serveNotFound = ((res) => {
-  res.writeHead(HTTP_NOT_FOUND, {'Content-Type': 'text/html'})
+  res.writeHead(HTTP_FOUND, {'Content-Type': 'text/html'})
   res.end(`<!DOCTYPE html>
 <html>
   <head>

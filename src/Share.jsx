@@ -30,6 +30,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
   const [file, setFile] = useState(null)
 
@@ -81,7 +82,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   return (
     modelPath &&
     <FileContext.Provider value={{file, setFile}}>
-      <ModelTitle modelPath={modelPath}/>
+      <ModelTitle repository={repository} modelPath={modelPath}/>
       <CssBaseline enableColorScheme>
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
@@ -98,11 +99,11 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 
 
 /** @return {ReactElement} */
-function ModelTitle({modelPath}) {
+function ModelTitle({repository, modelPath}) {
   const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
   return (
     <Helmet>
-      <title>Model: {modelName}</title>
+      <title>{modelName} - {repository.name}/{repository.orgName}</title>
     </Helmet>
   )
 }
