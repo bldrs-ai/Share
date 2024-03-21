@@ -1,4 +1,4 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Stack from '@mui/material/Stack'
@@ -6,8 +6,6 @@ import ControlsGroup from '../Components/ControlsGroup'
 import {useWindowDimensions} from '../Components/Hooks'
 import NavTreePanel from '../Components/NavTree/NavTreePanel'
 import SearchBar from '../Components/Search/SearchBar'
-// TODO(pablo): make left side drawer
-// import SideDrawer from '../Components/SideDrawer/SideDrawer'
 import VersionsPanel from '../Components/Versions/VersionsPanel'
 import useStore from '../store/useStore'
 
@@ -32,8 +30,11 @@ export default function ControlsGroupAndDrawer({
   // Slices from Controls
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
   const isNavTreeVisible = useStore((state) => state.isNavTreeVisible)
+  const setIsNavTreeVisible = useStore((state) => state.setIsNavTreeVisible)
+
   const isVersionsEnabled = useStore((state) => state.isVersionsEnabled)
   const isVersionsVisible = useStore((state) => state.isVersionsVisible)
+  const setIsVersionsVisible = useStore((state) => state.setIsVersionsVisible)
 
   // SearchSlice
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
@@ -47,6 +48,21 @@ export default function ControlsGroupAndDrawer({
   const searchAndNavWidthPx =
     windowDimensions.width - (operationsGroupWidthPx + spacingBetweenSearchAndOpsGroupPx)
   const searchAndNavMaxWidthPx = 300
+
+
+  useEffect(() => {
+    if (isNavTreeVisible && isVersionsVisible) {
+      setIsVersionsVisible(false)
+    }
+  }, [isNavTreeVisible, isVersionsVisible, setIsVersionsVisible])
+
+
+  useEffect(() => {
+    if (isNavTreeVisible && isVersionsVisible) {
+      setIsNavTreeVisible(false)
+    }
+  }, [isNavTreeVisible, isVersionsVisible, setIsNavTreeVisible])
+
 
   return (
     <Stack
