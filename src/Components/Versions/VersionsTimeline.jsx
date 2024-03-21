@@ -1,64 +1,94 @@
-/* eslint-disable no-magic-numbers */
-import React, {useState, useEffect} from 'react'
-import Paper from '@mui/material/Paper'
-import Stack from '@mui/material/Stack'
+import React, {ReactElement, useState, useEffect} from 'react'
 import Timeline from '@mui/lab/Timeline'
+import TimelineDot from '@mui/lab/TimelineDot'
 import TimelineItem from '@mui/lab/TimelineItem'
-import TimelineSeparator from '@mui/lab/TimelineSeparator'
 import TimelineConnector from '@mui/lab/TimelineConnector'
 import TimelineContent from '@mui/lab/TimelineContent'
+import TimelineSeparator from '@mui/lab/TimelineSeparator'
 import TimelineOppositeContent from '@mui/lab/TimelineOppositeContent'
-import TimelineDot from '@mui/lab/TimelineDot'
+import Paper from '@mui/material/Paper'
+import Stack from '@mui/material/Stack'
 import Typography from '@mui/material/Typography'
+import useTheme from '@mui/styles/useTheme'
 import {styled} from '@mui/system'
 import Loader from '../Loader'
 import NoContent from '../NoContent'
 import CommitIcon from '@mui/icons-material/Commit'
-import ControlPointIcon from '@mui/icons-material/ControlPoint'
 
 
 /**
- * CustomTimelineItem is a styled version of MUI's TimelineItem component
- * with specific styles applied when the MuiTimelineItem-missingOppositeContent
- * class is present.
+ * VersionsTimeline displays a series of versions in a timeline format.
+ * Each version corresponds to a commit, and this component fetches
+ * commit data for the provided branch and displays it.
+ *
+ * @property {Array<object>} commitData An array of commits
+ * @property {string} currentRef To indicate as active in the UI
+ * @property {Function} commitNavigateCb A callback function to navigate to a specific commit
+ * @return {ReactElement}
  */
-const CustomTimelineItem = styled(TimelineItem)(({theme}) => ({
-  '&.MuiTimelineItem-missingOppositeContent': {
-    '&::before': {
-      padding: 0,
-    },
-    '& .MuiTimelineOppositeContent-root': {
-      textAlign: 'left',
-    },
-  },
-}))
+export default function VersionsTimeline({commitData, currentRef, commitNavigateCb}) {
+  const [showLoginMessage, setShowLoginMessage] = useState(false)
+
+  const timeoutMillis = 4000
+  useEffect(() => {
+    // Set a timeout to display the login message after 4 seconds if commitData is still empty
+    const timer = setTimeout(() => {
+      if (commitData.length === 0) {
+        setShowLoginMessage(true)
+      }
+    }, timeoutMillis)
+    // Clear the timeout if commitData is populated or the component unmounts
+    return () => clearTimeout(timer)
+  }, [commitData])
+
+  const shaLength = 40
+  const refIsSha = currentRef.length === shaLength
+  return (
+    <Timeline>
+      {commitData.length === 0 && !showLoginMessage && <Loader/>}
+      {showLoginMessage && (
+        <NoContent message='Please log into GitHub to use the project timeline'/>)}
+      {commitData.map((commit, i) => (
+        <CustomTimelineItem key={i} onClick={() => commitNavigateCb(i)}>
+          <TimelineInfo
+            commit={commit}
+            active={
+              (refIsSha && commit.sha === currentRef) ?
+                true :
+                (!refIsSha && i === 0)
+            }
+          />
+        </CustomTimelineItem>
+      ))}
+    </Timeline>
+  )
+}
 
 
 /**
  * TimelineInfo displays detailed information related to a version on the timeline.
  *
- * @param {object} version - The version data to be displayed.
- * @param {boolean} active - Indicates if the current item is active.
- * @return {object} A component that displays version details.
+ * @property {object} version The version data to be displayed
+ * @property {boolean} active Indicates if the current item is active
+ * @return {ReactElement}
  */
 function TimelineInfo({commit, active}) {
+  const theme = useTheme()
+  const dotColor = active ?
+      theme.palette.secondary.active :
+      theme.palette.secondary.main
   return (
     <>
       <TimelineSeparator>
         <TimelineConnector/>
-        <TimelineDot color={active ? 'primary' : 'inherit'} data-testid='commit'>
-          {(commit.commitMessage.includes('Create') ||
-            commit.commitMessage.includes('Add') ||
-            commit.commitMessage.includes('Merge')) ?
-            <ControlPointIcon/> :
-            <CommitIcon sx={{transform: 'rotate(90deg)'}}/>
-          }
+        <TimelineDot sx={{bgcolor: dotColor}} data-testid='commit'>
+          <CommitIcon sx={{transform: active ? 'none' : 'rotate(90deg)'}}/>
         </TimelineDot>
         <TimelineConnector/>
       </TimelineSeparator>
       <TimelineOppositeContent
         sx={{padding: '10px 0px 10px 10px'}}
-        color={active ? 'text.primary' : 'text.secondary'}
+        color={active ? 'text.secondary' : 'inherit'}
       >
         <Paper
           elevation={active ? 4 : 1}
@@ -108,50 +138,19 @@ function TimelineInfo({commit, active}) {
   )
 }
 
+
 /**
- * VersionsTimeline displays a series of versions in a timeline format.
- * Each version corresponds to a commit, and this component fetches
- * commit data for the provided branch and displays it.
- *
- * @param {Array} commitData An array of commits
- * @param {string} currentRef To indicate as active in the UI
- * @param {Function} commitNavigateCb A callback function to navigate to a specific commit
- * @return {object} A timeline of versions
+ * CustomTimelineItem is a styled version of MUI's TimelineItem component
+ * with specific styles applied when the MuiTimelineItem-missingOppositeContent
+ * class is present.
  */
-export default function VersionsTimeline({commitData, currentRef, commitNavigateCb}) {
-  const [showLoginMessage, setShowLoginMessage] = useState(false)
-
-  useEffect(() => {
-    // Set a timeout to display the login message after 4 seconds if commitData is still empty
-    const timer = setTimeout(() => {
-      if (commitData.length === 0) {
-        setShowLoginMessage(true)
-      }
-    }, 4000)
-    // Clear the timeout if commitData is populated or the component unmounts
-    return () => clearTimeout(timer)
-  }, [commitData])
-
-  const shaLength = 40
-  const refIsSha = currentRef.length === shaLength
-  return (
-    <Timeline>
-      {commitData.length === 0 && !showLoginMessage && <Loader/>}
-      {showLoginMessage && (
-        <NoContent message='Please log in using your GitHub account to get access to the project timeline'/>
-      )}
-      {commitData.map((commit, i) => (
-        <CustomTimelineItem key={i} onClick={() => commitNavigateCb(i)}>
-          <TimelineInfo
-            commit={commit}
-            active={
-              (refIsSha && commit.sha === currentRef) ?
-                true :
-                (!refIsSha && i === 0)
-            }
-          />
-        </CustomTimelineItem>
-      ))}
-    </Timeline>
-  )
-}
+const CustomTimelineItem = styled(TimelineItem)(({theme}) => ({
+  '&.MuiTimelineItem-missingOppositeContent': {
+    '&::before': {
+      padding: 0,
+    },
+    '& .MuiTimelineOppositeContent-root': {
+      textAlign: 'left',
+    },
+  },
+}))

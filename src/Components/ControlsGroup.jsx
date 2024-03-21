@@ -1,80 +1,35 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import ButtonGroup from '@mui/material/ButtonGroup'
+import NavTreeControl from './NavTree/NavTreeControl'
+import OpenModelControl from './Open/OpenModelControl'
+import SaveModelControl from './Open/SaveModelControl'
+import SearchControl from '../Components/Search/SearchControl'
+import VersionsControl from './Versions/VersionsControl'
 import useStore from '../store/useStore'
-import {TooltipIconButton} from './Buttons'
-import OpenModelControl from './OpenModelControl'
-import SaveModelControl from './SaveModelControl'
-import HistoryIcon from '@mui/icons-material/History'
-import SearchIcon from '@mui/icons-material/Search'
-import TreeIcon from '../assets/icons/Tree.svg'
 
 
 /**
- * @property {Function} navigate Callback from CadView to change page url
+ * Contains OpenModelControl, Navigate, Versions and Save
+ *
  * @property {Function} isRepoActive deselects currently selected element
- * @return {React.Component}
+ * @return {ReactElement}
  */
-export default function ControlsGroup({navigate, isRepoActive}) {
+export default function ControlsGroup({isRepoActive}) {
+  const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
+  const isOpenEnabled = useStore((state) => state.isOpenEnabled)
+  const isSearchEnabled = useStore((state) => state.isSearchEnabled)
   const {isAuthenticated} = useAuth0()
-  const isNavigationVisible = useStore((state) => state.isNavigationVisible)
-  const toggleIsNavigationVisible = useStore((state) => state.toggleIsNavigationVisible)
-  const isSearchVisible = useStore((state) => state.isSearchVisible)
-  const toggleIsSearchVisible = useStore((state) => state.toggleIsSearchVisible)
-  const isVersionHistoryVisible = useStore((state) => state.isVersionHistoryVisible)
-  const toggleIsVersionHistoryVisible = useStore((state) => state.toggleIsVersionHistoryVisible)
-
-
   return (
-    <ButtonGroup
-      orientation='horizontal'
-      variant='contained'
-      sx={{'& > *:not(:last-of-type)': {mr: .6}}}
-    >
-      <OpenModelControl navigate={navigate}/>
-      <TooltipIconButton
-        title='Search'
-        icon={<SearchIcon className='icon-share' color='secondary'/>}
-        placement='bottom'
-        aboutInfo={false}
-        selected={isSearchVisible}
-        onClick={toggleIsSearchVisible}
-      />
-      <TooltipIconButton
-        title='Navigation'
-        icon={<TreeIcon className='icon-share' color='secondary' style={{width: '17px', height: '17px'}}/>}
-        placement='bottom'
-        dataTestId='Navigation'
-        aboutInfo={false}
-        selected={isNavigationVisible}
-        onClick={() => {
-          if (isVersionHistoryVisible) {
-            toggleIsVersionHistoryVisible()
-            toggleIsNavigationVisible()
-          } else {
-            toggleIsNavigationVisible()
-          }
-        }}
-      />
-      {isAuthenticated && <SaveModelControl navigate={navigate}/> }
-
-      {isRepoActive &&
-        <TooltipIconButton
-          title='Versions'
-          icon={<HistoryIcon className='icon-share' color='secondary'/>}
-          placement='bottom'
-          selected={isVersionHistoryVisible}
-          onClick={() => {
-            if (isNavigationVisible) {
-              toggleIsVersionHistoryVisible()
-              toggleIsNavigationVisible()
-            } else {
-              toggleIsVersionHistoryVisible()
-            }
-          }}
-        />
-      }
-
+    <ButtonGroup orientation='horizontal' variant='controls'>
+      {isOpenEnabled &&
+       <>
+         <OpenModelControl/>
+         {isAuthenticated && <SaveModelControl/>}
+       </>}
+      {isNavTreeEnabled && <NavTreeControl/>}
+      {isRepoActive && <VersionsControl/>}
+      {isSearchEnabled && <SearchControl/>}
     </ButtonGroup>
   )
 }

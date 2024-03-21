@@ -15,9 +15,9 @@ describe('UI slice', () => {
   it('Set Drawer State', () => {
     const {result} = renderHook(() => useStore((state) => state))
     act(() => {
-      result.current.openDrawer()
+      result.current.setIsSideDrawerVisible(true)
     })
-    expect(result.current.isDrawerOpen).toEqual(true)
+    expect(result.current.isSideDrawerVisible).toEqual(true)
   })
 })
 
@@ -45,7 +45,7 @@ describe('IFC slice', () => {
     const {result} = renderHook(() => useStore((state) => state))
     const model = {castShadow: false}
     act(() => {
-      result.current.setModelStore(model)
+      result.current.setModel(model)
     })
     expect(result.current.model).toEqual(model)
   })

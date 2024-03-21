@@ -1,27 +1,26 @@
 import React from 'react'
 import {fireEvent, render, waitFor} from '@testing-library/react'
 import ImagineControl from './ImagineControl'
-import {MockComponent} from '../__mocks__/MockComponent'
+import {HelmetStoreRouteThemeCtx, RouteThemeCtx} from '../Share.fixture'
+
+
+// ImagineControl uses viewer's screenshot
+jest.mock('web-ifc-viewer')
 
 
 describe('ImagineControl', () => {
-  it('renders the dialog in the document', () => {
-    const {getByTitle} = render(<ImagineControl/>, {
-      wrapper: MockComponent,
-    })
-
-    const component = getByTitle('AI Renderings')
+  it('ControlButton visible', () => {
+    const {getByTitle} = render(<ImagineControl/>, {wrapper: RouteThemeCtx})
+    const component = getByTitle('Rendering')
     expect(component).toBeInTheDocument()
   })
 
   it('updates the title when the dialog is open', async () => {
-    const {getByTitle} = render(<ImagineControl/>, {
-      wrapper: MockComponent,
-    })
+    const {getByTitle} = render(<ImagineControl/>, {wrapper: HelmetStoreRouteThemeCtx})
 
-    const button = getByTitle('AI Renderings')
+    const button = getByTitle('Rendering')
     fireEvent.click(button)
 
-    await(waitFor(() => expect(document.title).toBe('Bot the Bldr')))
+    await(waitFor(() => expect(document.title).toBe('Imagine')))
   })
 })

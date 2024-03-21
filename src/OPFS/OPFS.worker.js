@@ -159,7 +159,7 @@ async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owne
   }
 
   const reader = response.body.getReader()
-  const contentLength = +response.headers.get('Content-Length')
+  const contentLength = response.headers.get('Content-Length')
 
   let receivedLength = 0 // length of received bytes
 

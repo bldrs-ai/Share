@@ -1,9 +1,10 @@
-import React, {useEffect, useState, useMemo, useRef} from 'react'
+import React, {ReactElement, useEffect, useState, useMemo, useRef} from 'react'
+import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
 import {ThemeProvider} from '@mui/material/styles'
 import {CAMERA_PREFIX} from './Components/CameraControl'
-import CadView, {searchIndex} from './Containers/CadView'
+import CadView from './Containers/CadView'
 import WidgetApi from './WidgetApi/WidgetApi'
 import useStore from './store/useStore'
 import useShareTheme from './theme/Theme'
@@ -18,22 +19,25 @@ import FileContext from './OPFS/FileContext'
 /**
  * Handles path demuxing to pass to CadView.
  *
- * @param {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
- * @param {string} appPrefix e.g. /share is the prefix for this component.
- * @param {string} pathPrefix e.g. v/p for CadView, currently the only child.
- * @return {React.Component} The Share react component.
+ * @property {string} installPrefix e.g. '' on bldrs.ai or /Share on GitHub pages.
+ * @property {string} appPrefix e.g. /share is the prefix for this component.
+ * @property {string} pathPrefix e.g. v/p for CadView, currently the only child.
+ * @return {ReactElement}
  */
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
   const urlParams = useParams()
-  const setRepository = useStore((state) => state.setRepository)
   const modelPath = useStore((state) => state.modelPath)
+  const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
+  const repository = useStore((state) => state.repository)
+  const setRepository = useStore((state) => state.setRepository)
   const [file, setFile] = useState(null)
 
   useMemo(() => {
     new WidgetApi(navigation.current, searchIndex)
-  }, [navigation])
+  }, [navigation, searchIndex])
+
 
   /**
    * On a change to urlParams, setting a new model path will clear the
@@ -78,6 +82,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   return (
     modelPath &&
     <FileContext.Provider value={{file, setFile}}>
+      <ModelTitle repository={repository} modelPath={modelPath}/>
       <CssBaseline enableColorScheme>
         <ThemeProvider theme={theme}>
           <Styles theme={theme}/>
@@ -85,11 +90,22 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
             installPrefix={installPrefix}
             appPrefix={appPrefix}
             pathPrefix={pathPrefix}
-            modelPath={modelPath}
           />
         </ThemeProvider>
       </CssBaseline>
-    </FileContext.Provider>)
+    </FileContext.Provider>
+  )
+}
+
+
+/** @return {ReactElement} */
+function ModelTitle({repository, modelPath}) {
+  const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+  return (
+    <Helmet>
+      <title>{modelName} - {repository.name}/{repository.orgName}</title>
+    </Helmet>
+  )
 }
 
 

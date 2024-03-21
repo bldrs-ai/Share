@@ -1,89 +1,57 @@
-import React from 'react'
-import Box from '@mui/material/Box'
+import React, {ReactElement} from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
-import useStore from '../store/useStore'
-import CameraControl from './CameraControl'
-import LoginMenu from './LoginMenu'
-import NotesControl from './Notes/NotesContol'
-import ShareControl from './ShareControl'
-import ImagineControl from './ImagineControl'
-import {TooltipIconButton} from './Buttons'
+import Divider from '@mui/material/Divider'
 import AppStoreIcon from '../assets/icons/AppStore.svg'
 import {useExistInFeature} from '../hooks/useExistInFeature'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import useStore from '../store/useStore'
+import {TooltipIconButton} from './Buttons'
+import CameraControl from './CameraControl'
+import ImagineControl from './ImagineControl'
+import NotesControl from './Notes/NotesControl'
+import PersonaControl from './Persona/PersonaControl'
+import PropertiesControl from './Properties/PropertiesControl'
+import ShareControl from './ShareControl'
 
 
 /**
- * OperationsGroup contains tools for sharing, notes, properties, cut
- * plane, deselect, theme change and about.
+ * OperationsGroup contains tools for persona, sharing, notes, properties and
+ * imagine
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function OperationsGroup({deselectItems}) {
-  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
-  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
-  const isLoginVisible = useStore((state) => state.isLoginVisible)
-  const isCollaborationGroupVisible = useStore((state) => state.isCollaborationGroupVisible)
-  const isModelInteractionGroupVisible = useStore((state) => state.isModelInteractionGroupVisible)
-  const isSettingsVisible = useStore((state) => state.isSettingsVisible)
   const isAppStoreEnabled = useExistInFeature('apps')
-  // Properties
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const toggleIsPropertiesOn = useStore((state) => state.toggleIsPropertiesOn)
-  const openDrawer = useStore((state) => state.openDrawer)
-  const turnOffIsHelpTooltips = useStore((state) => state.turnOffIsHelpTooltips)
+  const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
+  const isImagineEnabled = useStore((state) => state.isImagineEnabled)
+  const isLoginEnabled = useStore((state) => state.isLoginEnabled)
+  const isNotesEnabled = useStore((state) => state.isNotesEnabled)
+  const isPropertiesEnabled = useStore((state) => state.isPropertiesEnabled)
+  const isShareEnabled = useStore((state) => state.isShareEnabled)
   const selectedElement = useStore((state) => state.selectedElement)
-  const isSelected = () => {
-    const ifSelected = (
-      selectedElement !== null
-    )
-    return ifSelected
-  }
+  const toggleAppStoreDrawer = useStore((state) => state.toggleAppStoreDrawer)
+  const isAnElementSelected = selectedElement !== null
 
   return (
-    <ButtonGroup
-      orientation='vertical'
-      variant='contained'
-      sx={{'margin': '1em', '& > *:not(:last-child)': {mb: .6}}} // Add space between buttons
-    >
-      {isLoginVisible &&
-        <LoginMenu/>
-      }
-      {isCollaborationGroupVisible &&
-        <Box sx={{marginTop: '.5em'}}>
-          <ShareControl/>
-        </Box>
-      }
-
-      {isModelInteractionGroupVisible &&
-      <NotesControl/>
-      }
-
-      {isSelected() && selectedElement !== null &&
+    <ButtonGroup orientation='vertical' variant='controls'>
+      {isLoginEnabled && (
+        <>
+          <PersonaControl/>
+          {/* This lines up divider with top of notes content panel */}
+          <Divider/>
+        </>)}
+      {isShareEnabled && <ShareControl/>}
+      {isNotesEnabled && <NotesControl/>}
+      {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
+      {isAppStoreEnabled &&
        <TooltipIconButton
-         title='Properties'
-         onClick={() => {
-           turnOffIsHelpTooltips()
-           toggleIsPropertiesOn()
-           openDrawer()
-         }}
-         selected={isPropertiesOn}
-         icon={<FormatListBulletedIcon className='icon-share' color='secondary'/>}
+         title='Open App Store'
+         icon={<AppStoreIcon/>}
+         selected={isAppStoreOpen}
+         onClick={() => toggleAppStoreDrawer()}
        />
       }
-
-      {isSettingsVisible && isAppStoreEnabled &&
-          <TooltipIconButton
-            title='Open App Store'
-            icon={<AppStoreIcon/>}
-            selected={isAppStoreOpen}
-            onClick={() => toggleAppStoreDrawer()}
-          />
-      }
-      {isCollaborationGroupVisible &&
-        <ImagineControl/>
-      }
+      {isImagineEnabled && <ImagineControl/>}
       {/* Invisible */}
       <CameraControl/>
     </ButtonGroup>

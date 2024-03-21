@@ -1,5 +1,8 @@
+import {CypressHistorySupport} from 'cypress-react-router'
 import React from 'react'
 import {createRoot} from 'react-dom/client'
+import {FlagsProvider} from 'react-feature-flags'
+import {Helmet, HelmetProvider} from 'react-helmet-async'
 import {
   BrowserRouter,
   useLocation,
@@ -7,15 +10,12 @@ import {
   createRoutesFromChildren,
   matchRoutes,
 } from 'react-router-dom'
-import BaseRoutes from './BaseRoutes'
-import {FlagsProvider} from 'react-feature-flags'
-import {flags} from './FeatureFlags'
-import {Auth0ProviderWithHistory} from './Components/Auth0ProviderWithHistory'
 import * as Sentry from '@sentry/react'
 import {BrowserTracing} from '@sentry/tracing'
+import Auth0ProviderWithHistory from './Auth0ProviderWithHistory'
+import BaseRoutes from './BaseRoutes'
 import ApplicationError from './Components/ApplicationError'
-import {Helmet, HelmetProvider} from 'react-helmet-async'
-import {CypressHistorySupport} from 'cypress-react-router'
+import {flags} from './FeatureFlags'
 
 
 Sentry.init({
@@ -39,7 +39,7 @@ Sentry.init({
   ],
 })
 
-if (JSON.stringify(process.env.DISABLE_MOCK_SERVICE_WORKER) !== 'true') {
+if (process.env.MSW_IS_ENABLED) {
   const {worker} = require('./__mocks__/browser')
   worker.start({
     onUnhandledRequest(req) {

@@ -1,17 +1,38 @@
-<svg width="68" height="91" viewBox="0 0 68 91" fill="none" xmlns="http://www.w3.org/2000/svg">
-<rect x="0.05" y="0.05" width="67.9" height="90.9" stroke="black" stroke-opacity="0.01" stroke-width="0.1"/>
-<path d="M17.9675 2L4.93939 8.07977V87.9853H17.9675V2Z" fill="#6D8752"/>
-<path d="M19.5708 43.6635V87.9538L36.2068 87.9852L36.2541 39.292L19.5708 43.6635Z" fill="#6D8752"/>
-<path d="M17.9675 2L45.7607 4.9999V40.2734L36.2068 39.3472L19.5707 43.6636V87.9853H17.9675V2Z" fill="#E9E8E2"/>
-<path d="M36.1648 39.292L36.2068 87.9852H64V42.0577L36.1648 39.292Z" fill="#E9E8E2"/>
-<path d="M36.254 39.292L63.9107 42.1469" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M36.254 39.292V87.8252" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M36.254 39.292L19.5707 43.6635V87.9144H63.9108" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M63.9107 42.147V87.9145" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M19.5707 87.9144H5.02855" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M5.02855 87.9144V8.15582" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M5.02859 8.15588L17.9648 2.08923" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M17.9648 2.08923L45.7108 5.03334" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M45.7108 5.03333V40.1842" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
-<path d="M17.9648 2.17847V87.8253" stroke="black" stroke-width="0.5" stroke-linecap="round"/>
+<?xml version="1.0"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  version="1.1"
+  title="Bldrs, Inc. Logo - block b"
+  width="68"
+  height="100"
+  viewBox="0 0 68 90">
+  <style>
+    .face {
+      stroke: black;
+    }
+    .face-left {
+      fill: lime;
+    }
+    .face-front {
+      fill: white;
+    }
+  </style>
+  <g>
+    <path
+      class="face face-left"
+      d="M17.9675 2L4.93939 8.07977V87.9853H17.9675V2Z"/>
+    <path
+      class="face face-left"
+      d="M19.5708 43.6635V87.9538L36.2068 87.9852L36.2541 39.292L19.5708 43.6635Z"/>
+    <path
+      class="face face-front"
+      d="M17.9675 2L45.7607 4.9999V40.2734L36.2068 39.3472L19.5707 43.6636V87.9853H17.9675V2Z"/>
+    <path
+      class="face face-front"
+      d="M36.1648 39.292L36.2068 87.9852H64V42.0577L36.1648 39.292Z"/>
+  </g>
 </svg>
+<!-- Keep this in sync with ./LogoBWithDomain.svg.
+     This file lacks a transform attribute on g. -->

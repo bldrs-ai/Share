@@ -1,31 +1,25 @@
-import React, {useState, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
 import {Vector3} from 'three'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {addHashParams, getHashParams, getObjectParams, removeHashParams} from '../utils/location'
 import {floatStrTrim, isNumeric} from '../utils/strings'
 import {TooltipIconButton} from './Buttons'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import CloseIcon from '@mui/icons-material/Close'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import ElevationIcon from '../assets/icons/Elevation.svg'
 import PlanIcon from '../assets/icons/Plan.svg'
 import SectionIcon from '../assets/icons/Section.svg'
 
 
-const PLANE_PREFIX = 'p'
-
-
 /**
- * BasicMenu used when there are several option behind UI button
- * show/hide from the right of the screen.
+ * Menu of three cut planes for the model
  *
- * @param {Array} listOfOptions Title for the drawer
- * @return {object} ItemPropertiesDrawer react component
+ * @return {ReactElement}
  */
 export default function CutPlaneMenu() {
   const [anchorEl, setAnchorEl] = useState(null)
@@ -37,25 +31,18 @@ export default function CutPlaneMenu() {
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const location = useLocation()
-  const open = Boolean(anchorEl)
-  const theme = useTheme()
+  const isMenuVisible = Boolean(anchorEl)
   const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
 
-  const handleClick = (event) => {
-    setAnchorEl(event.currentTarget)
-  }
-
-
   const handleClose = () => {
     setAnchorEl(null)
   }
 
-
   useEffect(() => {
-    const planeHash = getHashParams(location, 'p')
+    const planeHash = getHashParams(location, VIEW_PLANE_PREFIX)
     debug().log('CutPlaneMenu#useEffect: planeHash: ', planeHash)
     if (planeHash && model && viewer) {
       const planes = getPlanes(planeHash)
@@ -70,7 +57,6 @@ export default function CutPlaneMenu() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model])
 
-
   const togglePlane = ({direction, offset = 0}) => {
     setLevelInstance(null)
     const modelCenter = new Vector3
@@ -83,7 +69,7 @@ export default function CutPlaneMenu() {
 
     if (cutPlanes.findIndex((cutPlane) => cutPlane.direction === direction) > -1) {
       debug().log('CutPlaneMenu#togglePlane: found: ', true)
-      removeHashParams(window.location, PLANE_PREFIX, [direction])
+      removeHashParams(window.location, VIEW_PLANE_PREFIX, [direction])
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
@@ -94,44 +80,30 @@ export default function CutPlaneMenu() {
       })
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
-      addHashParams(window.location, PLANE_PREFIX, {[direction]: offset}, true)
+      addHashParams(window.location, VIEW_PLANE_PREFIX, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
     }
   }
 
-
   return (
     <>
       <TooltipIconButton
         title={'Section'}
-        placement='top'
-        variant='solid'
-        icon={<CropOutlinedIcon className='icon-share' color='secondary'/>}
-        onClick={handleClick}
+        icon={<CropOutlinedIcon className='icon-share'/>}
+        onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
+        placement='top'
+        variant='control'
       />
       <Menu
         elevation={1}
         id='basic-menu'
         anchorEl={anchorEl}
-        open={open}
+        open={isMenuVisible}
         onClose={handleClose}
         anchorOrigin={{vertical: 'top', horizontal: 'center'}}
-        transformOrigin={{vertical: 'top', horizontal: 'center'}}
-        PaperProps={{
-          style: {
-            left: '300px',
-            transform: 'translateX(0px) translateY(-60px)',
-          },
-          sx: {
-            'color': theme.palette.primary.contrastText,
-            '& .Mui-selected': {
-              color: theme.palette.secondary.main,
-              fontWeight: 800,
-            },
-          },
-        }}
+        transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
       >
         <MenuItem onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
@@ -157,7 +129,7 @@ export default function CutPlaneMenu() {
             removePlanes(viewer)
             setAnchorEl(null)
             setIsCutPlane(false)
-            removeHashParams(window.location, PLANE_PREFIX, ['x', 'y', 'z'])
+            removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
           } }
         >
           <CloseIcon className='icon-share'/>
@@ -170,7 +142,7 @@ export default function CutPlaneMenu() {
 
 
 /**
- * removePlanes delete all section planes from the viewer
+ * Deletes all section planes from the viewer
  *
  * @param {object} viewer bounding box
  */
@@ -184,7 +156,7 @@ export function removePlanes(viewer) {
 
 
 /**
- * Helper method to get the location of cut plane from the center of the model.
+ * Get the location of cut plane from the center of the model
  *
  * @param {object} viewer
  * @param {object} ifcModel
@@ -217,7 +189,7 @@ export function getPlanesOffset(viewer, ifcModel) {
 
 
 /**
- * helper method to add plane normal and the offset to the url as a hash parameter
+ * Add plane normal and the offset to the url as a hash parameter
  *
  * @param {object} viewer
  * @param {object} ifcModel
@@ -226,13 +198,13 @@ export function addPlaneLocationToUrl(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
-    addHashParams(window.location, PLANE_PREFIX, planeInfo, true)
+    addHashParams(window.location, VIEW_PLANE_PREFIX, planeInfo, true)
   }
 }
 
 
 /**
- * get offset info of x, y, z from plane hash string
+ * Get offset info of x, y, z from plane hash string
  *
  * @param {string} planeHash
  * @return {Array}
@@ -242,7 +214,7 @@ export function getPlanes(planeHash) {
     return []
   }
   const parts = planeHash.split(':')
-  if (parts[0] !== 'p' || !parts[1]) {
+  if (parts[0] !== VIEW_PLANE_PREFIX || !parts[1]) {
     return []
   }
   const planeObjectParams = getObjectParams(planeHash)
@@ -260,7 +232,7 @@ export function getPlanes(planeHash) {
       })
     }
     if (removableParamKeys.length) {
-      removeHashParams(window.location, PLANE_PREFIX, removableParamKeys)
+      removeHashParams(window.location, VIEW_PLANE_PREFIX, removableParamKeys)
     }
   })
   debug().log('CutPlaneMenu#getPlanes: planes: ', planes)
@@ -269,7 +241,7 @@ export function getPlanes(planeHash) {
 
 
 /**
- * get plane information (normal, model center offset)
+ * Get plane information (normal, model center offset)
  *
  * @param {Vector3} modelCenter
  * @param {string} direction
@@ -301,6 +273,13 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
       break
   }
 
-  const modelCenterOffset = new Vector3(modelCenter.x + planeOffsetX, modelCenter.y + planeOffsetY, modelCenter.z + planeOffsetZ)
+  const modelCenterOffset =
+        new Vector3(
+          modelCenter.x + planeOffsetX,
+          modelCenter.y + planeOffsetY,
+          modelCenter.z + planeOffsetZ)
   return {normal, modelCenterOffset}
 }
+
+
+export const VIEW_PLANE_PREFIX = 'vp'

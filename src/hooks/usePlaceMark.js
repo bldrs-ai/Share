@@ -9,7 +9,8 @@ import {CAMERA_PREFIX} from '../Components/CameraControl'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
-import {createComment, getIssueComments, getIssues} from '../utils/GitHub'
+import {getIssueComments, getIssues} from '../net/github/Issues'
+import {createComment} from '../net/github/Comments'
 import {arrayDiff} from '../utils/arrays'
 import {assertDefined} from '../utils/assert'
 import {isDevMode} from '../utils/common'
@@ -22,7 +23,7 @@ import debug from '../utils/debug'
  *
  * @return {Function}
  */
-export function usePlaceMark() {
+export default function usePlaceMark() {
   const placeMark = useStore((state) => state.placeMark)
   const setPlaceMark = useStore((state) => state.setPlaceMark)
   const placeMarkId = useStore((state) => state.placeMarkId)
@@ -145,13 +146,10 @@ export function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:
@@ -177,13 +175,10 @@ export function usePlaceMark() {
         break
       case 1: // Wheel button (middle button if present)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 2: // Secondary button (right button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 3: // Fourth button (back button)
         break
-      // eslint-disable-next-line no-magic-numbers
       case 4: // Fifth button (forward button)
         break
       default:

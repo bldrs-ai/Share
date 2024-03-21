@@ -1,102 +1,116 @@
-/* eslint-disable no-magic-numbers */
-import React, {useState} from 'react'
-import {useSwipeable} from 'react-swipeable'
-import Box from '@mui/material/Box'
+import React, {ReactElement, useEffect, useState} from 'react'
+import ButtonGroup from '@mui/material/ButtonGroup'
+import ListItem from '@mui/material/ListItem'
+import ListItemIcon from '@mui/material/ListItemIcon'
+import ListItemText from '@mui/material/ListItemText'
 import Stack from '@mui/material/Stack'
-import Typography from '@mui/material/Typography'
-import useTheme from '@mui/styles/useTheme'
+import useStore from '../store/useStore'
+import {ControlButtonWithHashState, TooltipIconButton} from './Buttons'
 import Dialog from './Dialog'
-import {TooltipIconButton} from './Buttons'
-import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
-import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
-import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
-import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import CloseIcon from '@mui/icons-material/Close'
-import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
-import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
-import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
-import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
-import HistoryIcon from '@mui/icons-material/History'
-import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
+import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
+import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
+import CloseIcon from '@mui/icons-material/Close'
+import CreateNewFolderOutlinedIcon from '@mui/icons-material/CreateNewFolderOutlined'
+import CropOutlinedIcon from '@mui/icons-material/CropOutlined'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted'
+import HelpOutlineIcon from '@mui/icons-material/HelpOutline'
+import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
+import HistoryIcon from '@mui/icons-material/History'
 import PortraitIcon from '@mui/icons-material/Portrait'
 import SearchIcon from '@mui/icons-material/Search'
-import LogoB from '../assets/LogoB.svg'
+import ShiftIcon from '@mui/icons-material/FileUpload'
+import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
+import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 import TreeIcon from '../assets/icons/Tree.svg'
-import ShiftIcon from '../assets/icons/Shift.svg'
 import ShareIcon from '../assets/icons/Share.svg'
 
+
 /**
- * The main component to display a help control button and a help dialog.
+ * ControlButton that toggles HelpDialog, with nav state
  *
- * @function
- * @param {object} props - Component props
- * @param {Function} fileOpen - Callback for file opening
- * @param {string} modelPath - Path to the model
- * @param {boolean} pisLocalModel - Determines if the model is local
- * @return {React.ReactElement} Rendered component
+ * @return {ReactElement}
  */
-export default function HelpControl({fileOpen, modelPath, isLocalModel}) {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
+export default function HelpControl() {
+  const isHelpVisible = useStore((state) => state.isHelpVisible)
+  const setIsHelpVisible = useStore((state) => state.setIsHelpVisible)
+  const setIsHelpTooltipsVisible = useStore((state) => state.setIsHelpTooltipsVisible)
+
+  useEffect(() => {
+    setIsHelpTooltipsVisible(isHelpVisible)
+  }, [isHelpVisible, setIsHelpTooltipsVisible])
 
   return (
-    <Box>
-      <TooltipIconButton
-        title={'Help'}
-        onClick={() => setIsDialogDisplayed(true)}
-        icon={<HelpOutlineIcon color='secondary'/>}
-        placement={'left'}
-        selected={isDialogDisplayed}
-        dataTestId='help-control-button'
-        showTitle={true}
-        variant='noBackground'
+    <ControlButtonWithHashState
+      title={'Help'}
+      icon={<HelpOutlineIcon className='icon-share'/>}
+      isDialogDisplayed={isHelpVisible}
+      setIsDialogDisplayed={setIsHelpVisible}
+      hashPrefix={HELP_PREFIX}
+      placement='left'
+      dataTestId='help-control-button'
+    >
+      <HelpDialog
+        isDialogDisplayed={isHelpVisible}
+        setIsDialogDisplayed={setIsHelpVisible}
       />
-      {isDialogDisplayed && (
-        <HelpDialog isDialogDisplayed={isDialogDisplayed} setIsDialogDisplayed={setIsDialogDisplayed}/>
-      )}
-    </Box>
+    </ControlButtonWithHashState>
   )
 }
 
 
+/** The prefix to use for the help state token */
+export const HELP_PREFIX = 'help'
+
+
 /**
- * Represents a single help entry with an icon and a description.
+ * The main dialog displaying the help contents.
+ * Provides controls for navigating between pages of help entries.
  *
- * @function
- * @param {object} props - Component props
- * @param {React.ReactElement} props.icon - Icon for the help entry
- * @param {string} props.description - Description text for the help entry
- * @return {React.ReactElement} Rendered component
+ * @property {boolean} isDialogDisplayed Determines if the dialog is displayed
+ * @property {Function} setIsDialogDisplayed Callback to set the dialog display state
+ * @return {ReactElement}
  */
-const HelpComponent = ({icon, description}) => {
+export function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+  const [pageIndex, setPageIndex] = useState(0)
+  const totalPages = 4
   return (
-    <Box
-      sx={{
-        display: 'flex',
-        flexDirection: 'row',
-        justifyContent: 'flex-start',
-        alignItems: 'center',
-        width: '230px',
-        marginBottom: '10px',
-        paddingBottom: '2px',
-        paddingTop: '2px',
-      }}
+    <Dialog
+      headerIcon={<HelpOutlineIcon/>}
+      headerText={'Help'}
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle={
+        <ButtonGroup>
+          <TooltipIconButton
+            title='Previous'
+            placement='right'
+            variant='noBackground'
+            icon={
+              <ArrowBackIcon
+                sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
+              />}
+            onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
+          />
+          <TooltipIconButton
+            title='Next'
+            icon={
+              <ArrowForwardIcon
+                sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
+              />}
+            onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
+            placement='right'
+            variant='noBackground'
+          />
+        </ButtonGroup>
+      }
+      actionIcon={<HelpOutlineIcon/>}
+      actionCb={() => setIsDialogDisplayed(false)}
     >
-      <Box sx={{marginLeft: '10px'}}>{icon}</Box>
-      <Typography
-        variant='overline'
-        sx={{
-          marginLeft: '34px',
-          width: '220px',
-          textAlign: 'left',
-          lineHeight: '1.4em',
-        }}
-      >
-        {description}
-      </Typography>
-    </Box>
+      <HelpList pageIndex={pageIndex}/>
+    </Dialog>
   )
 }
 
@@ -104,229 +118,89 @@ const HelpComponent = ({icon, description}) => {
 /**
  * Represents a list of help entries, paginated.
  *
- * @function
- * @param {object} props - Component props
- * @param {number} props.pageIndex - Index of the current displayed page
- * @return {React.ReactElement} Rendered component
+ * @property {number} pageIndex Index of the current displayed page
+ * @return {ReactElement}
  */
 const HelpList = ({pageIndex}) => {
   const helpContent = [
-    {
-      icon: <CreateNewFolderOutlinedIcon color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Open IFC models from GITHUB  <br/> or local drive
-      </Typography>,
-    },
-    {
-      icon: <CropOutlinedIcon color='secondary'/>,
-      description: 'Study the model using standard sections',
-    },
-    {
-      icon: <TouchAppOutlinedIcon className='icon-share' color='primary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Double click the model to select <br/> a model element
-      </Typography>,
-    },
-    {
-      icon: <ShiftIcon className='icon-share'/>,
-      description: 'Hold shift to select multiple elements',
-    },
-    {
-      icon: <FormatListBulletedIcon className='icon-share' color='secondary'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Study properties attached to  <br/> selected element
-      </Typography>,
-    },
-    {
-      icon: <FilterCenterFocusIcon className='icon-share' color='secondary'/>,
-      description: 'Isolate selected element',
-    },
-    {
-      icon: <HideSourceOutlinedIcon color='secondarygit p'/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Hide selected  <br/> element
-      </Typography>,
-    },
-    {
-      icon: <VisibilityOutlinedIcon color='secondary'/>,
-      description: `Show all hidden elements`,
-    },
-    {
-      icon: <CloseIcon className='icon-share' color='secondary'/>,
-      description: 'Clear selected elements',
-    },
-    {
-      icon: <TreeIcon className='icon-share' color='secondary' style={{margin: '0px 2px 0px 3px', width: '20px'}}/>,
-      description:
-      <Typography variant='overline' sx={{lineHeight: '1.4em'}}>
-        Navigate <br/> the model using element hierarchy
-      </Typography>,
-    },
-    {
-      icon: <HistoryIcon color='secondary'/>,
-      description: 'Access project versions',
-    },
-    {
-      icon: <SearchIcon color='secondary'/>,
-      description: 'Search the model',
-    },
-    {
-      icon: <PortraitIcon className='icon-share' color='secondary'/>,
-      description: 'Log in to get access to projects hosted on Github',
-    },
-    {
-      icon: <ShareIcon className='icon-share' color='secondary' style={{margin: '0px 1px'}}/>,
-      description: 'Share sectioned portions of the model',
-    },
-    {
-      icon: <ChatOutlinedIcon color='secondary'/>,
-      description: 'Attach notes to 3D elements',
-    },
-    {
-      icon: <AutoFixHighOutlinedIcon color='secondary'/>,
-      description: 'Create renderings using Bot the BLDR',
-    },
+    <ListItem key='1'>
+      <ListItemIcon><TouchAppOutlinedIcon className='icon-share' variant='success'/></ListItemIcon>
+      <ListItemText primary='Select' secondary='Double click the model to select a model element'/>
+    </ListItem>,
+    <ListItem key='2'>
+      <ListItemIcon><ShiftIcon className='icon-share' variant='success'/></ListItemIcon>
+      <ListItemText primary='Multi-select' secondary='Hold shift to select multiple elements'/>
+    </ListItem>,
+    <ListItem key='3'>
+      <ListItemIcon><CreateNewFolderOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Open' secondary='Open IFC models from GitHub or local drive'/>
+    </ListItem>,
+    <ListItem key='4'>
+      <ListItemIcon><CropOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Sections' secondary='Study the model using standard sections'/>
+    </ListItem>,
+    <ListItem key='5'>
+      <ListItemIcon><FormatListBulletedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Properties' secondary='Study properties attached to selected element'/>
+    </ListItem>,
+    <ListItem key='6'>
+      <ListItemIcon><FilterCenterFocusIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Isolate' secondary='Isolate selected element'/>
+    </ListItem>,
+    <ListItem key='7'>
+      <ListItemIcon><HideSourceOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Hide' secondary='Hide selected element'/>
+    </ListItem>,
+    <ListItem key='8'>
+      <ListItemIcon><VisibilityOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Show all' secondary='Show all hidden elements'/>
+    </ListItem>,
+    <ListItem key='9'>
+      <ListItemIcon><CloseIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Reset' secondary='Clear selected elements'/>
+    </ListItem>,
+    <ListItem key='10'>
+      <ListItemIcon><TreeIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Navigate' secondary='Navigate the model using element hierarchy'/>
+    </ListItem>,
+    <ListItem key='11'>
+      <ListItemIcon><HistoryIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Versions' secondary='Access project versions'/>
+    </ListItem>,
+    <ListItem key='12'>
+      <ListItemIcon><SearchIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Search' secondary='Search the model elements and properties'/>
+    </ListItem>,
+    <ListItem key='13'>
+      <ListItemIcon><PortraitIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Hosting' secondary='Log in to get access to projects hosted on GitHub'/>
+    </ListItem>,
+    <ListItem key='14'>
+      <ListItemIcon><ShareIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Share' secondary='Share sectioned portions of the model'/>
+    </ListItem>,
+    <ListItem key='15'>
+      <ListItemIcon><ChatOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Notes' secondary='Attach notes to 3D elements'/>
+    </ListItem>,
+    <ListItem key='16'>
+      <ListItemIcon><AutoFixHighOutlinedIcon className='icon-share'/></ListItemIcon>
+      <ListItemText primary='Imagine' secondary='Create renderings using Bot the BLDR'/>
+    </ListItem>,
   ]
 
+  /* eslint-disable no-magic-numbers */
   const pageContents = [
     helpContent.slice(0, 4),
     helpContent.slice(4, 9),
     helpContent.slice(9, 12),
     helpContent.slice(12),
   ]
+  /* eslint-enable no-magic-numbers */
 
   return (
-    <Box sx={{marginLeft: '10px', height: '240px'}}>
-      {pageContents[pageIndex].map((item, index) => (
-        <HelpComponent key={index} icon={item.icon} description={item.description}/>
-      ))}
-    </Box>
+    <Stack>
+      {pageContents[pageIndex].map((item, index) => item)}
+    </Stack>
   )
 }
-
-
-/**
- * The main dialog displaying the help contents.
- * Provides controls for navigating between pages of help entries.
- *
- * @function
- * @param {object} props - Component props
- * @param {boolean} props.isDialogDisplayed - Determines if the dialog is displayed
- * @param {Function} props.setIsDialogDisplayed - Callback to set the dialog display state
- * @return {React.ReactElement} Rendered component
- */
-function HelpDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const [pageIndex, setPageIndex] = useState(0)
-  const totalPages = 4
-  const theme = useTheme()
-
-
-  const swipeHandlers = useSwipeable({
-    onSwipedLeft: () => {
-      if (pageIndex < totalPages - 1) {
-        setPageIndex(pageIndex + 1)
-      }
-    },
-    onSwipedRight: () => {
-      if (pageIndex > 0) {
-        setPageIndex(pageIndex - 1)
-      }
-    },
-  })
-
-  return (
-    <Dialog
-      icon={<HelpOutlineIcon/>}
-      headerText={
-        <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', height: '80px'}}>
-          <LogoB/>
-          <Typography variant={'overline'}>bldrs.ai</Typography>
-        </Box>
-      }
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle={'OK'}
-      actionIcon={<HelpOutlineIcon/>}
-      actionCb={() => setIsDialogDisplayed(false)}
-      content={
-        <Box
-          sx={{
-            width: '250px',
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            marginTop: '10px',
-          }}
-          {...swipeHandlers}
-        >
-          <HelpList pageIndex={pageIndex}/>
-          <Box
-            sx={{
-              display: 'flex',
-              flexDirection: 'row',
-              justifyContent: 'space-between',
-              width: '68%',
-              marginTop: '6px',
-              alignItems: 'center',
-            }}
-          >
-            <TooltipIconButton
-              title='Previous'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowBackIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex > 0 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex > 0 && setPageIndex(pageIndex - 1)}
-            />
-
-            <Stack
-              sx={{width: '100%'}}
-              direction="row"
-              justifyContent="center"
-              alignItems="center"
-            >
-              <Stack
-                direction='row' sx={{width: '38px'}}
-              >
-                {[...Array(totalPages)].map((_, idx) => (
-                  <Box
-                    key={idx}
-                    sx={{
-                      width: '6px',
-                      height: '6px',
-                      backgroundColor: idx === pageIndex ? theme.palette.primary.main : theme.palette.secondary.background,
-                      borderRadius: '50%',
-                      marginX: '2px',
-                    }}
-                  />
-                ))}
-              </Stack>
-            </Stack>
-            <TooltipIconButton
-              title='Next'
-              placement='right'
-              variant='noBackground'
-              icon={
-                <ArrowForwardIcon
-                  color='secondary'
-                  sx={{cursor: pageIndex < totalPages - 1 ? 'pointer' : 'not-allowed'}}
-                />}
-              onClick={() => pageIndex < totalPages - 1 && setPageIndex(pageIndex + 1)}
-            />
-          </Box>
-        </Box>
-      }
-    />
-  )
-}
-
-
-export {HelpDialog}

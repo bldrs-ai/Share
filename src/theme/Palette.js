@@ -6,43 +6,85 @@ const colors = getColors()
 
 export const day = {
   mode: 'light',
+
+  // The 3d canvas and ControlButtons on it.
   primary: {
-    main: '#6D8752',
-    background: colors.grey.light,
-    contrastText: colors.black,
-    highlight: colors.orange,
+    main: colors.grey.light,
+    light: colors.grey.lightest,
+    dark: colors.grey.mediumlight,
+    contrastText: colors.grey.darkest,
+    sceneBackground: '#FFFFFF',
+    sceneHighlight: '#00F0FF',
   },
+
+  // Side drawer, dialogs
   secondary: {
-    main: colors.grey.dark,
-    background: colors.grey.lightest,
-    contrastText: colors.green.dark,
+    main: colors.grey.light,
+    light: colors.grey.lightest,
+    dark: colors.grey.mediumlight,
+    contrastText: colors.grey.darkest,
+    // e.g. for list of items with one active
+    active: '#00F0FF',
   },
-  background: {
-    paper: colors.grey.light,
+
+  success: {
+    main: '#0f0',
+    light: '#0f0',
+    dark: '#0f0',
+    contrastText: '#000',
   },
-  scene: {
-    background: colors.grey.lightest,
+
+  action: {
+    // Found this searching around
+    // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
+    selectedOpacity: 0.3,
+  },
+
+  logo: {
+    frontFace: 'white',
+    leftFace: 'lime', // lime: tron row4 col2
   },
 }
 
 
 export const night = {
   mode: 'dark',
+
+  // The 3d canvas and ControlButtons on it.
   primary: {
-    main: '#6D8752',
-    background: colors.grey.darkest,
+    main: colors.grey.dark,
+    light: colors.grey.mediumdark,
+    dark: colors.grey.darkest,
     contrastText: colors.grey.lightest,
-    highlight: colors.orange,
+    sceneBackground: '#000000',
+    sceneHighlight: '#00F0FF',
   },
+
+  // Side drawer, dialogs
   secondary: {
-    main: colors.grey.light,
-    background: colors.grey.dark,
-    contrastText: colors.green.lightest,
+    main: colors.grey.dark,
+    light: colors.grey.mediumdark,
+    dark: colors.grey.darkest,
+    contrastText: colors.grey.lightest,
+    // e.g. for list of items with one active
+    active: '#00F0FF',
   },
-  background: {
-    paper: colors.grey.darkest,
+
+  success: {
+    main: '#0f0',
+    light: '#0f0',
+    dark: '#0f0',
+    contrastText: '#000',
   },
-  scene: {
-    background: colors.black,
+
+  action: {
+    // Found this searching around
+    // https://github.com/search?q=repo%3Amui%2Fmaterial-ui%20selectedOpacity&type=code
+    selectedOpacity: 0.3,
+  },
+
+  logo: {
+    frontFace: 'white',
+    leftFace: 'lime', // lime: tron row4 col2
   },
 }

@@ -38,6 +38,7 @@ export default function BaseRoutes({testElt = null}) {
   const setIsOPFSAvailable = useStore((state) => state.setIsOPFSAvailable)
   setAppPrefix(appPrefix)
 
+
   useEffect(() => {
     const checkAvailability = async () => {
       const available = await checkOPFSAvailability()
@@ -47,6 +48,7 @@ export default function BaseRoutes({testElt = null}) {
 
     checkAvailability()
   }, [setIsOPFSAvailable]) // Empty dependency array means this effect runs once on mount
+
 
   useEffect(() => {
     if (location.pathname === installPrefix ||
@@ -72,8 +74,8 @@ export default function BaseRoutes({testElt = null}) {
         }
       })
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [basePath, installPrefix, location, navigate, getAccessTokenSilently, isAuthenticated, isLoading, setAccessToken])
+  }, [appPrefix, setAppPrefix, basePath, installPrefix, location, navigate,
+      isLoading, isAuthenticated, getAccessTokenSilently, setAccessToken])
 
   return (
     <SentryRoutes>

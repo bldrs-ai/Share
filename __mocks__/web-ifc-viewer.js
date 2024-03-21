@@ -95,15 +95,19 @@ const impl = {
     getClippingPlanes: jest.fn(() => {
       return []
     }),
+    renderer: {
+      newScreenshot: jest.fn(),
+    },
   },
   loadIfcUrl: jest.fn(jest.fn(() => loadedModel)),
   loadIfcFile: jest.fn(jest.fn(() => loadedModel)),
   getProperties: jest.fn((modelId, eltId) => {
     return loadedModel.ifcManager.getProperties(eltId)
   }),
-  setSelection: jest.fn(),
   pickIfcItemsByID: jest.fn(),
   preselectElementsByIds: jest.fn(),
+  setSelection: jest.fn(),
+  takeScreenshot: jest.fn(),
 }
 const constructorMock = ifcjsMock.IfcViewerAPI
 constructorMock.mockImplementation(() => impl)

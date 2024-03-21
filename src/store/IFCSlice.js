@@ -7,25 +7,35 @@
  */
 export default function createIFCSlice(set, get) {
   return {
-    viewer: {},
-    model: null,
-    modelPath: null,
-    selectedElement: null,
-    selectedElements: [],
-    elementTypesMap: [],
-    preselectedElementIds: null,
     cameraControls: null,
-    loadedFileInfo: null,
+    setCameraControls: (controls) => set(() => ({cameraControls: controls})),
+
     customViewSettings: null,
-    setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
-    setModelStore: (model) => set(() => ({model: model})),
-    setModelPath: (modelPath) => set(() => ({modelPath: modelPath})),
-    setSelectedElement: (element) => set(() => ({selectedElement: element})),
-    setSelectedElements: (elements) => set(() => ({selectedElements: elements})),
+    setCustomViewSettings: (settings) => set(() => ({customViewSettings: settings})),
+
+    isModelLoading: false,
+    setIsModelLoading: (isLoading) => set(() => ({isModelLoading: isLoading})),
+
+    // TODO(pablo): really needed?
+    isModelReady: false,
+    setIsModelReady: (isReady) => set(() => ({isModelReady: isReady})),
+
+    elementTypesMap: [],
     setElementTypesMap: (map) => set(() => ({elementTypesMap: map})),
-    setPreselectedElementIds: (elementIds) => set(() => ({preselectedElementIds: elementIds})),
-    setCameraControls: (cameraControls) => set(() => ({cameraControls: cameraControls})),
+
+    loadedFileInfo: null,
     setLoadedFileInfo: (loadedFileInfo) => set(() => ({loadedFileInfo: loadedFileInfo})),
-    setCustomViewSettings: (customViewSettings) => set(() => ({customViewSettings: customViewSettings})),
+
+    model: null,
+    setModel: (m) => set(() => ({model: m})),
+
+    preselectedElementIds: null,
+    setPreselectedElementIds: (ids) => set(() => ({preselectedElementIds: ids})),
+
+    rootElement: null,
+    setRootElement: (elt) => set(() => ({rootElement: elt})),
+
+    viewer: {},
+    setViewerStore: (viewer) => set(() => ({viewerStore: viewer})),
   }
 }

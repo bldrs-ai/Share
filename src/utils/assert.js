@@ -72,6 +72,30 @@ export function assertArraysEqualLength(...arrays) {
 
 
 /**
+ * Argument must have typeof(o) === 'object'
+ *
+ * @param {object} o
+ */
+export function assertObject(o) {
+  if (typeof(o) !== 'object') {
+    throw new Error('Argument must be an object')
+  }
+}
+
+
+/**
+ * Argument must have typeof(arg) === 'string'
+ *
+ * @param {string} s
+ */
+export function assertString(s) {
+  if (typeof(s) !== 'string') {
+    throw new Error('Argument must be a string')
+  }
+}
+
+
+/**
  * String must be defined and not the empty string.
  *
  * @param {string} str
@@ -81,6 +105,7 @@ export function assertStringNotEmpty(str) {
     throw new Error('String must be defined and not empty')
   }
 }
+
 
 /**
  * Checks that each named param is defined and returns the object for chaining.
@@ -93,7 +118,7 @@ export function assertStringNotEmpty(str) {
 export function assertValues(obj, keys) {
   const undefinedKeys = keys.filter((key) => obj[key] === undefined)
   if (undefinedKeys.length > 0) {
-    throw new Error(`The following keys are undefined: 
+    throw new Error(`The following keys are undefined:
       ${undefinedKeys.join(', ')}`)
   }
   return obj

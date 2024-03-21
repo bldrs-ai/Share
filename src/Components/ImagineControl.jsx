@@ -1,74 +1,95 @@
 import axios from 'axios'
-import React, {useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {Helmet} from 'react-helmet-async'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import {RectangularButton} from '../Components/Buttons'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
-import {ControlButton} from './Buttons'
-import {
-  addCameraUrlParams,
-} from './CameraControl'
+import {ControlButtonWithHashState, RectangularButton} from './Buttons'
+import {addCameraUrlParams} from './CameraControl'
 import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ClearIcon from '@mui/icons-material/Clear'
-import BotIcon4 from '../assets/icons/Bot2.svg'
-import CopyIcon from '../assets/icons/Copy.svg'
+import BotIcon from '../assets/icons/Bot2.svg'
 
 
 /**
  * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
- * @return {React.ReactElement} The button react component, with a hosted
+ * @return {ReactElement} The button react component, with a hosted
  *   ShareDialog component
  */
 export default function ImagineControl() {
-  const [isDialogDisplayed, setIsDialogDisplayed] = useState(false)
-  const openedDialog = !!isDialogDisplayed
-
+  const isImagineVisible = useStore((state) => state.isImagineVisible)
+  const setIsImagineVisible = useStore((state) => state.setIsImagineVisible)
   return (
-    <ControlButton
-      title='AI Renderings'
-      icon={<AutoFixHighOutlinedIcon className='icon-share' color='secondary'/>}
-      isDialogDisplayed={openedDialog}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      dialog={
-        <ImagineDialog
-          isDialogDisplayed={openedDialog}
-          setIsDialogDisplayed={setIsDialogDisplayed}
-        />
-      }
-    />
+    <ControlButtonWithHashState
+      title='Rendering'
+      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
+      isDialogDisplayed={isImagineVisible}
+      setIsDialogDisplayed={setIsImagineVisible}
+      hashPrefix={IMAGINE_PREFIX}
+      placement='left'
+    >
+      <ImagineDialog
+        isDialogDisplayed={isImagineVisible}
+        setIsDialogDisplayed={setIsImagineVisible}
+      />
+    </ControlButtonWithHashState>
   )
 }
 
 
+/** The prefix to use for the imagine state token */
+export const IMAGINE_PREFIX = 'imagine'
+
+
 /**
- * The ImagineDialog component contain instructions on how to access the bot.
+ * The ImagineDialog component contain instructions on how to access the bot
  *
- * @param {boolean} isDialogDisplayed
- * @param {Function} setIsDialogDisplayed
- * @param {number} botIconIndex The current index of the bot icon which is kept track of in the wrapper component
- * @return {React.Component} The react component
+ * @property {boolean} isDialogDisplayed Passed to dialog to be controlled
+ * @property {Function} setIsDialogDisplayed Passed to dialog to be controlled
+ * @return {React.Component}
  */
 function ImagineDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
 }) {
+  const cameraControls = useStore((state) => state.cameraControls)
+  const model = useStore((state) => state.model)
+  const viewer = useStore((state) => state.viewer)
+
   const [prompt, setPrompt] = useState('')
   const [screenshot, setScreenshot] = useState(null)
   const [isImagineLoading, setIsImagineLoading] = useState(false)
   const [imagine, setImagine] = useState(null)
   const [image, setImage] = useState(null)
-  const cameraControls = useStore((state) => state.cameraControls)
-  const viewer = useStore((state) => state.viewer)
-  const model = useStore((state) => state.model)
+
+  const [finalPrompt, setFinalPrompt] = useState(null)
+
+  const onCreateClick = () => {
+    setFinalPrompt(prompt)
+    setIsImagineLoading(true)
+    sendToWarhol(screenshot, prompt, (renderDataUrl) => {
+      setIsImagineLoading(false)
+      setImagine(renderDataUrl)
+      setImage(renderDataUrl)
+    })
+  }
+
+  const onClearClick = () => {
+    setPrompt('')
+    setFinalPrompt(null)
+    setIsImagineLoading(false)
+    const ss = viewer.takeScreenshot()
+    setScreenshot(ss)
+    setImage(ss)
+  }
 
   useEffect(() => {
     if (viewer) {
@@ -79,119 +100,80 @@ function ImagineDialog({
     }
   }, [viewer, model, cameraControls])
 
-  const closeDialog = () => {
-    setIsDialogDisplayed(false)
-  }
-
-  const handleClear = () => {
-    setPrompt('')
-    setIsImagineLoading(false)
-    const ss = viewer.takeScreenshot()
-    setScreenshot(ss)
-    setImage(ss)
-  }
-
   return (
     <Dialog
-      icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
-      headerText={<BotIcon4 style={{height: '60px'}}/>}
+      headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}
+      headerText={'Imagine'}
       isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={closeDialog}
-      actionTitle='Close'
-      actionIcon={<CopyIcon className='icon-share'/>}
-      actionCb={closeDialog}
-      hideActionButton={true}
-      content={
-        <>
-          <Helmet>
-            <title>Bot the Bldr</title>
-          </Helmet>
-          <Stack
-            spacing={2}
-            justifyContent={'center'}
-            alignContent={'center'}
-            sx={{minHeight: '390px'}}
-          >
+      setIsDialogDisplayed={setIsDialogDisplayed}
+    >
+      <Helmet><title>{finalPrompt ? `Imagine: ${finalPrompt}` : 'Imagine'}</title></Helmet>
+      <Stack
+        sx={{minHeight: '390px'}}
+      >
+        <Box
+          sx={{
+            minHeight: '390px',
+            borderRadius: '10px',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+          }}
+        >
+          {isImagineLoading && <Loader type='circular'/>}
+          {!isImagineLoading && image &&
+           <img
+             src={image}
+             alt='Imagine'
+             height={'390px'}
+           />}
+        </Box>
 
-            <Box
-              sx={{
-                minHeight: '390px',
-                borderRadius: '10px',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center'}}
-            >
-              {isImagineLoading &&
-                <Loader type='circular'/>
-              }
-              {!isImagineLoading && image &&
-               <img
-                 src={image}
-                 alt='Imagine'
-                 height={'390px'}
-               />}
-            </Box>
-
-            <TextField
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              fullWidth
-              multiline
-              size='small'
-              placeholder={'Imagine prompt'}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    {prompt && (
-                      <IconButton
-                        aria-label="clear text"
-                        onClick={handleClear}
-                        edge="end"
-                        size="small"
-                      >
-                        <ClearIcon size='inherit'/>
-                      </IconButton>
-                    )}
-                  </InputAdornment>
-                ),
-              }}
+        <Stack>
+          <TextField
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            fullWidth
+            multiline
+            size='small'
+            placeholder={'Imagine prompt'}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {prompt && (
+                    <IconButton
+                      aria-label="clear text"
+                      onClick={onClearClick}
+                      edge="end"
+                      size="small"
+                    >
+                      <ClearIcon size='inherit'/>
+                    </IconButton>
+                  )}
+                </InputAdornment>
+              ),
+            }}
+          />
+          <Stack direction={'row'} spacing={1} justifyContent='center'>
+            <RectangularButton
+              title={'Create'}
+              onClick={onCreateClick}
+              disabled={prompt.length === 0}
             />
-            <Stack
-              spacing={2}
-              direction={'row'}
-              justifyContent={'center'}
-              alignContent={'center'}
-            >
-              <RectangularButton
-                title={'Create'}
-                disabled={prompt.length === 0}
-                onClick={() => {
-                  setIsImagineLoading(true)
-                  sendToWarhol(screenshot, prompt, (renderDataUrl) => {
-                    setIsImagineLoading(false)
-                    setImagine(renderDataUrl)
-                    setImage(renderDataUrl)
-                  })
-                }}
-              />
-              <RectangularButton
-                title={'Download'}
-                disabled={imagine === null}
-                onClick={() => {
-                  downloadImaginePng(imagine)
-                }}
-              />
-            </Stack>
+            <RectangularButton
+              title={'Download'}
+              onClick={() => downloadImaginePng(imagine)}
+              disabled={imagine === null}
+            />
           </Stack>
-        </>
-      }
-    />)
+        </Stack>
+      </Stack>
+    </Dialog>
+  )
 }
 
 
-/**
- * @param {string} dataUrl The screenshot
- */
+/** @param {string} dataUrl The screenshot */
 function sendToWarhol(dataUrl, prompt, onReady) {
   const base64Content = dataUrl.split(',')[1]
 

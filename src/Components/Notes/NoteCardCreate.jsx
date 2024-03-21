@@ -9,8 +9,8 @@ import CardHeader from '@mui/material/CardHeader'
 import InputBase from '@mui/material/InputBase'
 import Stack from '@mui/material/Stack'
 import {TooltipIconButton} from '../Buttons'
+import {createIssue} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
-import {createIssue} from '../../utils/GitHub'
 import {assertStringNotEmpty} from '../../utils/assert'
 import CheckIcon from '@mui/icons-material/Check'
 
@@ -29,7 +29,7 @@ export default function NoteCardCreate({
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
-  const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
+  const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState(null)
 
@@ -47,7 +47,7 @@ export default function NoteCardCreate({
     }
 
     await createIssue(repository, issuePayload, accessToken)
-    toggleIsCreateNoteActive()
+    toggleIsCreateNoteVisible()
   }
 
   const submitEnabled = title !== null && title !== ''

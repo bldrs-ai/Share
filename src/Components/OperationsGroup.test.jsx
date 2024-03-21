@@ -5,6 +5,9 @@ import ShareMock from '../ShareMock'
 import useStore from '../store/useStore'
 import OperationsGroup from './OperationsGroup'
 
+// Instantiates ImagineControl which uses viewer's screenshot function
+// jest.mock('web-ifc-viewer')
+
 
 describe('OperationsGroup', () => {
   const deselectItems = jest.fn()
@@ -22,6 +25,7 @@ describe('OperationsGroup', () => {
       result.current.setViewer(viewer)
     })
   })
+
 
   it('should render and trigger Properties button when a selected element is present', async () => {
     const {result} = renderHook(() => useStore((state) => state))

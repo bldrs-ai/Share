@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <title>BLDRS - Redirect</title>
+  <!-- Start Single Page Apps for GitHub Pages -->
+  <script type="text/javascript">
+    // Single Page Apps for GitHub Pages
+    // MIT License
+    // https://github.com/rafgraph/spa-github-pages
+    // This page needs to be > 512 bytes to work for IE.  Currently 968.
+    var pathSegmentsToKeep = window.location.pathname.startsWith('/Share') ? 1 : 0
+
+    var l = window.location
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    )
+  </script>
+  <!-- End Single Page Apps for GitHub Pages -->
+</head>
+
+<body>
+</body>
+
+</html>

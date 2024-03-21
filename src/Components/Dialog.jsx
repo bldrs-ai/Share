@@ -1,69 +1,89 @@
-import React from 'react'
+import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
+import MuiDialog from '@mui/material/Dialog'
 import DialogActions from '@mui/material/DialogActions'
 import DialogContent from '@mui/material/DialogContent'
 import DialogTitle from '@mui/material/DialogTitle'
-import IconButton from '@mui/material/IconButton'
-import MuiDialog from '@mui/material/Dialog'
 import Typography from '@mui/material/Typography'
+import Paper from '@mui/material/Paper'
+import useTheme from '@mui/styles/useTheme'
 import {assertDefined} from '../utils/assert'
-import CloseIcon from '@mui/icons-material/Close'
+import {CloseButton} from './Buttons'
 
 
 /**
  * A generic base dialog component.
  *
- * @property {object} icon Leading icon above header description
+ * @property {object} headerIcon Leading icon above header description
  * @property {string} headerText Short message describing the operation
  * @property {boolean} isDialogDisplayed React var
  * @property {Function} setIsDialogDisplayed React setter
- * @property {React.ReactElement} content Content of the dialog
- * @property {string} actionTitle Title for the action button
- * @property {Function} actionCb Callback for action button
- * @property {React.ReactElement} [actionIcon] Optional icon for the action button
- * @return {React.Component}
+ * @property {string|ReactElement} [actionTitle] Title for the action button, or Component
+ * @property {Function} [actionCb] Callback for action button
+ * @property {ReactElement} children Content of the dialog
+ * @return {ReactElement}
  */
 export default function Dialog({
-  icon,
-  headerText,
   headerIcon,
+  headerText,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  content,
   actionTitle,
   actionCb,
-  actionIcon,
-  hideActionButton = false,
+  children,
 }) {
-  assertDefined(
-      headerText, isDialogDisplayed, setIsDialogDisplayed, content,
-      actionTitle, actionCb)
-  const close = () => setIsDialogDisplayed(false)
+  assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
+
+  const theme = useTheme()
+
+  const onCloseClick = () => setIsDialogDisplayed(false)
+
   return (
     <MuiDialog
       open={isDialogDisplayed}
-      onClose={close}
+      onClose={onCloseClick}
       data-testid='main-dialog'
     >
       <DialogTitle>
         {headerIcon ?
-          <Box sx={{display: 'inline-flex', flexDirection: 'column', textAlign: 'center', width: '46px', marginTop: '8px'}}>
-            {headerIcon}
-            <Typography variant={'overline'}>{headerText}</Typography>
-          </Box> : headerText
+         <Box
+           sx={{
+             display: 'flex',
+             flexDirection: 'column',
+             justifyContent: 'center',
+             alignItems: 'center',
+           }}
+         >
+           <Paper
+             sx={{
+               display: 'flex',
+               flexDirection: 'column',
+               alignItems: 'center',
+               justifyContent: 'center',
+               width: '2.5em',
+               height: '2.5em',
+               borderRadius: '50%',
+               background: theme.palette.secondary.main,
+             }}
+           >
+             {headerIcon}
+           </Paper>
+           <Typography variant='overline'>{headerText}</Typography>
+         </Box> : headerText
         }
 
       </DialogTitle>
-      <IconButton onClick={close} size="small">
-        <CloseIcon fontSize="inherit"/>
-      </IconButton>
-      <DialogContent>{content}</DialogContent>
-      {hideActionButton ? null :
+      <CloseButton onCloseClick={onCloseClick}/>
+      <DialogContent>{children}</DialogContent>
+      {(actionTitle === undefined || actionTitle === undefined) ? null :
        <DialogActions>
-         <Button variant="contained" onClick={actionCb} aria-label='action-button'>
-           {actionTitle}
-         </Button>
+         {typeof actionTitle === 'string' ?
+          <Button variant="contained" onClick={actionCb} aria-label='action-button'>
+            {actionTitle}
+          </Button> :
+          <>{actionTitle}</>
+         }
        </DialogActions>
       }
     </MuiDialog>

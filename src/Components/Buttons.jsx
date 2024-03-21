@@ -1,52 +1,55 @@
-import React from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
+import {useLocation} from 'react-router'
 import Button from '@mui/material/Button'
+import IconButton from '@mui/material/IconButton'
 import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
-import {assertDefined} from '../utils/assert'
 import useStore from '../store/useStore'
+import {assertDefined} from '../utils/assert'
+import {addHashParams, getHashParams} from '../utils/location'
+import {useIsMobile} from './Hooks'
+import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
-import CloseIcon from '@mui/icons-material/Close'
 
 
 /**
+ * An icon button with a tooltip.
+ *
  * @property {string} title Tooltip text
- * @property {Function} onClick callback
- * @property {object} icon button icon
+ * @property {Function} onClick Callback
+ * @property {object} icon Button icon
+ * @property {string} placement Tooltip placement
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
- * @property {string} [placement] Tooltip location. Default: left
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
- * @property {string} dataTestId Internal attribute for component testing. Default: ''
- * @return {React.Component} React component
+ * @property {string} dataTestId Internal attribute for component testing.  Default: ''
+ * @return {ReactElement}
  */
 export function TooltipIconButton({
   title,
   onClick,
   icon,
+  placement,
   enabled = true,
-  placement = 'right',
   selected = false,
-  size = 'medium',
-  dataTestId = '',
   aboutInfo = true,
-  variant = 'rounded',
+  color,
+  size,
+  variant,
+  dataTestId,
 }) {
-  assertDefined(title, onClick, icon)
-  const [openLocal, setOpenLocal] = React.useState(false)
-  const isHelpTooltips = useStore((state) => state.isHelpTooltips)
-  const open = aboutInfo ? isHelpTooltips : false
-  const handleClose = () => {
-    setOpenLocal(false)
-  }
-  const handleOpen = () => {
-    setOpenLocal(true)
-  }
+  assertDefined(title, onClick, icon, placement)
+  const isMobile = useIsMobile()
+  const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
+
+  const [openLocal, setOpenLocal] = useState(false)
+
   return (
     <Tooltip
-      open={openLocal || open}
-      onClose={handleClose}
-      onOpen={handleOpen}
+      open={isHelpTooltipsVisible || openLocal}
+      onClose={() => setOpenLocal(false)}
+      onOpen={() => setOpenLocal(aboutInfo)}
       title={title}
       describeChild
       placement={placement}
@@ -57,9 +60,10 @@ export function TooltipIconButton({
         onClick={onClick}
         value={''}
         size={size}
+        color={color}
         variant={variant}
         disabled={!enabled}
-        data-testid={dataTestId}
+        data-testid={dataTestId || title}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',
@@ -74,54 +78,102 @@ export function TooltipIconButton({
 
 /**
  * @property {string} title The text for tooltip
+ * @property {object} icon The header icon
  * @property {boolean} isDialogDisplayed Initial state
  * @property {Function} setIsDialogDisplayed Handler
- * @property {object} icon The header icon
- * @property {object} dialog The controlled dialog
- * @property {string} placement Default: left
- * @return {React.Component} React component
+ * @property {object} children The controlled dialog
+ * @property {string} [placement] See default in TooltipIconButton
+ * @property {string} [variant] See default in TooltipIconButton
+ * @return {ReactElement}
  */
 export function ControlButton({
   title,
+  icon,
   isDialogDisplayed,
   setIsDialogDisplayed,
-  icon,
-  dialog,
-  placement = 'left',
-  variant = 'rounded',
+  children,
+  ...props
 }) {
-  assertDefined(title, isDialogDisplayed, setIsDialogDisplayed, icon, dialog)
+  assertDefined(title, icon, isDialogDisplayed, setIsDialogDisplayed)
   return (
     <>
       <TooltipIconButton
         title={title}
-        onClick={() => setIsDialogDisplayed(true)}
         icon={icon}
+        onClick={() => setIsDialogDisplayed(!isDialogDisplayed)}
         selected={isDialogDisplayed}
-        className='icon-share'
-        variant={variant}
+        variant='control'
+        color='success'
+        size='small'
+        {...props}
       />
-      {isDialogDisplayed && dialog}
+      {children}
     </>
   )
 }
 
 
 /**
- * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * ControlButtonWithHashState component that accepts a hashPrefix parameter
+ * and forwards the rest of the props to the ControlButton component
+ *
+ * @property {string} hashPrefix The hash prefix for storing state
+ * @property {string} props See ControlButton
+ * @return {ReactElement}
  */
-export function CloseButton({onClick}) {
+export function ControlButtonWithHashState({
+  hashPrefix,
+  isDialogDisplayed,
+  setIsDialogDisplayed,
+  ...props
+}) {
+  assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
+
+  const location = useLocation()
+
+  // On first load, show dialog if state token present
+  useEffect(() => {
+    setIsDialogDisplayed(getHashParams(location, hashPrefix) !== undefined)
+  }, [hashPrefix, location, setIsDialogDisplayed])
+
+  // Enforce invariant
+  useEffect(() => {
+    // TODO(pablo): useNavigate
+    if (isDialogDisplayed) {
+      addHashParams(window.location, hashPrefix)
+    } else {
+      const currentHash = window.location.hash
+      const prefixRegex = new RegExp(`${hashPrefix}:`, 'g')
+      const newHash = currentHash.replace(prefixRegex, '')
+      window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
+    }
+  }, [isDialogDisplayed, hashPrefix])
+
   return (
-    <TooltipIconButton
-      title='Close'
-      onClick={onClick}
-      placement='bottom'
-      icon={<CloseIcon className='icon-share icon-small'/>}
-      aboutInfo={false}
-      className='closeButton'
-      variant='noBackground'
+    <ControlButton
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={() => setIsDialogDisplayed(!isDialogDisplayed)}
+      {...props}
     />
+  )
+}
+
+
+/**
+ * @property {Function} onCloseClick Handler for close event.
+ * @return {ReactElement}
+ */
+export function CloseButton({onCloseClick}) {
+  return (
+    <IconButton
+      title='Close'
+      onClick={onCloseClick}
+      size='small'
+      disableFocusRipple={true}
+      disableRipple={true}
+    >
+      <CloseIcon className='icon-share'/>
+    </IconButton>
   )
 }
 
@@ -147,15 +199,15 @@ export function RectangularButton({
   assertDefined(title, onClick)
   return (
     icon ?
-      <Button onClick={onClick} startIcon={icon} variant='rectangular'>{title}</Button> :
-      <Button onClick={onClick} variant='rectangular' disabled={disabled}>{title}</Button>
+      <Button onClick={onClick} startIcon={icon} variant='rectangular' color='secondary'>{title}</Button> :
+      <Button onClick={onClick} variant='rectangular' color='secondary' disabled={disabled}>{title}</Button>
   )
 }
 
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export function FullScreenButton({onClick}) {
   return (
@@ -171,7 +223,7 @@ export function FullScreenButton({onClick}) {
 
 /**
  * @property {Function} onClick Handler for close event.
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export function BackButton({onClick}) {
   return (

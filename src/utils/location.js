@@ -1,12 +1,18 @@
 import {isNumeric} from './strings'
+import {assertObject, assertString} from './assert'
+import debug from './debug'
 
 
+// Init
 /** @type {Object<string, Function>} */
 const hashListeners = {}
 window.onhashchange = () => {
+  // console.log('HASH CHANGE: ', window.location.hash)
+  // TODO(pablo)
+  /*
   Object.values(hashListeners).forEach((listener) => {
     listener()
-  })
+  })*/
 }
 
 
@@ -34,6 +40,7 @@ export function addHashListener(name, onHashCb) {
  *   parameter names in the encoding, default is false.
  */
 export function addHashParams(location, name, params, includeNames = false) {
+  debug().error('cur location hash:', window.location.hash, ', new params:', params)
   const hashGlobalParams = getHashParams(location, name)
   let objectGlobalParams = {}
   if (hashGlobalParams) {
@@ -49,7 +56,7 @@ export function addHashParams(location, name, params, includeNames = false) {
   }
 
   const encodedParams = getEncodedParam(objectGlobalParams, includeNames)
-  const sets = location.hash.substring(1).split('::')
+  const sets = location.hash.substring(1).split(FEATURE_SEP)
   /** @type {Object<string, string>} */
   const setMap = {}
 
@@ -70,12 +77,16 @@ export function addHashParams(location, name, params, includeNames = false) {
   for (const setKey in setMap) {
     if (Object.prototype.hasOwnProperty.call(setMap, setKey)) {
       const setValue = setMap[setKey]
-      newHash += `${newHash.length === 0 ? '' : '::'}${setKey}:${setValue}`
+      newHash += `${newHash.length === 0 ? '' : FEATURE_SEP}${setKey}:${setValue}`
     }
   }
 
   location.hash = newHash
 }
+
+
+// don't export
+const FEATURE_SEP = ';'
 
 
 /**
@@ -125,7 +136,6 @@ export function getObjectParams(hashParams) {
       return
     }
     const paramParts = param.split('=')
-    // eslint-disable-next-line no-magic-numbers
     if (paramParts.length < 2) {
       if (isNumeric(paramParts[0])) {
         // @ts-ignore
@@ -160,6 +170,7 @@ export function getHashParams(location, name) {
  * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParamsFromUrl(url, name) {
+  assertString(url)
   const splitUrl = url.split('#')
   if (!splitUrl[1]) {
     return undefined
@@ -174,7 +185,8 @@ export function getHashParamsFromUrl(url, name) {
  * @return {string|undefined} The encoded params (e.g. p:x=0,y=0)
  */
 export function getHashParamsFromHashStr(hashStr, name) {
-  const sets = hashStr.split('::')
+  assertString(hashStr)
+  const sets = hashStr.split(FEATURE_SEP)
   const prefix = `${name}:`
   for (let i = 0; i < sets.length; i++) {
     const set = sets[i]
@@ -191,10 +203,12 @@ export function getHashParamsFromHashStr(hashStr, name) {
  *
  * @param {Location} location
  * @param {string} name prefix of the params to fetch
- * @param {Array<string>} paramKeys param keys to remove from hash params. if empty, then remove all params
+ * @param {Array<string>} paramKeys param keys to remove from hash
+ *     params. if empty, then remove all params
  */
 export function removeHashParams(location, name, paramKeys = []) {
-  const sets = location.hash.substring(1).split('::')
+  assertObject(location)
+  const sets = location.hash.substring(1).split(FEATURE_SEP)
   const prefix = `${name}:`
   let newParamsEncoded = ''
 
@@ -221,7 +235,7 @@ export function removeHashParams(location, name, paramKeys = []) {
       set = `${prefix}${subSets.join(',')}`
     }
 
-    const separator = newParamsEncoded.length === 0 ? '' : '::'
+    const separator = newParamsEncoded.length === 0 ? '' : FEATURE_SEP
     newParamsEncoded += separator + set
   }
 
@@ -230,6 +244,22 @@ export function removeHashParams(location, name, paramKeys = []) {
     history.pushState(
         '', document.title, window.location.pathname + window.location.search)
   }
+}
+
+
+/**
+ * Equivalent to remove of the named param, then add params to name.
+ *
+ * @param {Location} location The window.location object
+ * @param {string} name A unique name for the params
+ * @param {Object<string, any>} params The parameters to encode
+ * @param {boolean} includeNames Whether or not to include the
+ *   parameter names in the encoding, default is false.
+ */
+export function setHashParams(location, name, params, includeNames = false) {
+  assertObject(location)
+  removeHashParams(location, name)
+  addHashParams(location, name, params, includeNames)
 }
 
 
@@ -276,7 +306,6 @@ export function parseGitHubPath(path) {
     repo = parts[2]
     branch = parts[3]
     // Join the remaining parts to form the filePath
-    // eslint-disable-next-line no-magic-numbers
     filePath = parts.slice(4).join('/')
     // get commit hash
     isPublic = true
@@ -286,7 +315,6 @@ export function parseGitHubPath(path) {
     repo = parts[1]
     branch = parts[2]
     // Join the remaining parts to form the filePath
-    // eslint-disable-next-line no-magic-numbers
     filePath = parts.slice(3).join('/')
     isPublic = false
   }

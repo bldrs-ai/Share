@@ -7,29 +7,37 @@
  */
 export default function createNotesSlice(set, get) {
   return {
-    notes: null,
-    isLoadingNotes: false,
-    isCreateNoteActive: false,
+    isNotesEnabled: true,
+    setIsNotesEnabled: (isEnabled) => set(() => ({isNotesEnabled: isEnabled})),
+
+    comments: null,
     createdNotes: null,
     deletedNotes: null,
-    synchSidebar: true, // To render again, not related to flag
-    comments: null,
+    isCreateNoteVisible: false,
+    isLoadingNotes: false,
+    isNotesVisible: false,
+    notes: null,
+    placeMark: null,
+    placeMarkActivated: false,
+    placeMarkId: null,
     selectedNoteId: null,
     selectedNoteIndex: null,
-    placeMark: null,
-    placeMarkId: null,
-    placeMarkActivated: false,
-    setNotes: (notes) => set(() => ({notes: notes})),
-    toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
-    toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
-    toggleIsCreateNoteActive: () => set((state) => ({isCreateNoteActive: !state.isCreateNoteActive})),
+    synchSidebar: true, // To render again, not related to flag
+    setComments: (comments) => set(() => ({comments: comments})),
     setCreatedNotes: (createdNotes) => set(() => ({createdNotes: createdNotes})),
     setDeletedNotes: (deletedNotes) => set(() => ({deletedNotes: deletedNotes})),
-    setComments: (comments) => set(() => ({comments: comments})),
+    setIsNotesVisible: (isVisible) => set(() => ({isNotesVisible: isVisible})),
+    setNotes: (notes) => set(() => ({notes: notes})),
+    setPlaceMark: (newPlaceMark) => set(() => ({placeMark: newPlaceMark})),
+    setPlaceMarkActivated: (newPlaceMarkActivated) =>
+      set(() => ({placeMarkActivated: newPlaceMarkActivated})),
+    setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
-    setPlaceMark: (newPlaceMark) => set(() => ({placeMark: newPlaceMark})),
-    setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
-    setPlaceMarkActivated: (newPlaceMarkActivated) => set(() => ({placeMarkActivated: newPlaceMarkActivated})),
+    toggleIsCreateNoteVisible: () =>
+      set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
+    toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
+    toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
+    toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
   }
 }

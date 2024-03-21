@@ -12,7 +12,7 @@ let DEBUG_LEVEL = WARN
  * Create debug statement.
  *
  * @param {number} level Default is INFO.
- * @return {Function} returned function is console.log or a no-op if debugging is turned off
+ * @return {console|MockLog} returned function is console.log or a no-op if debugging is turned off
  */
 export default function debug(level = INFO) {
   return level >= DEBUG_LEVEL ? console : mockLog
@@ -35,8 +35,22 @@ export function disableDebug() {
 
 
 /**
+ * Mock log object type definition.
+ *
+ * @typedef {object} MockLog
+ * @property {Function} log - Mimics console.log
+ * @property {Function} warn - Mimics console.warn
+ * @property {Function} error - Mimics console.error
+ * @property {Function} time - Mimics console.time
+ * @property {Function} timeEnd - Mimics console.timeEnd
+ */
+
+
+/**
  * When debugging is turned off, use this mock log object to throw
  * away log messages.
+ *
+ * @type {MockLog}
  */
 const mockLog = {
   /* eslint-disable no-empty-function */

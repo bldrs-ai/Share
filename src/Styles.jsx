@@ -43,9 +43,9 @@ export default function Styles({theme}) {
           marginRight: 'auto',
         },
         '.icon-share': {
+          width: '20px',
+          height: '20px',
           fill: theme.palette.primary.contrastText,
-          width: '19px',
-          height: '19px',
         },
         '.icon-small': {
           width: '15px',

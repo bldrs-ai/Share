@@ -1,4 +1,3 @@
-/* eslint-disable no-magic-numbers */
 import React from 'react'
 import debug from '../utils/debug'
 import {ThemeCtx} from '../theme/Theme.fixture'

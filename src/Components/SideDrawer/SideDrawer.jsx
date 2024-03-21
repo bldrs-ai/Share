@@ -1,70 +1,40 @@
-import React, {useEffect, useRef} from 'react'
-import {useLocation} from 'react-router-dom'
+import React, {ReactElement, useRef} from 'react'
 import Box from '@mui/material/Box'
 import Divider from '@mui/material/Divider'
 import Paper from '@mui/material/Paper'
 import useTheme from '@mui/styles/useTheme'
 import {useIsMobile} from '../Hooks'
+import NotesPanel from '../Notes/NotesPanel'
+import PropertiesPanel from '../Properties/PropertiesPanel'
 import useStore from '../../store/useStore'
 import {hexToRgba} from '../../utils/color'
-import {getHashParams} from '../../utils/location'
 import HorizonResizerButton from './HorizonResizerButton'
 import VerticalResizerButton from './VerticalResizerButton'
-import {PropertiesPanel, NotesPanel} from './SideDrawerPanels'
 
 
 /**
- * @return {React.Component}
+ * Container for Notes and Properties
+ *
+ * @return {ReactElement}
  */
 export default function SideDrawer() {
-  const isDrawerOpen = useStore((state) => state.isDrawerOpen)
-  const closeDrawer = useStore((state) => state.closeDrawer)
-  const isNotesOn = useStore((state) => state.isNotesOn)
-  const isPropertiesOn = useStore((state) => state.isPropertiesOn)
-  const openDrawer = useStore((state) => state.openDrawer)
-  const openNotes = useStore((state) => state.openNotes)
-  const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
-  const sidebarWidth = useStore((state) => state.sidebarWidth)
-  const setSidebarWidth = useStore((state) => state.setSidebarWidth)
+  const isNotesVisible = useStore((state) => state.isNotesVisible)
+  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const sidebarHeight = useStore((state) => state.sidebarHeight)
-  const setSidebarHeight = useStore((state) => state.setSidebarHeight)
-  const location = useLocation()
+  const sidebarWidth = useStore((state) => state.sidebarWidth)
+
   const isMobile = useIsMobile()
-  const sidebarRef = useRef(null)
   const theme = useTheme()
+
+  const sidebarRef = useRef(null)
+
   const thickness = 10
-  const isDividerOn = isNotesOn && isPropertiesOn
+  const isDrawerOpen = isNotesVisible === true || isPropertiesVisible === true
+  const isDividerVisible = isNotesVisible && isPropertiesVisible
   const borderOpacity = 0.5
-  const borderColor = hexToRgba(theme.palette.primary.contrastText, borderOpacity)
+  const borderColor = hexToRgba(theme.palette.secondary.contrastText, borderOpacity)
 
-
-  useEffect(() => {
-    const noteHash = getHashParams(location, 'i')
-    if (noteHash !== undefined) {
-      const extractedCommentId = noteHash.split(':')[1]
-      setSelectedNoteId(Number(extractedCommentId))
-      if (!isDrawerOpen) {
-        openDrawer()
-        openNotes()
-      }
-    }
-
-    // This address bug #314 by clearing selected issue when new model is loaded
-    if (noteHash === undefined && isDrawerOpen) {
-      setSelectedNoteId(null)
-    }
-
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location, openDrawer, setSelectedNoteId])
-
-
-  useEffect(() => {
-    if (!isNotesOn && !isPropertiesOn && isDrawerOpen) {
-      closeDrawer()
-    }
-  }, [isNotesOn, isPropertiesOn, isDrawerOpen, closeDrawer])
-
-
+  // TODO(pablo): removed what looked to be notes useEffect here.
   return (
     <Box
       sx={Object.assign({
@@ -89,55 +59,39 @@ export default function SideDrawer() {
           flexDirection: 'row',
           width: '100%',
           borderRadius: 0,
-          background: theme.palette.primary.background,
+          background: theme.palette.secondary.main,
         }}
         ref={sidebarRef}
       >
-        {!isMobile &&
-          <HorizonResizerButton
-            sidebarRef={sidebarRef}
-            thickness={thickness}
-            isOnLeft={true}
-            sidebarWidth={sidebarWidth}
-            setSidebarWidth={setSidebarWidth}
-          />
-        }
-        {isMobile &&
-          <VerticalResizerButton
-            sidebarRef={sidebarRef}
-            thickness={thickness}
-            isOnTop={true}
-            sidebarHeight={sidebarHeight}
-            setSidebarHeight={setSidebarHeight}
-          />
-        }
+        {!isMobile && <HorizonResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnLeft={true}/>}
+        {isMobile && <VerticalResizerButton sidebarRef={sidebarRef} thickness={thickness} isOnTop={true}/>}
         {/* Content */}
         <Box
           sx={{
             width: '100%',
-            margin: '1em',
+            margin: '0 1em',
             overflow: 'hidden',
           }}
         >
           <Box
             sx={{
-              display: isNotesOn ? 'block' : 'none',
-              height: isPropertiesOn ? `50%` : '100%',
+              display: isNotesVisible ? 'block' : 'none',
+              height: isPropertiesVisible ? `50%` : '100%',
               overflowX: 'hidden',
               overflowY: 'auto',
             }}
           >
-            {isNotesOn && <NotesPanel/>}
+            {isNotesVisible && <NotesPanel/>}
           </Box>
-          {isDividerOn && <Divider sx={{borderColor: borderColor}}/>}
+          {isDividerVisible && <Divider sx={{borderColor: borderColor}}/>}
           <Box
             sx={{
-              display: isPropertiesOn ? 'block' : 'none',
-              height: isNotesOn ? `50%` : '100%',
-              marginTop: isDividerOn ? '1em' : '0',
+              display: isPropertiesVisible ? 'block' : 'none',
+              height: isNotesVisible ? `50%` : '100%',
+              marginTop: isDividerVisible ? '1em' : '0',
             }}
           >
-            {isPropertiesOn && <PropertiesPanel includeGutter={!isDividerOn}/>}
+            {isPropertiesVisible && <PropertiesPanel/>}
           </Box>
         </Box>
       </Paper>

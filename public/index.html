@@ -2,7 +2,7 @@
 <html lang="en">
 
 <head>
-  <meta charset="utf-8" />
+  <meta charset="utf-8"/>
   <meta name="description" content="Build every thing together: Collab and Share 3d models online"/>
   <meta name="keywords" content="ifc, ifc viewer, cad viewer, share ifc, share model, open source"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
@@ -35,6 +35,7 @@
   <script type="application/javascript">
     const loader = document.createElement('script')
     const pathPrefix = window.location.pathname.startsWith('/Share') ? '/Share' : ''
+    loader.setAttribute('type', 'module')
     loader.setAttribute('src', pathPrefix + '/index.js')
     document.body.appendChild(loader)
   </script>

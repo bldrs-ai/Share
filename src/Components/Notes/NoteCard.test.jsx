@@ -1,15 +1,31 @@
 import React from 'react'
-import {render,
-  act, renderHook,
-  screen, fireEvent} from '@testing-library/react'
+import {
+  act,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  within,
+} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn} from '../../__mocks__/authentication'
 import useStore from '../../store/useStore'
 import ShareMock from '../../ShareMock'
 import NoteCard from './NoteCard'
-import {MOCK_NOTES} from '../../utils/GitHub'
+import {MOCK_NOTES} from './Notes.fixture'
 
 
 describe('NoteCard', () => {
+  beforeAll(async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => {
+      result.current.setRepository('testOrg', 'testRepo')
+    })
+    /*
+    await act(() => {
+      console.error('REPO!', result.current.repository)
+    })*/
+  })
+
   it('NoteCard', () => {
     const id = 123
     const index = 123
@@ -47,7 +63,7 @@ describe('NoteCard', () => {
         <ShareMock>
           <NoteCard id={id} index={index} title="Select the note card - title"/>
         </ShareMock>)
-    const selectIssueButton = rendered.getByTestId('selectionContainer')
+    const selectIssueButton = rendered.getByTestId('card-body')
     fireEvent.click(selectIssueButton)
     expect(screen.getByText('Select the note card - title')).toBeInTheDocument()
   })
@@ -68,7 +84,7 @@ describe('NoteCard', () => {
     expect(showCamera).toBeInTheDocument()
   })
 
-  it('Delete is working', async () => {
+  it('Note menu has edit and delete', async () => {
     const id = 123
     const index = 123
     const username = 'testing'
@@ -83,7 +99,7 @@ describe('NoteCard', () => {
     await act(() => {
       result.current.setNotes(MOCK_NOTES)
     })
-    const {getByTitle, getByText} = render(
+    const {getByTestId} = render(
         <ShareMock>
           <NoteCard
             id={id}
@@ -96,49 +112,20 @@ describe('NoteCard', () => {
             synchedNote={synchedNote}
           />
         </ShareMock>)
-    expect(getByTitle('Note Actions')).toBeInTheDocument()
-    const noteActionsMenu = getByTitle('Note Actions')
-    fireEvent.click(noteActionsMenu)
-    const deleteButton = getByText('Delete')
-    expect(deleteButton).toBeInTheDocument()
-    const res = fireEvent.click(deleteButton)
-    expect(res).toBe(true)
-  })
 
-  it('Edit is working', async () => {
-    const id = 123
-    const index = 123
-    const username = 'testing'
-    const title = 'Title'
-    const noteNumber = 1
-    const date = ''
-    const synchedNote = true
-    const {result} = renderHook(() => useStore((state) => state))
+    const noteMenuButton = getByTestId('note-menu-button')
+    expect(noteMenuButton).toBeInTheDocument()
+    expect(fireEvent.click(noteMenuButton)).toBe(true)
+    const noteMenu = getByTestId('note-menu')
+    expect(noteMenu).toBeInTheDocument()
 
-    mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
+    const deleteItem = within(noteMenu).getByText('Delete')
+    expect(deleteItem).toBeVisible()
+    expect(fireEvent.click(deleteItem)).toBe(true)
 
-    await act(() => {
-      result.current.setNotes(MOCK_NOTES)
-    })
-    const {getByTitle, getByText} = render(
-        <ShareMock>
-          <NoteCard
-            id={id}
-            index={index}
-            username={username}
-            synched={true}
-            noteNumber={noteNumber}
-            title={title}
-            date={date}
-            synchedNote={synchedNote}
-          />
-        </ShareMock>)
-    expect(getByTitle('Note Actions')).toBeInTheDocument()
-    const noteActionsMenu = getByTitle('Note Actions')
-    fireEvent.click(noteActionsMenu)
-    const editButton = getByText('Edit')
-    expect(editButton).toBeInTheDocument()
-    const res = fireEvent.click(editButton)
-    expect(res).toBe(true)
+    expect(fireEvent.click(noteMenuButton)).toBe(true)
+    const editItem = within(noteMenu).getByText('Edit')
+    expect(editItem).toBeVisible()
+    expect(fireEvent.click(editItem)).toBe(true)
   })
 })
