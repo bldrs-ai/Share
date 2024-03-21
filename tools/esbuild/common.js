@@ -21,7 +21,7 @@ export default {
   platform: 'browser',
   target: ['chrome64', 'firefox62', 'safari11.1', 'edge79', 'es2021'],
   bundle: true,
-  minify: (process.env.MINIFY_BUILD || 'true') === 'true',
+  minify: (process.env.MINIFY || 'true') === 'true',
   keepNames: true, // TODOD(pablo): have had breakage without this
   splitting: false,
   metafile: true,

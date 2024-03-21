@@ -1,9 +1,12 @@
-import React, {ReactElement} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate} from 'react-router-dom'
+import IconButton from '@mui/material/IconButton'
 import Snackbar from '@mui/material/Snackbar'
+import Stack from '@mui/material/Stack'
 import AlertDialog from '../Components/AlertDialog'
 import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
+import CloseIcon from '@mui/icons-material/Close'
 
 
 /** @return {ReactElement} */
@@ -13,7 +16,15 @@ export default function AlertAndSnackbar() {
   const snackMessage = useStore((state) => state.snackMessage)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
+  const [isSnackOpen, setIsSnackOpen] = useState(false)
+
   const navigate = useNavigate()
+
+
+  useEffect(() => {
+    setIsSnackOpen(snackMessage !== null)
+  }, [snackMessage, setIsSnackOpen])
+
 
   return (
     <>
@@ -25,12 +36,13 @@ export default function AlertAndSnackbar() {
       />
       <Snackbar
         anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
-        open={snackMessage !== null}
-        style={{bottom: '1em'}}
+        open={isSnackOpen}
+        onClose={(event, reason) => setIsSnackOpen(false)}
         message={
-          <div style={{wordWrap: 'break-word', whiteSpace: 'normal', maxWidth: '250px'}}>
+          <Stack direction='row'>
             {snackMessage}
-          </div>
+            <IconButton onClick={() => setIsSnackOpen(false)}><CloseIcon className='icon-share'/></IconButton>
+          </Stack>
         }
       />
     </>
