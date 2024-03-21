@@ -31,7 +31,7 @@ jobs:
         # Ensure your build script correctly outputs to the ./docs directory
         env:
           NODE_ENV: production
-          SHARE_CONFIG: dev
+          SHARE_CONFIG: cypress
 
       - name: Cypress run
         uses: cypress-io/github-action@v5
