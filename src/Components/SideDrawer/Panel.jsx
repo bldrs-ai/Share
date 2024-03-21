@@ -33,7 +33,7 @@ export default function Panel({title, onCloseClick, children, action = null, sx 
         'opacity': .96,
         'position': 'relative',
         'borderRadius': '5px',
-        'backgroundColor': theme.palette.secondary.dark,
+        'backgroundColor': theme.palette.secondary.main,
         '@media (max-width: 800px)': {
           maxHeight: '400px',
         },
@@ -49,6 +49,7 @@ export default function Panel({title, onCloseClick, children, action = null, sx 
           position: 'sticky',
           top: 0,
           zIndex: 1,
+          backgroundColor: theme.palette.secondary.dark,
         }}
       >
         {typeof(title) === 'string' ?
