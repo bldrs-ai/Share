@@ -31,6 +31,6 @@ describe('AboutControl', () => {
     const {getByTitle} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
     const aboutControl = getByTitle(bldrsVersionString)
     fireEvent.click(aboutControl)
-    await(waitFor(() => expect(document.title).toBe('About — Bldrs.ai')))
+    await(waitFor(() => expect(document.title).toBe('About — bldrs.ai')))
   })
 })
