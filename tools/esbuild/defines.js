@@ -7,9 +7,9 @@ import prod from './vars.prod.js'
 function zipEnvWithConfig(config) {
   const defines = {}
   Object.keys(config).forEach((name) => {
-    let val = parse(process.env[name]) || config[name]
+    let val = parse(process.env[name])
     if (val === undefined) {
-      val = null
+      val = config[name] || null
     }
     defines[`process.env.${name}`] = str(val)
   })
