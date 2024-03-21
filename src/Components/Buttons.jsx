@@ -7,6 +7,7 @@ import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
 import {addHashParams, getHashParams} from '../utils/location'
+import {useIsMobile} from './Hooks'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
 import BackIcon from '../assets/icons/Back.svg'
@@ -39,7 +40,8 @@ export function TooltipIconButton({
   dataTestId,
 }) {
   assertDefined(title, onClick, icon, placement)
-  const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible)
+  const isMobile = useIsMobile()
+  const isHelpTooltipsVisible = useStore((state) => state.isHelpTooltipsVisible) && !isMobile
 
   const [openLocal, setOpenLocal] = useState(false)
 
