@@ -52,7 +52,7 @@ function AboutContent() {
   return (
     <>
       <Helmet>
-        <title>About — Bldrs.ai</title>
+        <title>About — bldrs.ai</title>
       </Helmet>
       <Stack
         spacing={3}

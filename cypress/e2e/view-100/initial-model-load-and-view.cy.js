@@ -32,25 +32,26 @@ describe('initial-model-load-and-view', () => {
       cy.screenshot()
     })
 
-    it.only('See model centered in page (cookie isFirstTime: undefined)', () => {
+    it('See model centered in page (cookie isFirstTime: undefined)', () => {
       cy.visit('/')
       waitForModel()
       // Close About
       cy.get('button[aria-label="action-button"]')
           .click()
+      cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
       cy.screenshot()
     })
 
     it('Visit about permalink', () => {
       cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:')
       waitForModel()
+      cy.title().should('eq', 'About — bldrs.ai')
       cy.screenshot()
     })
 
     it('Title should contain model followed by repo and org', () => {
       cy.visit('/')
       waitForModel()
-      cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
     })
   })
 })
