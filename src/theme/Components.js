@@ -83,6 +83,24 @@ export function getComponentOverrides(palette, typography) {
         },
       },
     },
+    MuiChip: {
+      styleOverrides: {
+        filled: ({theme}) => ({
+          'border': `1px solid ${theme.palette.primary.dark}`,
+          'backgroundColor': theme.palette.primary.dark,
+          '&:hover': {
+            backgroundColor: theme.palette.secondary.main,
+          },
+        }),
+        outlined: ({theme}) => ({
+          'borderColor': theme.palette.primary.dark,
+          'color': theme.palette.primary.contrastText,
+          '&&:hover': { // Increased specificity
+            backgroundColor: theme.palette.primary.main,
+          },
+        }),
+      },
+    },
     MuiCardContent: {
       styleOverrides: {
         root: {
