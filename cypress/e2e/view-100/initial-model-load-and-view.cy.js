@@ -1,3 +1,6 @@
+import '@percy/cypress'
+
+
 describe('initial-model-load-and-view', () => {
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
     /** Helper to close About. */
@@ -29,7 +32,7 @@ describe('initial-model-load-and-view', () => {
       cy.setCookie('isFirstTime', '1')
       cy.visit('/')
       waitForModel()
-      cy.screenshot()
+      cy.percySnapshot()
     })
 
     it('See model centered in page (cookie isFirstTime: undefined)', () => {
