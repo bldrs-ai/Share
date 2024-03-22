@@ -1,19 +1,10 @@
 import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
-import Accordion from '@mui/material/Accordion'
-import AccordionSummary from '@mui/material/AccordionSummary'
-import AccordionDetails from '@mui/material/AccordionDetails'
 import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
-import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import FormControl from '@mui/material/FormControl'
-import FormHelperText from '@mui/material/FormHelperText'
-import IconButton from '@mui/material/Button'
-import InputAdornment from '@mui/material/InputAdornment'
+import Button from '@mui/material/Button'
 import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -28,8 +19,7 @@ import {ControlButtonWithHashState} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
-import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined'
-import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined'
+import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
 /**
@@ -67,7 +57,7 @@ export default function OpenModelControl() {
   return (
     <ControlButtonWithHashState
       title='Open'
-      icon={<FolderOpenOutlinedIcon className='icon-share'/>}
+      icon={<CreateNewFolderIcon className='icon-share'/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
       hashPrefix={OPEN_MODEL_PREFIX}
@@ -105,12 +95,9 @@ function OpenModelDialog({
   const [selectedOrgName, setSelectedOrgName] = useState('')
   const [selectedRepoName, setSelectedRepoName] = useState('')
   const [selectedFileName, setSelectedFileName] = useState('')
+  const [currentTab, setCurrentTab] = useState('Open')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
   const [filesArr, setFilesArr] = useState([''])
-  const [currentTab, setCurrentTab] = useState('Open')
-  const [samplesExpanded, setSamplesExpanded] = useState(true)
-  const [saveActionsExpanded, setSaveActionsExpanded] = useState(true)
-  const [saveAction, setSaveAction] = useState('version')
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
@@ -183,15 +170,54 @@ function OpenModelDialog({
       </Stack>
     )
   }
-  const LocationComponent = () => {
-    return (
-      <Stack>
-         <Selector
+
+  return (
+    <Dialog
+      headerIcon={<CreateNewFolderIcon className='icon-share'/>}
+      headerText='Open'
+      isDialogDisplayed={isDialogDisplayed}
+      setIsDialogDisplayed={setIsDialogDisplayed}
+      actionTitle='Open model'
+      actionCb={openFile}
+    >
+      <Stack sx={{padding: '20px 0px 20px 0px'}}>
+        <NavComponent/>
+      </Stack>
+      <Stack
+        spacing={1}
+        direction='column'
+        justifyContent='center'
+        alignItems='center'
+      >
+        <>
+          <Typography
+            variant='overline'
+            sx={{marginBottom: '6px'}}
+          >
+            Browse sample models
+          </Typography>
+          <SampleModelFileSelector
+            navigate={navigate}
+            setIsDialogDisplayed={setIsDialogDisplayed}
+          />
+        </>
+        {!isAuthenticated ?
+
+         <PleaseLogin/> :
+
+         <Stack alignItems='center'>
+           <Typography
+             variant='overline'
+             sx={{marginBottom: '6px'}}
+           >
+             Browse your GitHub projects
+           </Typography>
+           <Selector
              label='Organization'
              list={orgNamesArrWithAt}
              selected={selectedOrgName}
              setSelected={selectOrg}
-         />
+           />
            <Selector
              label='Repository'
              list={repoNamesArr}
@@ -206,191 +232,22 @@ function OpenModelDialog({
              setSelected={setSelectedFileName}
              testId='File'
            />
-            {selectedFileName !== '' &&
+           {selectedFileName !== '' &&
             <Box sx={{textAlign: 'center', marginTop: '4px'}}>
               <Button onClick={navigateToFile}>
                 Load file
               </Button>
             </Box>
            }
-      </Stack>
-    )
-  }
-  const SaveAction = () => {
-    return (
-      <>
-        <Stack
-          direction='row'
-          justifyContent="center"
-          spacing={1}
-          sx={{padding: '0px 0px 20px 0px'}}
-        >
-          <Chip
-            label="Version"
-            onClick={() => setSaveAction('version')}
-            variant={saveAction === 'version' ? 'filled' : 'outlined'}
-            color='primary'
-          />
-          <Chip
-            label="Model"
-            onClick={() => setSaveAction('model')}
-            variant={saveAction === 'model' ? 'filled' : 'outlined'}
-            color='primary'
-          />
-        </Stack>
-        {saveAction === 'version' &&
-          <FormControl >
-            <Select
-              labelId="demo-simple-select-label"
-              id="demo-simple-select"
-              // value={file}
-              size='small'
-            >
-              <MenuItem value={null}>...</MenuItem>
-              <MenuItem value={20}>One</MenuItem>
-              <MenuItem value={30}>Two</MenuItem>
-              <MenuItem value={40}>Three</MenuItem>
-            </Select>
-            <FormHelperText>Choose model to version</FormHelperText>
-          </FormControl>
+         </Stack>
         }
-        {saveAction === 'model' &&
-          <FormControl variant="standard">
-          <TextField
-            fullWidth
-            variant="outlined"
-            size="small"
-            multiline
-            placeholder="Model name"
-            helperText='Please include the extension'
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton edge="end" size="small" sx={{border: 'none', width: 20, height: 20}}>
-                    <ArrowForwardOutlinedIcon color='primary'/>
-                  </IconButton>
-                </InputAdornment>
-              ),
-            }}
-          />
-          </FormControl>
-        }
-      </>
-    )
-  }
-
-  return (
-    <Dialog
-      headerIcon={<FolderOpenOutlinedIcon className='icon-share'/>}
-      headerText='Manage projects'
-      isDialogDisplayed={isDialogDisplayed}
-      setIsDialogDisplayed={setIsDialogDisplayed}
-      actionTitle='Open local model'
-      actionCb={openFile}
-    >
-      <Stack sx={{padding: '20px 0px 20px 0px'}}>
-        <NavComponent/>
-      </Stack>
-      {currentTab === 'Open' &&
-        <Box sx={{margin: '20px 0px'}}>
-        <Accordion
-          expanded={samplesExpanded}
-          onChange={() => setSamplesExpanded(!samplesExpanded)}
+        <Typography
+          variant='overline'
+          sx={{marginBottom: '6px'}}
         >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon/>}
-            aria-controls="panel1-content"
-            id="panel1-header"
-          >
-            <Typography variant={'overline'} >
-              Sample Projects
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <SampleModelFileSelector
-              navigate={navigate}
-              setIsDialogDisplayed={setIsDialogDisplayed}
-            />
-          </AccordionDetails>
-        </Accordion>
-        </Box>
-      }
-      {isAuthenticated && currentTab === 'Open' &&
-        <Box sx={{margin: '20px 0px'}}>
-          <Accordion>
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon/>}
-              aria-controls="panel1-content"
-              id="panel1-header"
-            >
-              <Typography variant={'overline'} >
-                Model Location
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <LocationComponent/>
-            </AccordionDetails>
-          </Accordion>
-        </Box>
-      }
-      {isAuthenticated && currentTab === 'Save' &&
-        <Box sx={{margin: '20px 0px'}}>
-          <Accordion
-            expanded={saveActionsExpanded}
-            onChange={() => setSaveActionsExpanded(!saveActionsExpanded)}
-          >
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon/>}
-              aria-controls="panel1-content"
-              id="panel1-header"
-            >
-              <Typography variant={'overline'} >
-                Save Action
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <SaveAction/>
-            </AccordionDetails>
-          </Accordion>
-        </Box>
-      }
-      {!isAuthenticated && <PleaseLogin/> }
-      {isAuthenticated && currentTab === 'Save' &&
-        <Box sx={{margin: '20px 0px'}}>
-          <Accordion>
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon/>}
-              aria-controls="panel1-content"
-              id="panel1-header"
-            >
-              <Typography variant={'overline'} >
-                Model Location
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <LocationComponent/>
-            </AccordionDetails>
-          </Accordion>
-        </Box>
-      }
-      {isAuthenticated && currentTab === 'Delete' &&
-        <Box sx={{margin: '20px 0px'}}>
-          <Accordion>
-            <AccordionSummary
-              expandIcon={<ExpandMoreIcon/>}
-              aria-controls="panel1-content"
-              id="panel1-header"
-            >
-              <Typography variant={'overline'} >
-                Model Location
-              </Typography>
-            </AccordionSummary>
-            <AccordionDetails>
-              <LocationComponent/>
-            </AccordionDetails>
-          </Accordion>
-        </Box>
-      }
+          Open local model
+        </Typography>
+      </Stack>
     </Dialog>
   )
 }
@@ -424,7 +281,7 @@ function SampleModelFileSelector({navigate, setIsDialogDisplayed}) {
       value={selected}
       onChange={(e) => handleSelect(e, () => setIsDialogDisplayed(false))}
       variant='outlined'
-      label='Select a model'
+      label='Sample Projects'
       select
       size='small'
     >
