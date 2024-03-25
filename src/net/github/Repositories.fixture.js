@@ -11,7 +11,7 @@ export const MOCK_USER_REPOSITORIES = {
     {
       id: 452316989,
       node_id: 'R_kgDOGvXPPQ',
-      name: 'bizdev',
+      name: 'test-repo',
       full_name: 'bldrs-ai/bizdev',
       private: true,
       owner: {
