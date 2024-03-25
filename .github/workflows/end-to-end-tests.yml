@@ -39,4 +39,4 @@ jobs:
           browser: chrome
           command: yarn percy exec -- cypress run
         env:
-          PERCY_TOKEN: $
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
