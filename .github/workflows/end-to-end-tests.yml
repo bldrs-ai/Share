@@ -37,6 +37,6 @@ jobs:
         uses: cypress-io/github-action@v5
         with:
           browser: 'chrome'
-          command: 'percy exec -- cypress run'
+          command: 'yarn percy exec -- cypress run'
         env:
           PERCY_TOKEN: $
