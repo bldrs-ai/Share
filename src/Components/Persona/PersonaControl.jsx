@@ -56,7 +56,7 @@ export default function PersonaControl() {
         anchorOrigin={{vertical: 'top', horizontal: 'left'}}
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick}>
+        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid="login-with-github">
           <GitHubIcon/>
           {isAuthenticated ?
            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography> :

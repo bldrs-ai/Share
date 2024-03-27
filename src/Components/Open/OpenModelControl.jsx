@@ -182,20 +182,24 @@ function OpenModelDialog({
              list={orgNamesArrWithAt}
              selected={selectedOrgName}
              setSelected={selectOrg}
+             data-testid='openOrganization'
+             testId='openOrganization'
            />
            <Selector
              label='Repository'
              list={repoNamesArr}
              selected={selectedRepoName}
              setSelected={selectRepo}
-             testId='Repository'
+             data-testid='openRepository'
+             testId='openRepository'
            />
            <Selector
              label='File'
              list={filesArr}
              selected={selectedFileName}
              setSelected={setSelectedFileName}
-             testId='File'
+             data-testid='openFile'
+             testId='openFile'
            />
            {selectedFileName !== '' &&
             <Box sx={{textAlign: 'center', marginTop: '4px'}}>

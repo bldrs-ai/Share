@@ -5,7 +5,7 @@ import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
 import {MOCK_ISSUES} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
-import {MOCK_REPOSITORY} from '../net/github/Repositories.fixture'
+import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 import testEnvVars from '../../tools/jest/testEnvVars'
 
 
@@ -232,6 +232,13 @@ function githubHandlers() {
           ctx.status(httpOk),
           ctx.json(MOCK_ORGANIZATIONS.data),
       )
+    }),
+
+    rest.get(`${GH_BASE}/user/repos`, (req, res, ctx) => {
+      return res(
+        ctx.status(httpOk),
+        ctx.json(MOCK_USER_REPOSITORIES.data),
+    )
     }),
 
     rest.get(`${GH_BASE}/orgs/bldrs-ai/repos`, (req, res, ctx) => {
