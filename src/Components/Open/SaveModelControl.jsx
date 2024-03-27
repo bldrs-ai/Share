@@ -234,13 +234,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 
          <Stack>
            <Typography variant='overline' sx={{marginBottom: '6px'}}>Projects</Typography>
-           <Selector label='Organization' list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}/>
+           <Selector label='Organization' list={orgNamesArrWithAt} selected={selectedOrgName} setSelected={selectOrg}
+           data-testid='saveOrganization'
+           />
            <Selector
              label='Repository'
              list={repoNamesArr}
              selected={selectedRepoName}
              setSelected={selectRepo}
-             testId='Repository'
+             data-testid='saveRepository'
+             testId='saveRepository'
            />
            <SelectorSeparator
              label={(currentPath === '') ? 'Folder' :
@@ -248,7 +251,8 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              list={foldersArr}
              selected={selectedFolderName}
              setSelected={selectFolder}
-             testId='Folder'
+             data-testid='saveFolder'
+             testId='saveFolder'
            />
            {requestCreateFolder && (
              <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
@@ -280,6 +284,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              onKeyDown={(e) => e.stopPropagation()}
              sx={{marginBottom: '.5em'}}
              data-testid='CreateFileId'
+             testId='CreateFileId'
            />
          </Stack>
         }

@@ -1,14 +1,10 @@
-import {waitForModel} from '../../support/utils'
+import {waitForModel, homepageSetup} from '../../support/utils'
 
 
 describe('initial-model-load-and-view', () => {
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
     beforeEach(() => {
-      cy.clearLocalStorage()
-      cy.clearCookies()
-      // Must call waitForModel after this
-      cy.intercept('GET', '/index.ifc').as('loadModel')
-      cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
+      homepageSetup()
     })
 
     it('See model centered in page (cookie isFirstTime: 1)', () => {

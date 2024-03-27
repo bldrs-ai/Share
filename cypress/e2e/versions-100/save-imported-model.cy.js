@@ -1,13 +1,12 @@
 
-import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel} from '../../support/utils'
+import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel, homepageSetup} from '../../support/utils'
 
 
 describe('save model', () => {
   context('when no model is loaded', () => {
     beforeEach(() => {
-      cy.clearLocalStorage()
-      cy.clearCookies()
-      cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
+      homepageSetup()
+
       cy.setCookie('isFirstTime', '1')
 
       setupAuthenticationIntercepts()
@@ -45,6 +44,18 @@ describe('save model', () => {
         cy.findByTitle('Save', {timeout: 5000}).should('not.exist')
         auth0Login()
         cy.findByTitle('Save', {timeout: 5000}).should('exist').click({force: true})
+
+        cy.findByLabelText('Organization', {timeout: 5000}).click()
+
+        cy.contains('@cypresstester').click()
+
+        cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()
+
+        cy.contains('test-repo').click()
+
+        cy.findByLabelText('Enter file name').click().type('save-model-test.ifc')
+
+        cy.contains('button', 'Save model').click()
       })
     })
   })

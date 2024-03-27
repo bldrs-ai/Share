@@ -3,6 +3,44 @@ let nonce = ''
 const STATUS_OK = 200
 
 /**
+ *
+ */
+export function interceptIndex() {
+  cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
+}
+
+/**
+ *
+ */
+export function interceptBounce() {
+  cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
+}
+
+/**
+ *
+ */
+export function interceptInitialLoads() {
+  interceptIndex()
+  interceptBounce()
+}
+
+/**
+ *
+ */
+export function clearState() {
+    cy.clearLocalStorage()
+    cy.clearCookies()
+}
+
+/**
+ *
+ */
+export function homepageSetup() {
+    clearState()
+    interceptInitialLoads()
+}
+
+/**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
  * the login process. It waits for specific network requests to ensure the login process
  * has been initiated and completed successfully. Requires the setup of network request
