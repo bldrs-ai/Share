@@ -30,7 +30,7 @@ export default function SelectorSeparator({
     <TextField
       sx={{width: '260px', marginBottom: '.5em'}}
       value={selected}
-      onChange={(e) => handleSelect(e)}
+      onChange={handleSelect}
       variant='outlined'
       label={label}
       select
@@ -39,7 +39,7 @@ export default function SelectorSeparator({
     >
       {list.map((listMember, i) => {
         if (listMember.isSeparator) {
-          return <div style={{borderTop: '0.5px solid #cccccc', margin: '4px 0'}}/>
+          return <div key={i} style={{borderTop: '0.5px solid #cccccc', margin: '4px 0'}}/>
         }
         return (
           <MenuItem key={i} value={i}><Typography variant='p'>{listMember}</Typography></MenuItem>
