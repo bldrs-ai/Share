@@ -23,13 +23,18 @@ describe('access-notes-list', () => {
       // Must call waitForModel after this
       cy.intercept('GET', '/index.ifc').as('loadModel')
       cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
+      cy.visit('/')
+      waitForModel()
+      cy.get('.MuiIconButton-root').click()
+      cy.get('.MuiSnackbar-root > .MuiPaper-root').should('not.exist')
+      cy.get('[data-testid="Notes"]').click()
     })
 
     it('A list of notes to be visible)', () => {
-      cy.setCookie('isFirstTime', '1')
-      cy.visit('/')
-      waitForModel()
-      // cy.screenshot()
+      cy.get('.MuiList-root')
+    })
+    it('Navbar to tbe visible', () => {
+      cy.get('[data-testid="panelTitle"]').contains('NOTES')
     })
   })
 })
