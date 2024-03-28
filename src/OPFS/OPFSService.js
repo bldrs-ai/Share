@@ -15,7 +15,7 @@ let workerRef = null
  */
 export function initializeWorker() {
   if (workerRef === null) {
-    workerRef = new Worker('/Opfs.worker.js')
+    workerRef = new Worker('/OPFS.Worker.js')
   }
 
   return workerRef
@@ -189,13 +189,13 @@ export function opfsWriteModelFileHandle(file, originalFileName, commitHash, own
  * @param {string} branch The branch name where the file will be stored
  * @param {Function} onProgress A callback function to track the progress of the download
  */
-export function opfsDownloadToOpfs(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
+export function opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
   }
   workerRef.postMessage({
-    command: 'downloadToOpfs',
+    command: 'downloadToOPFS',
     objectUrl: objectUrl,
     commitHash: commitHash,
     originalFilePath: originalFilePath,
