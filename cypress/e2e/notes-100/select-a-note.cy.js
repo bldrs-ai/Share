@@ -32,9 +32,15 @@ describe('access-notes-list', () => {
           .click()
       cy.get('.MuiList-root')
     })
-    it('Select a note)', () => {
-      cy.get(':nth-child(1) > .MuiPaper-root > .MuiCardHeader-root')
+    it('The title on the navbar changes to NOTE)', () => {
       cy.get('[data-testid="panelTitle"]').contains('NOTE')
+    })
+    it('The list of notes is updated to display only the selected note)', () => {
+      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
+      cy.get('.MuiCardHeader-title').contains('Local issue 2')
+    })
+    it('A list of comments attached to the note to be visible.)', () => {
+      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
     })
   })
 })
