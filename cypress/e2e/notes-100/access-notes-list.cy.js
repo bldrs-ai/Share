@@ -34,8 +34,8 @@ describe('access-notes-list', () => {
     it('A list of notes to be visible)', () => {
       cy.get('.MuiList-root')
     })
-    // it('should display Notes navbar title', () => {
-    //   cy.get('[data-testid="panelTitle"]')
-    // })
+    it('should display Notes navbar title', () => {
+      cy.get('[data-testid="panelTitle"]')
+    })
   })
 })
