@@ -21,16 +21,20 @@ import {floatStrTrim} from '../utils/strings'
  * @return {ReactElement}
  */
 export default function CameraControl() {
-  const viewer = useStore((state) => state.viewer)
-  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
   const setCameraControls = useStore((state) => state.setCameraControls)
+  const setIsFitToFrame = useStore((state) => state.setIsFitToFrame)
+  const viewer = useStore((state) => state.viewer)
+
   const location = useLocation()
+
+  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
 
   useEffect(() => {
     setCameraControls(cameraControls)
-    onHash(location, cameraControls)
+    const hasParams = onHash(location, cameraControls)
+    setIsFitToFrame(!hasParams)
     onLoad(location, cameraControls)
-  }, [location, cameraControls, setCameraControls])
+  }, [location, cameraControls, setCameraControls, setIsFitToFrame])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
@@ -48,7 +52,6 @@ export const CAMERA_PREFIX = 'c'
  * @param {object} cameraControls obtained from the viewer
  */
 function onLoad(location, cameraControls) {
-  debug().log('CameraControl#onLoad')
   addHashListener('camera', () => onHash(location, cameraControls))
 }
 
@@ -60,13 +63,16 @@ function onLoad(location, cameraControls) {
  *
  * @param {object} location window.location
  * @param {object} cameraControls obtained from the viewer
+ * @return {boolean} Whether the hash had camera position.  e.g. false on first
+ * load useEffect
  */
 export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
   if (encodedParams === undefined) {
-    return
+    return true
   }
   setCameraFromParams(encodedParams, cameraControls)
+  return false
 }
 
 
@@ -82,7 +88,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
-
+  // console.trace('setCameraFromParams', coords, new Error())
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6
@@ -130,8 +136,10 @@ export function parseHashParams(encodedParams) {
 export function hasValidUrlParams() {
   const encoded = getHashParams(window.location, CAMERA_PREFIX)
   if (encoded && parseHashParams(encoded)) {
+    console.log('CameraControl: hasValidUrlParams: true')
     return true
   }
+  console.log('CameraControl: hasValidUrlParams: false')
   return false
 }
 
@@ -147,6 +155,7 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
+  console.log('addCameraUrlParams, hash, curPos', window.location.hash, position)
   let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
   if (target.x === 0 && target.y === 0 && target.z === 0) {

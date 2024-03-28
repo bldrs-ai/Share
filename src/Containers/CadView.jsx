@@ -76,6 +76,9 @@ export default function CadView({
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
 
+  // CameraSlice
+  const isFitToFrame = useStore((state) => state.isFitToFrame)
+
   // IFCSlice
   const model = useStore((state) => state.model)
   const setIsModelLoading = useStore((state) => state.setIsModelLoading)
@@ -178,6 +181,7 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
+    console.log('onViewer, before loadIfc, window.location.hash', window.location.hash)
     let tmpModelRef
     try {
       tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
@@ -257,7 +261,7 @@ export default function CadView({
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
-          !urlHasCameraParams(), // fit to frame
+          isFitToFrame,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.loaded)) {
               const loadedBytes = progressEvent.loaded
@@ -283,7 +287,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          !urlHasCameraParams(),
+          true, // ignore current camera for new load
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
           }, customViewSettings)
@@ -318,7 +322,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          !urlHasCameraParams(),
+          isFitToFrame,
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
@@ -364,7 +368,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
         file,
-        !urlHasCameraParams(),
+        isFitToFrame,
         (error) => {
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
