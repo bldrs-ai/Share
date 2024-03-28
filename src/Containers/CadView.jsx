@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useContext, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
@@ -11,7 +11,8 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import {getModelFromOpfs, downloadToOpfs} from '../OPFS/utils'
+import FileContext from '../OPFS/FileContext'
+import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
 import useStore from '../store/useStore'
@@ -88,8 +89,6 @@ export default function CadView({
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
-  const setOpfsFile = useStore((state) => state.setOpfsFile)
-
   // RepositorySlice
   const modelPath = useStore((state) => state.modelPath)
 
@@ -115,7 +114,7 @@ export default function CadView({
   const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
-  // react-router
+  const {setFile} = useContext(FileContext) // Consume the context
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -255,8 +254,6 @@ export default function CadView({
 
     let loadedModel
     if (!isOpfsAvailable) {
-      // eslint-disable-next-line no-console
-      console.warn('OPFS not available')
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
@@ -276,10 +273,10 @@ export default function CadView({
             setSnackMessage('')
           }, customViewSettings)
     } else if (uploadedFile) {
-      const file = await getModelFromOpfs('BldrsLocalStorage', 'V1', 'Projects', filepath)
+      const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
       if (file instanceof File) {
-        setOpfsFile(file)
+        setFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }
@@ -293,7 +290,7 @@ export default function CadView({
       // TODO(nickcastel50): need a more permanent way to
       // prevent redirect here for bundled ifc files
     } else if (ifcURL === '/index.ifc') {
-      const file = await downloadToOpfs(
+      const file = await downloadToOPFS(
           navigate,
           appPrefix,
           handleBeforeUnload,
@@ -314,7 +311,7 @@ export default function CadView({
           })
 
       if (file instanceof File) {
-        setOpfsFile(file)
+        setFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }
@@ -343,7 +340,7 @@ export default function CadView({
             `accessToken (present?):${accessToken ? 'true' : 'false'}`)
       }
 
-      const file = await downloadToOpfs(
+      const file = await downloadToOPFS(
         navigate,
         appPrefix,
         handleBeforeUnload,
@@ -364,7 +361,7 @@ export default function CadView({
         })
 
       if (file instanceof File) {
-        setOpfsFile(file)
+        setFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }
@@ -666,15 +663,14 @@ export default function CadView({
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isAuthLoading && !isAuthenticated) &&
-          (isOpfsAvailable !== null)) {
+          (!isAuthLoading && !isAuthenticated)) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken, isOpfsAvailable])
+  }, [isAuthLoading, isAuthenticated, accessToken])
 
 
   // ModelPath changes in parent (ShareRoutes) from user and

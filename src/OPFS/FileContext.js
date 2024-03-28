@@ -1,8 +1,11 @@
-import {createContext} from 'react'
+// FileContext.js
+import React from 'react'
 
-
-export default createContext({
+/* eslint-disable no-empty-function */
+const FileContext = React.createContext({
   file: null,
-  // eslint-disable-next-line no-empty-function
   setFile: () => {}, // Placeholder function
 })
+/* eslint-enable no-empty-function */
+
+export default FileContext

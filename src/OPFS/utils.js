@@ -1,12 +1,12 @@
 import {
   initializeWorker,
-  opfsDownloadToOpfs,
+  opfsDownloadToOPFS,
   opfsReadModel,
   opfsWriteModel,
   opfsWriteModelFileHandle,
   opfsDoesFileExist,
   opfsDeleteModel,
-} from '../OPFS/OpfsService.js'
+} from '../OPFS/OPFSService.js'
 import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 
@@ -17,7 +17,7 @@ import debug from '../utils/debug'
  * @param {string} filepath
  * @return {File}
  */
-export function writeSavedGithubModelOpfs(modelFile, originalFileName, commitHash, owner, repo, branch) {
+export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHash, owner, repo, branch) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
@@ -50,7 +50,7 @@ export function writeSavedGithubModelOpfs(modelFile, originalFileName, commitHas
  * @param {string} filepath
  * @return {File}
  */
-export function getModelFromOpfs(owner, repo, branch, filepath) {
+export function getModelFromOPFS(owner, repo, branch, filepath) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
@@ -89,7 +89,7 @@ export function getModelFromOpfs(owner, repo, branch, filepath) {
  * @param {string} commitHash
  * @return {File}
  */
-export function downloadToOpfs(
+export function downloadToOPFS(
     navigate,
     appPrefix,
     handleBeforeUnload,
@@ -144,7 +144,7 @@ export function downloadToOpfs(
       reject(new Error('Worker initialization failed'))
     }
 
-    opfsDownloadToOpfs(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
+    opfsDownloadToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, !!(onProgress))
   })
 }
 
@@ -209,7 +209,7 @@ function makePromise(callback, originalFilePath, commitHash, owner, repo, branch
  * @param {string} branch
  * @return {boolean}
  */
-export function doesFileExistInOpfs(
+export function doesFileExistInOPFS(
     originalFilePath,
     commitHash,
     owner,
@@ -221,7 +221,7 @@ export function doesFileExistInOpfs(
 }
 
 /**
- * Deletes a file from OPFS if it exists.
+ * Deletes a file from opfs if it exists.
  * Returns true if file was found and deleted, false otherwise.
  *
  * @param {string} originalFilePath
@@ -231,7 +231,7 @@ export function doesFileExistInOpfs(
  * @param {string} branch
  * @return {boolean}
  */
-export function deleteFileFromOpfs(
+export function deleteFileFromOPFS(
     originalFilePath,
     commitHash,
     owner,
@@ -303,7 +303,7 @@ export function loadLocalFileDragAndDrop(
  *
  * @return {boolean}
  */
-export async function checkOpfsAvailability() {
+export async function checkOPFSAvailability() {
   if ('FileSystemDirectoryHandle' in window) {
     try {
       await navigator.storage.getDirectory()
