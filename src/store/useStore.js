@@ -5,7 +5,6 @@ import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
 import createNotesSlice from './NotesSlice'
 import createOpenSlice from './OpenSlice'
-import createOpfsSlice from './OpfsSlice'
 import createPropertiesSlice from './PropertiesSlice'
 import createRepositorySlice from './RepositorySlice'
 import createSearchSlice from './SearchSlice'
@@ -22,7 +21,6 @@ const useStore = create((set, get) => ({
   ...createNavTreeSlice(set, get),
   ...createNotesSlice(set, get),
   ...createOpenSlice(set, get),
-  ...createOpfsSlice(set, get),
   ...createPropertiesSlice(set, get),
   ...createRepositorySlice(set, get),
   ...createSearchSlice(set, get),

@@ -1,30 +1,29 @@
 // Mock the entire module
-import * as OpfsService from '../OPFS/OpfsService.js'
+import * as OPFSService from '../OPFS/OPFSService.js'
 import {
-  writeSavedGithubModelOpfs,
-  getModelFromOpfs,
-  downloadToOpfs,
-  doesFileExistInOpfs,
-  deleteFileFromOpfs,
-  checkOpfsAvailability,
-} from './utils'
+  writeSavedGithubModelOPFS,
+  getModelFromOPFS,
+  downloadToOPFS,
+  doesFileExistInOPFS,
+  deleteFileFromOPFS,
+  checkOPFSAvailability} from './utils'
 
 
-jest.mock('../OPFS/OpfsService.js')
+jest.mock('../OPFS/OPFSService.js')
 
-describe('opfs/utils', () => {
+describe('OPFS Test Suite', () => {
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks()
 
     // Setup or reset mock implementations before each test
-    OpfsService.initializeWorker.mockReturnValue({
+    OPFSService.initializeWorker.mockReturnValue({
       addEventListener: jest.fn(),
       removeEventListener: jest.fn(),
     })
   })
 
-  describe('writeSavedGithubModelOpfs', () => {
+  describe('writeSavedGithubModelOPFS', () => {
     it('should resolve true when worker completes writing file', async () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
@@ -33,18 +32,18 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
-      const result = await writeSavedGithubModelOpfs('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
+      const result = await writeSavedGithubModelOPFS('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
       expect(result).toBe(true)
-      expect(OpfsService.initializeWorker).toHaveBeenCalled()
-      expect(OpfsService.opfsWriteModelFileHandle)
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsWriteModelFileHandle)
           .toHaveBeenCalledWith('mockFile', 'originalFileName', 'commitHash', 'owner', 'repo', 'branch')
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
     })
   })
 
-  describe('getModelFromOpfs', () => {
+  describe('getModelFromOPFS', () => {
     it('should resolve with file when worker completes retrieving file', async () => {
       // Create a mock file as the expected result
       const mockFile = new Blob(['dummy content'], {type: 'text/plain'})
@@ -58,21 +57,21 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       // Call the function with test data
-      const result = await getModelFromOpfs('owner', 'repo', 'branch', 'path/to/file.ifc')
+      const result = await getModelFromOPFS('owner', 'repo', 'branch', 'path/to/file.ifc')
 
       // Assert the expected outcomes
       expect(result).toEqual(mockFile)
-      expect(OpfsService.initializeWorker).toHaveBeenCalled()
-      expect(OpfsService.opfsReadModel).toHaveBeenCalledWith('file') // Since you manipulate the filepath in the function
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsReadModel).toHaveBeenCalledWith('file') // Since you manipulate the filepath in the function
       expect(mockWorker.addEventListener).toHaveBeenCalled()
       expect(mockWorker.removeEventListener).toHaveBeenCalled()
     })
   })
 
-  describe('downloadToOpfs', () => {
+  describe('downloadToOPFS', () => {
     it('should resolve with file when download completes', async () => {
       const mockFile = new Blob(['dummy content'], {type: 'application/octet-stream'})
       const mockWorker = {
@@ -83,10 +82,10 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const onProgressMock = jest.fn()
-      const result = await downloadToOpfs(
+      const result = await downloadToOPFS(
           // eslint-disable-next-line no-empty-function
           () => {}, // navigate
           'appPrefix',
@@ -102,8 +101,8 @@ describe('opfs/utils', () => {
       )
 
       expect(result).toEqual(mockFile)
-      expect(OpfsService.initializeWorker).toHaveBeenCalled()
-      expect(OpfsService.opfsDownloadToOpfs).toHaveBeenCalledWith(
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsDownloadToOPFS).toHaveBeenCalledWith(
           'objectUrl',
           'commitHash',
           'originalFilePath',
@@ -126,10 +125,10 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
       const onProgressMock = jest.fn()
-      await downloadToOpfs(
+      await downloadToOPFS(
           // eslint-disable-next-line no-empty-function
           () => {}, // navigate
           'appPrefix',
@@ -152,7 +151,7 @@ describe('opfs/utils', () => {
     })
   })
 
-  describe('doesFileExistInOpfs', () => {
+  describe('doesFileExistInOPFS', () => {
     it('should resolve true if the file exists', async () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
@@ -160,9 +159,9 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
-      const result = await doesFileExistInOpfs(
+      const result = await doesFileExistInOPFS(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -171,8 +170,8 @@ describe('opfs/utils', () => {
       )
 
       expect(result).toBe(true)
-      expect(OpfsService.initializeWorker).toHaveBeenCalled()
-      expect(OpfsService.opfsDoesFileExist).toHaveBeenCalledWith(
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsDoesFileExist).toHaveBeenCalledWith(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -190,9 +189,9 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
-      const result = await doesFileExistInOpfs(
+      const result = await doesFileExistInOPFS(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -204,7 +203,7 @@ describe('opfs/utils', () => {
     })
   })
 
-  describe('deleteFileFromOpfs', () => {
+  describe('deleteFileFromOPFS', () => {
     it('should resolve true if the file was successfully deleted', async () => {
       const mockWorker = {
         addEventListener: jest.fn((_, handler) => {
@@ -213,9 +212,9 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
-      const result = await deleteFileFromOpfs(
+      const result = await deleteFileFromOPFS(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -224,8 +223,8 @@ describe('opfs/utils', () => {
       )
 
       expect(result).toBe(true)
-      expect(OpfsService.initializeWorker).toHaveBeenCalled()
-      expect(OpfsService.opfsDeleteModel).toHaveBeenCalledWith(
+      expect(OPFSService.initializeWorker).toHaveBeenCalled()
+      expect(OPFSService.opfsDeleteModel).toHaveBeenCalledWith(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -244,9 +243,9 @@ describe('opfs/utils', () => {
         }),
         removeEventListener: jest.fn(),
       }
-      OpfsService.initializeWorker.mockReturnValue(mockWorker)
+      OPFSService.initializeWorker.mockReturnValue(mockWorker)
 
-      const result = await deleteFileFromOpfs(
+      const result = await deleteFileFromOPFS(
           'originalFilePath',
           'commitHash',
           'owner',
@@ -258,7 +257,7 @@ describe('opfs/utils', () => {
     })
   })
 
-  describe('checkOpfsAvailability', () => {
+  describe('checkOPFSAvailability', () => {
     // Backup original window object
     const originalWindow = global.window
 
@@ -283,7 +282,7 @@ describe('opfs/utils', () => {
       }
       mockGetDirectory.mockResolvedValue({}) // Simulate successful directory access
 
-      const result = await checkOpfsAvailability()
+      const result = await checkOPFSAvailability()
       expect(result).toBe(true)
     })
 
@@ -292,7 +291,7 @@ describe('opfs/utils', () => {
       // Ensure FileSystemDirectoryHandle is not defined
       delete global.window.FileSystemDirectoryHandle
 
-      const result = await checkOpfsAvailability()
+      const result = await checkOPFSAvailability()
       expect(result).toBe(false)
     })
   })

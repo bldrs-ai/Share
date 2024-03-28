@@ -48,7 +48,7 @@ jest.mock('../OPFS/utils', () => {
 
   return {
     ...actualUtils, // Preserve other exports from the module
-    downloadToOpfs: jest.fn().mockImplementation(() => {
+    downloadToOPFS: jest.fn().mockImplementation(() => {
       // Read the file content from disk (consider using async read in real use-cases)
       const fileContent = fs.readFileSync(path.join(__dirname, './index.ifc'), 'utf8')
 
@@ -201,7 +201,7 @@ describe('CadView', () => {
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setIsOpfsAvailable(false))
+    await act(() => result.current.setIsOPFSAvailable(false))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(
       <ShareMock>

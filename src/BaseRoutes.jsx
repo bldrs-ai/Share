@@ -1,7 +1,7 @@
 import React, {useEffect} from 'react'
 import {Outlet, Route, Routes, useLocation, useNavigate} from 'react-router-dom'
 import ShareRoutes from './ShareRoutes'
-import {checkOpfsAvailability} from './OPFS/utils'
+import {checkOPFSAvailability} from './OPFS/utils'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
 import {useAuth0} from '@auth0/auth0-react'
@@ -35,18 +35,19 @@ export default function BaseRoutes({testElt = null}) {
   const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
-  const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
+  const setIsOPFSAvailable = useStore((state) => state.setIsOPFSAvailable)
   setAppPrefix(appPrefix)
 
 
   useEffect(() => {
     const checkAvailability = async () => {
-      const available = await checkOpfsAvailability()
-      setIsOpfsAvailable(available)
+      const available = await checkOPFSAvailability()
+
+      setIsOPFSAvailable(available)
     }
 
     checkAvailability()
-  }, [setIsOpfsAvailable]) // Empty dependency array means this effect runs once on mount
+  }, [setIsOPFSAvailable]) // Empty dependency array means this effect runs once on mount
 
 
   useEffect(() => {

@@ -3,7 +3,7 @@ import {assertDefined} from '../utils/assert'
 import {
   initializeWorker,
   opfsWriteModel,
-} from '../OPFS/OpfsService.js'
+} from '../OPFS/OPFSService.js'
 
 /**
  * Upload a local file for display.
