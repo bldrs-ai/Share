@@ -7,7 +7,7 @@ import MenuItem from '@mui/material/MenuItem'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {checkOPFSAvailability} from '../../OPFS/utils'
+import {checkOpfsAvailability} from '../../OPFS/utils'
 import {getFiles} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
@@ -102,10 +102,10 @@ function OpenModelDialog({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
-  const isOPFSAvailable = checkOPFSAvailability()
+  const isOpfsAvailable = checkOpfsAvailability()
 
   const openFile = () => {
-    if (isOPFSAvailable) {
+    if (isOpfsAvailable) {
       loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
     } else {
       loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, false)

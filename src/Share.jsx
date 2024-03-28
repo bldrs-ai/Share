@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useState, useMemo, useRef} from 'react'
+import React, {ReactElement, useEffect, useMemo, useRef} from 'react'
 import {Helmet} from 'react-helmet-async'
 import {useNavigate, useParams} from 'react-router-dom'
 import CssBaseline from '@mui/material/CssBaseline'
@@ -13,7 +13,6 @@ import {navWith} from './utils/navigate'
 import {handleBeforeUnload} from './utils/event'
 import {splitAroundExtension} from './Filetype'
 import Styles from './Styles'
-import FileContext from './OPFS/FileContext'
 
 
 /**
@@ -32,7 +31,7 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setModelPath = useStore((state) => state.setModelPath)
   const repository = useStore((state) => state.repository)
   const setRepository = useStore((state) => state.setRepository)
-  const [file, setFile] = useState(null)
+
 
   useMemo(() => {
     new WidgetApi(navigation.current, searchIndex)
@@ -81,19 +80,19 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   // https://mui.com/material-ui/customization/how-to-customize/#4-global-css-override
   return (
     modelPath &&
-    <FileContext.Provider value={{file, setFile}}>
-      <ModelTitle repository={repository} modelPath={modelPath}/>
-      <CssBaseline enableColorScheme>
-        <ThemeProvider theme={theme}>
-          <Styles theme={theme}/>
-          <CadView
-            installPrefix={installPrefix}
-            appPrefix={appPrefix}
-            pathPrefix={pathPrefix}
-          />
-        </ThemeProvider>
-      </CssBaseline>
-    </FileContext.Provider>
+      <>
+        <ModelTitle repository={repository} modelPath={modelPath}/>
+        <CssBaseline enableColorScheme>
+          <ThemeProvider theme={theme}>
+            <Styles theme={theme}/>
+            <CadView
+              installPrefix={installPrefix}
+              appPrefix={appPrefix}
+              pathPrefix={pathPrefix}
+            />
+          </ThemeProvider>
+        </CssBaseline>
+      </>
   )
 }
 

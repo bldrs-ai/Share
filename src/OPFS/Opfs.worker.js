@@ -5,42 +5,42 @@ self.addEventListener('message', async (event) => {
     if (event.data.command === 'writeObjectURLToFile') {
       const {objectUrl, fileName} =
       assertValues(event.data, ['objectUrl', 'fileName'])
-      await writeFileToOPFS(objectUrl, fileName)
+      await writeFileToOpfs(objectUrl, fileName)
     } else if (event.data.command === 'readObjectFromStorage') {
       const {fileName} = assertValues(event.data, ['fileName'])
-      await readFileFromOPFS(fileName)
+      await readFileFromOpfs(fileName)
     } else if (event.data.command === 'writeObjectModel') {
       const {objectUrl, objectKey, originalFileName} =
           assertValues(event.data,
               ['objectUrl', 'objectKey', 'originalFileName'])
 
-      writeModelToOPFS(objectUrl, objectKey, originalFileName)
+      writeModelToOpfs(objectUrl, objectKey, originalFileName)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
       // eslint-disable-next-line no-unused-vars
       const {file, objectKey, originalFileName, owner, repo, branch} =
           assertValues(event.data,
               ['file', 'objectKey', 'originalFileName', 'owner', 'repo', 'branch'])
-      writeModelToOPFSFromFile(file, objectKey, originalFileName, owner, repo)
+      writeModelToOpfsFromFile(file, objectKey, originalFileName, owner, repo)
     } else if (event.data.command === 'readModelFromStorage') {
       const {modelKey} = assertValues(event.data, ['modelKey'])
-      await readModelFromOPFS(modelKey)
-    } else if (event.data.command === 'downloadToOPFS') {
+      await readModelFromOpfs(modelKey)
+    } else if (event.data.command === 'downloadToOpfs') {
       const {objectUrl, commitHash, owner, repo, branch, onProgress, originalFilePath} =
           assertValues(event.data,
               ['objectUrl', 'commitHash', 'owner', 'repo', 'branch', 'onProgress', 'originalFilePath'])
-      await downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
+      await downloadModelToOpfs(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress)
     } else if (event.data.command === 'doesFileExist') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
               ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
-      await doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch)
+      await doesFileExistInOpfs(commitHash, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'deleteModel') {
       const {commitHash, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
               ['commitHash', 'originalFilePath', 'owner', 'repo', 'branch'])
 
-      await deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch)
+      await deleteModelFromOpfs(commitHash, originalFilePath, owner, repo, branch)
     }
   } catch (error) {
     self.postMessage({error: error.message})
@@ -50,7 +50,7 @@ self.addEventListener('message', async (event) => {
 /**
  *
  */
-async function downloadModelToOPFS(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
+async function downloadModelToOpfs(objectUrl, commitHash, originalFilePath, owner, repo, branch, onProgress) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
   let repoFolderHandle = null
@@ -261,7 +261,7 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
 /**
  *
  */
-async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, owner, repo) {
+async function writeModelToOpfsFromFile(modelFile, objectKey, originalFileName, owner, repo) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -329,7 +329,7 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, 
  * @param {*} branch
  * @return {string} postmessage specifying operation status
  */
-async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, branch) {
+async function doesFileExistInOpfs(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
   let repoFolderHandle = null
@@ -414,7 +414,7 @@ async function doesFileExistInOPFS(commitHash, originalFilePath, owner, repo, br
  * @param {*} branch
  * @return {string} postmessage specifying operation status
  */
-async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, branch) {
+async function deleteModelFromOpfs(commitHash, originalFilePath, owner, repo, branch) {
   const opfsRoot = await navigator.storage.getDirectory()
   let ownerFolderHandle = null
   let repoFolderHandle = null
@@ -487,7 +487,7 @@ async function deleteModelFromOPFS(commitHash, originalFilePath, owner, repo, br
 /**
  *
  */
-async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
+async function writeModelToOpfs(objectUrl, objectKey, originalFileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -544,7 +544,7 @@ async function writeModelToOPFS(objectUrl, objectKey, originalFileName) {
 /**
  *
  */
-async function readModelFromOPFS(objectKey) {
+async function readModelFromOpfs(objectKey) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -579,7 +579,7 @@ async function readModelFromOPFS(objectKey) {
 /**
  *
  */
-async function writeFileToOPFS(objectUrl, fileName) {
+async function writeFileToOpfs(objectUrl, fileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
@@ -630,7 +630,7 @@ async function writeFileToOPFS(objectUrl, fileName) {
 /**
  *
  */
-async function readFileFromOPFS(fileName) {
+async function readFileFromOpfs(fileName) {
   try {
     const opfsRoot = await navigator.storage.getDirectory()
 
