@@ -14,7 +14,6 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
   assertDefined(title)
   return (
     <Box
-      data-testid={'panelTitle'}
       sx={{
         display: 'flex',
         flexDirection: 'row',
@@ -37,7 +36,7 @@ export default function PanelTitle({title, controlsGroup, iconSrc}) {
           }} src={iconSrc} alt={title}
           /> : <></>
         }
-        <Typography variant='body1'>
+        <Typography variant='body1' data-testid={'panelTitle'}>
           {title}
         </Typography>
       </Box>
