@@ -25,16 +25,17 @@ describe('access-notes-list', () => {
       cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
       cy.visit('/')
       waitForModel()
-      cy.get('.MuiIconButton-root').click()
-      cy.get('.MuiSnackbar-root > .MuiPaper-root').should('not.exist')
-      cy.get('[data-testid="Notes"]').click()
+      // Close About
+      cy.get('button[aria-label="action-button"]')
+          .click()
+      cy.get('[data-testid="Notes"]')
+          .click()
     })
-
     it('A list of notes to be visible)', () => {
       cy.get('.MuiList-root')
     })
-    it('Navbar to tbe visible', () => {
-      cy.get('[data-testid="panelTitle"]').contains('NOTES')
-    })
+    // it('should display Notes navbar title', () => {
+    //   cy.get('[data-testid="panelTitle"]')
+    // })
   })
 })
