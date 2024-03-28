@@ -1,11 +1,10 @@
-import React, {ReactElement, useState, useContext, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
 import {useAuth0} from '@auth0/auth0-react'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import FileContext from '../../OPFS/FileContext'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
@@ -73,7 +72,7 @@ export default function SaveModelControl() {
  * @property {Function} setIsDialogDisplayed Show SaveModelDialog
  * @property {Function} navigate Callback from CadView to change page url
  * @property {Array<string>} orgNamesArr The current user's GH orgs
- * @return {object} React component
+ * @return {ReactElement}
  */
 function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, orgNamesArr}) {
   const {isAuthenticated, user} = useAuth0()
@@ -86,20 +85,17 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const [requestCreateFolder, setRequestCreateFolder] = useState(false)
   const [selectedFolderName, setSelectedFolderName] = useState('')
   const [repoNamesArr, setRepoNamesArr] = useState([''])
-  // eslint-disable-next-line no-unused-vars
-  const [filesArr, setFilesArr] = useState([''])
   const [foldersArr, setFoldersArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
   const accessToken = useStore((state) => state.accessToken)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  // const fileName = filesArr[selectedFileName]
-  const {file} = useContext(FileContext) // Consume the context
+  const opfsFile = useStore((state) => state.opfsFile)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const saveFile = () => {
-    if (file instanceof File) {
+    if (opfsFile instanceof File) {
       let pathWithFileName = ''
       if (currentPath === '/') {
         if (createFolderName !== null && createFolderName !== '') {
@@ -116,7 +112,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       }
 
       fileSave(
-          file,
+          opfsFile,
           pathWithFileName,
           selectedFileName,
           orgName,
@@ -143,20 +139,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
     const repoNames = Object.keys(repos).map((key) => repos[key].name)
     setRepoNamesArr(repoNames)
     setFoldersArr(['/'])
-    // setSelectedFolderName('test')
   }
 
   const selectRepo = async (repo) => {
     setSelectedRepoName(repo)
     // setSelectedFolderName(0); // This will set it to '/'
     const owner = orgNamesArr[selectedOrgName]
-    const {files, directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
+    const {directories} = await getFilesAndFolders(repoNamesArr[repo], owner, '/', accessToken)
 
-    // eslint-disable-next-line no-shadow
-    const fileNames = files.map((file) => file.name)
     const directoryNames = directories.map((directory) => directory.name)
 
-    setFilesArr(fileNames)
     const foldersArrWithSeparator = [
       ...directoryNames, // All the folders
       {isSeparator: true}, // Separator item
@@ -191,19 +183,16 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
       setRequestCreateFolder(false)
     }
 
-    setSelectedFolderName('none')
+    setSelectedFolderName('')
 
     setCurrentPath(newPath)
 
-    const {files, directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
-    // eslint-disable-next-line no-shadow
-    const fileNames = files.map((file) => file.name)
+    const {directories} = await getFilesAndFolders(repoName, owner, newPath, accessToken)
     const directoryNames = directories.map((directory) => directory.name)
 
     // Adjust navigation options based on the current level
     const navigationOptions = newPath ? ['[Parent Directory]', ...directoryNames] : [...directoryNames]
 
-    setFilesArr(fileNames)
     const foldersArrWithSeparator = [
       ...navigationOptions, // All the folders
       {isSeparator: true}, // Separator item
@@ -293,7 +282,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
  *
  */
 async function fileSave(
-  file,
+  opfsFile,
   pathWithFileName,
   selectedFileName,
   orgName,
@@ -303,21 +292,21 @@ async function fileSave(
   setSnackMessage,
   onPathname,
 ) {
-  if (file instanceof File) {
+  if (opfsFile instanceof File) {
     setSnackMessage(`Committing ${pathWithFileName} to GitHub...`)
 
     const commitHash = await commitFile(
         orgName,
         repoName,
         pathWithFileName,
-        file,
+        opfsFile,
         `Created file ${selectedFileName}`,
         'main',
         accessToken)
 
     if (commitHash !== null) {
-      // save to opfs
-      // const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, orgName, repoName, branchName)
+      // TODO(https://github.com/bldrs-ai/Share/issues/1075)
+      // const opfsResult = await writeSavedGithubModelOpfs(file, selectedFileName, commitHash, orgName, repoName, branchName)
 
       //  if (opfsResult) {
       setSnackMessage('')
