@@ -6,6 +6,7 @@ import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import FileContext from '../../OPFS/FileContext'
+import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
@@ -317,14 +318,17 @@ async function fileSave(
 
     if (commitHash !== null) {
       // save to opfs
-      // const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, orgName, repoName, branchName)
+       const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
 
-      //  if (opfsResult) {
-      setSnackMessage('')
-      // Construct the GitHub path for the committed file
-      const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
-      onPathname(githubFilePath)
-      debug().error('Error saving file to OPFS')
+      if (opfsResult) {
+        setSnackMessage('')
+        // Construct the GitHub path for the committed file
+        const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
+        onPathname(githubFilePath)
+        debug().error('Error saving file to OPFS')
+      } else {
+        setSnackMessage('Error: Could not write file to OPFS.')
+      }
     } else {
       setSnackMessage('Error: Could not commit to GitHub.')
     }
