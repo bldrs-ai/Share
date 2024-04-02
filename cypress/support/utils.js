@@ -53,7 +53,7 @@ export function auth0Login() {
   cy.findByTestId('login-with-github').should('exist').click()
 
   // Use the alias to ensure the intercept was called
-  cy.wait('@authorizeRequest', {timeout: 15000}).its('response.statusCode').should('eq', STATUS_OK)
+  cy.wait('@authorizeRequest', {timeout: 5000}).its('response.statusCode').should('eq', STATUS_OK)
   cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
 
   // check to make sure Log out exists

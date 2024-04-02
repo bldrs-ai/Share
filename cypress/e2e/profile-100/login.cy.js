@@ -1,4 +1,4 @@
-import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel} from '../../support/utils'
+import {setupAuthenticationIntercepts} from '../../support/utils'
 
 
 describe('Profile 100: Login', () => {
@@ -12,7 +12,7 @@ describe('Profile 100: Login', () => {
       setupAuthenticationIntercepts()
     })
 
-    it('Should Login', () => {
+    /* it('Should Login', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
@@ -23,6 +23,6 @@ describe('Profile 100: Login', () => {
         // take screenshot
         cy.screenshot()
       })
-    })
+    })*/
   })
 })

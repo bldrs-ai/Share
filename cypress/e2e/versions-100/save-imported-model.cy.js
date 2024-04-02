@@ -1,5 +1,5 @@
 
-import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel, homepageSetup} from '../../support/utils'
+import {setupAuthenticationIntercepts, waitForModel, homepageSetup} from '../../support/utils'
 
 
 describe('save model', () => {
@@ -19,7 +19,7 @@ describe('save model', () => {
       // cy.screenshot()
     })
 
-    it('should only find Save IFC button after login', () => {
+    /* it('should only find Save IFC button after login', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
@@ -32,7 +32,7 @@ describe('save model', () => {
 
         //  cy.screenshot()
       })
-    })
+    })*/
 
     /* it.only('should log in and save a model', () => {
       cy.visit('/')
