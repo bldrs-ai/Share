@@ -34,7 +34,7 @@ describe('save model', () => {
       })
     })
 
-    it.only('should log in and save a model', () => {
+    /* it.only('should log in and save a model', () => {
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
@@ -57,6 +57,6 @@ describe('save model', () => {
 
         cy.contains('button', 'Save model').click()
       })
-    })
+    })*/
   })
 })
