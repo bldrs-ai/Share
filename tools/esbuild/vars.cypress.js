@@ -4,7 +4,7 @@ import prod from './vars.prod.js'
 export default {
   ...prod,
   // Auth
-  AUTH0_DOMAIN: 'bldrs.us.auth0.com.msw',
+  AUTH0_DOMAIN: 'https://bldrs.us.auth0.com.msw',
   OAUTH2_CLIENT_ID: 'cypresstestaudience',
   // GitHub
   GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh',
