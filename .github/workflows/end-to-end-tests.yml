@@ -37,6 +37,8 @@ jobs:
         uses: cypress-io/github-action@v5
         with:
           browser: 'chrome'
+          headed: true
+          record: true
 
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
