@@ -30,10 +30,26 @@ jobs:
         run: yarn cy-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
-          NODE_ENV: production
+          NODE_ENV: development
           SHARE_CONFIG: cypress
 
       - name: Cypress run
         uses: cypress-io/github-action@v5
         with:
           browser: 'chrome'
+
+      - name: Upload Cypress Screenshots
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: warn
+
+      - name: Upload Cypress Videos
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-videos
+          path: cypress/videos
+          if-no-files-found: warn
