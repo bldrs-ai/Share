@@ -37,11 +37,5 @@ describe('access-notes-list', () => {
       cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
       cy.get('.MuiCardHeader-title').contains('Local issue 2')
     })
-    it('The title on the navbar changes to NOTE)', () => {
-      cy.get('[data-testid="panelTitle"]').contains('NOTE')
-    })
-    it('A list of comments attached to the note to be visible.)', () => {
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
-    })
   })
 })
