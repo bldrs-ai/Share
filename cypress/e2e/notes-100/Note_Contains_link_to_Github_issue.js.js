@@ -33,8 +33,13 @@ describe('Note_Contains_link_to_Github_issue', () => {
           .click()
       cy.get('.MuiList-root')
     })
-    it('A note contains a link to github issue)', () => {
+    it('A note contains a link to github issue', () => {
       cy.get('[data-testid="Notes"]')
+      cy.get('[data-testid="Open in Github"]')
+    })
+    it('A note contains a link to github issue, when selected', () => {
+      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
+      cy.get('.MuiCardHeader-title').contains('Local issue 2')
       cy.get('[data-testid="Open in Github"]')
     })
   })
