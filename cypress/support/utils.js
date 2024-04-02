@@ -47,6 +47,7 @@ export function homepageSetup() {
  * intercepts with aliases 'authorizeRequest' and 'tokenRequest'.
  */
 export function auth0Login() {
+  setupAuthenticationIntercepts()
   cy.log(`The current port is: ${getPort()}`)
   cy.get('[title="Login and preferences"]').should('exist').click()
   cy.log('simulating login')

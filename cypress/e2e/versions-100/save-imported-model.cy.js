@@ -1,5 +1,5 @@
 
-import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel, homepageSetup} from '../../support/utils'
+import {auth0Login, setPort, waitForModel, homepageSetup} from '../../support/utils'
 
 
 describe('save model', () => {
@@ -8,8 +8,6 @@ describe('save model', () => {
       homepageSetup()
 
       cy.setCookie('isFirstTime', '1')
-
-      setupAuthenticationIntercepts()
     })
 
     it('should not find Save IFC button before login', () => {

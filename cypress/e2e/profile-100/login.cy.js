@@ -1,4 +1,4 @@
-import {auth0Login, setPort, setupAuthenticationIntercepts, waitForModel} from '../../support/utils'
+import {auth0Login, setPort, waitForModel} from '../../support/utils'
 
 
 describe('Profile 100: Login', () => {
@@ -8,8 +8,6 @@ describe('Profile 100: Login', () => {
       cy.clearCookies()
       cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
       cy.setCookie('isFirstTime', '1')
-
-      setupAuthenticationIntercepts()
     })
 
     it('Should Login', () => {
