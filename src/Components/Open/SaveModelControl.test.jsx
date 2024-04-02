@@ -32,7 +32,7 @@ describe('Save Model Dialog', () => {
     const button = getByTitle('Save')
     fireEvent.click(button)
     const File = getByTestId('CreateFileId')
-    const Repository = await getByTestId('Repository')
+    const Repository = await getByTestId('saveRepository')
     expect(File).toBeInTheDocument()
     expect(Repository).toBeInTheDocument()
   })
