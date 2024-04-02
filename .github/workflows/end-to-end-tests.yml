@@ -30,7 +30,12 @@ jobs:
         run: yarn cy-build
         # Ensure your build script correctly outputs to the ./docs directory
         env:
-          NODE_ENV: development
+          NODE_ENV: 'development'
+          AUTH0_DOMAIN: 'https://bldrs.us.auth0.com.msw'
+          GITHUB_BASE_URL: 'https://git.bldrs.dev.msw/p/gh'
+          OAUTH2_CLIENT_ID: 'cypresstestaudience'
+          OPFS_IS_ENABLED: 'false'
+          RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
           SHARE_CONFIG: cypress
 
       - name: Cypress run
