@@ -13,7 +13,6 @@ describe('Profile 100: Login', () => {
     })
 
     it('Should Login', () => {
-      cy.intercept('/dummy').as('dummy')
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
