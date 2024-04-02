@@ -20,6 +20,7 @@ describe('save model', () => {
     })
 
     it('should only find Save IFC button after login', () => {
+      cy.intercept('/dummy').as('dummy')
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
