@@ -1,4 +1,4 @@
-describe('access-notes-list', () => {
+describe('Note_Contains_link_to_Github_issue', () => {
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
     /** Helper to close About. */
     function waitForModel() {
@@ -33,9 +33,9 @@ describe('access-notes-list', () => {
           .click()
       cy.get('.MuiList-root')
     })
-    it('The list of notes is updated to display only the selected note)', () => {
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
-      cy.get('.MuiCardHeader-title').contains('Local issue 2')
+    it('A note contains a link to github issue)', () => {
+      cy.get('[data-testid="Notes"]')
+      cy.get('[data-testid="Open in Github"]')
     })
   })
 })
