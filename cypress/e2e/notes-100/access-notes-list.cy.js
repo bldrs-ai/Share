@@ -3,7 +3,6 @@ import {waitForModel, homepageSetup} from '../../support/utils'
 
 describe('access-notes-list', () => {
   context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
-    /** Helper to close About. */
     beforeEach(() => {
       homepageSetup()
     })
