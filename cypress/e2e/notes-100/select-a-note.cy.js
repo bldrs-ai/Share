@@ -30,5 +30,13 @@ describe('select-a-note', () => {
       cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
       cy.get('.css-1oum0wi > .css-8lgfcg > :nth-child(1) > .css-95g4uk > [data-testid="panelTitle"]').should('have.text', 'NOTE')
     })
+    it('Back to the list button to be visible on the navbar', () => {
+      cy.setCookie('isFirstTime', '1')
+      cy.visit('/')
+      waitForModel()
+      cy.get('[data-testid="Notes"]').click()
+      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
+      cy.get('[data-testid="Back to the list"]')
+    })
   })
 })
