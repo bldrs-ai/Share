@@ -38,8 +38,7 @@ import {initViewer} from './viewer'
 let count = 0
 
 /**
- * Only container for the for the app.  Hosts the IfcViewer as well as
- * nav components.
+ * Only container for the app.  Hosts the IfcViewer as well as nav components.
  *
  * @return {ReactElement}
  */
@@ -189,6 +188,7 @@ export default function CadView({
       setSnackMessage(null)
     }
     setIsModelLoading(false)
+    debug().log(`CadView#onViewer, pathToLoad(${pathToLoad}) tmpModelRef(${tmpModelRef}`)
 
     if (tmpModelRef === undefined || tmpModelRef === null) {
       setAlertMessage(
@@ -336,7 +336,11 @@ export default function CadView({
             await getLatestCommitHash(owner, repo, filePath, accessToken, branch)
 
       if (commitHash === null) {
-        debug().error(`Error obtaining commit hash for: ${ifcURL}`)
+        // downloadToOpfs below will error out as well.
+        debug().error(
+          `Error obtaining commit hash for: ` +
+            `owner:${owner}, repo:${repo}, filePath:${filePath}, branch:${branch} ` +
+            `accessToken (present?):${accessToken ? 'true' : 'false'}`)
       }
 
       const file = await downloadToOPFS(
