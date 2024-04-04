@@ -7,7 +7,7 @@ describe('share-a-note', () => {
       homepageSetup()
     })
 
-    it('open sidedrawer when a note is shared and copy the link', () => {
+    it('check that clipboard is activated when a note is shared', () => {
       cy.setCookie('isFirstTime', '1')
       cy.visit('/')
       waitForModel()
