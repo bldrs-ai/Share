@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.945",
+  "version": "1.0.953",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -36,6 +36,7 @@
     "lint-tools": "yarn eslint cypress tools",
     "precommit": "yarn lint && yarn test",
     "serve": "SHARE_CONFIG=dev yarn serve-share-conway",
+    "serve-prod": "SHARE_CONFIG=prod yarn serve-share-conway",
     "serve-cosmos": "cosmos --config .cosmos.config.json",
     "serve-share-conway": "run-script-os",
     "serve-share-conway:win32": "yarn build-share-conway && set USE_WEBIFC_SHIM=true&& node tools/esbuild/serve.js",
