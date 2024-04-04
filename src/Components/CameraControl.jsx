@@ -155,7 +155,7 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
-  console.log('addCameraUrlParams, hash, curPos', window.location.hash, position)
+  console.trace('addCameraUrlParams, hash, curPos', window.location.hash, position)
   let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
   if (target.x === 0 && target.y === 0 && target.z === 0) {

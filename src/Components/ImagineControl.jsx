@@ -91,7 +91,7 @@ function ImagineDialog({
     setImage(ss)
   }
 
-  useEffect(() => {
+/*  useEffect(() => {
     if (viewer) {
       addCameraUrlParams(cameraControls)
       const ss = viewer.takeScreenshot()
@@ -99,7 +99,7 @@ function ImagineDialog({
       setImage(ss)
     }
   }, [viewer, model, cameraControls])
-
+*/
   return (
     <Dialog
       headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}

@@ -45,7 +45,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @return {IfcModel} ifcModel object
    */
   async loadIfcUrl(url, fitToFrame, onProgress, onError, customViewSettings) {
-    console.log('IfcViewerAPIExtended: loadIfcUrl: fitToFrame', fitToFrame)
     this.viewsManager.setViewSettings(customViewSettings)
     return await this.IFC.loadIfcUrl(url, fitToFrame, onProgress, onError)
   }
@@ -60,7 +59,6 @@ export class IfcViewerAPIExtended extends IfcViewerAPI {
    * @return {IfcModel} ifcModel object
    */
   async loadIfcFile(file, fitToFrame, onError, customViewSettings) {
-    console.log('IfcViewerAPIExtended: loadIfcFiel: fitToFrame', fitToFrame)
     this.viewsManager.setViewSettings(customViewSettings)
     return await this.IFC.loadIfc(file, fitToFrame, onError)
   }

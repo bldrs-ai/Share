@@ -6,7 +6,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
-import {hasValidUrlParams as urlHasCameraParams, removeCameraUrlParams} from '../Components/CameraControl'
+import {removeCameraUrlParams} from '../Components/CameraControl'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -181,7 +181,6 @@ export default function CadView({
     }
 
     const pathToLoad = modelPath.gitpath || (installPrefix + modelPath.filepath)
-    console.log('onViewer, before loadIfc, window.location.hash', window.location.hash)
     let tmpModelRef
     try {
       tmpModelRef = await loadIfc(pathToLoad, modelPath.gitpath)
@@ -261,7 +260,7 @@ export default function CadView({
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
-          isFitToFrame,
+          !isFitToFrame,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.loaded)) {
               const loadedBytes = progressEvent.loaded
@@ -322,7 +321,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          isFitToFrame,
+          !isFitToFrame,
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
@@ -368,7 +367,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
         file,
-        isFitToFrame,
+        !isFitToFrame,
         (error) => {
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
