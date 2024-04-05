@@ -1,4 +1,4 @@
-import {waitForModel, homepageSetup} from '../../support/utils'
+import {waitForModel, homepageSetup, setCookingAndVisitHome} from '../../support/utils'
 
 
 describe('select-a-note', () => {
@@ -7,8 +7,7 @@ describe('select-a-note', () => {
       homepageSetup()
     })
     it('Github link is visible on a note card in the list', () => {
-      cy.setCookie('isFirstTime', '1')
-      cy.visit('/')
+      setCookingAndVisitHome()
       waitForModel()
       cy.get('[data-testid="Notes"]').click()
       cy.get('[data-testid="Open in Github"]')
