@@ -41,11 +41,12 @@ jobs:
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
+          env: true
           browser: 'chrome'
           headed: true
           record: true
         env:
-          CI_ENVIRONMENT: true
+          CYPRESS_CI_ENVIRONMENT: true
 
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
