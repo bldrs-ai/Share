@@ -244,7 +244,6 @@ export function setupAuthenticationIntercepts() {
   }).as('tokenRequest')
 }
 
-
 /**
  *
  */
