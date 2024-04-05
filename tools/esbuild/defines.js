@@ -3,13 +3,17 @@ import cypress from './vars.cypress.js'
 import prod from './vars.prod.js'
 
 
+// Exported for testing only
 /** @return {Object<string,string>} */
-function zipEnvWithConfig(config) {
+export function zipEnvWithConfig(config) {
   const defines = {}
   Object.keys(config).forEach((name) => {
     let val = parse(process.env[name])
     if (val === undefined) {
-      val = config[name] || null
+      val = config[name]
+      if (val === undefined) {
+        val = null
+      }
     }
     defines[`process.env.${name}`] = str(val)
 
@@ -20,12 +24,13 @@ function zipEnvWithConfig(config) {
 }
 
 
+// Exported for testing only
 /**
  * Convert simple env var strings to js types
  *
  * @return {boolean|number|string}
  */
-function parse(envStr) {
+export function parse(envStr) {
   if (envStr === undefined || envStr === 'undefined') {
     return undefined
   } else if (envStr === null || envStr === 'null') {
@@ -34,7 +39,7 @@ function parse(envStr) {
     return false
   } else if (envStr.toLowerCase() === 'true') {
     return true
-  } else if (isFinite(parseInt(envStr))) {
+  } else if (isFinite(parseInt(envStr)) && envStr === Number(parseInt(envStr))) {
     return parseInt(envStr)
   } else if (isFinite(parseFloat(envStr))) {
     return parseFloat(envStr)
@@ -51,7 +56,7 @@ let config
 switch (process.env.SHARE_CONFIG) {
   case 'dev': config = dev; break
   case 'cypress': config = cypress; break
-  case 'prod': break // fallthru
+  case 'prod': // fallthru
   default: config = prod; break
 }
 

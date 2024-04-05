@@ -44,6 +44,27 @@ describe('IssueControl', () => {
     expect(getByTitle('Next Note')).toBeInTheDocument()
   })
 
+
+  it('Navigate notes, back', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    const {getByTitle, queryByTitle} = render(<RouteThemeCtx><NotesNavBar/></RouteThemeCtx>)
+    const notes = [
+      {id: 1, index: 0},
+      {id: 2, index: 1},
+      {id: 3, index: 2},
+    ]
+    await act(() => {
+      result.current.setNotes(notes)
+      result.current.setSelectedNoteId(2)
+    })
+    const backButton = getByTitle('Back to the list')
+    expect(backButton).toBeInTheDocument()
+    fireEvent.click(backButton)
+    expect(backButton).not.toBeInTheDocument()
+    expect(queryByTitle('Next Note')).not.toBeInTheDocument()
+  })
+
+
   it('Navigate to create note', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     const {getByTitle} = render(<RouteThemeCtx><NotesNavBar/></RouteThemeCtx>)
