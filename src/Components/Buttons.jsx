@@ -14,7 +14,8 @@ import BackIcon from '../assets/icons/Back.svg'
 
 
 /**
- * An icon button with a tooltip.
+ * An icon button with a tooltip.  THe button will use a given buttonTestId or
+ * the tip title as the data-testid on the button.
  *
  * @property {string} title Tooltip text
  * @property {Function} onClick Callback
@@ -23,7 +24,7 @@ import BackIcon from '../assets/icons/Back.svg'
  * @property {boolean} [enabled] Whether the button can be clicked.  Default: true
  * @property {boolean} [selected] Selected state.  Default: false
  * @property {string} [size] Size enum: 'small', 'medium' or 'large'.  Default: 'medium'
- * @property {string} dataTestId Internal attribute for component testing.  Default: ''
+ * @property {string} [buttonTestId] Internal attribute for component testing.
  * @return {ReactElement}
  */
 export function TooltipIconButton({
@@ -37,7 +38,7 @@ export function TooltipIconButton({
   color,
   size,
   variant,
-  dataTestId,
+  buttonTestId,
 }) {
   assertDefined(title, onClick, icon, placement)
   const isMobile = useIsMobile()
@@ -63,7 +64,7 @@ export function TooltipIconButton({
         color={color}
         variant={variant}
         disabled={!enabled}
-        data-testid={dataTestId || title}
+        data-testid={buttonTestId || title}
         sx={{
           // TODO(pablo): couldn't figure how to set this in theme
           opacity: enabled ? '1.0' : '0.35',

@@ -183,7 +183,6 @@ function OpenModelDialog({
              selected={selectedOrgName}
              setSelected={selectOrg}
              data-testid='openOrganization'
-             testId='openOrganization'
            />
            <Selector
              label='Repository'
@@ -191,7 +190,6 @@ function OpenModelDialog({
              selected={selectedRepoName}
              setSelected={selectRepo}
              data-testid='openRepository'
-             testId='openRepository'
            />
            <Selector
              label='File'
@@ -199,7 +197,6 @@ function OpenModelDialog({
              selected={selectedFileName}
              setSelected={setSelectedFileName}
              data-testid='openFile'
-             testId='openFile'
            />
            {selectedFileName !== '' &&
             <Box sx={{textAlign: 'center', marginTop: '4px'}}>
