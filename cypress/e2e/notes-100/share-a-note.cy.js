@@ -1,4 +1,4 @@
-import {waitForModel, homepageSetup, setCookingAndVisitHome} from '../../support/utils'
+import {waitForModel, homepageSetup, setCookieAndVisitHome} from '../../support/utils'
 
 
 describe('share-a-note', () => {
@@ -8,7 +8,7 @@ describe('share-a-note', () => {
     })
 
     it('check that clipboard is activated when a note is shared', () => {
-      setCookingAndVisitHome()
+      setCookieAndVisitHome()
       waitForModel()
 
       cy.get('[data-testid="Notes"]').click()
