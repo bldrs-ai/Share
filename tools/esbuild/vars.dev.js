@@ -6,4 +6,6 @@ export default {
   // Share
   OPFS_IS_ENABLED: true,
   THEME_IS_ENABLED: true,
+  // Off for accurate performance
+  THREE_PDB_IS_ENABLED: false,
 }

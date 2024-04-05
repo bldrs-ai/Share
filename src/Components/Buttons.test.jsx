@@ -8,7 +8,7 @@ import QuestionIcon from '../assets/icons/Question.svg'
 
 describe('<TooltipIconButton />', () => {
   it('should render successfully', async () => {
-    const testId = 'test-button'
+    const buttonTestId = 'test-button'
     const rendered = render(
         <ThemeCtx>
           <TooltipIconButton
@@ -17,11 +17,11 @@ describe('<TooltipIconButton />', () => {
             onClick={() => {}}
             icon={<QuestionIcon/>}
             placement='top'
-            dataTestId={testId}
+            buttonTestId={buttonTestId}
           />
         </ThemeCtx>)
 
-    const button = rendered.getByTestId(testId)
+    const button = rendered.getByTestId(buttonTestId)
     fireEvent.mouseOver(button)
 
     const tooltip = await rendered.findByRole('tooltip')
