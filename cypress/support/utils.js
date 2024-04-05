@@ -247,7 +247,7 @@ export function setupAuthenticationIntercepts() {
 /**
  *
  */
-export function setCookingAndVisitHome() {
+export function setCookieAndVisitHome() {
   cy.setCookie('isFirstTime', '1')
   cy.visit('/')
 }
