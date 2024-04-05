@@ -11,7 +11,7 @@ import {handleBeforeUnload} from '../../utils/event'
  * @property {boolean} selected selected componet control the selected value of the component
  * @property {Function} setSelected callback to select the element
  * @property {Array} list list of eleemnt to populate select options
- * @property {any} props
+ * @property {any} props For prop drilling to the TextField
  * @return {ReactElement}
  */
 export default function SelectorSeparator({
