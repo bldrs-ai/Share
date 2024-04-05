@@ -69,7 +69,7 @@ export default function NotesNavBar() {
          <TooltipIconButton
            title='Back to the list'
            onClick={() => {
-             removeHashParams(window.location, NOTES_PREFIX)
+             setHashParams(window.location, NOTES_PREFIX)
              setSelectedNoteId(null)
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
