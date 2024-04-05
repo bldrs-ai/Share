@@ -1,4 +1,4 @@
-import {waitForModel, homepageSetup, setCookingAndVisitHome} from '../../support/utils'
+import {waitForModel, homepageSetup, setCookieAndVisitHome} from '../../support/utils'
 
 
 describe('select-a-note', () => {
@@ -7,13 +7,13 @@ describe('select-a-note', () => {
       homepageSetup()
     })
     it('Github link is visible on a note card in the list', () => {
-      setCookingAndVisitHome()
+      setCookieAndVisitHome()
       waitForModel()
       cy.get('[data-testid="Notes"]').click()
       cy.get('[data-testid="Open in Github"]')
     })
     it('Github link is visible on a note card when the note selected', () => {
-      setCookingAndVisitHome()
+      setCookieAndVisitHome()
       waitForModel()
       cy.get('[data-testid="Notes"]').click()
       cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
