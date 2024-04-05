@@ -14,7 +14,7 @@ function zipEnvWithConfig(config) {
     defines[`process.env.${name}`] = str(val)
 
     // eslint-disable-next-line no-console
-    console.log(`name: ${name} - val: ${val}`)
+    console.log(`name: ${name} - val: ${str(val)}`)
   })
   return defines
 }
