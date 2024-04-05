@@ -243,3 +243,11 @@ export function setupAuthenticationIntercepts() {
     })
   }).as('tokenRequest')
 }
+
+/**
+ *
+ */
+export function setCookingAndVisitHome() {
+  cy.setCookie('isFirstTime', '1')
+  cy.visit('/')
+}
