@@ -17,11 +17,11 @@ import {useIsMobile} from '../Hooks'
  * @property {ReactElement} children Enclosed elements
  * @property {ReactElement} [action] Action component, for the top bar
  * @property {object} [sx] Passed to root Paper elt
- * @property {string} [testId] Set on the root Paper element
+ * @property {string} [paperTestId] Set on the root Paper element
  * @return {ReactElement}
  */
-export default function Panel({title, onCloseClick, children, action = null, sx = {}, testId = ''}) {
-  assertDefined(title, onCloseClick, children, testId)
+export default function Panel({title, onCloseClick, children, action = null, sx = {}, paperTestId = ''}) {
+  assertDefined(title, onCloseClick, children, paperTestId)
   const theme = useTheme()
   const isMobile = useIsMobile()
   return (
@@ -39,7 +39,7 @@ export default function Panel({title, onCloseClick, children, action = null, sx 
         },
         ...sx,
       }}
-      data-testid={testId}
+      data-testid={paperTestId}
     >
       <Stack
         direction='row'

@@ -11,7 +11,7 @@ import {handleBeforeUnload} from '../../utils/event'
  * @property {boolean} selected selected componet control the selected value of the component
  * @property {Function} setSelected callback to select the element
  * @property {Array} list list of eleemnt to populate select options
- * @property {string} testId id for testing
+ * @property {any} props For prop drilling to the TextField
  * @return {ReactElement}
  */
 export default function SelectorSeparator({
@@ -20,7 +20,7 @@ export default function SelectorSeparator({
   selected,
   setSelected,
   list,
-  testId = 'SelectorSeparator',
+  ...props
 }) {
   const handleSelect = (e) => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -35,7 +35,7 @@ export default function SelectorSeparator({
       label={label}
       select
       size='small'
-      data-testid={testId}
+      {...props}
     >
       {list.map((listMember, i) => {
         if (listMember.isSeparator) {
