@@ -44,6 +44,8 @@ jobs:
           browser: 'chrome'
           headed: true
           record: true
+        env:
+          CI_ENVIRONMENT: true
 
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3

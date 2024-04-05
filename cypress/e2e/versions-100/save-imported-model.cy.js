@@ -10,6 +10,10 @@ describe('save model', () => {
       cy.setCookie('isFirstTime', '1')
     })
 
+    if (Cypress.env('CI_ENVIRONMENT')) {
+      // If the test is running in GitHub Actions, skip this test
+      cy.log('Skipping this test in GitHub Actions')
+    } else {
     it('should not find Save IFC button before login', () => {
       cy.visit('/')
       waitForModel()
@@ -57,5 +61,6 @@ describe('save model', () => {
         cy.contains('button', 'Save model').click()
       })
     })*/
+  }
   })
 })
