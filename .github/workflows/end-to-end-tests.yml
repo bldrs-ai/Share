@@ -14,6 +14,7 @@ on:
 jobs:
   cypress-run:
     runs-on: ubuntu-22.04
+    environment: cypress
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,15 +39,18 @@ jobs:
           RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
           SHARE_CONFIG: cypress
 
+      - name: Verify Percy CLI installation
+        run: yarn percy --version
+
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
+          browser: chrome
+          command: yarn percy exec -- cypress run
           env: true
-          browser: 'chrome'
-          headed: true
-          record: true
         env:
           CYPRESS_CI_ENVIRONMENT: true
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
 
       - name: Upload Cypress Screenshots
         uses: actions/upload-artifact@v3
@@ -63,3 +67,4 @@ jobs:
           name: conway-cypress-videos
           path: cypress/videos
           if-no-files-found: warn
+          

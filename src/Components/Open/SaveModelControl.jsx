@@ -244,7 +244,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              selected={selectedRepoName}
              setSelected={selectRepo}
              data-testid='saveRepository'
-             testId='saveRepository'
            />
            <SelectorSeparator
              label={(currentPath === '') ? 'Folder' :
@@ -253,7 +252,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              selected={selectedFolderName}
              setSelected={selectFolder}
              data-testid='saveFolder'
-             testId='saveFolder'
            />
            {requestCreateFolder && (
              <div style={{display: 'flex', alignItems: 'center', marginBottom: '.5em'}}>
@@ -285,7 +283,6 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
              onKeyDown={(e) => e.stopPropagation()}
              sx={{marginBottom: '.5em'}}
              data-testid='CreateFileId'
-             testId='CreateFileId'
            />
          </Stack>
         }
