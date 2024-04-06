@@ -9,7 +9,6 @@ import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {ControlButtonWithHashState, RectangularButton} from './Buttons'
-import {addCameraUrlParams} from './CameraControl'
 import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -61,7 +60,6 @@ function ImagineDialog({
   setIsDialogDisplayed,
 }) {
   const cameraControls = useStore((state) => state.cameraControls)
-  const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
 
   const [prompt, setPrompt] = useState('')
@@ -91,15 +89,14 @@ function ImagineDialog({
     setImage(ss)
   }
 
-/*  useEffect(() => {
-    if (viewer) {
-      addCameraUrlParams(cameraControls)
+  useEffect(() => {
+    if (viewer && isDialogDisplayed) {
       const ss = viewer.takeScreenshot()
       setScreenshot(ss)
       setImage(ss)
     }
-  }, [viewer, model, cameraControls])
-*/
+  }, [cameraControls, isDialogDisplayed, viewer])
+
   return (
     <Dialog
       headerIcon={<BotIcon className='icon-share' style={{height: '50px'}}/>}

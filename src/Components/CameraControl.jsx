@@ -136,10 +136,8 @@ export function parseHashParams(encodedParams) {
 export function hasValidUrlParams() {
   const encoded = getHashParams(window.location, CAMERA_PREFIX)
   if (encoded && parseHashParams(encoded)) {
-    console.log('CameraControl: hasValidUrlParams: true')
     return true
   }
-  console.log('CameraControl: hasValidUrlParams: false')
   return false
 }
 
@@ -155,7 +153,6 @@ export function addCameraUrlParams(cameraControls) {
     return
   }
   const position = cameraControls.getPosition()
-  console.trace('addCameraUrlParams, hash, curPos', window.location.hash, position)
   let camArr = roundCoord(...position)
   const target = cameraControls.getTarget()
   if (target.x === 0 && target.y === 0 && target.z === 0) {

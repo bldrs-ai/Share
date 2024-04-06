@@ -14,6 +14,7 @@ on:
 jobs:
   cypress-run:
     runs-on: ubuntu-22.04
+    environment: cypress
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -33,7 +34,13 @@ jobs:
           NODE_ENV: production
           SHARE_CONFIG: cypress
 
+      - name: Verify Percy CLI installation
+        run: yarn percy --version
+
       - name: Cypress run
         uses: cypress-io/github-action@v5
         with:
-          browser: 'chrome'
+          browser: chrome
+          command: yarn percy exec -- cypress run
+        env:
+          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}

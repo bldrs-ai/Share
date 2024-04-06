@@ -11,7 +11,7 @@ import {handleBeforeUnload} from '../../utils/event'
  * @property {boolean} selected selected componet control the selected value of the component
  * @property {Function} setSelected callback to select the element
  * @property {Array} list list of element to populate select options
- * @property {string} [testId] id for testing
+ * @property {string} [data-testid] id for testing
  * @return {ReactElement}
  */
 export default function Selector({
@@ -20,7 +20,7 @@ export default function Selector({
   selected,
   setSelected,
   list,
-  testId = 'Selector',
+  ...props
 }) {
   const handleSelect = (e) => {
     window.removeEventListener('beforeunload', handleBeforeUnload)
@@ -37,7 +37,7 @@ export default function Selector({
       select
       size='small'
       sx={{width: '260px', marginBottom: '.5em'}}
-      data-testid={testId}
+      {...props}
     >
       {list.map((listMember, i) => {
         return (
