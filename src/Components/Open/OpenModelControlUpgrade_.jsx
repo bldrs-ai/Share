@@ -8,12 +8,12 @@ import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
-import FormControl from '@mui/material/FormControl'
-import FormHelperText from '@mui/material/FormHelperText'
-import IconButton from '@mui/material/Button'
-import InputAdornment from '@mui/material/InputAdornment'
+// import FormControl from '@mui/material/FormControl'
+// import FormHelperText from '@mui/material/FormHelperText'
+// import IconButton from '@mui/material/Button'
+// import InputAdornment from '@mui/material/InputAdornment'
 import MenuItem from '@mui/material/MenuItem'
-import Select from '@mui/material/Select'
+// import Select from '@mui/material/Select'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -28,7 +28,7 @@ import {ControlButtonWithHashState} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
-import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined'
+// import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined'
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined'
 
 
@@ -219,7 +219,6 @@ function OpenModelDialog({
           direction='row'
           justifyContent="center"
           spacing={1}
-          sx={{padding: '0px 0px 20px 0px'}}
         >
           <Chip
             label="Save new version"
@@ -234,7 +233,7 @@ function OpenModelDialog({
             color='primary'
           />
         </Stack>
-        {saveAction === 'version' &&
+        {/* {saveAction === 'version' &&
           <FormControl >
             <Select
               labelId="demo-simple-select-label"
@@ -270,7 +269,7 @@ function OpenModelDialog({
             }}
           />
           </FormControl>
-        }
+        } */}
       </>
     )
   }
@@ -287,39 +286,14 @@ function OpenModelDialog({
       <Stack sx={{padding: '0px 0px 14px 0px'}}>
         <NavComponent/>
       </Stack>
+
       {currentTab === 'Open' &&
-        <Box>
-        <Accordion
-          sx={{border: '1px solid lightgrey'}}
-          elevation={0}
-          expanded={samplesExpanded}
-          onChange={() => setSamplesExpanded(!samplesExpanded)}
-        >
-          <AccordionSummary
-            expandIcon={<ExpandMoreIcon/>}
-            aria-controls="panel1-content"
-            id="panel1-header"
-          >
-            <Typography variant={'overline'} >
-              Sample Projects
-            </Typography>
-          </AccordionSummary>
-          <AccordionDetails>
-            <SampleModelFileSelector
-              navigate={navigate}
-              setIsDialogDisplayed={setIsDialogDisplayed}
-            />
-          </AccordionDetails>
-        </Accordion>
-        </Box>
-      }
-      {isAuthenticated && currentTab === 'Open' &&
-        <Box >
+        <Stack>
           <Accordion
-          elevation={0}
-          sx={{border: '1px solid lightgrey'}}
-          expanded={!samplesExpanded}
-          onChange={() => setSamplesExpanded(!samplesExpanded)}
+    sx={{border: '1px solid lightgrey'}}
+            elevation={0}
+            expanded={samplesExpanded}
+            onChange={() => setSamplesExpanded(!samplesExpanded)}
           >
             <AccordionSummary
               expandIcon={<ExpandMoreIcon/>}
@@ -327,21 +301,44 @@ function OpenModelDialog({
               id="panel1-header"
             >
               <Typography variant={'overline'} >
-                Open your github model
+                Sample Projects
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
-              <LocationComponent/>
+              <SampleModelFileSelector
+                navigate={navigate}
+                setIsDialogDisplayed={setIsDialogDisplayed}
+              />
             </AccordionDetails>
           </Accordion>
-        </Box>
-      }
-      {isAuthenticated && currentTab === 'Save' &&
-        <Box>
           <Accordion
+    sx={{border: '1px solid lightgrey'}}
+            elevation={0}
+            expanded={!samplesExpanded}
+            onChange={() => setSamplesExpanded(!samplesExpanded)}
+          >
+              <AccordionSummary
+                expandIcon={<ExpandMoreIcon/>}
+                aria-controls="panel1-content"
+                id="panel1-header"
+              >
+                <Typography variant={'overline'} >
+                  Open your github model
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails>
+                <LocationComponent/>
+              </AccordionDetails>
+          </Accordion>
+        </Stack>
+      }
+
+      {isAuthenticated && currentTab === 'Save' &&
+        <Stack spacing={0}>
+          <Accordion
+            sx={{border: '1px solid lightgrey'}}
             elevation={0}
             expanded={saveActionsExpanded}
-            sx={{border: '1px solid lightgrey'}}
             onChange={() => {
               setSaveActionsExpanded(!saveActionsExpanded)
             }}
@@ -359,18 +356,9 @@ function OpenModelDialog({
               <SaveAction/>
             </AccordionDetails>
           </Accordion>
-        </Box>
-      }
-      {!isAuthenticated &&
-          <AccordionDetails>
-          <PleaseLogin/>
-          </AccordionDetails>
-      }
-      {isAuthenticated && currentTab === 'Save' &&
-        <Box >
           <Accordion
-          elevation={0}
           sx={{border: '1px solid lightgrey'}}
+          elevation={0}
           expanded={!saveActionsExpanded}
           onChange={() => setSaveActionsExpanded(!saveActionsExpanded)}
           >
@@ -380,21 +368,22 @@ function OpenModelDialog({
               id="panel1-header"
             >
               <Typography variant={'overline'} >
-                Choose where to save
+                {saveAction === 'model' ? 'Choose where to save' : 'Choose the model to version'}
               </Typography>
             </AccordionSummary>
             <AccordionDetails>
               <LocationComponent/>
             </AccordionDetails>
           </Accordion>
-        </Box>
+        </Stack>
       }
+
       {isAuthenticated && currentTab === 'Delete' &&
-        <Box sx={{margin: '20px 0px'}}>
-          <Accordion
+        <Accordion
           sx={{border: '1px solid lightgrey'}}
           elevation={0}
-          >
+          expanded={true}
+        >
             <AccordionSummary
               expandIcon={<ExpandMoreIcon/>}
               aria-controls="panel1-content"
@@ -407,9 +396,14 @@ function OpenModelDialog({
             <AccordionDetails>
               <LocationComponent/>
             </AccordionDetails>
-          </Accordion>
-        </Box>
+        </Accordion>
       }
+      {!isAuthenticated &&
+          <AccordionDetails>
+          <PleaseLogin/>
+          </AccordionDetails>
+      }
+
     </Dialog>
   )
 }
