@@ -19,7 +19,7 @@ describe('Profile 100: Login', () => {
         waitForModel()
         auth0Login()
         // take screenshot
-        cy.screenshot()
+        // cy.screenshot()
       })
     })
   })
