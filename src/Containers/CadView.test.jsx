@@ -122,6 +122,12 @@ describe('CadView', () => {
     await waitFor(() => screen.getByTitle(bldrsVersionString))
   })
 
+  it.only('test', async () => {
+    const {result} = renderHook(() => useStore((state) => state))
+    await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
+    // Necessary to wait for some of the component to render to avoid
+  })
+
 
   // TODO(nickcastel50): See Issue #956
   it.skip('renders and selects the element ID from URL', async () => {

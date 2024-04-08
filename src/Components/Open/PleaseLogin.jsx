@@ -8,13 +8,12 @@ import Typography from '@mui/material/Typography'
 export default function PleaseLogin() {
   return (
     <Box sx={{padding: '0px 10px', width: '300px'}} elevation={0}>
-      <Typography variant={'body1'} sx={{marginTop: '10px'}}>
+      <Typography variant={'overline'} sx={{marginTop: '10px', lineHeight: '1em'}}>
         Please login to GitHub to get full access to your projects.
         Visit our {' '}
         <Link
-          href='https://github.com/bldrs-ai/Share/wiki/GitHub-model-hosting'
+          href='https://github.com/bldrs-ai/Share/wiki/Hosting%3A-GitHub'
           color='inherit'
-          variant='body1'
         >
           wiki
         </Link> to learn more about GitHub hosting.
