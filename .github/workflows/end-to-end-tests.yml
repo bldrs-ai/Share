@@ -38,10 +38,13 @@ jobs:
           OPFS_IS_ENABLED: false
           RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
           SHARE_CONFIG: cypress
-          CYPRESS_CI_ENVIRONMENT: true
 
       - name: Cypress run
-        uses: cypress-io/github-action@v6
+        uses: cypress-io/github-action@v5
         with:
           browser: chrome
           command: yarn cy
+          env: true
+        env:
+          CYPRESS_CI_ENVIRONMENT: true
+
