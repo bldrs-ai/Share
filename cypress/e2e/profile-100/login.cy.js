@@ -11,7 +11,6 @@ describe('Profile 100: Login', () => {
     })
 
     it('Should Login', () => {
-      cy.log(`AUTH0_DOMAIN: ${process.env.AUTH0_DOMAIN}`)
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
