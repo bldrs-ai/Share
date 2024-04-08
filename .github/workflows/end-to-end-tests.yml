@@ -48,3 +48,19 @@ jobs:
         env:
           CYPRESS_CI_ENVIRONMENT: true
 
+      - name: Upload Cypress Screenshots
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-screenshots
+          path: cypress/screenshots
+          if-no-files-found: warn
+
+      - name: Upload Cypress Videos
+        uses: actions/upload-artifact@v3
+        if: failure()
+        with:
+          name: conway-cypress-videos
+          path: cypress/videos
+          if-no-files-found: warn
+
