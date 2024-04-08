@@ -38,33 +38,10 @@ jobs:
           OPFS_IS_ENABLED: false
           RAW_GIT_PROXY_URL: 'https://rawgit.bldrs.dev.msw/r'
           SHARE_CONFIG: cypress
-
-      - name: Verify Percy CLI installation
-        run: yarn percy --version
+          CYPRESS_CI_ENVIRONMENT: true
 
       - name: Cypress run
         uses: cypress-io/github-action@v6
         with:
           browser: chrome
-          command: yarn percy exec -- cypress run
-          env: true
-        env:
-          CYPRESS_CI_ENVIRONMENT: true
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
-
-      - name: Upload Cypress Screenshots
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: conway-cypress-screenshots
-          path: cypress/screenshots
-          if-no-files-found: warn
-
-      - name: Upload Cypress Videos
-        uses: actions/upload-artifact@v3
-        if: failure()
-        with:
-          name: conway-cypress-videos
-          path: cypress/videos
-          if-no-files-found: warn
-          
+          command: yarn cy
