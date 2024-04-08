@@ -34,13 +34,8 @@ jobs:
           NODE_ENV: production
           SHARE_CONFIG: cypress
 
-      - name: Verify Percy CLI installation
-        run: yarn percy --version
-
       - name: Cypress run
         uses: cypress-io/github-action@v5
         with:
           browser: chrome
-          command: yarn percy exec -- cypress run
-        env:
-          PERCY_TOKEN: ${{ secrets.PERCY_TOKEN }}
+          command: yarn cy
