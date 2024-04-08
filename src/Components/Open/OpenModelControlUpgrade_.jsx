@@ -284,11 +284,11 @@ function OpenModelDialog({
       actionTitle='Open local model'
       actionCb={openFile}
     >
-      <Stack sx={{padding: '20px 0px 20px 0px'}}>
+      <Stack sx={{padding: '0px 0px 14px 0px'}}>
         <NavComponent/>
       </Stack>
       {currentTab === 'Open' &&
-        <Box sx={{margin: '20px 0px'}}>
+        <Box>
         <Accordion
           sx={{border: '1px solid lightgrey'}}
           elevation={0}
@@ -314,7 +314,7 @@ function OpenModelDialog({
         </Box>
       }
       {isAuthenticated && currentTab === 'Open' &&
-        <Box sx={{margin: '20px 0px'}}>
+        <Box >
           <Accordion
           elevation={0}
           sx={{border: '1px solid lightgrey'}}
@@ -337,7 +337,7 @@ function OpenModelDialog({
         </Box>
       }
       {isAuthenticated && currentTab === 'Save' &&
-        <Box sx={{margin: '20px 0px'}}>
+        <Box>
           <Accordion
             elevation={0}
             expanded={saveActionsExpanded}
@@ -367,7 +367,7 @@ function OpenModelDialog({
           </AccordionDetails>
       }
       {isAuthenticated && currentTab === 'Save' &&
-        <Box sx={{margin: '20px 0px'}}>
+        <Box >
           <Accordion
           elevation={0}
           sx={{border: '1px solid lightgrey'}}
