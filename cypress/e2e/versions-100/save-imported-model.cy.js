@@ -16,13 +16,7 @@ describe('save model', () => {
       // cy.screenshot()
     })
 
-    if (Cypress.env('CI_ENVIRONMENT')) {
-      // If the test is running in GitHub Actions, skip this test
-      // eslint-disable-next-line no-console
-      console.log('Skipping this test in GitHub Actions')
-    } else {
     it('should only find Save IFC button after login', () => {
-      cy.intercept('/dummy').as('dummy')
       cy.visit('/')
       // Now trigger the login process, which will use the mocked loginWithPopup
       cy.url().then((currentUrl) => {
@@ -61,6 +55,5 @@ describe('save model', () => {
         cy.contains('button', 'Save model').click()
       })
     })*/
-  }
   })
 })
