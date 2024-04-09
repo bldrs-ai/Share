@@ -36,7 +36,6 @@ export default function Selector({
       label={label}
       select
       size='small'
-      sx={{width: '260px', marginBottom: '.5em'}}
       {...props}
     >
       {list.map((listMember, i) => {
