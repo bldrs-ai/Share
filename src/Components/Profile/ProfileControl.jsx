@@ -46,7 +46,7 @@ export default function ProfileControl() {
         }
         variant='control'
         placement='left'
-        buttonTestId='Profile-control-button'
+        buttonTestId='control-button-profile'
       />
       <Menu
         elevation={1}
@@ -57,7 +57,7 @@ export default function ProfileControl() {
         anchorOrigin={{vertical: 'top', horizontal: 'left'}}
         transformOrigin={{vertical: 'top', horizontal: 'right'}}
       >
-        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid="login-with-github">
+        <MenuItem onClick={isAuthenticated ? onLogoutClick : onLoginClick} data-testid='login-with-github'>
           <GitHubIcon/>
           {isAuthenticated ?
            <Typography sx={{marginLeft: '10px'}} variant='overline'>Log out</Typography> :
