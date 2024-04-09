@@ -1,40 +1,79 @@
 import '@percy/cypress'
-import {homepageSetup, setCookieAndVisitHome, waitForModel} from '../../support/utils'
+import {
+  homepageSetup,
+  setIsReturningUser,
+  visitHomepage,
+  waitForModel,
+} from '../../support/utils'
 
 
-describe('initial-model-load-and-view', () => {
-  context('Open model by following a link to a project on Share (e.g. our index.ifc)', () => {
-    beforeEach(() => {
-      homepageSetup()
-    })
+describe('view 100: Initial model load and view', () => {
+  beforeEach(homepageSetup)
 
-    it('See model centered in page (cookie isFirstTime: 1) - snap', () => {
-      setCookieAndVisitHome()
-      waitForModel()
-      cy.percySnapshot()
-    })
+  context('Is first-time user', () => {
+    // No beforeEach, isFirstTime cookie remains unset
 
-    it('See model centered in page (cookie isFirstTime: undefined) - snap', () => {
-      cy.visit('/')
-      waitForModel()
-      // Close About
-      cy.get('button[aria-label="action-button"]')
+    context('Visit homepage', () => {
+      beforeEach(visitHomepage)
+
+      it('See AboutDialog - SCREEN', () => {
+        waitForModel()
+        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.percySnapshot()
+      })
+
+      it('AboutDialog closes and shows model - SCREEN', () => {
+        waitForModel()
+        cy.get('[data-testid="about-dialog"]').should('exist')
+        // Close About
+        cy.get('button[aria-label="action-button"]')
           .click()
-      cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
-      cy.percySnapshot()
+        cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
+        cy.percySnapshot()
+      })
     })
 
-    it('Visit about permalink - snap', () => {
-      cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:')
-      waitForModel()
-      cy.title().should('eq', 'About — bldrs.ai')
-      // cy.screenshot()
-      cy.percySnapshot()
+    context('Visit about permalink', () => {
+      beforeEach(() => cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:'))
+
+      it('See About dialog - SCREEN', () => {
+        waitForModel()
+        cy.get('[data-testid="about-dialog"]').should('exist')
+        cy.percySnapshot()
+      })
+
+      it('About dialog closes and shows model - SCREEN', () => {
+        waitForModel()
+        cy.get('[data-testid="about-dialog"]').should('exist')
+        // Close About
+        cy.get('button[aria-label="action-button"]')
+          .click()
+        cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
+        cy.percySnapshot()
+      })
+    })
+  })
+
+  context('Is returning user', () => {
+    beforeEach(setIsReturningUser)
+
+    context('Visit homepage', () => {
+      beforeEach(visitHomepage)
+
+      it('See logo - SCREEN', () => {
+        waitForModel()
+        cy.percySnapshot()
+      })
     })
 
-    it('Title should contain model followed by repo and org', () => {
-      cy.visit('/')
-      waitForModel()
+    context('Visit about permalink', () => {
+      beforeEach(() => cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:'))
+
+      it('See About dialog  - SCREEN', () => {
+        waitForModel()
+        cy.title().should('eq', 'About — bldrs.ai')
+        cy.percySnapshot()
+      })
     })
   })
 })

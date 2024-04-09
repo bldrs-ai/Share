@@ -16,29 +16,45 @@ export function interceptBounce() {
   cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
 }
 
-/**
- *
- */
-export function interceptInitialLoads() {
-  interceptIndex()
-  interceptBounce()
-}
-
-/**
- *
- */
+/** Clears local storage and cookies. */
 export function clearState() {
     cy.clearLocalStorage()
     cy.clearCookies()
 }
 
-/**
- *
- */
-export function homepageSetup() {
-    clearState()
-    interceptInitialLoads()
+
+/** Setup initial homepage intercepts */
+export function interceptInitialLoads() {
+  interceptIndex()
+  interceptBounce()
 }
+
+
+/** Clears local storage and cookies, and setup initial homepage intercepts */
+export function homepageSetup() {
+  clearState()
+  interceptInitialLoads()
+}
+
+
+/** Set cookie indicating user has visited before */
+export function setIsReturningUser() {
+  cy.setCookie('isFirstTime', '1')
+}
+
+
+/** Visit root path.  This will trigger an autoload to /share/v/p/index.ifc */
+export function visitHomepage() {
+  cy.visit('/')
+}
+
+
+/** Sets state for returning user and visit homepage */
+export function setCookieAndVisitHome() {
+  setIsReturningUser()
+  visitHomepage()
+}
+
 
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
@@ -242,12 +258,4 @@ export function setupAuthenticationIntercepts() {
        },
     })
   }).as('tokenRequest')
-}
-
-/**
- *
- */
-export function setCookieAndVisitHome() {
-  cy.setCookie('isFirstTime', '1')
-  cy.visit('/')
 }
