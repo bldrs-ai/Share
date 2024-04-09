@@ -281,7 +281,7 @@ function OpenModelDialog({
             spacing={1}
             >
               <Typography variant={'overline'} >
-                Open your github model
+                Open github model
               </Typography>
               <LocationComponent/>
               <Typography variant={'overline'} >
