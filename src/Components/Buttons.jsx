@@ -106,6 +106,7 @@ export function ControlButton({
         variant='control'
         color='success'
         size='small'
+        buttonTestId={props['data-testid'] || `${title}-control-button`}
         {...props}
       />
       {children}

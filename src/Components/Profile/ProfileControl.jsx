@@ -13,11 +13,11 @@ import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
 
 
 /**
- * PersonaControl contains the option to log in/log out and to theme control
+ * ProfileControl contains the option to log in/log out and to theme control
  *
  * @return {ReactElement}
  */
-export default function PersonaControl() {
+export default function ProfileControl() {
   const [anchorEl, setAnchorEl] = useState(null)
   const isMenuVisible = Boolean(anchorEl)
 
@@ -37,7 +37,7 @@ export default function PersonaControl() {
   return (
     <>
       <TooltipIconButton
-        title='Login and preferences'
+        title='Profile'
         onClick={(event) => setAnchorEl(event.currentTarget)}
         icon={
           isAuthenticated ?
@@ -46,6 +46,7 @@ export default function PersonaControl() {
         }
         variant='control'
         placement='left'
+        buttonTestId='Profile-control-button'
       />
       <Menu
         elevation={1}
