@@ -8,3 +8,4 @@ fi
 
 yarn cy-build && yarn percy exec -- yarn cy
 
+echo "Add the above percy URL to your PR description, with any notes about differences."
