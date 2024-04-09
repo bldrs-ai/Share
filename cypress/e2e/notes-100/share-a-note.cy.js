@@ -11,7 +11,7 @@ describe('share-a-note', () => {
       setCookieAndVisitHome()
       waitForModel()
 
-      cy.get('[data-testid="Notes"]').click()
+      cy.get('[data-testid="control-button-notes"]').click()
       cy.get('[data-testid="panelTitle"]').contains('NOTES')
       cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('Test Issue body').click()
       cy.get('.MuiCardHeader-title').contains('Local issue 2')
