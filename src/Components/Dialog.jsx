@@ -32,6 +32,7 @@ export default function Dialog({
   actionTitle,
   actionCb,
   children,
+  ...props
 }) {
   assertDefined(headerText, isDialogDisplayed, setIsDialogDisplayed, children)
 
@@ -43,7 +44,7 @@ export default function Dialog({
     <MuiDialog
       open={isDialogDisplayed}
       onClose={onCloseClick}
-      data-testid='main-dialog'
+      data-testid={props['data-testid'] || 'mui-dialog'}
     >
       <DialogTitle>
         {headerIcon ?

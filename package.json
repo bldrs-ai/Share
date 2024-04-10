@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.966",
+  "version": "1.0.971",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -22,7 +22,7 @@
     "build-share-copy-wasm-webifc": "shx cp node_modules/web-ifc/*.wasm docs/static/js",
     "build-share-analyze": "ANALYZE=true node tools/esbuild/build.js",
     "clean": "shx rm -rf docs",
-    "cy-build": "SHARE_CONFIG=cypress yarn build-share-conway",
+    "cy-build": "yarn clean && SHARE_CONFIG=cypress yarn build-share-conway",
     "cy": "cypress run --browser chrome",
     "cy-spec": "cypress run --browser chrome --spec",
     "cy-headed": "cypress run --headed --browser chrome --no-exit",
