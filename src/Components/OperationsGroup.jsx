@@ -8,13 +8,13 @@ import {TooltipIconButton} from './Buttons'
 import CameraControl from './CameraControl'
 import ImagineControl from './ImagineControl'
 import NotesControl from './Notes/NotesControl'
-import PersonaControl from './Persona/PersonaControl'
+import ProfileControl from './Profile/ProfileControl'
 import PropertiesControl from './Properties/PropertiesControl'
 import ShareControl from './ShareControl'
 
 
 /**
- * OperationsGroup contains tools for persona, sharing, notes, properties and
+ * OperationsGroup contains tools for profile, sharing, notes, properties and
  * imagine
  *
  * @property {Function} deselectItems deselects currently selected element
@@ -36,7 +36,7 @@ export default function OperationsGroup({deselectItems}) {
     <ButtonGroup orientation='vertical' variant='controls'>
       {isLoginEnabled && (
         <>
-          <PersonaControl/>
+          <ProfileControl/>
           {/* This lines up divider with top of notes content panel */}
           <Divider/>
         </>)}
