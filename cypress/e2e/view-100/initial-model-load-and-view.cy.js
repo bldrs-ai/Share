@@ -11,13 +11,13 @@ import {
 describe('view 100: Initial model load and view', () => {
   beforeEach(homepageSetup)
 
-  context('setIsReturningUser', () => {
+  context('Returning user', () => {
     beforeEach(setIsReturningUser)
 
-    context('visitHomepageWaitForModel', () => {
+    context('Visits homepage', () => {
       beforeEach(visitHomepageWaitForModel)
 
-      it('See logo model, model title and all main controls - SCREEN', () => {
+      it('See logo model, model title and all main controls - Screen', () => {
         cy.title().should('eq', 'index.ifc - Share/pablo-mayrgundter')
 
         cy.get('[data-testid="control-button-open"]').should('exist')
@@ -35,13 +35,13 @@ describe('view 100: Initial model load and view', () => {
       })
     })
 
-    context('Visit about permalink waitForModel', () => {
+    context('Visits about permalink', () => {
       beforeEach(() => {
         cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;about:')
         waitForModel()
       })
 
-      it('See About dialog - SCREEN', () => {
+      it('See AboutDialog - Screen', () => {
         cy.get('[data-testid="about-dialog"]').should('exist')
         cy.title().should('eq', 'About — bldrs.ai')
         cy.percySnapshot()
@@ -50,18 +50,18 @@ describe('view 100: Initial model load and view', () => {
   })
 
 
-  context('Is first-time user', () => {
+  context('First-time user', () => {
     // No beforeEach, isFirstTime cookie remains unset
 
-    context('visitHomepageWaitForModel', () => {
+    context('Visits homepage', () => {
       beforeEach(visitHomepageWaitForModel)
 
-      it('AboutDialog visible - SCREEN', () => {
+      it('See AboutDialog - Screen', () => {
         cy.get('[data-testid="about-dialog"]').should('exist')
         cy.percySnapshot()
       })
 
-      context('user closes about dialog', () => {
+      context('Close about dialog', () => {
         beforeEach(() => {
           cy.get('[data-testid="about-dialog"]').should('exist')
           // Close About
@@ -69,7 +69,7 @@ describe('view 100: Initial model load and view', () => {
             .click()
         })
 
-        it('Model visible - SCREEN', () => {
+        it('AboutDialog not visible, model visible - Screen', () => {
           cy.get('body').find('[data-testid="about-dialog"]').should('not.exist')
           cy.percySnapshot()
         })
