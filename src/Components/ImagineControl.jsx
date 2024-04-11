@@ -9,6 +9,7 @@ import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {ControlButtonWithHashState, RectangularButton} from './Buttons'
+import {addCameraUrlParams} from './CameraControl'
 import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -71,7 +72,7 @@ function ImagineDialog({
   const [finalPrompt, setFinalPrompt] = useState(null)
 
   useEffect(() => {
-    if (viewer) {
+    if (viewer && isDialogDisplayed) {
       // Clear out possible prior state
       setPrompt('')
       setFinalPrompt(null)
@@ -81,7 +82,8 @@ function ImagineDialog({
       setScreenshot(ss)
       setImage(ss)
     }
-  }, [viewer, model, cameraControls, isDialogDisplayed])
+  }, [cameraControls, isDialogDisplayed, viewer])
+
 
   const onCreateClick = () => {
     setFinalPrompt(prompt)
