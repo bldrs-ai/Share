@@ -2,14 +2,14 @@ import React from 'react'
 import {fireEvent, render} from '@testing-library/react'
 import {mockedUseAuth0, mockedUserLoggedIn, mockedUserLoggedOut} from '../../__mocks__/authentication'
 import {ThemeCtx} from '../../theme/Theme.fixture'
-import LoginMenu from './PersonaControl'
+import LoginMenu from './ProfileControl'
 
 
-describe('LoginMenu', () => {
+describe('ProfileControl', () => {
   it('renders the login button when not logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
-    const usersMenu = await findByTitle('Login and preferences')
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
     const LoginWithGithub = await findByText('Log in with Github')
@@ -18,8 +18,8 @@ describe('LoginMenu', () => {
 
   it('renders the user avatar when logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
-    const usersMenu = await findByTitle('Login and preferences')
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
     const LoginWithGithub = await findByText('Log out')
@@ -28,8 +28,8 @@ describe('LoginMenu', () => {
 
   it('renders the theme selection', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
-    const usersMenu = await findByTitle('Login and preferences')
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
 
     const dayThemeButton = await findByText('Night theme')
@@ -38,8 +38,8 @@ describe('LoginMenu', () => {
 
   it('renders the night theme when selected', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {findByTitle, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
-    const usersMenu = await findByTitle('Login and preferences')
+    const {findByTestId, findByText} = render(<LoginMenu/>, {wrapper: ThemeCtx})
+    const usersMenu = await findByTestId('control-button-profile')
     fireEvent.click(usersMenu)
     const dayThemeButton = await findByText('Night theme')
     fireEvent.click(dayThemeButton)

@@ -24,6 +24,7 @@ export default function AboutControl() {
       setIsDialogDisplayed={setIsAboutVisible}
       hashPrefix={ABOUT_PREFIX}
       placement='right'
+      buttonTestId='control-button-about'
     >
       <AboutDialog
         isDialogDisplayed={isFirst() || isAboutVisible}
