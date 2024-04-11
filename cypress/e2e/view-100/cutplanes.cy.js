@@ -3,6 +3,7 @@ import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
+  waitForModel,
 } from '../../support/utils'
 
 
@@ -10,7 +11,7 @@ import {
 describe('view 100: Cutplanes', () => {
   beforeEach(homepageSetup)
 
-  context.skip('View model', () => {
+  context('View model', () => {
     beforeEach(() => {
       setIsReturningUser()
       visitHomepageWaitForModel()
@@ -52,6 +53,19 @@ describe('view 100: Cutplanes', () => {
           })
         })
       })
+    })
+  })
+
+
+  context('View cut-plane permalink', () => {
+    beforeEach(() => {
+      setIsReturningUser()
+      cy.visit('/share/v/p/index.ifc#vp:y=17.077,x=-25.551,z=5.741;c:-133.022,131.828,161.85,-38.078,22.64,-2.314')
+      waitForModel()
+    })
+
+    it('Shows just vertical bar of b', () => {
+      cy.percySnapshot()
     })
   })
 })
