@@ -75,7 +75,7 @@ export default function Dialog({
         }
 
       </DialogTitle>
-      <CloseButton onCloseClick={onCloseClick}/>
+      <CloseButton onCloseClick={onCloseClick} data-testid='button-close-dialog'/>
       <DialogContent>{children}</DialogContent>
       {(actionTitle === undefined || actionTitle === undefined) ? null :
        <DialogActions>
