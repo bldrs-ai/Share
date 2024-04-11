@@ -352,7 +352,7 @@ async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, 
     // Create FileSystemSyncAccessHandle on the file.
     blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
 
-    if (writeFileToHandle(blobAccessHandle, modelFile)) {
+    if (await writeFileToHandle(blobAccessHandle, modelFile)) {
       self.postMessage({completed: true, event: 'write'})
     }
   } catch (error) {

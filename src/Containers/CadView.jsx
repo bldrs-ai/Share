@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useContext, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import {useAuth0} from '@auth0/auth0-react'
@@ -11,7 +11,6 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import FileContext from '../OPFS/FileContext'
 import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
@@ -72,7 +71,7 @@ export default function CadView({
   const viewer = useStore((state) => state.viewer)
 
   // AppSlice
-  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const isOPFSAvailable = useStore((state) => state.isOPFSAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
 
   // IFCSlice
@@ -114,7 +113,7 @@ export default function CadView({
   const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
-  const {setFile} = useContext(FileContext) // Consume the context
+  const setFile = useStore((state) => state.setFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -141,7 +140,7 @@ export default function CadView({
 
   /** When viewer is ready, load IFC model. */
   async function onViewer() {
-    if (isOpfsAvailable === null) {
+    if (isOPFSAvailable === null) {
       debug().warn('Do not have opfs status yet, waiting.')
       return
     }
@@ -253,7 +252,7 @@ export default function CadView({
                    filepath : await getFinalUrl(filepath, accessToken)
 
     let loadedModel
-    if (!isOpfsAvailable) {
+    if (!isOPFSAvailable) {
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
@@ -270,7 +269,7 @@ export default function CadView({
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
-            setSnackMessage('')
+            setSnackMessage(null)
           }, customViewSettings)
     } else if (uploadedFile) {
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
@@ -322,7 +321,7 @@ export default function CadView({
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
-            setSnackMessage('')
+            setSnackMessage(null)
           }, customViewSettings)
     } else {
       // TODO(pablo): probably already available in this scope, or use
@@ -663,14 +662,14 @@ export default function CadView({
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isAuthLoading && !isAuthenticated)) {
+          (!isAuthLoading && !isAuthenticated) && isOPFSAvailable !== null) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken])
+  }, [isAuthLoading, isAuthenticated, accessToken, isOPFSAvailable])
 
 
   // ModelPath changes in parent (ShareRoutes) from user and

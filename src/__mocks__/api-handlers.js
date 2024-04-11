@@ -84,6 +84,30 @@ function githubHandlers() {
       const {org, repo, path} = req.params
       const ref = req.url.searchParams.get('ref')
 
+      if (org === 'cypresstester') {
+        return res(
+          ctx.status(httpOk),
+          ctx.json({
+            name: 'test-model.ifc',
+            path: 'cypresstester/test-repo/test-model.ifc',
+            sha: '1fc13089c8851fd9c5d39cda54788823a8606564',
+            size: 36206,
+            url: 'https://api.github.com/repos/cypresstester/test-repo/contents/test-model.ifc?ref=main',
+            html_url: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
+            git_url: 'https://api.github.com/repos/cypresstester/test-repo/git/blobs/1fc13089c8851fd9c5d39cda54788823a8606564',
+            download_url: `/index.ifc`,
+            type: 'file',
+            content: 'dGVzdCBkYXRh\n',
+            encoding: 'base64',
+            _links: {
+              self: 'https://api.github.com/repos/cypresstester/test-repo/contents/test-model.ifc?ref=main',
+              git: 'https://api.github.com/repos/cypresstester/test-repo/git/blobs/1fc13089c8851fd9c5d39cda54788823a8606564',
+              html: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
+            },
+          }),
+        )
+      }
+
       if (org !== 'bldrs-ai' || repo !== 'Share' || path !== 'README.md') {
         return res(
             ctx.status(httpNotFound),

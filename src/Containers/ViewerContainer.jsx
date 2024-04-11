@@ -14,7 +14,7 @@ export default function ViewerContainer() {
 
   const appPrefix = useStore((state) => state.appPrefix)
   const isModelReady = useStore((state) => state.isModelReady)
-  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
+  const isOPFSAvailable = useStore((state) => state.isOPFSAvailable)
 
   const [, setIsDragActive] = useState(false)
 
@@ -42,7 +42,7 @@ export default function ViewerContainer() {
       event.dataTransfer.files
     // Here you can handle the files as needed
     if (files.length === 1) {
-      if (isOpfsAvailable) {
+      if (isOPFSAvailable) {
         loadLocalFileDragAndDrop(
           navigate,
           appPrefix,
