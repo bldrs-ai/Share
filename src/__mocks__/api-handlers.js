@@ -57,7 +57,8 @@ function githubHandlers() {
     rest.get(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
-      if (org !== 'pablo-mayrgundter' || repo !== 'Share') {
+      if (!((org === 'pablo-mayrgundter' && repo === 'Share') ||
+      (org === 'cypresstester' && repo === 'test-repo'))) {
         return res(ctx.status(httpNotFound))
       }
 

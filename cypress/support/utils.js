@@ -94,7 +94,7 @@ export function visitHomepageWaitForModel() {
 export function auth0Login() {
   setupAuthenticationIntercepts()
   cy.log(`The current port is: ${getPort()}`)
-  cy.get('[title="Login and preferences"]').should('exist').click()
+  cy.get('[title="Profile"]').should('exist').click()
   cy.log('simulating login')
   cy.findByTestId('login-with-github').should('exist').click()
 

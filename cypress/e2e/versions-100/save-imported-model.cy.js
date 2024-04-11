@@ -1,4 +1,4 @@
-
+import '@percy/cypress'
 import {auth0Login, setPort, waitForModel, homepageSetup} from '../../support/utils'
 
 
@@ -13,7 +13,7 @@ describe('save model', () => {
       cy.visit('/')
       waitForModel()
       cy.findByTestId('Save', {timeout: 10000}).should('not.exist')
-      // cy.screenshot()
+      cy.percySnapshot()
     })
 
     it('should only find Save IFC button after login', () => {
@@ -27,7 +27,10 @@ describe('save model', () => {
         auth0Login()
         cy.findByTitle('Save', {timeout: 5000}).should('exist')
 
-        //  cy.screenshot()
+        const animWaitTimeMs = 2000
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(animWaitTimeMs)
+        cy.percySnapshot()
       })
     })
 
@@ -53,6 +56,11 @@ describe('save model', () => {
         cy.findByLabelText('Enter file name').click().type('save-model-test.ifc')
 
         cy.contains('button', 'Save model').click()
+
+        const animWaitTimeMs = 2000
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(animWaitTimeMs)
+        cy.percySnapshot()
       })
     })
   })

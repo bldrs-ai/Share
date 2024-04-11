@@ -1,3 +1,4 @@
+import '@percy/cypress'
 import {auth0Login, setPort, waitForModel} from '../../support/utils'
 
 
@@ -19,7 +20,7 @@ describe('Profile 100: Login', () => {
         waitForModel()
         auth0Login()
         // take screenshot
-        // cy.screenshot()
+        cy.percySnapshot()
       })
     })
   })
