@@ -16,10 +16,10 @@ describe('create-100: Imagine', () => {
       visitHomepageWaitForModel()
     })
 
-    context('Click ControlButton', () => {
+    context('Click ImagineControlButton', () => {
       beforeEach(() => cy.findByTestId('control-button-rendering').click())
 
-      it('Shows screenshot', () => {
+      it('Shows screenshot - Screen', () => {
         cy.title().should('eq', 'Imagine')
         cy.percySnapshot()
       })
@@ -45,20 +45,20 @@ describe('create-100: Imagine', () => {
           cy.findByText('Create').click()
         })
 
-        it('Shows candy cane render', () => {
+        it('Shows candy cane render - Screen', () => {
           cy.wait('@renderedReply').its('response.statusCode').should('eq', HTTP_OK)
           cy.get('[data-testid="img-rendered"]')
           cy.percySnapshot()
         })
 
         // For bug https://github.com/bldrs-ai/Share/issues/1068
-        context('Close dialog', () => {
+        context('Reopen dialog', () => {
           beforeEach(() => {
             cy.get('[data-testid="button-close-dialog"]').click()
             cy.get('[data-testid="control-button-rendering"]').click()
           })
 
-          it('Shows screenshot', () => {
+          it('Shows screenshot - Screen', () => {
             cy.title().should('eq', 'Imagine')
             cy.percySnapshot()
           })
