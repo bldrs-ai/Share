@@ -95,7 +95,7 @@ export default function CutPlaneMenu() {
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
         variant='control'
         placement='top'
-        buttonTestId='control-button-section'
+        buttonTestId='control-button-cut-plane'
       />
       <Menu
         elevation={1}
@@ -138,7 +138,8 @@ export default function CutPlaneMenu() {
             setAnchorEl(null)
             setIsCutPlane(false)
             removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
-          } }
+          }}
+          data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
