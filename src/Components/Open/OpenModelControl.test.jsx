@@ -11,9 +11,9 @@ import {OpenModelControlFixture} from './OpenModelControl.fixture'
 describe('Open Model Dialog', () => {
   it('Renders a login message if the user is not logged in', () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedOut)
-    const {getByTitle, getByText} = render(<OpenModelControlFixture/>)
-    const button = getByTitle('Open')
-    fireEvent.click(button)
+    const {getByTestId, getByText} = render(<OpenModelControlFixture/>)
+    const openControlButton = getByTestId('control-button-open')
+    fireEvent.click(openControlButton)
     const loginTextMatcher = (content, node) => {
       const hasText = (_node) => _node.textContent.includes('Please login to GitHub')
       const nodeHasText = hasText(node)
@@ -30,9 +30,9 @@ describe('Open Model Dialog', () => {
 
   it('Renders file selector if the user is logged in', async () => {
     mockedUseAuth0.mockReturnValue(mockedUserLoggedIn)
-    const {getByTitle, getByTestId} = render(<OpenModelControlFixture/>)
-    const button = getByTitle('Open')
-    fireEvent.click(button)
+    const {getByTestId} = render(<OpenModelControlFixture/>)
+    const openControlButton = getByTestId('control-button-open')
+    fireEvent.click(openControlButton)
     const File = getByTestId('openFile')
     const Repository = await getByTestId('openRepository')
     expect(File).toBeInTheDocument()

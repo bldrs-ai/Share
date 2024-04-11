@@ -33,8 +33,9 @@ export default function CameraControl() {
     setCameraControls(cameraControls)
     const hasParams = onHash(location, cameraControls)
     setIsFitToFrame(!hasParams)
-    onLoad(location, cameraControls)
-  }, [location, cameraControls, setCameraControls, setIsFitToFrame])
+    onHash(location, cameraControls)
+    onLoad(location, cameraControls, viewer)
+  }, [location, cameraControls, setCameraControls, setIsFitToFrame, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
@@ -50,9 +51,33 @@ export const CAMERA_PREFIX = 'c'
  *
  * @param {object} location Either window.location or react-router location
  * @param {object} cameraControls obtained from the viewer
+ * @param {object} viewer the viewer, for null testing
  */
-function onLoad(location, cameraControls) {
+function onLoad(location, cameraControls, viewer) {
   addHashListener('camera', () => onHash(location, cameraControls))
+  const canvas = document.querySelector('canvas')
+  if (viewer && canvas) {
+    let isMouseDown = false
+    const onMouseDown = () => {
+      isMouseDown = true
+    }
+    const onMouseMove = () => {
+      if (isMouseDown) {
+        removeCameraUrlParams()
+      }
+    }
+    const onMouseUp = () => {
+      isMouseDown = false
+    }
+    canvas.removeEventListener('mousedown', onMouseDown)
+    canvas.addEventListener('mousedown', onMouseDown)
+
+    canvas.removeEventListener('mousemove', onMouseMove)
+    canvas.addEventListener('mousemove', onMouseMove)
+
+    canvas.removeEventListener('mouseup', onMouseUp)
+    canvas.addEventListener('mouseup', onMouseUp)
+  }
 }
 
 

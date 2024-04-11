@@ -93,8 +93,9 @@ export default function CutPlaneMenu() {
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
-        placement='top'
         variant='control'
+        placement='top'
+        buttonTestId='control-button-cut-plane'
       />
       <Menu
         elevation={1}
@@ -104,21 +105,28 @@ export default function CutPlaneMenu() {
         onClose={handleClose}
         anchorOrigin={{vertical: 'top', horizontal: 'center'}}
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
+        data-testid='menu-cut-plane'
       >
-        <MenuItem onClick={() => togglePlane({direction: 'y'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+          data-testid='menu-item-plan'
         >
           <PlanIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'x'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'x'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+          data-testid='menu-item-section'
         >
           <SectionIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'z'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
+          data-testid='menu-item-elevation'
         >
           <ElevationIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
@@ -130,7 +138,8 @@ export default function CutPlaneMenu() {
             setAnchorEl(null)
             setIsCutPlane(false)
             removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
-          } }
+          }}
+          data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>

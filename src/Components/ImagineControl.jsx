@@ -70,6 +70,19 @@ function ImagineDialog({
 
   const [finalPrompt, setFinalPrompt] = useState(null)
 
+  useEffect(() => {
+    if (viewer) {
+      // Clear out possible prior state
+      setPrompt('')
+      setFinalPrompt(null)
+      setIsImagineLoading(false)
+      addCameraUrlParams(cameraControls)
+      const ss = viewer.takeScreenshot()
+      setScreenshot(ss)
+      setImage(ss)
+    }
+  }, [viewer, model, cameraControls, isDialogDisplayed])
+
   const onCreateClick = () => {
     setFinalPrompt(prompt)
     setIsImagineLoading(true)
@@ -88,14 +101,6 @@ function ImagineDialog({
     setScreenshot(ss)
     setImage(ss)
   }
-
-  useEffect(() => {
-    if (viewer && isDialogDisplayed) {
-      const ss = viewer.takeScreenshot()
-      setScreenshot(ss)
-      setImage(ss)
-    }
-  }, [cameraControls, isDialogDisplayed, viewer])
 
   return (
     <Dialog
@@ -122,7 +127,8 @@ function ImagineDialog({
            <img
              src={image}
              alt='Imagine'
-             height={'390px'}
+             height='390px'
+             data-testid='img-rendered'
            />}
         </Box>
 
@@ -133,16 +139,17 @@ function ImagineDialog({
             fullWidth
             multiline
             size='small'
-            placeholder={'Imagine prompt'}
+            placeholder='Imagine prompt'
+            data-testid='text-field-render-description'
             InputProps={{
               endAdornment: (
-                <InputAdornment position="end">
+                <InputAdornment position='end'>
                   {prompt && (
                     <IconButton
-                      aria-label="clear text"
+                      aria-label='clear text'
                       onClick={onClearClick}
-                      edge="end"
-                      size="small"
+                      edge='end'
+                      size='small'
                     >
                       <ClearIcon size='inherit'/>
                     </IconButton>
@@ -151,14 +158,14 @@ function ImagineDialog({
               ),
             }}
           />
-          <Stack direction={'row'} spacing={1} justifyContent='center'>
+          <Stack direction='row' spacing={1} justifyContent='center'>
             <RectangularButton
-              title={'Create'}
+              title='Create'
               onClick={onCreateClick}
               disabled={prompt.length === 0}
             />
             <RectangularButton
-              title={'Download'}
+              title='Download'
               onClick={() => downloadImaginePng(imagine)}
               disabled={imagine === null}
             />
@@ -185,18 +192,18 @@ function sendToWarhol(dataUrl, prompt, onReady) {
   }
 
   axios
-      .post('https://warhol.bldrs.dev/generate', req, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((response) => {
-        const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
-        onReady(renderDataUrl)
-      })
-      .catch((error) => {
-        debug().error('Error uploading screenshot:', error)
-      })
+    .post('https://warhol.bldrs.dev/generate', req, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then((response) => {
+      const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
+      onReady(renderDataUrl)
+    })
+    .catch((error) => {
+      debug().error('Error uploading screenshot:', error)
+    })
 }
 
 
