@@ -7,7 +7,7 @@ import {
 
 
 /** @see https://github.com/bldrs-ai/Share/issues/1077 */
-describe('create-100: render-description-of-screenshot', () => {
+describe('create-100: Imagine', () => {
   beforeEach(homepageSetup)
 
   context('View model', () => {
