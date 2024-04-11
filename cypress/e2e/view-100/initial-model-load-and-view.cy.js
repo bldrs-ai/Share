@@ -28,7 +28,7 @@ describe('view 100: Initial model load and view', () => {
         cy.get('[data-testid="control-button-notes"]').should('exist')
         cy.get('[data-testid="control-button-rendering"]').should('exist')
         cy.get('[data-testid="control-button-help"]').should('exist')
-        cy.get('[data-testid="control-button-section"]').should('exist')
+        cy.get('[data-testid="control-button-cut-plane"]').should('exist')
         cy.get('[data-testid="control-button-about"]').should('exist')
 
         cy.percySnapshot()
