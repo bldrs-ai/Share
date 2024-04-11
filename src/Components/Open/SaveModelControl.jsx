@@ -50,7 +50,7 @@ export default function SaveModelControl() {
 
   return (
     <ControlButton
-      title={'Save'}
+      title='Save'
       isDialogDisplayed={isDialogDisplayed}
       setIsDialogDisplayed={setIsDialogDisplayed}
       icon={<SaveOutlinedIcon className='icon-share'/>}

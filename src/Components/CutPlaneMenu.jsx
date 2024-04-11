@@ -93,8 +93,9 @@ export default function CutPlaneMenu() {
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
         selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
-        placement='top'
         variant='control'
+        placement='top'
+        buttonTestId='control-button-section'
       />
       <Menu
         elevation={1}
