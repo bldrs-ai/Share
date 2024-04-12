@@ -681,7 +681,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
-  }, [modelPath, customViewSettings])
+  }, [modelPath, customViewSettings, isCameraHashStateSet])
 
 
   // Viewer changes in onModelPath (above)
