@@ -74,8 +74,11 @@ function onLoad(location, cameraControls, viewer) {
 
     canvas.removeEventListener('mousemove', onMouseMove)
     canvas.addEventListener('mousemove', onMouseMove)
+    canvas.addEventListener('touchmove', removeCameraUrlParams)
+    canvas.addEventListener('wheel', removeCameraUrlParams)
 
     canvas.removeEventListener('mouseup', onMouseUp)
+    canvas.removeEventListener('touchend', onMouseUp)
     canvas.addEventListener('mouseup', onMouseUp)
   }
 }
