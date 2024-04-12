@@ -1,5 +1,4 @@
 import React, {ReactElement, useState, useEffect} from 'react'
-import {useLocation} from 'react-router'
 import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
@@ -74,7 +73,6 @@ export default function NoteCard({
   const [editBody, setEditBody] = useState(body)
 
   const {user} = useAuth0()
-  const location = useLocation()
 
   const embeddedCameraParams = findUrls(body)
       .filter((url) => {
@@ -125,10 +123,8 @@ export default function NoteCard({
 
   /** Copies location which contains the issue id, camera position and selected element path */
   function shareIssue() {
-    navigator.clipboard.writeText(location)
-    setSnackMessage('The url path is copied to the clipboard')
-    const pauseTimeMs = 5000
-    setTimeout(() => setSnackMessage(null), pauseTimeMs)
+    navigator.clipboard.writeText(window.location.href)
+    setSnackMessage({text: 'The url path is copied to the clipboard', autoDismiss: true})
   }
 
 

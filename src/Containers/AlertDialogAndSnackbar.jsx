@@ -6,6 +6,7 @@ import Stack from '@mui/material/Stack'
 import AlertDialog from '../Components/AlertDialog'
 import {navToDefault} from '../Share'
 import useStore from '../store/useStore'
+import {assert} from '../utils/assert'
 import CloseIcon from '@mui/icons-material/Close'
 
 
@@ -17,12 +18,30 @@ export default function AlertAndSnackbar() {
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const [isSnackOpen, setIsSnackOpen] = useState(false)
+  const [text, setText] = useState(null)
+  const [duration, setDuration] = useState(null)
 
   const navigate = useNavigate()
 
 
   useEffect(() => {
-    setIsSnackOpen(snackMessage !== null)
+    if (snackMessage === null) {
+      setIsSnackOpen(false)
+      return
+    }
+    if (typeof snackMessage === 'string') {
+      setText(snackMessage)
+      setDuration(null)
+    } else {
+      assert(typeof snackMessage.text === 'string' && snackMessage.text.length > 0,
+             'snackMessage.text must be valid string')
+      assert(typeof snackMessage.autoDismiss === 'boolean' && snackMessage.autoDismiss,
+             'snackMessage.autoDismiss must be true')
+      setText(snackMessage.text)
+      const dismissTimeMs = 5000
+      setDuration(dismissTimeMs)
+    }
+    setIsSnackOpen(true)
   }, [snackMessage, setIsSnackOpen])
 
 
@@ -36,11 +55,12 @@ export default function AlertAndSnackbar() {
       />
       <Snackbar
         anchorOrigin={{vertical: 'bottom', horizontal: 'center'}}
+        autoHideDuration={duration}
         open={isSnackOpen}
         onClose={(event, reason) => setIsSnackOpen(false)}
         message={
           <Stack direction='row'>
-            {snackMessage}
+            {text}
             <IconButton onClick={() => setIsSnackOpen(false)}><CloseIcon className='icon-share'/></IconButton>
           </Stack>
         }

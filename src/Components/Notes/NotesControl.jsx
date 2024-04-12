@@ -66,7 +66,7 @@ export default function NotesControl() {
         setNotes(newNotes)
         toggleIsLoadingNotes()
       } catch (e) {
-        setSnackMessage('Notes: Cannot fetch from GitHub')
+        setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
       }
     })()
     // TODO(pablo):
