@@ -30,8 +30,10 @@ export default function CutPlaneMenu() {
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
 
+  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+  const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
+
   const [anchorEl, setAnchorEl] = useState(null)
-  const [isCutplane, setIsCutPlane] = useState(false)
 
   const location = useLocation()
 
@@ -51,7 +53,7 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
-        setIsCutPlane(true)
+        setIsCutPlaneActive(true)
         planes.forEach((plane) => {
           togglePlane(plane)
         })
@@ -76,16 +78,19 @@ export default function CutPlaneMenu() {
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      setIsCutPlane(false)
       restCutPlanes.forEach((restCutPlane) => {
         const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
         viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
       })
+      if (restCutPlanes.length === 0) {
+        setIsCutPlaneActive(false)
+      }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
       addHashParams(window.location, VIEW_PLANE_PREFIX, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
+      setIsCutPlaneActive(true)
     }
   }
 
@@ -95,7 +100,7 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
-        selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
+        selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}
         variant='control'
         placement='top'
         buttonTestId='control-button-cut-plane'
@@ -139,7 +144,7 @@ export default function CutPlaneMenu() {
             setCutPlaneDirections([])
             removePlanes(viewer)
             setAnchorEl(null)
-            setIsCutPlane(false)
+            setIsCutPlaneActive(false)
             removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
           }}
           data-testid='menu-item-clear-all'

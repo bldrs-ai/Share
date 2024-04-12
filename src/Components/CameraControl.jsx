@@ -22,7 +22,6 @@ import {floatStrTrim} from '../utils/strings'
  */
 export default function CameraControl() {
   const setCameraControls = useStore((state) => state.setCameraControls)
-  const setIsCameraHashStateSet = useStore((state) => state.setIsCameraHashStateSet)
   const viewer = useStore((state) => state.viewer)
 
   const location = useLocation()
@@ -31,11 +30,9 @@ export default function CameraControl() {
 
   useEffect(() => {
     setCameraControls(cameraControls)
-    const hasParams = onHash(location, cameraControls)
-    setIsCameraHashStateSet(hasParams)
     onHash(location, cameraControls)
     onLoad(location, cameraControls, viewer)
-  }, [location, cameraControls, setCameraControls, setIsCameraHashStateSet, viewer])
+  }, [location, cameraControls, setCameraControls, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
