@@ -20,8 +20,7 @@ import BotIcon from '../assets/icons/Bot2.svg'
  * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
- * @return {ReactElement} The button react component, with a hosted
- *   ShareDialog component
+ * @return {ReactElement}
  */
 export default function ImagineControl() {
   const isImagineVisible = useStore((state) => state.isImagineVisible)

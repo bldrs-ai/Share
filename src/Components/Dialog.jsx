@@ -80,7 +80,7 @@ export default function Dialog({
       {(actionTitle === undefined || actionTitle === undefined) ? null :
        <DialogActions>
          {typeof actionTitle === 'string' ?
-          <Button variant="contained" onClick={actionCb} aria-label='action-button'>
+          <Button variant='contained' onClick={actionCb} aria-label='action-button'>
             {actionTitle}
           </Button> :
           <>{actionTitle}</>

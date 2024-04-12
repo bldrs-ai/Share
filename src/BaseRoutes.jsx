@@ -36,7 +36,11 @@ export default function BaseRoutes({testElt = null}) {
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
   const setIsOPFSAvailable = useStore((state) => state.setIsOPFSAvailable)
-  setAppPrefix(appPrefix)
+
+
+  useEffect(() => {
+    setAppPrefix(appPrefix)
+  }, [setAppPrefix, appPrefix])
 
 
   useEffect(() => {

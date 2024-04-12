@@ -14,8 +14,8 @@ describe('HelpControl', () => {
   })
 
   it('navigates to the next page when the next button is clicked', () => {
-    const {getByTitle, getByTestId, getByText} = render(<HelpControl/>, {wrapper: StoreRouteThemeCtx})
-    const button = getByTitle('Help')
+    const {getByTestId, getByText} = render(<HelpControl/>, {wrapper: StoreRouteThemeCtx})
+    const button = getByTestId('control-button-help')
     fireEvent.click(button)
     const nextPageButton = getByTestId('Next')
     fireEvent.click(nextPageButton)
