@@ -57,13 +57,13 @@ export const SHARE_PREFIX = 'share'
  * @return {ReactElement}
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
-  const cameraControls = useStore((state) => state.cameraControls)
-  const viewer = useStore((state) => state.viewer)
   const model = useStore((state) => state.model)
-
+  const viewer = useStore((state) => state.viewer)
+  const cameraControls = useStore((state) => state.cameraControls)
+  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
-  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
 
   const urlTextFieldRef = createRef()
 
@@ -75,7 +75,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         removeCameraUrlParams()
       }
 
-      if (viewer.clipper.planes.length > 0) {
+      if (isCutPlaneActive) {
         setIsPlaneInUrl(true)
         addPlanesToHashState(viewer, model)
       }
@@ -162,7 +162,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           }}
         />
         <Stack spacing={0}>
-          {isPlaneInUrl &&
+          {isCutPlaneActive &&
            <Stack
              direction="row"
              justifyContent="space-around"
