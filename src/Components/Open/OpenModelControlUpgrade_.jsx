@@ -284,13 +284,13 @@ function OpenModelDialog({
                 Open github model
               </Typography>
               <LocationComponent/>
-              <Typography variant={'overline'} >
+              <Typography variant={'overline'} sx={{paddingTop: '1em'}}>
                 Open model from computer
               </Typography>
             </Stack>
         }
         {currentTab === 'Open' &&
-          <Box sx={{padding: '2px 0px'}}>
+          <Box>
             <Button onClick={openFile} variant='contained'>
               Open local file
             </Button>
