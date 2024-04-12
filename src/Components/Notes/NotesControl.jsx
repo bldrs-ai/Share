@@ -2,6 +2,7 @@ import React, {ReactElement, useEffect} from 'react'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
+import {getHashParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 
@@ -43,7 +44,6 @@ export default function NotesControl() {
     (async () => {
       toggleIsLoadingNotes()
       try {
-        setSelectedNoteId(null)
         const newNotes = []
         let issueIndex = 0
         const issueArr = await getIssues(repository, accessToken)
@@ -73,6 +73,24 @@ export default function NotesControl() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, isCreateNoteVisible])
 
+
+  // TODO(pablo): hack, move into helper
+  useEffect(() => {
+    const hashParams = getHashParams(window.location, NOTES_PREFIX)
+    if (hashParams) {
+      const parts = hashParams.split(':')
+      if (parts.length > 1) {
+        const id = parseInt(parts[1])
+        setSelectedNoteId(id)
+      }
+    }
+  }, [setSelectedNoteId])
+
+  useEffect(() => {
+    if (isNotesVisible === false) {
+      setSelectedNoteId(null)
+    }
+  }, [isNotesVisible, setSelectedNoteId])
 
   return (
     <ControlButtonWithHashState
