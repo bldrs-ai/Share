@@ -164,7 +164,7 @@ export function ControlButtonWithHashState({
  * @property {Function} onCloseClick Handler for close event.
  * @return {ReactElement}
  */
-export function CloseButton({onCloseClick}) {
+export function CloseButton({onCloseClick, ...props}) {
   return (
     <IconButton
       title='Close'
@@ -172,6 +172,7 @@ export function CloseButton({onCloseClick}) {
       size='small'
       disableFocusRipple={true}
       disableRipple={true}
+      {...props}
     >
       <CloseIcon className='icon-share'/>
     </IconButton>
