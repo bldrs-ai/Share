@@ -22,7 +22,7 @@ import {floatStrTrim} from '../utils/strings'
  */
 export default function CameraControl() {
   const setCameraControls = useStore((state) => state.setCameraControls)
-  const setIsFitToFrame = useStore((state) => state.setIsFitToFrame)
+  const setIsCameraHashStateSet = useStore((state) => state.setIsCameraHashStateSet)
   const viewer = useStore((state) => state.viewer)
 
   const location = useLocation()
@@ -32,10 +32,10 @@ export default function CameraControl() {
   useEffect(() => {
     setCameraControls(cameraControls)
     const hasParams = onHash(location, cameraControls)
-    setIsFitToFrame(!hasParams)
+    setIsCameraHashStateSet(hasParams)
     onHash(location, cameraControls)
     onLoad(location, cameraControls, viewer)
-  }, [location, cameraControls, setCameraControls, setIsFitToFrame, viewer])
+  }, [location, cameraControls, setCameraControls, setIsCameraHashStateSet, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
@@ -97,10 +97,10 @@ function onLoad(location, cameraControls, viewer) {
 export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
   if (encodedParams === undefined) {
-    return true
+    return false
   }
   setCameraFromParams(encodedParams, cameraControls)
-  return false
+  return true
 }
 
 

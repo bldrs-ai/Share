@@ -76,7 +76,7 @@ export default function CadView({
   const setAppPrefix = useStore((state) => state.setAppPrefix)
 
   // CameraSlice
-  const isFitToFrame = useStore((state) => state.isFitToFrame)
+  const isCameraHashStateSet = useStore((state) => state.isCameraHashStateSet)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -260,7 +260,7 @@ export default function CadView({
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
-          !isFitToFrame,
+          !isCameraHashStateSet,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.loaded)) {
               const loadedBytes = progressEvent.loaded
@@ -321,7 +321,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          !isFitToFrame,
+          !isCameraHashStateSet,
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
@@ -371,7 +371,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
         file,
-        !isFitToFrame,
+        !isCameraHashStateSet,
         (error) => {
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.

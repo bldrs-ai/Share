@@ -1,5 +1,4 @@
 import React, {ReactElement, createRef, useEffect, useState} from 'react'
-import {useLocation} from 'react-router-dom'
 import {Helmet} from 'react-helmet-async'
 import QRCode from 'react-qr-code'
 import Box from '@mui/material/Box'
