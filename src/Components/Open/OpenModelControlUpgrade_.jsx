@@ -22,8 +22,8 @@ import {ControlButtonWithHashState} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
 import Selector from './Selector'
-import ArrowForwardOutlinedIcon from '@mui/icons-material/ArrowForwardOutlined'
 import FolderOpenOutlinedIcon from '@mui/icons-material/FolderOpenOutlined'
+import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
 
 
 /**
@@ -319,8 +319,8 @@ function OpenModelDialog({
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton edge="end" size="small" sx={{border: 'none', width: 20, height: 20}}>
-                        <ArrowForwardOutlinedIcon color='primary'/>
+                      <IconButton edge="end" size="small" sx={{height: '1em'}}>
+                        <SaveOutlinedIcon color='primary'/>
                       </IconButton>
                     </InputAdornment>
                   ),
