@@ -1,10 +1,8 @@
 import React, {ReactElement, useState, useEffect} from 'react'
-import ReactMarkdown from 'react-markdown'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
 import CardHeader from '@mui/material/CardHeader'
-import CardContent from '@mui/material/CardContent'
 import NoteBodyEdit from './NoteBodyEdit'
 import {
   closeIssue,
@@ -23,6 +21,7 @@ import {
   removeCameraUrlParams,
 } from '../CameraControl'
 import NoteBody from './NoteBody'
+import NoteContent from './NoteContent'
 import {NOTES_PREFIX} from './NotesControl'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
@@ -194,8 +193,8 @@ export default function NoteCard({
        />}
       {isNote && !editMode && !selected &&
        <NoteBody selectCard={selectCard} markdownContent={editBody}/>}
-      {selected && !editMode && <SelectedNoteBody editBody={editBody}/>}
-      {!isNote && <CommentNoteBody editBody={editBody}/>}
+      {selected && !editMode && <NoteContent markdownContent={editBody}/>}
+      {!isNote && <NoteContent markdownContent={editBody}/>}
       {editMode &&
        <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
@@ -219,27 +218,5 @@ export default function NoteCard({
         username={username}
       />
     </Card>
-  )
-}
-
-
-const SelectedNoteBody = ({editBody}) => {
-  return (
-    <CardContent>
-      <ReactMarkdown>
-        {editBody}
-      </ReactMarkdown>
-    </CardContent>
-  )
-}
-
-
-const CommentNoteBody = ({editBody}) => {
-  return (
-    <CardContent>
-      <ReactMarkdown>
-        {editBody}
-      </ReactMarkdown>
-    </CardContent>
   )
 }
