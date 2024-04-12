@@ -61,7 +61,6 @@ function ImagineDialog({
   setIsDialogDisplayed,
 }) {
   const cameraControls = useStore((state) => state.cameraControls)
-  const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
 
   const [prompt, setPrompt] = useState('')
@@ -73,7 +72,7 @@ function ImagineDialog({
   const [finalPrompt, setFinalPrompt] = useState(null)
 
   useEffect(() => {
-    if (viewer) {
+    if (viewer && isDialogDisplayed) {
       // Clear out possible prior state
       setPrompt('')
       setFinalPrompt(null)
@@ -83,7 +82,8 @@ function ImagineDialog({
       setScreenshot(ss)
       setImage(ss)
     }
-  }, [viewer, model, cameraControls, isDialogDisplayed])
+  }, [cameraControls, isDialogDisplayed, viewer])
+
 
   const onCreateClick = () => {
     setFinalPrompt(prompt)

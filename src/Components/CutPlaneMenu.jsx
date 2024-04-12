@@ -22,7 +22,6 @@ import SectionIcon from '../assets/icons/Section.svg'
  * @return {ReactElement}
  */
 export default function CutPlaneMenu() {
-  const [anchorEl, setAnchorEl] = useState(null)
   const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -30,9 +29,13 @@ export default function CutPlaneMenu() {
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
-  const location = useLocation()
-  const isMenuVisible = Boolean(anchorEl)
+
+  const [anchorEl, setAnchorEl] = useState(null)
   const [isCutplane, setIsCutPlane] = useState(false)
+
+  const location = useLocation()
+
+  const isMenuVisible = Boolean(anchorEl)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
@@ -198,12 +201,12 @@ export function getPlanesOffset(viewer, ifcModel) {
 
 
 /**
- * Add plane normal and the offset to the url as a hash parameter
+ * Add plane normal and the offset to the hash state
  *
  * @param {object} viewer
  * @param {object} ifcModel
  */
-export function addPlaneLocationToUrl(viewer, ifcModel) {
+export function addPlanesToHashState(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
@@ -288,6 +291,12 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
           modelCenter.y + planeOffsetY,
           modelCenter.z + planeOffsetZ)
   return {normal, modelCenterOffset}
+}
+
+
+/** Removes cut plane params from hash state */
+export function removePlanesFromHashState() {
+  removeHashParams(window.location, VIEW_PLANE_PREFIX)
 }
 
 

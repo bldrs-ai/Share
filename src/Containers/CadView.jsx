@@ -6,7 +6,7 @@ import Box from '@mui/material/Box'
 import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import AboutControl from '../Components/About/AboutControl'
-import {hasValidUrlParams as urlHasCameraParams, removeCameraUrlParams} from '../Components/CameraControl'
+import {removeCameraUrlParams} from '../Components/CameraControl'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -74,6 +74,9 @@ export default function CadView({
   // AppSlice
   const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const setAppPrefix = useStore((state) => state.setAppPrefix)
+
+  // CameraSlice
+  const isCameraHashStateSet = useStore((state) => state.isCameraHashStateSet)
 
   // IFCSlice
   const model = useStore((state) => state.model)
@@ -257,7 +260,7 @@ export default function CadView({
       // fallback to loadIfcUrl
       loadedModel = await viewer.loadIfcUrl(
           ifcURL,
-          !urlHasCameraParams(), // fit to frame
+          !isCameraHashStateSet,
           (progressEvent) => {
             if (Number.isFinite(progressEvent.loaded)) {
               const loadedBytes = progressEvent.loaded
@@ -283,7 +286,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          !urlHasCameraParams(),
+          true, // ignore current camera for new load
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
           }, customViewSettings)
@@ -318,7 +321,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
           file,
-          !urlHasCameraParams(),
+          !isCameraHashStateSet,
           (error) => {
             debug().log('CadView#loadIfc$onError: ', error)
             setIsModelLoading(false)
@@ -368,7 +371,7 @@ export default function CadView({
 
       loadedModel = await viewer.loadIfcFile(
         file,
-        !urlHasCameraParams(),
+        !isCameraHashStateSet,
         (error) => {
           debug().log('CadView#loadIfc$onError: ', error)
           // TODO(pablo): error modal.
@@ -678,7 +681,7 @@ export default function CadView({
   useEffect(() => {
     debug().log('CadView#useEffect1[modelPath], calling onModelPath...')
     onModelPath()
-  }, [modelPath, customViewSettings])
+  }, [modelPath, customViewSettings, isCameraHashStateSet])
 
 
   // Viewer changes in onModelPath (above)

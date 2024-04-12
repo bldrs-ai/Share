@@ -1,5 +1,6 @@
 import create from 'zustand'
 import createAppSlice from './AppSlice'
+import createCameraSlice from './CameraSlice'
 import createIFCSlice from './IFCSlice'
 import createIsolatorSlice from './IfcIsolatorSlice'
 import createNavTreeSlice from './NavTreeSlice'
@@ -16,6 +17,7 @@ import createVersionsSlice from './VersionsSlice'
 
 const useStore = create((set, get) => ({
   ...createAppSlice(set, get),
+  ...createCameraSlice(set, get),
   ...createIFCSlice(set, get),
   ...createIsolatorSlice(set, get),
   ...createNavTreeSlice(set, get),
