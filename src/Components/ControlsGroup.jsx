@@ -1,9 +1,9 @@
 import React, {ReactElement} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
+// import {useAuth0} from '@auth0/auth0-react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import NavTreeControl from './NavTree/NavTreeControl'
 import OpenModelControl from './Open/OpenModelControlUpgrade_'
-import SaveModelControl from './Open/SaveModelControl'
+// import SaveModelControl from './Open/SaveModelControl'
 import SearchControl from '../Components/Search/SearchControl'
 import VersionsControl from './Versions/VersionsControl'
 import useStore from '../store/useStore'
@@ -19,13 +19,13 @@ export default function ControlsGroup({isRepoActive}) {
   const isNavTreeEnabled = useStore((state) => state.isNavTreeEnabled)
   const isOpenEnabled = useStore((state) => state.isOpenEnabled)
   const isSearchEnabled = useStore((state) => state.isSearchEnabled)
-  const {isAuthenticated} = useAuth0()
+  // const {isAuthenticated} = useAuth0()
   return (
     <ButtonGroup orientation='horizontal' variant='controls'>
       {isOpenEnabled &&
        <>
          <OpenModelControl/>
-         {isAuthenticated && <SaveModelControl/>}
+         {/* {isAuthenticated && <SaveModelControl/>} */}
        </>}
       {isNavTreeEnabled && <NavTreeControl/>}
       {isRepoActive && <VersionsControl/>}
