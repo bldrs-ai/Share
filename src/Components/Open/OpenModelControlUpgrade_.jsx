@@ -204,17 +204,39 @@ function OpenModelDialog({
               testId='File'
             />
            }
+            {currentTab === 'Save' && saveAction === 'model' &&
+                <FormControl variant="standard" >
+                  <TextField
+                    fullWidth
+                    variant="outlined"
+                    size="small"
+                    multiline
+                    placeholder="Model name"
+                    helperText='Please include the extension'
+                    InputProps={{
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <IconButton edge="end" >
+                            <SaveOutlinedIcon fontSize='small'/>
+                          </IconButton>
+                        </InputAdornment>
+                      ),
+                    }}
+                  />
+                </FormControl>
+              }
             {currentTab === 'Open' &&
-              <Box sx={{textAlign: 'center', paddingTop: '10px'}}>
+              <Box sx={{textAlign: 'center'}}>
                 <Button onClick={navigateToFile} variant='contained' disabled={selectedFileName === ''}>
                   Open model
                 </Button>
               </Box>
             }
             {currentTab === 'Save' &&
-              <Box sx={{textAlign: 'center', paddingTop: '10px'}}>
+              <Box sx={{textAlign: 'center'}}>
                 <Button onClick={navigateToFile} variant='contained' disabled={selectedFileName === ''}>
-                  Save model to Github
+                {saveAction === 'version' && 'Save new Version'}
+                {saveAction === 'model' && 'Save model to Github'}
                 </Button>
               </Box>
             }
@@ -262,7 +284,7 @@ function OpenModelDialog({
     >
       <Stack
         spacing={2}
-        sx={{paddingBottom: '20px'}}
+        sx={{paddingBottom: '10px'}}
       >
         <Stack>
           <NavComponent/>
@@ -321,27 +343,6 @@ function OpenModelDialog({
                 {saveAction === 'model' ? 'Choose where to save' : 'Choose Model to version'}
               </Typography>
               <LocationComponent save={saveAction === 'model'}/>
-              {saveAction === 'model' &&
-            <FormControl variant="standard">
-              <TextField
-                fullWidth
-                variant="outlined"
-                size="small"
-                multiline
-                placeholder="Model name"
-                helperText='Please include the extension'
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton edge="end" size="small" sx={{height: '1em'}}>
-                        <SaveOutlinedIcon color='primary'/>
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </FormControl>
-          }
           </Stack>
         }
 
