@@ -25,7 +25,7 @@ describe('Profile 100: Theme', () => {
 
       it('Night theme active - Screen', () => cy.percySnapshot())
 
-      context('Select ProfileControl > Night theme', () => {
+      context('Select ProfileControl > Day theme', () => {
         beforeEach(() => {
           cy.get('[data-testid="control-button-profile"]').click()
           cy.get('[data-testid="change-theme-to-day"]').click()
