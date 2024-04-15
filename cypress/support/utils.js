@@ -16,29 +16,74 @@ export function interceptBounce() {
   cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
 }
 
-/**
- *
- */
-export function interceptInitialLoads() {
-  interceptIndex()
-  interceptBounce()
-}
-
-/**
- *
- */
+/** Clears local storage and cookies. */
 export function clearState() {
     cy.clearLocalStorage()
     cy.clearCookies()
 }
 
-/**
- *
- */
-export function homepageSetup() {
-    clearState()
-    interceptInitialLoads()
+
+/** Setup initial homepage intercepts */
+export function interceptInitialLoads() {
+  interceptIndex()
+  interceptBounce()
 }
+
+
+/** Clears local storage and cookies, and setup initial homepage intercepts */
+export function homepageSetup() {
+  clearState()
+  interceptInitialLoads()
+}
+
+
+/** Set cookie indicating user has visited before */
+export function setIsReturningUser() {
+  cy.setCookie('isFirstTime', '1')
+}
+
+
+/** Visit root path.  This will trigger an autoload to /share/v/p/index.ifc */
+export function visitHomepage() {
+  cy.visit('/')
+}
+
+
+/** Sets state for returning user and visit homepage */
+export function setCookieAndVisitHome() {
+  setIsReturningUser()
+  visitHomepage()
+}
+
+/**
+ * Waits for a 3D model to load and become visible within the viewer.
+ * It checks for the presence of the model canvas and a specific attribute
+ * indicating the model is ready. Requires the setup of a network request
+ * intercept with alias 'loadModel' for model loading.
+ */
+export function waitForModel() {
+  cy.get('#viewer-container').get('canvas').should('be.visible')
+  const HTTP_OK = 200
+  const HTTP_NOT_MODIFIED = 304 // ie it's cached
+  cy.wait('@loadModel').its('response.statusCode').should((statusCode) => {
+    expect([HTTP_OK, HTTP_NOT_MODIFIED]).to.include(statusCode)
+  })
+  cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
+  const animWaitTimeMs = 1000
+  // eslint-disable-next-line cypress/no-unnecessary-waiting
+  cy.wait(animWaitTimeMs)
+  // TODO(pablo): ideally we just wait on anim rest event from
+  // camera-controls lib, but only seems to work locally.
+  // cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 1000})
+}
+
+
+/** Assumes other setup, then visit homepage and wait for model */
+export function visitHomepageWaitForModel() {
+  visitHomepage()
+  waitForModel()
+}
+
 
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
@@ -60,27 +105,6 @@ export function auth0Login() {
   cy.contains('span', 'Log out').should('exist')
 }
 
-/**
- * Waits for a 3D model to load and become visible within the viewer.
- * It checks for the presence of the model canvas and a specific attribute
- * indicating the model is ready. Requires the setup of a network request
- * intercept with alias 'loadModel' for model loading.
- */
-export function waitForModel() {
-    cy.get('#viewer-container').get('canvas').should('be.visible')
-    const HTTP_OK = 200
-    const HTTP_NOT_MODIFIED = 304 // ie it's cached
-    cy.wait('@loadModel').its('response.statusCode').should((statusCode) => {
-      expect([HTTP_OK, HTTP_NOT_MODIFIED]).to.include(statusCode)
-    })
-    cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
-    const animWaitTimeMs = 1000
-    // eslint-disable-next-line cypress/no-unnecessary-waiting
-    cy.wait(animWaitTimeMs)
-    // TODO(pablo): ideally we just wait on anim rest event from
-    // camera-controls lib, but only seems to work locally.
-    // cy.get('[data-is-camera-at-rest="true"]').should('exist', {timeout: 1000})
-  }
 
 /**
  * Sets a new value for the global `port` variable. This function is
@@ -242,12 +266,4 @@ export function setupAuthenticationIntercepts() {
        },
     })
   }).as('tokenRequest')
-}
-
-/**
- *
- */
-export function setCookieAndVisitHome() {
-  cy.setCookie('isFirstTime', '1')
-  cy.visit('/')
 }

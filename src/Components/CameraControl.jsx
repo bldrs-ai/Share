@@ -21,16 +21,18 @@ import {floatStrTrim} from '../utils/strings'
  * @return {ReactElement}
  */
 export default function CameraControl() {
-  const viewer = useStore((state) => state.viewer)
-  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
   const setCameraControls = useStore((state) => state.setCameraControls)
+  const viewer = useStore((state) => state.viewer)
+
   const location = useLocation()
+
+  const cameraControls = viewer.IFC.context.ifcCamera.cameraControls
 
   useEffect(() => {
     setCameraControls(cameraControls)
     onHash(location, cameraControls)
-    onLoad(location, cameraControls)
-  }, [location, cameraControls, setCameraControls])
+    onLoad(location, cameraControls, viewer)
+  }, [location, cameraControls, setCameraControls, viewer])
 
   return <div style={{display: 'none'}}>Camera</div>
 }
@@ -46,10 +48,36 @@ export const CAMERA_PREFIX = 'c'
  *
  * @param {object} location Either window.location or react-router location
  * @param {object} cameraControls obtained from the viewer
+ * @param {object} viewer the viewer, for null testing
  */
-function onLoad(location, cameraControls) {
-  debug().log('CameraControl#onLoad')
+function onLoad(location, cameraControls, viewer) {
   addHashListener('camera', () => onHash(location, cameraControls))
+  const canvas = document.querySelector('canvas')
+  if (viewer && canvas) {
+    let isMouseDown = false
+    const onMouseDown = () => {
+      isMouseDown = true
+    }
+    const onMouseMove = () => {
+      if (isMouseDown) {
+        removeCameraUrlParams()
+      }
+    }
+    const onMouseUp = () => {
+      isMouseDown = false
+    }
+    canvas.removeEventListener('mousedown', onMouseDown)
+    canvas.addEventListener('mousedown', onMouseDown)
+
+    canvas.removeEventListener('mousemove', onMouseMove)
+    canvas.addEventListener('mousemove', onMouseMove)
+    canvas.addEventListener('touchmove', removeCameraUrlParams)
+    canvas.addEventListener('wheel', removeCameraUrlParams)
+
+    canvas.removeEventListener('mouseup', onMouseUp)
+    canvas.removeEventListener('touchend', onMouseUp)
+    canvas.addEventListener('mouseup', onMouseUp)
+  }
 }
 
 
@@ -60,13 +88,16 @@ function onLoad(location, cameraControls) {
  *
  * @param {object} location window.location
  * @param {object} cameraControls obtained from the viewer
+ * @return {boolean} Whether the hash had camera position.  e.g. false on first
+ * load useEffect
  */
 export function onHash(location, cameraControls) {
   const encodedParams = getHashParams(location, CAMERA_PREFIX)
   if (encodedParams === undefined) {
-    return
+    return false
   }
   setCameraFromParams(encodedParams, cameraControls)
+  return true
 }
 
 
@@ -82,7 +113,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
     return
   }
   const coords = parseHashParams(encodedParams)
-
+  // console.trace('setCameraFromParams', coords, new Error())
   if (coords) {
     cameraControls.setPosition(coords[0], coords[1], coords[2], true)
     const extendedCoordsSize = 6

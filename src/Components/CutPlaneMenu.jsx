@@ -22,7 +22,6 @@ import SectionIcon from '../assets/icons/Section.svg'
  * @return {ReactElement}
  */
 export default function CutPlaneMenu() {
-  const [anchorEl, setAnchorEl] = useState(null)
   const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
   const cutPlanes = useStore((state) => state.cutPlanes)
@@ -30,9 +29,15 @@ export default function CutPlaneMenu() {
   const removeCutPlaneDirection = useStore((state) => state.removeCutPlaneDirection)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
+
+  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+  const setIsCutPlaneActive = useStore((state) => state.setIsCutPlaneActive)
+
+  const [anchorEl, setAnchorEl] = useState(null)
+
   const location = useLocation()
+
   const isMenuVisible = Boolean(anchorEl)
-  const [isCutplane, setIsCutPlane] = useState(false)
 
   debug().log('CutPlaneMenu: location: ', location)
   debug().log('CutPlaneMenu: cutPlanes: ', cutPlanes)
@@ -48,7 +53,7 @@ export default function CutPlaneMenu() {
       const planes = getPlanes(planeHash)
       debug().log('CutPlaneMenu#useEffect: planes: ', planes)
       if (planes && planes.length) {
-        setIsCutPlane(true)
+        setIsCutPlaneActive(true)
         planes.forEach((plane) => {
           togglePlane(plane)
         })
@@ -73,16 +78,19 @@ export default function CutPlaneMenu() {
       removeCutPlaneDirection(direction)
       viewer.clipper.deleteAllPlanes()
       const restCutPlanes = cutPlanes.filter((cutPlane) => cutPlane.direction !== direction)
-      setIsCutPlane(false)
       restCutPlanes.forEach((restCutPlane) => {
         const planeInfo = getPlaneSceneInfo({modelCenter, direction: restCutPlane.direction, offset: restCutPlane.offset})
         viewer.clipper.createFromNormalAndCoplanarPoint(planeInfo.normal, planeInfo.modelCenterOffset)
       })
+      if (restCutPlanes.length === 0) {
+        setIsCutPlaneActive(false)
+      }
     } else {
       debug().log('CutPlaneMenu#togglePlane: found: ', false)
       addHashParams(window.location, VIEW_PLANE_PREFIX, {[direction]: offset}, true)
       addCutPlaneDirection({direction, offset})
       viewer.clipper.createFromNormalAndCoplanarPoint(normal, modelCenterOffset)
+      setIsCutPlaneActive(true)
     }
   }
 
@@ -92,9 +100,10 @@ export default function CutPlaneMenu() {
         title={'Section'}
         icon={<CropOutlinedIcon className='icon-share'/>}
         onClick={(event) => setAnchorEl(event.currentTarget)}
-        selected={anchorEl !== null || !!cutPlanes.length || isCutplane}
-        placement='top'
+        selected={anchorEl !== null || !!cutPlanes.length || isCutPlaneActive}
         variant='control'
+        placement='top'
+        buttonTestId='control-button-cut-plane'
       />
       <Menu
         elevation={1}
@@ -104,21 +113,28 @@ export default function CutPlaneMenu() {
         onClose={handleClose}
         anchorOrigin={{vertical: 'top', horizontal: 'center'}}
         transformOrigin={{vertical: 'bottom', horizontal: 'center'}}
+        data-testid='menu-cut-plane'
       >
-        <MenuItem onClick={() => togglePlane({direction: 'y'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'y'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'y') > -1}
+          data-testid='menu-item-plan'
         >
           <PlanIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Plan</Typography>
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'x'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'x'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'x') > -1}
+          data-testid='menu-item-section'
         >
           <SectionIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Section</Typography>
         </MenuItem>
-        <MenuItem onClick={() => togglePlane({direction: 'z'})}
+        <MenuItem
+          onClick={() => togglePlane({direction: 'z'})}
           selected={cutPlanes.findIndex((cutPlane) => cutPlane.direction === 'z') > -1}
+          data-testid='menu-item-elevation'
         >
           <ElevationIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Elevation</Typography>
@@ -128,9 +144,10 @@ export default function CutPlaneMenu() {
             setCutPlaneDirections([])
             removePlanes(viewer)
             setAnchorEl(null)
-            setIsCutPlane(false)
+            setIsCutPlaneActive(false)
             removeHashParams(window.location, VIEW_PLANE_PREFIX, ['x', 'y', 'z'])
-          } }
+          }}
+          data-testid='menu-item-clear-all'
         >
           <CloseIcon className='icon-share'/>
           <Typography sx={{marginLeft: '10px'}} variant='overline'>Clear all</Typography>
@@ -189,12 +206,12 @@ export function getPlanesOffset(viewer, ifcModel) {
 
 
 /**
- * Add plane normal and the offset to the url as a hash parameter
+ * Add plane normal and the offset to the hash state
  *
  * @param {object} viewer
  * @param {object} ifcModel
  */
-export function addPlaneLocationToUrl(viewer, ifcModel) {
+export function addPlanesToHashState(viewer, ifcModel) {
   if (viewer.clipper.planes.length > 0) {
     const planeInfo = getPlanesOffset(viewer, ifcModel)
     debug().log('CutPlaneMenu#addPlaneLocationToUrl: planeInfo: ', planeInfo)
@@ -279,6 +296,12 @@ export function getPlaneSceneInfo({modelCenter, direction, offset = 0}) {
           modelCenter.y + planeOffsetY,
           modelCenter.z + planeOffsetZ)
   return {normal, modelCenterOffset}
+}
+
+
+/** Removes cut plane params from hash state */
+export function removePlanesFromHashState() {
+  removeHashParams(window.location, VIEW_PLANE_PREFIX)
 }
 
 

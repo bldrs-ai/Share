@@ -1,3 +1,7 @@
+import {NOTES_PREFIX} from '../Components/Notes/NotesControl'
+import {getHashParams} from '../utils/location'
+
+
 /**
  * Data stored in Zustand for Notes state.
  *
@@ -15,7 +19,7 @@ export default function createNotesSlice(set, get) {
     deletedNotes: null,
     isCreateNoteVisible: false,
     isLoadingNotes: false,
-    isNotesVisible: false,
+    isNotesVisible: getHashParams(window.location, NOTES_PREFIX) !== undefined,
     notes: null,
     placeMark: null,
     placeMarkActivated: false,

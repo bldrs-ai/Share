@@ -40,6 +40,7 @@ export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, on
       setIsDialogDisplayed={setIsDialogDisplayed}
       actionTitle='OK'
       actionCb={onClose}
+      data-testid='about-dialog'
     >
       <AboutContent/>
     </Dialog>

@@ -35,6 +35,8 @@ export default function createUISlice(set, get) {
       return {cutPlanes: filterPlanes}
     }),
     setCutPlaneDirections: (directions) => set(() => ({cutPlanes: directions})),
+    isCutPlaneActive: false,
+    setIsCutPlaneActive: (is) => set(() => ({isCutPlaneActive: is})),
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices

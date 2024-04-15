@@ -14,8 +14,8 @@ describe('AboutControl', () => {
   })
 
   it('renders the AboutControl button', () => {
-    const {getByTitle} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTitle(bldrsVersionString)
+    const {getByTestId} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const aboutControl = getByTestId('control-button-about')
     expect(aboutControl).toBeInTheDocument()
   })
 
@@ -28,8 +28,8 @@ describe('AboutControl', () => {
   })
 
   it('updates the document title when the dialog is open', async () => {
-    const {getByTitle} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const aboutControl = getByTitle(bldrsVersionString)
+    const {getByTestId} = render(<AboutControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    const aboutControl = getByTestId('control-button-about')
     fireEvent.click(aboutControl)
     await(waitFor(() => expect(document.title).toBe('About — bldrs.ai')))
   })

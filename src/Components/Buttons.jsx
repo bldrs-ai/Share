@@ -106,6 +106,7 @@ export function ControlButton({
         variant='control'
         color='success'
         size='small'
+        buttonTestId={props['data-testid'] || `control-button-${title.toLowerCase()}`}
         {...props}
       />
       {children}
@@ -134,21 +135,20 @@ export function ControlButtonWithHashState({
 
   // On first load, show dialog if state token present
   useEffect(() => {
-    setIsDialogDisplayed(getHashParams(location, hashPrefix) !== undefined)
+    setIsDialogDisplayed(getHashParams(window.location, hashPrefix) !== undefined)
   }, [hashPrefix, location, setIsDialogDisplayed])
 
   // Enforce invariant
   useEffect(() => {
-    // TODO(pablo): useNavigate
     if (isDialogDisplayed) {
       addHashParams(window.location, hashPrefix)
     } else {
       const currentHash = window.location.hash
-      const prefixRegex = new RegExp(`${hashPrefix}:`, 'g')
+      const prefixRegex = new RegExp(`${hashPrefix}:[^;]*;?`, 'g')
       const newHash = currentHash.replace(prefixRegex, '')
       window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
     }
-  }, [isDialogDisplayed, hashPrefix])
+  }, [hashPrefix, isDialogDisplayed])
 
   return (
     <ControlButton
@@ -164,7 +164,7 @@ export function ControlButtonWithHashState({
  * @property {Function} onCloseClick Handler for close event.
  * @return {ReactElement}
  */
-export function CloseButton({onCloseClick}) {
+export function CloseButton({onCloseClick, ...props}) {
   return (
     <IconButton
       title='Close'
@@ -172,6 +172,7 @@ export function CloseButton({onCloseClick}) {
       size='small'
       disableFocusRipple={true}
       disableRipple={true}
+      {...props}
     >
       <CloseIcon className='icon-share'/>
     </IconButton>

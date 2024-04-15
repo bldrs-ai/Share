@@ -46,7 +46,6 @@ export default function NotesControl() {
     (async () => {
       toggleIsLoadingNotes()
       try {
-        setSelectedNoteId(null)
         const newNotes = []
         let issueIndex = 0
         const issueArr = await getIssues(repository, accessToken)
@@ -71,7 +70,7 @@ export default function NotesControl() {
         console.log('selectedNoteId', selectedNoteId)
         console.log('in the null')
       } catch (e) {
-        setSnackMessage('Notes: Cannot fetch from GitHub')
+        setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
       }
     })()
     // TODO(pablo):
@@ -92,6 +91,24 @@ export default function NotesControl() {
   },
 )
 
+
+  // TODO(pablo): hack, move into helper
+  useEffect(() => {
+    const hashParams = getHashParams(window.location, NOTES_PREFIX)
+    if (hashParams) {
+      const parts = hashParams.split(':')
+      if (parts.length > 1) {
+        const id = parseInt(parts[1])
+        setSelectedNoteId(id)
+      }
+    }
+  }, [setSelectedNoteId])
+
+  useEffect(() => {
+    if (isNotesVisible === false) {
+      setSelectedNoteId(null)
+    }
+  }, [isNotesVisible, setSelectedNoteId])
 
   return (
     <ControlButtonWithHashState

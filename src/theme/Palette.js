@@ -9,7 +9,8 @@ export const day = {
 
   // The 3d canvas and ControlButtons on it.
   primary: {
-    main: colors.grey.light,
+    // TODO(pablo): main controls both primary action buttons and link text in NoteContent.
+    main: colors.grey.medium,
     light: colors.grey.lightest,
     dark: colors.grey.mediumlight,
     contrastText: colors.grey.darkest,

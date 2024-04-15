@@ -8,11 +8,10 @@ import InputAdornment from '@mui/material/InputAdornment'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {removeHashParams} from '../utils/location'
 import useStore from '../store/useStore'
 import {ControlButtonWithHashState} from './Buttons'
 import {addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
-import {addPlaneLocationToUrl} from './CutPlaneMenu'
+import {addPlanesToHashState, removePlanesFromHashState} from './CutPlaneMenu'
 import Dialog from './Dialog'
 import Toggle from './Toggle'
 import CopyIcon from '../assets/icons/Copy.svg'
@@ -58,12 +57,14 @@ export const SHARE_PREFIX = 'share'
  * @return {ReactElement}
  */
 function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
+  const model = useStore((state) => state.model)
+  const viewer = useStore((state) => state.viewer)
+  const cameraControls = useStore((state) => state.cameraControls)
+  const isCutPlaneActive = useStore((state) => state.isCutPlaneActive)
+  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
   const [isLinkCopied, setIsLinkCopied] = useState(false)
   const [isCameraInUrl, setIsCameraInUrl] = useState(true)
-  const [isPlaneInUrl, setIsPlaneInUrl] = useState(false)
-  const cameraControls = useStore((state) => state.cameraControls)
-  const viewer = useStore((state) => state.viewer)
-  const model = useStore((state) => state.model)
+
   const urlTextFieldRef = createRef()
 
   useEffect(() => {
@@ -74,9 +75,9 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         removeCameraUrlParams()
       }
 
-      if (viewer.clipper.planes.length > 0) {
+      if (isCutPlaneActive) {
         setIsPlaneInUrl(true)
-        addPlaneLocationToUrl(viewer, model)
+        addPlanesToHashState(viewer, model)
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -84,7 +85,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   const onCopy = (event) => {
     setIsLinkCopied(true)
-    navigator.clipboard.writeText(location)
+    navigator.clipboard.writeText(window.location)
     urlTextFieldRef.current.select()
   }
 
@@ -103,9 +104,9 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
 
   const togglePlaneIncluded = () => {
     if (isPlaneInUrl) {
-      removeHashParams(window.location, 'p')
+      removePlanesFromHashState()
     } else {
-      addPlaneLocationToUrl(viewer, model)
+      addPlanesToHashState(viewer, model)
     }
     setIsPlaneInUrl(!isPlaneInUrl)
   }
@@ -161,7 +162,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           }}
         />
         <Stack spacing={0}>
-          {isPlaneInUrl &&
+          {isCutPlaneActive &&
            <Stack
              direction="row"
              justifyContent="space-around"

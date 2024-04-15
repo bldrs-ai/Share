@@ -9,7 +9,6 @@ import IconButton from '@mui/material/IconButton'
 import useStore from '../store/useStore'
 import debug from '../utils/debug'
 import {ControlButtonWithHashState, RectangularButton} from './Buttons'
-import {addCameraUrlParams} from './CameraControl'
 import Dialog from './Dialog'
 import Loader from './Loader'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -21,8 +20,7 @@ import BotIcon from '../assets/icons/Bot2.svg'
  * This button hosts the ImagineDialog component and toggles it open and
  * closed.
  *
- * @return {ReactElement} The button react component, with a hosted
- *   ShareDialog component
+ * @return {ReactElement}
  */
 export default function ImagineControl() {
   const isImagineVisible = useStore((state) => state.isImagineVisible)
@@ -60,8 +58,6 @@ function ImagineDialog({
   isDialogDisplayed,
   setIsDialogDisplayed,
 }) {
-  const cameraControls = useStore((state) => state.cameraControls)
-  const model = useStore((state) => state.model)
   const viewer = useStore((state) => state.viewer)
 
   const [prompt, setPrompt] = useState('')
@@ -71,6 +67,19 @@ function ImagineDialog({
   const [image, setImage] = useState(null)
 
   const [finalPrompt, setFinalPrompt] = useState(null)
+
+  useEffect(() => {
+    if (viewer && isDialogDisplayed) {
+      // Clear out possible prior state
+      setPrompt('')
+      setFinalPrompt(null)
+      setIsImagineLoading(false)
+      const ss = viewer.takeScreenshot()
+      setScreenshot(ss)
+      setImage(ss)
+    }
+  }, [isDialogDisplayed, viewer])
+
 
   const onCreateClick = () => {
     setFinalPrompt(prompt)
@@ -90,15 +99,6 @@ function ImagineDialog({
     setScreenshot(ss)
     setImage(ss)
   }
-
-  useEffect(() => {
-    if (viewer) {
-      addCameraUrlParams(cameraControls)
-      const ss = viewer.takeScreenshot()
-      setScreenshot(ss)
-      setImage(ss)
-    }
-  }, [viewer, model, cameraControls])
 
   return (
     <Dialog
@@ -125,7 +125,8 @@ function ImagineDialog({
            <img
              src={image}
              alt='Imagine'
-             height={'390px'}
+             height='390px'
+             data-testid='img-rendered'
            />}
         </Box>
 
@@ -136,16 +137,17 @@ function ImagineDialog({
             fullWidth
             multiline
             size='small'
-            placeholder={'Imagine prompt'}
+            placeholder='Imagine prompt'
+            data-testid='text-field-render-description'
             InputProps={{
               endAdornment: (
-                <InputAdornment position="end">
+                <InputAdornment position='end'>
                   {prompt && (
                     <IconButton
-                      aria-label="clear text"
+                      aria-label='clear text'
                       onClick={onClearClick}
-                      edge="end"
-                      size="small"
+                      edge='end'
+                      size='small'
                     >
                       <ClearIcon size='inherit'/>
                     </IconButton>
@@ -154,14 +156,14 @@ function ImagineDialog({
               ),
             }}
           />
-          <Stack direction={'row'} spacing={1} justifyContent='center'>
+          <Stack direction='row' spacing={1} justifyContent='center'>
             <RectangularButton
-              title={'Create'}
+              title='Create'
               onClick={onCreateClick}
               disabled={prompt.length === 0}
             />
             <RectangularButton
-              title={'Download'}
+              title='Download'
               onClick={() => downloadImaginePng(imagine)}
               disabled={imagine === null}
             />
@@ -188,18 +190,18 @@ function sendToWarhol(dataUrl, prompt, onReady) {
   }
 
   axios
-      .post('https://warhol.bldrs.dev/generate', req, {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-      .then((response) => {
-        const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
-        onReady(renderDataUrl)
-      })
-      .catch((error) => {
-        debug().error('Error uploading screenshot:', error)
-      })
+    .post('https://warhol.bldrs.dev/generate', req, {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
+    .then((response) => {
+      const renderDataUrl = `data:image/png;base64,${response.data[0].img}`
+      onReady(renderDataUrl)
+    })
+    .catch((error) => {
+      debug().error('Error uploading screenshot:', error)
+    })
 }
 
 

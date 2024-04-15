@@ -1,7 +1,6 @@
 import React, {ReactElement} from 'react'
-import ReactMarkdown from 'react-markdown'
 import CardActionArea from '@mui/material/CardActionArea'
-import CardContent from '@mui/material/CardContent'
+import NoteContent from './NoteContent'
 
 
 /**
@@ -9,7 +8,7 @@ import CardContent from '@mui/material/CardContent'
  * @property {string} markdownContent The note text in markdown format
  * @return {ReactElement}
  */
-export default function CardBody({selectCard, markdownContent}) {
+export default function NoteBody({selectCard, markdownContent}) {
   return (
     <CardActionArea
       onClick={selectCard}
@@ -17,11 +16,7 @@ export default function CardBody({selectCard, markdownContent}) {
       disableTouchRipple
       data-testid='card-body'
     >
-      <CardContent>
-        <ReactMarkdown>
-          {markdownContent}
-        </ReactMarkdown>
-      </CardContent>
+      <NoteContent markdownContent={markdownContent}/>
     </CardActionArea>
   )
 }
