@@ -1,4 +1,4 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Menu from '@mui/material/Menu'
@@ -24,6 +24,8 @@ export default function ProfileControl() {
   const theme = useTheme()
   const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
 
+  const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
+
   const onLoginClick = async () => {
     await loginWithPopup({
       appState: {
@@ -33,6 +35,10 @@ export default function ProfileControl() {
   }
   const onLogoutClick = () => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
   const onCloseClick = () => setAnchorEl(null)
+
+  useEffect(() => {
+    setIsDay(theme.palette.mode === 'light')
+  }, [theme.palette.mode])
 
   return (
     <>
@@ -68,15 +74,16 @@ export default function ProfileControl() {
             onCloseClick()
             theme.toggleColorMode()
           }}
+          data-testid={`change-theme-to-${isDay ? 'night' : 'day'}`}
         >
-          {theme.palette.mode === 'light' ?
+          {isDay ?
           <NightlightOutlinedIcon className='icon-share'/> :
           <WbSunnyOutlinedIcon className='icon-share'/> }
           <Typography
             sx={{marginLeft: '10px'}}
             variant='overline'
           >
-            {`${theme.palette.mode === 'light' ? 'Night' : 'Day'} theme`}
+            {`${isDay ? 'Night' : 'Day'} theme`}
           </Typography>
         </MenuItem>
       </Menu>
