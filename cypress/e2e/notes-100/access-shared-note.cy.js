@@ -10,10 +10,10 @@ describe('Notes 100 - Access shared note', () => {
       waitForModel()
     })
     it('Panel title to contain NOTES string', () => {
-      cy.get('[data-testid="panelTitle"]').contains('NOTE')
+      cy.get('[data-testid="panelTitle"]').contains('NOTES')
     })
     it('Notes list to be visible', () => {
-      cy.get('[data-testid="panelTitle"]').contains('NOTES')
+      cy.get('.MuiList-root').should('exist')
     })
   })
   context('Access the shared link containing the path to a note index', () => {
