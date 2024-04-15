@@ -24,7 +24,6 @@ export default function NotesControl() {
   const model = useStore((state) => state.model)
   const repository = useStore((state) => state.repository)
   const setNotes = useStore((state) => state.setNotes)
-  const selectedNoteId = useStore((state) => state.selectedNoteId)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const toggleIsLoadingNotes = useStore((state) => state.toggleIsLoadingNotes)
 
@@ -67,8 +66,6 @@ export default function NotesControl() {
         })
         setNotes(newNotes)
         toggleIsLoadingNotes()
-        console.log('selectedNoteId', selectedNoteId)
-        console.log('in the null')
       } catch (e) {
         setSnackMessage({text: 'Notes: Cannot fetch from GitHub', autoDismiss: true})
       }
@@ -83,10 +80,8 @@ export default function NotesControl() {
       const match = noteNumberStr.match(/i:(\d*)/) // \d* matches any number of digits, including none
       const noteId = match && match[1] ? parseInt(match[1], 10) : null
       if (noteId !== null) {
-        console.log('the number id', noteId)
         setSelectedNoteId(noteId)
       }
-      console.log('selectedNoteId -- second', selectedNoteId)
     }
   },
 )
