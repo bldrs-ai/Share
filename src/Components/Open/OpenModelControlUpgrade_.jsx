@@ -284,7 +284,7 @@ function OpenModelDialog({
     >
       <Stack
         spacing={2}
-        sx={{paddingBottom: '10px'}}
+        sx={{paddingBottom: '12px'}}
       >
         <Stack>
           <NavComponent/>
