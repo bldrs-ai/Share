@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, render, renderHook, waitFor} from '@testing-library/react'
+import {fireEvent, render, renderHook, waitFor} from '@testing-library/react'
 import ShareControl from './ShareControl'
 import {HelmetStoreRouteThemeCtx} from '../Share.fixture'
 import useStore from '../store/useStore'
@@ -20,7 +20,7 @@ describe('ShareControl', () => {
     it('Renders', () => expect(controlButton).toBeInTheDocument())
 
     context('Click ShareControl', () => {
-      beforeEach(() => act(() => controlButton.click()))
+      beforeEach(() => fireEvent.click(controlButton))
 
       it('Has controls and page title updated', async () => {
         expect(await findByTestId('img-qrcode')).toBeInTheDocument()
@@ -39,7 +39,7 @@ describe('ShareControl', () => {
       const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
       findByTestId = fbti
       controlButton = await findByTestId('control-button-share')
-      act(() => controlButton.click())
+      fireEvent.click(controlButton)
     })
 
     it('Includes cutplanes', async () => expect(await findByTestId('toggle-cutplane')).toBeInTheDocument())
