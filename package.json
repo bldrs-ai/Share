@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.981",
+  "version": "1.0.983",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -126,7 +126,7 @@
     "@types/react-dom": "18.0.9",
     "@types/three": "0.146.0",
     "babel-jest": "28.1.3",
-    "cypress": "13.2.0",
+    "cypress": "13.6.6",
     "cypress-real-events": "1.10.3",
     "eslint": "8.22.0",
     "eslint-config-google": "0.14.0",
