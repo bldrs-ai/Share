@@ -15,5 +15,5 @@ describe('view 100: Mdel centering and view reset', () => {
     waitForModel()
   })
 
-  it('Model re-centered with autozoom - Screen', cy.percySnapshot())
+  it('Model re-centered with autozoom - Screen', () => cy.percySnapshot())
 })
