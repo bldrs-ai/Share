@@ -15,5 +15,12 @@ describe('view 100: Mdel centering and view reset', () => {
     waitForModel()
   })
 
-  it('Model re-centered with autozoom - Screen', () => cy.percySnapshot())
+  /**
+   * This is just testing that auto-zoom works.  Not really user-facing behavior.
+   * [Discord]{@link https://discord.com/channels/853953158560743424/984184622621540352/1229766172199616584}
+   */
+  it('Model re-centered with when camera hash removed - Screen', () => {
+    cy.visit('/share/v/p/index.ifc')
+    cy.percySnapshot()
+  })
 })
