@@ -7,7 +7,7 @@ import {
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1042} */
-describe('view 100: Mdel centering and view reset', () => {
+describe('view 100: Model centering and view reset', () => {
   beforeEach(() => {
     homepageSetup()
     setIsReturningUser()
