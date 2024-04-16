@@ -1,43 +1,47 @@
 import React from 'react'
-import {fireEvent, render, renderHook, waitFor} from '@testing-library/react'
+import {act, render, renderHook, waitFor} from '@testing-library/react'
 import ShareControl from './ShareControl'
-import useStore from '../store/useStore'
 import {HelmetStoreRouteThemeCtx} from '../Share.fixture'
+import useStore from '../store/useStore'
 
 
 describe('ShareControl', () => {
-  it('renders the dialog in the document', () => {
-    const {getByTitle} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
-    const component = getByTitle('Share')
-    expect(component).toBeInTheDocument()
-  })
+  let controlButton
+  let findByTestId
 
 
-  it('updates the title when the dialog is open', async () => {
-    const {result} = renderHook(() => useStore((state) => state.setViewer))
-    result.current({
-      clipper: {
-        planes: [],
-      },
+  context('no cutplanes active', () => {
+    beforeEach(async () => {
+      const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      findByTestId = fbti
+      controlButton = await findByTestId('control-button-share')
     })
 
-    const {getByTitle} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+    it('Renders', () => expect(controlButton).toBeInTheDocument())
 
-    const button = getByTitle('Share')
-    fireEvent.click(button)
+    context('Click ShareControl', () => {
+      beforeEach(() => act(() => controlButton.click()))
 
-    await(waitFor(() => expect(document.title).toBe('Share Model')))
+      it('Has controls and page title updated', async () => {
+        expect(await findByTestId('img-qrcode')).toBeInTheDocument()
+        expect(await findByTestId('textfield-link')).toBeInTheDocument()
+        expect(await findByTestId('toggle-camera')).toBeInTheDocument()
+        await(waitFor(() => expect(document.title).toBe('Share Model')))
+      })
+    })
   })
 
 
-  test('renders QRCode component', () => {
-    const {queryByTestId, getByTitle} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+  context('Cutplanes active', () => {
+    beforeEach(async () => {
+      const {result} = renderHook(() => useStore((state) => state.setIsCutPlaneActive))
+      result.current(true)
+      const {findByTestId: fbti} = render(<ShareControl/>, {wrapper: HelmetStoreRouteThemeCtx})
+      findByTestId = fbti
+      controlButton = await findByTestId('control-button-share')
+      act(() => controlButton.click())
+    })
 
-    // The ShareDialog is not open by default, so we'll need to simulate it being opened
-    const shareButton = getByTitle('Share')
-    fireEvent.click(shareButton)
-
-    const qrcode = queryByTestId('qrcode')
-    expect(qrcode).toBeInTheDocument()
+    it('Includes cutplanes', async () => expect(await findByTestId('toggle-cutplane')).toBeInTheDocument())
   })
 })
