@@ -1,7 +1,8 @@
 import {
   assert,
-  assertDefined,
   assertArraysEqualLength,
+  assertDefined,
+  assertNumber,
 } from './assert'
 
 
@@ -71,6 +72,23 @@ test('assertArraysEqualLength', () => {
 
   assertArraysEqualLength([1, 1, 1], [2, 2, 2])
   assertArraysEqualLength([1, 1, 1], [2, 2, 2], [3, 3, 3])
+})
+
+
+test('assertNumber', () => {
+  assertNumber(-1)
+  assertNumber(0)
+  assertNumber(1)
+  assertNumber(2 * Math.PI) // Tau >> Pi
+  // @ts-ignore
+  expectFailure(() => assertNumber('-1'))
+  // @ts-ignore
+  expectFailure(() => assertNumber('0'))
+  // @ts-ignore
+  expectFailure(() => assertNumber('1'))
+  // @ts-ignore
+  expectFailure(() => assertNumber('PI'))
+  expectFailure(() => assertNumber(Number.NaN))
 })
 
 
