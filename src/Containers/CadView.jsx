@@ -20,7 +20,7 @@ import {getLatestCommitHash} from '../net/github/Commits'
 // TODO(pablo): use ^^ instead of this
 import {parseGitHubPath} from '../utils/location'
 import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined} from '../utils/assert'
+import {assertDefined, assertNumber} from '../utils/assert'
 import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
@@ -64,6 +64,7 @@ export default function CadView({
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
+  const rootElement = useStore((state) => state.rootElement)
   const setRootElement = useStore((state) => state.setRootElement)
   const setSelectedElement = useStore((state) => state.setSelectedElement)
   const setSelectedElements = useStore((state) => state.setSelectedElements)
@@ -521,7 +522,7 @@ export default function CadView({
       // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
-        const pathIds = getPathIdsForElements(lastId)
+        const pathIds = getParentPathIdsForElement(parseInt(lastId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
         navWith(
@@ -550,10 +551,11 @@ export default function CadView({
    * @param {number} expressId
    * @return {Array} pathIds
    */
-  function getPathIdsForElements(expressId) {
-    const lookupElt = elementsById[parseInt(expressId)]
+  function getParentPathIdsForElement(expressId) {
+    assertNumber(expressId)
+    const lookupElt = elementsById[expressId]
     if (!lookupElt) {
-      debug().error(`CadView#getPathIdsForElements(${expressId}) missing in table:`, elementsById)
+      debug().error(`CadView#getParentPathIdsForElement(${expressId}) missing in table:`, elementsById)
       return undefined
     }
     const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
@@ -700,6 +702,28 @@ export default function CadView({
 
   useEffect(() => {
     (async () => {
+      if (Array.isArray(preselectedElementIds) && preselectedElementIds.length && viewer) {
+        await viewer.preselectElementsByIds(0, preselectedElementIds)
+      }
+    })()
+  }, [preselectedElementIds])
+
+
+  // Watch for path changes within the model.
+  // TODO(pablo): would be nice to have more consistent handling of path parsing.
+  useEffect(() => {
+    if (rootElement) {
+      const parts = location.pathname.split(/\.ifc/i)
+      const expectedPartCount = 2
+      if (parts.length === expectedPartCount) {
+        selectElementBasedOnFilepath(parts[1])
+      }
+    }
+  }, [location, model, rootElement])
+
+
+  useEffect(() => {
+    (async () => {
       if (!Array.isArray(selectedElements) || !viewer) {
         return
       }
@@ -709,11 +733,11 @@ export default function CadView({
       // If current selection is not empty
       if (selectedElements.length > 0) {
         // Display the properties of the last one,
-        const lastId = selectedElements.slice(-1)
+        const lastId = selectedElements.slice(-1)[0]
         const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
         // Update the expanded elements in NavTreePanel
-        const pathIds = getPathIdsForElements(lastId)
+        const pathIds = getParentPathIdsForElement(parseInt(lastId))
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }
@@ -726,30 +750,6 @@ export default function CadView({
       }
     })()
   }, [selectedElements])
-
-
-  useEffect(() => {
-    (async () => {
-      if (Array.isArray(preselectedElementIds) && preselectedElementIds.length && viewer) {
-        await viewer.preselectElementsByIds(0, preselectedElementIds)
-      }
-    })()
-  }, [preselectedElementIds])
-
-
-  // Watch for path changes within the model.
-  // TODO(pablo): would be nice to have more consistent handling of path parsing.
-  useEffect(() => {
-    if (model) {
-      (() => {
-        const parts = location.pathname.split(/\.ifc/i)
-        const expectedPartCount = 2
-        if (parts.length === expectedPartCount) {
-          selectElementBasedOnFilepath(parts[1])
-        }
-      })()
-    }
-  }, [location, model])
   /* eslint-enable */
 
 

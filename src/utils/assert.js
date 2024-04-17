@@ -72,6 +72,18 @@ export function assertArraysEqualLength(...arrays) {
 
 
 /**
+ * Argument must have typeof(n) === 'number' && isFinite(n)
+ *
+ * @param {number} n
+ */
+export function assertNumber(n) {
+  if (!(typeof(n) === 'number' && isFinite(n))) {
+    throw new Error(`Argument must be a number and finite (for ${n})`)
+  }
+}
+
+
+/**
  * Argument must have typeof(o) === 'object'
  *
  * @param {object} o
