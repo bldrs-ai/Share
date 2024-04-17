@@ -517,8 +517,8 @@ export default function CadView({
     }
     try {
       // Update The Component state
-      setSelectedElements(resultIDs.map((id) => `${id}`))
-
+      const resIds = resultIDs.map((id) => `${id}`)
+      setSelectedElements(resIds)
       // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const lastId = resultIDs.slice(-1)
@@ -611,6 +611,7 @@ export default function CadView({
     if (!viewer.isolator.canBePickedInScene(expressId)) {
       return
     }
+    let updateNav = false
     if (shiftKey) {
       const selectedInViewer = viewer.getSelectedIds()
       const indexOfItem = selectedInViewer.indexOf(expressId)
@@ -626,8 +627,9 @@ export default function CadView({
       // camera
       removeCameraUrlParams()
       newSelection = [expressId]
+      updateNav = true
     }
-    selectItemsInScene(newSelection)
+    selectItemsInScene(newSelection, updateNav)
   }
 
 
