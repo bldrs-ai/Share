@@ -266,4 +266,9 @@ export function setupAuthenticationIntercepts() {
        },
     })
   }).as('tokenRequest')
+
+  cy.intercept('*', (req) => {
+    // eslint-disable-next-line no-console
+    console.warn('Unhandled request to:', req.url)
+  }).as('catchAll')
 }

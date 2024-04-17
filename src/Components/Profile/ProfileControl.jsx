@@ -22,17 +22,19 @@ export default function ProfileControl() {
   const isMenuVisible = Boolean(anchorEl)
 
   const theme = useTheme()
-  const {isAuthenticated, loginWithPopup, logout, user} = useAuth0()
+  const {isAuthenticated, /* loginWithPopup, */ loginWithRedirect: onLoginClick, logout, user} = useAuth0()
 
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
 
+/*
   const onLoginClick = async () => {
     await loginWithPopup({
       appState: {
         returnTo: window.location.pathname,
       },
     })
-  }
+    }
+    */
   const onLogoutClick = () => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
   const onCloseClick = () => setAnchorEl(null)
 
