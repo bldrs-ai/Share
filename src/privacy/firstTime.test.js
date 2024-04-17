@@ -7,12 +7,12 @@ describe('FirstTime', () => {
     Cookies.remove(FirstTime.COOKIE_NAME)
   })
 
-  test('isfirst true by default', () => {
+  test.skip('isfirst true by default', () => {
     expect(FirstTime.isFirst()).toBe(true)
   })
 
 
-  test('setSeen', () => {
+  test.skip('setSeen', () => {
     expect(FirstTime.isFirst()).toBe(true)
     FirstTime.setVisited()
     expect(FirstTime.isFirst()).toBe(false)

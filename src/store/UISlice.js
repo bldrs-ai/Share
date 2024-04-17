@@ -1,5 +1,5 @@
 import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
-// import {isFirst} from '../privacy/firstTime'
+import {isFirst} from '../privacy/firstTime'
 
 
 const isThemeEnabled = process.env.THEME_IS_ENABLED
@@ -38,7 +38,7 @@ export default function createUISlice(set, get) {
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
-    isAboutVisible: false,
+    isAboutVisible: isFirst(),
     setIsAboutVisible: (is) => set(() => ({isAboutVisible: is})),
 
     isHelpVisible: false,

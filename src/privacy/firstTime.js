@@ -9,8 +9,9 @@ import Expires from './Expires'
  * @return {boolean}
  */
 export function isFirst() {
-  const storedSerial = parseInt(Cookies.get(COOKIE_NAME))
-  return Number.isNaN(storedSerial) ? true : storedSerial < SERIAL_VALUE
+  // const storedSerial = parseInt(Cookies.get(COOKIE_NAME))
+  // return Number.isNaN(storedSerial) ? true : storedSerial < SERIAL_VALUE
+  return false
 }
 
 
