@@ -1,5 +1,4 @@
 import React, {ReactElement, useEffect, useState} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
@@ -10,6 +9,10 @@ import AccountBoxOutlinedIcon from '@mui/icons-material/AccountBoxOutlined'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import NightlightOutlinedIcon from '@mui/icons-material/NightlightOutlined'
 import WbSunnyOutlinedIcon from '@mui/icons-material/WbSunnyOutlined'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
+
+
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
 
 /**
@@ -26,15 +29,33 @@ export default function ProfileControl() {
 
   const [isDay, setIsDay] = useState(theme.palette.mode === 'light')
 
+  const [toggledLogin, setToggledLogin] = useState(false)
+  const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
+
   const onLoginClick = async () => {
     await loginWithPopup({
       appState: {
         returnTo: window.location.pathname,
       },
     })
+
+    if (useMock) {
+      setToggledLogin((prev) => !prev)
+    }
   }
-  const onLogoutClick = () => logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
+  const onLogoutClick = () => {
+    logout({returnTo: process.env.OAUTH2_REDIRECT_URI || window.location.origin})
+    if (useMock) {
+      setToggledLogin((prev) => !prev) // Toggle to force re-render
+   }
+  }
   const onCloseClick = () => setAnchorEl(null)
+
+
+  useEffect(() => {
+    // This effect will run whenever the authentication state changes
+    // (only when mocked to enable rerender)
+  }, [toggledLogin])
 
   useEffect(() => {
     setIsDay(theme.palette.mode === 'light')

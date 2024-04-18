@@ -1,6 +1,5 @@
 let port = 0
 let nonce = ''
-const STATUS_OK = 200
 
 /**
  *
@@ -87,19 +86,12 @@ export function visitHomepageWaitForModel() {
 
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
- * the login process. It waits for specific network requests to ensure the login process
- * has been initiated and completed successfully. Requires the setup of network request
- * intercepts with aliases 'authorizeRequest' and 'tokenRequest'.
+ * the login process.
  */
 export function auth0Login() {
-  cy.log(`The current port is: ${getPort()}`)
-  cy.get('[title="Login and preferences"]').should('exist').click()
+  cy.get('[title="Profile"]').should('exist').click()
   cy.log('simulating login')
   cy.findByTestId('login-with-github').should('exist').click()
-
-  // Use the alias to ensure the intercept was called
-  cy.wait('@authorizeRequest', {timeout: 5000}).its('response.statusCode').should('eq', STATUS_OK)
-  cy.wait('@tokenRequest').its('response.statusCode').should('eq', STATUS_OK)
 
   // check to make sure Log out exists
   cy.contains('span', 'Log out').should('exist')
