@@ -4,9 +4,9 @@ import ShareRoutes from './ShareRoutes'
 import {checkOPFSAvailability} from './OPFS/utils'
 import debug from './utils/debug'
 import {navWith} from './utils/navigate'
-import {useAuth0} from '@auth0/auth0-react'
 import useStore from './store/useStore'
 import * as Sentry from '@sentry/react'
+import {useAuth0} from './Auth0/Auth0Proxy'
 
 
 const SentryRoutes = Sentry.withSentryReactRouterV6Routing(Routes)
