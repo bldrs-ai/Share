@@ -5,6 +5,7 @@
 /docs
 
 cypress/downloads
+cypress/e2e/logs
 
 /coverage
 
