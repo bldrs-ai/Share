@@ -7,6 +7,6 @@ module.exports = defineConfig({
     fileServerFolder: 'docs/',
     screenshotOnRunFailure: false,
     video: false,
-    pageLoadTimeout: 15000,
+    pageLoadTimeout: 2500,
   },
 })
