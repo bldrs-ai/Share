@@ -1,25 +1,23 @@
 import '@percy/cypress'
-import {auth0Login, waitForModel} from '../../support/utils'
+import {
+  auth0Login,
+  homepageSetup,
+  setIsReturningUser,
+  visitHomepageWaitForModel,
+} from '../../support/utils'
 
 
 describe('Profile 100: Login', () => {
-  context('when no model is loaded', () => {
+  beforeEach(homepageSetup)
+  context('Returning user visits homepage, clicks ProfileControl', () => {
     beforeEach(() => {
-      cy.clearLocalStorage()
-      cy.clearCookies()
-      cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
-      cy.setCookie('isFirstTime', '1')
+      setIsReturningUser()
+      visitHomepageWaitForModel()
     })
 
-     it('Should Login', () => {
-      cy.visit('/')
-      // Now trigger the login process, which will use the mocked loginWithPopup
-      cy.url().then((currentUrl) => {
-        waitForModel()
-        auth0Login()
-        // take screenshot
-        cy.percySnapshot()
-      })
+    it('Should Login - Screen', () => {
+      auth0Login()
+      cy.percySnapshot()
     })
   })
 })
