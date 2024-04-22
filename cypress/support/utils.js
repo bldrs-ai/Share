@@ -1,24 +1,30 @@
 let port = 0
 let nonce = ''
 
+
+/** Clears local storage and cookies */
+export function clearState() {
+  cy.clearLocalStorage()
+  cy.clearCookies()
+}
+
+
 /**
- *
+ * Intercept load of index.ifc to attach an @loadModel event to it.  index.ifc
+ * isn't accessed directly by UX, but is implicitly loaded by
+ * /share/v/p/index.ifc virtual path
  */
 export function interceptIndex() {
   cy.intercept('GET', '/index.ifc', {fixture: 'index.ifc'}).as('loadModel')
 }
 
+
 /**
- *
+ * Intercept load of virtual project path to index.ifc to serve up 404 bounce
+ * page.  Also registers @bounce event for wait
  */
 export function interceptBounce() {
   cy.intercept('GET', '/share/v/p/index.ifc', {fixture: '404.html'}).as('bounce')
-}
-
-/** Clears local storage and cookies. */
-export function clearState() {
-    cy.clearLocalStorage()
-    cy.clearCookies()
 }
 
 
@@ -36,6 +42,13 @@ export function homepageSetup() {
 }
 
 
+/** Sets state for returning user and visit homepage */
+export function setCookieAndVisitHome() {
+  setIsReturningUser()
+  visitHomepage()
+}
+
+
 /** Set cookie indicating user has visited before */
 export function setIsReturningUser() {
   cy.setCookie('isFirstTime', '1')
@@ -48,11 +61,12 @@ export function visitHomepage() {
 }
 
 
-/** Sets state for returning user and visit homepage */
-export function setCookieAndVisitHome() {
-  setIsReturningUser()
+/** Assumes other setup, then visit homepage and wait for model */
+export function visitHomepageWaitForModel() {
   visitHomepage()
+  waitForModel()
 }
+
 
 /**
  * Waits for a 3D model to load and become visible within the viewer.
@@ -77,23 +91,14 @@ export function waitForModel() {
 }
 
 
-/** Assumes other setup, then visit homepage and wait for model */
-export function visitHomepageWaitForModel() {
-  visitHomepage()
-  waitForModel()
-}
-
-
 /**
  * Performs a simulated login using Auth0 by interacting with the UI elements related to
  * the login process.
  */
 export function auth0Login() {
-  cy.get('[title="Profile"]').should('exist').click()
+  cy.get('[data-testid="control-button-profile"]').click()
   cy.log('simulating login')
-  cy.findByTestId('login-with-github').should('exist').click()
-
-  // check to make sure Log out exists
+  cy.get('[data-testid="login-with-github"]').click()
   cy.contains('span', 'Log out').should('exist')
 }
 
