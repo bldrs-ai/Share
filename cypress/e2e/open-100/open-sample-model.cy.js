@@ -27,11 +27,17 @@ describe('Open 100: Open Sample Model', () => {
           'https://rawgit.bldrs.dev.msw/r/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
           {fixture: '/Momentum.ifc'},
         )
-          .as('loadModel')
+          .as('loadMomentum')
         cy.findByText('Momentum').click()
       })
 
       it('Project loads - Screen', () => {
+        cy.wait('@loadMomentum')
+        // TODO(pablo): same as index.ifc load
+        cy.get('[data-model-ready="true"]').should('exist', {timeout: 1000})
+        const animWaitTimeMs = 1000
+        // eslint-disable-next-line cypress/no-unnecessary-waiting
+        cy.wait(animWaitTimeMs)
         cy.percySnapshot()
       })
     })
