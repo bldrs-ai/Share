@@ -1,16 +1,15 @@
-import React, {ReactElement, useState, useContext, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import FileContext from '../../OPFS/FileContext'
+import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import useStore from '../../store/useStore'
-import debug from '../../utils/debug'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
@@ -91,11 +90,12 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const [foldersArr, setFoldersArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
   const accessToken = useStore((state) => state.accessToken)
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
   // const fileName = filesArr[selectedFileName]
-  const {file} = useContext(FileContext) // Consume the context
+  const file = useStore((state) => state.file)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const saveFile = () => {
@@ -123,6 +123,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           repoName,
           'main',
           accessToken,
+          isOpfsAvailable,
           setSnackMessage,
           (pathname) => {
             navigate({pathname: pathname})
@@ -290,6 +291,18 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   )
 }
 
+/**
+ *
+ */
+function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
+  setSnackMessage('Model saved successfully!')
+  const pauseTimeMs = 5000
+  setTimeout(() => setSnackMessage(null), pauseTimeMs)
+  // Construct the GitHub path for the committed file
+  const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
+  onPathname(githubFilePath)
+}
+
 
 /**
  *
@@ -302,6 +315,7 @@ async function fileSave(
   repoName,
   branchName,
   accessToken,
+  isOpfsAvailable,
   setSnackMessage,
   onPathname,
 ) {
@@ -319,16 +333,23 @@ async function fileSave(
 
     if (commitHash !== null) {
       // save to opfs
-      // const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, orgName, repoName, branchName)
+      if (isOpfsAvailable) {
+       const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
 
-      //  if (opfsResult) {
-      setSnackMessage('')
-      // Construct the GitHub path for the committed file
-      const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
-      onPathname(githubFilePath)
-      debug().error('Error saving file to OPFS')
+      if (opfsResult) {
+        redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+      } else {
+        setSnackMessage('Error: Could not write file to OPFS.')
+        const pauseTimeMs = 5000
+        setTimeout(() => setSnackMessage(null), pauseTimeMs)
+      }
+    } else {
+      redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+    }
     } else {
       setSnackMessage('Error: Could not commit to GitHub.')
+      const pauseTimeMs = 5000
+      setTimeout(() => setSnackMessage(null), pauseTimeMs)
     }
   }
 }

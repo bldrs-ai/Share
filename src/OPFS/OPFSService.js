@@ -156,7 +156,7 @@ export function opfsDoesFileExist(originalFileName, commitHash, owner, repo, bra
  * @param {string} repo The name of the repository
  * @param {string} branch The branch name where the file will be written
  */
-export function opfsWriteModelFileHandle(file, originalFileName, commitHash, owner, repo, branch) {
+export function opfsWriteModelFileHandle(file, originalFilePath, commitHash, owner, repo, branch) {
   if (!workerRef) {
     debug().error('Worker not initialized')
     return
@@ -166,7 +166,7 @@ export function opfsWriteModelFileHandle(file, originalFileName, commitHash, own
     command: 'writeObjectModelFileHandle',
     file: file,
     objectKey: commitHash,
-    originalFileName: originalFileName,
+    originalFilePath: originalFilePath,
     owner: owner,
     repo: repo,
     branch: branch,

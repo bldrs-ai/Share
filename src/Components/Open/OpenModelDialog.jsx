@@ -42,10 +42,10 @@ export default function OpenModelDialog({
   const repoName = repoNamesArr[selectedRepoName]
   const fileName = filesArr[selectedFileName]
   const appPrefix = useStore((state) => state.appPrefix)
-  const isOPFSAvailable = checkOPFSAvailability()
+  const isOpfsAvailable = checkOPFSAvailability()
 
   const openFile = () => {
-    if (isOPFSAvailable) {
+    if (isOpfsAvailable) {
       loadLocalFile(navigate, appPrefix, handleBeforeUnload, false)
     } else {
       loadLocalFileFallback(navigate, appPrefix, handleBeforeUnload, false)

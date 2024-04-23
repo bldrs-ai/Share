@@ -201,7 +201,7 @@ describe('CadView', () => {
     }
     reactRouting.useLocation.mockReturnValue(mockCurrLocation)
     const {result} = renderHook(() => useStore((state) => state))
-    await act(() => result.current.setIsOPFSAvailable(false))
+    await act(() => result.current.setIsOpfsAvailable(false))
     await act(() => result.current.setModelPath({filepath: `/index.ifc`}))
     render(
       <ShareMock>

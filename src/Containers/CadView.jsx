@@ -1,4 +1,4 @@
-import React, {ReactElement, useEffect, useContext, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import {useNavigate, useSearchParams, useLocation} from 'react-router-dom'
 import {MeshLambertMaterial} from 'three'
 import Box from '@mui/material/Box'
@@ -11,7 +11,6 @@ import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
 import LoadingBackdrop from '../Components/LoadingBackdrop'
-import FileContext from '../OPFS/FileContext'
 import {getModelFromOPFS, downloadToOPFS} from '../OPFS/utils'
 import usePlaceMark from '../hooks/usePlaceMark'
 import * as Analytics from '../privacy/analytics'
@@ -115,7 +114,7 @@ export default function CadView({
   const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
-  const {setFile} = useContext(FileContext) // Consume the context
+  const setFile = useStore((state) => state.setFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -669,14 +668,14 @@ export default function CadView({
       /* eslint-disable no-mixed-operators */
       if (!isAuthLoading &&
           (isAuthenticated && accessToken !== '') ||
-          (!isAuthLoading && !isAuthenticated)) {
+          (!isAuthLoading && !isAuthenticated) && isOpfsAvailable !== null) {
         (async () => {
           await onViewer()
         })()
       }
       /* eslint-enable no-mixed-operators */
     }
-  }, [isAuthLoading, isAuthenticated, accessToken])
+  }, [isAuthLoading, isAuthenticated, accessToken, isOpfsAvailable])
 
 
   // ModelPath changes in parent (ShareRoutes) from user and
