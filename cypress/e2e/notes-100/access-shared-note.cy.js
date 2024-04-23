@@ -3,12 +3,10 @@ import {waitForModel, homepageSetup, setIsReturningUser} from '../../support/uti
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1072} */
 describe('Notes 100 - Access shared note', () => {
-  context('Access shared link containing the path to the general notes', () => {
+  context('Returning user accessing share through the link that contains general NOTE PREFIX', () => {
     beforeEach(() => {
       homepageSetup()
       setIsReturningUser()
-    })
-    beforeEach(() => {
       cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;i:')
       waitForModel()
     })
@@ -20,12 +18,10 @@ describe('Notes 100 - Access shared note', () => {
       cy.percySnapshot()
       })
   })
-  context('Access the shared link containing the path to a note index', () => {
+  context('Returning user accessing share through the link that contains specific NOTE PREFIX', () => {
     beforeEach(() => {
       homepageSetup()
       setIsReturningUser()
-    })
-    beforeEach(() => {
       cy.visit('/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:2')
       waitForModel()
     })
