@@ -128,7 +128,6 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
         </Helmet>
         <Box>
           <QRCode
-            data-testid="qrcode"
             style={{
               height: 'auto',
               maxWidth: '82%',
@@ -137,6 +136,7 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
             }}
             value={String(window.location)}
             viewBox={`0 0 100 100`}
+            data-testid='img-qrcode'
           />
         </Box>
         <TextField
@@ -149,10 +149,10 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
           InputProps={{
             readOnly: true,
             endAdornment: (
-              <InputAdornment position="end">
+              <InputAdornment position='end'>
                 <IconButton
                   onClick={onCopy}
-                  edge="end"
+                  edge='end'
                   size='small'
                 >
                   <ContentCopyIcon size='inherit' sx={{width: '16px', height: '16px'}}/>
@@ -160,30 +160,33 @@ function ShareDialog({isDialogDisplayed, setIsDialogDisplayed}) {
               </InputAdornment>
             ),
           }}
+          data-testid='textfield-link'
         />
         <Stack spacing={0}>
           {isCutPlaneActive &&
            <Stack
-             direction="row"
-             justifyContent="space-around"
-             alignItems="center"
+             direction='row'
+             justifyContent='space-around'
+             alignItems='center'
            >
              <Typography>Cutplane position</Typography>
              <Toggle
                onChange={togglePlaneIncluded}
                checked={isPlaneInUrl}
+               data-testid='toggle-cutplane'
              />
            </Stack>
           }
           <Stack
-            direction="row"
-            justifyContent="space-around"
-            alignItems="center"
+            direction='row'
+            justifyContent='space-around'
+            alignItems='center'
           >
             <Typography>Camera position</Typography>
             <Toggle
               onChange={toggleCameraIncluded}
               checked={isCameraInUrl}
+              data-testid='toggle-camera'
             />
           </Stack>
         </Stack>

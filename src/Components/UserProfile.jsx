@@ -4,7 +4,6 @@ import {
   bindTrigger,
   bindMenu,
 } from 'material-ui-popup-state/hooks'
-import {useAuth0} from '@auth0/auth0-react'
 import Avatar from '@mui/material/Avatar'
 import IconButton from '@mui/material/IconButton'
 import ListItemIcon from '@mui/material/ListItemIcon'
@@ -14,6 +13,7 @@ import Typography from '@mui/material/Typography'
 import Divider from '@mui/material/Divider'
 import GitHubIcon from '@mui/icons-material/GitHub'
 import LogoutIcon from '@mui/icons-material/Logout'
+import {useAuth0} from '../Auth0/Auth0Proxy'
 
 
 const UserProfile = ({size = 'medium'}) => {

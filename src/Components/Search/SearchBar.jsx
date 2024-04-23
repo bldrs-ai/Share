@@ -100,6 +100,7 @@ export default function SearchBar() {
             sx={{
               width: '100%',
             }}
+            data-testid='textfield-search-query'
           />
         )}
       />

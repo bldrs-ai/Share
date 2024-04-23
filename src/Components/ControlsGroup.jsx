@@ -1,5 +1,5 @@
 import React, {ReactElement} from 'react'
-import {useAuth0} from '@auth0/auth0-react'
+import {useAuth0} from '../Auth0/Auth0Proxy'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import NavTreeControl from './NavTree/NavTreeControl'
 import OpenModelControl from './Open/OpenModelControl'
