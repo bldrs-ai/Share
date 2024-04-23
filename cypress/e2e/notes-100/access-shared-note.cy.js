@@ -1,3 +1,4 @@
+import '@percy/cypress'
 import {waitForModel, homepageSetup, setIsReturningUser} from '../../support/utils'
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1072} */
@@ -16,7 +17,7 @@ describe('Notes 100 - Access shared note', () => {
       cy.get('[data-testid="panelTitle"]').contains('NOTES')
       // List of notes to be visible
       cy.get('.MuiList-root').should('exist')
-      // cy.percySnapshot()
+      cy.percySnapshot()
       })
   })
   context('Access the shared link containing the path to a note index', () => {
