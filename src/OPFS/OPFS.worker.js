@@ -16,11 +16,10 @@ self.addEventListener('message', async (event) => {
 
       writeModelToOPFS(objectUrl, objectKey, originalFileName)
     } else if (event.data.command === 'writeObjectModelFileHandle') {
-      // eslint-disable-next-line no-unused-vars
-      const {file, objectKey, originalFileName, owner, repo, branch} =
+      const {file, objectKey, originalFilePath, owner, repo, branch} =
           assertValues(event.data,
-              ['file', 'objectKey', 'originalFileName', 'owner', 'repo', 'branch'])
-      writeModelToOPFSFromFile(file, objectKey, originalFileName, owner, repo)
+              ['file', 'objectKey', 'originalFilePath', 'owner', 'repo', 'branch'])
+      writeModelToOPFSFromFile(file, objectKey, originalFilePath, owner, repo, branch)
     } else if (event.data.command === 'readModelFromStorage') {
       const {modelKey} = assertValues(event.data, ['modelKey'])
       await readModelFromOPFS(modelKey)
@@ -261,58 +260,103 @@ async function retrieveFileWithPath(rootHandle, filePath, commitHash, shouldCrea
 /**
  *
  */
-async function writeModelToOPFSFromFile(modelFile, objectKey, originalFileName, owner, repo) {
+async function writeFileToHandle(blobAccessHandle, modelFile) {
   try {
-    const opfsRoot = await navigator.storage.getDirectory()
+    // Step 1: Convert the File to an ArrayBuffer
+    const arrayBuffer = await modelFile.arrayBuffer()
 
-    let newFolderHandle = null
+    // Optional: Truncate the file if you want to overwrite it completely
+    await blobAccessHandle.truncate(0)
 
-    // Get folder handle
+    // Step 2: Write the ArrayBuffer to the blobAccessHandle
+    await blobAccessHandle.write(arrayBuffer)
+
+    // Step 3: Close the handle after writing is done
+    await blobAccessHandle.close()
+
+    return true
+  } catch (error) {
+    const workerMessage = `Error writing file to handle: ${error}`
+      self.postMessage({error: workerMessage})
+      return false
+  }
+}
+
+/**
+ *
+ */
+async function writeModelToOPFSFromFile(modelFile, objectKey, originalFilePath, owner, repo, branch) {
+  const opfsRoot = await navigator.storage.getDirectory()
+  let ownerFolderHandle = null
+  let repoFolderHandle = null
+  let branchFolderHandle = null
+  // See if owner folder handle exists
+  try {
+    ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: false})
+  } catch (error) {
+    // Expected: folder does not exist
+  }
+
+  if (ownerFolderHandle === null) {
     try {
-      newFolderHandle = await opfsRoot.getDirectoryHandle(objectKey, {create: true})
+      ownerFolderHandle = await opfsRoot.getDirectoryHandle(owner, {create: true})
     } catch (error) {
-      const workerMessage = `Error getting folder handle for ${objectKey}: ${error}`
+      const workerMessage = `Error getting folder handle for ${owner}: ${error}`
       self.postMessage({error: workerMessage})
       return
     }
+  }
 
-    // Get a file handle in the folder for the model
-    let modelBlobFileHandle = null
+  // See if repo folder handle exists
+  try {
+    repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: false})
+  } catch (error) {
+    // Expected: folder does not exist
+  }
 
-    // Get file handle for file blob
+  if (repoFolderHandle === null) {
     try {
-      modelBlobFileHandle = await newFolderHandle.getFileHandle(objectKey, {create: true})
+      repoFolderHandle = await ownerFolderHandle.getDirectoryHandle(repo, {create: true})
     } catch (error) {
-      const workerMessage = `Error getting file handle for ${objectKey}: ${error}`
+      const workerMessage = `Error getting folder handle for ${repo}: ${error}`
       self.postMessage({error: workerMessage})
       return
     }
+  }
 
-    const fileArrayBuffer = await modelFile.arrayBuffer()
+  // See if branch folder handle exists
+  try {
+    branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: false})
+  } catch (error) {
+    // Expected: folder does not exist
+  }
 
+  if (branchFolderHandle === null) {
     try {
-      // Create FileSystemSyncAccessHandle on the file.
-      const blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
-
-      // Write buffer at the beginning of the file
-      const blobWriteSize = await blobAccessHandle.write(fileArrayBuffer, {at: 0})
-      // Close the access handle when done
-      await blobAccessHandle.close()
-
-      if (blobWriteSize > 0) {
-        self.postMessage({completed: true, event: 'write', fileName: objectKey})
-        return
-      } else {
-        const workerMessage = `Error writing to file: ${objectKey}`
-        self.postMessage({error: workerMessage})
-      }
+      branchFolderHandle = await repoFolderHandle.getDirectoryHandle(branch, {create: true})
     } catch (error) {
-      const workerMessage = `Error writing to ${objectKey}: ${error}.`
+      const workerMessage = `Error getting folder handle for ${branch}: ${error}`
       self.postMessage({error: workerMessage})
       return
+    }
+  }
+
+  // Get a file handle in the folder for the model
+  let modelBlobFileHandle = null
+  let modelDirectoryHandle = null
+  let blobAccessHandle = null
+
+  try {
+    // eslint-disable-next-line no-unused-vars
+    [modelDirectoryHandle, modelBlobFileHandle] = await retrieveFileWithPath(branchFolderHandle, originalFilePath, objectKey, true)
+    // Create FileSystemSyncAccessHandle on the file.
+    blobAccessHandle = await modelBlobFileHandle.createSyncAccessHandle()
+
+    if (await writeFileToHandle(blobAccessHandle, modelFile)) {
+      self.postMessage({completed: true, event: 'write'})
     }
   } catch (error) {
-    const workerMessage = `Error writing object URL to file: ${error}`
+    const workerMessage = `Error getting file handle for ${originalFilePath}: ${error}`
     self.postMessage({error: workerMessage})
   }
 }
