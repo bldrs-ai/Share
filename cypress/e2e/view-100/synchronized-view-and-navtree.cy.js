@@ -3,8 +3,10 @@ import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
-  waitForModel,
 } from '../../support/utils'
+import {
+  waitForModelReady,
+} from '../../support/models'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1046} */
@@ -41,7 +43,7 @@ describe('View 100: Synchronized View and NavTree', () => {
     beforeEach(() => {
       // TODO(pablo): can't figure out how to get intercept for deep path, but this works
       cy.visit('/share/v/p/index.ifc/621')
-      waitForModel()
+      waitForModelReady('bounceEltSelect')
     })
 
     it('Item highlighted in tree and scene - Screen', () => {
