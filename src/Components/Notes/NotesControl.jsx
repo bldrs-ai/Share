@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {ReactElement, useEffect} from 'react'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
@@ -73,18 +72,6 @@ export default function NotesControl() {
     // TODO(pablo):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model, isCreateNoteVisible])
-
-  useEffect(() => {
-    const noteNumberStr = getHashParams(location, NOTES_PREFIX) // Assuming this returns something like "i:123"
-    if (noteNumberStr) {
-      const match = noteNumberStr.match(/i:(\d*)/) // \d* matches any number of digits, including none
-      const noteId = match && match[1] ? parseInt(match[1], 10) : null
-      if (noteId !== null) {
-        setSelectedNoteId(noteId)
-      }
-    }
-  },
-)
 
 
   // TODO(pablo): hack, move into helper
