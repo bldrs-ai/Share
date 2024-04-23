@@ -51,7 +51,7 @@ export default function BaseRoutes({testElt = null}) {
     }
 
     checkAvailability()
-  }, [setIsOpfsAvailable]) // Empty dependency array means this effect runs once on mount
+  }, [setIsOpfsAvailable])
 
 
   useEffect(() => {

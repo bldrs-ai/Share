@@ -114,7 +114,7 @@ export default function CadView({
   const {createPlaceMark} = usePlaceMark()
   // Auth
   const {isLoading: isAuthLoading, isAuthenticated} = useAuth0()
-  const setFile = useStore((state) => state.setFile)
+  const setOpfsFile = useStore((state) => state.setOpfsFile)
   const navigate = useNavigate()
   // TODO(pablo): Removing this setter leads to a very strange stack overflow
   const [searchParams] = useSearchParams()
@@ -278,7 +278,7 @@ export default function CadView({
       const file = await getModelFromOPFS('BldrsLocalStorage', 'V1', 'Projects', filepath)
 
       if (file instanceof File) {
-        setFile(file)
+        setOpfsFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }
@@ -313,7 +313,7 @@ export default function CadView({
           })
 
       if (file instanceof File) {
-        setFile(file)
+        setOpfsFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }
@@ -363,7 +363,7 @@ export default function CadView({
         })
 
       if (file instanceof File) {
-        setFile(file)
+        setOpfsFile(file)
       } else {
         debug().error('Retrieved object is not of type File.')
       }

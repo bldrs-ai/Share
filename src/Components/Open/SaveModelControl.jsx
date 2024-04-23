@@ -17,6 +17,7 @@ import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
+import {navigateBaseOnModelPath} from '../../utils/location'
 
 
 /**
@@ -94,8 +95,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  // const fileName = filesArr[selectedFileName]
-  const file = useStore((state) => state.file)
+  const file = useStore((state) => state.opfsFile)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const saveFile = () => {
@@ -292,20 +292,44 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
 }
 
 /**
+ * Redirects to a new model after displaying a success message.
+ * The function constructs a GitHub path for the committed file
+ * and triggers a navigation to this path.
  *
+ * @param {Function} onPathname - Callback function to handle pathname changes.
+ * @param {string} orgName - The organization name on GitHub.
+ * @param {string} repoName - The repository name on GitHub.
+ * @param {string} branchName - The branch name on GitHub.
+ * @param {string} pathWithFileName - The path including the file name on GitHub.
+ * @param {Function} setSnackMessage - Function to set a snack message displayed to the user.
  */
 function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
   setSnackMessage('Model saved successfully!')
   const pauseTimeMs = 5000
   setTimeout(() => setSnackMessage(null), pauseTimeMs)
-  // Construct the GitHub path for the committed file
-  const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
-  onPathname(githubFilePath)
+
+  const pathLeadingSlash = `/${ pathWithFileName}`
+
+  // Redirect
+  onPathname(navigateBaseOnModelPath(orgName, repoName, branchName, pathLeadingSlash))
 }
 
 
 /**
+ * Asynchronously saves a file to GitHub and optionally to OPFS, then redirects.
+ * The function handles the entire process of committing a file to
+ * GitHub and managing UI feedback through snack messages.
  *
+ * @param {File} file - The file to be saved.
+ * @param {string} pathWithFileName - The full path including the file name.
+ * @param {string} selectedFileName - The name of the file selected for save.
+ * @param {string} orgName - The organization name on GitHub.
+ * @param {string} repoName - The repository name on GitHub.
+ * @param {string} branchName - The branch name on GitHub.
+ * @param {string} accessToken - GitHub access token for authentication.
+ * @param {boolean} opfsIsAvailable - Flag indicating if OPFS is available for use.
+ * @param {Function} setSnackMessage - Function to set snack messages for the user.
+ * @param {Function} onPathname - Callback function to handle pathname changes after successful save.
  */
 async function fileSave(
   file,
@@ -315,7 +339,7 @@ async function fileSave(
   repoName,
   branchName,
   accessToken,
-  isOpfsAvailable,
+  opfsIsAvailable,
   setSnackMessage,
   onPathname,
 ) {
@@ -333,7 +357,7 @@ async function fileSave(
 
     if (commitHash !== null) {
       // save to opfs
-      if (isOpfsAvailable) {
+      if (opfsIsAvailable) {
        const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
 
       if (opfsResult) {
