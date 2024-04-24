@@ -17,7 +17,7 @@ import debug from '../utils/debug'
  * @param {string} filepath
  * @return {File}
  */
-export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHash, owner, repo, branch) {
+export function writeSavedGithubModelOPFS(modelFile, originalFilePath, commitHash, owner, repo, branch) {
   return new Promise((resolve, reject) => {
     const workerRef = initializeWorker()
     if (workerRef !== null) {
@@ -36,7 +36,7 @@ export function writeSavedGithubModelOPFS(modelFile, originalFileName, commitHas
         }
       }
       workerRef.addEventListener('message', listener)
-      opfsWriteModelFileHandle(modelFile, originalFileName, commitHash, owner, repo, branch)
+      opfsWriteModelFileHandle(modelFile, originalFilePath, commitHash, owner, repo, branch)
     } else {
       reject(new Error('Worker initialization failed'))
     }

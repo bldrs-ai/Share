@@ -35,7 +35,7 @@ export default function BaseRoutes({testElt = null}) {
   const setAccessToken = useStore((state) => state.setAccessToken)
   const appPrefix = `${basePath}share`
   const setAppPrefix = useStore((state) => state.setAppPrefix)
-  const setIsOPFSAvailable = useStore((state) => state.setIsOPFSAvailable)
+  const setIsOpfsAvailable = useStore((state) => state.setIsOpfsAvailable)
 
 
   useEffect(() => {
@@ -47,11 +47,11 @@ export default function BaseRoutes({testElt = null}) {
     const checkAvailability = async () => {
       const available = await checkOPFSAvailability()
 
-      setIsOPFSAvailable(available)
+      setIsOpfsAvailable(available)
     }
 
     checkAvailability()
-  }, [setIsOPFSAvailable]) // Empty dependency array means this effect runs once on mount
+  }, [setIsOpfsAvailable])
 
 
   useEffect(() => {

@@ -1,4 +1,5 @@
 const isOpfsEnabled = process.env.OPFS_IS_ENABLED
+const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
 
 
 /**
@@ -19,7 +20,9 @@ export default function createAppSlice(set, get) {
     selectedStoreApp: null,
     setSelectedStoreApp: (appInfo) => set(() => ({selectedStoreApp: appInfo})),
     // Depended on by CadView.  When enabled, null lets detection code set first time.
-    isOPFSAvailable: isOpfsEnabled ? null : false,
-    setIsOPFSAvailable: (is) => set(() => ({isOPFSAvailable: isOpfsEnabled ? is : false})),
+    isOpfsAvailable: isOpfsEnabled ? null : false,
+    setIsOpfsAvailable: (is) => set(() => ({isOpfsAvailable: isOpfsEnabled ? is : false})),
+    opfsFile: OAUTH_2_CLIENT_ID === 'cypresstestaudience' ? new File([], 'mockFile.ifc') : null,
+    setOpfsFile: (modelFile) => set(() => ({opfsFile: modelFile})),
   }
 }

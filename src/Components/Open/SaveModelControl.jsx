@@ -1,16 +1,15 @@
-import React, {ReactElement, useState, useContext, useEffect} from 'react'
+import React, {ReactElement, useState, useEffect} from 'react'
 import {useNavigate} from 'react-router-dom'
+import {useAuth0} from '../../Auth0/Auth0Proxy'
 import IconButton from '@mui/material/IconButton'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import {useAuth0} from '../../Auth0/Auth0Proxy'
-import FileContext from '../../OPFS/FileContext'
+import {writeSavedGithubModelOPFS} from '../../OPFS/utils'
 import {commitFile, getFilesAndFolders} from '../../net/github/Files'
 import {getOrganizations} from '../../net/github/Organizations'
 import {getRepositories, getUserRepositories} from '../../net/github/Repositories'
 import useStore from '../../store/useStore'
-import debug from '../../utils/debug'
 import {ControlButton} from '../Buttons'
 import Dialog from '../Dialog'
 import PleaseLogin from './PleaseLogin'
@@ -18,6 +17,7 @@ import Selector from './Selector'
 import SelectorSeparator from './SelectorSeparator'
 import ClearIcon from '@mui/icons-material/Clear'
 import SaveOutlinedIcon from '@mui/icons-material/SaveOutlined'
+import {navigateBaseOnModelPath} from '../../utils/location'
 
 
 /**
@@ -91,11 +91,11 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   const [foldersArr, setFoldersArr] = useState([''])
   const [currentPath, setCurrentPath] = useState('')
   const accessToken = useStore((state) => state.accessToken)
+  const isOpfsAvailable = useStore((state) => state.isOpfsAvailable)
   const orgNamesArrWithAt = orgNamesArr.map((orgName) => `@${orgName}`)
   const orgName = orgNamesArr[selectedOrgName]
   const repoName = repoNamesArr[selectedRepoName]
-  // const fileName = filesArr[selectedFileName]
-  const {file} = useContext(FileContext) // Consume the context
+  const file = useStore((state) => state.opfsFile)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
 
   const saveFile = () => {
@@ -123,6 +123,7 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
           repoName,
           'main',
           accessToken,
+          isOpfsAvailable,
           setSnackMessage,
           (pathname) => {
             navigate({pathname: pathname})
@@ -290,9 +291,45 @@ function SaveModelDialog({isDialogDisplayed, setIsDialogDisplayed, navigate, org
   )
 }
 
+/**
+ * Redirects to a new model after displaying a success message.
+ * The function constructs a GitHub path for the committed file
+ * and triggers a navigation to this path.
+ *
+ * @param {Function} onPathname - Callback function to handle pathname changes.
+ * @param {string} orgName - The organization name on GitHub.
+ * @param {string} repoName - The repository name on GitHub.
+ * @param {string} branchName - The branch name on GitHub.
+ * @param {string} pathWithFileName - The path including the file name on GitHub.
+ * @param {Function} setSnackMessage - Function to set a snack message displayed to the user.
+ */
+function redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage) {
+  setSnackMessage('Model saved successfully!')
+  const pauseTimeMs = 5000
+  setTimeout(() => setSnackMessage(null), pauseTimeMs)
+
+  const pathLeadingSlash = `/${ pathWithFileName}`
+
+  // Redirect
+  onPathname(navigateBaseOnModelPath(orgName, repoName, branchName, pathLeadingSlash))
+}
+
 
 /**
+ * Asynchronously saves a file to GitHub and optionally to OPFS, then redirects.
+ * The function handles the entire process of committing a file to
+ * GitHub and managing UI feedback through snack messages.
  *
+ * @param {File} file - The file to be saved.
+ * @param {string} pathWithFileName - The full path including the file name.
+ * @param {string} selectedFileName - The name of the file selected for save.
+ * @param {string} orgName - The organization name on GitHub.
+ * @param {string} repoName - The repository name on GitHub.
+ * @param {string} branchName - The branch name on GitHub.
+ * @param {string} accessToken - GitHub access token for authentication.
+ * @param {boolean} opfsIsAvailable - Flag indicating if OPFS is available for use.
+ * @param {Function} setSnackMessage - Function to set snack messages for the user.
+ * @param {Function} onPathname - Callback function to handle pathname changes after successful save.
  */
 async function fileSave(
   file,
@@ -302,6 +339,7 @@ async function fileSave(
   repoName,
   branchName,
   accessToken,
+  opfsIsAvailable,
   setSnackMessage,
   onPathname,
 ) {
@@ -319,16 +357,23 @@ async function fileSave(
 
     if (commitHash !== null) {
       // save to opfs
-      // const opfsResult = await writeSavedGithubModelOPFS(file, selectedFileName, commitHash, orgName, repoName, branchName)
+      if (opfsIsAvailable) {
+       const opfsResult = await writeSavedGithubModelOPFS(file, pathWithFileName, commitHash, orgName, repoName, branchName)
 
-      //  if (opfsResult) {
-      setSnackMessage('')
-      // Construct the GitHub path for the committed file
-      const githubFilePath = `/share/v/gh/${orgName}/${repoName}/${branchName}/${pathWithFileName}`
-      onPathname(githubFilePath)
-      debug().error('Error saving file to OPFS')
+      if (opfsResult) {
+        redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+      } else {
+        setSnackMessage('Error: Could not write file to OPFS.')
+        const pauseTimeMs = 5000
+        setTimeout(() => setSnackMessage(null), pauseTimeMs)
+      }
+    } else {
+      redirectToNewModel(onPathname, orgName, repoName, branchName, pathWithFileName, setSnackMessage)
+    }
     } else {
       setSnackMessage('Error: Could not commit to GitHub.')
+      const pauseTimeMs = 5000
+      setTimeout(() => setSnackMessage(null), pauseTimeMs)
     }
   }
 }
