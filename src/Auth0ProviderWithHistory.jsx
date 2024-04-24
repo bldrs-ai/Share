@@ -1,6 +1,6 @@
 import React from 'react'
 import {useNavigate} from 'react-router-dom'
-import {Auth0Provider} from '@auth0/auth0-react'
+import {Auth0Provider} from './Auth0/Auth0ProviderProxy'
 
 
 /** @return {React.ReactContext} */

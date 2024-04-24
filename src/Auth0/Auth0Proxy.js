@@ -56,7 +56,7 @@ function mockLogout() {
 }
 
 // Mock implementation of Auth0Context
-const MockAuth0Context = React.createContext({
+export const MockAuth0Context = React.createContext({
   error: undefined,
   isAuthenticated: false,
   isLoading: false,
