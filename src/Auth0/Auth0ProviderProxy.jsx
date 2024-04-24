@@ -1,6 +1,6 @@
 import React, {useState} from 'react'
 import {Auth0Provider as OriginalAuth0Provider} from '@auth0/auth0-react'
-import {MockAuth0Context} from './Auth0Proxy'
+import {MockAuth0Context, mockGitHubUser} from './Auth0Proxy'
  // Adjust the import path
 
 const OAUTH_2_CLIENT_ID = process.env.OAUTH2_CLIENT_ID
@@ -53,10 +53,7 @@ export const Auth0Provider = ({children, onRedirectCallback, ...props}) => {
   const loginWithPopup = () => {
     setState({
       isAuthenticated: true,
-      user: {
-        name: 'Mock User',
-        email: 'mockuser@example.com',
-      },
+      user: mockGitHubUser,
       token: 'mock_access_token',
     })
   }
