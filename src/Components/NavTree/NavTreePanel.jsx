@@ -1,5 +1,6 @@
-import React, {ReactElement, useState} from 'react'
+import React, {ReactElement, useContext, useEffect, useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
+import TreeViewContext from '@mui/lab/TreeView/TreeViewContext'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
@@ -47,12 +48,16 @@ export default function NavTreePanel({
 
   const theme = useTheme()
 
+  useEffect(() => {
+    console.log('selectedElements:', selectedElements)
+  }, [selectedElements])
+
   return (
     <Panel
       title='Navigation'
       onCloseClick={() => setIsNavTreeVisible(false)}
       action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
-      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
+      sx={{height: '200px', m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
@@ -61,6 +66,10 @@ export default function NavTreePanel({
         defaultExpanded={isNavTree ? defaultExpandedElements : defaultExpandedTypes}
         expanded={isNavTree ? expandedElements : expandedTypes}
         selected={selectedElements}
+        multiSelect={true}
+        onNodeSelect={(event, nodes) => {
+          console.log('onNodeSelect, nodes:', nodes)
+        }}
         onNodeToggle={(event, nodeIds) => {
           if (isNavTree) {
             setExpandedElements(nodeIds)
@@ -81,6 +90,7 @@ export default function NavTreePanel({
           },
         }}
       >
+        <MyTreeItemComponent/>
         {isNavTree ? (
           <NavTree
             model={model}
@@ -139,5 +149,19 @@ function Actions({navigationMode, setNavigationMode}) {
         </ToggleButton>
       </Tooltip>
     </StyledToggleButtonGroup>
+  )
+}
+
+/** @return {ReactElement} */
+function MyTreeItemComponent({nodeId}) {
+  const {focusLastNode} = useContext(TreeViewContext)
+
+  const handleFocus = () => {
+    console.log('focusing nodeId', focusLastNode)
+    focusLastNode() // Call the focus function with the node ID you want to focus
+  }
+
+  return (
+    <button onClick={handleFocus}>Focus Node</button>
   )
 }
