@@ -3,7 +3,7 @@ import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
-import {MOCK_ISSUES} from '../net/github/Issues.fixture'
+import {MOCK_ISSUES, MOCK_ISSUE} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 import testEnvVars from '../../tools/jest/testEnvVars'
@@ -50,6 +50,7 @@ function gaHandlers() {
 /**
  * Static stubs GitHub orgs, repos, issues.
  *
+ * @param {object} githubStore todo implementation
  * @return {Array<object>} handlers
  */
 function githubHandlers() {
@@ -186,17 +187,18 @@ function githubHandlers() {
     rest.post(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
-      if (org !== 'bldrs-ai' || repo !== 'Share') {
+      if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
         return res(
-            ctx.status(httpNotFound),
-            ctx.json({
-              message: 'Not Found',
-            }),
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
         )
       }
 
       return res(
-          ctx.status(httpCreated),
+        ctx.status(httpCreated),
+        ctx.json(MOCK_ISSUE),
       )
     }),
 
