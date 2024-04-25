@@ -22,7 +22,7 @@ run_cy_spec misc cypress/e2e/appStore,cypress/e2e/hide-feat,cypress/e2e/home,cyp
 
 # Then conventional
 for EPIC in create profile notes versions view ; do
-    SPECS="cypress/e2e/$EPIC-100"
+    SPECS="cypress/e2e/$EPIC"
     run_cy_spec $EPIC "$SPECS"
 done
 
