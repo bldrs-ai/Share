@@ -1,6 +1,6 @@
 #!/bin/bash
-yarn install
-yarn cy-build
+# yarn install
+# yarn cy-build
 LOGS_DIR=cypress/e2e/logs
 mkdir -p $LOGS_DIR
 
@@ -21,7 +21,7 @@ echo "Running cypress specs in parallel..."
 run_cy_spec misc cypress/e2e/appStore,cypress/e2e/hide-feat,cypress/e2e/home,cypress/e2e/ifc-model,cypress/e2e/integration
 
 # Then conventional
-for EPIC in create profile notes versions view ; do
+for EPIC in create-100 open notes-100 profile-100 versions-100 view-100 ; do
     SPECS="cypress/e2e/$EPIC"
     run_cy_spec $EPIC "$SPECS"
 done
