@@ -172,7 +172,7 @@ export default function NoteCard({
 
 
   return (
-    <Card elevation={1}>
+    <Card elevation={1} data-testid='note-card'>
       {isNote ?
        <CardHeader
          title={title}
