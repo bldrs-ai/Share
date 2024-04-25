@@ -6,7 +6,7 @@ import Notes from './Notes'
 import {MOCK_NOTES} from './Notes.fixture'
 
 
-describe('Notes Control', () => {
+describe('Notes', () => {
   beforeEach(async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(() => {
