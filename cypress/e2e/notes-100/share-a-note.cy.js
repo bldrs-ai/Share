@@ -31,7 +31,7 @@ describe('notes-100: Share a note', () => {
           expect(url.hash).to.eq('#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:2')
         })
 
-        cy.get('.MuiSnackbarContent-message > .css-1xhj18k').contains('The url path is copied to the clipboard')
+        cy.get('[data-testid="snackbar"]').contains('The url path is copied to the clipboard')
         cy.percySnapshot()
       })
     })
