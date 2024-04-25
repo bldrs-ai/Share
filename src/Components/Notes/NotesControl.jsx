@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useEffect} from 'react'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
@@ -38,7 +39,9 @@ export default function NotesControl() {
     //
     // We detect we're in a delayed load state here by checking model first,
     // which then doesn't touch octokit until later when auth is available.
+
     if (!model) {
+      console.log('in the return')
       return
     }
     (async () => {
@@ -46,6 +49,7 @@ export default function NotesControl() {
       try {
         const newNotes = []
         let issueIndex = 0
+        console.log('in the loop to fetch the notes')
         const issueArr = await getIssues(repository, accessToken)
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 

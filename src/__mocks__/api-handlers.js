@@ -61,9 +61,10 @@ function githubHandlers(githubStore) {
 
       if (!((org === 'pablo-mayrgundter' && repo === 'Share') ||
       (org === 'cypresstester' && repo === 'test-repo'))) {
+        console.log('not the right repo')
         return res(ctx.status(httpNotFound))
       }
-      console.log('in the get issues')
+      console.log('in the get')
       return res(
           ctx.status(httpOk),
           ctx.json(MOCK_ISSUES.data),
