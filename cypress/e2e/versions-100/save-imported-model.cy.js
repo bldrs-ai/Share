@@ -19,8 +19,9 @@ describe('Versions 100: Save model', () => {
       beforeEach(auth0Login)
 
       it('Save button visible, User inputs details and saves - Screens', () => {
+        const percyLabelPrefix = 'Versions 100: Save Model,'
         cy.findByTitle('Save', {timeout: 5000}).should('exist')
-        cy.percySnapshot()
+        cy.percySnapshot(`${percyLabelPrefix} save button visible`)
 
         cy.findByTitle('Save', {timeout: 5000}).should('exist').click({force: true})
         cy.findByLabelText('Organization', {timeout: 5000}).click()
@@ -28,13 +29,13 @@ describe('Versions 100: Save model', () => {
         cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()
         cy.contains('test-repo').click()
         cy.findByLabelText('Enter file name').click().type('save-model-test.ifc')
-        cy.percySnapshot()
+        cy.percySnapshot(`${percyLabelPrefix} form filled`)
 
         cy.contains('button', 'Save model').click()
         const animWaitTimeMs = 2000
         // eslint-disable-next-line cypress/no-unnecessary-waiting
         cy.wait(animWaitTimeMs)
-        cy.percySnapshot()
+        cy.percySnapshot(`${percyLabelPrefix} model visible after save`)
       })
     })
   })
