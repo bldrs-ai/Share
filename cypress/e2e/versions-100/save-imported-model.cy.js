@@ -1,36 +1,32 @@
-
 import '@percy/cypress'
 import {waitForModel, homepageSetup, auth0Login} from '../../support/utils'
 
 
-describe('save model', () => {
-  context('when no model is loaded', () => {
-    beforeEach(() => {
-      homepageSetup()
-      cy.setCookie('isFirstTime', '1')
-    })
+describe('Versions 100: Save Model', () => {
+  beforeEach(() => {
+    homepageSetup()
+    cy.setCookie('isFirstTime', '1')
+    cy.visit('/')
+  })
 
-    it('should not find Save IFC button before login', () => {
-      cy.visit('/')
+  context('Visit homepage without model loaded', () => {
+    it('Check absence of Save IFC button pre-login', () => {
       waitForModel()
       cy.findByTestId('Save', {timeout: 10000}).should('not.exist')
       cy.percySnapshot()
     })
 
-     it('should only find Save IFC button after login', () => {
-      cy.visit('/')
+    it('Confirm presence of Save IFC button post-login', () => {
       waitForModel()
-      cy.findByTitle('Save', {timeout: 5000}).should('not.exist')
       auth0Login()
       cy.findByTitle('Save', {timeout: 5000}).should('exist')
-
       cy.percySnapshot()
     })
+  })
 
-     it.only('should log in and save a model', () => {
-      cy.visit('/')
+  context('Save model action', () => {
+    it('Login, click Save IFC button, input details and save', () => {
       waitForModel()
-      cy.findByTitle('Save', {timeout: 5000}).should('not.exist')
       auth0Login()
       cy.findByTitle('Save', {timeout: 5000}).should('exist').click({force: true})
       cy.findByLabelText('Organization', {timeout: 5000}).click()
