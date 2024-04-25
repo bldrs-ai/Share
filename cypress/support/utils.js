@@ -102,6 +102,7 @@ export function auth0Login() {
   cy.log('simulating login')
   cy.get('[data-testid="login-with-github"]').click()
   cy.contains('span', 'Log out').should('exist')
+  cy.get('[data-testid="control-button-profile"]').realClick()
 }
 
 

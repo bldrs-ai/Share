@@ -29,16 +29,22 @@ function mockGetAccessTokenSilently(options) {
 
 /* eslint-enable jsdoc/no-undefined-types*/
 
-const mockGitHubUser = {
+export const mockGitHubUser = {
   name: 'Unit Testing',
-  nickname: 'testing',
+  nickname: 'cypresstester',
   picture: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAAAAACPAi4CAAAAwUlEQVR42u3VLQvCUBTGcT/LX6vMjyAIliVhYLELmgSzRbALA0EUVix' +
       'GQUEmFkG2riiO813EF+5Y8040nSed54ZfOOGegnyZggIKKKCAAj8DpnBOW4WhSINM3P8D8eGRBQTPIbYGXglhnXMHCihgD8zhlDaHkS2whMiUpIhvC0QQmLKBlS0gVTwzt' +
       '3Fu1sAEBu9xTLqCzwFpgetvj/tZE7wkB3Dtms+nc5EcgEjYq5VLTr2/yzxaAHqZFFBAAQXy5g5KPEV7KOa7LAAAAABJRU5ErkJggg==',
-  email: 'testing@example.com',
+  updated_at: '2024-02-20T02:57:40.324Z',
+  email: 'cypresstest@bldrs.ai',
   email_verified: true,
-  sub: 'github|1234567',
-  updated_at: '2023-02-22T17:07:29.123Z',
+  iss: 'https://bldrs.us.auth0.com.msw/',
+  aud: 'cypresstestaudience',
+  iat: 0,
+  exp: 0,
+  sub: 'github|11111111',
+  sid: 'cypresssession-abcdef',
+  nonce: 'testnonce',
 }
 
 /**
@@ -46,6 +52,7 @@ const mockGitHubUser = {
  */
 function mockLoginWithPopup() {
   MockAuth0Context._currentValue.isAuthenticated = true
+  MockAuth0Context._currentValue.user = mockGitHubUser
 }
 
 /**
@@ -56,7 +63,7 @@ function mockLogout() {
 }
 
 // Mock implementation of Auth0Context
-const MockAuth0Context = React.createContext({
+export const MockAuth0Context = React.createContext({
   error: undefined,
   isAuthenticated: false,
   isLoading: false,
