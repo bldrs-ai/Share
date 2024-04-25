@@ -89,6 +89,7 @@ export default function Notes() {
     <List
       spacing={1}
       sx={isMobile ? {paddingBottom: '100px'} : {}}
+      data-testid='list-notes'
     >
       {isLoadingNotes && !isCreateNoteVisible && <Loader type={'linear'}/>}
       {notes && notes.length === 0 && !isCreateNoteVisible && !isLoadingNotes && <NoContent/>}

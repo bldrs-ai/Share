@@ -16,4 +16,4 @@ cypress/e2e/logs
 *.log
 *~
 \#*
-
+.\#*
