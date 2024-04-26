@@ -41,7 +41,6 @@ export default function NotesControl() {
     // which then doesn't touch octokit until later when auth is available.
 
     if (!model) {
-      console.log('in the return')
       return
     }
     (async () => {
@@ -49,7 +48,6 @@ export default function NotesControl() {
       try {
         const newNotes = []
         let issueIndex = 0
-        console.log('in the loop to fetch the notes')
         const issueArr = await getIssues(repository, accessToken)
         debug().log('Notes#useEffect: issueArr: ', issueArr)
 

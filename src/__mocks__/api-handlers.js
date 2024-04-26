@@ -1,4 +1,4 @@
-/* eslint-disable no-console */
+/* eslint-disable no-magic-numbers */
 import {rest} from 'msw'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
