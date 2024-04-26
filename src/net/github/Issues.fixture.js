@@ -197,49 +197,38 @@ export const MOCK_ISSUE = {
   state_reason: null,
 }
 
+export const createMockIssues = (issueID, org, repo, issueBody, issueTitle, numberOfIssues) => {
+  const issues = []
 
-export const createMockIssue = (issueID, org, repo) => {
-  return (
-    {
-      url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385',
-      repository_url: 'https://api.github.com/repos/pablo-mayrgundter/Share',
-      labels_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385/labels{/name}',
-      comments_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385/comments',
-      events_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385/events',
-      html_url: 'https://github.com/pablo-mayrgundter/Share/issues/385',
-      id: 2263954358,
-      node_id: 'I_kwDOFwgxOc6G8TO2',
-      number: 385,
-      title: 'hi',
+  for (let i = 0; i < numberOfIssues; i++) {
+    const indexedIssueID = issueID + i
+    const indexedTitle = `${issueTitle} ${i + 1}`
+    const indexedBody = `${issueBody} ${i + 1}`
+
+    const issue = {
+      url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}`,
+      repository_url: `https://api.github.com/repos/${org}/${repo}`,
+      labels_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/labels{/name}`,
+      comments_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/comments`,
+      events_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/events`,
+      html_url: `https://github.com/${org}/${repo}/issues/${indexedIssueID}`,
+      id: indexedIssueID,
+      node_id: `I_kwDOFwgxOc6G8TO${i}`,
+      number: indexedIssueID,
+      title: indexedTitle,
       user: {
         login: 'OlegMoshkovich',
         id: 3433606,
         node_id: 'MDQ6VXNlcjM0MzM2MDY=',
         avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-        gravatar_id: '',
         url: 'https://api.github.com/users/OlegMoshkovich',
         html_url: 'https://github.com/OlegMoshkovich',
-        followers_url: 'https://api.github.com/users/OlegMoshkovich/followers',
-        following_url: 'https://api.github.com/users/OlegMoshkovich/following{/other_user}',
-        gists_url: 'https://api.github.com/users/OlegMoshkovich/gists{/gist_id}',
-        starred_url: 'https://api.github.com/users/OlegMoshkovich/starred{/owner}{/repo}',
-        subscriptions_url: 'https://api.github.com/users/OlegMoshkovich/subscriptions',
-        organizations_url: 'https://api.github.com/users/OlegMoshkovich/orgs',
-        repos_url: 'https://api.github.com/users/OlegMoshkovich/repos',
-        events_url: 'https://api.github.com/users/OlegMoshkovich/events{/privacy}',
-        received_events_url: 'https://api.github.com/users/OlegMoshkovich/received_events',
-        type: 'User',
-        site_admin: false,
       },
-      labels: [
-
-      ],
+      labels: [],
       state: 'open',
       locked: false,
       assignee: null,
-      assignees: [
-
-      ],
+      assignees: [],
       milestone: null,
       comments: 0,
       created_at: '2024-04-25T15:55:25Z',
@@ -247,10 +236,10 @@ export const createMockIssue = (issueID, org, repo) => {
       closed_at: null,
       author_association: 'NONE',
       active_lock_reason: null,
-      body: 'hi',
+      body: indexedBody,
       closed_by: null,
       reactions: {
-        'url': 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385/reactions',
+        'url': `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/reactions`,
         'total_count': 0,
         '+1': 0,
         '-1': 0,
@@ -261,11 +250,13 @@ export const createMockIssue = (issueID, org, repo) => {
         'rocket': 0,
         'eyes': 0,
       },
-      timeline_url: 'https://api.github.com/repos/pablo-mayrgundter/Share/issues/385/timeline',
+      timeline_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/timeline`,
       performed_via_github_app: null,
       state_reason: null,
     }
-  )
+    issues.push(issue)
+  }
+  return issues
 }
 
 export const MOCK_ISSUES_EMPTY = {data: []}

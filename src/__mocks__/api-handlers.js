@@ -1,10 +1,10 @@
-/* eslint-disable no-console */
+/* eslint-disable no-magic-numbers */
 import {rest} from 'msw'
 import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
-import {MOCK_ISSUES, createMockIssue} from '../net/github/Issues.fixture'
+import {createMockIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 import testEnvVars from '../../tools/jest/testEnvVars'
@@ -61,13 +61,11 @@ function githubHandlers(githubStore) {
 
       if (!((org === 'pablo-mayrgundter' && repo === 'Share') ||
       (org === 'cypresstester' && repo === 'test-repo'))) {
-        console.log('not the right repo')
         return res(ctx.status(httpNotFound))
       }
-      console.log('in the get')
       return res(
           ctx.status(httpOk),
-          ctx.json(MOCK_ISSUES.data),
+          ctx.json(createMockIssues(123, 'pablo-mayrgundter', 'Share', 'issueTitle', 'issueBody', 4)),
       )
     }),
 
@@ -199,7 +197,7 @@ function githubHandlers(githubStore) {
 
       return res(
         ctx.status(httpCreated),
-        ctx.json(createMockIssue()),
+        ctx.json(createMockIssues(123, 'pablo-mayrgundter', 'Share', 'issueTitle', 'issueBody', 1)),
       )
     }),
 
