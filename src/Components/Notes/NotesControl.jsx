@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {ReactElement, useEffect} from 'react'
 import {getIssues} from '../../net/github/Issues'
 import useStore from '../../store/useStore'
@@ -39,7 +38,6 @@ export default function NotesControl() {
     //
     // We detect we're in a delayed load state here by checking model first,
     // which then doesn't touch octokit until later when auth is available.
-
     if (!model) {
       return
     }
