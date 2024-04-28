@@ -2,6 +2,8 @@ import '@percy/cypress'
 import {
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
+  setCookieAndVisitHome,
+  waitForModel,
 } from '../../support/utils'
 
 
@@ -17,6 +19,9 @@ describe('select-a-note', () => {
       cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('issueBody_4').click()
       cy.get('.MuiCardHeader-title').contains('issueTitle_4')
       cy.get('[data-testid="Open in Github"]')
+    })
+  })
+})
 /** {@link https://github.com/bldrs-ai/Share/issues/1056} */
 describe('Notes 100: Select a note', () => {
   beforeEach(homepageSetup)
