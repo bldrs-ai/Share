@@ -177,7 +177,7 @@ export const MOCK_ISSUES = {
   ],
 }
 
-export const createMockIssues = (issueID, org, repo, issueBody, issueTitle, numberOfIssues) => {
+export const createMockIssues = (issueID, org, repo, issueTitle, issueBody, numberOfIssues) => {
   const issues = []
 
 /**
