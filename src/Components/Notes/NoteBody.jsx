@@ -14,7 +14,7 @@ export default function NoteBody({selectCard, markdownContent}) {
       onClick={selectCard}
       disableRipple
       disableTouchRipple
-      data-testid='card-body'
+      data-testid='note-body'
     >
       <NoteContent markdownContent={markdownContent}/>
     </CardActionArea>

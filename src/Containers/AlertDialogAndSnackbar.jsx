@@ -64,6 +64,7 @@ export default function AlertAndSnackbar() {
             <IconButton onClick={() => setIsSnackOpen(false)}><CloseIcon className='icon-share'/></IconButton>
           </Stack>
         }
+        data-testid='snackbar'
       />
     </>
   )

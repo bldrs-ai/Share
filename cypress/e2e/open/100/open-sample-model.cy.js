@@ -3,11 +3,11 @@ import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
-} from '../../support/utils'
+} from '../../../support/utils'
 import {
-  setupInterceptForGhModel,
+  setupVirtualPathIntercept,
   waitForModelReady,
-} from '../../support/models'
+} from '../../../support/models'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/757} */
@@ -28,7 +28,11 @@ describe('Open 100: Open Sample Model', () => {
     context('Choose one of the projects from the list', () => {
       const interceptTag = 'ghModelLoad'
       beforeEach(() => {
-        setupInterceptForGhModel(interceptTag)
+        setupVirtualPathIntercept(
+          '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
+          '/Momentum.ifc',
+          interceptTag,
+        )
         cy.findByText('Momentum').click()
       })
 

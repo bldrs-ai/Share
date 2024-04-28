@@ -1,18 +1,20 @@
-
 /**
- * Setup intercept proxy access as @loadMomentum for:
+ * Setup intercept for virtual paths in share.  There will also be an
+ * interceptTag created for the bounce page as `${interceptTag}-bounce`
  *
- *   https://github.com/Swiss-Property-AG/Momentum-Public/blob/main/Momentum.ifc
- *
- * @param {string} tag Like 'loadMomentum'
+ * @param {string} path Like /bldrs-ai/test-models/blob/main/step/gear.step.ifc
+ * @param {string} tag Like 'loadGear'
  */
-export function setupInterceptForGhModel(tag) {
-  cy.intercept(
-    'GET',
-    'https://rawgit.bldrs.dev.msw/r/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
-    {fixture: '/Momentum.ifc'},
-  )
-    .as(tag)
+export function setupVirtualPathIntercept(path, fixturePath, interceptTag) {
+  const sharePrefix = '/share/v/gh'
+  if (!path.startsWith(sharePrefix)) {
+    throw new Error(`Path must start with ${sharePrefix}`)
+  }
+  cy.intercept('GET', `${path}`, {fixture: '404.html'})
+    .as(`${interceptTag}-bounce`)
+  const ghPath = path.substring(sharePrefix.length)
+  cy.intercept('GET', `https://rawgit.bldrs.dev.msw/r${ghPath}`, {fixture: fixturePath})
+    .as(interceptTag)
 }
 
 
