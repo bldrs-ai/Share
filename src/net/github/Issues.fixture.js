@@ -131,13 +131,13 @@ export const MOCK_ISSUES = {
   ],
 }
 
-export const createMockIssues = (issueID, org, repo, issueBody, issueTitle, numberOfIssues) => {
+export const createMockIssues = (issueID, org, repo, issueTitle, issueBody, numberOfIssues) => {
   const issues = []
 
   for (let i = 0; i < numberOfIssues; i++) {
     const indexedIssueID = issueID + i
-    const indexedTitle = `${issueTitle} ${i + 1}`
-    const indexedBody = `${issueBody} ${i + 1}`
+    const indexedTitle = `${issueTitle}_${i + 1}`
+    const indexedBody = `${issueBody}_${i + 1}`
 
     const issue = {
       url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}`,

@@ -75,7 +75,7 @@ describe('Notes', () => {
     await act(() => {
       result.current.setSelectedNoteId(Number(extractedNoteId))
     })
-    expect(await findByText('Test Comment 1')).toBeVisible()
-    expect(await findByText('Test Comment 2')).toBeVisible()
+    expect(await findByText('testComment_1')).toBeVisible()
+    expect(await findByText('testComment_2')).toBeVisible()
   })
 })

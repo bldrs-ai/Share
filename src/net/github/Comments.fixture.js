@@ -33,7 +33,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `Test Comment 1`,
+      body: `testComment_1`,
       reactions: {
         'url': `${GITHUB_BASE_URL}/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions`,
         'total_count': 0,
@@ -78,7 +78,7 @@ export const MOCK_COMMENTS = {
       created_at: '2022-06-02T14:31:04Z',
       updated_at: '2022-06-08T08:18:43Z',
       author_association: 'NONE',
-      body: `Test Comment 2`,
+      body: `testComment_2`,
       reactions: {
         'url': `${GITHUB_BASE_URL}/repos/pablo-mayrgundter/Share/issues/comments/1144935479/reactions`,
         'total_count': 0,

@@ -21,9 +21,9 @@ describe('notes-100: Share a note', () => {
         cy.get('[data-testid="control-button-notes"]').click()
         cy.get('[data-testid="panelTitle"]').contains('NOTES')
         cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root')
-          .contains('Test Issue body')
+          .contains('issueBody_4')
           .click()
-        cy.get('.MuiCardHeader-title').contains('Local issue 2')
+        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
       })
 
       context('Click share in note footer', () => {
@@ -46,7 +46,7 @@ describe('notes-100: Share a note', () => {
             const clipboardText = stub.getCall(0).args[0] // Retrieve the first argument of the first call
             const url = new URL(clipboardText)
             expect(url.pathname).to.eq('/share/v/p/index.ifc')
-            expect(url.hash).to.eq('#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:2')
+            expect(url.hash).to.eq('#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;i:126')
           })
         })
       })

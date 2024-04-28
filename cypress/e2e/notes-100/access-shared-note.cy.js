@@ -22,7 +22,7 @@ describe('Notes 100 - Access shared note', () => {
   })
   context('Returning user accessing share through the link that contains specific NOTE PREFIX', () => {
     beforeEach(() => {
-      cy.visit('/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:2')
+      cy.visit('/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:126')
       waitForModel()
     })
       it('Panel title to contain NOTE string', () => {
@@ -32,10 +32,10 @@ describe('Notes 100 - Access shared note', () => {
         cy.get('[data-testid="Back to the list"]').should('exist')
       })
       it('Shared note to be visible', () => {
-        cy.get('.MuiList-root > :nth-child(1) > .MuiCardContent-root').contains('Test Issue body')
+        cy.get('.MuiList-root > :nth-child(1) > .MuiCardContent-root').contains('issueBody_4')
       })
-      it('Notes comments to be visible', () => {
-        cy.get(':nth-child(2) > .MuiPaper-root > .MuiCardContent-root').contains('Test Comment 1')
+      it.only('Notes comments to be visible', () => {
+        cy.get(':nth-child(2) > .MuiPaper-root > .MuiCardContent-root > p').contains('testComment_1')
       })
   })
 })
