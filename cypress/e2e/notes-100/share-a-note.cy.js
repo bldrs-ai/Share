@@ -1,38 +1,55 @@
-import {waitForModel, homepageSetup, setCookieAndVisitHome} from '../../support/utils'
+import '@percy/cypress'
+import {
+  homepageSetup,
+  setIsReturningUser,
+  visitHomepageWaitForModel,
+} from '../../support/utils'
 
 
-describe('select-a-note', () => {
-  context('Open index.ifc and notes', () => {
+/** @see https://github.com/bldrs-ai/Share/issues/1071 */
+describe('notes-100: Share a note', () => {
+  beforeEach(homepageSetup)
+
+  context('Visit model', () => {
     beforeEach(() => {
-      homepageSetup()
+      setIsReturningUser()
+      visitHomepageWaitForModel()
     })
-    it('The list of notes is updated to display only the selected note', () => {
-      setCookieAndVisitHome()
-      waitForModel()
-      cy.get('[data-testid="control-button-notes"]').click()
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('issueBody_4').click()
-      cy.get('.MuiCardHeader-title').contains('issueTitle_4')
-    })
-    it('A list of comments attached to the note to be visible', () => {
-      setCookieAndVisitHome()
-      waitForModel()
-      cy.get('[data-testid="control-button-notes"]').click()
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('issueBody_4').click()
-      cy.get(':nth-child(2) > .MuiPaper-root > .MuiCardContent-root > p').contains('testComment_1')
-    })
-    it('The title on the navbar changes to NOTE', () => {
-      setCookieAndVisitHome()
-      waitForModel()
-      cy.get('[data-testid="control-button-notes"]').click()
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('issueBody_4').click()
-      cy.get('.css-1oum0wi > .css-8lgfcg > :nth-child(1) > .css-95g4uk > [data-testid="panelTitle"]').should('have.text', 'NOTE')
-    })
-    it('Back to the list button to be visible on the navbar', () => {
-      setCookieAndVisitHome()
-      waitForModel()
-      cy.get('[data-testid="control-button-notes"]').click()
-      cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root').contains('issueBody_4').click()
-      cy.get('[data-testid="Back to the list"]')
+
+    context('Open notes, select first', () => {
+      beforeEach(() => {
+        cy.get('[data-testid="control-button-notes"]').click()
+        cy.get('[data-testid="panelTitle"]').contains('NOTES')
+        cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root')
+          .contains('issueBody_4')
+          .click()
+        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
+      })
+
+      context('Click share in note footer', () => {
+        beforeEach(() => {
+          cy.window().then((win) => {
+            cy.stub(win.navigator.clipboard, 'writeText').as('clipboardSpy')
+              .resolves()
+          })
+          cy.get('.MuiCardActions-root > [data-testid="Share"] > .icon-share').click()
+          cy.get('@clipboardSpy').should('have.been.calledOnce')
+        })
+
+        it('SnackBar informs link copied - Screen', () => {
+          cy.get('.MuiSnackbarContent-message > .css-1xhj18k').contains('The url path is copied to the clipboard')
+          cy.percySnapshot()
+        })
+
+        it('Link has model path, issue id, current camera', () => {
+          cy.get('@clipboardSpy').then((stub) => {
+            const clipboardText = stub.getCall(0).args[0] // Retrieve the first argument of the first call
+            const url = new URL(clipboardText)
+            expect(url.pathname).to.eq('/share/v/p/index.ifc')
+            expect(url.hash).to.eq('#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;i:126')
+          })
+        })
+      })
     })
   })
 })
