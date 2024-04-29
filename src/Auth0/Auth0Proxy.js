@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {useContext} from 'react'
 import {useAuth0 as useAuth0Original} from '@auth0/auth0-react'
 
@@ -85,7 +86,8 @@ export const MockAuth0Context = React.createContext({
  */
 export const useAuth0 = () => {
   const useMock = OAUTH_2_CLIENT_ID === 'cypresstestaudience'
-
+  console.log('useMock from AuthO', useMock)
+  console.log('MockAuth0Context', MockAuth0Context)
   if (useMock) {
     // eslint-disable-next-line react-hooks/rules-of-hooks
     return useContext(MockAuth0Context)

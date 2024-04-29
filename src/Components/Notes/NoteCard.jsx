@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useState, useEffect} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
@@ -170,6 +171,9 @@ export default function NoteCard({
     setEditMode(false)
   }
 
+  console.log('nickname', username)
+  console.log('user', user)
+  // console.log('user.nickname', user.nickname)
 
   return (
     <Card elevation={1} data-testid='note-card'>
@@ -179,7 +183,7 @@ export default function NoteCard({
          avatar={<Avatar alt={username} src={avatarUrl}/>}
          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
          action={
-           synched && user && user.nickname === username &&
+          //  user && user.nickname === username &&
              <NoteMenu
                onEditClick={() => setEditMode(true)}
                onDeleteClick={() => onDeleteClick(noteNumber)}
