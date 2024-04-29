@@ -15,7 +15,7 @@ describe('edit a note', () => {
       auth0Login()
     })
     it('Correct project to be loaded into the viewport and side drawer to be open - Screen', () => {
-      // cy.get('[data-testid="panelTitle"]').contains('NOTES')
+        cy.get('[data-testid="control-button-notes"]').click()
       })
   })
 })
