@@ -183,7 +183,7 @@ export default function NoteCard({
          avatar={<Avatar alt={username} src={avatarUrl}/>}
          subheader={`${username} at ${dateParts[0]} ${dateParts[1]}`}
          action={
-          //  user && user.nickname === username &&
+           user && user.nickname === username &&
              <NoteMenu
                onEditClick={() => setEditMode(true)}
                onDeleteClick={() => onDeleteClick(noteNumber)}
