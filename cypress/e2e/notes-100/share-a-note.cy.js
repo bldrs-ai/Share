@@ -20,10 +20,9 @@ describe('notes-100: Share a note', () => {
       beforeEach(() => {
         cy.get('[data-testid="control-button-notes"]').click()
         cy.get('[data-testid="panelTitle"]').contains('NOTES')
-        cy.get(':nth-child(1) > .MuiPaper-root > [data-testid="card-body"] > .MuiCardContent-root')
+        cy.get(':nth-child(1) > [data-testid="note-card"] > [data-testid="note-body"] > .MuiCardContent-root > p')
           .contains('issueBody_4')
           .click()
-        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
       })
 
       context('Click share in note footer', () => {
