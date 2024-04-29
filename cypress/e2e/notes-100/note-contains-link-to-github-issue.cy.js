@@ -4,8 +4,13 @@ import {
   returningUserVisitsHomepageWaitForModel,
 } from '../../support/utils'
 
+<<<<<<< HEAD
 /** {@link https://github.com/bldrs-ai/Share/issues/1056} */
 describe('Notes 100: Note contains link to GitHub', () => {
+=======
+
+describe('Notes 100: Select a note', () => {
+>>>>>>> 8add23a5 (revert github test)
   beforeEach(homepageSetup)
   context('Returning user visits homepage', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
