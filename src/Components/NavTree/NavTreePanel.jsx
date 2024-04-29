@@ -1,6 +1,5 @@
-import React, {ReactElement, useContext, useEffect, useState} from 'react'
+import React, {ReactElement, useEffect, useState} from 'react'
 import TreeView from '@mui/lab/TreeView'
-import TreeViewContext from '@mui/lab/TreeView/TreeViewContext'
 import ToggleButton from '@mui/material/ToggleButton'
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup'
 import Tooltip from '@mui/material/Tooltip'
@@ -43,21 +42,38 @@ export default function NavTreePanel({
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
-  const [navigationMode, setNavigationMode] = useState('spatial-tree')
+  const [navigationMode, setNavigationMode] = useState(true ? 'spatial-tree' : 'element-types')
+  const idToRef = {}
+
   const isNavTree = navigationMode === 'spatial-tree'
 
   const theme = useTheme()
 
+  // TODO(pablo): major perf hit?
   useEffect(() => {
-    console.log('selectedElements:', selectedElements)
-  }, [selectedElements])
+    const nodeId = selectedElements[0]
+    console.log('NavTreePanel#useEffect#selectedElements, nodeId', nodeId)
+    if (nodeId) {
+      const ref = idToRef[nodeId]
+      if (ref && ref.current) {
+        ref.current.scrollIntoView({
+          // behavior: 'smooth',
+          block: 'center',
+        })
+      } else {
+        // TODO(pablo)
+        // console.warn('no ref for nodeId', nodeId, ref, idToRef)
+      }
+    }
+  }, [selectedElements, idToRef])
+
 
   return (
     <Panel
       title='Navigation'
       onCloseClick={() => setIsNavTreeVisible(false)}
       action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
-      sx={{height: '200px', m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
+      sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
@@ -67,9 +83,6 @@ export default function NavTreePanel({
         expanded={isNavTree ? expandedElements : expandedTypes}
         selected={selectedElements}
         multiSelect={true}
-        onNodeSelect={(event, nodes) => {
-          console.log('onNodeSelect, nodes:', nodes)
-        }}
         onNodeToggle={(event, nodeIds) => {
           if (isNavTree) {
             setExpandedElements(nodeIds)
@@ -81,7 +94,7 @@ export default function NavTreePanel({
         sx={{
           'padding': '7px 0 14px 0',
           'maxWidth': '400px',
-          'overflowY': 'auto',
+          'overflowY': 'scroll',
           'overflowX': 'hidden',
           'flexGrow': 1,
           'backgroundColor': theme.palette.secondary.main,
@@ -90,20 +103,24 @@ export default function NavTreePanel({
           },
         }}
       >
-        <MyTreeItemComponent/>
         {isNavTree ? (
           <NavTree
+            keyId='nav-tree-root'
             model={model}
             element={rootElement}
             pathPrefix={pathPrefix}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
+            idToRef={idToRef}
           />
         ) : (
           <TypesNavTree
+            keyId='types-nav-tree-root'
             model={model}
+            element={rootElement}
             types={elementTypesMap}
             pathPrefix={pathPrefix}
             selectWithShiftClickEvents={selectWithShiftClickEvents}
+            idToRef={idToRef}
           />
         )}
       </TreeView>
@@ -149,19 +166,5 @@ function Actions({navigationMode, setNavigationMode}) {
         </ToggleButton>
       </Tooltip>
     </StyledToggleButtonGroup>
-  )
-}
-
-/** @return {ReactElement} */
-function MyTreeItemComponent({nodeId}) {
-  const {focusLastNode} = useContext(TreeViewContext)
-
-  const handleFocus = () => {
-    console.log('focusing nodeId', focusLastNode)
-    focusLastNode() // Call the focus function with the node ID you want to focus
-  }
-
-  return (
-    <button onClick={handleFocus}>Focus Node</button>
   )
 }
