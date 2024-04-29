@@ -22,3 +22,5 @@ Bldrs is open source and we'd appreciate your help.
 - [Projects](https://github.com/orgs/bldrs-ai/projects?query=is%3Aopen&type=beta)
 - [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design)
 - [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Dev:-Guide)
+
+[![This project is using Percy.io for visual regression testing.](https://percy.io/static/images/percy-badge.svg)](https://percy.io/8fe2b2f1/share)
