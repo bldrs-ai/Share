@@ -237,8 +237,10 @@ export function getComponentOverrides(palette, typography) {
       },
       variants: [{
         props: {variant: 'control'},
-        style: {
-        },
+        style: {},
+      }, {
+        props: {variant: 'small'},
+        style: {border: 'solid 3px red'},
       }],
     },
   }

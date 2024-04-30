@@ -19,6 +19,10 @@ export default {
    */
   expansionIcon: PropTypes.node,
   /**
+   * Determines if the tree node has a hide icon.
+   */
+  isExpandable: PropTypes.bool.isRequired,
+  /**
    * The icon to display next to the tree node's label.
    */
   icon: PropTypes.node,
@@ -34,4 +38,8 @@ export default {
    * Determines if the tree node has a hide icon.
    */
   hasHideIcon: PropTypes.bool,
+  /**
+   * Multi-select callback
+   */
+  selectWithShiftClickEvents: PropTypes.func.isRequired,
 }

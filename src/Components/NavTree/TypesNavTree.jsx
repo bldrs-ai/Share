@@ -1,8 +1,9 @@
-import React, {ReactElement, RefObject, forwardRef, useRef} from 'react'
+import React, {ReactElement, RefObject, forwardRef} from 'react'
+import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
+import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
 import CustomContent from './CustomContent'
-import NavTree from './NavTree'
 import PropTypes from './PropTypes'
 
 
@@ -25,45 +26,47 @@ export default function TypesNavTree({
   idToRef,
 }) {
   assertDefined(keyId, model, types, pathPrefix, selectWithShiftClickEvents, idToRef)
+
+  const viewer = useStore((state) => state.viewer)
+
   const customContentRef = forwardRef(CustomContent)
   customContentRef.propTypes = PropTypes
 
-  const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={customContentRef} {...props}/>
-  }
-
-  // TODO(pablo): total hack to support scrollIntoView behavior.  See
-  // NavTreePanel#useEffect[selectedElts] for use.
-  const itemRef = useRef(null)
-  const itemId = `type-root`
+  const CustomTreeItem = (props) => <TreeItem ContentComponent={customContentRef} {...props}/>
 
   let i = 0
   return types.map((type) =>
     <CustomTreeItem
-      key={keyId}
-      nodeId={itemId}
+      key={`${keyId}-${i++}`}
+      nodeId={type.name}
       label={type.name}
       ContentProps={{
         isExpandable: true,
+        selectWithShiftClickEvents: selectWithShiftClickEvents,
+        idToRef: idToRef,
       }}
       data-testid={keyId}
     >
-      <div ref={itemRef}/>
-      {type.elements && type.elements.length > 0 ?
-       type.elements.map((e) => {
-         const childKeyId = `${pathPrefix}-${i++}`
-         return (
-           <NavTree
-             key={childKeyId}
-             keyId={childKeyId}
-             model={model}
-             element={e}
-             pathPrefix={pathPrefix}
-             selectWithShiftClickEvents={selectWithShiftClickEvents}
-             idToRef={idToRef}
-           />
-         )
-       }) : null
+      {
+        type.elements && type.elements.length > 0 ?
+          type.elements.map((elt) => {
+            const childKeyId = `${pathPrefix}-${i++}`
+            const hasHideIcon = viewer.isolator.canBeHidden(elt.expressID)
+            return (
+              <CustomTreeItem
+                key={childKeyId}
+                nodeId={elt.expressID.toString()}
+                label={reifyName({properties: model}, elt)}
+                ContentProps={{
+                  hasHideIcon: hasHideIcon,
+                  isExpandable: false,
+                  selectWithShiftClickEvents: selectWithShiftClickEvents,
+                  idToRef: idToRef,
+                }}
+              />
+            )
+          }) :
+          null
       }
     </CustomTreeItem>)
 }

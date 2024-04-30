@@ -37,7 +37,9 @@ describe('TypesNavTree', () => {
         <ShareMock>
           <TypesNavTree
             keyId='test'
-            model={{/** mock */}}
+            model={{
+              getIfcType: jest.fn(),
+            }}
             pathPrefix={'/share/v/p/index.ifc'}
             types={newMockTypes(testLabel, testType)}
             selectWithShiftClickEvents={jest.fn()}

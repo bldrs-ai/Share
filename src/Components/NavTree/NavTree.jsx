@@ -1,4 +1,4 @@
-import React, {ReactElement, RefObject, forwardRef, useRef} from 'react'
+import React, {ReactElement, RefObject, forwardRef} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
 import useStore from '../../store/useStore'
@@ -25,34 +25,29 @@ export default function NavTree({
   idToRef,
 }) {
   assertDefined(keyId, model, pathPrefix, selectWithShiftClickEvents, idToRef)
+
   const customContentRef = forwardRef(CustomContent)
   customContentRef.propTypes = PropTypes
-
   const CustomTreeItem = (props) => <TreeItem ContentComponent={customContentRef} {...props}/>
 
+  const isExpandable = element.children && element.children.length > 0
   const viewer = useStore((state) => state.viewer)
   const hasHideIcon = viewer.isolator.canBeHidden(element.expressID)
 
-  // TODO(pablo): total hack to support scrollIntoView behavior.  See
-  // NavTreePanel#useEffect[selectedElts] for use.
-  const itemRef = useRef(null)
-  const nodeId = element.expressID.toString()
-  idToRef[nodeId] = itemRef
-
   let i = 0
-
   return (
     <CustomTreeItem
       key={keyId}
-      nodeId={nodeId}
+      nodeId={element.expressID.toString()}
       label={reifyName({properties: model}, element)}
       ContentProps={{
         hasHideIcon: hasHideIcon,
-        isExpandable: element.children && element.children.length > 0,
+        isExpandable: isExpandable,
+        selectWithShiftClickEvents: selectWithShiftClickEvents,
+        idToRef: idToRef,
       }}
       data-testid={keyId}
     >
-      <div ref={itemRef}/>
       {element.children && element.children.length > 0 ?
         element.children.map((child) => {
           const childKeyId = `${pathPrefix}-${i++}`

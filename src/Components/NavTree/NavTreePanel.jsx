@@ -99,25 +99,25 @@ export default function NavTreePanel({
           },
         }}
       >
-        {isNavTree ? (
-          <NavTree
-            keyId='nav-tree-root'
-            model={model}
-            element={rootElement}
-            pathPrefix={pathPrefix}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-            idToRef={idToRef}
-          />
-        ) : (
-          <TypesNavTree
-            keyId='types-nav-tree-root'
-            model={model}
-            types={elementTypesMap}
-            pathPrefix={pathPrefix}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
-            idToRef={idToRef}
-          />
-        )}
+        {
+          isNavTree ?
+            <NavTree
+              keyId='nav-tree-root'
+              model={model}
+              element={rootElement}
+              pathPrefix={pathPrefix}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
+              idToRef={idToRef}
+            /> :
+            <TypesNavTree
+              keyId='types-nav-tree-root'
+              model={model}
+              types={elementTypesMap}
+              pathPrefix={pathPrefix}
+              selectWithShiftClickEvents={selectWithShiftClickEvents}
+              idToRef={idToRef}
+            />
+        }
       </TreeView>
     </Panel>
   )
@@ -126,12 +126,6 @@ export default function NavTreePanel({
 
 /** @return {ReactElement} */
 function Actions({navigationMode, setNavigationMode}) {
-  const onTreeViewChanged = (event, value) => {
-    if (value !== null) {
-      setNavigationMode(value)
-    }
-  }
-
   const StyledToggleButtonGroup = styled(ToggleButtonGroup)(() => ({
     '& .MuiToggleButtonGroup-grouped': {
       'border': 0,
@@ -141,25 +135,23 @@ function Actions({navigationMode, setNavigationMode}) {
       },
     },
   }))
-
   return (
     <StyledToggleButtonGroup
       value={navigationMode}
-      onChange={onTreeViewChanged}
-      id='togglegrp'
-      size='small'
+      onChange={(event, value) => setNavigationMode(value)}
       exclusive
+      size='small'
     >
-      <Tooltip title='Spatial Structure' placement='top' describeChild>
-        <ToggleButton value='spatial-tree' aria-label='spatial-tree'>
+      <ToggleButton value='spatial-tree' aria-label='spatial-tree' size='small'>
+        <Tooltip title='Spatial Structure' placement='top' describeChild>
           <AccountTreeIcon className='icon-share'/>
-        </ToggleButton>
-      </Tooltip>
-      <Tooltip title='Element Types' placement='top' describeChild>
-        <ToggleButton value='element-types' aria-label='element-types'>
+        </Tooltip>
+      </ToggleButton>
+      <ToggleButton value='element-types' aria-label='element-types' size='small'>
+        <Tooltip title='Element Types' placement='top' describeChild>
           <ListIcon className='icon-share'/>
-        </ToggleButton>
-      </Tooltip>
+        </Tooltip>
+      </ToggleButton>
     </StyledToggleButtonGroup>
   )
 }
