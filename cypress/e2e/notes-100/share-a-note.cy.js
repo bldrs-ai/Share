@@ -28,7 +28,7 @@ describe('notes-100: Share a note', () => {
           const clipboardText = stub.getCall(0).args[0] // Retrieve the first argument of the first call
           const url = new URL(clipboardText)
           expect(url.pathname).to.eq('/share/v/p/index.ifc')
-          expect(url.hash).to.eq('#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;i:126')
+          expect(url.hash).to.eq('#c:-73.467,127.432,94,-27.69,7.071,1.331;i:126')
         })
 
         cy.get('[data-testid="snackbar"]').contains('The url path is copied to the clipboard')
