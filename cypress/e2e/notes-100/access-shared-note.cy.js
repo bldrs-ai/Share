@@ -32,10 +32,10 @@ describe('Notes 100 - Access shared note', () => {
         cy.get('[data-testid="Back to the list"]').should('exist')
       })
       it('Shared note to be visible', () => {
-        cy.get('.MuiList-root > :nth-child(1) > .MuiCardContent-root').contains('issueBody_4')
+        cy.get('[data-testid="list-notes"] > :nth-child(1) > [data-testid="note-card"] p').contains('issueBody_4')
       })
       it.only('Notes comments to be visible', () => {
-        cy.get(':nth-child(2) > .MuiPaper-root > .MuiCardContent-root > p').contains('testComment_1')
+        cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
       })
   })
 })
