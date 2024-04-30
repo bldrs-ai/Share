@@ -77,7 +77,7 @@ describe('NavTree', () => {
     expect(viewer.isolator.hideElementsById).toHaveBeenLastCalledWith([ifcElementMock.expressID])
   })
 
-  it.skip('should select element on click', async () => {
+  it('should select element on click', async () => {
     const selectElementsMock = jest.fn()
     const testLabel = 'Test node label'
     const ifcElementMock = newMockStringValueElt(testLabel)

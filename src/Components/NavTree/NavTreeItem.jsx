@@ -46,6 +46,10 @@ export default function CustomContent(props, ref) {
 
   idToRef[nodeId] = ref
 
+  // TODO(pablo): the following uses a measured value of 30px width for the
+  // visiblity icon, to compute widths for a straight column layout of all of
+  // the icons.  Thifs should either be an imported value or find a better way to
+  // do the layout
   return (
     <Box
       className={clsx(className, classes.root, {
@@ -75,7 +79,7 @@ export default function CustomContent(props, ref) {
           <Typography variant='tree'>{label}</Typography>
         </Box>
         {hasHideIcon &&
-         <Box display='flex' sx={{display: 'contents', width: '30px', border: 'solid 1px blue'}}>
+         <Box display='flex' sx={{display: 'contents', width: '30px'}}>
            <HideToggleButton elementId={parseInt(nodeId)}/>
          </Box>
         }

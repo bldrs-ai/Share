@@ -3,7 +3,7 @@ import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import CustomContent from './CustomContent'
+import NavTreeItem from './NavTreeItem'
 import PropTypes from './PropTypes'
 
 
@@ -29,10 +29,10 @@ export default function TypesNavTree({
 
   const viewer = useStore((state) => state.viewer)
 
-  const customContentRef = forwardRef(CustomContent)
-  customContentRef.propTypes = PropTypes
+  const navTreeItemRef = forwardRef(NavTreeItem)
+  navTreeItemRef.propTypes = PropTypes
 
-  const CustomTreeItem = (props) => <TreeItem ContentComponent={customContentRef} {...props}/>
+  const CustomTreeItem = (props) => <TreeItem ContentComponent={navTreeItemRef} {...props}/>
 
   let i = 0
   return types.map((type) =>

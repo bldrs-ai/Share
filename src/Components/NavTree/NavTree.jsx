@@ -3,7 +3,7 @@ import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
 import useStore from '../../store/useStore'
 import {assertDefined} from '../../utils/assert'
-import CustomContent from './CustomContent'
+import NavTreeItem from './NavTreeItem'
 import PropTypes from './PropTypes'
 
 
@@ -26,9 +26,9 @@ export default function NavTree({
 }) {
   assertDefined(keyId, model, pathPrefix, selectWithShiftClickEvents, idToRef)
 
-  const customContentRef = forwardRef(CustomContent)
-  customContentRef.propTypes = PropTypes
-  const CustomTreeItem = (props) => <TreeItem ContentComponent={customContentRef} {...props}/>
+  const navTreeItemRef = forwardRef(NavTreeItem)
+  navTreeItemRef.propTypes = PropTypes
+  const CustomTreeItem = (props) => <TreeItem ContentComponent={navTreeItemRef} {...props}/>
 
   const isExpandable = element.children && element.children.length > 0
   const viewer = useStore((state) => state.viewer)
