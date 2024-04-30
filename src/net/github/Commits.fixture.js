@@ -2,7 +2,7 @@ const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL
 
 
 export const MOCK_COMMITS = [{
-  sha: 'testsha',
+  sha: 'testsha1testsha1testsha1testsha1testsha1',
   node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
   commit: {
     author: {
@@ -17,7 +17,7 @@ export const MOCK_COMMITS = [{
     },
     message: 'First Commit',
     tree: {
-      sha: '123',
+      sha: 'testsha1testsha1testsha1testsha1testsha1',
       url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b`,
     },
     url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c`,
@@ -81,7 +81,7 @@ export const MOCK_COMMITS = [{
   ],
 },
 {
-  sha: 'testsha2',
+  sha: 'testsha2testsha2testsha2testsha2testsha2',
   node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
   commit: {
     author: {
@@ -96,7 +96,7 @@ export const MOCK_COMMITS = [{
     },
     message: 'Second Commit',
     tree: {
-      sha: '123',
+      sha: 'testsha2testsha2testsha2testsha2testsha2',
       url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b`,
     },
     url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c`,
@@ -160,7 +160,7 @@ export const MOCK_COMMITS = [{
   ],
 },
 {
-  sha: 'testsha3',
+  sha: 'testsha3testsha3testsha3testsha3testsha3',
   node_id: 'C_kwDOIC6VB9oAKDg5OGViYzQ0MGFhNjBjOGQ3ZTcwNGJlYWQ2MzM0MjQwMGE1NjdiOWM',
   commit: {
     author: {
@@ -175,7 +175,7 @@ export const MOCK_COMMITS = [{
     },
     message: 'Third Commit',
     tree: {
-      sha: '123',
+      sha: 'testsha3testsha3testsha3testsha3testsha3',
       url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/trees/ab6f0517905f88b158c05fbb7578c34c239fba9b`,
     },
     url: `${GITHUB_BASE_URL}/repos/user2/Momentum-Public/git/commits/898ebc440aa60c8d7e704bead63342400a567b9c`,

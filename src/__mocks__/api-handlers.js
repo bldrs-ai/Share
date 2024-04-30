@@ -83,9 +83,9 @@ function githubHandlers() {
             repo === 'Momentum-Public' &&
             path === 'Momentum.ifc' &&
             (ref === 'main' ||
-             ref === 'testsha' ||
-             ref === 'testsha2' ||
-             ref === 'testsha3'))) {
+             ref === 'testsha1testsha1testsha1testsha1testsha1' ||
+             ref === 'testsha2testsha2testsha2testsha2testsha2' ||
+             ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
         const downloadUrl = (org === 'cypresstester') ? '/index.ifc' :
           `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
 
