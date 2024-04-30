@@ -20,10 +20,11 @@ describe('Versions 100: Show a specific version', () => {
      beforeEach(auth0Login)
 
       const interceptTag = 'ghModelLoad'
-      const versionInterceptTag = 'ghVersionLoad'
+      const firstVersionInterceptTag = 'ghFirstVersionLoad'
+      const secondVersionInterceptTag = 'ghSecondVersionLoad'
+      const thirdVersionInterceptTag = 'ghThirdVersionLoad'
 
       it('Open Momentum.ifc, open versions component and select a version', () => {
-        const percyLabelPrefix = 'Versions 100: Show a specific version,'
         cy.get('[data-testid="control-button-open"]').click()
         cy.get('[data-testid="textfield-sample-projects"]').click()
 
@@ -38,7 +39,21 @@ describe('Versions 100: Show a specific version', () => {
         setupVirtualPathIntercept(
             '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha/Momentum.ifc',
             '/Momentum.ifc',
-            versionInterceptTag,
+            firstVersionInterceptTag,
+          )
+
+        // set up versioned momentum.ifc load (testsha2 commit)
+        setupVirtualPathIntercept(
+            '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha2/Momentum.ifc',
+            '/Momentum.ifc',
+            secondVersionInterceptTag,
+          )
+
+        // set up versioned momentum.ifc load (testsha3 commit)
+        setupVirtualPathIntercept(
+            '/share/v/gh/Swiss-Property-AG/Momentum-Public/testsha3/Momentum.ifc',
+            '/Momentum.ifc',
+            thirdVersionInterceptTag,
           )
 
         cy.findByText('Momentum').click()
@@ -47,9 +62,21 @@ describe('Versions 100: Show a specific version', () => {
         cy.get('[data-testid="control-button-versions"]').click()
         cy.get('.MuiTimeline-root > .MuiTimelineItem-root:nth-child(1)').as('firstTimelineItem')
         cy.get('@firstTimelineItem').click()
-        waitForModelReady(versionInterceptTag)
+        waitForModelReady(firstVersionInterceptTag)
 
-        cy.percySnapshot(`${percyLabelPrefix} model visible after version click`)
+        // second commit version test
+        cy.get('[data-testid="control-button-versions"]').click()
+        cy.get('.MuiTimeline-root > .MuiTimelineItem-root:nth-child(2)').as('secondTimelineItem')
+        cy.get('@secondTimelineItem').click()
+        waitForModelReady(secondVersionInterceptTag)
+
+        // third commit version test
+        cy.get('[data-testid="control-button-versions"]').click()
+        cy.get('.MuiTimeline-root > .MuiTimelineItem-root:nth-child(3)').as('thirdTimelineItem')
+        cy.get('@thirdTimelineItem').click()
+        waitForModelReady(thirdVersionInterceptTag)
+
+        cy.percySnapshot()
       })
     })
   })
