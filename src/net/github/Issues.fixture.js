@@ -1,5 +1,44 @@
 const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL
 
+export const sampleIssues = [
+  {
+    id: '123',
+    title: 'issueTitle_1',
+    body: `issueBody_1. Lorem ipsum dolor sit amet, consectetur adipiscing
+    elit. Sed ac dolor sit amet purus malesuada congue. Nullam at arcu a
+    est sollicitudin euismod. Integer malesuada. Praesent blandit odio eu
+    enim. Pellentesque sed dui ut augue blandit sodales. Curabitur dictum
+    gravida mauris nam arcu libero, nonummy eget.
+    [bot-the-bldr image](https://github.com/OlegMoshkovich/Bldrs_Plaza/assets/3433606/1a6ecf3a-7422-4b8e-a895-2895051d53ae)
+    `,
+  },
+  {
+    id: '124',
+    title: 'issueTitle_2',
+    body: `issueBody_2. Lorem ipsum dolor sit amet, consectetur adipiscing
+    elit. Nam dui ligula, fringilla a, euismod sodales, sollicitudin vel,
+    wisi. Morbi auctor lorem non justo. Nam lacus libero, pretium at,
+    lobortis vitae, ultricies et, tellus. Donec aliquet, tortor sed
+    accumsan bibendum.`,
+  },
+  {
+    id: '125',
+    title: 'issueTitle_3',
+    body: `issueBody_3. Lorem ipsum dolor sit amet, consectetur adipiscing
+    elit. Quisque tincidunt scelerisque libero. Maecenas libero. Aliquam
+    erat volutpat. Etiam posuere lacus quis dolor. Mauris elementum mauris
+    vitae tortor. In hac habitasse platea dictumst.`,
+  },
+  {
+    id: '126',
+    title: 'issueTitle_4',
+    body: `issueBody_4. Lorem ipsum dolor sit amet, consectetur adipiscing
+    elit. Fusce tellus odio, dapibus id fermentum quis, suscipit id erat.
+    Pellentesque ipsum. Nulla pulvinar eleifend sem. Nullam varius, turpis
+    et commodo pharetra, est eros bibendum elit, nec luctus magna felis
+    sollicitudin mauris. Integer in mauris eu nibh euismod gravida.`,
+  },
+]
 
 export const MOCK_ISSUES = {
   data: [
@@ -131,124 +170,66 @@ export const MOCK_ISSUES = {
   ],
 }
 
-export const createMockIssues = (issueID, org, repo, issueTitle, issueBody, numberOfIssues) => {
-  const issues = []
 
-  for (let i = 0; i < numberOfIssues; i++) {
-    const indexedIssueID = issueID + i
-    const indexedTitle = `${issueTitle}_${i + 1}`
-    const indexedBody = `${issueBody}_${i + 1}`
-
-    const issue = {
-      url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}`,
-      repository_url: `https://api.github.com/repos/${org}/${repo}`,
-      labels_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/labels{/name}`,
-      comments_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/comments`,
-      events_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/events`,
-      html_url: `https://github.com/${org}/${repo}/issues/${indexedIssueID}`,
-      id: indexedIssueID,
-      node_id: `I_kwDOFwgxOc6G8TO${i}`,
-      number: indexedIssueID,
-      title: indexedTitle,
-      user: {
-        login: 'OlegMoshkovich',
-        id: 3433606,
-        node_id: 'MDQ6VXNlcjM0MzM2MDY=',
-        avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-        url: 'https://api.github.com/users/OlegMoshkovich',
-        html_url: 'https://github.com/OlegMoshkovich',
-      },
-      labels: [],
-      state: 'open',
-      locked: false,
-      assignee: null,
-      assignees: [],
-      milestone: null,
-      comments: 0,
-      created_at: '2024-04-25T15:55:25Z',
-      updated_at: '2024-04-25T15:55:25Z',
-      closed_at: null,
-      author_association: 'NONE',
-      active_lock_reason: null,
-      body: indexedBody,
-      closed_by: null,
-      reactions: {
-        'url': `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/reactions`,
-        'total_count': 0,
-        '+1': 0,
-        '-1': 0,
-        'laugh': 0,
-        'hooray': 0,
-        'confused': 0,
-        'heart': 0,
-        'rocket': 0,
-        'eyes': 0,
-      },
-      timeline_url: `https://api.github.com/repos/${org}/${repo}/issues/${indexedIssueID}/timeline`,
-      performed_via_github_app: null,
-      state_reason: null,
-    }
-    issues.push(issue)
-  }
-  return issues
-}
-
-export const createMockIssuesNew = ( org, repo, issuesInfo) => {
-  const issues = issuesInfo.map((issueInfo, index) => {
-    return (
-      {
-        url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}`,
-        repository_url: `https://api.github.com/repos/${org}/${repo}`,
-        labels_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/labels{/name}`,
-        comments_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/comments`,
-        events_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/events`,
-        html_url: `https://github.com/${org}/${repo}/issues/${issueInfo.id}`,
-        id: issueInfo.id,
-        node_id: `I_kwDOFwgxOc6G8TO${issueInfo.id}`,
-        number: index,
-        title: issueInfo.Title,
-        user: {
-          login: 'OlegMoshkovich',
-          id: 3433606,
-          node_id: 'MDQ6VXNlcjM0MzM2MDY=',
-          avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
-          url: 'https://api.github.com/users/OlegMoshkovich',
-          html_url: 'https://github.com/OlegMoshkovich',
-        },
-        labels: [],
-        state: 'open',
-        locked: false,
-        assignee: null,
-        assignees: [],
-        milestone: null,
-        comments: 0,
-        created_at: '2024-04-25T15:55:25Z',
-        updated_at: '2024-04-25T15:55:25Z',
-        closed_at: null,
-        author_association: 'NONE',
-        active_lock_reason: null,
-        body: issueInfo.body,
-        closed_by: null,
-        reactions: {
-          'url': `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/reactions`,
-          'total_count': 0,
-          '+1': 0,
-          '-1': 0,
-          'laugh': 0,
-          'hooray': 0,
-          'confused': 0,
-          'heart': 0,
-          'rocket': 0,
-          'eyes': 0,
-        },
-        timeline_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/timeline`,
-        performed_via_github_app: null,
-        state_reason: null,
-      }
-
-    )
-  })
-  return issues
+/**
+ * Generates an array of mock GitHub issue objects.
+ * Each issue object is constructed using the provided organization, repository, and issue information.
+ *
+ * @param {string} org - The GitHub organization name.
+ * @param {string} repo - The GitHub repository name.
+ * @param {Array} issuesInfo - An array of objects containing information for each issue.
+ * @return {Array} An array of mock issue objects.
+ */
+export const createMockIssues = (org, repo, issuesInfo) => {
+  return issuesInfo.map((issueInfo, index) => ({
+    url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}`,
+    repository_url: `https://api.github.com/repos/${org}/${repo}`,
+    labels_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/labels{/name}`,
+    comments_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/comments`,
+    events_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/events`,
+    html_url: `https://github.com/${org}/${repo}/issues/${issueInfo.id}`,
+    id: issueInfo.id,
+    node_id: `I_kwDOFwgxOc6G8TO${issueInfo.id}`,
+    number: index,
+    title: issueInfo.title,
+    user: {
+      login: 'OlegMoshkovich',
+      id: 3433606,
+      node_id: 'MDQ6VXNlcjM0MzM2MDY=',
+      avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+      url: 'https://api.github.com/users/OlegMoshkovich',
+      html_url: 'https://github.com/OlegMoshkovich',
+    },
+    labels: [],
+    state: 'open',
+    locked: false,
+    assignee: null,
+    assignees: [],
+    milestone: null,
+    comments: 0,
+    created_at: '2024-04-25T15:55:25Z',
+    updated_at: '2024-04-25T15:55:25Z',
+    closed_at: null,
+    author_association: 'NONE',
+    active_lock_reason: null,
+    body: issueInfo.body,
+    closed_by: null,
+    reactions: {
+      'url': `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/reactions`,
+      'total_count': 0,
+      '+1': 0,
+      '-1': 0,
+      'laugh': 0,
+      'hooray': 0,
+      'confused': 0,
+      'heart': 0,
+      'rocket': 0,
+      'eyes': 0,
+    },
+    timeline_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/timeline`,
+    performed_via_github_app: null,
+    state_reason: null,
+  }))
 }
 
 
