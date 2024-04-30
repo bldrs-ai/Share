@@ -44,7 +44,7 @@ export default function VersionsTimeline({commitData, currentRef, commitNavigate
   const shaLength = 40
   const refIsSha = currentRef.length === shaLength
   return (
-    <Timeline>
+    <Timeline data-testid="timeline-list">
       {commitData.length === 0 && !showLoginMessage && <Loader/>}
       {showLoginMessage && (
         <NoContent message='Please log into GitHub to use the project timeline'/>)}

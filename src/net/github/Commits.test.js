@@ -6,7 +6,7 @@ import {
 describe('net/github/Commits', () => {
   it('get latest commit hash', async () => {
     const result = await getLatestCommitHash('testowner', 'testrepo', '', '', '')
-    expect(result).toEqual('testsha')
+    expect(result).toEqual('testsha1testsha1testsha1testsha1testsha1')
   })
 
   describe('get latest commit hash failure case', () => {
