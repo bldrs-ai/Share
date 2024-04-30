@@ -193,4 +193,63 @@ export const createMockIssues = (issueID, org, repo, issueTitle, issueBody, numb
   return issues
 }
 
+export const createMockIssuesNew = ( org, repo, issuesInfo) => {
+  const issues = issuesInfo.map((issueInfo, index) => {
+    return (
+      {
+        url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}`,
+        repository_url: `https://api.github.com/repos/${org}/${repo}`,
+        labels_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/labels{/name}`,
+        comments_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/comments`,
+        events_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/events`,
+        html_url: `https://github.com/${org}/${repo}/issues/${issueInfo.id}`,
+        id: issueInfo.id,
+        node_id: `I_kwDOFwgxOc6G8TO${issueInfo.id}`,
+        number: index,
+        title: issueInfo.Title,
+        user: {
+          login: 'OlegMoshkovich',
+          id: 3433606,
+          node_id: 'MDQ6VXNlcjM0MzM2MDY=',
+          avatar_url: 'https://avatars.githubusercontent.com/u/3433606?v=4',
+          url: 'https://api.github.com/users/OlegMoshkovich',
+          html_url: 'https://github.com/OlegMoshkovich',
+        },
+        labels: [],
+        state: 'open',
+        locked: false,
+        assignee: null,
+        assignees: [],
+        milestone: null,
+        comments: 0,
+        created_at: '2024-04-25T15:55:25Z',
+        updated_at: '2024-04-25T15:55:25Z',
+        closed_at: null,
+        author_association: 'NONE',
+        active_lock_reason: null,
+        body: issueInfo.body,
+        closed_by: null,
+        reactions: {
+          'url': `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/reactions`,
+          'total_count': 0,
+          '+1': 0,
+          '-1': 0,
+          'laugh': 0,
+          'hooray': 0,
+          'confused': 0,
+          'heart': 0,
+          'rocket': 0,
+          'eyes': 0,
+        },
+        timeline_url: `https://api.github.com/repos/${org}/${repo}/issues/${issueInfo.id}/timeline`,
+        performed_via_github_app: null,
+        state_reason: null,
+      }
+
+    )
+  })
+  return issues
+}
+
+
 export const MOCK_ISSUES_EMPTY = {data: []}
