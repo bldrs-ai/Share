@@ -10,6 +10,7 @@ export const sampleIssues = [
     enim. Pellentesque sed dui ut augue blandit sodales. Curabitur dictum
     gravida mauris nam arcu libero, nonummy eget.
     [bot-the-bldr image](https://github.com/OlegMoshkovich/Bldrs_Plaza/assets/3433606/1a6ecf3a-7422-4b8e-a895-2895051d53ae)
+    - [cam 1](/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:123)
     `,
   },
   {
@@ -19,7 +20,9 @@ export const sampleIssues = [
     elit. Nam dui ligula, fringilla a, euismod sodales, sollicitudin vel,
     wisi. Morbi auctor lorem non justo. Nam lacus libero, pretium at,
     lobortis vitae, ultricies et, tellus. Donec aliquet, tortor sed
-    accumsan bibendum.`,
+    accumsan bibendum.
+    - [cam 2](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,-10,16.21,-3.48;i:2)
+    `,
   },
   {
     id: 125,
@@ -27,7 +30,9 @@ export const sampleIssues = [
     body: `issueBody_3. Lorem ipsum dolor sit amet, consectetur adipiscing
     elit. Quisque tincidunt scelerisque libero. Maecenas libero. Aliquam
     erat volutpat. Etiam posuere lacus quis dolor. Mauris elementum mauris
-    vitae tortor. In hac habitasse platea dictumst.`,
+    vitae tortor. In hac habitasse platea dictumst.
+    - [cam 3](http://localhost:8080/share/v/p/index.ifc#c:-26.91,28.84,112.47,0,16.21,-3.48;i:2)
+    `,
   },
   {
     id: 126,
@@ -36,7 +41,9 @@ export const sampleIssues = [
     elit. Fusce tellus odio, dapibus id fermentum quis, suscipit id erat.
     Pellentesque ipsum. Nulla pulvinar eleifend sem. Nullam varius, turpis
     et commodo pharetra, est eros bibendum elit, nec luctus magna felis
-    sollicitudin mauris. Integer in mauris eu nibh euismod gravida.`,
+    sollicitudin mauris. Integer in mauris eu nibh euismod gravida.
+    - [cam 1](/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:123)
+    `,
   },
 ]
 
