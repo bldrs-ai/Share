@@ -6,6 +6,6 @@ if [ -z "$PERCY_TOKEN" ]; then
   exit 1
 fi
 
-yarn cy-build && yarn percy exec -- yarn cy
+yarn cy-build && yarn percy exec -- yarn cy $@
 
 echo "Add the above percy URL to your PR description, with any notes about differences."
