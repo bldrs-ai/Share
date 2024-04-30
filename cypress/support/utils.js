@@ -45,9 +45,16 @@ export function homepageSetup() {
 
 
 /** Sets state for returning user and visit homepage */
-export function setCookieAndVisitHome() {
+export function returningUserVisitsHomepage() {
   setIsReturningUser()
   visitHomepage()
+}
+
+
+/** Same as returningUserVisitsHomepage, but waitForModel too */
+export function returningUserVisitsHomepageWaitForModel() {
+  returningUserVisitsHomepage()
+  waitForModel()
 }
 
 
@@ -102,6 +109,7 @@ export function auth0Login() {
   cy.log('simulating login')
   cy.get('[data-testid="login-with-github"]').click()
   cy.contains('span', 'Log out').should('exist')
+  cy.get('[data-testid="control-button-profile"]').realClick()
 }
 
 

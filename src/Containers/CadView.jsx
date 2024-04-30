@@ -422,7 +422,7 @@ export default function CadView({
     setDblClickListener()
     setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
-    const rootProps = await viewer.getProperties(0, rootElt.expressID)
+    const rootProps = await viewer.getProperties(0, rootElt.expressID) || {Name: 'Model', LongName: 'Model'}
     rootElt.Name = rootProps.Name
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)

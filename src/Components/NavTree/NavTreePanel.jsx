@@ -42,7 +42,8 @@ export default function NavTreePanel({
   const setExpandedElements = useStore((state) => state.setExpandedElements)
   const setExpandedTypes = useStore((state) => state.setExpandedTypes)
 
-  const [navigationMode, setNavigationMode] = useState(true ? 'spatial-tree' : 'element-types')
+  const [navigationMode, setNavigationMode] = useState('spatial-tree')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const idToRef = {}
 
   const isNavTree = navigationMode === 'spatial-tree'
@@ -52,17 +53,12 @@ export default function NavTreePanel({
   // TODO(pablo): major perf hit?
   useEffect(() => {
     const nodeId = selectedElements[0]
-    console.log('NavTreePanel#useEffect#selectedElements, nodeId', nodeId)
     if (nodeId) {
       const ref = idToRef[nodeId]
-      if (ref && ref.current) {
-        ref.current.scrollIntoView({
-          // behavior: 'smooth',
+      if (typeof ref?.current?.scrollIntoView === 'function') {
+        ref?.current?.scrollIntoView({
           block: 'center',
         })
-      } else {
-        // TODO(pablo)
-        // console.warn('no ref for nodeId', nodeId, ref, idToRef)
       }
     }
   }, [selectedElements, idToRef])
@@ -116,7 +112,6 @@ export default function NavTreePanel({
           <TypesNavTree
             keyId='types-nav-tree-root'
             model={model}
-            element={rootElement}
             types={elementTypesMap}
             pathPrefix={pathPrefix}
             selectWithShiftClickEvents={selectWithShiftClickEvents}

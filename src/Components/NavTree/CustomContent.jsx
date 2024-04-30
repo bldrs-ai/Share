@@ -17,6 +17,7 @@ export default function CustomContent(props, ref) {
     expansionIcon,
     displayIcon,
     hasHideIcon,
+    isExpandable,
   } = props
 
   const {
@@ -52,12 +53,14 @@ export default function CustomContent(props, ref) {
       onMouseDown={handleMouseDown}
       ref={ref}
     >
-      <Box
-        onClick={handleExpansionClick}
-        sx={{margin: '0px 14px'}}
-      >
-        {icon}
-      </Box>
+      {isExpandable &&
+       <Box
+         onClick={handleExpansionClick}
+         sx={{margin: '0px 14px'}}
+       >
+         {icon}
+       </Box>
+      }
       <div style={{width: '300px'}}>
         <Typography
           variant='tree'

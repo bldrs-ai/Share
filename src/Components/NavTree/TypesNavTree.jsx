@@ -1,5 +1,6 @@
 import React, {ReactElement, RefObject, forwardRef, useRef} from 'react'
 import TreeItem from '@mui/lab/TreeItem'
+import {assertDefined} from '../../utils/assert'
 import CustomContent from './CustomContent'
 import NavTree from './NavTree'
 import PropTypes from './PropTypes'
@@ -18,12 +19,12 @@ import PropTypes from './PropTypes'
 export default function TypesNavTree({
   keyId,
   model,
-  element,
   types,
   pathPrefix,
   selectWithShiftClickEvents,
   idToRef,
 }) {
+  assertDefined(keyId, model, types, pathPrefix, selectWithShiftClickEvents, idToRef)
   const customContentRef = forwardRef(CustomContent)
   customContentRef.propTypes = PropTypes
 
@@ -34,9 +35,7 @@ export default function TypesNavTree({
   // TODO(pablo): total hack to support scrollIntoView behavior.  See
   // NavTreePanel#useEffect[selectedElts] for use.
   const itemRef = useRef(null)
-  const nodeId = element.expressID.toString()
-  const itemId = `type-${nodeId}`
-  idToRef[itemId] = itemRef
+  const itemId = `type-root`
 
   let i = 0
   return types.map((type) =>
@@ -45,8 +44,9 @@ export default function TypesNavTree({
       nodeId={itemId}
       label={type.name}
       ContentProps={{
-        hasHideIcon: type.elements && type.elements.length > 0,
+        isExpandable: true,
       }}
+      data-testid={keyId}
     >
       <div ref={itemRef}/>
       {type.elements && type.elements.length > 0 ?
@@ -54,6 +54,7 @@ export default function TypesNavTree({
          const childKeyId = `${pathPrefix}-${i++}`
          return (
            <NavTree
+             key={childKeyId}
              keyId={childKeyId}
              model={model}
              element={e}
@@ -66,5 +67,3 @@ export default function TypesNavTree({
       }
     </CustomTreeItem>)
 }
-
-

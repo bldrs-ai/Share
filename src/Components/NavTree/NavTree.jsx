@@ -2,6 +2,7 @@ import React, {ReactElement, RefObject, forwardRef, useRef} from 'react'
 import {reifyName} from '@bldrs-ai/ifclib'
 import TreeItem from '@mui/lab/TreeItem'
 import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
 import CustomContent from './CustomContent'
 import PropTypes from './PropTypes'
 
@@ -23,6 +24,7 @@ export default function NavTree({
   selectWithShiftClickEvents,
   idToRef,
 }) {
+  assertDefined(keyId, model, pathPrefix, selectWithShiftClickEvents, idToRef)
   const customContentRef = forwardRef(CustomContent)
   customContentRef.propTypes = PropTypes
 
@@ -38,14 +40,15 @@ export default function NavTree({
   idToRef[nodeId] = itemRef
 
   let i = 0
-  console.log(`NavTree, nodeId(${nodeId}) keyId(${keyId})`)
+
   return (
     <CustomTreeItem
       key={keyId}
-      nodeId={`nav-${nodeId}`}
+      nodeId={nodeId}
       label={reifyName({properties: model}, element)}
       ContentProps={{
         hasHideIcon: hasHideIcon,
+        isExpandable: element.children && element.children.length > 0,
       }}
       data-testid={keyId}
     >
@@ -54,8 +57,8 @@ export default function NavTree({
         element.children.map((child) => {
           const childKeyId = `${pathPrefix}-${i++}`
           return (
-            <div key={childKeyId}>
             <NavTree
+              key={childKeyId}
               keyId={childKeyId}
               model={model}
               element={child}
@@ -63,7 +66,6 @@ export default function NavTree({
               selectWithShiftClickEvents={selectWithShiftClickEvents}
               idToRef={idToRef}
             />
-            </div>
           )
         }) :
         null}
