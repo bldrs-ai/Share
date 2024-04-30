@@ -1,24 +1,22 @@
 import '@percy/cypress'
 import {
   homepageSetup,
-  setIsReturningUser,
-  visitHomepageWaitForModel,
+  returningUserVisitsHomepageWaitForModel,
 } from '../../support/utils'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1043} */
 describe('view 100: Shareable camera position', () => {
-  beforeEach(() => {
-    homepageSetup()
-    setIsReturningUser()
-  })
+  beforeEach(homepageSetup)
+
 
   context('User visits homepage, positions camera, clicks ShareControl', () => {
     beforeEach(() => {
-      visitHomepageWaitForModel()
+      returningUserVisitsHomepageWaitForModel()
       // TODO(pablo): can't move model
       cy.get('[data-testid="control-button-share"]').click()
     })
+
 
     it('ShareDialog opens - Screen', () => {
       cy.get('[data-testid="img-qrcode"]').should('exist')
