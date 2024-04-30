@@ -42,16 +42,11 @@ describe('Versions 100: Show a specific version', () => {
           )
 
         cy.findByText('Momentum').click()
-
         waitForModelReady(interceptTag)
 
-
         cy.get('[data-testid="control-button-versions"]').click()
-
         cy.get('.MuiTimeline-root > .MuiTimelineItem-root:nth-child(1)').as('firstTimelineItem')
-
         cy.get('@firstTimelineItem').click()
-
         waitForModelReady(versionInterceptTag)
 
         cy.percySnapshot(`${percyLabelPrefix} model visible after version click`)

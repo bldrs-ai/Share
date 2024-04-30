@@ -83,6 +83,9 @@ function githubHandlers() {
       repo === 'Momentum-Public' &&
       path === 'Momentum.ifc' &&
       (ref === 'main' || ref === 'testsha'))) {
+        const downloadUrl = (org === 'cypresstester') ? '/index.ifc' :
+        `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
+
         return res(
           ctx.status(httpOk),
           ctx.json({
@@ -93,7 +96,7 @@ function githubHandlers() {
             url: 'https://api.github.com/repos/cypresstester/test-repo/contents/test-model.ifc?ref=main',
             html_url: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
             git_url: 'https://api.github.com/repos/cypresstester/test-repo/git/blobs/1fc13089c8851fd9c5d39cda54788823a8606564',
-            download_url: `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`,
+            download_url: downloadUrl,
             type: 'file',
             content: 'dGVzdCBkYXRh\n',
             encoding: 'base64',
