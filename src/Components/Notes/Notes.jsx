@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import React, {ReactElement, useEffect, useState} from 'react'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
@@ -34,6 +35,7 @@ export default function Notes() {
   const {user} = useAuth0()
   const isMobile = useIsMobile()
 
+  // this is the problem - selectedNote is not set
   const selectedNote =
         (notes && selectedNoteId) ?
         notes.filter((issue) => issue.id === selectedNoteId)[0] :
