@@ -2,7 +2,7 @@ const GITHUB_BASE_URL = process.env.GITHUB_BASE_URL
 
 export const sampleIssues = [
   {
-    id: '123',
+    id: 123,
     title: 'issueTitle_1',
     body: `issueBody_1. Lorem ipsum dolor sit amet, consectetur adipiscing
     elit. Sed ac dolor sit amet purus malesuada congue. Nullam at arcu a
@@ -13,7 +13,7 @@ export const sampleIssues = [
     `,
   },
   {
-    id: '124',
+    id: 124,
     title: 'issueTitle_2',
     body: `issueBody_2. Lorem ipsum dolor sit amet, consectetur adipiscing
     elit. Nam dui ligula, fringilla a, euismod sodales, sollicitudin vel,
@@ -22,7 +22,7 @@ export const sampleIssues = [
     accumsan bibendum.`,
   },
   {
-    id: '125',
+    id: 125,
     title: 'issueTitle_3',
     body: `issueBody_3. Lorem ipsum dolor sit amet, consectetur adipiscing
     elit. Quisque tincidunt scelerisque libero. Maecenas libero. Aliquam
@@ -30,7 +30,7 @@ export const sampleIssues = [
     vitae tortor. In hac habitasse platea dictumst.`,
   },
   {
-    id: '126',
+    id: 126,
     title: 'issueTitle_4',
     body: `issueBody_4. Lorem ipsum dolor sit amet, consectetur adipiscing
     elit. Fusce tellus odio, dapibus id fermentum quis, suscipit id erat.
