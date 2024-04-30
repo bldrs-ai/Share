@@ -79,15 +79,15 @@ function githubHandlers() {
       const ref = req.url.searchParams.get('ref')
 
       if ((org === 'cypresstester') ||
-        (org === 'Swiss-Property-AG' &&
-        repo === 'Momentum-Public' &&
-        path === 'Momentum.ifc' &&
-          (ref === 'main' ||
-            ref === 'testsha' ||
-            ref === 'testsha2' ||
-            ref === 'testsha3'))) {
+           (org === 'Swiss-Property-AG' &&
+            repo === 'Momentum-Public' &&
+            path === 'Momentum.ifc' &&
+            (ref === 'main' ||
+             ref === 'testsha' ||
+             ref === 'testsha2' ||
+             ref === 'testsha3'))) {
         const downloadUrl = (org === 'cypresstester') ? '/index.ifc' :
-        `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
+          `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
 
         return res(
           ctx.status(httpOk),
