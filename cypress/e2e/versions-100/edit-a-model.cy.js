@@ -38,6 +38,7 @@ describe('Versions 100: Edit a specific version', () => {
         cy.contains('window.ifc').click()
         cy.contains('button', 'Load file').click()
         waitForModelReady(interceptTag)
+        cy.percySnapshot()
       })
 
       it('Overwrites model with a new model on GitHub', () => {
@@ -52,10 +53,9 @@ describe('Versions 100: Edit a specific version', () => {
         cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()
         cy.contains('test-repo').click()
         cy.findByLabelText('Enter file name').click().type('window.ifc')
-        // cy.percySnapshot(`${percyLabelPrefix} form filled`)
-
         cy.contains('button', 'Save model').click()
         waitForModelReady(overwriteVersionInterceptTag)
+        cy.percySnapshot()
       })
     })
   })

@@ -3,11 +3,11 @@ import {
   auth0Login,
   homepageSetup,
   returningUserVisitsHomepageWaitForModel,
-} from '../../support/utils'
+} from '../../../support/utils'
 import {
     setupVirtualPathIntercept,
     waitForModelReady,
-  } from '../../support/models'
+  } from '../../../support/models'
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1159}*/
@@ -20,7 +20,7 @@ describe('Open 100: Open model from GH via UI', () => {
       beforeEach(auth0Login)
 
       const interceptTag = 'ghOpenModelLoad'
-      it('Opens a model from Github', () => {
+      it('Opens a model from Github via the UI', () => {
         // set up initial index.ifc load
         setupVirtualPathIntercept(
           '/share/v/gh/cypresstester/test-repo/main/window.ifc',
