@@ -7,7 +7,11 @@ import Typography from '@mui/material/Typography'
 import HideToggleButton from '../HideToggleButton'
 
 
-/** @return {ReactElement} */
+/**
+ * @param {object} props CustomContent props provided via Mui TreeItem
+ * @param {object} ref
+ * @return {ReactElement}
+ */
 export default function CustomContent(props, ref) {
   const {
     classes,

@@ -8,6 +8,7 @@ import PropTypes from './PropTypes'
 
 
 /**
+ * @property {string} keyId Unique key
  * @property {object} model IFC model
  * @property {object} element Element in the model
  * @property {object} types Types to use in the model

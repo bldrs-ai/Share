@@ -5,6 +5,9 @@ import {getDescendantExpressIds} from '../utils/TreeUtils'
 /**
  * Select/Deselect items in the scene using shift+click
  *
+ * @param {object} viewer
+ * @param {Map<number,object>} elementsById Express elts by their expressID
+ * @param {Function} selectItemsInScene
  * @param {boolean} isShiftKeyDown the click event
  * @param {number} expressId the express id of the element
  */
