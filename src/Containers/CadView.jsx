@@ -6,7 +6,7 @@ import Typography from '@mui/material/Typography'
 import useTheme from '@mui/styles/useTheme'
 import {useAuth0} from '../Auth0/Auth0Proxy'
 import AboutControl from '../Components/About/AboutControl'
-import {removeCameraUrlParams, onHash} from '../Components/CameraControl'
+import {onHash} from '../Components/CameraControl'
 import ElementGroup from '../Components/ElementGroup'
 import HelpControl from '../Components/HelpControl'
 import {useIsMobile} from '../Components/Hooks'
@@ -18,8 +18,8 @@ import useStore from '../store/useStore'
 import {getLatestCommitHash} from '../net/github/Commits'
 // TODO(pablo): use ^^ instead of this
 import {parseGitHubPath} from '../utils/location'
-import {computeElementPathIds, setupLookupAndParentLinks} from '../utils/TreeUtils'
-import {assertDefined, assertNumber} from '../utils/assert'
+import {getParentPathIdsForElement, setupLookupAndParentLinks} from '../utils/TreeUtils'
+import {assertDefined} from '../utils/assert'
 import debug from '../utils/debug'
 import {handleBeforeUnload} from '../utils/event'
 import {groupElementsByTypes} from '../utils/ifc'
@@ -30,6 +30,7 @@ import AlertDialogAndSnackbar from './AlertDialogAndSnackbar'
 import ControlsGroupAndDrawer from './ControlsGroupAndDrawer'
 import OperationsGroupAndDrawer from './OperationsGroupAndDrawer'
 import ViewerContainer from './ViewerContainer'
+import {elementSelection} from './selection'
 import {getFinalUrl} from './urls'
 import {initViewer} from './viewer'
 
@@ -419,7 +420,7 @@ export default function CadView({
       throw new Error('Model has undefined root express ID')
     }
     setupLookupAndParentLinks(rootElt, elementsById)
-    setDblClickListener()
+    window.ondblclick = canvasDoubleClickHandler
     setKeydownListeners(viewer, selectItemsInScene)
     initSearch(m, rootElt)
     const rootProps = await viewer.getProperties(0, rootElt.expressID) || {Name: 'Model', LongName: 'Model'}
@@ -427,6 +428,19 @@ export default function CadView({
     rootElt.LongName = rootProps.LongName
     setRootElement(rootElt)
     setElementTypesMap(groupElementsByTypes(rootElt))
+  }
+
+
+  /** Handle double click event on canvas. */
+  async function canvasDoubleClickHandler(event) {
+    if (!event.target || event.target.tagName !== 'CANVAS') {
+      return
+    }
+    const item = await viewer.castRayToIfcScene()
+    if (!item) {
+      return
+    }
+    elementSelection(viewer, elementsById, selectItemsInScene, event.shiftKey, item.id)
   }
 
 
@@ -446,6 +460,7 @@ export default function CadView({
     debug().timeEnd('build searchIndex')
     onSearchParams()
   }
+
 
   /**
    * Search for the query in the index and select matching items in UI elts.
@@ -520,8 +535,8 @@ export default function CadView({
       setSelectedElements(resIds)
       // Sets the url to the last selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
-        const lastId = resultIDs.slice(-1)
-        const pathIds = getParentPathIdsForElement(parseInt(lastId))
+        const firstId = resultIDs.slice(0, 1)
+        const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
         const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
         const path = pathIds.join('/')
         navWith(
@@ -544,25 +559,6 @@ export default function CadView({
 
 
   /**
-   * Returns the ids of path parts from root to this elt in spatial
-   * structure.
-   *
-   * @param {number} expressId
-   * @return {Array} pathIds
-   */
-  function getParentPathIdsForElement(expressId) {
-    assertNumber(expressId)
-    const lookupElt = elementsById[expressId]
-    if (!lookupElt) {
-      debug().error(`CadView#getParentPathIdsForElement(${expressId}) missing in table:`, elementsById)
-      return undefined
-    }
-    const pathIds = computeElementPathIds(lookupElt, (elt) => elt.expressID)
-    return pathIds
-  }
-
-
-  /**
    * Extracts the path to the element from the url and selects the element
    *
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
@@ -577,58 +573,6 @@ export default function CadView({
         selectItemsInScene([targetId], false)
       }
     }
-  }
-
-
-  /** Select items in model when they are double-clicked */
-  function setDblClickListener() {
-    window.ondblclick = canvasDoubleClickHandler
-  }
-
-
-  /** Handle double click event on canvas. */
-  async function canvasDoubleClickHandler(event) {
-    if (!event.target || event.target.tagName !== 'CANVAS') {
-      return
-    }
-    const item = await viewer.castRayToIfcScene()
-    if (!item) {
-      return
-    }
-    selectWithShiftClickEvents(event.shiftKey, item.id)
-  }
-
-
-  /**
-   * Select/Deselect items in the scene using shift+click
-   *
-   * @param {boolean} shiftKey the click event
-   * @param {number} expressId the express id of the element
-   */
-  function selectWithShiftClickEvents(shiftKey, expressId) {
-    let newSelection = []
-    if (!viewer.isolator.canBePickedInScene(expressId)) {
-      return
-    }
-    let updateNav = false
-    if (shiftKey) {
-      const selectedInViewer = viewer.getSelectedIds()
-      const indexOfItem = selectedInViewer.indexOf(expressId)
-      const alreadySelected = indexOfItem !== -1
-      if (alreadySelected) {
-        selectedInViewer.splice(indexOfItem, 1)
-      } else {
-        selectedInViewer.push(expressId)
-      }
-      newSelection = selectedInViewer
-    } else {
-      // New selection will try to recenter camera, which fights with existing
-      // camera
-      removeCameraUrlParams()
-      newSelection = [expressId]
-      updateNav = true
-    }
-    selectItemsInScene(newSelection, updateNav)
   }
 
 
@@ -738,11 +682,14 @@ export default function CadView({
         const props = await viewer.getProperties(0, Number(lastId))
         setSelectedElement(props)
         // Update the expanded elements in NavTreePanel
-        const pathIds = getParentPathIdsForElement(parseInt(lastId))
+        const pathIds = getParentPathIdsForElement(elementsById, parseInt(lastId))
         if (pathIds) {
           setExpandedElements(pathIds.map((n) => `${n}`))
         }
-        const types = elementTypesMap.filter((t) => t.elements.filter((e) => ids.includes(e.expressID)).length > 0).map((t) => t.name)
+        const types = elementTypesMap.filter(
+          (t) => t.elements.filter(
+            (e) => ids.includes(e.expressID)).length > 0)
+              .map((t) => t.name)
         if (types.length > 0) {
           setExpandedTypes([...new Set(types.concat(expandedTypes))])
         }
@@ -787,7 +734,9 @@ export default function CadView({
             deselectItems={deselectItems}
             pathPrefix={pathPrefix}
             branch={modelPath.branch}
-            selectWithShiftClickEvents={selectWithShiftClickEvents}
+            selectWithShiftClickEvents={(isShiftKeyDown, expressId) => {
+              elementSelection(viewer, elementsById, selectItemsInScene, isShiftKeyDown, expressId)
+            }}
           />
 
           <Box sx={{...absBtm, ...center}}>

@@ -19,7 +19,6 @@ import Toggle from '../Toggle'
 export default function Properties() {
   const model = useStore((state) => state.model)
   const element = useStore((state) => state.selectedElement)
-
   const [propTable, setPropTable] = useState(null)
   const [psetsList, setPsetsList] = useState(null)
   const [expandAll, setExpandAll] = useState(false)
