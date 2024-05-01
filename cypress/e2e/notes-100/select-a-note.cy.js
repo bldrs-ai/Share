@@ -4,7 +4,6 @@ import {
   returningUserVisitsHomepageWaitForModel,
 } from '../../support/utils'
 
-
 /** {@link https://github.com/bldrs-ai/Share/issues/1055} */
 describe('Notes 100: Select a note', () => {
   beforeEach(homepageSetup)
@@ -17,11 +16,11 @@ describe('Notes 100: Select a note', () => {
       })
       it('Shows title, comments and new nav state', () => {
         // The list of notes is updated to display only the selected note
-        cy.get('.MuiCardHeader-title').contains('Local issue 2')
+        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
 
         // A list of comments attached to the note to be visible
-        cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('Test Comment 1')
-        cy.get('[data-testid="list-notes"] > :nth-child(3) > [data-testid="note-card"] p').contains('Test Comment 2')
+        cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
+        cy.get('[data-testid="list-notes"] > :nth-child(3) > [data-testid="note-card"] p').contains('testComment_2')
 
         cy.get('[data-testid="panelTitle"]').should('have.text', 'NOTE')
 

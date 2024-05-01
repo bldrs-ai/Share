@@ -3,7 +3,7 @@ import {MOCK_BRANCHES} from '../net/github/Branches.fixture'
 import {MOCK_COMMENTS} from '../net/github/Comments.fixture'
 import {MOCK_COMMITS} from '../net/github/Commits.fixture'
 import {MOCK_FILES} from '../net/github/Files.fixture'
-import {MOCK_ISSUES} from '../net/github/Issues.fixture'
+import {createMockIssues, sampleIssues} from '../net/github/Issues.fixture'
 import {MOCK_ORGANIZATIONS} from '../net/github/Organizations.fixture'
 import {MOCK_REPOSITORY, MOCK_USER_REPOSITORIES} from '../net/github/Repositories.fixture'
 import testEnvVars from '../../tools/jest/testEnvVars'
@@ -50,14 +50,17 @@ function gaHandlers() {
 /**
  * Static stubs GitHub orgs, repos, issues.
  *
+ * @param {object} githubStore todo implementation
  * @return {Array<object>} handlers
  */
-function githubHandlers() {
+function githubHandlers(githubStore) {
   return [
     rest.get(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
+      const {org, repo} = req.params
+      const createdIssues = createMockIssues(org, repo, sampleIssues)
       return res(
           ctx.status(httpOk),
-          ctx.json(MOCK_ISSUES.data),
+          ctx.json(createdIssues),
       )
     }),
 
@@ -67,7 +70,6 @@ function githubHandlers() {
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return res(ctx.status(httpNotFound))
       }
-
       return res(
           ctx.status(httpOk),
           ctx.json(MOCK_COMMENTS.data),
@@ -189,17 +191,17 @@ function githubHandlers() {
     rest.post(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
 
-      if (org !== 'bldrs-ai' || repo !== 'Share') {
+      if ( !(org === 'bldrs-ai' || org === 'pablo-mayrgundter') || repo !== 'Share') {
         return res(
-            ctx.status(httpNotFound),
-            ctx.json({
-              message: 'Not Found',
-            }),
+          ctx.status(httpNotFound),
+          ctx.json({
+            message: 'Not Found',
+          }),
         )
       }
 
       return res(
-          ctx.status(httpCreated),
+        ctx.status(httpCreated),
       )
     }),
 
