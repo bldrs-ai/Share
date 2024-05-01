@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import React, {ReactElement, useState, useEffect} from 'react'
 import Avatar from '@mui/material/Avatar'
 import Card from '@mui/material/Card'
@@ -170,10 +169,6 @@ export default function NoteCard({
     setNotes(notes)
     setEditMode(false)
   }
-
-  console.log('nickname', username)
-  console.log('user', user)
-  // console.log('user.nickname', user.nickname)
 
   return (
     <Card elevation={1} data-testid='note-card'>

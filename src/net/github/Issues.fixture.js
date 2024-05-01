@@ -243,8 +243,6 @@ export const MOCK_ISSUE = {
   state_reason: null,
 }
 
-export const createMockIssues = (issueID, org, repo, issueTitle, issueBody, numberOfIssues) => {
-  const issues = []
 
 /**
  * Generates an array of mock GitHub issue objects.
@@ -306,6 +304,5 @@ export const createMockIssues = (org, repo, issuesInfo) => {
     state_reason: null,
   }))
 }
-
 
 export const MOCK_ISSUES_EMPTY = {data: []}
