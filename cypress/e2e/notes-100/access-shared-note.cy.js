@@ -25,14 +25,14 @@ describe('Notes 100 - Access shared note', () => {
       cy.visit('/share/v/p/index.ifc#c:-26.91,28.84,112.47,-22,16.21,-3.48;i:126')
       waitForModel()
     })
-      it('Panel title to contain NOTE string and back button', () => {
-        cy.get('[data-testid="panelTitle"]').contains('NOTE')
-        cy.get('[data-testid="Back to the list"]').should('exist')
-      })
-      it('Shared note and comment to be visible', () => {
-        cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
-        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
-      })
+    it('Panel title to contain NOTE string and back button', () => {
+      cy.get('[data-testid="panelTitle"]').contains('NOTE')
+      cy.get('[data-testid="Back to the list"]').should('exist')
+    })
+    it('Shared note and comment to be visible', () => {
+      cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
+      cy.get('.MuiCardHeader-title').contains('issueTitle_4')
+    })
   })
 })
 

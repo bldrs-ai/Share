@@ -7,7 +7,7 @@ import NotesControl from './NotesControl'
 import model from '../../__mocks__/MockModel.js'
 
 
-describe('Notes Control', () => {
+describe('NotesControl', () => {
   it('Fetch notes from issues endpoint and set notes in zustand', async () => {
     const {result} = renderHook(() => useStore((state) => state))
     await act(

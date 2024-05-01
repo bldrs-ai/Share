@@ -6,7 +6,7 @@ import {
 
 
 /** {@link https://github.com/bldrs-ai/Share/issues/1071} */
-describe('notes-100: Share a note', () => {
+describe('Notes-100: Share a note', () => {
   beforeEach(homepageSetup)
   context('Returning user visits homepage', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
