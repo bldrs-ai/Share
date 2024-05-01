@@ -36,7 +36,14 @@ describe('TypesNavTree', () => {
     const {getByText} = render(
         <ShareMock>
           <TypesNavTree
+            keyId='test'
+            model={{
+              getIfcType: jest.fn(),
+            }}
+            pathPrefix={'/share/v/p/index.ifc'}
             types={newMockTypes(testLabel, testType)}
+            selectWithShiftClickEvents={jest.fn()}
+            idToRef={{}}
           />
         </ShareMock>)
     await actAsyncFlush()

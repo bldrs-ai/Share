@@ -52,17 +52,18 @@ export default function Panel({title, onCloseClick, children, action = null, sx 
           backgroundColor: theme.palette.secondary.dark,
         }}
       >
-        {typeof(title) === 'string' ?
-        <Typography
-          variant='body1'
-          sx={{
-            marginLeft: '.9em',
-            textTransform: 'uppercase',
-          }}
-        >
-          {title}
-        </Typography> :
-         <>{title}</>
+        {
+          typeof(title) === 'string' ?
+            <Typography
+              variant='body1'
+              sx={{
+                margin: '0.5em',
+                textTransform: 'uppercase',
+              }}
+            >
+              {title}
+            </Typography> :
+            <>{title}</>
         }
         <Stack direction='row' justifyContent='center' alignItems='center'>
           <Box>{action}</Box>

@@ -41,9 +41,10 @@ export function prettyType(type) {
 
 
 /**
- * Groups elements by theirtypes
+ * Recursively visit the given element and its children, accumulating their
+ * types in the given elementTypes map
  *
- * @param {object} root element.
+ * @param {object} element Element tree
  * @return {Array} element types
  */
 export function groupElementsByTypes(element, elementTypes) {
@@ -69,6 +70,5 @@ export function groupElementsByTypes(element, elementTypes) {
       groupElementsByTypes(e, elementTypes)
     })
   }
-
   return elementTypes
 }

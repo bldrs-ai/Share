@@ -57,12 +57,7 @@ function githubHandlers(githubStore) {
   return [
     rest.get(`${GH_BASE}/repos/:org/:repo/issues`, (req, res, ctx) => {
       const {org, repo} = req.params
-      const createdIssues = createMockIssues( org, repo, sampleIssues)
-
-      if (!((org === 'pablo-mayrgundter' && repo === 'Share') ||
-      (org === 'cypresstester' && repo === 'test-repo'))) {
-        return res(ctx.status(httpNotFound))
-      }
+      const createdIssues = createMockIssues(org, repo, sampleIssues)
       return res(
           ctx.status(httpOk),
           ctx.json(createdIssues),
@@ -85,7 +80,17 @@ function githubHandlers(githubStore) {
       const {org, repo, path} = req.params
       const ref = req.url.searchParams.get('ref')
 
-      if (org === 'cypresstester') {
+      if ((org === 'cypresstester') ||
+           (org === 'Swiss-Property-AG' &&
+            repo === 'Momentum-Public' &&
+            path === 'Momentum.ifc' &&
+            (ref === 'main' ||
+             ref === 'testsha1testsha1testsha1testsha1testsha1' ||
+             ref === 'testsha2testsha2testsha2testsha2testsha2' ||
+             ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
+        const downloadUrl = (org === 'cypresstester') ? '/index.ifc' :
+          `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
+
         return res(
           ctx.status(httpOk),
           ctx.json({
@@ -96,7 +101,7 @@ function githubHandlers(githubStore) {
             url: 'https://api.github.com/repos/cypresstester/test-repo/contents/test-model.ifc?ref=main',
             html_url: 'https://github.com/cypresstester/test-repo/contents/test-model.ifc',
             git_url: 'https://api.github.com/repos/cypresstester/test-repo/git/blobs/1fc13089c8851fd9c5d39cda54788823a8606564',
-            download_url: `/index.ifc`,
+            download_url: downloadUrl,
             type: 'file',
             content: 'dGVzdCBkYXRh\n',
             encoding: 'base64',

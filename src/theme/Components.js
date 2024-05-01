@@ -223,7 +223,7 @@ export function getComponentOverrides(palette, typography) {
         root: {
           '& > div.Mui-selected, & > div.Mui-selected:hover': {
             color: palette.secondary.contrastText,
-            backgroundColor: palette.secondary.light,
+            backgroundColor: palette.secondary.active,
           },
           '& > div.MuiTreeItem-content': {
             borderRadius: '0px',

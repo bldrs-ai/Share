@@ -109,8 +109,9 @@ async function prettyProps(model, propName, propValue, isPset, serial = 0) {
           d1={label}
           d2={
             await deref(
-                propValue, model, serial,
-                async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
+              propValue, model, serial,
+              // TODO(pablo): there's no 4th param in deref
+              async (v, mdl, srl) => await createPropertyTable(mdl, v, srl))
           }
           key={serial}
         />
