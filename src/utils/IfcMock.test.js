@@ -120,12 +120,12 @@ export function newMockStringValueElt(label, id = 1) {
  * @param {string} label
  * @return {object} The hirerachy root element
  */
-export function newMockElementHirerachyWithType(label) {
+export function newMockElementHirerachyWithType(label, idOffset = 0) {
   return {
     children: [{
       children: [{
         children: [],
-        expressID: 3,
+        expressID: idOffset + 3,
         type: label,
         Name: {
           type: 3,
@@ -134,14 +134,14 @@ export function newMockElementHirerachyWithType(label) {
       },
       {
         children: [],
-        expressID: 4,
+        expressID: idOffset + 4,
         type: label,
         Name: {
           type: 4,
           value: '4',
         },
       }],
-      expressID: 6,
+      expressID: idOffset + 6,
       type: label,
       Name: {
         type: 6,
@@ -150,14 +150,14 @@ export function newMockElementHirerachyWithType(label) {
     },
     {
       children: [],
-      expressID: 7,
+      expressID: idOffset + 7,
       type: label,
       Name: {
         type: 7,
         value: '7',
       },
     }],
-    expressID: 2,
+    expressID: idOffset + 2,
     type: label,
     Name: {
       type: 2,

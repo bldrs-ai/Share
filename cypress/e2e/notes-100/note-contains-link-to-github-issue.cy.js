@@ -4,9 +4,8 @@ import {
   returningUserVisitsHomepageWaitForModel,
 } from '../../support/utils'
 
-
 /** {@link https://github.com/bldrs-ai/Share/issues/1056} */
-describe('Notes 100: Select a note', () => {
+describe('Notes 100: Note contains link to GitHub', () => {
   beforeEach(homepageSetup)
   context('Returning user visits homepage', () => {
     beforeEach(returningUserVisitsHomepageWaitForModel)
@@ -19,7 +18,7 @@ describe('Notes 100: Select a note', () => {
       context('Open first note', () => {
         beforeEach(() => cy.get('[data-testid="list-notes"] :nth-child(1) > [data-testid="note-body"]').first().click())
         it('Github link is visible on a note card when the note selected - Screen', () => {
-          cy.get('.MuiCardHeader-title').contains('Local issue 2')
+          cy.get('.MuiCardHeader-title').contains('issueTitle_4')
           cy.get('[data-testid="Open in Github"]')
           cy.percySnapshot()
         })

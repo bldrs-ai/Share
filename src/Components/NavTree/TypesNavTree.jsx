@@ -1,159 +1,73 @@
-import clsx from 'clsx'
-import React, {ReactElement, forwardRef} from 'react'
-import PropTypes from 'prop-types'
-import TreeItem, {useTreeItem} from '@mui/lab/TreeItem'
-import Box from '@mui/material/Box'
-import Typography from '@mui/material/Typography'
-import HideToggleButton from '../HideToggleButton'
-import NavTree from './NavTree'
+import React, {ReactElement, RefObject, forwardRef} from 'react'
+import {reifyName} from '@bldrs-ai/ifclib'
+import TreeItem from '@mui/lab/TreeItem'
+import useStore from '../../store/useStore'
+import {assertDefined} from '../../utils/assert'
+import NavTreeItem from './NavTreeItem'
+import PropTypes from './PropTypes'
 
 
 /**
+ * @property {string} keyId Unique key
  * @property {object} model IFC model
+ * @property {object} element Element in the model
  * @property {object} types Types to use in the model
  * @property {string} pathPrefix URL prefix for constructing links to
  *   elements, recursively grown as passed down the tree
  * @property {Function} selectWithShiftClickEvents handler for shift-clicks
+ * @property {Map<string,RefObject<HTMLDivElement>>} idToRef Mapping of expressId to TreeItem refs
  * @return {ReactElement}
  */
 export default function TypesNavTree({
+  keyId,
   model,
   types,
   pathPrefix,
   selectWithShiftClickEvents,
+  idToRef,
 }) {
-  const CustomContent = forwardRef(function CustomContent(props, ref) {
-    const {
-      classes,
-      className,
-      label,
-      nodeId,
-      icon: iconProp,
-      expansionIcon,
-      displayIcon,
-      hasHideIcon,
-    } = props
+  assertDefined(keyId, model, types, pathPrefix, selectWithShiftClickEvents, idToRef)
 
-    const {
-      disabled,
-      expanded,
-      selected,
-      focused,
-      handleExpansion,
-      handleSelection,
-      preventSelection,
-    } = useTreeItem(nodeId)
+  const viewer = useStore((state) => state.viewer)
 
-    const icon = iconProp || expansionIcon || displayIcon
+  const navTreeItemRef = forwardRef(NavTreeItem)
+  navTreeItemRef.propTypes = PropTypes
 
-    const handleMouseDown = (event) => preventSelection(event)
-
-    const handleExpansionClick = (event) => handleExpansion(event)
-
-    const handleSelectionClick = (event) => {
-      handleSelection(event)
-    }
-
-    return (
-      // eslint-disable-next-line jsx-a11y/no-static-element-interactions
-      <div
-        className={clsx(className, classes.root, {
-          [classes.expanded]: expanded,
-          [classes.selected]: selected,
-          [classes.focused]: focused,
-          [classes.disabled]: disabled,
-        })}
-        onMouseDown={handleMouseDown}
-        ref={ref}
-      >
-        <Box
-          onClick={handleExpansionClick}
-          sx={{margin: '0px 14px 0px 14px'}}
-        >
-          {icon}
-        </Box>
-        <div style={{width: '300px'}}>
-          <Typography
-            variant='tree'
-            onClick={handleSelectionClick}
-          >
-            {label}
-          </Typography>
-          {hasHideIcon &&
-            <div style={{display: 'contents'}}>
-              <HideToggleButton elementId={nodeId}/>
-            </div>
-          }
-        </div>
-      </div>
-    )
-  })
-
-  CustomContent.propTypes = TypesNavTreePropTypes
-
-  const CustomTreeItem = (props) => {
-    return <TreeItem ContentComponent={CustomContent} {...props}/>
-  }
+  const CustomTreeItem = (props) => <TreeItem ContentComponent={navTreeItemRef} {...props}/>
 
   let i = 0
-
   return types.map((type) =>
     <CustomTreeItem
-      key={type.name}
+      key={`${keyId}-${i++}`}
       nodeId={type.name}
       label={type.name}
       ContentProps={{
-        hasHideIcon: type.elements && type.elements.length > 0,
+        isExpandable: true,
+        selectWithShiftClickEvents: selectWithShiftClickEvents,
+        idToRef: idToRef,
       }}
+      data-testid={keyId}
     >
-      {type.elements && type.elements.length > 0 ?
-    type.elements.map((e) => {
-      const childKey = `${pathPrefix}-${i++}`
-      return (
-        <NavTree
-          key={childKey}
-          model={model}
-          element={e}
-          pathPrefix={pathPrefix}
-          selectWithShiftClickEvents={selectWithShiftClickEvents}
-        />
-      )
-    }) : null}
+      {
+        type.elements && type.elements.length > 0 ?
+          type.elements.map((elt) => {
+            const childKeyId = `${pathPrefix}-${i++}`
+            const hasHideIcon = viewer.isolator.canBeHidden(elt.expressID)
+            return (
+              <CustomTreeItem
+                key={childKeyId}
+                nodeId={elt.expressID.toString()}
+                label={reifyName({properties: model}, elt)}
+                ContentProps={{
+                  hasHideIcon: hasHideIcon,
+                  isExpandable: false,
+                  selectWithShiftClickEvents: selectWithShiftClickEvents,
+                  idToRef: idToRef,
+                }}
+              />
+            )
+          }) :
+          null
+      }
     </CustomTreeItem>)
-}
-
-
-const TypesNavTreePropTypes = {
-  /**
-   * Override or extend the styles applied to the component.
-   */
-  classes: PropTypes.object.isRequired,
-  /**
-   * className applied to the root element.
-   */
-  className: PropTypes.string,
-  /**
-   * The icon to display next to the tree node's label. Either a parent or end icon.
-   */
-  displayIcon: PropTypes.node,
-  /**
-   * The icon to display next to the tree node's label. Either an expansion or collapse icon.
-   */
-  expansionIcon: PropTypes.node,
-  /**
-   * The icon to display next to the tree node's label.
-   */
-  icon: PropTypes.node,
-  /**
-   * The tree node label.
-   */
-  label: PropTypes.node,
-  /**
-   * The id of the node.
-   */
-  nodeId: PropTypes.string.isRequired,
-  /**
-   * Determines if the tree node has a hide icon.
-   */
-  hasHideIcon: PropTypes.bool,
 }
