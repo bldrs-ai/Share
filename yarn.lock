@@ -2078,9 +2078,9 @@
   resolved "https://registry.npmjs.org/@bcoe/v8-coverage/-/v8-coverage-0.2.3.tgz"
   integrity sha512-0hYQ8SB4Db5zvZB4axdMHGwEaQjkZzFjQiN9LVYvIFB2nSUHW9tYpxWriPrWDASIxiaXax83REcLxuSdnGPZtw==
 
-"@bldrs-ai/conway@./bldrs-ai-conway-0.1.507.tgz":
-  version "0.1.507"
-  resolved "./bldrs-ai-conway-0.1.507.tgz#f97df85bc0a24b0910ad8fbbbd913fe12b9776b7"
+"@bldrs-ai/conway@./bldrs-ai-conway-0.1.510.tgz":
+  version "0.1.510"
+  resolved "./bldrs-ai-conway-0.1.510.tgz#3e2b14aca95b024dab912d938b978d016f34fabc"
   dependencies:
     buffer "^6.0.3"
     gl-matrix "^3.4.3"
