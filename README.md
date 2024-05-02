@@ -23,4 +23,5 @@ Bldrs is open source and we'd appreciate your help.
 - [Design Doc](https://github.com/bldrs-ai/Share/wiki/Design)
 - [Developer Guide](https://github.com/bldrs-ai/Share/wiki/Dev:-Guide)
 
+[![](https://img.shields.io/discord/853953158560743424.svg?logo=discord&logoColor=white&label=Discord&color=5865F2)](https://discord.gg/9SxguBkFfQ "Join the Discord chat at https://discord.gg/9SxguBkFfQ")
 [![This project is using Percy.io for visual regression testing.](https://percy.io/static/images/percy-badge.svg)](https://percy.io/8fe2b2f1/share)

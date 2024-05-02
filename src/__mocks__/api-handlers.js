@@ -88,7 +88,7 @@ function githubHandlers(githubStore) {
              ref === 'testsha1testsha1testsha1testsha1testsha1' ||
              ref === 'testsha2testsha2testsha2testsha2testsha2' ||
              ref === 'testsha3testsha3testsha3testsha3testsha3'))) {
-        const downloadUrl = (org === 'cypresstester') ? '/index.ifc' :
+        const downloadUrl = (org === 'cypresstester' && path !== 'window.ifc') ? '/index.ifc' :
           `https://rawgit.bldrs.dev.msw/r/${org}/${repo}/${ref}/${path}`
 
         return res(
