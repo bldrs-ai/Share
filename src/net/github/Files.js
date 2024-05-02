@@ -41,7 +41,8 @@ export async function commitFile(owner, repo, path, file, message, branch, acces
 
   // Set the authorization headers for each octokit request
   const headers = {
-    authorization: `Bearer ${accessToken}`,
+    'authorization': `Bearer ${accessToken}`,
+    'If-None-Match': '',
   }
 
   // 1. Get the SHA of the latest commit on the branch

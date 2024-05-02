@@ -16,8 +16,9 @@ export async function getGitHub(repository, path, args = {}, accessToken = '') {
   assertDefined(repository.orgName, repository.name)
   if (accessToken) {
     args.headers = {
-      authorization: `Bearer ${accessToken}`,
+      'authorization': `Bearer ${accessToken}`,
       ...args.headers,
+      'If-None-Match': '',
     }
   }
   return await requestWithTimeout(octokit.request(`GET /repos/{org}/{repo}/${path}`, {
