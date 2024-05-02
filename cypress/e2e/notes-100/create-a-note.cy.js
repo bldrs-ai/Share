@@ -16,20 +16,21 @@ describe('Notes 100: Create a note', () => {
         cy.get('[data-testid="control-button-notes"]').click()
         cy.get('[data-testid="Add a note"]').click()
       })
-      it('Notes list switched to display only create note card', () => {
+      it('Notes list switches to display only create note card and back to the list when nav backbutton is pressed', () => {
         cy.get('[data-testid="Back to the list"]').should('exist')
         cy.get('[placeholder="Note Title"]').should('exist')
         cy.get('[data-testid="panelTitle"]').contains('ADD A NOTE')
         cy.percySnapshot()
-      })
-      it('Back button navigates to the notes list', () => {
         cy.get('[data-testid="Back to the list"]').click()
         cy.get('[data-testid="list-notes"]').should('exist')
       })
+      // ToDo: the final check with the created note appended to the top of the list
+      // will be implemented when Pablo finishes the github store mock
       it('When note is created, navigate to the notes list with a new note created at the top of the list', () => {
         cy.get('[placeholder="Note Title"]').click().type('New Note Title')
         cy.get('[placeholder="Note Body"]').click().type('New Note Body')
         cy.get('[data-testid="Submit"]').should('be.enabled').click()
+        cy.get('[data-testid="list-notes"]').should('exist')
       })
     })
   })
