@@ -87,7 +87,7 @@ export default function Notes() {
   return hasError ?
     <ApplicationError/> : (
     <List
-      spacing={1}
+      spacing={3}
       sx={isMobile ? {paddingBottom: '100px'} : {}}
       data-testid='list-notes'
     >
@@ -129,6 +129,9 @@ export default function Notes() {
          username={selectedNote.username}
        />
       }
+      <ListItem key={'commentCreate'}>
+        {selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
+      </ListItem>
       {comments && selectedNote &&
        comments.map((comment, index) => {
          return (

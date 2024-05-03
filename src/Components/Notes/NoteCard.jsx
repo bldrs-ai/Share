@@ -53,6 +53,7 @@ export default function NoteCard({
   title = '',
   username = '',
   isNote = true,
+  locked = false,
 }) {
   assertDefined(...arguments)
   const accessToken = useStore((state) => state.accessToken)
@@ -66,7 +67,10 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const [showCreateComment, setShowCreateComment] = useState(false)
+
 
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
@@ -102,6 +106,11 @@ export default function NoteCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
+    let selectedNote = null
+    if (notes) {
+      selectedNote = notes.filter((issue) => issue.id === id)
+    }
+    setSelectedNote(selectedNote)
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
     if (embeddedCameraParams) {
@@ -199,6 +208,10 @@ export default function NoteCard({
        <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
+         isNote={isNote}
+         setShowCreateComment={setShowCreateComment}
+         showCreateComment={showCreateComment}
+         locked={locked}
        />
       }
       <NoteFooter
