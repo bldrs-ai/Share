@@ -1,7 +1,7 @@
 import '@percy/cypress'
 import {homepageSetup, returningUserVisitsHomepageWaitForModel, auth0Login} from '../../support/utils'
 
-
+/** {@link https://github.com/bldrs-ai/Share/issues/1058} */
 describe('edit a note', () => {
   context('User visits homepage in the logged-in state', () => {
     beforeEach(() => {
