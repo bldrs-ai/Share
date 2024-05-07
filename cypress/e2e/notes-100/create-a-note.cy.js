@@ -24,7 +24,7 @@ describe('Notes 100: Create a note', () => {
         cy.get('[data-testid="Back to the list"]').click()
         cy.get('[data-testid="list-notes"]').should('exist')
       })
-      // ToDo: the final check with the created note appended to the top of the list
+      // TODO(oleg): the final check with the created note appended to the top of the list
       // will be implemented when Pablo finishes the github store mock
       it('When note is created, navigate to the notes list with a new note created at the top of the list', () => {
         cy.get('[placeholder="Note Title"]').click().type('New Note Title')
