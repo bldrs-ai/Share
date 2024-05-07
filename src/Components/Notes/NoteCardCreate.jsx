@@ -32,6 +32,7 @@ export default function NoteCardCreate({
   const {user, isAuthenticated} = useAuth0()
   const accessToken = useStore((state) => state.accessToken)
   const repository = useStore((state) => state.repository)
+  const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
   const notes = useStore((state) => state.notes)
   const setNotes = useStore((state) => state.setNotes)
@@ -86,6 +87,18 @@ export default function NoteCardCreate({
     setBody('')
     incrementCommentNumber()
     fetchComments()
+    const createdComment = res.data
+    const processedComment =
+    {
+      id: createdComment.id,
+      body: createdComment.body,
+      date: createdComment.created_at,
+      username: createdComment.user.login,
+      avatarUrl: createdComment.user.avatar_url,
+      synched: true,
+    }
+    const newCommentList = [...comments, processedComment]
+    setComments(newCommentList)
     return res
   }
 
