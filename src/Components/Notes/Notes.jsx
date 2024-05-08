@@ -1,4 +1,5 @@
 import React, {ReactElement, useEffect, useState} from 'react'
+import Box from '@mui/material/Box'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import * as Sentry from '@sentry/react'
@@ -130,8 +131,12 @@ export default function Notes() {
        />
       }
       <ListItem key={'commentCreate'}>
-        {selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
+        {user && selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
       </ListItem>
+      {selectedNote && !user && <Box sx={{paddingBottom: '10px'}}><NoContent message={'Please login to leave comments.'}/></Box>}
+      {selectedNote && user && selectedNote.locked &&
+        <Box sx={{paddingBottom: '10px'}}><NoContent message={'Please login to leave comments.'}/></Box>
+      }
       {comments && selectedNote &&
        comments.map((comment, index) => {
          return (
