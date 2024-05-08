@@ -135,7 +135,7 @@ export default function Notes() {
       </ListItem>
       {selectedNote && !user && <Box sx={{paddingBottom: '10px'}}><NoContent message={'Please login to leave comments.'}/></Box>}
       {selectedNote && user && selectedNote.locked &&
-        <Box sx={{paddingBottom: '10px'}}><NoContent message={'Please login to leave comments.'}/></Box>
+        <Box sx={{paddingBottom: '10px'}}><NoContent message={'The note is locked.'}/></Box>
       }
       {comments && selectedNote &&
        comments.map((comment, index) => {
