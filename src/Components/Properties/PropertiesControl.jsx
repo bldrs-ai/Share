@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_PROPERTIES} from './hashState'
 import PropertiesIcon from '@mui/icons-material/FormatListBulleted'
 
 
@@ -18,12 +19,8 @@ export default function PropertiesControl() {
       icon={<PropertiesIcon className='icon-share'/>}
       isDialogDisplayed={isPropertiesVisible}
       setIsDialogDisplayed={setIsPropertiesVisible}
-      hashPrefix={PROPERTIES_PREFIX}
+      hashPrefix={HASH_PREFIX_PROPERTIES}
       placement='left'
     />
   )
 }
-
-
-/** The prefix to use for the properties state tokens */
-export const PROPERTIES_PREFIX = 'p'

@@ -1,7 +1,7 @@
 import React from 'react'
 import {fireEvent, render, waitFor} from '@testing-library/react'
+import {HelmetStoreRouteThemeCtx, RouteThemeCtx} from '../../Share.fixture'
 import ImagineControl from './ImagineControl'
-import {HelmetStoreRouteThemeCtx, RouteThemeCtx} from '../Share.fixture'
 
 
 // ImagineControl uses viewer's screenshot

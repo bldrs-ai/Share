@@ -1,5 +1,4 @@
-import {NOTES_PREFIX} from '../Components/Notes/NotesControl'
-import {getHashParams} from '../utils/location'
+import {isVisibleInitially} from '../Components/Notes/hashState'
 
 
 /**
@@ -19,7 +18,7 @@ export default function createNotesSlice(set, get) {
     deletedNotes: null,
     isCreateNoteVisible: false,
     isLoadingNotes: false,
-    isNotesVisible: getHashParams(window.location, NOTES_PREFIX) !== undefined,
+    isNotesVisible: isVisibleInitially(),
     notes: null,
     placeMark: null,
     placeMarkActivated: false,

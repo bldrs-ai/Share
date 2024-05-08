@@ -6,7 +6,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams, getHashParams} from '../utils/location'
+import {addHashParams, hasHashParams, removeHashParams} from '../utils/location'
 import {useIsMobile} from './Hooks'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
@@ -132,7 +132,21 @@ export function ControlButtonWithHashState({
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
 
   const location = useLocation()
+  useEffect(() => {
+    // If dialog displayed by initial state value (e.g. About for isFirstTime)
+    // or if hashPrefix is present
+    const isActiveHash = hasHashParams(window.location, hashPrefix)
+    if (isDialogDisplayed) {
+      if (!isActiveHash) {
+        addHashParams(window.location, hashPrefix)
+      }
+    } else if (isActiveHash) {
+      removeHashParams(window.location, hashPrefix)
+    }
+  }, [hashPrefix, isDialogDisplayed, location])
 
+
+  /*
   // On first load, show dialog if state token present
   useEffect(() => {
     setIsDialogDisplayed(getHashParams(window.location, hashPrefix) !== undefined)
@@ -141,15 +155,17 @@ export function ControlButtonWithHashState({
   // Enforce invariant
   useEffect(() => {
     if (isDialogDisplayed) {
+      console.log('Buttons#ControlButtonWithHashState#useEffect, isDialogDisplayed: true, adding hash param')
       addHashParams(window.location, hashPrefix)
     } else {
+      console.log('Buttons#ControlButtonWithHashState#useEffect, isDialogDisplayed: false, removing hash param')
       const currentHash = window.location.hash
       const prefixRegex = new RegExp(`${hashPrefix}:[^;]*;?`, 'g')
       const newHash = currentHash.replace(prefixRegex, '')
       window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
     }
   }, [hashPrefix, isDialogDisplayed])
-
+*/
   return (
     <ControlButton
       isDialogDisplayed={isDialogDisplayed}

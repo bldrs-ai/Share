@@ -1,6 +1,7 @@
 import React, {ReactElement, useEffect, useState} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_NAV_TREE} from './hashState'
 import TreeIcon from '../../assets/icons/Tree.svg'
 
 
@@ -30,12 +31,8 @@ export default function NavTreeControl() {
       icon={<TreeIcon className='icon-share'/>}
       isDialogDisplayed={isNavTreeVisible}
       setIsDialogDisplayed={setIsNavTreeVisible}
-      hashPrefix={NAVTREE_PREFIX}
+      hashPrefix={HASH_PREFIX_NAV_TREE}
       placement='bottom'
     />
   )
 }
-
-
-/** The prefix to use for the NavTree state tokens */
-export const NAVTREE_PREFIX = 'n'

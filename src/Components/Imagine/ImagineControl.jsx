@@ -6,14 +6,15 @@ import TextField from '@mui/material/TextField'
 import Box from '@mui/material/Box'
 import InputAdornment from '@mui/material/InputAdornment'
 import IconButton from '@mui/material/IconButton'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
-import {ControlButtonWithHashState, RectangularButton} from './Buttons'
-import Dialog from './Dialog'
-import Loader from './Loader'
+import useStore from '../../store/useStore'
+import debug from '../../utils/debug'
+import {ControlButtonWithHashState, RectangularButton} from '../Buttons'
+import Dialog from '../Dialog'
+import Loader from '../Loader'
+import {HASH_PREFIX_IMAGINE} from './hashState'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
 import ClearIcon from '@mui/icons-material/Clear'
-import BotIcon from '../assets/icons/Bot2.svg'
+import BotIcon from '../../assets/icons/Bot2.svg'
 
 
 /**
@@ -31,7 +32,7 @@ export default function ImagineControl() {
       icon={<AutoFixHighOutlinedIcon className='icon-share'/>}
       isDialogDisplayed={isImagineVisible}
       setIsDialogDisplayed={setIsImagineVisible}
-      hashPrefix={IMAGINE_PREFIX}
+      hashPrefix={HASH_PREFIX_IMAGINE}
       placement='left'
     >
       <ImagineDialog
@@ -41,10 +42,6 @@ export default function ImagineControl() {
     </ControlButtonWithHashState>
   )
 }
-
-
-/** The prefix to use for the imagine state token */
-export const IMAGINE_PREFIX = 'imagine'
 
 
 /**
