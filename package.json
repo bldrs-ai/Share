@@ -1,6 +1,6 @@
 {
   "name": "bldrs",
-  "version": "1.0.1033",
+  "version": "1.0.1034",
   "main": "src/index.jsx",
   "license": "MIT",
   "homepage": "https://github.com/bldrs-ai/Share",
@@ -27,7 +27,7 @@
     "cy-headed": "cypress run --headed --browser chrome --no-exit",
     "cy-headed-spec": "cypress run --headed --browser chrome --no-exit --spec",
     "cy-parallel": "time ./cypress/e2e/parallel.sh",
-    "cy-percy": "./tools/cy-percy.sh $@",
+    "cy-percy": "./tools/cy-percy.sh",
     "cy-spec": "cypress run --browser chrome --spec",
     "deps-graph": "npx dependency-cruiser src --include-only 'jsx?' --config --output-type dot | dot -T svg > deps.svg",
     "husky-init": "husky install",
