@@ -74,6 +74,7 @@ export default function OpenModelDialog({
   }
 
   const navigateToFile = () => {
+    setIsDialogDisplayed(false)
     if (filesArr[selectedFileName].includes('.ifc')) {
       navigate({pathname: `/share/v/gh/${orgName}/${repoName}/main/${fileName}`})
     }
