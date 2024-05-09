@@ -1,4 +1,5 @@
 import '@percy/cypress'
+import {waitForModelReady} from '../../support/models'
 import {
   homepageSetup,
   setIsReturningUser,
@@ -8,13 +9,13 @@ import {
 
 /** @see https://github.com/bldrs-ai/Share/issues/1077 */
 describe('create-100: Imagine', () => {
-  beforeEach(homepageSetup)
+  beforeEach(() => {
+    homepageSetup()
+    setIsReturningUser()
+  })
 
-  context('View model', () => {
-    beforeEach(() => {
-      setIsReturningUser()
-      visitHomepageWaitForModel()
-    })
+  context('Returning user visits hompage', () => {
+    beforeEach(visitHomepageWaitForModel)
 
     context('Click ImagineControlButton', () => {
       beforeEach(() => cy.findByTestId('control-button-rendering').click())
@@ -64,6 +65,17 @@ describe('create-100: Imagine', () => {
           })
         })
       })
+    })
+  })
+
+  context('Returning user visits imagine permalink', () => {
+    beforeEach(() => {
+      cy.visit('/share/v/p/index.ifc#imagine:')
+      waitForModelReady('bounce')
+    })
+
+    it('Imagine dialog and model screenshot visible - Screen', () => {
+      cy.percySnapshot()
     })
   })
 })

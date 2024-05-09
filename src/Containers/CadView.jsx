@@ -61,6 +61,7 @@ export default function CadView({
   const selectedElements = useStore((state) => state.selectedElements)
   const setCutPlaneDirections = useStore((state) => state.setCutPlaneDirections)
   const setElementTypesMap = useStore((state) => state.setElementTypesMap)
+  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setIsSearchBarVisible = useStore((state) => state.setIsSearchBarVisible)
   const setLevelInstance = useStore((state) => state.setLevelInstance)
   const setLoadedFileInfo = useStore((state) => state.setLoadedFileInfo)
@@ -502,6 +503,7 @@ export default function CadView({
   function resetState() {
     resetSelection()
     setIsSearchBarVisible(false)
+    setIsNotesVisible(false)
     setCutPlaneDirections([])
     setLevelInstance(null)
   }

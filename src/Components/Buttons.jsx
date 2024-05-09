@@ -145,27 +145,6 @@ export function ControlButtonWithHashState({
     }
   }, [hashPrefix, isDialogDisplayed, location])
 
-
-  /*
-  // On first load, show dialog if state token present
-  useEffect(() => {
-    setIsDialogDisplayed(getHashParams(window.location, hashPrefix) !== undefined)
-  }, [hashPrefix, location, setIsDialogDisplayed])
-
-  // Enforce invariant
-  useEffect(() => {
-    if (isDialogDisplayed) {
-      console.log('Buttons#ControlButtonWithHashState#useEffect, isDialogDisplayed: true, adding hash param')
-      addHashParams(window.location, hashPrefix)
-    } else {
-      console.log('Buttons#ControlButtonWithHashState#useEffect, isDialogDisplayed: false, removing hash param')
-      const currentHash = window.location.hash
-      const prefixRegex = new RegExp(`${hashPrefix}:[^;]*;?`, 'g')
-      const newHash = currentHash.replace(prefixRegex, '')
-      window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
-    }
-  }, [hashPrefix, isDialogDisplayed])
-*/
   return (
     <ControlButton
       isDialogDisplayed={isDialogDisplayed}

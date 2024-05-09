@@ -1,12 +1,10 @@
 import '@percy/cypress'
+import {waitForModelReady} from '../../../support/models'
 import {
   homepageSetup,
   setIsReturningUser,
   visitHomepageWaitForModel,
 } from '../../../support/utils'
-import {
-  waitForModelReady,
-} from '../../../support/models'
 
 
 /** {@link } */
@@ -16,7 +14,7 @@ describe('Search 100: Permalink', () => {
     setIsReturningUser()
   })
 
-  context('User visits homepage, Open Seach > Enters "together"', () => {
+  context('Returning user visits homepage, Open Seach > Enters "together"', () => {
     beforeEach(() => {
       visitHomepageWaitForModel()
       cy.get('[data-testid="control-button-search"]').click()
@@ -28,7 +26,7 @@ describe('Search 100: Permalink', () => {
     })
   })
 
-  context('Visits permalink to "together" search', () => {
+  context('Returning user visits permalink to "together" search', () => {
     beforeEach(() => {
       cy.visit('/share/v/p/index.ifc?q=together#n:;s:')
       waitForModelReady('bounceSearch')
