@@ -16,12 +16,10 @@ describe('Notes 100: Comments on a note', () => {
         cy.get('[data-testid="list-notes"] :nth-child(1) > [data-testid="note-body"]').first().click()
       })
       it('Please login message to be visible', () => {
-        // The list of notes is updated to display only the selected note with a comment input card visible
         cy.get('.MuiCardHeader-title').contains('issueTitle_4')
         cy.percySnapshot()
       })
       it('Create a comment card to be visible', () => {
-        // The list of notes is updated to display only the selected note with a comment input card visible
         auth0Login()
         cy.get('[placeholder="Leave a comment ..."]')
         cy.percySnapshot()

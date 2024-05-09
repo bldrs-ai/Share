@@ -117,23 +117,27 @@ export default function Notes() {
        })
       }
       {selectedNote &&
-       <NoteCard
-         avatarUrl={selectedNote.avatarUrl}
-         body={selectedNote.body}
-         date={selectedNote.date}
-         id={selectedNote.id}
-         index={selectedNote.index}
-         noteNumber={selectedNote.number}
-         numberOfComments={selectedNote.numberOfComments}
-         synched={selectedNote.synched}
-         title={selectedNote.title}
-         username={selectedNote.username}
-       />
+        <NoteCard
+          avatarUrl={selectedNote.avatarUrl}
+          body={selectedNote.body}
+          date={selectedNote.date}
+          id={selectedNote.id}
+          index={selectedNote.index}
+          noteNumber={selectedNote.number}
+          numberOfComments={selectedNote.numberOfComments}
+          synched={selectedNote.synched}
+          title={selectedNote.title}
+          username={selectedNote.username}
+        />
       }
       <ListItem key={'commentCreate'}>
         {user && selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
       </ListItem>
-      {selectedNote && !user && <Box sx={{paddingBottom: '10px'}}><NoContent message={'Please login to leave comments.'}/></Box>}
+      {selectedNote && !user &&
+        <Box sx={{paddingBottom: '10px'}}>
+          <NoContent message={'Please login to leave comments.'}/>
+        </Box>
+      }
       {selectedNote && user && selectedNote.locked &&
         <Box sx={{paddingBottom: '10px'}}><NoContent message={'The note is locked.'}/></Box>
       }

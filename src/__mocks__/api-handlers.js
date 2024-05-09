@@ -211,10 +211,8 @@ function githubHandlers(githubStore) {
       if (org !== 'pablo-mayrgundter' || repo !== 'Share' || !issueNumber) {
         return res(ctx.status(httpNotFound))
       }
-
       return res(
           ctx.status(httpCreated),
-          // ctx.json(MOCK_COMMENT),
       )
     }),
 
