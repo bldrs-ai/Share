@@ -34,6 +34,9 @@ export default function NoteCardCreate({
   const repository = useStore((state) => state.repository)
   const comments = useStore((state) => state.comments)
   const setComments = useStore((state) => state.setComments)
+  const notes = useStore((state) => state.notes)
+  const setNotes = useStore((state) => state.setNotes)
+  const selectedNoteId = useStore((state) => state.selectedNoteId)
   const toggleIsCreateNoteActive = useStore((state) => state.toggleIsCreateNoteActive)
   const [title, setTitle] = useState('')
   const [body, setBody] = useState(null)
@@ -82,6 +85,7 @@ export default function NoteCardCreate({
     }
     const res = await createComment(repository, noteNumber, commentPayload, accessToken)
     setBody('')
+    incrementCommentNumber()
     fetchComments()
     const createdComment = res.data
     const processedComment =
@@ -96,6 +100,17 @@ export default function NoteCardCreate({
     const newCommentList = [...comments, processedComment]
     setComments(newCommentList)
     return res
+  }
+
+  /** change comment number in store */
+  const incrementCommentNumber = () => {
+    const updatedNotes = notes.map((note) => {
+      if (note.id === selectedNoteId) {
+        return {...note, numberOfComments: note.numberOfComments + 1}
+      }
+      return note
+    })
+    setNotes(updatedNotes)
   }
 
   const submitEnabled = (title !== null && title !== '') || (!isNote && body !== null && body !== '')
