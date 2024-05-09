@@ -22,7 +22,7 @@ describe('Notes 100: Comments on a note', () => {
       it('Create a comment card to be visible', () => {
         // The list of notes is updated to display only the selected note with a comment input card visible
         auth0Login()
-        cy.get('[data-testid="note-body"]').contains('Leave a comment ...')
+        cy.get('[placeholder="Leave a comment ..."]')
       })
     })
   })

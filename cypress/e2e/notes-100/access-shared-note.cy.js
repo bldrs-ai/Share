@@ -30,7 +30,7 @@ describe('Notes 100 - Access shared note', () => {
       cy.get('[data-testid="Back to the list"]').should('exist')
     })
     it('Shared note and comment to be visible', () => {
-      cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
+      cy.get('[data-testid="list-notes"] > :nth-child(4) > [data-testid="note-card"] p').contains('testComment_1')
       cy.get('.MuiCardHeader-title').contains('issueTitle_4')
     })
   })
