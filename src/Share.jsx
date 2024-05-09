@@ -99,9 +99,13 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
 /** @return {ReactElement} */
 function ModelTitle({repository, modelPath}) {
   const modelName = modelPath ? (modelPath.filepath || modelPath.gitpath).replace(/^\//, '') : 'loading...'
+
+  // Check if repository is available and construct the title accordingly
+  const title = repository ? `${modelName} - ${repository.name}/${repository.orgName}` : `${modelName} - Local Project`
+
   return (
     <Helmet>
-      <title>{modelName} - {repository.name}/{repository.orgName}</title>
+      <title>{title}</title>
     </Helmet>
   )
 }
