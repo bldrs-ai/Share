@@ -126,7 +126,6 @@ export default function CadView({
    * new viewer.
    */
   function onModelPath() {
-    setIsSearchBarVisible(false)
     // TODO(pablo): First arg isn't used for first time, and then it's
     // newMode for the themeChangeListeners, which is also unused.
     const initViewerCb = (any, themeArg) => {
@@ -502,6 +501,7 @@ export default function CadView({
   /** Reset global state */
   function resetState() {
     resetSelection()
+    setIsSearchBarVisible(false)
     setCutPlaneDirections([])
     setLevelInstance(null)
   }
@@ -533,7 +533,7 @@ export default function CadView({
       // Update The Component state
       const resIds = resultIDs.map((id) => `${id}`)
       setSelectedElements(resIds)
-      // Sets the url to the last selected element path.
+      // Sets the url to the first selected element path.
       if (resultIDs.length > 0 && updateNavigation) {
         const firstId = resultIDs.slice(0, 1)
         const pathIds = getParentPathIdsForElement(elementsById, parseInt(firstId))
@@ -543,9 +543,7 @@ export default function CadView({
           navigate,
           `${pathPrefix}${repoFilePath}/${path}`,
           {
-            // TODO(pablo): unclear if search should be carried
             search: '',
-            // TODO(pablo): necessary to preserve UI state
             hash: window.location.hash,
           })
       }
@@ -564,8 +562,11 @@ export default function CadView({
    * @param {string} filepath Part of the URL that is the file path, e.g. index.ifc/1/2/3/...
    */
   function selectElementBasedOnFilepath(filepath) {
+    if (filepath.startsWith('/')) {
+      filepath = filepath.substring(1)
+    }
     const parts = filepath.split(/\//)
-    if (parts.length > 0) {
+    if (parts.length > 1) {
       debug().log('CadView#selectElementBasedOnUrlPath: have path', parts)
       const targetId = parseInt(parts[parts.length - 1])
       const selectedInViewer = viewer.getSelectedIds()
@@ -660,7 +661,7 @@ export default function CadView({
     if (rootElement) {
       const parts = location.pathname.split(/\.ifc/i)
       const expectedPartCount = 2
-      if (parts.length === expectedPartCount) {
+      if (parts.length === expectedPartCount && parts[1] !== '') {
         selectElementBasedOnFilepath(parts[1])
       }
     }

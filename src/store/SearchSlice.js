@@ -12,10 +12,10 @@ import {isVisibleInitially} from '../Components/Search/hashState'
 export default function createSearchSlice(set, get) {
   return {
     isSearchEnabled: true,
-    setIsSearchEnabled: (isEnabled) => set(() => ({isSearchEnabled: isEnabled})),
+    setIsSearchEnabled: (is) => set(() => ({isSearchEnabled: is})),
 
     isSearchBarVisible: isVisibleInitially(),
-    setIsSearchBarVisible: (isVisible) => set(() => ({isSearchBarVisible: isVisible})),
+    setIsSearchBarVisible: (is) => set(() => ({isSearchBarVisible: is})),
 
     searchIndex: new SearchIndex(),
     setSearchIndex: (index) => set(() => ({searchIndex: index})),
