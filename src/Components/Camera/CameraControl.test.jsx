@@ -1,21 +1,22 @@
 import React from 'react'
-import {act, render, screen, renderHook} from '@testing-library/react'
-import useStore from '../store/useStore'
-import ShareMock from '../ShareMock'
 import {__getIfcViewerAPIExtendedMockSingleton} from 'web-ifc-viewer'
+import {act, render, screen, renderHook} from '@testing-library/react'
+import useStore from '../../store/useStore'
+import ShareMock from '../../ShareMock'
 import CameraControl, {
   onHash,
   parseHashParams,
 } from './CameraControl'
+import {HASH_PREFIX_CAMERA} from './hashState'
 
 
 describe('CameraControl', () => {
   it('parseHashParams, 3 params', () => {
-    expect(parseHashParams('c:1,2,3')).toStrictEqual([1, 2, 3])
+    expect(parseHashParams(`${HASH_PREFIX_CAMERA}:1,2,3`)).toStrictEqual([1, 2, 3])
   })
 
   it('parseHashParams, 6 params', () => {
-    expect(parseHashParams('c:1,2,3,4,5,6')).toStrictEqual([1, 2, 3, 4, 5, 6])
+    expect(parseHashParams(`${HASH_PREFIX_CAMERA}:1,2,3,4,5,6`)).toStrictEqual([1, 2, 3, 4, 5, 6])
   })
 
   it('CameraControl', async () => {
@@ -30,7 +31,7 @@ describe('CameraControl', () => {
 
   it('onHash, position', () => {
     const cam = new MockCamera()
-    const location = {hash: '#c:1,2,3'}
+    const location = {hash: `#${HASH_PREFIX_CAMERA}:1,2,3`}
     onHash(location, cam)
     const expectCam = new MockCamera(1, 2, 3)
     expectCam.setDoTween(true)
@@ -39,7 +40,7 @@ describe('CameraControl', () => {
 
   it('onHash, target', () => {
     const cam = new MockCamera()
-    const location = {hash: '#c:1,2,3,4,5,6'}
+    const location = {hash: `#${HASH_PREFIX_CAMERA}:1,2,3,4,5,6`}
     onHash(location, cam)
     const expectCam = new MockCamera(1, 2, 3, 4, 5, 6)
     expectCam.setDoTween(true)

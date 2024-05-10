@@ -4,8 +4,15 @@ import {Vector3} from 'three'
 import {useDoubleTap} from 'use-double-tap'
 import useStore from '../store/useStore'
 import PlaceMark from '../Infrastructure/PlaceMark'
-import {addHashParams, getAllHashParams, getHashParams, getHashParamsFromUrl, getObjectParams, removeHashParams} from '../utils/location'
-import {CAMERA_PREFIX} from '../Components/CameraControl'
+import {
+  addHashParams,
+  getAllHashParams,
+  getHashParams,
+  getHashParamsFromUrl,
+  getObjectParams,
+  removeHashParams,
+} from '../utils/location'
+import {HASH_PREFIX_CAMERA} from '../Components/Camera/hashState'
 import {floatStrTrim, findMarkdownUrls} from '../utils/strings'
 import {roundCoord} from '../utils/math'
 import {addUserDataInGroup, setGroupColor} from '../utils/svg'
@@ -57,7 +64,7 @@ export default function usePlaceMark() {
 
         issueComments.forEach((comment) => {
           if (comment.body) {
-            const newPlaceMarkUrls = findMarkdownUrls(comment.body, PLACE_MARK_PREFIX)
+            const newPlaceMarkUrls = findMarkdownUrls(comment.body, HASH_PREFIX_PLACE_MARK)
             placeMarkUrls = placeMarkUrls.concat(newPlaceMarkUrls)
           }
         })
@@ -69,12 +76,12 @@ export default function usePlaceMark() {
       const totalPlaceMarkHashUrlMap = new Map()
 
       totalPlaceMarkUrls.forEach((url) => {
-        const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
+        const hash = getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
         totalPlaceMarkHashUrlMap.set(hash, url)
       })
 
       const totalPlaceMarkHashes = Array.from(totalPlaceMarkHashUrlMap.keys())
-      const activePlaceMarkHash = getHashParams(location, PLACE_MARK_PREFIX)
+      const activePlaceMarkHash = getHashParams(location, HASH_PREFIX_PLACE_MARK)
       const inactivePlaceMarkHashes = totalPlaceMarkHashes.filter((hash) => hash !== activePlaceMarkHash)
 
       if (activePlaceMarkHash) {
@@ -199,12 +206,12 @@ export default function usePlaceMark() {
     if (point && promiseGroup) {
       const svgGroup = await promiseGroup
       const markArr = roundCoord(...point)
-      addHashParams(window.location, PLACE_MARK_PREFIX, markArr)
-      removeHashParams(window.location, CAMERA_PREFIX)
+      addHashParams(window.location, HASH_PREFIX_PLACE_MARK, markArr)
+      removeHashParams(window.location, HASH_PREFIX_CAMERA)
       addUserDataInGroup(svgGroup, {
         url: window.location.href,
       })
-      const hash = getHashParamsFromUrl(window.location.href, PLACE_MARK_PREFIX)
+      const hash = getHashParamsFromUrl(window.location.href, HASH_PREFIX_PLACE_MARK)
       placeMarkGroupMap.set(hash, svgGroup)
       setPlaceMarkStatus(svgGroup, true)
     }
@@ -232,7 +239,7 @@ export default function usePlaceMark() {
       return
     }
     assertDefined(url)
-    const hash = getHashParamsFromUrl(url, PLACE_MARK_PREFIX)
+    const hash = getHashParamsFromUrl(url, HASH_PREFIX_PLACE_MARK)
     const svgGroup = placeMarkGroupMap.get(hash)
 
     if (svgGroup) {
@@ -310,6 +317,6 @@ const resetPlaceMarkColors = () => {
 }
 
 
-const PLACE_MARK_PREFIX = 'm'
+const HASH_PREFIX_PLACE_MARK = 'm'
 const placeMarkGroupMap = new Map()
 let prevSynchSidebar

@@ -4,9 +4,10 @@ import ListItem from '@mui/material/ListItem'
 import ListItemIcon from '@mui/material/ListItemIcon'
 import ListItemText from '@mui/material/ListItemText'
 import Stack from '@mui/material/Stack'
-import useStore from '../store/useStore'
-import {ControlButtonWithHashState, TooltipIconButton} from './Buttons'
-import Dialog from './Dialog'
+import useStore from '../../store/useStore'
+import {ControlButtonWithHashState, TooltipIconButton} from '../Buttons'
+import Dialog from '../Dialog'
+import {HASH_PREFIX_HELP} from './hashState'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward'
 import AutoFixHighOutlinedIcon from '@mui/icons-material/AutoFixHighOutlined'
@@ -24,8 +25,8 @@ import SearchIcon from '@mui/icons-material/Search'
 import ShiftIcon from '@mui/icons-material/FileUpload'
 import TouchAppOutlinedIcon from '@mui/icons-material/TouchAppOutlined'
 import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
-import TreeIcon from '../assets/icons/Tree.svg'
-import ShareIcon from '../assets/icons/Share.svg'
+import TreeIcon from '../../assets/icons/Tree.svg'
+import ShareIcon from '../../assets/icons/Share.svg'
 
 
 /**
@@ -48,7 +49,7 @@ export default function HelpControl() {
       icon={<HelpOutlineIcon className='icon-share'/>}
       isDialogDisplayed={isHelpVisible}
       setIsDialogDisplayed={setIsHelpVisible}
-      hashPrefix={HELP_PREFIX}
+      hashPrefix={HASH_PREFIX_HELP}
       placement='left'
       dataTestId='help-control-button'
     >
@@ -59,10 +60,6 @@ export default function HelpControl() {
     </ControlButtonWithHashState>
   )
 }
-
-
-/** The prefix to use for the help state token */
-export const HELP_PREFIX = 'help'
 
 
 /**

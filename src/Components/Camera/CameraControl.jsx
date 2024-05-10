@@ -1,15 +1,16 @@
 import React, {ReactElement, useEffect} from 'react'
 import {useLocation} from 'react-router-dom'
-import useStore from '../store/useStore'
-import debug from '../utils/debug'
+import useStore from '../../store/useStore'
+import debug from '../../utils/debug'
 import {
   addHashListener,
   addHashParams,
   getHashParams,
   removeHashParams,
-} from '../utils/location'
-import {roundCoord} from '../utils/math'
-import {floatStrTrim} from '../utils/strings'
+} from '../../utils/location'
+import {roundCoord} from '../../utils/math'
+import {floatStrTrim} from '../../utils/strings'
+import {HASH_PREFIX_CAMERA} from './hashState'
 
 
 /**
@@ -36,10 +37,6 @@ export default function CameraControl() {
 
   return <div style={{display: 'none'}}>Camera</div>
 }
-
-
-/** The prefix to use for camera coordinate in the URL hash. */
-export const CAMERA_PREFIX = 'c'
 
 
 /**
@@ -92,7 +89,7 @@ function onLoad(location, cameraControls, viewer) {
  * load useEffect
  */
 export function onHash(location, cameraControls) {
-  const encodedParams = getHashParams(location, CAMERA_PREFIX)
+  const encodedParams = getHashParams(location, HASH_PREFIX_CAMERA)
   if (encodedParams === undefined) {
     return false
   }
@@ -128,7 +125,7 @@ export function setCameraFromParams(encodedParams, cameraControls) {
 
 const floatPattern = '(-?\\d+(?:\\.\\d+)?)'
 const coordPattern = `${floatPattern},${floatPattern},${floatPattern}`
-const paramPattern = `${CAMERA_PREFIX}:${coordPattern}(?:,${coordPattern})?`
+const paramPattern = `${HASH_PREFIX_CAMERA}:${coordPattern}(?:,${coordPattern})?`
 const paramRegex = new RegExp(paramPattern)
 
 
@@ -159,7 +156,7 @@ export function parseHashParams(encodedParams) {
 
 /** @return {boolean} True iff the camera hash params are present. */
 export function hasValidUrlParams() {
-  const encoded = getHashParams(window.location, CAMERA_PREFIX)
+  const encoded = getHashParams(window.location, HASH_PREFIX_CAMERA)
   if (encoded && parseHashParams(encoded)) {
     return true
   }
@@ -185,11 +182,11 @@ export function addCameraUrlParams(cameraControls) {
   } else {
     camArr = camArr.concat(roundCoord(...target))
   }
-  addHashParams(window.location, CAMERA_PREFIX, camArr)
+  addHashParams(window.location, HASH_PREFIX_CAMERA, camArr)
 }
 
 
 /** Removes camera params from the URL if present */
 export function removeCameraUrlParams() {
-  removeHashParams(window.location, CAMERA_PREFIX)
+  removeHashParams(window.location, HASH_PREFIX_CAMERA)
 }

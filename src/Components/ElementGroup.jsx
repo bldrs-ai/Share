@@ -1,9 +1,9 @@
-import React, {useState} from 'react'
+import React, {ReactElement, useState} from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Stack from '@mui/material/Stack'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
-import CutPlaneMenu from './CutPlaneMenu'
+import CutPlaneMenu from './CutPlane/CutPlaneMenu'
 import CloseIcon from '@mui/icons-material/Close'
 import FilterCenterFocusIcon from '@mui/icons-material/FilterCenterFocus'
 import HideSourceOutlinedIcon from '@mui/icons-material/HideSourceOutlined'
@@ -11,11 +11,10 @@ import VisibilityOutlinedIcon from '@mui/icons-material/VisibilityOutlined'
 
 
 /**
- * OperationsGroup contains tools for sharing, notes, properties, cut
- * plane, deselect, theme change and about.
+ * ElementGroup contains tools for controlling element visibility
  *
  * @property {Function} deselectItems deselects currently selected element
- * @return {React.Component}
+ * @return {ReactElement}
  */
 export default function ElementGroup({deselectItems}) {
   const viewer = useStore((state) => state.viewer)

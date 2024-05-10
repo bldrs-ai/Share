@@ -21,6 +21,7 @@ describe('view 100: Model centering and view reset', () => {
    */
   it('Model re-centered with when camera hash removed - Screen', () => {
     cy.visit('/share/v/p/index.ifc')
+    waitForModel()
     cy.percySnapshot()
   })
 })

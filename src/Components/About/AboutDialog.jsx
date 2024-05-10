@@ -19,7 +19,7 @@ import DiscordIcon from '../../assets/icons/Discord.svg'
  *
  * @property {boolean} isDialogDisplayed Passed to Dialog to be controlled
  * @property {Function} setIsDialogDisplayed Passed to Dialog to be controlled
- * @property {boolean} onClose Callback when closed
+ * @property {Function} onClose Callback when closed
  * @return {ReactElement}
  */
 export default function AboutDialog({isDialogDisplayed, setIsDialogDisplayed, onClose}) {

@@ -1,10 +1,10 @@
 import React, {ReactElement} from 'react'
 import Box from '@mui/material/Box'
 import useStore from '../../store/useStore'
-import {setHashParams, removeHashParams} from '../../utils/location'
+import {setParams, removeParams} from '../../utils/location'
 import {CloseButton, TooltipIconButton} from '../Buttons'
-import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../CameraControl'
-import {NOTES_PREFIX} from './NotesControl'
+import {setCameraFromParams, addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
+import {HASH_PREFIX_NOTES} from './hashState'
 import AddCommentOutlinedIcon from '@mui/icons-material/AddCommentOutlined'
 import ArrowBackIcon from '@mui/icons-material/ArrowBack'
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore'
@@ -17,6 +17,7 @@ export default function NotesNavBar() {
   const notes = useStore((state) => state.notes)
   const selectedNoteId = useStore((state) => state.selectedNoteId)
   const selectedNoteIndex = useStore((state) => state.selectedNoteIndex)
+  const setIsNotesVisible = useStore((state) => state.setIsNotesVisible)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
   const toggleIsCreateNoteVisible = useStore((state) => state.toggleIsCreateNoteVisible)
@@ -34,7 +35,7 @@ export default function NotesNavBar() {
       const note = notes.filter((n) => n.index === index)[0]
       setSelectedNoteId(note.id)
       setSelectedNoteIndex(note.index)
-      setHashParams(location, NOTES_PREFIX, {id: note.id})
+      setParams(HASH_PREFIX_NOTES, {id: note.id})
       if (note.url) {
         setCameraFromParams(note.url)
         addCameraUrlParams()
@@ -42,6 +43,13 @@ export default function NotesNavBar() {
         removeCameraUrlParams()
       }
     }
+  }
+
+
+  /** Hide panel and remove hash state */
+  function onCloseClick() {
+    setIsNotesVisible(false)
+    removeParams(HASH_PREFIX_NOTES)
   }
 
 
@@ -69,7 +77,7 @@ export default function NotesNavBar() {
          <TooltipIconButton
            title='Back to the list'
            onClick={() => {
-             setHashParams(window.location, NOTES_PREFIX)
+             setParams(HASH_PREFIX_NOTES)
              setSelectedNoteId(null)
            }}
            icon={<ArrowBackIcon className='icon-share'/>}
@@ -132,7 +140,7 @@ export default function NotesNavBar() {
             />
 
         )}
-        <CloseButton onCloseClick={() => removeHashParams(location, NOTES_PREFIX)}/>
+        <CloseButton onCloseClick={onCloseClick}/>
       </Box>
     </Box>
   )

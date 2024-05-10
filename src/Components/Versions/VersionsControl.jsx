@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_VERSIONS} from './hashState'
 import HistoryIcon from '@mui/icons-material/History'
 
 
@@ -18,12 +19,8 @@ export default function VersionsControl() {
       icon={<HistoryIcon className='icon-share'/>}
       isDialogDisplayed={isVersionsVisible}
       setIsDialogDisplayed={setIsVersionsVisible}
-      hashPrefix={VERSIONS_PREFIX}
+      hashPrefix={HASH_PREFIX_VERSIONS}
       placement='bottom'
     />
   )
 }
-
-
-/** The prefix to use for the Versions state tokens */
-export const VERSIONS_PREFIX = 'v'

@@ -1,6 +1,7 @@
 import React, {ReactElement} from 'react'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_SEARCH} from './hashState'
 import SearchIcon from '@mui/icons-material/Search'
 
 
@@ -16,14 +17,10 @@ export default function SearchControl() {
     <ControlButtonWithHashState
       title='Search'
       icon={<SearchIcon className='icon-share'/>}
-      hashPrefix={SEARCH_PREFIX}
+      hashPrefix={HASH_PREFIX_SEARCH}
       isDialogDisplayed={isSearchBarVisible}
       setIsDialogDisplayed={setIsSearchBarVisible}
       placement='bottom'
     />
   )
 }
-
-
-/** The prefix to use for the search state token */
-export const SEARCH_PREFIX = 's'
