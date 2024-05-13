@@ -5,7 +5,7 @@ import {
   auth0Login,
 } from '../../support/utils'
 
-/** {@link https://github.com/orgs/bldrs-ai/projects/50/views/1?pane=issue&itemId=52262146} */
+/** {@link https://github.com/bldrs-ai/Share/issues/978} */
 describe('Notes 100: Comments on a note', () => {
   beforeEach(homepageSetup)
   context('Returning user visits homepage', () => {

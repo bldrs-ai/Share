@@ -134,12 +134,12 @@ export default function Notes() {
         {user && selectedNote && !selectedNote.locked && <NoteCardCreate isNote={false} noteNumber={selectedNote.number}/>}
       </ListItem>
       {selectedNote && !user &&
-        <Box sx={{paddingBottom: '10px'}}>
+        <Box sx={{paddingBottom: '1em'}}>
           <NoContent message={'Please login to leave comments.'}/>
         </Box>
       }
       {selectedNote && user && selectedNote.locked &&
-        <Box sx={{paddingBottom: '10px'}}><NoContent message={'The note is locked.'}/></Box>
+        <Box sx={{paddingBottom: '1em'}}><NoContent message={'The note is locked.'}/></Box>
       }
       {comments && selectedNote &&
        comments.map((comment, index) => {
