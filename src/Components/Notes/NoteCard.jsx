@@ -14,15 +14,15 @@ import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {
-  CAMERA_PREFIX,
   addCameraUrlParams,
   setCameraFromParams,
   parseHashParams,
   removeCameraUrlParams,
-} from '../CameraControl'
+} from '../Camera/CameraControl'
+import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
 import NoteContent from './NoteContent'
-import {NOTES_PREFIX} from './NotesControl'
+import {HASH_PREFIX_NOTES} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
 
@@ -84,7 +84,7 @@ export default function NoteCard({
         }
         const encoded = getHashParamsFromHashStr(
             url.substring(url.indexOf('#') + 1),
-            CAMERA_PREFIX)
+            HASH_PREFIX_CAMERA)
         return encoded && parseHashParams(encoded)
       })
 
@@ -116,7 +116,7 @@ export default function NoteCard({
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
-    setHashParams(window.location, NOTES_PREFIX, {id: id})
+    setHashParams(window.location, HASH_PREFIX_NOTES, {id: id})
   }
 
 

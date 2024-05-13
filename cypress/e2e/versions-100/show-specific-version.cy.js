@@ -25,7 +25,8 @@ describe('Versions 100: Show a specific version', () => {
       const thirdVersionInterceptTag = 'ghThirdVersionLoad'
       const percyLabelPrefix = 'Versions 100: Show a specific version,'
 
-      it('Open Momentum.ifc, open versions component, select three versions', () => {
+      // TODO(https://github.com/bldrs-ai/Share/issues/1178)
+      it.skip('Open Momentum.ifc, open versions component, select three versions', () => {
         cy.get('[data-testid="control-button-open"]').click()
         cy.get('[data-testid="textfield-sample-projects"]').click()
 

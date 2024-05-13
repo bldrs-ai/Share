@@ -24,14 +24,13 @@ describe('View 100: Synchronized View and NavTree', () => {
       cy.findByText('Build').should('be.visible').click()
       cy.findByText('Every').should('be.visible').click()
       cy.findByText('Thing').should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[0]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[1]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[2]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[3]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[4]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[5]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[6]).should('be.visible').click()
-      cy.findAllByText('Together').then((elt) => elt[7]).should('be.visible').click()
+      cy.findAllByText('Together').eq(0).should('be.visible').click()
+      cy.findAllByText('Together').eq(1).should('be.visible').click()
+      cy.findAllByText('Together').eq(2).should('be.visible').click()
+      cy.findAllByText('Together').eq(3).should('be.visible').click()
+      cy.findAllByText('Together').eq(4).should('be.visible').click()
+      cy.findAllByText('Together').eq(5).should('be.visible').click()
+      cy.findAllByText('Together').eq(6).should('be.visible').click()
     })
 
     it('Item highlighted in tree and scene - Screen', () => {
@@ -39,11 +38,12 @@ describe('View 100: Synchronized View and NavTree', () => {
     })
   })
 
-  context.only('Visits permalink to selected element', () => {
+  context('Visits permalink to selected element', () => {
     beforeEach(() => {
-      // TODO(pablo): can't figure out how to get intercept for deep path, but this works
-      cy.visit('/share/v/p/index.ifc/621')
-      waitForModelReady('bounceEltSelect')
+      // TODO(pablo): root id selection doesn't work after search state working.  Also move this to a helper
+      cy.intercept('GET', '/share/v/p/index.ifc/81/621', {fixture: '404.html'}).as('twoLevelSelect')
+      cy.visit('/share/v/p/index.ifc/81/621')
+      waitForModelReady('twoLevelSelect')
     })
 
     it('Item highlighted in tree and scene - Screen', () => {

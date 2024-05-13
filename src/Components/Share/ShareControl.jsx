@@ -8,14 +8,15 @@ import InputAdornment from '@mui/material/InputAdornment'
 import Stack from '@mui/material/Stack'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
-import useStore from '../store/useStore'
-import {ControlButtonWithHashState} from './Buttons'
-import {addCameraUrlParams, removeCameraUrlParams} from './CameraControl'
-import {addPlanesToHashState, removePlanesFromHashState} from './CutPlaneMenu'
-import Dialog from './Dialog'
-import Toggle from './Toggle'
-import CopyIcon from '../assets/icons/Copy.svg'
-import ShareIcon from '../assets/icons/Share.svg'
+import useStore from '../../store/useStore'
+import {ControlButtonWithHashState} from '../Buttons'
+import {addCameraUrlParams, removeCameraUrlParams} from '../Camera/CameraControl'
+import {addPlanesToHashState, removePlanesFromHashState} from '../CutPlane/CutPlaneMenu'
+import Dialog from '../Dialog'
+import Toggle from '../Toggle'
+import {HASH_PREFIX_SHARE} from './hashState'
+import CopyIcon from '../../assets/icons/Copy.svg'
+import ShareIcon from '../../assets/icons/Share.svg'
 
 
 /**
@@ -34,7 +35,7 @@ export default function ShareControl() {
       icon={<ShareIcon className='icon-share'/>}
       isDialogDisplayed={isShareVisible}
       setIsDialogDisplayed={setIsShareVisible}
-      hashPrefix={SHARE_PREFIX}
+      hashPrefix={HASH_PREFIX_SHARE}
       placement='left'
     >
       <ShareDialog
@@ -45,7 +46,6 @@ export default function ShareControl() {
   )
 }
 
-export const SHARE_PREFIX = 'share'
 
 /**
  * The ShareDialog component lets the user control what state is

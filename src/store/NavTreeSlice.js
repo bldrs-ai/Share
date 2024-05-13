@@ -1,3 +1,6 @@
+import {isVisibleInitially} from '../Components/NavTree/hashState'
+
+
 /**
  * NavTree store.
  *
@@ -22,7 +25,7 @@ export default function createNavTreeSlice(set, get) {
     expandedTypes: [],
     setExpandedTypes: (types) => set(() => ({expandedTypes: types})),
 
-    isNavTreeVisible: false,
+    isNavTreeVisible: isVisibleInitially(),
     setIsNavTreeVisible: (isVisible) => set(() => ({isNavTreeVisible: isVisible})),
     toggleIsNavTreeVisible: () =>
       set((state) => ({isNavTreeVisible: !state.isNavTreeVisible})),
