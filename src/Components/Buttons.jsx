@@ -6,7 +6,7 @@ import ToggleButton from '@mui/material/ToggleButton'
 import Tooltip from '@mui/material/Tooltip'
 import useStore from '../store/useStore'
 import {assertDefined} from '../utils/assert'
-import {addHashParams, getHashParams} from '../utils/location'
+import {addHashParams, hasHashParams, removeHashParams} from '../utils/location'
 import {useIsMobile} from './Hooks'
 import CloseIcon from '@mui/icons-material/Close'
 import ExpandIcon from '../assets/icons/Expand.svg'
@@ -132,23 +132,18 @@ export function ControlButtonWithHashState({
   assertDefined(hashPrefix, isDialogDisplayed, setIsDialogDisplayed)
 
   const location = useLocation()
-
-  // On first load, show dialog if state token present
   useEffect(() => {
-    setIsDialogDisplayed(getHashParams(window.location, hashPrefix) !== undefined)
-  }, [hashPrefix, location, setIsDialogDisplayed])
-
-  // Enforce invariant
-  useEffect(() => {
+    // If dialog displayed by initial state value (e.g. About for isFirstTime)
+    // or if hashPrefix is present
+    const isActiveHash = hasHashParams(window.location, hashPrefix)
     if (isDialogDisplayed) {
-      addHashParams(window.location, hashPrefix)
-    } else {
-      const currentHash = window.location.hash
-      const prefixRegex = new RegExp(`${hashPrefix}:[^;]*;?`, 'g')
-      const newHash = currentHash.replace(prefixRegex, '')
-      window.history.replaceState(null, '', window.location.pathname + window.location.search + newHash)
+      if (!isActiveHash) {
+        addHashParams(window.location, hashPrefix)
+      }
+    } else if (isActiveHash) {
+      removeHashParams(window.location, hashPrefix)
     }
-  }, [hashPrefix, isDialogDisplayed])
+  }, [hashPrefix, isDialogDisplayed, location])
 
   return (
     <ControlButton

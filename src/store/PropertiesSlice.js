@@ -1,5 +1,8 @@
+import {isVisibleInitially} from '../Components/Properties/hashState'
+
+
 /**
- * Properties store.
+ * Properties store
  *
  * @param {Function} set
  * @param {Function} get
@@ -10,7 +13,7 @@ export default function createPropertiesSlice(set, get) {
     isPropertiesEnabled: true,
     setIsPropertiesEnabled: (is) => set(() => ({isPropertiesEnabled: is})),
 
-    isPropertiesVisible: false,
+    isPropertiesVisible: isVisibleInitially(),
     setIsPropertiesVisible: (is) => set(() => ({isPropertiesVisible: is})),
     toggleIsPropertiesVisible: () =>
       set((state) => ({isPropertiesVisible: !state.isPropertiesVisible})),

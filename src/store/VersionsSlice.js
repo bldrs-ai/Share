@@ -1,3 +1,6 @@
+import {isVisibleInitially} from '../Components/Versions/hashState'
+
+
 /**
  * Data stored in Zustand for Versions state.
  *
@@ -13,7 +16,7 @@ export default function createVersionsSlice(set, get) {
     activeVersion: 0,
     setActiveVersion: (version) => set(() => ({activeVersion: version})),
 
-    isVersionsVisible: false,
+    isVersionsVisible: isVisibleInitially(),
     setIsVersionsVisible: (isVisible) => set(() => ({isVersionsVisible: isVisible})),
     toggleIsVersionsVisible: () =>
       set((state) => ({isVersionsVisible: !state.isVersionsVisible})),

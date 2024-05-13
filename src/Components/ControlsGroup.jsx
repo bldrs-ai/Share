@@ -4,7 +4,7 @@ import ButtonGroup from '@mui/material/ButtonGroup'
 import NavTreeControl from './NavTree/NavTreeControl'
 import OpenModelControl from './Open/OpenModelControl'
 import SaveModelControl from './Open/SaveModelControl'
-import SearchControl from '../Components/Search/SearchControl'
+import SearchControl from './Search/SearchControl'
 import VersionsControl from './Versions/VersionsControl'
 import useStore from '../store/useStore'
 

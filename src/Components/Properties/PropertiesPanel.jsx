@@ -1,12 +1,12 @@
 import React, {ReactElement, useEffect} from 'react'
 import {useLocation} from 'react-router'
 import useStore from '../../store/useStore'
-import {addHashParams, getHashParams, removeHashParams} from '../../utils/location'
+import {getParams, removeParams} from '../../utils/location'
 import {CloseButton} from '../Buttons'
 import NoContent from '../NoContent'
 import PanelWithTitle from '../SideDrawer/PanelWithTitle'
 import Properties from './Properties'
-import {PROPERTIES_PREFIX} from './PropertiesControl'
+import {HASH_PREFIX_PROPERTIES} from './hashState'
 
 
 /**
@@ -20,27 +20,21 @@ import {PROPERTIES_PREFIX} from './PropertiesControl'
  */
 export default function PropertiesPanel({includeGutter}) {
   const selectedElement = useStore((state) => state.selectedElement)
-  const isPropertiesVisible = useStore((state) => state.isPropertiesVisible)
   const setIsPropertiesVisible = useStore((state) => state.setIsPropertiesVisible)
 
   const location = useLocation()
 
   useEffect(() => {
-    const propsParams = getHashParams(location, PROPERTIES_PREFIX)
+    const propsParams = getParams(location, HASH_PREFIX_PROPERTIES)
     if (propsParams) {
       setIsPropertiesVisible(true)
     }
   }, [location, setIsPropertiesVisible])
 
-  /** Toggle properties visibility and set url state token */
+  /** Hide panel and remove hash state */
   function onCloseClick() {
-    if (isPropertiesVisible) {
-      setIsPropertiesVisible(false)
-      removeHashParams(window.location, PROPERTIES_PREFIX)
-    } else {
-      setIsPropertiesVisible(true)
-      addHashParams(window.location, PROPERTIES_PREFIX)
-    }
+    setIsPropertiesVisible(false)
+    removeParams(HASH_PREFIX_PROPERTIES)
   }
 
   return (

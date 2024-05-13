@@ -5,6 +5,7 @@ import {getOrganizations} from '../../net/github/Organizations'
 import useStore from '../../store/useStore'
 import {ControlButtonWithHashState} from '../Buttons'
 import OpenModelDialog from './OpenModelDialog'
+import {HASH_PREFIX_OPEN_MODEL} from './hashState'
 import CreateNewFolderIcon from '@mui/icons-material/CreateNewFolderOutlined'
 
 
@@ -46,7 +47,7 @@ export default function OpenModelControl() {
       icon={<CreateNewFolderIcon className='icon-share'/>}
       isDialogDisplayed={isOpenModelVisible}
       setIsDialogDisplayed={setIsOpenModelVisible}
-      hashPrefix={OPEN_MODEL_PREFIX}
+      hashPrefix={HASH_PREFIX_OPEN_MODEL}
       placement='bottom'
     >
       <OpenModelDialog
@@ -58,7 +59,3 @@ export default function OpenModelControl() {
     </ControlButtonWithHashState>
   )
 }
-
-
-/** The prefix to use for the OpenModel state tokens, 'f' for files */
-export const OPEN_MODEL_PREFIX = 'om'
