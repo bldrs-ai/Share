@@ -61,6 +61,7 @@ export default function NotesControl() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
+            locked: issue.locked,
             synched: true,
           })
         })

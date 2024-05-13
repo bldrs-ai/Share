@@ -12,8 +12,8 @@ export default function createNotesSlice(set, get) {
   return {
     isNotesEnabled: true,
     setIsNotesEnabled: (isEnabled) => set(() => ({isNotesEnabled: isEnabled})),
-
-    comments: null,
+    addComment: true,
+    comments: [],
     createdNotes: null,
     deletedNotes: null,
     isCreateNoteVisible: false,
@@ -35,8 +35,10 @@ export default function createNotesSlice(set, get) {
     setPlaceMarkActivated: (newPlaceMarkActivated) =>
       set(() => ({placeMarkActivated: newPlaceMarkActivated})),
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
+    setSelectedNote: (note) => set(() => ({selectedNote: note})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
+    toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
     toggleIsCreateNoteVisible: () =>
       set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),

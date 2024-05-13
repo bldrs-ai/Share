@@ -147,13 +147,13 @@ export default function NoteFooter({
        />
       }
 
-      {isNote &&
+      {isNote && !selected &&
        <TooltipIconButton
          title='Add Comment'
          size='small'
          placement='bottom'
          selected={showCreateComment}
-         onClick={() => setShowCreateComment(!showCreateComment)}
+         onClick={selectCard}
          icon={<AddCommentOutlinedIcon className='icon-share'/>}
        />
       }
