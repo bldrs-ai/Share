@@ -160,7 +160,6 @@ export default function CutPlaneMenu() {
  * Called by this component and CadView for consistent reset
  *
  * @param {object} viewer
- * @param {Function} setAnchorEl
  * @param {Function} setCutPlaneDirections
  * @param {Function} setIsCutPlaneActive
  */
