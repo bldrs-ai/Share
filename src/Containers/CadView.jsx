@@ -139,7 +139,10 @@ export default function CadView({
         assertDefined(themeArg.palette.primary.sceneBackground))
       setViewer(initializedViewer)
     }
-    resetState()
+    // Don't call first time since component states get set from permalinks
+    if (isModelReady) {
+      resetState()
+    }
     initViewerCb(undefined, theme)
     theme.addThemeChangeListener(initViewerCb)
   }
