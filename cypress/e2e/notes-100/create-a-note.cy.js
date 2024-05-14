@@ -29,8 +29,10 @@ describe('Notes 100: Create a note', () => {
       it('When note is created, navigate to the notes list with a new note created at the top of the list', () => {
         cy.get('[placeholder="Note Title"]').click().type('New Note Title')
         cy.get('[placeholder="Note Body"]').click().type('New Note Body')
-        cy.get('[data-testid="Submit"]').should('be.enabled').click()
+        cy.get('[data-testid="Submit"]').should('be.enabled')
+        cy.get('[data-testid="Submit"]').click()
         cy.get('[data-testid="list-notes"]').should('exist')
+        cy.percySnapshot()
       })
     })
   })
