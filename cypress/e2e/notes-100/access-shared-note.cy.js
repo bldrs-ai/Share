@@ -12,7 +12,7 @@ describe('Notes 100: Access shared note', () => {
       cy.visit('/share/v/p/index.ifc#c:-133.022,131.828,161.85,-38.078,22.64,-2.314;i:')
       waitForModel()
     })
-    it.only('Notes open - Screen', () => {
+    it('Notes open - Screen', () => {
       // Panel title to contain 'NOTES' string
       cy.get('[data-testid="panelTitle"]').contains('NOTES')
       // List of notes to be visible
