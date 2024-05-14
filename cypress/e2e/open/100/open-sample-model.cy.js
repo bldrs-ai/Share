@@ -48,6 +48,7 @@ describe('Open 100: Open Sample Model', () => {
     })
 
     context('Open up all persistent controls', () => {
+      const interceptModelLoadTag = 'ghModelLoad'
       beforeEach(() => {
         // Select element, opens nav
         const interceptEltSelectTag = 'twoLevelSelect'
@@ -70,20 +71,18 @@ describe('Open 100: Open Sample Model', () => {
         cy.get('[data-testid="menu-item-plan"]').click()
 
         // Select a sample project
-        cy.get('[data-testid="control-button-open"]').click()
-        cy.get('[data-testid="textfield-sample-projects"]').click()
-
-        const interceptModelLoadTag = 'ghModelLoad'
         setupVirtualPathIntercept(
           '/share/v/gh/Swiss-Property-AG/Momentum-Public/main/Momentum.ifc',
           '/Momentum.ifc',
           interceptModelLoadTag,
         )
+        cy.get('[data-testid="control-button-open"]').click()
+        cy.get('[data-testid="textfield-sample-projects"]').click()
         cy.findByText('Momentum').click()
-        waitForModelReady(interceptModelLoadTag)
       })
 
       it('Project loads, all controls reset - Screen', () => {
+        waitForModelReady(interceptModelLoadTag)
         cy.percySnapshot()
       })
     })
