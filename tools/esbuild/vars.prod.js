@@ -1,4 +1,6 @@
 export default {
+  APPS_IS_ENABLED: false,
+
   // Auth
   AUTH0_DOMAIN: 'bldrs.us.auth0.com',
   OAUTH2_CLIENT_ID: null,

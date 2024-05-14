@@ -26,6 +26,7 @@ import Styles from './Styles'
 export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const navigation = useRef(useNavigate())
   const urlParams = useParams()
+  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const modelPath = useStore((state) => state.modelPath)
   const searchIndex = useStore((state) => state.searchIndex)
   const setModelPath = useStore((state) => state.setModelPath)
@@ -33,8 +34,10 @@ export default function Share({installPrefix, appPrefix, pathPrefix}) {
   const setRepository = useStore((state) => state.setRepository)
 
   useMemo(() => {
-    new WidgetApi(navigation.current, searchIndex)
-  }, [navigation, searchIndex])
+    if (isAppsEnabled) {
+      new WidgetApi(navigation.current, searchIndex)
+    }
+  }, [isAppsEnabled, navigation, searchIndex])
 
 
   /**
