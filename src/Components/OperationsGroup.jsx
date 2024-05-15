@@ -1,7 +1,6 @@
 import React, {ReactElement} from 'react'
 import ButtonGroup from '@mui/material/ButtonGroup'
 import Divider from '@mui/material/Divider'
-import {useExistInFeature} from '../hooks/useExistInFeature'
 import useStore from '../store/useStore'
 import {TooltipIconButton} from './Buttons'
 import CameraControl from './Camera/CameraControl'
@@ -21,7 +20,7 @@ import AppStoreIcon from '../assets/icons/AppStore.svg'
  * @return {ReactElement}
  */
 export default function OperationsGroup({deselectItems}) {
-  const isAppStoreEnabled = useExistInFeature('apps')
+  const isAppsEnabled = useStore((state) => state.isAppsEnabled)
   const isAppStoreOpen = useStore((state) => state.isAppStoreOpen)
   const isImagineEnabled = useStore((state) => state.isImagineEnabled)
   const isLoginEnabled = useStore((state) => state.isLoginEnabled)
@@ -43,7 +42,7 @@ export default function OperationsGroup({deselectItems}) {
       {isShareEnabled && <ShareControl/>}
       {isNotesEnabled && <NotesControl/>}
       {isPropertiesEnabled && isAnElementSelected && <PropertiesControl/>}
-      {isAppStoreEnabled &&
+      {isAppsEnabled &&
        <TooltipIconButton
          title='Open App Store'
          icon={<AppStoreIcon/>}

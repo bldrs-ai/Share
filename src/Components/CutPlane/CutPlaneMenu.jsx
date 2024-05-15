@@ -142,11 +142,8 @@ export default function CutPlaneMenu() {
         </MenuItem>
         <MenuItem
           onClick={() => {
-            setCutPlaneDirections([])
-            removePlanes(viewer)
             setAnchorEl(null)
-            setIsCutPlaneActive(false)
-            removeParams(HASH_PREFIX_CUT_PLANE, ['x', 'y', 'z'])
+            resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
           }}
           data-testid='menu-item-clear-all'
         >
@@ -156,6 +153,24 @@ export default function CutPlaneMenu() {
       </Menu>
     </>
   )
+}
+
+
+/**
+ * Called by this component and CadView for consistent reset
+ *
+ * @param {object} viewer
+ * @param {Function} setCutPlaneDirections
+ * @param {Function} setIsCutPlaneActive
+ */
+export function resetState(viewer, setCutPlaneDirections, setIsCutPlaneActive) {
+  // These aren't setup when CadView inits
+  if (viewer && setCutPlaneDirections && setIsCutPlaneActive) {
+    removePlanes(viewer)
+    removePlanesFromHashState()
+    setCutPlaneDirections([])
+    setIsCutPlaneActive(false)
+  }
 }
 
 

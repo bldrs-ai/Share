@@ -239,7 +239,7 @@ describe('CadView', () => {
       await fireEvent.click(clearSelection)
     })
     const callDeletePlanes = viewer.clipper.deleteAllPlanes.mock.calls
-    expect(callDeletePlanes.length).toBe(1)
+    expect(callDeletePlanes.length).toBe(3)
     expect(result.current.selectedElements).toHaveLength(0)
     expect(result.current.selectedElement).toBe(null)
     expect(result.current.cutPlanes.length).toBe(0)
