@@ -39,8 +39,7 @@ export default function createNotesSlice(set, get) {
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
     toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
-    toggleIsCreateNoteVisible: () =>
-      set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
+    toggleIsCreateNoteVisible: () => set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),
