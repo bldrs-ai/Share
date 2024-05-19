@@ -71,7 +71,7 @@ describe('view 100: Cutplanes', () => {
     })
   })
 
-  context.only('All hidable controls visible', () => {
+  context('All hidable controls visible', () => {
     beforeEach(() => {
       const twoLevelSelect = 'twoLevelSelect'
       cy.intercept('GET', '/share/v/p/index.ifc/88/546', {fixture: '404.html'}).as(twoLevelSelect)
