@@ -526,7 +526,8 @@ export default function CadView({
     if (viewer) {
       viewer.clipper.deleteAllPlanes()
     }
-    resetState()
+    resetSelection()
+    resetCutPlaneState(viewer, setCutPlaneDirections, setIsCutPlaneActive)
     const repoFilePath = modelPath.gitpath ? modelPath.getRepoPath() : modelPath.filepath
     window.removeEventListener('beforeunload', handleBeforeUnload)
     navWith(navigate, `${pathPrefix}${repoFilePath}`, {search: '', hash: ''})

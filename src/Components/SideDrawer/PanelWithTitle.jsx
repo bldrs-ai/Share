@@ -19,7 +19,10 @@ export default function PanelWithTitle({title, children, controlsGroup, iconSrc}
   const isMobile = useIsMobile()
 
   return (
-    <Box sx={{height: '100%', overflow: 'hidden'}}>
+    <Box
+      sx={{height: '100%', overflow: 'hidden'}}
+      data-testid={`side-drawer-panel-${title.toLowerCase()}`}
+    >
       <PanelTitle
         title={title}
         iconSrc={iconSrc}

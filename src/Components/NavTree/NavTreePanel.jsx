@@ -64,12 +64,14 @@ export default function NavTreePanel({
   }, [selectedElements, idToRef])
 
 
+  const title = 'Navigation'
   return (
     <Panel
-      title='Navigation'
+      title={title}
       onCloseClick={() => setIsNavTreeVisible(false)}
       action={<Actions navigationMode={navigationMode} setNavigationMode={setNavigationMode}/>}
       sx={{m: '0 0 0 10px'}} // equal to SearchBar m:5 + p:5
+      paperTestId={`panel-${title.toLowerCase()}`}
     >
       <TreeView
         aria-label={isNavTree ? 'IFC Navigator' : 'IFC Types Navigator'}
