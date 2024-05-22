@@ -83,7 +83,8 @@ export default function OpenModelDialog({
           {isAuthenticated && !isMobile && <Divider sx={{paddingBottom: '.2em'}}/>}
           {isAuthenticated && isMobile && <Divider sx={{paddingTop: '.5em'}}/>}
           </Stack>
-          {isAuthenticated && <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user}/>}
+          {isAuthenticated &&
+          <GitHubFileBrowser navigate={navigate} orgNamesArr={orgNamesArr} user={user} setIsDialogDisplayed={setIsDialogDisplayed}/>}
           {!isAuthenticated && <Box sx={{width: '92%'}}><PleaseLogin/></Box>}
         </Stack>
       }
