@@ -27,14 +27,14 @@ describe('Open 100: Open model from GH via UI', () => {
     const interceptTag = 'ghOpenModelLoad'
     it('Opens a model from Github via the UI', () => {
       cy.get('[data-testid="control-button-open"]').click()
+      cy.findByText('Projects').click()
       cy.findByLabelText('Organization', {timeout: 5000}).click()
       cy.contains('@cypresstester').click()
       cy.findByLabelText('Repository', {timeout: 5000}).eq(0).click()
       cy.contains('test-repo').click()
       cy.findByLabelText('File', {timeout: 5000}).eq(0).click()
       cy.contains('window.ifc').click()
-      cy.contains('button', 'Load file').click()
-
+      cy.get('[data-testid="openFromGithub"]').click()
       waitForModelReady(interceptTag)
       cy.percySnapshot()
     })

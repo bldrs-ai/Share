@@ -18,10 +18,10 @@ describe('Open 100: Open Sample Model', () => {
       setIsReturningUser()
       visitHomepageWaitForModel()
       cy.get('[data-testid="control-button-open"]').click()
-      cy.get('[data-testid="textfield-sample-projects"]').click()
     })
 
     it('Sample project list appears, including Momentum etc. - Screen', () => {
+      cy.get(':nth-child(1) > [data-testid="sample-model-chip"]').contains('Momentum')
       cy.percySnapshot()
     })
 
