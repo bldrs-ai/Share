@@ -1,5 +1,4 @@
-import {NOTES_PREFIX} from '../Components/Notes/NotesControl'
-import {getHashParams} from '../utils/location'
+import {isVisibleInitially} from '../Components/Notes/hashState'
 
 
 /**
@@ -13,13 +12,13 @@ export default function createNotesSlice(set, get) {
   return {
     isNotesEnabled: true,
     setIsNotesEnabled: (isEnabled) => set(() => ({isNotesEnabled: isEnabled})),
-
-    comments: null,
+    addComment: true,
+    comments: [],
     createdNotes: null,
     deletedNotes: null,
     isCreateNoteVisible: false,
     isLoadingNotes: false,
-    isNotesVisible: getHashParams(window.location, NOTES_PREFIX) !== undefined,
+    isNotesVisible: isVisibleInitially(),
     notes: null,
     placeMark: null,
     placeMarkActivated: false,
@@ -36,10 +35,11 @@ export default function createNotesSlice(set, get) {
     setPlaceMarkActivated: (newPlaceMarkActivated) =>
       set(() => ({placeMarkActivated: newPlaceMarkActivated})),
     setPlaceMarkId: (newPlaceMarkId) => set(() => ({placeMarkId: newPlaceMarkId})),
+    setSelectedNote: (note) => set(() => ({selectedNote: note})),
     setSelectedNoteId: (noteId) => set(() => ({selectedNoteId: noteId})),
     setSelectedNoteIndex: (noteIndex) => set(() => ({selectedNoteIndex: noteIndex})),
-    toggleIsCreateNoteVisible: () =>
-      set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
+    toggleAddComment: () => set((state) => ({addComment: !state.addComment})),
+    toggleIsCreateNoteVisible: () => set((state) => ({isCreateNoteVisible: !state.isCreateNoteVisible})),
     toggleIsLoadingNotes: () => set((state) => ({isLoadingNotes: !state.isLoadingNotes})),
     toggleIsNotesVisible: () => set((state) => ({isNotesVisible: !state.isNotesVisible})),
     toggleSynchSidebar: () => set((state) => ({synchSidebar: !state.synchSidebar})),

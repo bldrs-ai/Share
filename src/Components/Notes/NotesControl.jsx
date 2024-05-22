@@ -4,6 +4,7 @@ import useStore from '../../store/useStore'
 import debug from '../../utils/debug'
 import {getHashParams} from '../../utils/location'
 import {ControlButtonWithHashState} from '../Buttons'
+import {HASH_PREFIX_NOTES} from './hashState'
 import ChatOutlinedIcon from '@mui/icons-material/ChatOutlined'
 
 
@@ -60,6 +61,7 @@ export default function NotesControl() {
             username: issue.user.login,
             avatarUrl: issue.user.avatar_url,
             numberOfComments: issue.comments,
+            locked: issue.locked,
             synched: true,
           })
         })
@@ -76,7 +78,7 @@ export default function NotesControl() {
 
   // TODO(pablo): hack, move into helper
   useEffect(() => {
-    const hashParams = getHashParams(window.location, NOTES_PREFIX)
+    const hashParams = getHashParams(window.location, HASH_PREFIX_NOTES)
     if (hashParams) {
       const parts = hashParams.split(':')
       if (parts.length > 1) {
@@ -98,12 +100,8 @@ export default function NotesControl() {
       icon={<ChatOutlinedIcon className='icon-share'/>}
       isDialogDisplayed={isNotesVisible}
       setIsDialogDisplayed={setIsNotesVisible}
-      hashPrefix={NOTES_PREFIX}
+      hashPrefix={HASH_PREFIX_NOTES}
       placement='left'
     />
   )
 }
-
-
-/** The prefix to use for the note state tokens */
-export const NOTES_PREFIX = 'i'

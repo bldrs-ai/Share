@@ -1,5 +1,9 @@
 import {MOBILE_HEIGHT, MOBILE_WIDTH} from '../utils/constants'
-import {isFirst} from '../privacy/firstTime'
+import {isVisibleInitially as aboutIsVisibleInitially} from '../Components/About/hashState'
+import {isVisibleInitially as helpIsVisibleInitially} from '../Components/Help/hashState'
+import {isVisibleInitially as imagineIsVisibleInitially} from '../Components/Imagine/hashState'
+import {isVisibleInitially as openModelIsVisibleInitially} from '../Components/Open/hashState'
+import {isVisibleInitially as shareIsVisibleInitially} from '../Components/Share/hashState'
 
 
 const isThemeEnabled = process.env.THEME_IS_ENABLED
@@ -40,22 +44,22 @@ export default function createUISlice(set, get) {
 
     // TODO(pablo): move all of these to feature slice files
     // NOTE: Nav, Notes, Search and Versions have been moved to their Slices
-    isAboutVisible: isFirst(),
+    isAboutVisible: aboutIsVisibleInitially(),
     setIsAboutVisible: (is) => set(() => ({isAboutVisible: is})),
 
-    isHelpVisible: false,
+    isHelpVisible: helpIsVisibleInitially(),
     setIsHelpVisible: (is) => set(() => ({isHelpVisible: is})),
 
     isHelpTooltipsVisible: false,
     setIsHelpTooltipsVisible: (is) => set(() => ({isHelpTooltipsVisible: is})),
 
-    isImagineVisible: false,
+    isImagineVisible: imagineIsVisibleInitially(),
     setIsImagineVisible: (is) => set(() => ({isImagineVisible: is})),
 
-    isOpenModelVisible: false,
+    isOpenModelVisible: openModelIsVisibleInitially(),
     setIsOpenModelVisible: (is) => set(() => ({isOpenModelVisible: is})),
 
-    isShareVisible: false,
+    isShareVisible: shareIsVisibleInitially(),
     setIsShareVisible: (is) => set(() => ({isShareVisible: is})),
 
     isThemeEnabled: isThemeEnabled,

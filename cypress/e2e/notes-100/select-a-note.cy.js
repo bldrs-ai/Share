@@ -19,8 +19,8 @@ describe('Notes 100: Select a note', () => {
         cy.get('.MuiCardHeader-title').contains('issueTitle_4')
 
         // A list of comments attached to the note to be visible
-        cy.get('[data-testid="list-notes"] > :nth-child(2) > [data-testid="note-card"] p').contains('testComment_1')
-        cy.get('[data-testid="list-notes"] > :nth-child(3) > [data-testid="note-card"] p').contains('testComment_2')
+        cy.get('[data-testid="list-notes"] > :nth-child(4) > [data-testid="note-card"] p').contains('testComment_1')
+        cy.get('[data-testid="list-notes"] > :nth-child(5) > [data-testid="note-card"] p').contains('testComment_2')
 
         cy.get('[data-testid="panelTitle"]').should('have.text', 'NOTE')
 

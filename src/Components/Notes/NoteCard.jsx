@@ -14,15 +14,15 @@ import {assertDefined} from '../../utils/assert'
 import {getHashParamsFromHashStr, setHashParams} from '../../utils/location'
 import {findUrls} from '../../utils/strings'
 import {
-  CAMERA_PREFIX,
   addCameraUrlParams,
   setCameraFromParams,
   parseHashParams,
   removeCameraUrlParams,
-} from '../CameraControl'
+} from '../Camera/CameraControl'
+import {HASH_PREFIX_CAMERA} from '../Camera/hashState'
 import NoteBody from './NoteBody'
 import NoteContent from './NoteContent'
-import {NOTES_PREFIX} from './NotesControl'
+import {HASH_PREFIX_NOTES} from './hashState'
 import NoteFooter from './NoteFooter'
 import NoteMenu from './NoteMenu'
 
@@ -53,6 +53,7 @@ export default function NoteCard({
   title = '',
   username = '',
   isNote = true,
+  locked = false,
 }) {
   assertDefined(...arguments)
   const accessToken = useStore((state) => state.accessToken)
@@ -66,7 +67,10 @@ export default function NoteCard({
   const setNotes = useStore((state) => state.setNotes)
   const setSelectedNoteId = useStore((state) => state.setSelectedNoteId)
   const setSelectedNoteIndex = useStore((state) => state.setSelectedNoteIndex)
+  const setSelectedNote = useStore((state) => state.setSelectedNote)
   const setSnackMessage = useStore((state) => state.setSnackMessage)
+  const [showCreateComment, setShowCreateComment] = useState(false)
+
 
   const [editMode, setEditMode] = useState(false)
   const [editBody, setEditBody] = useState(body)
@@ -80,7 +84,7 @@ export default function NoteCard({
         }
         const encoded = getHashParamsFromHashStr(
             url.substring(url.indexOf('#') + 1),
-            CAMERA_PREFIX)
+            HASH_PREFIX_CAMERA)
         return encoded && parseHashParams(encoded)
       })
 
@@ -102,12 +106,17 @@ export default function NoteCard({
 
   /** Selecting a card move the notes to the replies/comments thread. */
   function selectCard() {
+    let selectedNote = null
+    if (notes) {
+      selectedNote = notes.filter((issue) => issue.id === id)
+    }
+    setSelectedNote(selectedNote)
     setSelectedNoteIndex(index)
     setSelectedNoteId(id)
     if (embeddedCameraParams) {
       setCameraFromParams(firstCamera)
     }
-    setHashParams(window.location, NOTES_PREFIX, {id: id})
+    setHashParams(window.location, HASH_PREFIX_NOTES, {id: id})
   }
 
 
@@ -199,6 +208,10 @@ export default function NoteCard({
        <NoteBodyEdit
          handleTextUpdate={(event) => setEditBody(event.target.value)}
          value={editBody}
+         isNote={isNote}
+         setShowCreateComment={setShowCreateComment}
+         showCreateComment={showCreateComment}
+         locked={locked}
        />
       }
       <NoteFooter

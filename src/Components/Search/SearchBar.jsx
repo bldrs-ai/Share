@@ -3,7 +3,6 @@ import {useLocation, useNavigate, useSearchParams} from 'react-router-dom'
 import Autocomplete from '@mui/material/Autocomplete'
 import TextField from '@mui/material/TextField'
 import {looksLikeLink, githubUrlOrPathToSharePath} from '../../net/github/utils'
-import debug from '../../utils/debug'
 import {handleBeforeUnload} from '../../utils/event'
 import {navWithSearchParamRemoved} from '../../utils/navigate'
 import CloseIcon from '@mui/icons-material/Close'
@@ -25,7 +24,6 @@ export default function SearchBar() {
 
 
   useEffect(() => {
-    debug().log('SearchBar#useEffect[searchParams]')
     if (location.search) {
       if (validSearchQuery(searchParams)) {
         const newInputText = searchParams.get(QUERY_PARAM)
@@ -36,6 +34,9 @@ export default function SearchBar() {
         window.removeEventListener('beforeunload', handleBeforeUnload)
         navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
       }
+    } else {
+      setInputText('')
+      navWithSearchParamRemoved(navigate, location.pathname, QUERY_PARAM)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams])
