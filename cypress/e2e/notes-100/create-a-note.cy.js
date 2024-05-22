@@ -31,6 +31,8 @@ describe('Notes 100: Create a note', () => {
         cy.get('[placeholder="Note Body"]').click().type('New Note Body')
         cy.get('[data-testid="Submit"]').should('be.enabled')
         cy.get('[data-testid="Submit"]').click()
+        cy.get('[data-testid="list-notes"]').should('exist')
+        cy.get('.MuiCardHeader-title').contains('issueTitle_4')
         cy.percySnapshot()
       })
     })
